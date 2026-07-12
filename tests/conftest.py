@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import ASGITransport, AsyncClient
+from httpx2 import ASGITransport, AsyncClient
 
 # Force testing environment before any settings import.
 os.environ.setdefault("APP_ENV", "testing")
