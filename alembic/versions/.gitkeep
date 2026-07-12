@@ -1,0 +1,5 @@
+"""Alembic versions package.
+
+Migration revision scripts are generated into this directory.
+Foundation sprint ships an empty baseline — no domain tables yet.
+"""

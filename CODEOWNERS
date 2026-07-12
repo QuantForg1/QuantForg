@@ -1,0 +1,29 @@
+# CODEOWNERS — QuantForg
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Replace team handles with real GitHub teams/users for your org when available.
+# Default owner covers the entire repository.
+
+*       @QuantForg1/maintainers
+
+# Architecture & governance
+/docs/adr/                      @QuantForg1/maintainers @QuantForg1/architecture
+/docs/architecture.md           @QuantForg1/maintainers @QuantForg1/architecture
+/docs/architecture-governance.md @QuantForg1/maintainers @QuantForg1/architecture
+/docs/engineering/              @QuantForg1/maintainers @QuantForg1/architecture
+/CODEOWNERS                     @QuantForg1/maintainers
+/CONTRIBUTING.md                @QuantForg1/maintainers
+/CHANGELOG.md                   @QuantForg1/maintainers
+
+# Domain core
+/app/domain/                    @QuantForg1/maintainers @QuantForg1/architecture
+/app/application/               @QuantForg1/maintainers
+
+# Infrastructure & CI
+/app/infrastructure/            @QuantForg1/maintainers
+/core/                          @QuantForg1/maintainers
+/.github/                       @QuantForg1/maintainers
+/docker/                        @QuantForg1/maintainers
+/Dockerfile                     @QuantForg1/maintainers
+/docker-compose.yml             @QuantForg1/maintainers
+/pyproject.toml                 @QuantForg1/maintainers

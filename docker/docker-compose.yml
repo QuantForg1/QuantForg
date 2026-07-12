@@ -1,0 +1,97 @@
+# Canonical compose file lives at the repository root: ../docker-compose.yml
+# This file mirrors it for `docker compose -f docker/docker-compose.yml` workflows.
+
+name: quantforg
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: quantforg-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      LOG_FORMAT: console
+      LOG_JSON: "false"
+      RELOAD: "false"
+      ALLOWED_HOSTS: localhost,127.0.0.1,api,quantforg-api,*
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - quantforg-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ../app:/app/app:ro
+      - ../core:/app/core:ro
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: quantforg-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-quantforg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantforg_dev_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-quantforg}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - quantforg-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quantforg} -d ${POSTGRES_DB:-quantforg}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: quantforg-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - quantforg-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  quantforg-net:
+    driver: bridge
+    name: quantforg-net

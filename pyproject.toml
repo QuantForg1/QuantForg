@@ -1,0 +1,188 @@
+[tool.poetry]
+name = "quantforg"
+version = "0.1.0"
+description = "QuantForg — AI-Powered Algorithmic Trading Platform (foundation)"
+authors = ["QuantForg <engineering@quantforg.com>"]
+readme = "README.md"
+license = "Proprietary"
+packages = [
+    { include = "app" },
+    { include = "core" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+fastapi = "^0.115.6"
+uvicorn = { extras = ["standard"], version = "^0.34.0" }
+pydantic = "^2.10.4"
+pydantic-settings = "^2.7.0"
+sqlalchemy = { extras = ["asyncio"], version = "^2.0.36" }
+asyncpg = "^0.30.0"
+alembic = "^1.14.0"
+redis = { extras = ["hiredis"], version = "^5.2.1" }
+structlog = "^24.4.0"
+python-json-logger = "^3.2.1"
+httpx = "^0.28.1"
+orjson = "^3.10.12"
+tenacity = "^9.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+pytest-asyncio = "^0.25.0"
+pytest-cov = "^6.0.0"
+pytest-mock = "^3.14.0"
+ruff = "^0.8.4"
+black = "^24.10.0"
+mypy = "^1.14.0"
+types-redis = "^4.6.0.20241004"
+pre-commit = "^4.0.1"
+factory-boy = "^3.3.1"
+faker = "^33.1.0"
+testcontainers = { extras = ["postgres", "redis"], version = "^4.9.0" }
+
+[tool.poetry.scripts]
+quantforg = "app.main:run"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.ruff_cache
+  | \.venv
+  | alembic/versions
+)/
+'''
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+src = ["app", "core", "tests"]
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "RUF",    # ruff-specific
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit (security)
+]
+ignore = [
+    "S101",   # assert allowed in tests
+    "B008",   # FastAPI Depends() in defaults is intentional
+    "TC001",  # typing-only imports often needed at runtime for Protocols
+    "TC002",
+    "TC003",
+    "TC004",
+    "S104",   # binding 0.0.0.0 is intentional for containerized APIs
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106", "ARG001", "ARG002", "B017", "RUF002"]
+"app/domain/interfaces/**/*.py" = ["TC001", "TC002", "TC003"]
+"alembic/**/*.py" = ["INP001"]
+"app/infrastructure/cache/redis_client.py" = ["BLE001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "core"]
+force-single-line = false
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+pretty = true
+plugins = ["pydantic.mypy"]
+mypy_path = "."
+packages = ["app", "core"]
+exclude = ["alembic/versions", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["asyncpg.*", "hiredis.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=app",
+    "--cov=core",
+    "--cov-report=term-missing",
+    "--cov-report=xml:coverage.xml",
+    "--cov-fail-under=60",
+]
+markers = [
+    "unit: Fast isolated unit tests",
+    "integration: Tests requiring external services",
+    "slow: Long-running tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["app", "core"]
+omit = [
+    "*/tests/*",
+    "*/alembic/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+    "@overload",
+]

@@ -1,0 +1,12 @@
+# Configuration for GitHub issue templates
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/QuantForg1/QuantForg/security/advisories/new
+    about: Report security issues privately — do not file a public bug.
+  - name: Architecture Governance Guide
+    url: https://github.com/QuantForg1/QuantForg/blob/main/docs/architecture-governance.md
+    about: How ADRs and architecture reviews work.
+  - name: Contributing guide
+    url: https://github.com/QuantForg1/QuantForg/blob/main/CONTRIBUTING.md
+    about: Setup, workflow, and acceptance criteria.

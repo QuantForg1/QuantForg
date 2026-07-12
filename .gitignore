@@ -216,3 +216,32 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# QuantForg
+.env
+.env.local
+.env.*.local
+.venv/
+venv/
+*.log
+logs/
+data/
+tmp/
+.DS_Store
+htmlcov/
+coverage.xml
+.coverage
+.coverage.*
+dist/
+build/
+*.egg-info/
+.idea/
+.vscode/
+!.vscode/extensions.json
+docker/postgres/data/
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+credentials.json
+secrets.json
