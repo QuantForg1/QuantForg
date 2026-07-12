@@ -6,7 +6,6 @@ session-handling pattern; no concrete trading aggregates are defined yet.
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,11 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.entities.base import Entity
 
-TEntity = TypeVar("TEntity", bound=Entity)
-TModel = TypeVar("TModel")
 
-
-class SQLAlchemyRepository(Generic[TEntity, TModel]):
+class SQLAlchemyRepository[TEntity: Entity, TModel]:
     """Generic async repository over a SQLAlchemy mapped model.
 
     Parameters

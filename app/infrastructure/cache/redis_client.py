@@ -42,7 +42,7 @@ class RedisClient:
         if self._client is not None:
             return
         self._client = cast(
-            Any,
+            "Any",
             aioredis.from_url(
                 self._settings.redis_url,
                 max_connections=self._settings.redis_pool_size,
@@ -65,7 +65,7 @@ class RedisClient:
     async def get(self, key: str) -> str | None:
         """Get a string value by key."""
         value = await self.client.get(key)
-        return cast(str | None, value)
+        return cast("str | None", value)
 
     async def set(
         self,

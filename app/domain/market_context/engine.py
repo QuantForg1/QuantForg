@@ -117,6 +117,7 @@ class MarketContextEngine:
         )
 
         # Calendar closed days force CLOSED regardless of session window.
+        market_state: MarketState
         if calendar_state in {MarketState.HOLIDAY, MarketState.WEEKEND}:
             market_state = calendar_state
             if session not in {MarketSession.CLOSED, MarketSession.OFF_HOURS}:
