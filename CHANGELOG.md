@@ -12,6 +12,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 - (none yet)
 
+## [1.0.0] - 2026-07-12
+
+### Added
+
+- General Availability packaging: version `1.0.0`, OpenAPI `openapi/openapi.v1.0.0.json`,
+  `GA_READINESS_REPORT.md`, migration verify scripts.
+- Durable Postgres Unit of Work factories for all feature modules
+  (platform, broker, MT5, execution, portfolio, risk, strategy, backtest,
+  paper, walk-forward, ops), selected via `DURABLE_PERSISTENCE` / non-testing env.
+- Committed `poetry.lock` for reproducible installs.
+
+### Safety
+
+- `EXECUTION_ENABLED` remains **false** by default.
+- No AI features.
+- No new trading features beyond prior RC1 surface.
+
+### Changed
+
+- Promote package/app version from `1.0.0-rc.1` to `1.0.0`.
+- CI dependency cache keyed on `poetry.lock`.
+
+## [1.0.0-rc.1] - 2026-07-12
+
+### Added
+
+- Release Candidate packaging: version `1.0.0-rc.1`, OpenAPI export (`openapi/`),
+  and release documentation set (`ARCHITECTURE.md`, `DEPLOYMENT.md`,
+  `OPERATIONS.md`, `SECURITY.md`, `BACKUP_RECOVERY.md`, `API_REFERENCE.md`,
+  `PRODUCTION_READINESS_REPORT.md`, `RELEASE_CANDIDATE_v1_REPORT.md`).
+- Operations & Observability Platform: monitoring dashboard, metrics collector,
+  alerting (info/warning/critical), Audit Center, health ready probe,
+  `/api/v1/metrics`, ops migrations + RLS.
+- Walk-Forward Validation Engine (IS/OOS, robustness, promotion decisions).
+- Paper Trading Engine (virtual broker, positions, performance).
+- Backtesting Engine with metrics.
+- Strategy Runtime (evaluate + signals; no live send).
+- Risk Engine (`POST /risk/check`).
+- Portfolio / Position Engine (read/sync paths).
+- Execution Safety + Execution Gateway (submit gated by `EXECUTION_ENABLED`).
+- MT5 Adapter sprints 1–4 (connect, market data, validation, portfolio, gateway).
+- Broker Foundation (brokers, accounts, connections, health/reconnect).
+- Authentication and User Platform (profiles, settings, orgs, notifications).
+- Supabase SQL foundation with reversible migrations and RLS.
+
+### Safety
+
+- `EXECUTION_ENABLED` remains **false** by default.
+- No AI features in this release candidate.
+- No new live trading features beyond existing gated execution path.
+
+### Changed
+
+- Package/app version bumped from `0.1.0` to `1.0.0-rc.1`.
+- Dockerfile base image aligned to Python **3.13** (matches CI / `pyproject.toml`).
+- Development status classifier moved Alpha → Beta.
+
 ## [0.1.0] - 2026-07-12
 
 ### Added

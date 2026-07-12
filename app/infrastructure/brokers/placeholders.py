@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from app.domain.enums.broker import BrokerCapabilityCode
 from app.domain.interfaces.broker_adapter import (
     BrokerAccountInfo,
     BrokerBalanceInfo,
@@ -73,9 +74,21 @@ class PlaceholderBrokerAdapter:
         _ = session_ref
         raise self._nyi("get_orders")
 
+    def discover_capabilities(self) -> list[BrokerCapabilityCode]:
+        from app.domain.interfaces.broker_capability_discovery import (
+            default_capabilities_for_platform,
+        )
 
-class MT5Adapter(PlaceholderBrokerAdapter):
-    """Future MetaTrader 5 adapter placeholder."""
+        return list(default_capabilities_for_platform(self.platform_code))
+
+
+class MT5PlaceholderAdapter(PlaceholderBrokerAdapter):
+    """Legacy placeholder retained for non-MT5 registry bootstrap.
+
+    The production connection-layer adapter lives in
+    ``app.infrastructure.brokers.mt5.MT5Adapter`` and overwrites ``mt5``
+    on the registry at container startup.
+    """
 
     platform_code = "mt5"
 
@@ -99,10 +112,19 @@ class DXtradeAdapter(PlaceholderBrokerAdapter):
 
 
 def register_placeholder_adapters(registry: object) -> None:
-    """Register all Sprint 1 placeholder adapters on a registry."""
+    """Register placeholder adapters; MT5 is overwritten by the real adapter."""
     register = getattr(registry, "register", None)
     if not callable(register):
         msg = "registry must expose register()"
         raise TypeError(msg)
-    for adapter in (MT5Adapter(), MT4Adapter(), CTraderAdapter(), DXtradeAdapter()):
+    for adapter in (
+        MT5PlaceholderAdapter(),
+        MT4Adapter(),
+        CTraderAdapter(),
+        DXtradeAdapter(),
+    ):
         register(adapter)
+
+
+# Backward-compatible name for tests that still import placeholders.MT5Adapter
+MT5Adapter = MT5PlaceholderAdapter

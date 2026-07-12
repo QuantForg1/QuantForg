@@ -275,3 +275,38 @@ class ValidateBrokerResultDTO:
     valid: bool
     platform_code: str
     message: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class BrokerHealthDTO:
+    """Aggregated broker health — never includes credentials."""
+
+    broker_id: UUID
+    status: str
+    latency_ms: float | None
+    uptime_seconds: float
+    reconnect_count: int
+    last_error: str
+    capabilities: tuple[str, ...]
+    last_heartbeat_at: datetime | None = None
+    last_successful_connection_at: datetime | None = None
+    connection_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class BrokerDiagnosticsDTO:
+    """Extended diagnostics for a catalogue broker."""
+
+    broker_id: UUID
+    status: str
+    latency_ms: float | None
+    uptime_seconds: float
+    reconnect_count: int
+    last_error: str
+    capabilities: tuple[str, ...]
+    discovered_capabilities: tuple[str, ...]
+    connections: tuple[dict[str, object], ...]
+    reconnect: tuple[dict[str, object], ...]
+    platform_code: str
+    last_heartbeat_at: datetime | None = None
+    last_successful_connection_at: datetime | None = None

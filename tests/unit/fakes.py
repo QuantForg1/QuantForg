@@ -186,6 +186,14 @@ class InMemoryAuditLogRepository:
         self.items[entry.id] = entry
         return entry
 
+    async def list_recent(self, *, limit: int = 200) -> list[AuditLog]:
+        rows = list(self.items.values())
+        rows.sort(
+            key=lambda e: e.occurred_at or e.created_at,
+            reverse=True,
+        )
+        return rows[:limit]
+
 
 class InMemoryUnitOfWork:
     """Async context-manager UoW backed by in-memory repositories."""

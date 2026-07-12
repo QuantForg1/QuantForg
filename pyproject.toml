@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "quantforg"
-version = "0.1.0"
-description = "QuantForg — AI-Powered Algorithmic Trading Platform (foundation)"
+version = "1.0.0"
+description = "QuantForg — Algorithmic Trading Platform (v1.0.0)"
 authors = ["QuantForg <engineering@quantforg.com>"]
 readme = "README.md"
 license = "Proprietary"
@@ -10,7 +10,7 @@ packages = [
     { include = "core" },
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Framework :: FastAPI",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
@@ -38,7 +38,7 @@ orjson = "^3.10.12"
 tenacity = "^9.0.0"
 email-validator = "^2.2.0"
 python-multipart = ">=0.0.9"
-cryptography = ">=43.0.0,<47.0.0"
+cryptography = ">=48.0.1,<49.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"

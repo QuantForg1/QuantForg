@@ -10,4 +10,4 @@ Organised according to Clean Architecture:
 No trading, AI, indicator, or strategy logic lives in this foundation.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"

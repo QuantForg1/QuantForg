@@ -110,3 +110,89 @@ class BrokerDeleted(DomainEvent):
             }
         )
         return payload
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BrokerHeartbeatReceived(DomainEvent):
+    event_type: ClassVar[str] = "broker.heartbeat_received"
+    broker_id: UUID
+    connection_id: UUID
+    latency_ms: float
+    previous_status: str
+    status: str
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = super().to_dict()
+        payload.update(
+            {
+                "broker_id": str(self.broker_id),
+                "connection_id": str(self.connection_id),
+                "latency_ms": self.latency_ms,
+                "previous_status": self.previous_status,
+                "status": self.status,
+            }
+        )
+        return payload
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BrokerHealthChanged(DomainEvent):
+    event_type: ClassVar[str] = "broker.health_changed"
+    broker_id: UUID
+    connection_id: UUID
+    previous_status: str
+    status: str
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = super().to_dict()
+        payload.update(
+            {
+                "broker_id": str(self.broker_id),
+                "connection_id": str(self.connection_id),
+                "previous_status": self.previous_status,
+                "status": self.status,
+            }
+        )
+        return payload
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BrokerReconnected(DomainEvent):
+    event_type: ClassVar[str] = "broker.reconnected"
+    broker_id: UUID
+    connection_id: UUID
+    attempts: int
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = super().to_dict()
+        payload.update(
+            {
+                "broker_id": str(self.broker_id),
+                "connection_id": str(self.connection_id),
+                "attempts": self.attempts,
+            }
+        )
+        return payload
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class BrokerConnectionLost(DomainEvent):
+    event_type: ClassVar[str] = "broker.connection_lost"
+    broker_id: UUID
+    connection_id: UUID
+    previous_status: str
+    status: str
+    error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = super().to_dict()
+        payload.update(
+            {
+                "broker_id": str(self.broker_id),
+                "connection_id": str(self.connection_id),
+                "previous_status": self.previous_status,
+                "status": self.status,
+                "error": self.error,
+            }
+        )
+        return payload

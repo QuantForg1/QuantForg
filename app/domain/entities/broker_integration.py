@@ -223,12 +223,17 @@ class BrokerCredential(Entity):
     encrypted_payload: str
     key_hint: str = ""
     status: CredentialStatus = CredentialStatus.ACTIVE
+    encryption_key_version: int = 1
     rotated_at: datetime | None = None
 
     def __post_init__(self) -> None:
         require(
             len(self.encrypted_payload) > 0,
             "encrypted_payload is required",
+        )
+        require(
+            self.encryption_key_version >= 1,
+            "encryption_key_version must be >= 1",
         )
         self.key_hint = self.key_hint.strip()[:32]
 
@@ -240,6 +245,7 @@ class BrokerCredential(Entity):
         credential_type: BrokerCredentialType,
         encrypted_payload: str,
         key_hint: str = "",
+        encryption_key_version: int = 1,
         entity_id: UUID | None = None,
     ) -> Self:
         kwargs: dict[str, object] = {
@@ -248,16 +254,29 @@ class BrokerCredential(Entity):
             "encrypted_payload": encrypted_payload,
             "key_hint": key_hint,
             "status": CredentialStatus.ACTIVE,
+            "encryption_key_version": encryption_key_version,
             "rotated_at": datetime.now(UTC),
         }
         if entity_id is not None:
             kwargs["id"] = entity_id
         return cls(**kwargs)  # type: ignore[arg-type]
 
-    def rotate(self, *, encrypted_payload: str, key_hint: str = "") -> None:
+    def rotate(
+        self,
+        *,
+        encrypted_payload: str,
+        key_hint: str = "",
+        encryption_key_version: int | None = None,
+    ) -> None:
         require(len(encrypted_payload) > 0, "encrypted_payload is required")
         self.encrypted_payload = encrypted_payload
         self.key_hint = key_hint.strip()[:32]
+        if encryption_key_version is not None:
+            require(
+                encryption_key_version >= 1,
+                "encryption_key_version must be >= 1",
+            )
+            self.encryption_key_version = encryption_key_version
         self.status = CredentialStatus.ROTATED
         self.rotated_at = datetime.now(UTC)
         self.touch()
@@ -275,6 +294,7 @@ class BrokerCredential(Entity):
                 "credential_type": self.credential_type.value,
                 "key_hint": self.key_hint,
                 "status": self.status.value,
+                "encryption_key_version": self.encryption_key_version,
                 "has_secret": True,
                 "rotated_at": (
                     self.rotated_at.isoformat() if self.rotated_at else None

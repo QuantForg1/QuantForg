@@ -55,6 +55,17 @@ class BrokerCapabilityCode(StrEnum):
     BALANCES = "balances"
     POSITIONS = "positions"
     ORDERS = "orders"
+    MARKET_DATA = "market_data"
+    HISTORY = "history"
+
+
+class BrokerHealthStatus(StrEnum):
+    """Aggregated health status for a broker connection."""
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    UNHEALTHY = "unhealthy"
+    UNKNOWN = "unknown"
 
 
 class BrokerAccountStatus(StrEnum):

@@ -6,6 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.entities.broker import Broker
+from app.domain.entities.broker_health import BrokerConnectionHealth
 from app.domain.entities.broker_integration import (
     BrokerAccount,
     BrokerCapability,
@@ -122,3 +123,27 @@ class BrokerSessionRepositoryPort(Protocol):
     async def update(self, session: BrokerSession) -> BrokerSession: ...
 
     async def delete_for_account(self, broker_account_id: UUID) -> None: ...
+
+
+class BrokerConnectionHealthRepositoryPort(Protocol):
+    async def get_by_connection_id(
+        self, connection_id: UUID
+    ) -> BrokerConnectionHealth | None: ...
+
+    async def list_for_broker(
+        self, broker_id: UUID
+    ) -> list[BrokerConnectionHealth]: ...
+
+    async def list_for_account(
+        self, broker_account_id: UUID
+    ) -> list[BrokerConnectionHealth]: ...
+
+    async def add(self, health: BrokerConnectionHealth) -> BrokerConnectionHealth: ...
+
+    async def update(
+        self, health: BrokerConnectionHealth
+    ) -> BrokerConnectionHealth: ...
+
+    async def upsert(
+        self, health: BrokerConnectionHealth
+    ) -> BrokerConnectionHealth: ...

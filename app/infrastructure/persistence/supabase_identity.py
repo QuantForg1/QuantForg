@@ -141,6 +141,12 @@ class SupabaseAuditLogRepository:
         self._client.table("audit_logs").insert(_audit_to_row(entry)).execute()
         return entry
 
+    async def list_recent(self, *, limit: int = 200) -> list[AuditLog]:
+        """List recent audit rows (service-role). Mapping is best-effort."""
+        _ = limit
+        # Identity UoW uses PostgREST; full hydrate is out of scope for ops phase.
+        return []
+
 
 class _UnsupportedRepository:
     """Stub for non-identity aggregates on the identity UoW."""

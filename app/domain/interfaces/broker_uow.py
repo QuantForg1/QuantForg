@@ -9,6 +9,7 @@ from app.domain.interfaces.broker_repositories import (
     BrokerAccountRepositoryPort,
     BrokerCapabilityRepositoryPort,
     BrokerCatalogueRepositoryPort,
+    BrokerConnectionHealthRepositoryPort,
     BrokerConnectionRepositoryPort,
     BrokerCredentialRepositoryPort,
     BrokerSessionRepositoryPort,
@@ -24,6 +25,7 @@ class BrokerUnitOfWorkPort(Protocol):
     credentials: BrokerCredentialRepositoryPort
     connections: BrokerConnectionRepositoryPort
     sessions: BrokerSessionRepositoryPort
+    health: BrokerConnectionHealthRepositoryPort
 
     async def __aenter__(self) -> Self: ...
 

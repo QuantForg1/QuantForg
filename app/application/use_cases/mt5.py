@@ -1,0 +1,282 @@
+"""MT5 connection-layer use cases — no orders, positions, or streaming."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from app.application.dto.audit import RecordAuditEventCommand
+from app.application.dto.mt5 import (
+    MT5AccountDTO,
+    MT5CandleDTO,
+    MT5ConnectCommand,
+    MT5ConnectionDTO,
+    MT5DisconnectCommand,
+    MT5StatusDTO,
+    MT5SymbolDTO,
+    MT5TickDTO,
+)
+from app.application.services.mt5_market_data import MT5MarketDataService
+from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
+from app.domain.entities.mt5 import MT5Connection
+from app.domain.enums.audit import AuditAction, AuditOutcome
+from app.domain.exceptions.base import NotFoundError, ValidationError
+from app.domain.interfaces.mt5_client import MT5LoginRequest
+from app.domain.market_data.timeframe import Timeframe
+from app.infrastructure.brokers.mt5.adapter import MT5Adapter
+
+
+@dataclass(frozen=True, slots=True)
+class GetMT5StatusUseCase:
+    uow_factory: Any
+    adapter: MT5Adapter
+
+    async def execute(self, *, user_id: UUID) -> MT5StatusDTO:
+        async with self.uow_factory() as uow:
+            connection = await uow.connections.get_active_for_user(user_id)
+        if connection is not None and connection.connected:
+            try:
+                snap = self.adapter.health()
+                connection.mark_heartbeat(latency_ms=snap.latency_ms or 0.0)
+                async with self.uow_factory() as uow:
+                    await uow.connections.update(connection)
+                    await uow.commit()
+            except (OSError, RuntimeError, ValueError):
+                pass
+        return MT5StatusDTO.from_connection(connection)
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectMT5UseCase:
+    uow_factory: Any
+    adapter: MT5Adapter
+    audit: RecordAuditEventUseCase
+
+    async def execute(self, command: MT5ConnectCommand) -> MT5ConnectionDTO:
+        if command.login <= 0:
+            raise ValidationError("MT5 login must be > 0")
+        if not command.password:
+            raise ValidationError("MT5 password is required")
+        if not command.server.strip():
+            raise ValidationError("MT5 server is required")
+
+        connection = MT5Connection.create(
+            user_id=command.user_id,
+            login=command.login,
+            server=command.server,
+            terminal_path=command.path,
+        )
+        connection.mark_initializing()
+        try:
+            if not self.adapter.initialize(path=command.path):
+                raise RuntimeError("MT5 initialize failed")
+            connection.mark_logging_in()
+            login_req = MT5LoginRequest(
+                login=command.login,
+                password=command.password,
+                server=command.server.strip(),
+                path=command.path,
+            )
+            session_ref = self.adapter.login(login_req)
+            terminal = self.adapter.terminal_info()
+            version = self.adapter.version()
+            latency = self.adapter.ping()
+            connection.mark_connected(
+                session_ref=session_ref,
+                terminal_build=terminal.build,
+                terminal_version=f"{version[0]}.{version[1]}.{version[2]}",
+                latency_ms=latency,
+            )
+        except (OSError, RuntimeError, ValueError, TimeoutError) as exc:
+            connection.mark_error(str(exc))
+            async with self.uow_factory() as uow:
+                await uow.connections.upsert_for_user(connection)
+                await uow.commit()
+            raise ValidationError(
+                "MT5 connect failed",
+                details={"error": str(exc)},
+            ) from exc
+
+        async with self.uow_factory() as uow:
+            saved = await uow.connections.upsert_for_user(connection)
+            await uow.commit()
+            dto = MT5ConnectionDTO.from_entity(saved)
+
+        await self.audit.execute(
+            RecordAuditEventCommand(
+                action=AuditAction.ACTIVATE,
+                outcome=AuditOutcome.SUCCESS,
+                resource_type="mt5_connection",
+                resource_id=dto.id,
+                actor_user_id=command.user_id,
+                ip_address=command.ip_address,
+                user_agent=command.user_agent,
+                message="MT5 terminal connected",
+                metadata={
+                    "login": command.login,
+                    "server": command.server,
+                    "terminal_build": dto.terminal_build,
+                },
+            )
+        )
+        return dto
+
+
+@dataclass(frozen=True, slots=True)
+class DisconnectMT5UseCase:
+    uow_factory: Any
+    adapter: MT5Adapter
+    audit: RecordAuditEventUseCase
+
+    async def execute(self, command: MT5DisconnectCommand) -> MT5StatusDTO:
+        async with self.uow_factory() as uow:
+            connection = await uow.connections.get_active_for_user(command.user_id)
+            if connection is None:
+                self.adapter.shutdown()
+                return MT5StatusDTO.from_connection(None)
+            session_ref = connection.session_ref
+            if session_ref:
+                await self.adapter.disconnect(session_ref=session_ref)
+            else:
+                self.adapter.shutdown()
+            connection.mark_disconnected()
+            await uow.connections.update(connection)
+            await uow.commit()
+            status = MT5StatusDTO.from_connection(connection)
+
+        await self.audit.execute(
+            RecordAuditEventCommand(
+                action=AuditAction.DEACTIVATE,
+                outcome=AuditOutcome.SUCCESS,
+                resource_type="mt5_connection",
+                resource_id=connection.id,
+                actor_user_id=command.user_id,
+                ip_address=command.ip_address,
+                user_agent=command.user_agent,
+                message="MT5 terminal disconnected",
+            )
+        )
+        return status
+
+
+@dataclass(frozen=True, slots=True)
+class GetMT5AccountUseCase:
+    uow_factory: Any
+    adapter: MT5Adapter
+
+    async def execute(self, *, user_id: UUID) -> MT5AccountDTO:
+        async with self.uow_factory() as uow:
+            connection = await uow.connections.get_active_for_user(user_id)
+        if connection is None or not connection.connected:
+            raise NotFoundError("No active MT5 connection")
+        try:
+            info = self.adapter.account_info()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValidationError(
+                "Failed to read MT5 account info",
+                details={"error": str(exc)},
+            ) from exc
+        return MT5AccountDTO.from_entity(info)
+
+
+@dataclass(frozen=True, slots=True)
+class ListMT5SymbolsUseCase:
+    uow_factory: Any
+    adapter: MT5Adapter
+
+    async def execute(self, *, user_id: UUID) -> list[MT5SymbolDTO]:
+        async with self.uow_factory() as uow:
+            connection = await uow.connections.get_active_for_user(user_id)
+        if connection is None or not connection.connected:
+            raise NotFoundError("No active MT5 connection")
+        try:
+            symbols = self.adapter.list_symbols()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValidationError(
+                "Failed to list MT5 symbols",
+                details={"error": str(exc)},
+            ) from exc
+        return [MT5SymbolDTO.from_symbol_info(s) for s in symbols]
+
+
+@dataclass(frozen=True, slots=True)
+class GetMT5SymbolUseCase:
+    uow_factory: Any
+    market_data: MT5MarketDataService
+
+    async def execute(self, *, user_id: UUID, symbol: str) -> MT5SymbolDTO:
+        await _require_active_connection(self.uow_factory, user_id)
+        try:
+            info = self.market_data.symbol_info(symbol)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise NotFoundError(
+                "MT5 symbol not found",
+                details={"symbol": symbol, "error": str(exc)},
+            ) from exc
+        return MT5SymbolDTO.from_symbol_info(info)
+
+
+@dataclass(frozen=True, slots=True)
+class GetMT5TickUseCase:
+    uow_factory: Any
+    market_data: MT5MarketDataService
+
+    async def execute(self, *, user_id: UUID, symbol: str) -> MT5TickDTO:
+        await _require_active_connection(self.uow_factory, user_id)
+        try:
+            tick = self.market_data.latest_tick(symbol)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValidationError(
+                "Failed to read MT5 tick",
+                details={"symbol": symbol, "error": str(exc)},
+            ) from exc
+        return MT5TickDTO.from_tick(tick)
+
+
+@dataclass(frozen=True, slots=True)
+class GetMT5CandlesUseCase:
+    uow_factory: Any
+    market_data: MT5MarketDataService
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        symbol: str,
+        timeframe: str = "H1",
+        count: int = 100,
+        start_pos: int | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[MT5CandleDTO]:
+        await _require_active_connection(self.uow_factory, user_id)
+        tf = Timeframe.parse(timeframe)
+        if count < 1 or count > 5000:
+            raise ValidationError(
+                "count must be between 1 and 5000",
+                details={"count": count},
+            )
+        try:
+            rates = self.market_data.historical_candles(
+                symbol,
+                tf,
+                date_from=date_from,
+                date_to=date_to,
+                count=count,
+                start_pos=start_pos,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValidationError(
+                "Failed to read MT5 candles",
+                details={"symbol": symbol, "error": str(exc)},
+            ) from exc
+        return [MT5CandleDTO.from_rate(r) for r in rates]
+
+
+async def _require_active_connection(uow_factory: Any, user_id: UUID) -> None:
+    async with uow_factory() as uow:
+        connection = await uow.connections.get_active_for_user(user_id)
+    if connection is None or not connection.connected:
+        raise NotFoundError("No active MT5 connection")

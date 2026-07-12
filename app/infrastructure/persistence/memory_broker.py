@@ -6,6 +6,7 @@ from typing import Self
 from uuid import UUID
 
 from app.domain.entities.broker import Broker
+from app.domain.entities.broker_health import BrokerConnectionHealth
 from app.domain.entities.broker_integration import (
     BrokerAccount,
     BrokerCapability,
@@ -248,6 +249,45 @@ class InMemoryBrokerSessionRepository:
             del self.items[sid]
 
 
+class InMemoryBrokerConnectionHealthRepository:
+    def __init__(self) -> None:
+        self.items: dict[UUID, BrokerConnectionHealth] = {}
+
+    async def get_by_connection_id(
+        self, connection_id: UUID
+    ) -> BrokerConnectionHealth | None:
+        for health in self.items.values():
+            if health.connection_id == connection_id:
+                return health
+        return None
+
+    async def list_for_broker(self, broker_id: UUID) -> list[BrokerConnectionHealth]:
+        return [h for h in self.items.values() if h.broker_id == broker_id]
+
+    async def list_for_account(
+        self, broker_account_id: UUID
+    ) -> list[BrokerConnectionHealth]:
+        return [
+            h for h in self.items.values() if h.broker_account_id == broker_account_id
+        ]
+
+    async def add(self, health: BrokerConnectionHealth) -> BrokerConnectionHealth:
+        self.items[health.id] = health
+        return health
+
+    async def update(self, health: BrokerConnectionHealth) -> BrokerConnectionHealth:
+        self.items[health.id] = health
+        return health
+
+    async def upsert(self, health: BrokerConnectionHealth) -> BrokerConnectionHealth:
+        existing = await self.get_by_connection_id(health.connection_id)
+        if existing is None:
+            return await self.add(health)
+        health.id = existing.id
+        self.items[existing.id] = health
+        return health
+
+
 class InMemoryBrokerUnitOfWork:
     def __init__(self) -> None:
         self.brokers = InMemoryBrokerCatalogueRepository()
@@ -257,6 +297,7 @@ class InMemoryBrokerUnitOfWork:
         self.connections = InMemoryBrokerConnectionRepository()
         self.connections.bind_accounts(self.accounts)
         self.sessions = InMemoryBrokerSessionRepository()
+        self.health = InMemoryBrokerConnectionHealthRepository()
         # Shared with RecordAuditEventUseCase (same pattern as platform UoW).
         self.audit_logs = InMemoryAuditLogRepository()
         self.committed = False

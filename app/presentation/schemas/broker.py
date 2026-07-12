@@ -108,3 +108,32 @@ class ValidateBrokerResponse(BaseModel):
     valid: bool
     platform_code: str
     message: str = ""
+
+
+class BrokerHealthResponse(BaseModel):
+    broker_id: UUID
+    status: str
+    latency_ms: float | None = None
+    uptime_seconds: float = 0.0
+    reconnect_count: int = 0
+    last_error: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    last_heartbeat_at: datetime | None = None
+    last_successful_connection_at: datetime | None = None
+    connection_count: int = 0
+
+
+class BrokerDiagnosticsResponse(BaseModel):
+    broker_id: UUID
+    status: str
+    latency_ms: float | None = None
+    uptime_seconds: float = 0.0
+    reconnect_count: int = 0
+    last_error: str = ""
+    capabilities: list[str] = Field(default_factory=list)
+    discovered_capabilities: list[str] = Field(default_factory=list)
+    connections: list[dict[str, object]] = Field(default_factory=list)
+    reconnect: list[dict[str, object]] = Field(default_factory=list)
+    platform_code: str
+    last_heartbeat_at: datetime | None = None
+    last_successful_connection_at: datetime | None = None

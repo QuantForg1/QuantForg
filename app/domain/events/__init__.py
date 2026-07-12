@@ -1,12 +1,31 @@
 """Domain events package."""
 
+from app.domain.events.backtest import (
+    BacktestFinished,
+    BacktestStarted,
+    MetricUpdated,
+    TradeSimulated,
+)
 from app.domain.events.base import DomainEvent
 from app.domain.events.broker import (
     BrokerConnected,
+    BrokerConnectionLost,
     BrokerDeleted,
     BrokerDisconnected,
+    BrokerHealthChanged,
+    BrokerHeartbeatReceived,
+    BrokerReconnected,
     BrokerRegistered,
     CredentialsUpdated,
+)
+from app.domain.events.execution import (
+    ExecutionApproved,
+    ExecutionDisabled,
+    ExecutionFailed,
+    ExecutionRejected,
+    ExecutionRequested,
+    ExecutionRetryRequested,
+    ExecutionSubmitted,
 )
 from app.domain.events.fair_value_gap import (
     FairValueGapDetected,
@@ -44,6 +63,7 @@ from app.domain.events.market_structure import (
     SwingDetected,
     TrendChanged,
 )
+from app.domain.events.mt5 import CandleReceived, MarketDataUpdated
 from app.domain.events.order_block import (
     BreakerDetected,
     MitigationDetected,
@@ -52,18 +72,58 @@ from app.domain.events.order_block import (
     OrderBlockStateChanged,
     OrderBlockValidated,
 )
+from app.domain.events.paper import (
+    PaperOrderFilled,
+    PaperOrderRejected,
+    PaperTradeClosed,
+    PaperTradeOpened,
+)
+from app.domain.events.portfolio import (
+    AccountUpdated,
+    PendingOrderDetected,
+    PortfolioSynchronized,
+    PositionClosedDetected,
+    PositionOpenedDetected,
+)
+from app.domain.events.risk import RiskApproved, RiskReduced, RiskRejected
+from app.domain.events.strategy import (
+    SignalGenerated,
+    SignalRejected,
+    StrategyBlocked,
+    StrategyEvaluated,
+)
+from app.domain.events.walkforward import (
+    WalkForwardFinished,
+    WalkForwardFoldCompleted,
+    WalkForwardStarted,
+)
 
 __all__ = [
+    "AccountUpdated",
+    "BacktestFinished",
+    "BacktestStarted",
     "BreakOfStructureDetected",
     "BreakerDetected",
     "BrokerConnected",
+    "BrokerConnectionLost",
     "BrokerDeleted",
     "BrokerDisconnected",
+    "BrokerHealthChanged",
+    "BrokerHeartbeatReceived",
+    "BrokerReconnected",
     "BrokerRegistered",
     "CandleClosed",
+    "CandleReceived",
     "ChangeOfCharacterDetected",
     "CredentialsUpdated",
     "DomainEvent",
+    "ExecutionApproved",
+    "ExecutionDisabled",
+    "ExecutionFailed",
+    "ExecutionRejected",
+    "ExecutionRequested",
+    "ExecutionRetryRequested",
+    "ExecutionSubmitted",
     "FairValueGapDetected",
     "FairValueGapExpired",
     "FairValueGapStateChanged",
@@ -78,18 +138,39 @@ __all__ = [
     "MarketContextCreated",
     "MarketContextUpdated",
     "MarketDataStored",
+    "MarketDataUpdated",
     "MarketOpened",
     "MarketSnapshotCaptured",
+    "MetricUpdated",
     "MitigationDetected",
     "OrderBlockDetected",
     "OrderBlockExpired",
     "OrderBlockStateChanged",
     "OrderBlockValidated",
+    "PaperOrderFilled",
+    "PaperOrderRejected",
+    "PaperTradeClosed",
+    "PaperTradeOpened",
+    "PendingOrderDetected",
+    "PortfolioSynchronized",
+    "PositionClosedDetected",
+    "PositionOpenedDetected",
     "QuoteUpdated",
+    "RiskApproved",
+    "RiskReduced",
+    "RiskRejected",
     "SessionChanged",
+    "SignalGenerated",
+    "SignalRejected",
     "SpreadObserved",
+    "StrategyBlocked",
+    "StrategyEvaluated",
     "StructureChanged",
     "SwingDetected",
     "TickReceived",
+    "TradeSimulated",
     "TrendChanged",
+    "WalkForwardFinished",
+    "WalkForwardFoldCompleted",
+    "WalkForwardStarted",
 ]

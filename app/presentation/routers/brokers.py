@@ -28,6 +28,8 @@ from app.presentation.dependencies.auth import (
 )
 from app.presentation.dependencies.broker import BrokerSvc
 from app.presentation.schemas.broker import (
+    BrokerDiagnosticsResponse,
+    BrokerHealthResponse,
     BrokerResponse,
     CreateBrokerRequest,
     UpdateBrokerRequest,
@@ -64,6 +66,51 @@ async def get_broker(
 ) -> BrokerResponse:
     dto = await brokers.get_broker.execute(broker_id=broker_id)
     return _to_response(dto)
+
+
+@router.get("/{broker_id}/health", response_model=BrokerHealthResponse)
+async def get_broker_health(
+    broker_id: UUID,
+    _user: CurrentUser,
+    brokers: BrokerSvc,
+) -> BrokerHealthResponse:
+    dto = await brokers.get_broker_health.execute(broker_id=broker_id)
+    return BrokerHealthResponse(
+        broker_id=dto.broker_id,
+        status=dto.status,
+        latency_ms=dto.latency_ms,
+        uptime_seconds=dto.uptime_seconds,
+        reconnect_count=dto.reconnect_count,
+        last_error=dto.last_error,
+        capabilities=list(dto.capabilities),
+        last_heartbeat_at=dto.last_heartbeat_at,
+        last_successful_connection_at=dto.last_successful_connection_at,
+        connection_count=dto.connection_count,
+    )
+
+
+@router.get("/{broker_id}/diagnostics", response_model=BrokerDiagnosticsResponse)
+async def get_broker_diagnostics(
+    broker_id: UUID,
+    _user: CurrentUser,
+    brokers: BrokerSvc,
+) -> BrokerDiagnosticsResponse:
+    dto = await brokers.get_broker_diagnostics.execute(broker_id=broker_id)
+    return BrokerDiagnosticsResponse(
+        broker_id=dto.broker_id,
+        status=dto.status,
+        latency_ms=dto.latency_ms,
+        uptime_seconds=dto.uptime_seconds,
+        reconnect_count=dto.reconnect_count,
+        last_error=dto.last_error,
+        capabilities=list(dto.capabilities),
+        discovered_capabilities=list(dto.discovered_capabilities),
+        connections=list(dto.connections),
+        reconnect=list(dto.reconnect),
+        platform_code=dto.platform_code,
+        last_heartbeat_at=dto.last_heartbeat_at,
+        last_successful_connection_at=dto.last_successful_connection_at,
+    )
 
 
 @router.post(

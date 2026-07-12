@@ -14,6 +14,10 @@ from app.application.dto.broker import (
     UpdateBrokerAccountCommand,
     UpdateBrokerCommand,
 )
+from app.application.services.broker_health import (
+    AutomaticReconnectManager,
+    ConnectionHealthMonitor,
+)
 from app.application.use_cases.broker import (
     CreateBrokerAccountUseCase,
     CreateBrokerUseCase,
@@ -345,6 +349,8 @@ class TestConnectDisconnectValidate:
             audit=audit,
             registry=registry,
             encryption_key=_SECRET,
+            health_monitor=ConnectionHealthMonitor(),
+            reconnect_manager=AutomaticReconnectManager(),
         ).execute(ConnectBrokerCommand(user_id=user_id, account_id=account.id))
         assert connected.status == "connected"
         assert connected.adapter_session_ref == "session-ref-1"
@@ -354,6 +360,8 @@ class TestConnectDisconnectValidate:
             uow_factory=factory,
             audit=audit,
             registry=registry,
+            health_monitor=ConnectionHealthMonitor(),
+            reconnect_manager=AutomaticReconnectManager(),
         ).execute(DisconnectBrokerCommand(user_id=user_id, account_id=account.id))
         assert disconnected.status == "disconnected"
 
@@ -396,6 +404,8 @@ class TestConnectDisconnectValidate:
                 audit=audit,
                 registry=registry,
                 encryption_key=_SECRET,
+                health_monitor=ConnectionHealthMonitor(),
+                reconnect_manager=AutomaticReconnectManager(),
             ).execute(ConnectBrokerCommand(user_id=user_id, account_id=account.id))
 
 

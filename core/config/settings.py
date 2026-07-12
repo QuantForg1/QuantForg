@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     app_name: Annotated[str, Field(description="Human-readable application name")] = (
         "QuantForg"
     )
-    app_version: Annotated[str, Field(description="Semantic version string")] = "0.1.0"
+    app_version: Annotated[str, Field(description="Semantic version string")] = "1.0.0"
     app_env: Annotated[
         AppEnvironment,
         Field(description="Runtime environment selector"),
@@ -165,6 +165,18 @@ class Settings(BaseSettings):
             description="Application secret key for signing tokens",
         ),
     ] = SecretStr("change-me-to-a-long-random-secret-key-at-least-64-chars")
+    encryption_key_version: Annotated[
+        int,
+        Field(ge=1, description="Active AES-256-GCM credential key version"),
+    ] = 1
+    credential_encryption_previous_keys: Annotated[
+        list[SecretStr],
+        NoDecode,
+        Field(
+            default_factory=list,
+            description="Prior credential encryption secrets for key rotation",
+        ),
+    ]
     access_token_expire_minutes: Annotated[
         int, Field(ge=1, description="JWT access token lifetime in minutes")
     ] = 30
@@ -175,12 +187,70 @@ class Settings(BaseSettings):
         float, Field(gt=0, description="Health check probe timeout")
     ] = 5.0
 
+    # -- MT5 Adapter (connection layer) --------------------------------------
+    mt5_enabled: Annotated[
+        bool,
+        Field(description="Register the MT5 connection-layer adapter"),
+    ] = True
+    mt5_use_mock: Annotated[
+        bool,
+        Field(
+            description=(
+                "Use MockMT5Client instead of a live MetaTrader5 terminal "
+                "(required for CI / non-Windows)"
+            )
+        ),
+    ] = True
+    mt5_terminal_path: Annotated[
+        str,
+        Field(description="Optional path to the MetaTrader 5 terminal"),
+    ] = ""
+    mt5_connect_timeout_seconds: Annotated[
+        float,
+        Field(gt=0, description="MT5 connect timeout in seconds"),
+    ] = 60.0
+
+    # -- Execution Gateway (DISABLED by default) -----------------------------
+    execution_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Allow MT5 Execution Gateway order_send. "
+                "DISABLED by default — never enable in production without review"
+            )
+        ),
+    ] = False
+
+    # -- Persistence ----------------------------------------------------------
+    durable_persistence: Annotated[
+        bool,
+        Field(
+            description=(
+                "Use SQLAlchemy Postgres Unit of Work factories when not "
+                "testing. Set False to force in-memory factories. "
+                "Testing env always uses memory."
+            )
+        ),
+    ] = True
+
     # -- Validators -----------------------------------------------------------
 
     @field_validator("allowed_hosts", "cors_origins", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: Any) -> list[str]:
         """Accept comma-separated strings or native lists from the environment."""
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, list):
+            return value
+        msg = f"Expected str or list, got {type(value).__name__}"
+        raise TypeError(msg)
+
+    @field_validator("credential_encryption_previous_keys", mode="before")
+    @classmethod
+    def _parse_previous_encryption_keys(cls, value: Any) -> list[Any]:
+        if value is None or value == "":
+            return []
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         if isinstance(value, list):

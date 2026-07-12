@@ -2,10 +2,9 @@
 # Runs on every push and pull request to main/develop.
 #
 # Dependency notes:
-# - pyproject.toml is Poetry-managed ([tool.poetry]), but poetry.lock is not
-#   committed yet. setup-python's `cache: poetry` requires poetry.lock and must
-#   not be used until a lockfile is present.
-# - Jobs install Poetry after setup-python, then resolve from pyproject.toml.
+# - pyproject.toml is Poetry-managed ([tool.poetry]). poetry.lock is committed;
+#   setup-python may use poetry cache when lockfile is present.
+# - Jobs install Poetry after setup-python, then poetry install --no-interaction.
 
 name: CI
 
@@ -41,7 +40,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            poetry.lock
+            pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==${{ env.POETRY_VERSION }}
@@ -66,7 +67,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            poetry.lock
+            pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==${{ env.POETRY_VERSION }}
@@ -88,7 +91,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            poetry.lock
+            pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==${{ env.POETRY_VERSION }}
@@ -150,7 +155,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            poetry.lock
+            pyproject.toml
 
       - name: Install Poetry
         run: pip install poetry==${{ env.POETRY_VERSION }}

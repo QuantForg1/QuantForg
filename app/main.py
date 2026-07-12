@@ -20,15 +20,24 @@ from app.presentation.middleware.request_context import RequestContextMiddleware
 from app.presentation.middleware.session import SessionMiddleware
 from app.presentation.routers import (
     auth,
+    backtest,
     broker_accounts,
     broker_connections,
     brokers,
+    execution,
     health,
+    mt5,
     notifications,
+    ops,
     organizations,
+    paper,
+    portfolio,
     profile,
+    risk,
     settings as settings_router,
+    strategy,
     version,
+    walkforward,
 )
 from core.config.settings import Settings, get_settings
 from core.database.session import DatabaseManager, set_database_manager
@@ -91,8 +100,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "QuantForg — AI-Powered Algorithmic Trading Platform. "
-            "Foundation API: health, version, and authentication."
+            "QuantForg v1.0.0 — Algorithmic Trading Platform. "
+            "Live execution is DISABLED by default (EXECUTION_ENABLED=false). "
+            "AI is not included in this release."
         ),
         docs_url="/docs" if not settings.is_production else None,
         redoc_url="/redoc" if not settings.is_production else None,
@@ -133,6 +143,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(brokers.router, prefix=prefix)
     application.include_router(broker_accounts.router, prefix=prefix)
     application.include_router(broker_connections.router, prefix=prefix)
+    application.include_router(mt5.router, prefix=prefix)
+    application.include_router(execution.router, prefix=prefix)
+    application.include_router(portfolio.router, prefix=prefix)
+    application.include_router(risk.router, prefix=prefix)
+    application.include_router(strategy.router, prefix=prefix)
+    application.include_router(backtest.router, prefix=prefix)
+    application.include_router(paper.router, prefix=prefix)
+    application.include_router(walkforward.router, prefix=prefix)
+    application.include_router(ops.router, prefix=prefix)
 
     return application
 

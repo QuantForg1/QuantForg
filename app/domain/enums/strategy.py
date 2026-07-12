@@ -27,3 +27,12 @@ class StrategyStatus(StrEnum):
     PUBLISHED = "published"
     DEPRECATED = "deprecated"
     ARCHIVED = "archived"
+
+
+class StrategyDecisionType(StrEnum):
+    """Strategy Runtime outcome — decisions only, never execution."""
+
+    NO_ACTION = "no_action"
+    WATCH = "watch"
+    READY = "ready"
+    BLOCKED = "blocked"

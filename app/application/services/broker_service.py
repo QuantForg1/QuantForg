@@ -22,6 +22,10 @@ from app.application.use_cases.broker import (
     UpdateBrokerUseCase,
     ValidateBrokerUseCase,
 )
+from app.application.use_cases.broker_health import (
+    GetBrokerDiagnosticsUseCase,
+    GetBrokerHealthUseCase,
+)
 from app.domain.interfaces.broker_registry import BrokerRegistryPort
 
 
@@ -43,4 +47,6 @@ class BrokerService:
     connect_broker: ConnectBrokerUseCase
     disconnect_broker: DisconnectBrokerUseCase
     validate_broker: ValidateBrokerUseCase
+    get_broker_health: GetBrokerHealthUseCase
+    get_broker_diagnostics: GetBrokerDiagnosticsUseCase
     registry: BrokerRegistryPort

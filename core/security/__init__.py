@@ -5,6 +5,7 @@ Authentication and authorization business rules belong in the application
 layer; this package only supplies low-level building blocks.
 """
 
+from core.security.credential_encryption import CredentialEncryptionService
 from core.security.crypto import (
     credential_hint,
     decrypt_secret,
@@ -16,6 +17,7 @@ from core.security.crypto import (
 from core.security.headers import SecurityHeaders
 
 __all__ = [
+    "CredentialEncryptionService",
     "SecurityHeaders",
     "credential_hint",
     "decrypt_secret",

@@ -6,6 +6,7 @@ Version and liveness are pure and tested here.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -13,9 +14,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.application.dto.health import DependencyStatus, HealthReport, HealthStatus
+from app.application.dto.ops import OpsMetricsDTO
 from app.application.dto.version import VersionInfo
 from app.application.services.health_service import HealthService
 from app.application.services.version_service import VersionService
+from app.application.use_cases.ops import GetOpsMetricsUseCase
+from app.presentation.dependencies.ops import get_ops_metrics_uc
 from app.presentation.dependencies.services import (
     get_health_service,
     get_version_service,
@@ -58,8 +62,28 @@ def _build_test_app() -> FastAPI:
         )
     )
 
+    mock_metrics_uc = MagicMock(spec=GetOpsMetricsUseCase)
+    mock_metrics_uc.execute = AsyncMock(
+        return_value=OpsMetricsDTO(
+            payload={
+                "request_latency_ms_avg": 1.5,
+                "error_rate": 0.0,
+                "throughput_per_minute": 10.0,
+                "cache_hit_ratio": 0.8,
+                "job_duration_ms_avg": 2.0,
+                "request_count": 10,
+                "error_count": 0,
+                "cache_hits": 8,
+                "cache_misses": 2,
+                "job_count": 1,
+                "collected_at": datetime.now(UTC).isoformat(),
+            }
+        )
+    )
+
     application.dependency_overrides[get_version_service] = lambda: mock_version
     application.dependency_overrides[get_health_service] = lambda: mock_health
+    application.dependency_overrides[get_ops_metrics_uc] = lambda: mock_metrics_uc
     return application
 
 
@@ -83,6 +107,23 @@ class TestHealthEndpoints:
         response = client.get("/api/v1/health/live")
         assert response.status_code == 200
         assert response.json()["status"] == "alive"
+
+    def test_readiness(self) -> None:
+        client = TestClient(_build_test_app())
+        response = client.get("/api/v1/health/ready")
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"
+
+    def test_metrics(self) -> None:
+        client = TestClient(_build_test_app())
+        response = client.get("/api/v1/metrics")
+        assert response.status_code == 200
+        body = response.json()
+        assert "request_latency_ms_avg" in body
+        assert "error_rate" in body
+        assert "throughput_per_minute" in body
+        assert "cache_hit_ratio" in body
+        assert "job_duration_ms_avg" in body
 
     def test_health_healthy(self) -> None:
         client = TestClient(_build_test_app())

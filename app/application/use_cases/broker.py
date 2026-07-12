@@ -25,6 +25,10 @@ from app.application.dto.broker import (
     ValidateBrokerCommand,
     ValidateBrokerResultDTO,
 )
+from app.application.services.broker_health import (
+    AutomaticReconnectManager,
+    ConnectionHealthMonitor,
+)
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.broker import Broker
 from app.domain.entities.broker_integration import (
@@ -51,29 +55,21 @@ from app.domain.events.broker import (
 from app.domain.exceptions.auth import AuthorizationError
 from app.domain.exceptions.base import ConflictError, NotFoundError, ValidationError
 from app.domain.interfaces.broker_adapter import BrokerConnectRequest
+from app.domain.interfaces.broker_capability_discovery import (
+    default_capabilities_for_platform,
+)
 from app.domain.interfaces.broker_registry import BrokerRegistryPort
 from app.domain.interfaces.broker_uow import BrokerUnitOfWorkFactory
 from app.domain.value_objects.identity import EntitySlug
-from core.security.crypto import credential_hint, decrypt_secret, encrypt_secret
+from core.security.credential_encryption import CredentialEncryptionService
+from core.security.crypto import credential_hint, decrypt_secret
 
 
 def _default_capabilities(
     platform_code: str,
 ) -> tuple[BrokerCapabilityCode, ...]:
-    """Baseline capability set advertised for a platform (no adapter yet)."""
-    base = (
-        BrokerCapabilityCode.CONNECT,
-        BrokerCapabilityCode.DISCONNECT,
-        BrokerCapabilityCode.VALIDATE,
-        BrokerCapabilityCode.REFRESH,
-        BrokerCapabilityCode.ACCOUNT_INFO,
-        BrokerCapabilityCode.SYMBOLS,
-        BrokerCapabilityCode.BALANCES,
-        BrokerCapabilityCode.POSITIONS,
-        BrokerCapabilityCode.ORDERS,
-    )
-    _ = platform_code  # reserved for platform-specific filtering later
-    return base
+    """Baseline capability set advertised for a platform."""
+    return default_capabilities_for_platform(platform_code)
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,6 +317,8 @@ class CreateBrokerAccountUseCase:
     uow_factory: BrokerUnitOfWorkFactory
     audit: RecordAuditEventUseCase
     encryption_key: str
+    encryption_key_version: int = 1
+    previous_encryption_keys: tuple[str, ...] = ()
 
     async def execute(self, command: CreateBrokerAccountCommand) -> BrokerAccountDTO:
         async with self.uow_factory() as uow:
@@ -371,6 +369,8 @@ class CreateBrokerAccountUseCase:
                 api_key=command.api_key,
                 api_secret=command.api_secret,
                 token=command.token,
+                key_version=self.encryption_key_version,
+                previous_keys=self.previous_encryption_keys,
             )
             await uow.commit()
             dto = BrokerAccountDTO.from_entity(
@@ -404,6 +404,8 @@ class UpdateBrokerAccountUseCase:
     uow_factory: BrokerUnitOfWorkFactory
     audit: RecordAuditEventUseCase
     encryption_key: str
+    encryption_key_version: int = 1
+    previous_encryption_keys: tuple[str, ...] = ()
 
     async def execute(self, command: UpdateBrokerAccountCommand) -> BrokerAccountDTO:
         async with self.uow_factory() as uow:
@@ -430,6 +432,8 @@ class UpdateBrokerAccountUseCase:
                 api_key=command.api_key,
                 api_secret=command.api_secret,
                 token=command.token,
+                key_version=self.encryption_key_version,
+                previous_keys=self.previous_encryption_keys,
             )
             connection = await uow.connections.get_for_account(account.id)
             credentials = await uow.credentials.list_for_account(account.id)
@@ -517,10 +521,16 @@ async def _store_secrets(
     api_key: str | None,
     api_secret: str | None,
     token: str | None,
+    key_version: int = 1,
+    previous_keys: tuple[str, ...] = (),
 ) -> list[BrokerCredential]:
     """Encrypt and upsert provided secrets. Never returns plaintext."""
     credentials_repo = uow.credentials  # type: ignore[attr-defined]
-    stored: list[BrokerCredential] = []
+    crypto = CredentialEncryptionService(
+        secret_key=encryption_key,
+        key_version=key_version,
+        previous_keys=previous_keys,
+    )
     pairs: list[tuple[BrokerCredentialType, str | None]] = [
         (BrokerCredentialType.PASSWORD, password),
         (BrokerCredentialType.API_KEY, api_key),
@@ -530,7 +540,7 @@ async def _store_secrets(
     for cred_type, secret in pairs:
         if secret is None or secret == "":
             continue
-        ciphertext = encrypt_secret(secret, secret_key=encryption_key)
+        ciphertext, version = crypto.encrypt(secret)
         hint = credential_hint(secret, visible=0)
         existing = await credentials_repo.get_by_account_and_type(account_id, cred_type)
         if existing is None:
@@ -539,13 +549,16 @@ async def _store_secrets(
                 credential_type=cred_type,
                 encrypted_payload=ciphertext,
                 key_hint=hint,
+                encryption_key_version=version,
             )
             await credentials_repo.add(credential)
-            stored.append(credential)
         else:
-            existing.rotate(encrypted_payload=ciphertext, key_hint=hint)
+            existing.rotate(
+                encrypted_payload=ciphertext,
+                key_hint=hint,
+                encryption_key_version=version,
+            )
             await credentials_repo.update(existing)
-            stored.append(existing)
     # Return full list for DTO enrichment when creating
     return list(await credentials_repo.list_for_account(account_id))
 
@@ -589,6 +602,48 @@ async def _build_connect_request(
         api_secret=api_secret,
         token=token,
     )
+
+
+async def _record_connection_healthy(
+    uow: object,
+    *,
+    monitor: ConnectionHealthMonitor,
+    reconnect: AutomaticReconnectManager,
+    connection: BrokerConnection,
+    broker_id: UUID,
+    account_id: UUID,
+) -> None:
+    health = monitor.ensure(
+        connection_id=connection.id,
+        broker_account_id=account_id,
+        broker_id=broker_id,
+    )
+    _, _changed = monitor.mark_connected(connection.id)
+    _, _event = reconnect.record_success(connection.id, broker_id=broker_id)
+    await uow.health.upsert(health)  # type: ignore[attr-defined]
+
+
+async def _record_connection_lost(
+    uow: object,
+    *,
+    monitor: ConnectionHealthMonitor,
+    reconnect: AutomaticReconnectManager,
+    connection: BrokerConnection,
+    broker_id: UUID,
+    account_id: UUID,
+    error: str,
+    attempt_reconnect: bool = True,
+) -> None:
+    health = monitor.ensure(
+        connection_id=connection.id,
+        broker_account_id=account_id,
+        broker_id=broker_id,
+    )
+    _, _lost = monitor.mark_lost(connection.id, error=error)
+    if attempt_reconnect and reconnect.can_attempt(connection.id):
+        reconnect.record_attempt(connection.id)
+        health.record_reconnect_attempt()
+    await uow.health.upsert(health)  # type: ignore[attr-defined]
 
 
 @dataclass(frozen=True, slots=True)
@@ -647,6 +702,8 @@ class ConnectBrokerUseCase:
     audit: RecordAuditEventUseCase
     registry: BrokerRegistryPort
     encryption_key: str
+    health_monitor: ConnectionHealthMonitor
+    reconnect_manager: AutomaticReconnectManager
 
     async def execute(self, command: ConnectBrokerCommand) -> BrokerConnectionDTO:
         async with self.uow_factory() as uow:
@@ -686,6 +743,15 @@ class ConnectBrokerUseCase:
             except NotImplementedError as exc:
                 connection.mark_error(str(exc))
                 await uow.connections.update(connection)
+                await _record_connection_lost(
+                    uow,
+                    monitor=self.health_monitor,
+                    reconnect=self.reconnect_manager,
+                    connection=connection,
+                    broker_id=broker.id,
+                    account_id=account.id,
+                    error=str(exc),
+                )
                 await uow.commit()
                 raise ValidationError(
                     "Broker adapter is not implemented yet",
@@ -694,6 +760,15 @@ class ConnectBrokerUseCase:
             except (OSError, RuntimeError, ValueError, TimeoutError) as exc:
                 connection.mark_error(str(exc))
                 await uow.connections.update(connection)
+                await _record_connection_lost(
+                    uow,
+                    monitor=self.health_monitor,
+                    reconnect=self.reconnect_manager,
+                    connection=connection,
+                    broker_id=broker.id,
+                    account_id=account.id,
+                    error=str(exc),
+                )
                 await uow.commit()
                 raise ValidationError(
                     "Broker connect failed",
@@ -702,6 +777,14 @@ class ConnectBrokerUseCase:
 
             connection.mark_connected(adapter_session_ref=session_ref)
             await uow.connections.update(connection)
+            await _record_connection_healthy(
+                uow,
+                monitor=self.health_monitor,
+                reconnect=self.reconnect_manager,
+                connection=connection,
+                broker_id=broker.id,
+                account_id=account.id,
+            )
             existing = await uow.sessions.get_active_for_account(account.id)
             if existing is not None:
                 existing.close()
@@ -745,6 +828,8 @@ class DisconnectBrokerUseCase:
     uow_factory: BrokerUnitOfWorkFactory
     audit: RecordAuditEventUseCase
     registry: BrokerRegistryPort
+    health_monitor: ConnectionHealthMonitor
+    reconnect_manager: AutomaticReconnectManager
 
     async def execute(self, command: DisconnectBrokerCommand) -> BrokerConnectionDTO:
         async with self.uow_factory() as uow:
@@ -776,6 +861,16 @@ class DisconnectBrokerUseCase:
                 await uow.sessions.update(session)
             connection.mark_disconnected()
             await uow.connections.update(connection)
+            await _record_connection_lost(
+                uow,
+                monitor=self.health_monitor,
+                reconnect=self.reconnect_manager,
+                connection=connection,
+                broker_id=broker.id,
+                account_id=account.id,
+                error="disconnected",
+                attempt_reconnect=False,
+            )
             await uow.commit()
             dto = BrokerConnectionDTO.from_entity(
                 connection,

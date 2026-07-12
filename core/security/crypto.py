@@ -1,7 +1,8 @@
 """Cryptographic utility functions.
 
-These helpers wrap the Python standard library and Fernet so call sites stay
-consistent and easy to audit. They do not implement authentication flows.
+These helpers wrap the Python standard library, Fernet (legacy), and
+AES-256-GCM so call sites stay consistent. They do not implement
+authentication flows.
 """
 
 from __future__ import annotations
@@ -54,23 +55,50 @@ def _fernet_from_secret(secret: str) -> Fernet:
     return Fernet(base64.urlsafe_b64encode(digest))
 
 
-def encrypt_secret(plaintext: str, *, secret_key: str) -> str:
-    """Encrypt ``plaintext`` for at-rest storage. Returns a URL-safe token."""
-    if not plaintext:
-        msg = "Cannot encrypt an empty secret"
-        raise ValueError(msg)
-    token = _fernet_from_secret(secret_key).encrypt(plaintext.encode("utf-8"))
-    return token.decode("ascii")
+def encrypt_secret(
+    plaintext: str,
+    *,
+    secret_key: str,
+    key_version: int = 1,
+) -> str:
+    """Encrypt ``plaintext`` for at-rest storage (AES-256-GCM by default).
+
+    Returns a versioned envelope. Legacy callers that omit ``key_version``
+    still work. Prefer :class:`CredentialEncryptionService` for rotation.
+    """
+    from core.security.credential_encryption import encrypt_aes256_gcm
+
+    return encrypt_aes256_gcm(plaintext, secret_key=secret_key, key_version=key_version)
 
 
-def decrypt_secret(token: str, *, secret_key: str) -> str:
-    """Decrypt a token produced by :func:`encrypt_secret`."""
+def decrypt_secret(
+    token: str,
+    *,
+    secret_key: str,
+    previous_keys: tuple[str, ...] = (),
+) -> str:
+    """Decrypt AES-256-GCM envelopes or legacy Fernet tokens."""
+    from core.security.credential_encryption import (
+        CredentialEncryptionService,
+        is_aes256_envelope,
+    )
+
+    if is_aes256_envelope(token) or previous_keys:
+        return CredentialEncryptionService(
+            secret_key=secret_key,
+            previous_keys=previous_keys,
+        ).decrypt(token)
     if not token:
         msg = "Cannot decrypt an empty token"
         raise ValueError(msg)
     try:
         plaintext = _fernet_from_secret(secret_key).decrypt(token.encode("ascii"))
     except InvalidToken as exc:
+        # May already be AES envelope attempted above; try AES explicitly
+        from core.security.credential_encryption import decrypt_aes256_gcm
+
+        if token.startswith("v2:"):
+            return decrypt_aes256_gcm(token, secret_key=secret_key)
         msg = "Failed to decrypt secret payload"
         raise ValueError(msg) from exc
     return plaintext.decode("utf-8")
