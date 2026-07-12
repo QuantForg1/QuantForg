@@ -1,6 +1,4 @@
 # Force Railway to use the Dockerfile image and our entrypoint.
-# Do NOT set healthcheckPath here — a failing platform healthcheck marks the
-# deployment unhealthy and the edge returns x-railway-fallback: true (502).
 
 [build]
 builder = "DOCKERFILE"
@@ -8,5 +6,8 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "/app/docker-entrypoint.sh"
+# Raw ASGI answers immediately on /
+healthcheckPath = "/"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

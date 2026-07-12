@@ -22,7 +22,8 @@ This is **not** an application HTTP 502. Uvicorn can log `Application startup co
 1. **Platform healthcheck failed** → deployment marked unhealthy → edge won’t route traffic (even if the process is listening).
 2. **Public domain not attached** to the deployment that is listening on `$PORT`.
 3. **Stale / failed deployment** still shown in logs while the public URL points at an empty pool.
-4. **Start command / port mismatch** in Railway dashboard (edge dials `$PORT`, process listens elsewhere).
+4. **Start command / port mismatch** in Railway dashboard (edge dials wrong port).
+5. **`EXPOSE 8000` in Dockerfile while Railway sets `PORT=8080`** — edge may proxy to 8000 while Uvicorn listens on 8080 (removed in `e3edf60+`).
 
 Code isolation proved: **raw ASGI with zero middleware** still gets `x-railway-fallback: true` from the public URL — the request **never reaches Python** on the live edge path.
 

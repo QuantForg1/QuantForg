@@ -83,9 +83,7 @@ RUN chmod +x ./docker-entrypoint.sh \
 
 USER quantforg
 
-EXPOSE 8000
-
-# No Docker HEALTHCHECK — can mark the image unhealthy during startup and cause
-# Railway edge x-railway-fallback: true while Uvicorn logs look healthy.
+# Do NOT EXPOSE a fixed port — Railway injects PORT (often 8080). A hardcoded
+# EXPOSE 8000 can cause the edge to proxy to the wrong port → x-railway-fallback.
 
 CMD ["/app/docker-entrypoint.sh"]
