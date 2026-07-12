@@ -100,7 +100,7 @@ jobs:
         run: poetry run pytest -m "unit or not integration" --cov-fail-under=60
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         if: always()
         with:
           files: coverage.xml
