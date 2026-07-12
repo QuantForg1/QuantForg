@@ -37,7 +37,7 @@ tenacity = "^9.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
-pytest-asyncio = "^0.25.0"
+pytest-asyncio = ">=0.25,<1.5"
 pytest-cov = ">=6,<8"
 pytest-mock = "^3.14.0"
 ruff = "^0.8.4"
