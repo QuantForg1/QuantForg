@@ -55,7 +55,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ALLOWED_HOSTS=* \
     DOCS_ENABLED=true \
     WORKERS=1 \
-    HOST=:: \
+    HOST=0.0.0.0 \
     PORT=8000 \
     QF_MINIMAL=1
 
@@ -75,8 +75,8 @@ COPY --from=builder /build/app ./app
 COPY --from=builder /build/core ./core
 COPY --from=builder /build/alembic ./alembic
 COPY --from=builder /build/alembic.ini ./alembic.ini
-# Root entrypoint (not blocked by scripts/* dockerignore rules).
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY scripts/railway_self_check.py ./scripts/railway_self_check.py
 
 RUN chmod +x ./docker-entrypoint.sh \
     && chown -R quantforg:quantforg ${APP_HOME}
@@ -85,9 +85,7 @@ USER quantforg
 
 EXPOSE 8000
 
-# Liveness only — process must respond even when optional deps are down.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -f "http://127.0.0.1:${PORT:-8000}/health/live" || exit 1
+# No Docker HEALTHCHECK — can mark the image unhealthy during startup and cause
+# Railway edge x-railway-fallback: true while Uvicorn logs look healthy.
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/app/docker-entrypoint.sh"]

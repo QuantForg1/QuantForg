@@ -21,6 +21,7 @@ tests
 # Exclude helper scripts; keep entrypoint(s) needed by the runtime image.
 scripts/*
 !scripts/docker-entrypoint.sh
+!scripts/railway_self_check.py
 *.md
 !README.md
 .pre-commit-config.yaml

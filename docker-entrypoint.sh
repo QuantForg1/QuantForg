@@ -12,51 +12,50 @@ export DOCS_ENABLED="${DOCS_ENABLED:-true}"
 
 PORT="${PORT:-8000}"
 export PORT
-# Dual-stack listen: Railway's edge may reach the container over IPv6.
-# Binding only 0.0.0.0 (IPv4) then yields edge 502 "Application failed to respond".
-HOST="${HOST:-::}"
+HOST="${HOST:-0.0.0.0}"
 export HOST
 WORKERS=1
 export WORKERS
 
-# Outage isolation: QF_MINIMAL=1 serves app.minimal_asgi:app (no middleware/lifespan).
-# Default ON until Railway returns 200; set QF_MINIMAL=0 to restore full app.
 QF_MINIMAL="${QF_MINIMAL:-1}"
 export QF_MINIMAL
 
 if [ "${QF_MINIMAL}" = "1" ]; then
-  # Raw ASGI first — eliminates FastAPI/Starlette/middleware entirely.
   APP_TARGET="app.raw_asgi:app"
+  LIFESPAN_FLAG="off"
 else
   APP_TARGET="app.main:app"
+  LIFESPAN_FLAG="on"
 fi
 
-echo "quantforg_entrypoint python=$(python -c 'import sys; print(sys.version.split()[0])') APP_ENV=${APP_ENV} PORT=${PORT} HOST=${HOST} WORKERS=${WORKERS} QF_MINIMAL=${QF_MINIMAL} APP_TARGET=${APP_TARGET}"
+echo "quantforg_entrypoint PORT=${PORT} HOST=${HOST} QF_MINIMAL=${QF_MINIMAL} APP_TARGET=${APP_TARGET}"
 
-# h11 + asyncio: most compatible with Railway's reverse proxy (avoid httptools/uvloop quirks).
-# lifespan=off for minimal; on for full app.
-if [ "${QF_MINIMAL}" = "1" ]; then
-  exec python -m uvicorn "${APP_TARGET}" \
-    --host "${HOST}" \
-    --port "${PORT}" \
-    --workers 1 \
-    --http h11 \
-    --loop asyncio \
-    --lifespan off \
-    --proxy-headers \
-    --forwarded-allow-ips='*' \
-    --log-level info \
-    --access-log
-else
-  exec python -m uvicorn "${APP_TARGET}" \
-    --host "${HOST}" \
-    --port "${PORT}" \
-    --workers 1 \
-    --http h11 \
-    --loop asyncio \
-    --lifespan on \
-    --proxy-headers \
-    --forwarded-allow-ips='*' \
-    --log-level info \
-    --access-log
-fi
+python - <<'PY'
+import os
+import socket
+
+port = int(os.environ["PORT"])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("0.0.0.0", port))
+print(f"bind_probe_ok port={port}")
+s.close()
+PY
+
+python -m uvicorn "${APP_TARGET}" \
+  --host "${HOST}" \
+  --port "${PORT}" \
+  --workers 1 \
+  --http h11 \
+  --loop asyncio \
+  --lifespan "${LIFESPAN_FLAG}" \
+  --proxy-headers \
+  --forwarded-allow-ips='*' \
+  --log-level info \
+  --access-log &
+UV_PID=$!
+
+python scripts/railway_self_check.py || true
+
+echo "uvicorn_pid=${UV_PID} listening=${HOST}:${PORT}"
+wait "${UV_PID}"

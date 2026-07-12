@@ -1,6 +1,6 @@
 # Force Railway to use the Dockerfile image and our entrypoint.
-# Without this, a dashboard Start Command / Nixpacks override can leave
-# Uvicorn "running" in logs while the edge proxies to the wrong process/port.
+# Do NOT set healthcheckPath here — a failing platform healthcheck marks the
+# deployment unhealthy and the edge returns x-railway-fallback: true (502).
 
 [build]
 builder = "DOCKERFILE"
@@ -8,7 +8,5 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "/app/docker-entrypoint.sh"
-healthcheckPath = "/health"
-healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
