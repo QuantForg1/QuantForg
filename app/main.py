@@ -247,17 +247,16 @@ def _select_app() -> FastAPI:
         "on",
     }
     if minimal:
-        from app.minimal_asgi import app as minimal_app
+        from app.raw_asgi import app as raw_app
 
         print(
-            "qf_main_select_minimal"
-            f" type={type(minimal_app)!r}"
-            f" id={id(minimal_app)}"
-            f" module={minimal_app.__class__.__module__}"
+            "qf_main_select_raw"
+            f" type={type(raw_app)!r}"
+            f" id={id(raw_app)}"
             f" python={sys.version.split()[0]}",
             flush=True,
         )
-        return minimal_app
+        return raw_app  # type: ignore[return-value]
 
     full = create_app()
     print(

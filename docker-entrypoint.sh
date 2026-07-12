@@ -12,9 +12,10 @@ export DOCS_ENABLED="${DOCS_ENABLED:-true}"
 
 PORT="${PORT:-8000}"
 export PORT
-HOST="${HOST:-0.0.0.0}"
+# Dual-stack listen: Railway's edge may reach the container over IPv6.
+# Binding only 0.0.0.0 (IPv4) then yields edge 502 "Application failed to respond".
+HOST="${HOST:-::}"
 export HOST
-# Force single worker — multi-worker has caused silent proxy failures on Railway.
 WORKERS=1
 export WORKERS
 
@@ -24,7 +25,8 @@ QF_MINIMAL="${QF_MINIMAL:-1}"
 export QF_MINIMAL
 
 if [ "${QF_MINIMAL}" = "1" ]; then
-  APP_TARGET="app.minimal_asgi:app"
+  # Raw ASGI first — eliminates FastAPI/Starlette/middleware entirely.
+  APP_TARGET="app.raw_asgi:app"
 else
   APP_TARGET="app.main:app"
 fi
