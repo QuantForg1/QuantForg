@@ -213,9 +213,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return application
 
 
-app = create_app()
-
-
 def run() -> None:
     """CLI entrypoint used by ``poetry run quantforg``."""
     settings = get_settings()
@@ -224,11 +221,57 @@ def run() -> None:
         host=settings.host,
         port=settings.port,
         reload=settings.reload and settings.is_development,
-        workers=settings.workers if not settings.reload else 1,
+        workers=1,
         log_level=settings.log_level.lower(),
         proxy_headers=True,
         forwarded_allow_ips="*",
+        http="h11",
+        loop="asyncio",
     )
+
+
+def _select_app() -> FastAPI:
+    """Choose ASGI target.
+
+    Default QF_MINIMAL=1 so Railway returns HTTP 200 even when the platform
+    start command bypasses docker-entrypoint.sh and runs ``uvicorn app.main:app``.
+    Set QF_MINIMAL=0 to restore the full application.
+    """
+    import os
+    import sys
+
+    minimal = os.environ.get("QF_MINIMAL", "1").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if minimal:
+        from app.minimal_asgi import app as minimal_app
+
+        print(
+            "qf_main_select_minimal"
+            f" type={type(minimal_app)!r}"
+            f" id={id(minimal_app)}"
+            f" module={minimal_app.__class__.__module__}"
+            f" python={sys.version.split()[0]}",
+            flush=True,
+        )
+        return minimal_app
+
+    full = create_app()
+    print(
+        "qf_main_select_full"
+        f" type={type(full)!r}"
+        f" id={id(full)}"
+        f" routes={len(full.routes)}"
+        f" python={sys.version.split()[0]}",
+        flush=True,
+    )
+    return full
+
+
+app = _select_app()
 
 
 if __name__ == "__main__":

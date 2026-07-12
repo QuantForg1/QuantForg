@@ -13,6 +13,7 @@ from httpx2 import ASGITransport, AsyncClient
 
 # Force testing environment before any settings import.
 os.environ.setdefault("APP_ENV", "testing")
+os.environ.setdefault("QF_MINIMAL", "0")
 os.environ.setdefault(
     "SECRET_KEY",
     "test-secret-key-that-is-long-enough-for-validation-32chars",
