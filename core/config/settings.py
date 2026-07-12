@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Annotated, Any
 
 from pydantic import (
+    AliasChoices,
     Field,
     SecretStr,
     field_validator,
@@ -60,13 +61,22 @@ class Settings(BaseSettings):
     allowed_hosts: Annotated[
         list[str],
         NoDecode,
-        Field(description="Trusted hostnames for Host header validation"),
-    ] = ["localhost", "127.0.0.1"]
+        Field(
+            description=(
+                "Trusted hostnames for Host header validation. "
+                "Use '*' behind a platform reverse proxy (Railway, etc.)."
+            )
+        ),
+    ] = ["*"]
     cors_origins: Annotated[
         list[str],
         NoDecode,
         Field(description="Allowed CORS origins"),
     ] = ["http://localhost:3000", "http://localhost:8000"]
+    docs_enabled: Annotated[
+        bool,
+        Field(description="Expose /docs, /redoc, and /openapi.json"),
+    ] = True
 
     # -- Server ---------------------------------------------------------------
     host: Annotated[str, Field(description="Bind address")] = "0.0.0.0"
@@ -113,6 +123,14 @@ class Settings(BaseSettings):
     postgres_echo: Annotated[bool, Field(description="Echo SQL statements to log")] = (
         False
     )
+    database_url_override: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Full Postgres DSN from the platform (DATABASE_URL)",
+            validation_alias=AliasChoices("DATABASE_URL", "database_url_override"),
+        ),
+    ] = None
 
     # -- Supabase -------------------------------------------------------------
     supabase_url: Annotated[
@@ -156,6 +174,14 @@ class Settings(BaseSettings):
     redis_pool_size: Annotated[
         int, Field(ge=1, description="Redis connection pool size")
     ] = 10
+    redis_url_override: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Full Redis DSN from the platform (REDIS_URL)",
+            validation_alias=AliasChoices("REDIS_URL", "redis_url_override"),
+        ),
+    ] = None
 
     # -- Security -------------------------------------------------------------
     secret_key: Annotated[
@@ -292,10 +318,13 @@ class Settings(BaseSettings):
             if any(marker in secret for marker in insecure_markers):
                 msg = "SECRET_KEY must be replaced with a strong production value"
                 raise ValueError(msg)
-            password = self.postgres_password.get_secret_value()
-            if any(marker in password for marker in insecure_markers):
-                msg = "POSTGRES_PASSWORD must be replaced in production"
-                raise ValueError(msg)
+            # Platforms often inject DATABASE_URL only; skip composed password check.
+            dsn = (self.database_url_override or "").strip()
+            if not dsn:
+                password = self.postgres_password.get_secret_value()
+                if any(marker in password for marker in insecure_markers):
+                    msg = "POSTGRES_PASSWORD must be replaced in production"
+                    raise ValueError(msg)
         return self
 
     # -- Computed properties --------------------------------------------------
@@ -315,15 +344,32 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """Async SQLAlchemy connection URL (asyncpg driver)."""
+        override = (self.database_url_override or "").strip()
+        if override:
+            return self._as_asyncpg_url(override)
         password = self.postgres_password.get_secret_value()
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
+    @staticmethod
+    def _as_asyncpg_url(url: str) -> str:
+        """Normalize platform DSNs to SQLAlchemy asyncpg form."""
+        if url.startswith("postgresql+asyncpg://"):
+            return url
+        if url.startswith("postgres://"):
+            return "postgresql+asyncpg://" + url.removeprefix("postgres://")
+        if url.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + url.removeprefix("postgresql://")
+        return url
+
     @property
     def redis_url(self) -> str:
         """Redis connection URL."""
+        override = (self.redis_url_override or "").strip()
+        if override:
+            return override
         scheme = "rediss" if self.redis_ssl else "redis"
         auth = ""
         if self.redis_password is not None:

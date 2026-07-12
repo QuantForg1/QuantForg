@@ -22,11 +22,20 @@ def get_health_service() -> HealthService:
     """Build a :class:`HealthService` wired to live infrastructure probes."""
     container = get_container()
     app_info = SettingsAppInfo(settings=container.settings)
-    probes = (
-        PostgresHealthCheck(database=container.database),
-        RedisHealthCheck(redis=container.require_redis()),
+    from app.infrastructure.health.unavailable import UnavailableHealthCheck
+
+    probes: list[object] = []
+    # Postgres is required only when durable persistence is active.
+    if container.settings.durable_persistence and not container.settings.is_testing:
+        probes.append(PostgresHealthCheck(database=container.database))
+    if container.redis is not None:
+        probes.append(RedisHealthCheck(redis=container.redis))
+    else:
+        probes.append(UnavailableHealthCheck(name="redis"))
+    use_case = GetHealthUseCase(
+        app_info=app_info,
+        probes=tuple(probes),  # type: ignore[arg-type]
     )
-    use_case = GetHealthUseCase(app_info=app_info, probes=probes)
     return HealthService(use_case=use_case)
 
 

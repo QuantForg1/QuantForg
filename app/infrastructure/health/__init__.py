@@ -1,0 +1,1 @@
+"""Infrastructure health-check adapters."""

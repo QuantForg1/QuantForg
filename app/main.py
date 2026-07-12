@@ -56,7 +56,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     -------
     1. Load settings and configure structured logging.
     2. Construct the DI container with database manager.
-    3. Open PostgreSQL and Redis connections.
+    3. Open PostgreSQL and Redis connections (optional deps fail soft).
 
     Shutdown
     --------
@@ -70,17 +70,25 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     set_container(container)
     set_database_manager(database)
 
-    await container.startup()
-    logger.info(
-        "application_started",
-        name=settings.app_name,
-        version=settings.app_version,
-        env=settings.app_env.value,
-    )
+    try:
+        await container.startup()
+        logger.info(
+            "application_started",
+            name=settings.app_name,
+            version=settings.app_version,
+            env=settings.app_env.value,
+            execution_enabled=bool(settings.execution_enabled),
+        )
+    except Exception as exc:
+        # Last-resort: keep process alive for liveness probes.
+        logger.exception("application_startup_degraded", error=str(exc))
 
     yield
 
-    await container.shutdown()
+    try:
+        await container.shutdown()
+    except Exception as exc:
+        logger.warning("application_shutdown_error", error=str(exc))
     logger.info("application_stopped")
 
 
@@ -96,6 +104,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings is None:
         settings = get_settings()
 
+    docs_url = "/docs" if settings.docs_enabled else None
+    redoc_url = "/redoc" if settings.docs_enabled else None
+    openapi_url = "/openapi.json" if settings.docs_enabled else None
+
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
@@ -104,9 +116,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "Live execution is DISABLED by default (EXECUTION_ENABLED=false). "
             "AI is not included in this release."
         ),
-        docs_url="/docs" if not settings.is_production else None,
-        redoc_url="/redoc" if not settings.is_production else None,
-        openapi_url="/openapi.json" if not settings.is_production else None,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+        openapi_url=openapi_url,
         lifespan=lifespan,
     )
 
@@ -131,7 +143,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- Exception handlers ---------------------------------------------------
     register_exception_handlers(application)
 
-    # -- Routers --------------------------------------------------------------
+    # -- Root + unprefixed health (Railway / platform probes) -----------------
+    @application.get("/", tags=["Root"], include_in_schema=False)
+    async def root() -> dict[str, str]:
+        return {
+            "name": settings.app_name,
+            "version": settings.app_version,
+            "status": "ok",
+        }
+
+    application.include_router(health.router)
+
+    # -- Versioned API routers ------------------------------------------------
     prefix = settings.api_prefix
     application.include_router(health.router, prefix=prefix)
     application.include_router(version.router, prefix=prefix)

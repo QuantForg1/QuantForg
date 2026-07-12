@@ -38,22 +38,38 @@ class RedisClient:
         return self._client
 
     async def connect(self) -> None:
-        """Open the Redis connection pool."""
+        """Open the Redis connection pool and verify with PING.
+
+        Failures are logged and leave the client disconnected so the
+        application can continue starting without Redis.
+        """
         if self._client is not None:
             return
-        self._client = cast(
-            "Any",
-            aioredis.from_url(
-                self._settings.redis_url,
-                max_connections=self._settings.redis_pool_size,
-                decode_responses=True,
-            ),
-        )
-        logger.info(
-            "redis_connected",
-            host=self._settings.redis_host,
-            db=self._settings.redis_db,
-        )
+        try:
+            self._client = cast(
+                "Any",
+                aioredis.from_url(
+                    self._settings.redis_url,
+                    max_connections=self._settings.redis_pool_size,
+                    decode_responses=True,
+                ),
+            )
+            await self._client.ping()
+            logger.info(
+                "redis_connected",
+                host=self._settings.redis_host,
+                db=self._settings.redis_db,
+            )
+        except Exception as exc:
+            logger.warning("redis_unavailable", error=str(exc))
+            client = self._client
+            self._client = None
+            if client is not None:
+                try:
+                    await client.aclose()
+                except Exception as close_exc:
+                    logger.warning("redis_close_failed", error=str(close_exc))
+            raise
 
     async def disconnect(self) -> None:
         """Close the Redis connection pool."""

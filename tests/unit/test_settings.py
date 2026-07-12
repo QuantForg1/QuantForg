@@ -48,9 +48,34 @@ class TestSettings:
         assert settings.database_url.startswith("postgresql+asyncpg://")
         assert "quantforg_test" in settings.database_url
 
+    def test_database_url_from_override(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+            app_env=AppEnvironment.TESTING,
+            database_url_override="postgres://user:pass@db:5432/app",
+        )
+        assert settings.database_url.startswith("postgresql+asyncpg://")
+        assert "user:pass@db:5432/app" in settings.database_url
+
+    def test_production_accepts_database_url_without_postgres_password(
+        self,
+    ) -> None:
+        settings = production_settings(
+            secret_key="a-real-production-secret-key-with-enough-entropy-here",
+            database_url_override="postgresql://u:p@host:5432/db",
+        )
+        assert "postgresql+asyncpg://" in settings.database_url
+
     def test_redis_url_format(self) -> None:
         settings = testing_settings()
         assert settings.redis_url.startswith("redis://")
+
+    def test_redis_url_from_override(self) -> None:
+        settings = testing_settings(
+            redis_url_override="rediss://:secret@redis.example:6380/1",
+        )
+        assert settings.redis_url == "rediss://:secret@redis.example:6380/1"
 
     def test_comma_separated_cors_origins(self) -> None:
         settings = Settings(

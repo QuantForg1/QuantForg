@@ -16,6 +16,9 @@ from app.application.dto.health import DependencyStatus, HealthReport, HealthSta
 from app.domain.interfaces.app_info import AppInfoPort
 from app.domain.interfaces.health import HealthCheckPort
 
+# Cache / optional infra — reported in the payload but do not fail readiness.
+_OPTIONAL_DEPENDENCIES = frozenset({"redis"})
+
 
 @dataclass(frozen=True, slots=True)
 class GetHealthUseCase:
@@ -45,9 +48,11 @@ class GetHealthUseCase:
 
         results = await asyncio.gather(*[_run(p) for p in self.probes])
         dependencies = list(results)
+        critical = [d for d in dependencies if d.name not in _OPTIONAL_DEPENDENCIES]
+        # No critical probes (e.g. testing/memory mode) → process is healthy.
         overall = (
             HealthStatus.HEALTHY
-            if all(d.status == HealthStatus.HEALTHY for d in dependencies)
+            if not critical or all(d.status == HealthStatus.HEALTHY for d in critical)
             else HealthStatus.UNHEALTHY
         )
         return HealthReport(

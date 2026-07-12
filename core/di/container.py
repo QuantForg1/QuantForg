@@ -73,8 +73,11 @@ class Container:
     alerting_service: Any = field(default=None, init=False)
 
     async def startup(self) -> None:
-        """Start all managed infrastructure connections."""
-        await self.database.start()
+        """Start managed infrastructure; optional deps fail soft with warnings."""
+        try:
+            await self.database.start()
+        except Exception as exc:
+            logger.warning("database_startup_failed", error=str(exc))
 
         from app.application.services.broker_health import (
             AutomaticReconnectManager,
@@ -88,28 +91,51 @@ class Container:
         from app.infrastructure.persistence.factory import build_persistence_factories
 
         self.redis = RedisClient(self.settings)
-        await self.redis.connect()
+        try:
+            await self.redis.connect()
+        except Exception as exc:
+            logger.warning("redis_startup_failed", error=str(exc))
+            self.redis = None
 
         if self.settings.supabase_configured:
-            from app.infrastructure.supabase.client import SupabaseClient
+            try:
+                from app.infrastructure.supabase.client import SupabaseClient
 
-            self.supabase = SupabaseClient(self.settings)
-            self.supabase.connect()
+                self.supabase = SupabaseClient(self.settings)
+                self.supabase.connect()
+            except Exception as exc:
+                logger.warning("supabase_startup_failed", error=str(exc))
+                self.supabase = None
 
-        persistence = build_persistence_factories(
-            self.settings, self.database, supabase=self.supabase
-        )
-        self.platform_uow_factory = persistence["platform_uow_factory"]
-        self.broker_uow_factory = persistence["broker_uow_factory"]
-        self.mt5_uow_factory = persistence["mt5_uow_factory"]
-        self.execution_uow_factory = persistence["execution_uow_factory"]
-        self.portfolio_uow_factory = persistence["portfolio_uow_factory"]
-        self.risk_uow_factory = persistence["risk_uow_factory"]
-        self.strategy_uow_factory = persistence["strategy_uow_factory"]
-        self.backtest_uow_factory = persistence["backtest_uow_factory"]
-        self.paper_uow_factory = persistence["paper_uow_factory"]
-        self.walkforward_uow_factory = persistence["walkforward_uow_factory"]
-        self.ops_uow_factory = persistence["ops_uow_factory"]
+        try:
+            persistence = build_persistence_factories(
+                self.settings, self.database, supabase=self.supabase
+            )
+        except Exception as exc:
+            logger.warning("persistence_factory_failed", error=str(exc))
+            from app.infrastructure.persistence.memory_ops import (
+                MemoryOpsUnitOfWorkFactory,
+            )
+
+            persistence = {"ops_uow_factory": MemoryOpsUnitOfWorkFactory()}
+
+        self.platform_uow_factory = persistence.get("platform_uow_factory")
+        self.broker_uow_factory = persistence.get("broker_uow_factory")
+        self.mt5_uow_factory = persistence.get("mt5_uow_factory")
+        self.execution_uow_factory = persistence.get("execution_uow_factory")
+        self.portfolio_uow_factory = persistence.get("portfolio_uow_factory")
+        self.risk_uow_factory = persistence.get("risk_uow_factory")
+        self.strategy_uow_factory = persistence.get("strategy_uow_factory")
+        self.backtest_uow_factory = persistence.get("backtest_uow_factory")
+        self.paper_uow_factory = persistence.get("paper_uow_factory")
+        self.walkforward_uow_factory = persistence.get("walkforward_uow_factory")
+        self.ops_uow_factory = persistence.get("ops_uow_factory")
+        if self.ops_uow_factory is None:
+            from app.infrastructure.persistence.memory_ops import (
+                MemoryOpsUnitOfWorkFactory,
+            )
+
+            self.ops_uow_factory = MemoryOpsUnitOfWorkFactory()
         if persistence.get("uow_factory") is not None:
             self.uow_factory = persistence["uow_factory"]
 
@@ -121,19 +147,25 @@ class Container:
         from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
 
         execution_enabled = bool(self.settings.execution_enabled)
-        if self.settings.mt5_enabled:
-            client = MockMT5Client()
-            if not self.settings.mt5_use_mock:
-                # Live MetaTrader5 package is Windows-only and optional.
-                # Sprint 1 defaults to mock; live client is a future enhancement.
+        try:
+            if self.settings.mt5_enabled:
                 client = MockMT5Client()
+                if not self.settings.mt5_use_mock:
+                    # Live MetaTrader5 package is Windows-only and optional.
+                    # Sprint 1 defaults to mock; live client is a future enhancement.
+                    client = MockMT5Client()
+                self.mt5_adapter = MT5Adapter(
+                    client=client, execution_enabled=execution_enabled
+                )
+                self.broker_registry.register(self.mt5_adapter)
+            else:
+                self.mt5_adapter = MT5Adapter(
+                    client=MockMT5Client(), execution_enabled=execution_enabled
+                )
+        except Exception as exc:
+            logger.warning("mt5_startup_failed", error=str(exc))
             self.mt5_adapter = MT5Adapter(
-                client=client, execution_enabled=execution_enabled
-            )
-            self.broker_registry.register(self.mt5_adapter)
-        else:
-            self.mt5_adapter = MT5Adapter(
-                client=MockMT5Client(), execution_enabled=execution_enabled
+                client=MockMT5Client(), execution_enabled=False
             )
 
         from app.application.services.execution_gateway import ExecutionGateway
@@ -203,7 +235,13 @@ class Container:
             uow_factory=self.ops_uow_factory,
             metrics=self.metrics_collector,
         )
-        logger.info("container_startup_complete", env=self.settings.app_env.value)
+        logger.info(
+            "container_startup_complete",
+            env=self.settings.app_env.value,
+            redis=self.redis is not None,
+            supabase=self.supabase is not None,
+            execution_enabled=bool(self.settings.execution_enabled),
+        )
 
     async def shutdown(self) -> None:
         """Gracefully close all managed infrastructure connections."""

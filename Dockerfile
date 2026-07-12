@@ -48,7 +48,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     APP_HOME=/app \
     PATH="/app/.venv/bin:$PATH" \
     APP_ENV=production \
-    DEBUG=false
+    DEBUG=false \
+    RELOAD=false \
+    EXECUTION_ENABLED=false \
+    ALLOWED_HOSTS=* \
+    DOCS_ENABLED=true \
+    WORKERS=1 \
+    PORT=8000
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
@@ -66,18 +72,19 @@ COPY --from=builder /build/app ./app
 COPY --from=builder /build/core ./core
 COPY --from=builder /build/alembic ./alembic
 COPY --from=builder /build/alembic.ini ./alembic.ini
+COPY scripts/docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chown -R quantforg:quantforg ${APP_HOME}
+RUN chmod +x ./docker-entrypoint.sh \
+    && chown -R quantforg:quantforg ${APP_HOME}
 
 USER quantforg
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+# Liveness only — readiness (/health) may be 503 until Postgres/Redis are up.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -f "http://127.0.0.1:${PORT:-8000}/health/live" || exit 1
 
 ENTRYPOINT ["tini", "--"]
-# Use python -m uvicorn (not bare "uvicorn"): Poetry console scripts copied from the
-# builder stage keep a shebang pointing at /build/.venv/bin/python, which does not
-# exist in the runtime image — tini then fails with "No such file or directory".
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Bind to $PORT (Railway injects this). Do not hardcode 8000 in the process args.
+CMD ["./docker-entrypoint.sh"]
