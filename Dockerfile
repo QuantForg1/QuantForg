@@ -80,10 +80,4 @@ ENTRYPOINT ["tini", "--"]
 # Use python -m uvicorn (not bare "uvicorn"): Poetry console scripts copied from the
 # builder stage keep a shebang pointing at /build/.venv/bin/python, which does not
 # exist in the runtime image — tini then fails with "No such file or directory".
-CMD [
-    "python", "-m", "uvicorn",
-    "app.main:app",
-    "--host", "0.0.0.0",
-    "--port", "8000",
-    "--workers", "4"
-]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
