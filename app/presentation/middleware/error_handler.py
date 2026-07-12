@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.domain.exceptions.auth import AuthenticationError, AuthorizationError
 from app.domain.exceptions.base import (
     ConflictError,
     DomainError,
@@ -50,6 +51,35 @@ def _request_id_from(request: Request) -> str | None:
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach all global exception handlers to the FastAPI application."""
+
+    @app.exception_handler(AuthenticationError)
+    async def authentication_handler(
+        request: Request, exc: AuthenticationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content=_error_body(
+                code=exc.code,
+                message=exc.message,
+                details=exc.details,
+                request_id=_request_id_from(request),
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    @app.exception_handler(AuthorizationError)
+    async def authorization_handler(
+        request: Request, exc: AuthorizationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content=_error_body(
+                code=exc.code,
+                message=exc.message,
+                details=exc.details,
+                request_id=_request_id_from(request),
+            ),
+        )
 
     @app.exception_handler(NotFoundError)
     async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:

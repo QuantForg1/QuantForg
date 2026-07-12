@@ -17,7 +17,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class AppEnvironment(StrEnum):
@@ -59,10 +59,12 @@ class Settings(BaseSettings):
     )
     allowed_hosts: Annotated[
         list[str],
+        NoDecode,
         Field(description="Trusted hostnames for Host header validation"),
     ] = ["localhost", "127.0.0.1"]
     cors_origins: Annotated[
         list[str],
+        NoDecode,
         Field(description="Allowed CORS origins"),
     ] = ["http://localhost:3000", "http://localhost:8000"]
 
@@ -111,6 +113,37 @@ class Settings(BaseSettings):
     postgres_echo: Annotated[bool, Field(description="Echo SQL statements to log")] = (
         False
     )
+
+    # -- Supabase -------------------------------------------------------------
+    supabase_url: Annotated[
+        str,
+        Field(description="Supabase project URL (https://xxxx.supabase.co)"),
+    ] = ""
+    supabase_publishable_key: Annotated[
+        SecretStr | None,
+        Field(description="Supabase publishable API key (preferred)"),
+    ] = None
+    supabase_anon_key: Annotated[
+        SecretStr | None,
+        Field(description="Supabase legacy anon JWT (fallback)"),
+    ] = None
+    supabase_service_role_key: Annotated[
+        SecretStr | None,
+        Field(
+            description=(
+                "Supabase service-role key for server-side profile sync "
+                "(never expose to clients)"
+            )
+        ),
+    ] = None
+    auth_redirect_url: Annotated[
+        str,
+        Field(description="Default redirect URL for OAuth and password reset"),
+    ] = "http://localhost:3000/auth/callback"
+    auth_oauth_enabled: Annotated[
+        bool,
+        Field(description="Expose Google/GitHub OAuth endpoints"),
+    ] = True
 
     # -- Redis ----------------------------------------------------------------
     redis_host: Annotated[str, Field(description="Redis hostname")] = "localhost"
@@ -228,6 +261,24 @@ class Settings(BaseSettings):
             if secret:
                 auth = f":{secret}@"
         return f"{scheme}://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+    @property
+    def supabase_configured(self) -> bool:
+        """Return True when URL and at least one API key are present."""
+        return bool(self.supabase_url.strip()) and self.supabase_api_key is not None
+
+    @property
+    def supabase_api_key(self) -> str | None:
+        """Prefer publishable key; fall back to legacy anon JWT."""
+        if self.supabase_publishable_key is not None:
+            value = self.supabase_publishable_key.get_secret_value().strip()
+            if value:
+                return value
+        if self.supabase_anon_key is not None:
+            value = self.supabase_anon_key.get_secret_value().strip()
+            if value:
+                return value
+        return None
 
 
 @lru_cache(maxsize=1)

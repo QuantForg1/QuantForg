@@ -14,9 +14,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
+from app.presentation.middleware.authentication import AuthenticationMiddleware
 from app.presentation.middleware.error_handler import register_exception_handlers
 from app.presentation.middleware.request_context import RequestContextMiddleware
-from app.presentation.routers import health, version
+from app.presentation.middleware.session import SessionMiddleware
+from app.presentation.routers import (
+    auth,
+    health,
+    notifications,
+    organizations,
+    profile,
+    settings as settings_router,
+    version,
+)
 from core.config.settings import Settings, get_settings
 from core.database.session import DatabaseManager, set_database_manager
 from core.di.container import Container, set_container
@@ -79,7 +89,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=settings.app_version,
         description=(
             "QuantForg — AI-Powered Algorithmic Trading Platform. "
-            "Foundation API: health, version, and infrastructure probes."
+            "Foundation API: health, version, and authentication."
         ),
         docs_url="/docs" if not settings.is_production else None,
         redoc_url="/redoc" if not settings.is_production else None,
@@ -101,6 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allowed_hosts=settings.allowed_hosts,
     )
     application.add_middleware(SecurityHeaders)
+    application.add_middleware(AuthenticationMiddleware)
+    application.add_middleware(SessionMiddleware)
     application.add_middleware(RequestContextMiddleware)
 
     # -- Exception handlers ---------------------------------------------------
@@ -110,6 +122,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     prefix = settings.api_prefix
     application.include_router(health.router, prefix=prefix)
     application.include_router(version.router, prefix=prefix)
+    application.include_router(auth.router, prefix=prefix)
+    application.include_router(profile.router, prefix=prefix)
+    application.include_router(settings_router.router, prefix=prefix)
+    application.include_router(notifications.router, prefix=prefix)
+    application.include_router(organizations.router, prefix=prefix)
 
     return application
 

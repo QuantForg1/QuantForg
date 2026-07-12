@@ -1,5 +1,21 @@
 """HTTP API routers."""
 
-from app.presentation.routers import health, version
+from app.presentation.routers import (
+    auth,
+    health,
+    notifications,
+    organizations,
+    profile,
+    settings,
+    version,
+)
 
-__all__ = ["health", "version"]
+__all__ = [
+    "auth",
+    "health",
+    "notifications",
+    "organizations",
+    "profile",
+    "settings",
+    "version",
+]

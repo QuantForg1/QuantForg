@@ -57,6 +57,10 @@ def testing_settings(**overrides: object) -> Settings:
         "postgres_echo": False,
         "postgres_db": "quantforg_test",
         "secret_key": "test-secret-key-that-is-long-enough-for-validation-32chars",
+        # Keep unit tests isolated from developer machine .env secrets.
+        "supabase_url": "",
+        "supabase_publishable_key": None,
+        "supabase_anon_key": None,
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]

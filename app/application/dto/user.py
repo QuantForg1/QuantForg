@@ -28,6 +28,7 @@ class UserDTO:
     display_name: str
     role: str
     status: str
+    auth_user_id: UUID | None = None
 
     @classmethod
     def from_entity(cls, user: User) -> UserDTO:
@@ -37,4 +38,5 @@ class UserDTO:
             display_name=str(user.display_name),
             role=user.role.value,
             status=user.status.value,
+            auth_user_id=user.auth_user_id,
         )

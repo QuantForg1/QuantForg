@@ -1,0 +1,54 @@
+-- DOWN: 20260712130100_user_platform_rls
+DROP POLICY IF EXISTS storage_objects_all_own ON public.storage_objects;
+DROP POLICY IF EXISTS notification_preferences_all_own ON public.notification_preferences;
+DROP POLICY IF EXISTS notifications_insert_own ON public.notifications;
+DROP POLICY IF EXISTS notifications_update_own ON public.notifications;
+DROP POLICY IF EXISTS notifications_select_own ON public.notifications;
+DROP POLICY IF EXISTS activity_events_insert_own ON public.activity_events;
+DROP POLICY IF EXISTS activity_events_select_own ON public.activity_events;
+DROP POLICY IF EXISTS organization_invitations_update_admin ON public.organization_invitations;
+DROP POLICY IF EXISTS organization_invitations_insert_admin ON public.organization_invitations;
+DROP POLICY IF EXISTS organization_invitations_select ON public.organization_invitations;
+DROP POLICY IF EXISTS organization_members_update_admin ON public.organization_members;
+DROP POLICY IF EXISTS organization_members_insert_admin ON public.organization_members;
+DROP POLICY IF EXISTS organization_members_select ON public.organization_members;
+DROP POLICY IF EXISTS organizations_update_admin ON public.organizations;
+DROP POLICY IF EXISTS organizations_insert_owner ON public.organizations;
+DROP POLICY IF EXISTS organizations_select_member ON public.organizations;
+DROP POLICY IF EXISTS user_sessions_update_own ON public.user_sessions;
+DROP POLICY IF EXISTS user_sessions_insert_own ON public.user_sessions;
+DROP POLICY IF EXISTS user_sessions_select_own ON public.user_sessions;
+DROP POLICY IF EXISTS user_devices_all_own ON public.user_devices;
+DROP POLICY IF EXISTS user_settings_update_own ON public.user_settings;
+DROP POLICY IF EXISTS user_settings_insert_own ON public.user_settings;
+DROP POLICY IF EXISTS user_settings_select_own ON public.user_settings;
+DROP POLICY IF EXISTS user_profiles_update_own ON public.user_profiles;
+DROP POLICY IF EXISTS user_profiles_insert_own ON public.user_profiles;
+DROP POLICY IF EXISTS user_profiles_select_own ON public.user_profiles;
+
+ALTER TABLE public.storage_objects NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_preferences NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_events NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.organization_invitations NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.organization_members NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.organizations NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.user_sessions NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.user_devices NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.user_profiles NO FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.storage_objects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_preferences DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_events DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organization_invitations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organization_members DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organizations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_devices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_profiles DISABLE ROW LEVEL SECURITY;
+
+DROP FUNCTION IF EXISTS public.is_org_admin(uuid);
+DROP FUNCTION IF EXISTS public.is_org_member(uuid);
