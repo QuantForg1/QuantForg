@@ -62,8 +62,26 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     --------
     1. Close Redis and PostgreSQL connections gracefully.
     """
+    import sys
+
     settings = get_settings()
     configure_logging(settings)
+
+    logger.info(
+        "startup_diagnostics",
+        python_version=sys.version.split()[0],
+        app_env=settings.app_env.value,
+        port=settings.port,
+        host=settings.host,
+        reload=settings.reload,
+        debug=settings.debug,
+        execution_enabled=bool(settings.execution_enabled),
+        database_url_configured=bool(
+            (settings.database_url_override or "").strip() or settings.postgres_host
+        ),
+        redis_url_configured=bool((settings.redis_url_override or "").strip()),
+        railway_public_domain=settings.railway_public_domain or "",
+    )
 
     database = DatabaseManager(settings)
     container = Container(settings=settings, database=database)
@@ -78,7 +96,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             version=settings.app_version,
             env=settings.app_env.value,
             execution_enabled=bool(settings.execution_enabled),
+            redis_connected=container.redis is not None,
+            supabase_connected=container.supabase is not None,
         )
+        logger.info("startup_complete")
     except Exception as exc:
         # Last-resort: keep process alive for liveness probes.
         logger.exception("application_startup_degraded", error=str(exc))

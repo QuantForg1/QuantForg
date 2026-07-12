@@ -43,6 +43,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         validate_default=True,
+        populate_by_name=True,
     )
 
     # -- Application ----------------------------------------------------------
@@ -52,7 +53,10 @@ class Settings(BaseSettings):
     app_version: Annotated[str, Field(description="Semantic version string")] = "1.0.0"
     app_env: Annotated[
         AppEnvironment,
-        Field(description="Runtime environment selector"),
+        Field(
+            description="Runtime environment selector",
+            validation_alias=AliasChoices("APP_ENV", "ENVIRONMENT", "app_env"),
+        ),
     ] = AppEnvironment.DEVELOPMENT
     debug: Annotated[bool, Field(description="Enable debug mode")] = False
     api_prefix: Annotated[str, Field(description="URL prefix for all API routes")] = (
@@ -77,12 +81,33 @@ class Settings(BaseSettings):
         bool,
         Field(description="Expose /docs, /redoc, and /openapi.json"),
     ] = True
+    railway_public_domain: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Railway public hostname (RAILWAY_PUBLIC_DOMAIN)",
+            validation_alias=AliasChoices(
+                "RAILWAY_PUBLIC_DOMAIN", "railway_public_domain"
+            ),
+        ),
+    ] = None
 
     # -- Server ---------------------------------------------------------------
     host: Annotated[str, Field(description="Bind address")] = "0.0.0.0"
     port: Annotated[int, Field(ge=1, le=65535, description="Bind port")] = 8000
     workers: Annotated[int, Field(ge=1, description="Uvicorn worker count")] = 1
     reload: Annotated[bool, Field(description="Enable auto-reload (dev only)")] = False
+    # When False (default), /health and /health/ready return HTTP 200 even if
+    # optional/critical deps are degraded — required for Railway edge probes.
+    health_http_strict: Annotated[
+        bool,
+        Field(
+            description=(
+                "If True, unhealthy dependencies yield HTTP 503 on /health and "
+                "/health/ready. If False, always HTTP 200 with status in body."
+            )
+        ),
+    ] = False
 
     # -- Logging --------------------------------------------------------------
     log_level: Annotated[
@@ -305,14 +330,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Settings:
-        """Reject insecure defaults when running in production."""
+        """Harden production: coerce unsafe toggles; reject insecure secrets."""
         if self.app_env == AppEnvironment.PRODUCTION:
-            if self.debug:
-                msg = "DEBUG must be False in production"
-                raise ValueError(msg)
+            # Platform dashboards often sync RELOAD=true / DEBUG=true from .env
+            # templates. Coerce instead of crashing the container.
             if self.reload:
-                msg = "RELOAD must be False in production"
-                raise ValueError(msg)
+                object.__setattr__(self, "reload", False)
+            if self.debug:
+                object.__setattr__(self, "debug", False)
             insecure_markers = ("change-me", "dev_password", "secret-key-at-least")
             secret = self.secret_key.get_secret_value()
             if any(marker in secret for marker in insecure_markers):
@@ -325,6 +350,11 @@ class Settings(BaseSettings):
                 if any(marker in password for marker in insecure_markers):
                     msg = "POSTGRES_PASSWORD must be replaced in production"
                     raise ValueError(msg)
+
+        domain = (self.railway_public_domain or "").strip()
+        hosts = self.allowed_hosts
+        if domain and "*" not in hosts and domain not in hosts:
+            object.__setattr__(self, "allowed_hosts", [*hosts, domain])
         return self
 
     # -- Computed properties --------------------------------------------------

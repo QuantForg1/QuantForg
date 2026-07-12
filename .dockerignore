@@ -18,7 +18,8 @@ htmlcov
 !.env.example
 docs
 tests
-scripts
+# Exclude helper scripts; keep entrypoint(s) needed by the runtime image.
+scripts/*
 !scripts/docker-entrypoint.sh
 *.md
 !README.md

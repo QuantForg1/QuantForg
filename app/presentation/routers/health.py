@@ -13,8 +13,31 @@ from app.presentation.schemas.health import (
     HealthResponse,
 )
 from app.presentation.schemas.ops import MetricsResponse
+from core.config.settings import get_settings
 
 router = APIRouter(tags=["Health"])
+
+
+def _to_response(report: object) -> HealthResponse:
+    return HealthResponse(
+        status=report.status.value,  # type: ignore[attr-defined]
+        version=report.version,  # type: ignore[attr-defined]
+        environment=report.environment,  # type: ignore[attr-defined]
+        dependencies=[
+            DependencyStatusSchema(
+                name=dep.name,
+                status=dep.status.value,
+                latency_ms=dep.latency_ms,
+            )
+            for dep in report.dependencies  # type: ignore[attr-defined]
+        ],
+    )
+
+
+def _maybe_503(response: Response, report_status: HealthStatus) -> None:
+    """Only emit 503 when HEALTH_HTTP_STRICT=true (off by default for Railway)."""
+    if get_settings().health_http_strict and report_status != HealthStatus.HEALTHY:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
 
 @router.get(
@@ -24,7 +47,7 @@ router = APIRouter(tags=["Health"])
     description=(
         "Returns the aggregated health of the application and its "
         "infrastructure dependencies (PostgreSQL, Redis). "
-        "Responds with HTTP 200 when healthy, 503 when unhealthy."
+        "HTTP 200 by default; set HEALTH_HTTP_STRICT=true for 503 on failure."
     ),
 )
 async def health_check(
@@ -33,23 +56,8 @@ async def health_check(
 ) -> HealthResponse:
     """Execute health probes and return a structured report."""
     report = await service.check()
-
-    if report.status != HealthStatus.HEALTHY:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-
-    return HealthResponse(
-        status=report.status.value,
-        version=report.version,
-        environment=report.environment,
-        dependencies=[
-            DependencyStatusSchema(
-                name=dep.name,
-                status=dep.status.value,
-                latency_ms=dep.latency_ms,
-            )
-            for dep in report.dependencies
-        ],
-    )
+    _maybe_503(response, report.status)
+    return _to_response(report)
 
 
 @router.get(
@@ -58,7 +66,7 @@ async def health_check(
     summary="Readiness probe",
     description=(
         "Kubernetes-style readiness probe. Checks PostgreSQL and Redis. "
-        "Responds with HTTP 200 when ready, 503 when not ready."
+        "HTTP 200 by default; set HEALTH_HTTP_STRICT=true for 503 on failure."
     ),
 )
 async def readiness(
@@ -67,21 +75,8 @@ async def readiness(
 ) -> HealthResponse:
     """Ready when infrastructure dependencies are healthy."""
     report = await service.check()
-    if report.status != HealthStatus.HEALTHY:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    return HealthResponse(
-        status=report.status.value,
-        version=report.version,
-        environment=report.environment,
-        dependencies=[
-            DependencyStatusSchema(
-                name=dep.name,
-                status=dep.status.value,
-                latency_ms=dep.latency_ms,
-            )
-            for dep in report.dependencies
-        ],
-    )
+    _maybe_503(response, report.status)
+    return _to_response(report)
 
 
 @router.get(

@@ -133,7 +133,7 @@ class TestHealthEndpoints:
         assert body["status"] == "healthy"
         assert len(body["dependencies"]) == 2
 
-    def test_health_unhealthy_returns_503(self) -> None:
+    def test_health_unhealthy_returns_200_by_default(self) -> None:
         application = _build_test_app()
         mock_health = MagicMock(spec=HealthService)
         mock_health.check = AsyncMock(
@@ -153,5 +153,5 @@ class TestHealthEndpoints:
         application.dependency_overrides[get_health_service] = lambda: mock_health
         client = TestClient(application)
         response = client.get("/api/v1/health")
-        assert response.status_code == 503
+        assert response.status_code == 200
         assert response.json()["status"] == "unhealthy"

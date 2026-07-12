@@ -28,13 +28,16 @@ class TestSettings:
         assert settings.app_env == AppEnvironment.TESTING
         assert settings.postgres_db == "quantforg_test"
 
-    def test_production_rejects_debug(self) -> None:
-        with pytest.raises(ValidationError):
-            production_settings(
-                debug=True,
-                secret_key="a-real-production-secret-key-with-enough-entropy-here",
-                postgres_password="a-real-production-password-here",
-            )
+    def test_production_forces_reload_and_debug_off(self) -> None:
+        """Platform-synced RELOAD/DEBUG must not crash production."""
+        settings = production_settings(
+            debug=True,
+            reload=True,
+            secret_key="a-real-production-secret-key-with-enough-entropy-here",
+            postgres_password="a-real-production-password-here",
+        )
+        assert settings.debug is False
+        assert settings.reload is False
 
     def test_production_rejects_insecure_secret(self) -> None:
         with pytest.raises(ValidationError):
@@ -128,6 +131,17 @@ class TestSettings:
         )
         assert settings.supabase_configured is True
         assert settings.supabase_api_key == "eyJanon"
+
+    def test_environment_alias_maps_to_app_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ENVIRONMENT", "staging")
+        monkeypatch.delenv("APP_ENV", raising=False)
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+        )
+        assert settings.app_env == AppEnvironment.STAGING
 
     def test_auth_redirect_defaults(self) -> None:
         settings = testing_settings()
