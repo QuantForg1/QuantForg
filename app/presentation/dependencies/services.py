@@ -20,10 +20,19 @@ def get_settings_dependency() -> Settings:
 
 def get_health_service() -> HealthService:
     """Build a :class:`HealthService` wired to live infrastructure probes."""
-    container = get_container()
-    app_info = SettingsAppInfo(settings=container.settings)
     from app.infrastructure.health.unavailable import UnavailableHealthCheck
 
+    try:
+        container = get_container()
+    except RuntimeError:
+        # Request arrived before lifespan finished (or tests without lifespan).
+        # Never raise — unhandled errors in BaseHTTPMiddleware can abort the
+        # connection and surface as Railway 502.
+        app_info = SettingsAppInfo(settings=get_settings())
+        use_case = GetHealthUseCase(app_info=app_info, probes=())
+        return HealthService(use_case=use_case)
+
+    app_info = SettingsAppInfo(settings=container.settings)
     probes: list[object] = []
     # Postgres is required only when durable persistence is active.
     if container.settings.durable_persistence and not container.settings.is_testing:

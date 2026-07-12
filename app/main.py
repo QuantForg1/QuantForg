@@ -13,7 +13,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from app.presentation.middleware.access_log import RequestAccessLogMiddleware
 from app.presentation.middleware.authentication import AuthenticationMiddleware
 from app.presentation.middleware.error_handler import register_exception_handlers
 from app.presentation.middleware.request_context import RequestContextMiddleware
@@ -76,6 +78,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         reload=settings.reload,
         debug=settings.debug,
         execution_enabled=bool(settings.execution_enabled),
+        allowed_hosts=settings.allowed_hosts,
         database_url_configured=bool(
             (settings.database_url_override or "").strip() or settings.postgres_host
         ),
@@ -143,23 +146,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # -- Middleware (order matters: last added = outermost) -------------------
+    # -- Middleware (order: last added = outermost) ---------------------------
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.cors_origins or ["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["X-Request-ID"],
+        allow_origin_regex=r"https://.*\.up\.railway\.app",
     )
-    application.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.allowed_hosts,
-    )
+
+    # TrustedHost: skip when '*' present — Host checks belong at the edge proxy.
+    # An empty/localhost-only list rejects Railway's public Host → edge 502.
+    hosts = settings.allowed_hosts or ["*"]
+    if "*" not in hosts:
+        application.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=hosts,
+        )
+        logger.info("trusted_host_middleware_enabled", allowed_hosts=hosts)
+    else:
+        logger.info("trusted_host_middleware_skipped", reason="allowed_hosts=*")
+
     application.add_middleware(SecurityHeaders)
     application.add_middleware(AuthenticationMiddleware)
     application.add_middleware(SessionMiddleware)
     application.add_middleware(RequestContextMiddleware)
+    # Trust X-Forwarded-For / X-Forwarded-Proto from Railway's edge.
+    application.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    # Outermost: log every request that enters the process.
+    application.add_middleware(RequestAccessLogMiddleware)
 
     # -- Exception handlers ---------------------------------------------------
     register_exception_handlers(application)
@@ -167,11 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- Root + unprefixed health (Railway / platform probes) -----------------
     @application.get("/", tags=["Root"], include_in_schema=False)
     async def root() -> dict[str, str]:
-        return {
-            "name": settings.app_name,
-            "version": settings.app_version,
-            "status": "ok",
-        }
+        return {"status": "ok"}
 
     application.include_router(health.router)
 
@@ -213,6 +226,8 @@ def run() -> None:
         reload=settings.reload and settings.is_development,
         workers=settings.workers if not settings.reload else 1,
         log_level=settings.log_level.lower(),
+        proxy_headers=True,
+        forwarded_allow_ips="*",
     )
 
 

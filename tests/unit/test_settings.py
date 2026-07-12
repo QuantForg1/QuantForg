@@ -132,6 +132,15 @@ class TestSettings:
         assert settings.supabase_configured is True
         assert settings.supabase_api_key == "eyJanon"
 
+    def test_empty_allowed_hosts_becomes_wildcard(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+            app_env=AppEnvironment.TESTING,
+            allowed_hosts=[],  # type: ignore[arg-type]
+        )
+        assert settings.allowed_hosts == ["*"]
+
     def test_environment_alias_maps_to_app_env(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

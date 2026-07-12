@@ -290,8 +290,12 @@ class Settings(BaseSettings):
     @classmethod
     def _split_comma_separated(cls, value: Any) -> list[str]:
         """Accept comma-separated strings or native lists from the environment."""
+        if value is None:
+            return []
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            # Empty ALLOWED_HOSTS="" must not become [] (rejects every Host).
+            return items
         if isinstance(value, list):
             return value
         msg = f"Expected str or list, got {type(value).__name__}"
@@ -352,9 +356,14 @@ class Settings(BaseSettings):
                     raise ValueError(msg)
 
         domain = (self.railway_public_domain or "").strip()
-        hosts = self.allowed_hosts
+        hosts = list(self.allowed_hosts)
+        # Empty or missing hosts reject every request behind Railway → edge 502.
+        if not hosts:
+            hosts = ["*"]
         if domain and "*" not in hosts and domain not in hosts:
-            object.__setattr__(self, "allowed_hosts", [*hosts, domain])
+            hosts = [*hosts, domain]
+        if hosts != self.allowed_hosts:
+            object.__setattr__(self, "allowed_hosts", hosts)
         return self
 
     # -- Computed properties --------------------------------------------------
