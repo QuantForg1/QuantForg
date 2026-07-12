@@ -11,8 +11,9 @@
 
 | Item | Value |
 |------|-------|
-| Tip commit | `2ee6cc6c590778874dd96f1e26a0f50262296f8f` |
-| Subject | `style: format Postgres persistence modules with Black 26` |
+| Tip commit | `4f79ae461a47a963b723552ace2e8850b31dbb7e` |
+| Subject | `docs: add FINAL_REPOSITORY_REPORT for v1.0.0 RC1 on main` |
+| Code tip (Black fix) | `2ee6cc6c590778874dd96f1e26a0f50262296f8f` |
 | Finalize commit | `b5848a4245efa65172dfaa3c77d0df4742f700e6` — `chore: finalize QuantForg v1.0.0 RC1` |
 | Lockfile commit | `1636b48` — `build: commit poetry.lock for QuantForg v1.0.0 reproducible installs` |
 | Remote | `origin/main` (up to date) |
@@ -24,11 +25,11 @@
 
 | Item | Value |
 |------|-------|
-| Run URL | https://github.com/QuantForg1/QuantForg/actions/runs/29206503413 |
-| Head SHA | `2ee6cc6…` |
-| Conclusion | **success** |
+| Tip run URL | https://github.com/QuantForg1/QuantForg/actions/runs/29206591483 |
+| Code tip run URL | https://github.com/QuantForg1/QuantForg/actions/runs/29206503413 |
+| Conclusion | **success** (both) |
 
-### Jobs
+### Jobs (tip of `main`)
 
 | Job | Result |
 |-----|--------|
@@ -36,9 +37,6 @@
 | Type Check | **success** |
 | Unit Tests | **success** |
 | Integration Tests | **success** |
-
-Prior run on finalize commit (`b5848a4`) failed Black only (local Black 24 vs lockfile Black 26.5.1). Fixed and re-pushed; current tip is green.
-
 ---
 
 ## Local validation (pre-push)
