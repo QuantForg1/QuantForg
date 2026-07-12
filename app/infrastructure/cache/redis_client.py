@@ -43,7 +43,7 @@ class RedisClient:
             return
         self._client = cast(
             Any,
-            aioredis.from_url(  # type: ignore[no-untyped-call]
+            aioredis.from_url(
                 self._settings.redis_url,
                 max_connections=self._settings.redis_pool_size,
                 decode_responses=True,
