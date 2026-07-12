@@ -19,6 +19,7 @@ htmlcov
 docs
 tests
 scripts
+!scripts/docker-entrypoint.sh
 *.md
 !README.md
 .pre-commit-config.yaml
