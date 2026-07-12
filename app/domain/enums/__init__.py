@@ -5,7 +5,18 @@ and database columns without opaque integer mappings.
 """
 
 from app.domain.enums.audit import AuditAction, AuditOutcome
-from app.domain.enums.broker import BrokerStatus, BrokerType
+from app.domain.enums.broker import (
+    BrokerAccountStatus,
+    BrokerCapabilityCode,
+    BrokerConnectionStatus,
+    BrokerCredentialType,
+    BrokerEnvironment,
+    BrokerPlatform,
+    BrokerStatus,
+    BrokerType,
+    ConnectionStatus,
+    CredentialStatus,
+)
 from app.domain.enums.license import LicenseStatus, LicenseTier
 from app.domain.enums.order import OrderSide, OrderStatus, OrderType, TimeInForce
 from app.domain.enums.position import PositionSide, PositionStatus
@@ -22,8 +33,16 @@ __all__ = [
     "AccountType",
     "AuditAction",
     "AuditOutcome",
+    "BrokerAccountStatus",
+    "BrokerCapabilityCode",
+    "BrokerConnectionStatus",
+    "BrokerCredentialType",
+    "BrokerEnvironment",
+    "BrokerPlatform",
     "BrokerStatus",
     "BrokerType",
+    "ConnectionStatus",
+    "CredentialStatus",
     "LicenseStatus",
     "LicenseTier",
     "OrderSide",

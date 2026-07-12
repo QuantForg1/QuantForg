@@ -20,6 +20,9 @@ from app.presentation.middleware.request_context import RequestContextMiddleware
 from app.presentation.middleware.session import SessionMiddleware
 from app.presentation.routers import (
     auth,
+    broker_accounts,
+    broker_connections,
+    brokers,
     health,
     notifications,
     organizations,
@@ -127,6 +130,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(settings_router.router, prefix=prefix)
     application.include_router(notifications.router, prefix=prefix)
     application.include_router(organizations.router, prefix=prefix)
+    application.include_router(brokers.router, prefix=prefix)
+    application.include_router(broker_accounts.router, prefix=prefix)
+    application.include_router(broker_connections.router, prefix=prefix)
 
     return application
 

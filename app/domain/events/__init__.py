@@ -1,6 +1,13 @@
 """Domain events package."""
 
 from app.domain.events.base import DomainEvent
+from app.domain.events.broker import (
+    BrokerConnected,
+    BrokerDeleted,
+    BrokerDisconnected,
+    BrokerRegistered,
+    CredentialsUpdated,
+)
 from app.domain.events.fair_value_gap import (
     FairValueGapDetected,
     FairValueGapExpired,
@@ -49,8 +56,13 @@ from app.domain.events.order_block import (
 __all__ = [
     "BreakOfStructureDetected",
     "BreakerDetected",
+    "BrokerConnected",
+    "BrokerDeleted",
+    "BrokerDisconnected",
+    "BrokerRegistered",
     "CandleClosed",
     "ChangeOfCharacterDetected",
+    "CredentialsUpdated",
     "DomainEvent",
     "FairValueGapDetected",
     "FairValueGapExpired",
