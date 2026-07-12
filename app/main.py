@@ -8,18 +8,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from app.presentation.middleware.access_log import RequestAccessLogMiddleware
-from app.presentation.middleware.authentication import AuthenticationMiddleware
 from app.presentation.middleware.error_handler import register_exception_handlers
-from app.presentation.middleware.request_context import RequestContextMiddleware
-from app.presentation.middleware.session import SessionMiddleware
 from app.presentation.routers import (
     auth,
     backtest,
@@ -45,7 +39,6 @@ from core.config.settings import Settings, get_settings
 from core.database.session import DatabaseManager, set_database_manager
 from core.di.container import Container, set_container
 from core.logging import configure_logging, get_logger
-from core.security.headers import SecurityHeaders
 
 logger = get_logger(__name__)
 
@@ -146,37 +139,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # -- Middleware (order: last added = outermost) ---------------------------
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins or ["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["X-Request-ID"],
-        allow_origin_regex=r"https://.*\.up\.railway\.app",
-    )
-
-    # TrustedHost: skip when '*' present — Host checks belong at the edge proxy.
-    # An empty/localhost-only list rejects Railway's public Host → edge 502.
-    hosts = settings.allowed_hosts or ["*"]
-    if "*" not in hosts:
-        application.add_middleware(
-            TrustedHostMiddleware,
-            allowed_hosts=hosts,
-        )
-        logger.info("trusted_host_middleware_enabled", allowed_hosts=hosts)
-    else:
-        logger.info("trusted_host_middleware_skipped", reason="allowed_hosts=*")
-
-    application.add_middleware(SecurityHeaders)
-    application.add_middleware(AuthenticationMiddleware)
-    application.add_middleware(SessionMiddleware)
-    application.add_middleware(RequestContextMiddleware)
-    # Trust X-Forwarded-For / X-Forwarded-Proto from Railway's edge.
-    application.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
-    # Outermost: log every request that enters the process.
-    application.add_middleware(RequestAccessLogMiddleware)
+    # Middleware temporarily disabled for Railway outage isolation.
+    # Re-enable incrementally after GET / returns 200 at the edge.
+    # (TrustedHost/Proxy/CORS/Auth/Session/AccessLog were candidates for
+    # connection aborts behind railway-hikari.)
+    logger.info("middleware_stack_disabled", reason="railway_outage_isolation")
 
     # -- Exception handlers ---------------------------------------------------
     register_exception_handlers(application)
@@ -230,7 +197,7 @@ def run() -> None:
     )
 
 
-def _select_app() -> FastAPI:
+def _select_app() -> Any:
     """Choose ASGI target.
 
     Default QF_MINIMAL=1 so Railway returns HTTP 200 even when the platform
@@ -256,7 +223,7 @@ def _select_app() -> FastAPI:
             f" python={sys.version.split()[0]}",
             flush=True,
         )
-        return raw_app  # type: ignore[return-value]
+        return raw_app
 
     full = create_app()
     print(

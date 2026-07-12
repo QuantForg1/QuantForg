@@ -6,6 +6,8 @@ Used for Railway edge forensics when even FastAPI is suspect.
 from __future__ import annotations
 
 import sys
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 ROUTES = {
     "/": b'{"status":"ok"}',
@@ -15,14 +17,15 @@ ROUTES = {
 }
 
 print(
-    "qf_raw_asgi_loaded"
-    f" python={sys.version.split()[0]}"
-    f" module=app.raw_asgi",
+    "qf_raw_asgi_loaded" f" python={sys.version.split()[0]}" f" module=app.raw_asgi",
     flush=True,
 )
 
+Receive = Callable[[], Awaitable[dict[str, Any]]]
+Send = Callable[[dict[str, Any]], Awaitable[None]]
 
-async def app(scope: dict, receive: object, send) -> None:  # type: ignore[no-untyped-def]
+
+async def app(scope: dict[str, Any], receive: Receive, send: Send) -> None:
     _ = receive
     if scope["type"] != "http":
         return
