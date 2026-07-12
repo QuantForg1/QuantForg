@@ -168,7 +168,7 @@ class TestVerifyRefreshLogoutPassword:
 
     @pytest.mark.asyncio
     async def test_forgot_password_message(self) -> None:
-        factory, provider, audit = _wire()
+        _factory, provider, audit = _wire()
         msg = await RequestPasswordResetUseCase(
             auth=provider, audit=audit, default_redirect_to="http://localhost/reset"
         ).execute(RequestPasswordResetCommand(email="missing@quantforg.com"))
