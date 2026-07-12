@@ -56,7 +56,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DOCS_ENABLED=true \
     WORKERS=1 \
     HOST=0.0.0.0 \
-    PORT=8000
+    PORT=8000 \
+    QF_MINIMAL=1
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
