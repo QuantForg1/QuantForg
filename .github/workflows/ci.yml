@@ -1,5 +1,11 @@
 # QuantForg CI — continuous integration pipeline
 # Runs on every push and pull request to main/develop.
+#
+# Dependency notes:
+# - pyproject.toml is Poetry-managed ([tool.poetry]), but poetry.lock is not
+#   committed yet. setup-python's `cache: poetry` requires poetry.lock and must
+#   not be used until a lockfile is present.
+# - Jobs install Poetry after setup-python, then resolve from pyproject.toml.
 
 name: CI
 
@@ -30,14 +36,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Poetry
-        run: pipx install poetry==${{ env.POETRY_VERSION }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: poetry
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Poetry
+        run: pip install poetry==${{ env.POETRY_VERSION }}
 
       - name: Install dependencies
         run: poetry install --no-interaction
@@ -54,14 +61,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Poetry
-        run: pipx install poetry==${{ env.POETRY_VERSION }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: poetry
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Poetry
+        run: pip install poetry==${{ env.POETRY_VERSION }}
 
       - name: Install dependencies
         run: poetry install --no-interaction
@@ -75,14 +83,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Poetry
-        run: pipx install poetry==${{ env.POETRY_VERSION }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: poetry
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Poetry
+        run: pip install poetry==${{ env.POETRY_VERSION }}
 
       - name: Install dependencies
         run: poetry install --no-interaction
@@ -136,14 +145,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Poetry
-        run: pipx install poetry==${{ env.POETRY_VERSION }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: poetry
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Poetry
+        run: pip install poetry==${{ env.POETRY_VERSION }}
 
       - name: Install dependencies
         run: poetry install --no-interaction
