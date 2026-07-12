@@ -33,8 +33,11 @@ structlog = ">=24.4,<27.0"
 python-json-logger = ">=3.2.1,<5.0.0"
 httpx = "^0.28.1"
 httpx2 = "^2.5.0"
+supabase = "^2.15.0"
 orjson = "^3.10.12"
 tenacity = "^9.0.0"
+email-validator = "^2.2.0"
+python-multipart = ">=0.0.9"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
@@ -133,7 +136,7 @@ packages = ["app", "core"]
 exclude = ["alembic/versions", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "hiredis.*"]
+module = ["asyncpg.*", "hiredis.*", "supabase.*", "postgrest.*", "realtime.*", "storage3.*", "supabase_auth.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

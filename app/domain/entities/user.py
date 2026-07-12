@@ -31,6 +31,7 @@ class User(Entity):
     role: UserRole = UserRole.TRADER
     status: UserStatus = UserStatus.PENDING
     password_hash: str = ""
+    auth_user_id: UUID | None = None
     last_login_at: datetime | None = None
     deactivated_at: datetime | None = None
 
@@ -54,6 +55,11 @@ class User(Entity):
             isinstance(self.status, UserStatus),
             "User.status must be a UserStatus",
         )
+        if self.auth_user_id is not None:
+            require(
+                isinstance(self.auth_user_id, UUID),
+                "User.auth_user_id must be a UUID when set",
+            )
         if self.status == UserStatus.DEACTIVATED:
             require(
                 self.deactivated_at is not None,
@@ -156,6 +162,25 @@ class User(Entity):
         )
         self.touch()
 
+    def link_auth_identity(self, auth_user_id: UUID) -> None:
+        """Bind this profile to a Supabase Auth ``auth.users`` row."""
+        require(
+            isinstance(auth_user_id, UUID),
+            "auth_user_id must be a UUID",
+            field="auth_user_id",
+        )
+        require_state(
+            self.auth_user_id is None or self.auth_user_id == auth_user_id,
+            "User is already linked to a different auth identity",
+            auth_user_id=str(self.auth_user_id) if self.auth_user_id else None,
+        )
+        self.auth_user_id = auth_user_id
+        self.touch()
+
+    def has_role(self, *roles: UserRole) -> bool:
+        """Return True when this user's role is in ``roles``."""
+        return self.role in roles
+
     @property
     def is_active(self) -> bool:
         return self.status == UserStatus.ACTIVE
@@ -168,6 +193,7 @@ class User(Entity):
                 "display_name": str(self.display_name),
                 "role": self.role.value,
                 "status": self.status.value,
+                "auth_user_id": str(self.auth_user_id) if self.auth_user_id else None,
                 "last_login_at": (
                     self.last_login_at.isoformat() if self.last_login_at else None
                 ),

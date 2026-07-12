@@ -47,6 +47,20 @@ class TestUser:
         with pytest.raises(ConflictError):
             user.record_login()
 
+    def test_link_auth_identity(self) -> None:
+        user = User.create(email="a@b.com", display_name="A")
+        auth_id = uuid4()
+        user.link_auth_identity(auth_id)
+        assert user.auth_user_id == auth_id
+        user.link_auth_identity(auth_id)
+        with pytest.raises(ConflictError):
+            user.link_auth_identity(uuid4())
+
+    def test_has_role(self) -> None:
+        user = User.create(email="a@b.com", display_name="A", role=UserRole.ADMIN)
+        assert user.has_role(UserRole.ADMIN, UserRole.OWNER)
+        assert not user.has_role(UserRole.TRADER)
+
 
 @pytest.mark.unit
 class TestLicense:

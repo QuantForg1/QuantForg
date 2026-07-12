@@ -36,6 +36,12 @@ class InMemoryUserRepository:
                 return user
         return None
 
+    async def get_by_auth_user_id(self, auth_user_id: UUID) -> User | None:
+        for user in self.items.values():
+            if user.auth_user_id == auth_user_id:
+                return user
+        return None
+
     async def add(self, user: User) -> User:
         self.items[user.id] = user
         return user

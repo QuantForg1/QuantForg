@@ -8,7 +8,7 @@ services from this container rather than constructing them inline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core.config.settings import Settings
 from core.database.session import DatabaseManager
@@ -16,6 +16,7 @@ from core.logging import get_logger
 
 if TYPE_CHECKING:
     from app.infrastructure.cache.redis_client import RedisClient
+    from app.infrastructure.supabase.client import SupabaseClient
 
 logger = get_logger(__name__)
 
@@ -32,24 +33,50 @@ class Container:
         Async database manager (engine + session factory).
     redis:
         Redis client wrapper, initialised during ``startup``.
+    supabase:
+        Supabase client wrapper, initialised during ``startup`` when configured.
+    uow_factory:
+        Unit of Work factory for identity profile persistence.
     """
 
     settings: Settings
     database: DatabaseManager
     redis: RedisClient | None = field(default=None, init=False)
+    supabase: SupabaseClient | None = field(default=None, init=False)
+    uow_factory: Any = field(default=None, init=False)
+    platform_uow_factory: Any = field(default=None, init=False)
 
     async def startup(self) -> None:
         """Start all managed infrastructure connections."""
         await self.database.start()
 
         from app.infrastructure.cache.redis_client import RedisClient
+        from app.infrastructure.persistence.memory_platform import (
+            MemoryPlatformUnitOfWorkFactory,
+        )
 
         self.redis = RedisClient(self.settings)
         await self.redis.connect()
+        self.platform_uow_factory = MemoryPlatformUnitOfWorkFactory()
+
+        if self.settings.supabase_configured:
+            from app.infrastructure.persistence.supabase_identity import (
+                SupabaseIdentityUnitOfWorkFactory,
+            )
+            from app.infrastructure.supabase.client import SupabaseClient
+
+            self.supabase = SupabaseClient(self.settings)
+            self.supabase.connect()
+            self.uow_factory = SupabaseIdentityUnitOfWorkFactory(supabase=self.supabase)
         logger.info("container_startup_complete", env=self.settings.app_env.value)
 
     async def shutdown(self) -> None:
         """Gracefully close all managed infrastructure connections."""
+        self.uow_factory = None
+        self.platform_uow_factory = None
+        if self.supabase is not None:
+            self.supabase.disconnect()
+            self.supabase = None
         if self.redis is not None:
             await self.redis.disconnect()
             self.redis = None
@@ -62,6 +89,13 @@ class Container:
             msg = "Redis client is not available"
             raise RuntimeError(msg)
         return self.redis
+
+    def require_supabase(self) -> SupabaseClient:
+        """Return the Supabase client or raise if not connected."""
+        if self.supabase is None:
+            msg = "Supabase client is not available"
+            raise RuntimeError(msg)
+        return self.supabase
 
 
 _container: Container | None = None

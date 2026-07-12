@@ -74,3 +74,37 @@ class TestSettings:
                 secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
                 app_env=AppEnvironment.TESTING,
             )
+
+    def test_supabase_not_configured_by_default(self) -> None:
+        settings = testing_settings()
+        assert settings.supabase_configured is False
+        assert settings.supabase_api_key is None
+
+    def test_supabase_prefers_publishable_key(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+            app_env=AppEnvironment.TESTING,
+            supabase_url="https://example.supabase.co",
+            supabase_publishable_key="sb_publishable_test",  # type: ignore[arg-type]
+            supabase_anon_key="eyJlegacy",  # type: ignore[arg-type]
+        )
+        assert settings.supabase_configured is True
+        assert settings.supabase_api_key == "sb_publishable_test"
+
+    def test_supabase_falls_back_to_anon_key(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+            app_env=AppEnvironment.TESTING,
+            supabase_url="https://example.supabase.co",
+            supabase_publishable_key=None,  # type: ignore[arg-type]
+            supabase_anon_key="eyJanon",  # type: ignore[arg-type]
+        )
+        assert settings.supabase_configured is True
+        assert settings.supabase_api_key == "eyJanon"
+
+    def test_auth_redirect_defaults(self) -> None:
+        settings = testing_settings()
+        assert "auth/callback" in settings.auth_redirect_url
+        assert settings.auth_oauth_enabled is True
