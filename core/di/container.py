@@ -45,12 +45,21 @@ class Container:
     supabase: SupabaseClient | None = field(default=None, init=False)
     uow_factory: Any = field(default=None, init=False)
     platform_uow_factory: Any = field(default=None, init=False)
+    broker_uow_factory: Any = field(default=None, init=False)
+    broker_registry: Any = field(default=None, init=False)
 
     async def startup(self) -> None:
         """Start all managed infrastructure connections."""
         await self.database.start()
 
+        from app.infrastructure.brokers.placeholders import (
+            register_placeholder_adapters,
+        )
+        from app.infrastructure.brokers.registry import BrokerRegistry
         from app.infrastructure.cache.redis_client import RedisClient
+        from app.infrastructure.persistence.memory_broker import (
+            MemoryBrokerUnitOfWorkFactory,
+        )
         from app.infrastructure.persistence.memory_platform import (
             MemoryPlatformUnitOfWorkFactory,
         )
@@ -58,6 +67,9 @@ class Container:
         self.redis = RedisClient(self.settings)
         await self.redis.connect()
         self.platform_uow_factory = MemoryPlatformUnitOfWorkFactory()
+        self.broker_uow_factory = MemoryBrokerUnitOfWorkFactory()
+        self.broker_registry = BrokerRegistry()
+        register_placeholder_adapters(self.broker_registry)
 
         if self.settings.supabase_configured:
             from app.infrastructure.persistence.supabase_identity import (
@@ -74,6 +86,8 @@ class Container:
         """Gracefully close all managed infrastructure connections."""
         self.uow_factory = None
         self.platform_uow_factory = None
+        self.broker_uow_factory = None
+        self.broker_registry = None
         if self.supabase is not None:
             self.supabase.disconnect()
             self.supabase = None
