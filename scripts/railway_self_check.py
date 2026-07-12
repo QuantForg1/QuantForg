@@ -10,7 +10,7 @@ import urllib.request
 
 
 def main() -> int:
-    port = os.environ.get("PORT", "8000")
+    port = os.environ["PORT"]
     url = f"http://127.0.0.1:{port}/"
     for attempt in range(1, 11):
         try:

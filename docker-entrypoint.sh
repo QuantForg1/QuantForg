@@ -10,8 +10,15 @@ export EXECUTION_ENABLED="${EXECUTION_ENABLED:-false}"
 export ALLOWED_HOSTS="*"
 export DOCS_ENABLED="${DOCS_ENABLED:-true}"
 
-PORT="${PORT:-8000}"
+# Railway injects PORT at runtime (commonly 8080). Never default to 8000 here —
+# that mismatch leaves Networking → Public Domain → Port 8000 while Uvicorn
+# listens on ${PORT}.
+if [ -z "${PORT:-}" ]; then
+  echo "FATAL: PORT is not set. Railway must inject PORT; do not bake PORT=8000 in the image." >&2
+  exit 1
+fi
 export PORT
+
 HOST="${HOST:-0.0.0.0}"
 export HOST
 WORKERS=1

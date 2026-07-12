@@ -56,7 +56,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DOCS_ENABLED=true \
     WORKERS=1 \
     HOST=0.0.0.0 \
-    PORT=8000 \
     QF_MINIMAL=1
 
 RUN apt-get update \
@@ -83,7 +82,8 @@ RUN chmod +x ./docker-entrypoint.sh \
 
 USER quantforg
 
-# Do NOT EXPOSE a fixed port — Railway injects PORT (often 8080). A hardcoded
-# EXPOSE 8000 can cause the edge to proxy to the wrong port → x-railway-fallback.
+# Do NOT set PORT in the image. Railway injects PORT at runtime (e.g. 8080).
+# Baking PORT=8000 caused the public domain target port to be pinned to 8000
+# while the process correctly listened on Railway's injected PORT.
 
 CMD ["/app/docker-entrypoint.sh"]

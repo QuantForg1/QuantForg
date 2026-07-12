@@ -1,4 +1,11 @@
-# Force Railway to use the Dockerfile image and our entrypoint.
+# Railway deployment — config-as-code
+#
+# PORT is NOT defined here. Railway injects PORT at runtime (e.g. 8080).
+# Do NOT add PORT=8000 to service variables — that pins the public domain
+# target port to 8000 while Railway may inject a different runtime PORT.
+#
+# After deploy: Networking → Public Domain → edit target port to match the
+# PORT shown in deploy logs (e.g. 8080), or remove and regenerate the domain.
 
 [build]
 builder = "DOCKERFILE"
@@ -6,7 +13,6 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "/app/docker-entrypoint.sh"
-# Raw ASGI answers immediately on /
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
