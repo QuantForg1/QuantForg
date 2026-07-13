@@ -27,6 +27,7 @@ import {
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { FlaskConical } from "lucide-react";
 import { FeatureGate } from "@/components/platform/feature-gate";
+import { PaperTradingTutorial } from "@/components/platform/paper-tutorial";
 
 export default function PaperPage() {
   const qc = useQueryClient();
@@ -143,6 +144,8 @@ export default function PaperPage() {
           </>
         }
       />
+
+      <PaperTradingTutorial />
 
       {loading ? (
         <DeskSkeleton rows={5} />

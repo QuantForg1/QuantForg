@@ -22,6 +22,7 @@ import {
   Newspaper,
   Settings,
   Shield,
+  Rocket,
   Sparkles,
   Target,
   UserRound,
@@ -103,6 +104,8 @@ export const appNav: NavGroup[] = [
   {
     title: "Account",
     items: [
+      { href: "/get-started", label: "Get Started", icon: Rocket },
+      { href: "/whats-new", label: "What's New", icon: Newspaper },
       { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/organizations", label: "Organizations", icon: CreditCard },
       { href: "/profile", label: "Profile", icon: UserRound },

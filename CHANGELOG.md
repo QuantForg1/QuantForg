@@ -10,7 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 ### Added
 
-- (none yet)
+- Closed Beta onboarding: Get Started hub, first-run checklist, product tour,
+  broker connection wizard, paper trading tutorial, in-app What’s New,
+  and beta docs (`BETA_ONBOARDING.md`, `BETA_OPERATIONS.md`,
+  `BETA_FEEDBACK_PLAN.md`, `BETA_CHECKLIST.md`).
 
 ## [1.0.0] - 2026-07-12
 

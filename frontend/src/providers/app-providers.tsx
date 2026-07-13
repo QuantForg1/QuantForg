@@ -10,6 +10,8 @@ import {
   BetaInviteGate,
   MaintenanceGate,
 } from "@/components/platform/beta-controls";
+import { FirstRunChecklist } from "@/components/platform/first-run-checklist";
+import { ProductTour } from "@/components/platform/product-tour";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +22,8 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           <BetaInviteGate>
             <div className="flex min-h-0 flex-1 flex-col">
               <BetaBanner />
+              <FirstRunChecklist />
+              <ProductTour />
               <AppShell>{children}</AppShell>
               <FeedbackWidget />
             </div>

@@ -143,6 +143,32 @@ export default function SupportPage() {
               </p>
             </CardContent>
           </Card>
+
+          <Card id="feedback">
+            <CardHeader>
+              <CardTitle>Beta feedback</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-[var(--fg-muted)]">
+                Use the floating feedback control (bottom-right) for bugs and
+                feature requests. Items are stored locally and optionally sent to
+                the configured webhook.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" asChild>
+                  <Link href="/get-started">Onboarding guide</Link>
+                </Button>
+                <Button size="sm" variant="secondary" asChild>
+                  <Link href="/whats-new">Release notes</Link>
+                </Button>
+                <Button size="sm" variant="secondary" asChild>
+                  <a href="mailto:beta@quantforg.com?subject=QuantForg%20Beta%20Feedback">
+                    Email beta team
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
       )}
     </div>
