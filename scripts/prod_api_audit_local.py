@@ -176,11 +176,11 @@ def main() -> int:
         call(client, "GET", "/api/v1/health", expect=200)
         call(client, "GET", "/api/v1/health/live", expect=200)
         call(client, "GET", "/api/v1/version", expect=200)
-        call(client, "GET", "/api/v1/metrics", expect=200)
-        call(client, "GET", "/api/v1/ops/dashboard", expect=200)
-        call(client, "GET", "/api/v1/ops/metrics", expect=200)
-        call(client, "GET", "/api/v1/ops/alerts", expect=200)
-        call(client, "GET", "/api/v1/ops/audit", expect=200)
+        call(client, "GET", "/api/v1/ops/dashboard", expect=401)
+        call(client, "GET", "/api/v1/ops/metrics", expect=401)
+        call(client, "GET", "/api/v1/ops/alerts", expect=401)
+        call(client, "GET", "/api/v1/ops/audit", expect=401)
+        call(client, "GET", "/api/v1/metrics", expect=401)
 
         # Auth validation
         call(

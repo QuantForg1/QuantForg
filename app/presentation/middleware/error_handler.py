@@ -46,6 +46,18 @@ def _error_body(
 
 
 def _request_id_from(request: Request) -> str | None:
+    state_id = getattr(request.state, "request_id", None)
+    if isinstance(state_id, str) and state_id:
+        return state_id
+    from contextlib import suppress
+
+    with suppress(Exception):
+        import structlog
+
+        ctx = structlog.contextvars.get_contextvars()
+        ctx_id = ctx.get("request_id")
+        if isinstance(ctx_id, str) and ctx_id:
+            return ctx_id
     return request.headers.get("X-Request-ID")
 
 
@@ -57,6 +69,15 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: AuthenticationError
     ) -> JSONResponse:
         # Map provider-specific auth codes to accurate HTTP statuses.
+        # Never echo raw IdP exception text for auth failures.
+        public_messages = {
+            "invalid_credentials": "Invalid login credentials",
+            "email_already_registered": "An account with this email already exists",
+            "auth_rate_limited": "Too many authentication attempts. Try again later.",
+            "email_not_verified": "Email address has not been verified",
+            "missing_token": "Missing bearer access token",
+        }
+        message = public_messages.get(exc.code, "Authentication failed")
         if exc.code == "email_already_registered":
             http_status = status.HTTP_409_CONFLICT
             headers: dict[str, str] | None = None
@@ -73,8 +94,8 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=http_status,
             content=_error_body(
                 code=exc.code,
-                message=exc.message,
-                details=exc.details,
+                message=message,
+                details=exc.details if exc.code == "missing_token" else {},
                 request_id=_request_id_from(request),
             ),
             headers=headers,

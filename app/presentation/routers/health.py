@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Response, status
 
 from app.application.dto.health import HealthStatus
 from app.application.services.health_service import HealthService
+from app.domain.enums.user import UserRole
+from app.presentation.dependencies.auth import require_roles
 from app.presentation.dependencies.ops import OpsMetricsDep
 from app.presentation.dependencies.services import get_health_service
 from app.presentation.schemas.health import (
@@ -96,10 +100,17 @@ async def liveness() -> dict[str, str]:
     summary="Operational metrics",
     description=(
         "Returns request latency, error rate, throughput, cache hit ratio, "
-        "and job duration metrics. Does not enable execution or AI."
+        "and job duration metrics. Requires owner/admin. "
+        "Does not enable execution or AI."
     ),
 )
-async def metrics(uc: OpsMetricsDep) -> MetricsResponse:
-    """Public metrics snapshot for operators and scrapers."""
+async def metrics(
+    _admin: Annotated[
+        object,
+        Depends(require_roles(UserRole.OWNER, UserRole.ADMIN)),
+    ],
+    uc: OpsMetricsDep,
+) -> MetricsResponse:
+    """Authenticated metrics snapshot for operators."""
     dto = await uc.execute(persist=False)
     return MetricsResponse(**dto.payload)

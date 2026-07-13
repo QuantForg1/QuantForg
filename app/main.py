@@ -62,8 +62,32 @@ def _disabled_components() -> set[str]:
     return {part.strip().lower() for part in raw.split(",") if part.strip()}
 
 
+_SECURITY_COMPONENTS = frozenset(
+    {
+        "cors",
+        "trusted_host",
+        "security_headers",
+        "authentication",
+        "session",
+        "request_context",
+        "proxy_headers",
+        "rate_limit",
+    }
+)
+
+
 def _is_disabled(name: str) -> bool:
-    return name.lower() in _disabled_components()
+    if name.lower() not in _disabled_components():
+        return False
+    env = os.environ.get("APP_ENV", os.environ.get("ENVIRONMENT", "")).lower()
+    if env == "production" and name.lower() in _SECURITY_COMPONENTS:
+        logger.warning(
+            "security_component_disable_blocked",
+            component=name,
+            reason="production",
+        )
+        return False
+    return True
 
 
 @asynccontextmanager
@@ -136,11 +160,13 @@ def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
     """Register middleware one-by-one; skip components in QF_DISABLED_COMPONENTS."""
     registered: list[str] = []
 
+    # Never pair allow_credentials with wildcard origins.
+    cors_origins = [o for o in (settings.cors_origins or []) if o and o != "*"]
     if not _is_disabled("cors"):
         application.add_middleware(
             CORSMiddleware,
-            allow_origins=settings.cors_origins or ["*"],
-            allow_credentials=True,
+            allow_origins=cors_origins,
+            allow_credentials=bool(cors_origins),
             allow_methods=["*"],
             allow_headers=["*"],
             expose_headers=["X-Request-ID"],
@@ -175,6 +201,12 @@ def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
     if not _is_disabled("proxy_headers"):
         application.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
         registered.append("proxy_headers")
+
+    if not _is_disabled("rate_limit"):
+        from app.presentation.middleware.rate_limit import AuthRateLimitMiddleware
+
+        application.add_middleware(AuthRateLimitMiddleware)
+        registered.append("rate_limit")
 
     if not _is_disabled("access_log"):
         application.add_middleware(RequestAccessLogMiddleware)

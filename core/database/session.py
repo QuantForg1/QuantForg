@@ -38,6 +38,7 @@ def create_engine(settings: Settings) -> AsyncEngine:
         echo=settings.postgres_echo,
         pool_pre_ping=True,
         pool_recycle=3600,
+        pool_timeout=30,
     )
 
 

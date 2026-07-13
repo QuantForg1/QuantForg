@@ -41,6 +41,7 @@ from app.presentation.schemas.auth import (
     RegisterRequest,
     VerifyEmailRequest,
 )
+from core.config.settings import Settings, get_settings
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -175,12 +176,16 @@ async def forgot_password(
     body: ForgotPasswordRequest,
     request: Request,
     auth: Annotated[AuthService, Depends(get_auth_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> MessageResponse:
+    from app.presentation.security.redirects import sanitize_redirect_to
+
     ip, ua = get_client_meta(request)
+    redirect = sanitize_redirect_to(body.redirect_to, settings=settings)
     result = await auth.forgot_password(
         RequestPasswordResetCommand(
             email=str(body.email),
-            redirect_to=body.redirect_to,
+            redirect_to=redirect,
             ip_address=ip,
             user_agent=ua,
         )
@@ -213,10 +218,14 @@ async def change_password(
 async def oauth_start(
     provider: OAuthProvider,
     auth: Annotated[AuthService, Depends(get_auth_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
     redirect_to: str | None = None,
 ) -> OAuthUrlResponse:
+    from app.presentation.security.redirects import sanitize_redirect_to
+
+    redirect = sanitize_redirect_to(redirect_to, settings=settings)
     result = await auth.oauth_url(
-        OAuthStartCommand(provider=provider, redirect_to=redirect_to)
+        OAuthStartCommand(provider=provider, redirect_to=redirect)
     )
     return OAuthUrlResponse(provider=result.provider, url=result.url)
 
@@ -226,12 +235,16 @@ async def oauth_callback(
     body: OAuthCallbackRequest,
     request: Request,
     auth: Annotated[AuthService, Depends(get_auth_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthSessionResponse:
+    from app.presentation.security.redirects import sanitize_redirect_to
+
     ip, ua = get_client_meta(request)
+    redirect = sanitize_redirect_to(body.redirect_to, settings=settings)
     result = await auth.oauth_callback(
         OAuthCallbackCommand(
             code=body.code,
-            redirect_to=body.redirect_to,
+            redirect_to=redirect,
             ip_address=ip,
             user_agent=ua,
         )

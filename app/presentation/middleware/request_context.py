@@ -6,6 +6,8 @@ the structured logging context, and echoes it on the response.
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -31,25 +33,42 @@ class RequestContextMiddleware:
 
         headers = MutableHeaders(scope=scope)
         request_id = headers.get(REQUEST_ID_HEADER.lower()) or new_request_id()
+        state = scope.setdefault("state", {})
+        with suppress(Exception):
+            state["request_id"] = request_id  # type: ignore[index]
 
         clear_context()
         bind_context(request_id=request_id)
 
         timer = Timer()
         timer.__enter__()
+        status_code_box: dict[str, int | None] = {"code": None}
 
         async def send_with_request_id(message: Message) -> None:
             if message["type"] == "http.response.start":
                 response_headers = MutableHeaders(scope=message)
                 response_headers[REQUEST_ID_HEADER] = request_id
+                status_code_box["code"] = int(message.get("status", 0) or 0)
                 timer.__exit__(None, None, None)
+                duration_ms = round(timer.elapsed_ms, 2)
                 logger.info(
                     "request_completed",
                     method=scope.get("method"),
                     path=scope.get("path"),
-                    status=message.get("status"),
-                    duration_ms=round(timer.elapsed_ms, 2),
+                    status=status_code_box["code"],
+                    duration_ms=duration_ms,
                 )
+                # Best-effort metrics (container may not be ready yet).
+                with suppress(Exception):
+                    from core.di.container import get_container
+
+                    collector = getattr(get_container(), "metrics_collector", None)
+                    if collector is not None:
+                        code = status_code_box["code"] or 500
+                        collector.record_request(
+                            latency_ms=duration_ms,
+                            success=code < 500,
+                        )
             await send(message)
 
         try:

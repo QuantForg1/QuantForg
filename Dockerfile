@@ -53,7 +53,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     RELOAD=false \
     EXECUTION_ENABLED=false \
     ALLOWED_HOSTS=* \
-    DOCS_ENABLED=true \
+    DOCS_ENABLED=false \
     WORKERS=1 \
     HOST=0.0.0.0
 
@@ -85,4 +85,6 @@ USER quantforg
 # Baking PORT=8000 caused the public domain target port to be pinned to 8000
 # while the process correctly listened on Railway's injected PORT.
 
+# tini as PID 1 for correct SIGTERM / zombie reaping on Railway deploys.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/app/docker-entrypoint.sh"]

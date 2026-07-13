@@ -7,8 +7,10 @@ export ENVIRONMENT="${ENVIRONMENT:-$APP_ENV}"
 export DEBUG=false
 export RELOAD=false
 export EXECUTION_ENABLED="${EXECUTION_ENABLED:-false}"
-export ALLOWED_HOSTS="*"
-export DOCS_ENABLED="${DOCS_ENABLED:-true}"
+# Behind Railway's edge Host checks are optional; keep * unless overridden.
+export ALLOWED_HOSTS="${ALLOWED_HOSTS:-*}"
+# OpenAPI docs off by default in production images.
+export DOCS_ENABLED="${DOCS_ENABLED:-false}"
 
 # Railway injects PORT at runtime (commonly 8080). Never default to 8000 here —
 # that mismatch leaves Networking → Public Domain → Port 8000 while Uvicorn
@@ -41,7 +43,14 @@ print(f"bind_probe_ok port={port}")
 s.close()
 PY
 
-python -m uvicorn "${APP_TARGET}" \
+# Non-blocking self-check after listen; uvicorn must remain foreground for SIGTERM.
+(
+  sleep 2
+  python scripts/railway_self_check.py || true
+) &
+
+# exec so signals reach uvicorn (tini is PID 1 via Dockerfile ENTRYPOINT).
+exec python -m uvicorn "${APP_TARGET}" \
   --host "${HOST}" \
   --port "${PORT}" \
   --workers 1 \
@@ -51,10 +60,4 @@ python -m uvicorn "${APP_TARGET}" \
   --proxy-headers \
   --forwarded-allow-ips='*' \
   --log-level info \
-  --access-log &
-UV_PID=$!
-
-python scripts/railway_self_check.py || true
-
-echo "uvicorn_pid=${UV_PID} listening=${HOST}:${PORT}"
-wait "${UV_PID}"
+  --access-log

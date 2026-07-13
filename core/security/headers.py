@@ -41,6 +41,16 @@ class SecurityHeaders:
                 headers = MutableHeaders(scope=message)
                 for key, value in self._HEADERS.items():
                     headers[key] = value
+                # HSTS when the edge terminated TLS (Railway) or direct HTTPS.
+                proto = ""
+                for hdr_key, hdr_val in scope.get("headers") or []:
+                    if hdr_key == b"x-forwarded-proto":
+                        proto = hdr_val.decode("latin-1", errors="replace").lower()
+                        break
+                if proto == "https" or scope.get("scheme") == "https":
+                    headers["Strict-Transport-Security"] = (
+                        "max-age=31536000; includeSubDomains"
+                    )
             await send(message)
 
         await self.app(scope, receive, send_with_headers)

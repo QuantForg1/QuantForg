@@ -24,12 +24,14 @@ from app.presentation.dependencies.services import (
     get_health_service,
     get_version_service,
 )
+from app.presentation.middleware.error_handler import register_exception_handlers
 from app.presentation.routers import health, version
 
 
 def _build_test_app() -> FastAPI:
     """Minimal FastAPI app with only foundation routers and mocked services."""
     application = FastAPI()
+    register_exception_handlers(application)
     application.include_router(health.router, prefix="/api/v1")
     application.include_router(version.router, prefix="/api/v1")
 
@@ -114,17 +116,12 @@ class TestHealthEndpoints:
         assert response.status_code == 200
         assert response.json()["status"] == "healthy"
 
-    def test_metrics(self) -> None:
+    def test_metrics_requires_auth(self) -> None:
         client = TestClient(_build_test_app())
         response = client.get("/api/v1/metrics")
-        assert response.status_code == 200
+        assert response.status_code == 401
         body = response.json()
-        assert "request_latency_ms_avg" in body
-        assert "error_rate" in body
-        assert "throughput_per_minute" in body
-        assert "cache_hit_ratio" in body
-        assert "job_duration_ms_avg" in body
-
+        assert body["error"]["code"] == "missing_token"
     def test_health_healthy(self) -> None:
         client = TestClient(_build_test_app())
         response = client.get("/api/v1/health")

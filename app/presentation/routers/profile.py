@@ -103,18 +103,50 @@ async def upload_avatar(
     platform: PlatformSvc,
     file: Annotated[UploadFile, File()],
 ) -> AvatarUploadResponse:
-    content = await file.read()
-    if not content:
-        raise ValidationError("Empty upload", code="empty_upload")
-    content_type = file.content_type or "application/octet-stream"
-    if not content_type.startswith("image/"):
-        raise ValidationError("Avatar must be an image", code="invalid_avatar_type")
-    ext = {
+    allowed_types = {
         "image/jpeg": "jpg",
         "image/png": "png",
         "image/webp": "webp",
         "image/gif": "gif",
-    }.get(content_type, "bin")
+    }
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    if content_type not in allowed_types:
+        raise ValidationError(
+            "Avatar must be jpeg, png, webp, or gif",
+            code="invalid_avatar_type",
+        )
+    # Reject SVG / HTML disguised as images; enforce size while streaming.
+    max_bytes = 5 * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise ValidationError(
+                "Avatar exceeds 5MB limit",
+                code="avatar_too_large",
+            )
+        chunks.append(chunk)
+    content = b"".join(chunks)
+    if not content:
+        raise ValidationError("Empty upload", code="empty_upload")
+    # Magic-byte sniff (first bytes) — reject obvious non-images / SVG.
+    head = content[:256].lstrip()
+    if head.startswith(b"<") or b"<svg" in content[:1024].lower():
+        raise ValidationError(
+            "SVG and markup uploads are not allowed",
+            code="invalid_avatar_type",
+        )
+    if content_type == "image/png" and not content.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValidationError("PNG content does not match type", code="invalid_avatar")
+    if content_type == "image/jpeg" and not (
+        content.startswith(b"\xff\xd8\xff")
+    ):
+        raise ValidationError("JPEG content does not match type", code="invalid_avatar")
+    ext = allowed_types[content_type]
     auth_folder = str(user.auth_user_id or user.id)
     object_path = f"{auth_folder}/{uuid4()}.{ext}"
     # Metadata persistence; binary upload to Supabase Storage is handled by
