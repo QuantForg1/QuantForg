@@ -6,9 +6,10 @@ aggregate readiness without depending on concrete clients.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from app.application.dto.health import HealthStatus
+if TYPE_CHECKING:
+    from app.application.dto.health import HealthStatus
 
 
 class HealthCheckPort(Protocol):
