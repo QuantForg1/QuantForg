@@ -22,3 +22,11 @@ class ConnectivityTradingRequest(BaseModel):
     """Trading probe — never places orders; reports gate only."""
 
     intent: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunCertificationRequest(BaseModel):
+    """Run certification against the live MT5 session (no simulated data)."""
+
+    broker: str | None = Field(default=None, max_length=64)
+    symbol: str = Field(default="EURUSD", min_length=1, max_length=32)
+    tester: str = Field(default="operator", min_length=1, max_length=128)

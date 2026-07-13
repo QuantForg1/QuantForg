@@ -242,6 +242,21 @@ export const brokerConnectivityApi = {
     apiFetch<Record<string, unknown>>(
       `/broker-connectivity/onboarding/${encodeURIComponent(slug)}`,
     ),
+  certificationDashboard: () =>
+    apiFetch<Record<string, unknown>>(
+      "/broker-connectivity/certification/dashboard",
+    ),
+  certificationHistory: (broker?: string) =>
+    apiFetch<Record<string, unknown>>(
+      broker
+        ? `/broker-connectivity/certification/history?broker=${encodeURIComponent(broker)}`
+        : "/broker-connectivity/certification/history",
+    ),
+  runCertification: (body: Record<string, unknown> = {}) =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/certification/run", {
+      method: "POST",
+      body,
+    }),
 };
 
 export const opsApi = {

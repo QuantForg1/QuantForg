@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.services.broker_connectivity import BrokerConnectivityService
+from app.domain.broker_connectivity.certification_store import CertificationStore
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 from core.di.container import get_container
 
@@ -23,11 +24,18 @@ def get_broker_connectivity() -> BrokerConnectivityService:
         mt5 = None
 
     paper_available = getattr(container, "paper_trading_engine", None) is not None
+    cert_store = getattr(container, "broker_certification_store", None)
+    if cert_store is None:
+        cert_store = CertificationStore()
+        with contextlib.suppress(Exception):
+            container.broker_certification_store = cert_store  # type: ignore[attr-defined]
+
     svc = BrokerConnectivityService.create(
         mt5=mt5,
         health_monitor=getattr(container, "broker_health_monitor", None),
         reconnect_manager=getattr(container, "broker_reconnect_manager", None),
         paper_available=paper_available,
+        cert_store=cert_store,
     )
     with contextlib.suppress(Exception):
         container.broker_connectivity = svc  # type: ignore[attr-defined]

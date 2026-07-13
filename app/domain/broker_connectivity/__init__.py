@@ -23,12 +23,12 @@ from app.domain.broker_connectivity.types import (
 __all__ = [
     "CAPABILITY_MATRIX",
     "MT5_ECOSYSTEM",
-    "MT5BrokerProfile",
     "BrokerCapabilityProfile",
     "BrokerConnectivityPort",
     "ConnectivityCapability",
     "ConnectivityResult",
     "ConnectivityStatus",
+    "MT5BrokerProfile",
     "ecosystem_as_dicts",
     "match_broker_for_server",
     "matrix_as_dicts",

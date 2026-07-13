@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.domain.broker_connectivity.certification import (
+    certification_dashboard,
+    run_certification,
+)
+from app.domain.broker_connectivity.certification_store import CertificationStore
 from app.domain.broker_connectivity.compatibility import run_compatibility_suite
 from app.domain.broker_connectivity.matrix import matrix_as_dicts, profile_for
 from app.domain.broker_connectivity.mt5_ecosystem import (
@@ -32,6 +37,7 @@ class BrokerConnectivityService:
     _health_monitor: Any | None = None
     _reconnect_manager: Any | None = None
     _paper_available: bool = False
+    _cert_store: CertificationStore = field(default_factory=CertificationStore)
 
     @classmethod
     def create(
@@ -41,11 +47,13 @@ class BrokerConnectivityService:
         health_monitor: Any | None = None,
         reconnect_manager: Any | None = None,
         paper_available: bool = False,
+        cert_store: CertificationStore | None = None,
     ) -> BrokerConnectivityService:
         svc = cls(
             _health_monitor=health_monitor,
             _reconnect_manager=reconnect_manager,
             _paper_available=paper_available,
+            _cert_store=cert_store or CertificationStore(),
         )
         if mt5 is not None:
             svc.register(MT5ConnectivityAdapter(mt5))
@@ -309,6 +317,47 @@ class BrokerConnectivityService:
             ),
         }
 
+    def run_certification(
+        self,
+        *,
+        broker_slug: str | None = None,
+        quote_symbol: str = "EURUSD",
+        tester: str = "operator",
+    ) -> dict[str, Any]:
+        return run_certification(
+            store=self._cert_store,
+            invoke=self.invoke,
+            broker_slug=broker_slug,
+            quote_symbol=quote_symbol,
+            paper_available=self._paper_available,
+            tester=tester,
+            persist=True,
+        )
+
+    def certification_status(self, slug: str | None = None) -> dict[str, Any]:
+        if slug:
+            row = self._cert_store.get_status(slug)
+            if row is None:
+                return {
+                    "slug": slug,
+                    "state": "Not Tested",
+                    "result": "not_tested",
+                }
+            return row
+        return {"items": self._cert_store.all_status()}
+
+    def certification_history(
+        self, *, broker_slug: str | None = None, limit: int = 100
+    ) -> dict[str, Any]:
+        return {
+            "items": self._cert_store.history(
+                broker_slug=broker_slug, limit=limit
+            )
+        }
+
+    def certification_dashboard(self) -> dict[str, Any]:
+        return certification_dashboard(self._cert_store)
+
     def dashboard(self) -> dict[str, Any]:
         return {
             "catalog": self.catalog(),
@@ -316,6 +365,7 @@ class BrokerConnectivityService:
             "diagnostics": self.diagnostics(),
             "ecosystem": self.ecosystem(),
             "compatibility": self.compatibility(),
+            "certification": self.certification_dashboard(),
             "notes": (
                 "MT5 is the only live connectivity adapter. "
                 "Future venues return status=unsupported "

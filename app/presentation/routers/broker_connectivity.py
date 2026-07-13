@@ -15,6 +15,7 @@ from app.presentation.dependencies.broker_connectivity import BrokerConnectivity
 from app.presentation.schemas.broker_connectivity import (
     ConnectivityTradingRequest,
     InvokeConnectivityRequest,
+    RunCertificationRequest,
 )
 
 router = APIRouter(
@@ -97,6 +98,49 @@ async def broker_onboarding(
     if guide is None:
         raise HTTPException(status_code=404, detail=f"Unknown broker '{slug}'")
     return guide
+
+
+@router.get("/certification")
+async def certification_status(
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+    broker: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Current certification status (Not Tested until a real run)."""
+    return svc.certification_status(broker)
+
+
+@router.get("/certification/dashboard")
+async def certification_dashboard_route(
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+) -> dict[str, Any]:
+    """Broker Certification Dashboard — certified / pending / failed."""
+    return svc.certification_dashboard()
+
+
+@router.get("/certification/history")
+async def certification_history(
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+    broker: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    return svc.certification_history(broker_slug=broker, limit=limit)
+
+
+@router.post("/certification/run")
+async def certification_run(
+    body: RunCertificationRequest,
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+) -> dict[str, Any]:
+    """Advance certification using the live MT5 session only."""
+    return svc.run_certification(
+        broker_slug=body.broker,
+        quote_symbol=body.symbol,
+        tester=body.tester,
+    )
 
 
 @router.get("/{platform}/capabilities")
