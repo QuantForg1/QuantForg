@@ -56,6 +56,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("intelligence", "app.presentation.routers.intelligence"),
     ("portfolio_intelligence", "app.presentation.routers.portfolio_intelligence"),
     ("execution_intelligence", "app.presentation.routers.execution_intelligence"),
+    ("broker_connectivity", "app.presentation.routers.broker_connectivity"),
 )
 
 

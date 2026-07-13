@@ -200,6 +200,34 @@ export const executionIntelligenceApi = {
     apiFetch<Record<string, unknown>>("/execution-intelligence/broker"),
 };
 
+export const brokerConnectivityApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/dashboard"),
+  catalog: () =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/catalog"),
+  matrix: () =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/matrix"),
+  diagnostics: (platform?: string) =>
+    apiFetch<Record<string, unknown>>(
+      platform
+        ? `/broker-connectivity/diagnostics?platform=${encodeURIComponent(platform)}`
+        : "/broker-connectivity/diagnostics",
+    ),
+  invoke: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/invoke", {
+      method: "POST",
+      body,
+    }),
+  health: (platform: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/broker-connectivity/${encodeURIComponent(platform)}/health`,
+    ),
+  heartbeat: (platform: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/broker-connectivity/${encodeURIComponent(platform)}/heartbeat`,
+    ),
+};
+
 export const opsApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/ops/dashboard"),
   metrics: () => apiFetch<Record<string, unknown>>("/ops/metrics"),

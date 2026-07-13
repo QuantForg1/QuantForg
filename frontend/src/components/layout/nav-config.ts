@@ -25,6 +25,7 @@ import {
   UserRound,
   Wallet,
   Waypoints,
+  Network,
 } from "lucide-react";
 
 export type NavItem = {
@@ -78,6 +79,11 @@ export const appNav: NavGroup[] = [
     items: [
       { href: "/brokers", label: "Broker Accounts", icon: Building2 },
       { href: "/mt5", label: "MT5 Accounts", icon: CandlestickChart },
+      {
+        href: "/broker-connectivity",
+        label: "Broker Connectivity",
+        icon: Network,
+      },
       { href: "/ops", label: "Operations", icon: Gauge },
     ],
   },
