@@ -80,12 +80,23 @@ export async function apiFetch<T>(
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const url = path.startsWith("http") ? path : `${env.apiBaseUrl}${path}`;
-  let res = await fetch(url, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
+  } catch (err) {
+    const safePath = path.startsWith("http") ? new URL(path).pathname : path;
+    console.error("api_network_error", {
+      path: safePath,
+      method,
+      message: err instanceof Error ? err.message : "network_error",
+    });
+    throw err;
+  }
 
   if (res.status === 401 && auth) {
     if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => {
@@ -103,7 +114,15 @@ export async function apiFetch<T>(
     }
   }
 
-  if (!res.ok) await parseError(res);
+  if (!res.ok) {
+    const safePath = path.startsWith("http") ? new URL(path).pathname : path;
+    console.error("api_request_failed", {
+      path: safePath,
+      method,
+      status: res.status,
+    });
+    await parseError(res);
+  }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }

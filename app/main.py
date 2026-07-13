@@ -193,12 +193,27 @@ def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
                 "Origin",
             ],
             "expose_headers": ["X-Request-ID"],
+            "max_age": 600,
         }
-        # Broad Railway preview regex only outside production.
-        if not settings.is_production:
+        if settings.is_production:
+            # Vercel production + preview hosts (never "*"). Exact origins from
+            # CORS_ALLOWED_ORIGINS remain in allow_origins.
+            cors_kwargs["allow_origin_regex"] = (
+                r"https://([a-zA-Z0-9-]+\.)*vercel\.app"
+            )
+            # Bearer-token SPA calls still need credentials flag when an origin
+            # matches via regex even if the static allowlist is empty.
+            if not cors_origins:
+                cors_kwargs["allow_credentials"] = True
+        else:
             cors_kwargs["allow_origin_regex"] = r"https://.*\.up\.railway\.app"
         application.add_middleware(CORSMiddleware, **cors_kwargs)
         registered.append("cors")
+        logger.info(
+            "cors_middleware_enabled",
+            allow_origins_count=len(cors_origins),
+            allow_origin_regex=bool(cors_kwargs.get("allow_origin_regex")),
+        )
 
     hosts = settings.allowed_hosts or ["*"]
     if "*" not in hosts and not _is_disabled("trusted_host"):

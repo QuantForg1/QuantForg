@@ -43,7 +43,13 @@ export default function LoginPage() {
               router.push("/verify-email");
               return;
             }
-            toast.error(e instanceof ApiError ? e.message : "Login failed");
+            toast.error(
+              e instanceof ApiError
+                ? e.message
+                : e instanceof Error
+                  ? e.message
+                  : "Login failed",
+            );
           }
         })}
       >

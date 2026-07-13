@@ -51,7 +51,13 @@ export default function RegisterPage() {
             if (e instanceof ApiError && e.code === "auth_rate_limited") {
               toast.error("Too many attempts. Please wait a few minutes and try again.");
             } else {
-              toast.error(e instanceof ApiError ? e.message : "Registration failed");
+              toast.error(
+                e instanceof ApiError
+                  ? e.message
+                  : e instanceof Error
+                    ? e.message
+                    : "Registration failed",
+              );
             }
           }
         })}
