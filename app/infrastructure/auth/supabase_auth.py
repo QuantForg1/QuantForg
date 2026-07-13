@@ -95,15 +95,20 @@ def _map_auth_error(exc: Exception) -> AuthenticationError:
     message = str(exc).strip() or "Authentication failed"
     lowered = message.lower()
     code = "authentication_failed"
-    if "rate limit" in lowered:
+    details: dict[str, object] = {"source": "supabase"}
+    if "rate limit" in lowered or "over_email_send_rate_limit" in lowered:
         code = "auth_rate_limited"
+        logger.warning(
+            "supabase_auth_rate_limited",
+            provider_message=message[:300],
+        )
     elif "invalid login" in lowered or "invalid credentials" in lowered:
         code = "invalid_credentials"
     elif "already registered" in lowered or "user already" in lowered:
         code = "email_already_registered"
     elif "email not confirmed" in lowered:
         code = "email_not_verified"
-    return AuthenticationError(message, code=code)
+    return AuthenticationError(message, code=code, details=details)
 
 
 class SupabaseAuthAdapter:
