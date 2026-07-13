@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -75,3 +76,68 @@ class StrategyEvaluateResponse(BaseModel):
 class StrategySignalListResponse(BaseModel):
     items: list[StrategySignalResponse]
     count: int
+
+
+# --- Strategy Engine (deterministic TA plugins; additive) ---
+
+
+class OhlcBarRequest(BaseModel):
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float = 0.0
+    time: str = ""
+
+
+class StrategyRiskLimitsRequest(BaseModel):
+    max_risk_pct: float = Field(default=1.0, gt=0, le=100)
+    max_trades: int = Field(default=5, ge=0, le=500)
+    daily_loss_pct: float = Field(default=3.0, gt=0, le=100)
+    max_exposure_pct: float = Field(default=20.0, gt=0, le=100)
+    max_correlation: float = Field(default=0.8, ge=0, le=1)
+
+
+class StrategyEngineRunRequest(BaseModel):
+    strategy_key: str = Field(min_length=1, max_length=64)
+    symbol: str = Field(min_length=1, max_length=32)
+    timeframe: str = Field(default="H1", max_length=16)
+    bars: list[OhlcBarRequest] = Field(
+        default_factory=list,
+        description="Caller-supplied OHLC (or empty to load from MT5 when connected)",
+        max_length=5000,
+    )
+    params: dict[str, Any] = Field(default_factory=dict)
+    session: str = Field(default="unknown", max_length=32)
+    market_state: str = Field(default="unknown", max_length=64)
+    open_trades: int = Field(default=0, ge=0)
+    daily_pnl_pct: float = 0.0
+    exposure_pct: float = Field(default=0.0, ge=0)
+    correlation: float | None = Field(default=None, ge=-1, le=1)
+    limits: StrategyRiskLimitsRequest | None = None
+    allocation_weight_pct: float | None = Field(default=None, ge=0, le=100)
+    use_mt5_bars: bool = Field(
+        default=True,
+        description=(
+            "When bars empty, attempt MT5 historical candles "
+            "(never fabricated)"
+        ),
+    )
+    mt5_bar_count: int = Field(default=200, ge=5, le=5000)
+
+
+class StrategyEngineValidateRequest(BaseModel):
+    strategy_key: str = Field(min_length=1, max_length=64)
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class StrategyAllocationItem(BaseModel):
+    strategy_key: str = Field(min_length=1, max_length=64)
+    weight_pct: float = Field(ge=0, le=100)
+    symbols: list[str] = Field(default_factory=list, max_length=64)
+
+
+class StrategyAllocationPutRequest(BaseModel):
+    allocations: list[StrategyAllocationItem] = Field(
+        default_factory=list, max_length=50
+    )

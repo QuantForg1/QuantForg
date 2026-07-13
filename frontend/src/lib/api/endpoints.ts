@@ -98,6 +98,23 @@ export const strategyApi = {
       body,
     }),
   signals: () => apiFetch<Record<string, unknown>>("/strategy/signals"),
+  catalog: () => apiFetch<Record<string, unknown>>("/strategy/catalog"),
+  engineValidate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy/engine/validate", {
+      method: "POST",
+      body,
+    }),
+  engineRun: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy/engine/run", {
+      method: "POST",
+      body,
+    }),
+  portfolio: () => apiFetch<Record<string, unknown>>("/strategy/portfolio"),
+  setAllocations: (allocations: unknown[]) =>
+    apiFetch<Record<string, unknown>>("/strategy/portfolio/allocations", {
+      method: "PUT",
+      body: { allocations },
+    }),
 };
 
 export const backtestApi = {
