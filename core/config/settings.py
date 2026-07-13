@@ -551,22 +551,34 @@ class Settings(BaseSettings):
 
     @property
     def asyncpg_connect_args(self) -> dict[str, Any]:
-        """Connect args for ``create_async_engine`` (SSL when required)."""
+        """Connect args for ``create_async_engine`` (SSL + pooler-safe cache)."""
         import ssl
         from urllib.parse import urlparse
 
         url, use_ssl = self._asyncpg_dsn_and_ssl()
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        port = parsed.port or 5432
+        args: dict[str, Any] = {}
+
+        # PgBouncer (Supabase pooler / transaction mode) rejects prepared
+        # statements — disable asyncpg's statement cache for those targets.
+        if port == 6543 or "pooler.supabase.com" in host:
+            args["statement_cache_size"] = 0
+
         if not use_ssl:
-            return {}
-        host = (urlparse(url).hostname or "").lower()
+            return args
+
         # Supabase pooler presents a chain that fails default CA verification
         # on many runtimes; encrypt the socket without hostname CA pin.
         if "supabase.co" in host or "supabase.com" in host:
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-            return {"ssl": ctx}
-        return {"ssl": True}
+            args["ssl"] = ctx
+        else:
+            args["ssl"] = True
+        return args
 
     @staticmethod
     def _as_asyncpg_url(url: str) -> str:

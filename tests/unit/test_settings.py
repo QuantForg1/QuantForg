@@ -76,6 +76,18 @@ class TestSettings:
         assert "postgres.abcdef" in settings.database_url
         assert "pooler.supabase.com" in settings.database_url
         assert "ssl" in settings.asyncpg_connect_args
+        assert settings.asyncpg_connect_args.get("statement_cache_size") == 0
+
+    def test_transaction_pooler_disables_statement_cache(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+            app_env=AppEnvironment.TESTING,
+            database_url_override=(
+                "postgresql://user:pass@db.example.supabase.co:6543/postgres"
+            ),
+        )
+        assert settings.asyncpg_connect_args.get("statement_cache_size") == 0
 
     def test_production_accepts_database_url_without_postgres_password(
         self,
