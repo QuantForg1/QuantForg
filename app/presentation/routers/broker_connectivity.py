@@ -58,6 +58,47 @@ async def connectivity_diagnostics(
     return svc.diagnostics(platform)
 
 
+@router.get("/ecosystem")
+async def mt5_ecosystem(
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+) -> dict[str, Any]:
+    """MT5 Broker Ecosystem v1.1 — Weltrade, XM, Exness, IC Markets, Pepperstone."""
+    return svc.ecosystem()
+
+
+@router.get("/compatibility")
+async def broker_compatibility(
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+    broker: str | None = Query(default=None),
+    symbol: str = Query(default="EURUSD"),
+) -> dict[str, Any]:
+    """Live compatibility suite — never invents market/account data."""
+    return svc.compatibility(broker_slug=broker, quote_symbol=symbol)
+
+
+@router.get("/compatibility/dashboard")
+async def broker_compatibility_dashboard(
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+) -> dict[str, Any]:
+    """Broker Compatibility Dashboard payload."""
+    return svc.compatibility_dashboard()
+
+
+@router.get("/onboarding/{slug}")
+async def broker_onboarding(
+    slug: str,
+    _user: CurrentUser,
+    svc: BrokerConnectivityDep,
+) -> dict[str, Any]:
+    guide = svc.onboarding(slug)
+    if guide is None:
+        raise HTTPException(status_code=404, detail=f"Unknown broker '{slug}'")
+    return guide
+
+
 @router.get("/{platform}/capabilities")
 async def platform_capabilities(
     platform: str,

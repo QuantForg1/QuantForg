@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.domain.broker_connectivity.compatibility import run_compatibility_suite
 from app.domain.broker_connectivity.matrix import matrix_as_dicts, profile_for
+from app.domain.broker_connectivity.mt5_ecosystem import (
+    ecosystem_as_dicts,
+    profile_by_slug,
+)
 from app.domain.broker_connectivity.port import BrokerConnectivityPort
 from app.domain.broker_connectivity.types import (
     ConnectivityCapability,
@@ -26,6 +31,7 @@ class BrokerConnectivityService:
     _adapters: dict[str, BrokerConnectivityPort] = field(default_factory=dict)
     _health_monitor: Any | None = None
     _reconnect_manager: Any | None = None
+    _paper_available: bool = False
 
     @classmethod
     def create(
@@ -34,10 +40,12 @@ class BrokerConnectivityService:
         mt5: MT5Adapter | None = None,
         health_monitor: Any | None = None,
         reconnect_manager: Any | None = None,
+        paper_available: bool = False,
     ) -> BrokerConnectivityService:
         svc = cls(
             _health_monitor=health_monitor,
             _reconnect_manager=reconnect_manager,
+            _paper_available=paper_available,
         )
         if mt5 is not None:
             svc.register(MT5ConnectivityAdapter(mt5))
@@ -243,14 +251,75 @@ class BrokerConnectivityService:
             "matrix": matrix_rows,
         }
 
+    def ecosystem(self) -> dict[str, Any]:
+        """MT5 Broker Ecosystem v1.1 — documented retail brand profiles."""
+        return {
+            "version": "1.1",
+            "platform": "mt5",
+            "items": ecosystem_as_dicts(),
+            "notes": (
+                "Priority brands use the live MT5 adapter. Profiles are "
+                "documented onboarding metadata — not simulated connectivity."
+            ),
+        }
+
+    def onboarding(self, slug: str) -> dict[str, Any] | None:
+        profile = profile_by_slug(slug)
+        if profile is None:
+            return None
+        return {
+            "slug": profile.slug,
+            "name": profile.name,
+            "website": profile.website,
+            "platform": profile.platform,
+            "server_hints": list(profile.server_hints),
+            "steps": [s.to_dict() for s in profile.onboarding],
+            "notes": profile.notes,
+            "connect_path": "/mt5",
+            "compatibility_path": "/broker-compatibility",
+        }
+
+    def compatibility(
+        self,
+        *,
+        broker_slug: str | None = None,
+        quote_symbol: str = "EURUSD",
+    ) -> dict[str, Any]:
+        return run_compatibility_suite(
+            invoke=self.invoke,
+            broker_slug=broker_slug,
+            quote_symbol=quote_symbol,
+            paper_available=self._paper_available,
+        )
+
+    def compatibility_dashboard(self) -> dict[str, Any]:
+        suite = self.compatibility()
+        return {
+            "title": "Broker Compatibility Dashboard",
+            "version": suite.get("version"),
+            "session": suite.get("session"),
+            "matrix": suite.get("matrix"),
+            "brokers": suite.get("brokers"),
+            "checks": suite.get("checks"),
+            "operator_actions": suite.get("operator_actions"),
+            "ecosystem": self.ecosystem(),
+            "notes": (
+                "Compatible cells require a live MT5 session for that brand. "
+                "pending_session is not a failure — connect via /mt5."
+            ),
+        }
+
     def dashboard(self) -> dict[str, Any]:
         return {
             "catalog": self.catalog(),
             "matrix": self.capability_matrix(),
             "diagnostics": self.diagnostics(),
+            "ecosystem": self.ecosystem(),
+            "compatibility": self.compatibility(),
             "notes": (
                 "MT5 is the only live connectivity adapter. "
                 "Future venues return status=unsupported "
-                "without simulated connectivity."
+                "without simulated connectivity. "
+                "Ecosystem v1.1 brands are MT5 retail profiles."
             ),
         }

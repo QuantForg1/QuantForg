@@ -15,11 +15,12 @@ import { brokersApi, mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 
 const FEATURED = [
+  { key: "weltrade", name: "Weltrade", match: /weltrade/i, href: "/broker-compatibility" },
+  { key: "xm", name: "XM", match: /\bxm\b/i, href: "/broker-compatibility" },
+  { key: "exness", name: "Exness", match: /exness/i, href: "/broker-compatibility" },
+  { key: "ic-markets", name: "IC Markets", match: /ic.?markets/i, href: "/broker-compatibility" },
+  { key: "pepperstone", name: "Pepperstone", match: /pepperstone/i, href: "/broker-compatibility" },
   { key: "mt5", name: "MT5", match: /mt5|meta.?trader/i, href: "/mt5" },
-  { key: "ib", name: "Interactive Brokers", match: /interactive|ibkr|ib\b/i, href: "/brokers" },
-  { key: "bybit", name: "Bybit", match: /bybit/i, href: "/brokers" },
-  { key: "binance", name: "Binance", match: /binance/i, href: "/brokers" },
-  { key: "ctrader", name: "cTrader", match: /ctrader/i, href: "/brokers" },
 ];
 
 export default function BrokersPage() {

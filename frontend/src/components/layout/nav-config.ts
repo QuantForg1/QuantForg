@@ -84,6 +84,11 @@ export const appNav: NavGroup[] = [
         label: "Broker Connectivity",
         icon: Network,
       },
+      {
+        href: "/broker-compatibility",
+        label: "Broker Compatibility",
+        icon: Shield,
+      },
       { href: "/ops", label: "Operations", icon: Gauge },
     ],
   },

@@ -226,6 +226,22 @@ export const brokerConnectivityApi = {
     apiFetch<Record<string, unknown>>(
       `/broker-connectivity/${encodeURIComponent(platform)}/heartbeat`,
     ),
+  ecosystem: () =>
+    apiFetch<Record<string, unknown>>("/broker-connectivity/ecosystem"),
+  compatibility: (broker?: string, symbol = "EURUSD") =>
+    apiFetch<Record<string, unknown>>(
+      broker
+        ? `/broker-connectivity/compatibility?broker=${encodeURIComponent(broker)}&symbol=${encodeURIComponent(symbol)}`
+        : `/broker-connectivity/compatibility?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  compatibilityDashboard: () =>
+    apiFetch<Record<string, unknown>>(
+      "/broker-connectivity/compatibility/dashboard",
+    ),
+  onboarding: (slug: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/broker-connectivity/onboarding/${encodeURIComponent(slug)}`,
+    ),
 };
 
 export const opsApi = {
