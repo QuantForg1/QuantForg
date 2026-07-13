@@ -11,10 +11,25 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("global_error", {
-      message: error.message,
-      digest: error.digest,
-    });
+    try {
+      // Keep global-error self-contained; avoid importing app chrome that may also be broken.
+      const payload = {
+        kind: "route",
+        message: error.message,
+        digest: error.digest,
+        route: typeof window !== "undefined" ? window.location.pathname : "/",
+        build_version: process.env.NEXT_PUBLIC_BUILD_VERSION || "unknown",
+        at: new Date().toISOString(),
+      };
+      const raw = localStorage.getItem("qf.ops.errors.v1");
+      const prev = raw ? (JSON.parse(raw) as unknown[]) : [];
+      localStorage.setItem(
+        "qf.ops.errors.v1",
+        JSON.stringify([{ id: `err_global_${Date.now()}`, ...payload }, ...prev].slice(0, 80)),
+      );
+    } catch {
+      /* ignore */
+    }
   }, [error]);
 
   return (

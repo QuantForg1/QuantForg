@@ -32,6 +32,8 @@ export default function OrganizationsPage() {
   const create = useMutation({
     mutationFn: () => platformApi.createOrganization({ name, slug }),
     onSuccess: async (data) => {
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit("organization_change", "success", "Organization created", { slug });
       toast.success("Workspace created");
       setSelectedId(str(asRecord(data).id));
       setName("");
@@ -44,7 +46,9 @@ export default function OrganizationsPage() {
   const invite = useMutation({
     mutationFn: () =>
       platformApi.inviteMember(selectedId!, { email: inviteEmail, role: "member" }),
-    onSuccess: () => {
+    onSuccess: async () => {
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit("organization_change", "success", "Member invited");
       toast.success("Invitation sent");
       setInviteEmail("");
     },

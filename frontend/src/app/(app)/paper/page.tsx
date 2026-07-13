@@ -26,6 +26,7 @@ import {
 } from "@/lib/desk";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { FlaskConical } from "lucide-react";
+import { FeatureGate } from "@/components/platform/feature-gate";
 
 export default function PaperPage() {
   const qc = useQueryClient();
@@ -114,6 +115,7 @@ export default function PaperPage() {
   const loading = perfQ.isLoading && posQ.isLoading;
 
   return (
+    <FeatureGate flag="paper" label="Paper Trading">
     <div>
       <PageHeader
         title="Paper Trading"
@@ -285,5 +287,6 @@ export default function PaperPage() {
         </motion.div>
       )}
     </div>
+    </FeatureGate>
   );
 }

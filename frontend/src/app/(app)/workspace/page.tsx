@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { DeskSkeleton } from "@/components/desk/primitives";
+import { FeatureGate } from "@/components/platform/feature-gate";
 
 const WorkspaceShell = dynamic(
   () =>
@@ -17,5 +18,9 @@ const WorkspaceShell = dynamic(
 );
 
 export default function WorkspacePage() {
-  return <WorkspaceShell />;
+  return (
+    <FeatureGate flag="workspace" label="Trading Workspace">
+      <WorkspaceShell />
+    </FeatureGate>
+  );
 }

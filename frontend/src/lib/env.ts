@@ -24,4 +24,9 @@ export const env = {
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
     "http://localhost:3000",
   useMockAi: process.env.NEXT_PUBLIC_MOCK_AI === "true",
+  buildVersion:
+    process.env.NEXT_PUBLIC_BUILD_VERSION?.trim() ||
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
+    "1.0.0",
+  appEnv: process.env.NEXT_PUBLIC_APP_ENV?.trim() || process.env.NODE_ENV || "development",
 };

@@ -136,6 +136,8 @@ export const executionApi = {
 export const opsApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/ops/dashboard"),
   metrics: () => apiFetch<Record<string, unknown>>("/ops/metrics"),
+  alerts: () => apiFetch<Record<string, unknown>>("/ops/alerts"),
+  audit: () => apiFetch<Record<string, unknown>>("/ops/audit"),
 };
 
 export const platformApi = {

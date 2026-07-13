@@ -190,6 +190,11 @@ export const ExecutionOrderTicket = forwardRef<
   const submitLive = async () => {
     setBusy(true);
     try {
+      const { isReadOnlyMode } = await import("@/lib/platform/beta");
+      if (isReadOnlyMode()) {
+        toast.error("Read-only mode is enabled — live orders are blocked");
+        return;
+      }
       const payload = {
         ...buildPayload(),
         side: confirmMode === "oneclick" ? side : side,
@@ -199,6 +204,11 @@ export const ExecutionOrderTicket = forwardRef<
       const check = await executionApi.check(payload);
       setLastCheck(asRecord(check));
       if (str(asRecord(check).decision) === "reject") {
+        const { recordAudit } = await import("@/lib/observability/audit");
+        recordAudit("order_submit", "failure", "Execution rejected by safety gate", {
+          symbol: payload.symbol,
+          side: payload.side,
+        });
         toast.error("Execution rejected", {
           description: asListish(asRecord(check).rejection_reasons).join(" · ") || "Rejected",
         });
@@ -206,23 +216,44 @@ export const ExecutionOrderTicket = forwardRef<
       }
       const result = await executionApi.submit(payload);
       const outcome = str(asRecord(result).outcome);
+      const { recordAudit } = await import("@/lib/observability/audit");
       if (outcome === "disabled") {
+        recordAudit("order_submit", "info", "Live send disabled by EXECUTION_ENABLED", {
+          symbol: payload.symbol,
+        });
         toast.message("Live send disabled", {
           description: str(asRecord(result).message, "EXECUTION_ENABLED is false on the server."),
         });
       } else if (outcome === "success") {
+        recordAudit("order_submit", "success", "Order submitted", {
+          symbol: payload.symbol,
+          side: payload.side,
+          ticket: str(asRecord(result).order_ticket),
+        });
         toast.success("Order submitted", {
           description: `Ticket ${str(asRecord(result).order_ticket)}`,
         });
       } else if (asRecord(result).retryable) {
+        recordAudit("order_submit", "failure", "Order submit retryable failure", {
+          symbol: payload.symbol,
+          outcome,
+        });
         toast.error(str(asRecord(result).message, outcome), {
           description: "Retryable — try again.",
         });
       } else {
+        recordAudit("order_submit", "failure", "Order submit failed", {
+          symbol: payload.symbol,
+          outcome,
+        });
         toast.error(str(asRecord(result).message, outcome));
       }
       setConfirmOpen(false);
     } catch (e) {
+      const { recordAudit } = await import("@/lib/observability/audit");
+      const { captureError } = await import("@/lib/observability/error-monitor");
+      recordAudit("order_submit", "failure", "Order submit exception");
+      captureError("execution", e, { path: "/execution/submit" });
       toast.error(e instanceof ApiError ? e.message : "Submit failed");
     } finally {
       setBusy(false);

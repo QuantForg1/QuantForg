@@ -75,6 +75,8 @@ export default function SettingsPage() {
   const save = useMutation({
     mutationFn: () => platformApi.updateSettings(form),
     onSuccess: async () => {
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit("settings_change", "success", "Settings updated");
       toast.success("Settings saved");
       await qc.invalidateQueries({ queryKey: ["settings"] });
     },
@@ -83,7 +85,9 @@ export default function SettingsPage() {
 
   const changePw = useMutation({
     mutationFn: () => authApi.changePassword(newPassword),
-    onSuccess: () => {
+    onSuccess: async () => {
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit("password_reset", "success", "Password changed");
       toast.success("Password updated");
       setNewPassword("");
     },

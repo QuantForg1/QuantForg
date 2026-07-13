@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { env } from "@/lib/env";
+import { FeatureGate } from "@/components/platform/feature-gate";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -55,6 +56,7 @@ export default function AiPage() {
   }
 
   return (
+    <FeatureGate flag="ai" label="AI Assistant">
     <div className="flex h-[calc(100vh-7rem)] flex-col">
       <PageHeader
         title="AI Assistant"
@@ -99,5 +101,6 @@ export default function AiPage() {
         </form>
       </Card>
     </div>
+    </FeatureGate>
   );
 }

@@ -17,6 +17,7 @@ import {
   type AuthSession,
   type AuthUser,
 } from "@/lib/auth/session";
+import { recordAudit } from "@/lib/observability/audit";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -56,20 +57,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshMe]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const session = await authApi.login(email, password);
-    saveSession(session);
-    setUser(session.user);
+    try {
+      const session = await authApi.login(email, password);
+      saveSession(session);
+      setUser(session.user);
+      recordAudit("login", "success", "User signed in", { email });
+    } catch (e) {
+      recordAudit("login", "failure", "Sign-in failed", { email });
+      throw e;
+    }
   }, []);
 
   const register = useCallback(
     async (email: string, password: string, displayName: string) => {
-      const result = await authApi.register(email, password, displayName);
-      if ("access_token" in result) {
-        saveSession(result as AuthSession);
-        setUser((result as AuthSession).user);
-        return;
+      try {
+        const result = await authApi.register(email, password, displayName);
+        if ("access_token" in result) {
+          saveSession(result as AuthSession);
+          setUser((result as AuthSession).user);
+          recordAudit("register", "success", "Account registered", { email });
+          return;
+        }
+        recordAudit("register", "info", "Registration pending verification", { email });
+        return result.message;
+      } catch (e) {
+        recordAudit("register", "failure", "Registration failed", { email });
+        throw e;
       }
-      return result.message;
     },
     [],
   );
@@ -77,8 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
+      recordAudit("logout", "success", "User signed out");
     } catch {
-      /* ignore */
+      recordAudit("logout", "info", "Sign-out completed locally after API error");
     }
     clearSession();
     setUser(null);

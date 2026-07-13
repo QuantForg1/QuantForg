@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { captureError } from "@/lib/observability/error-monitor";
 
 export default function AppError({
   error,
@@ -11,10 +12,7 @@ export default function AppError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("app_route_error", {
-      message: error.message,
-      digest: error.digest,
-    });
+    captureError("route", error, { details: { digest: error.digest } });
   }, [error]);
 
   return (

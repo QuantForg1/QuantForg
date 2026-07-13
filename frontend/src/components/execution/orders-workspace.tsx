@@ -61,6 +61,14 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
       );
     }
     const result = await executionApi.submit(payload);
+    const { recordAudit } = await import("@/lib/observability/audit");
+    if (intent === "cancel") {
+      recordAudit("order_cancel", "success", "Order cancel submitted", {
+        ticket: str(row.ticket),
+        symbol: str(row.symbol),
+        outcome: str(asRecord(result).outcome),
+      });
+    }
     toast.message(str(asRecord(result).outcome), {
       description: str(asRecord(result).message),
     });

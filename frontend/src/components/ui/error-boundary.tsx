@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
+import { captureError } from "@/lib/observability/error-monitor";
 
 type State = { error: Error | null };
 
@@ -13,6 +14,10 @@ export class ErrorBoundary extends React.Component<
 
   static getDerivedStateFromError(error: Error) {
     return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    captureError("react", error);
   }
 
   render() {

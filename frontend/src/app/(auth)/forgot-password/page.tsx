@@ -31,8 +31,14 @@ export default function ForgotPasswordPage() {
               values.email,
               `${env.appUrl}/login`,
             );
+            const { recordAudit } = await import("@/lib/observability/audit");
+            recordAudit("password_reset", "success", "Password reset requested", {
+              email: values.email,
+            });
             toast.success("If the email exists, a reset link was sent.");
           } catch (e) {
+            const { recordAudit } = await import("@/lib/observability/audit");
+            recordAudit("password_reset", "failure", "Password reset request failed");
             toast.error(e instanceof ApiError ? e.message : "Request failed");
           }
         })}

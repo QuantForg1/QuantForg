@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -8,34 +9,84 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { PageMotion } from "@/components/desk/motion";
-import { opsApi, platformApi } from "@/lib/api/endpoints";
+import { mt5Api, opsApi, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
+import { env } from "@/lib/env";
+import { useRealtimeContext } from "@/providers/realtime-provider";
+import { listMonitoredErrors } from "@/lib/observability/error-monitor";
+import { listAuditEvents } from "@/lib/observability/audit";
+import { describeFlags } from "@/lib/platform/flags";
+import { getBetaState } from "@/lib/platform/beta";
 
 function toneFor(status: string): "success" | "warning" | "danger" | "accent" | "neutral" {
   const s = status.toLowerCase();
-  if (s === "healthy" || s === "ok" || s === "up") return "success";
-  if (s === "degraded" || s === "alive") return "accent";
-  if (s === "unhealthy" || s === "down" || s === "error") return "danger";
+  if (s === "healthy" || s === "ok" || s === "up" || s === "connected" || s === "alive")
+    return "success";
+  if (s === "degraded" || s === "polling") return "accent";
+  if (s === "unhealthy" || s === "down" || s === "error" || s === "disconnected") return "danger";
   if (s === "unknown") return "warning";
   return "neutral";
 }
 
 export default function OpsPage() {
+  const realtime = useRealtimeContext();
+  const [clientErrors, setClientErrors] = useState(() => listMonitoredErrors());
+  const [clientAudit, setClientAudit] = useState(() => listAuditEvents());
+  const flags = describeFlags();
+  const beta = getBetaState();
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setClientErrors(listMonitoredErrors());
+      setClientAudit(listAuditEvents());
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
   const health = useQuery({
     queryKey: ["health"],
     queryFn: platformApi.health,
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  const healthLive = useQuery({
+    queryKey: ["health-live"],
+    queryFn: platformApi.healthLive,
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  const versionQ = useQuery({
+    queryKey: ["platform-version"],
+    queryFn: platformApi.version,
     retry: false,
   });
   const dashboard = useQuery({
     queryKey: ["ops-dashboard"],
     queryFn: opsApi.dashboard,
     retry: false,
+    refetchInterval: 30_000,
   });
   const metrics = useQuery({
     queryKey: ["ops-metrics"],
     queryFn: opsApi.metrics,
     retry: false,
+  });
+  const alerts = useQuery({
+    queryKey: ["ops-alerts"],
+    queryFn: opsApi.alerts,
+    retry: false,
+  });
+  const serverAudit = useQuery({
+    queryKey: ["ops-audit"],
+    queryFn: opsApi.audit,
+    retry: false,
+  });
+  const mt5 = useQuery({
+    queryKey: ["mt5-status"],
+    queryFn: mt5Api.status,
+    retry: false,
+    refetchInterval: 30_000,
   });
 
   const deps = asList(health.data?.dependencies).map(asRecord);
@@ -55,9 +106,37 @@ export default function OpsPage() {
     components.find((c) => str(c.kind).toLowerCase() === kind.toLowerCase());
 
   const db = findDep("postgres") || findDep("database") || findComp("database");
-  const redis = findDep("redis") || findComp("queue");
+  const redis = findDep("redis") || findComp("redis");
+  const queue = findComp("queue") || findDep("queue") || findDep("celery") || findDep("worker");
+  const jobs = findComp("jobs") || findComp("worker") || findDep("jobs");
   const api = findComp("api") || { status: health.data?.status, latency_ms: null };
-  const railway = findComp("system") || { status: health.data?.environment, latency_ms: null };
+  const mt5Comp = findComp("mt5") || findDep("mt5");
+  const realtimeComp = findComp("realtime") || findDep("realtime");
+
+  const alertRows = asList(alerts.data?.items ?? alerts.data).map(asRecord);
+  const serverAuditRows = asList(serverAudit.data?.items ?? serverAudit.data).map(asRecord);
+  const ver = asRecord(versionQ.data);
+
+  const deployments = [
+    {
+      target: "Frontend",
+      version: env.buildVersion,
+      environment: env.appEnv,
+      note: "NEXT_PUBLIC_BUILD_VERSION / Vercel SHA",
+    },
+    {
+      target: "API health",
+      version: str(health.data?.version, "—"),
+      environment: str(health.data?.environment, "—"),
+      note: "GET /health",
+    },
+    {
+      target: "API version",
+      version: str(ver.version ?? ver.git_sha ?? ver.commit, "—"),
+      environment: str(ver.environment ?? ver.env, "—"),
+      note: "GET /api/v1/version",
+    },
+  ];
 
   return (
     <div>
@@ -74,9 +153,27 @@ export default function OpsPage() {
         <PageMotion>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             <StatCard
-              label="System Health"
+              label="API health"
               value={str(dashboard.data?.overall ?? health.data?.status, "—")}
-              hint={str(health.data?.version, "")}
+              hint={str(healthLive.data?.status ?? health.data?.status, "")}
+            />
+            <StatCard
+              label="Realtime"
+              value={realtime.status.connected ? realtime.status.transport : "offline"}
+              hint={
+                realtime.status.latencyMs != null
+                  ? `${formatNumber(realtime.status.latencyMs, 0)} ms`
+                  : str(asRecord(realtimeComp).status, "")
+              }
+            />
+            <StatCard
+              label="Broker / MT5"
+              value={
+                mt5.data?.connected
+                  ? "connected"
+                  : str(asRecord(mt5Comp).status, mt5.isError ? "error" : "disconnected")
+              }
+              hint={lat(mt5.data?.latency_ms ?? asRecord(mt5Comp).latency_ms)}
             />
             <StatCard
               label="Database"
@@ -89,21 +186,39 @@ export default function OpsPage() {
               hint={lat(asRecord(redis).latency_ms)}
             />
             <StatCard
-              label="Railway"
-              value={str(health.data?.environment ?? asRecord(railway).status, "—")}
+              label="Queue / jobs"
+              value={str(
+                asRecord(queue).status ?? asRecord(jobs).status,
+                str(dashboard.data?.execution_enabled) === "true" ? "enabled" : "—",
+              )}
+              hint={lat(asRecord(queue).latency_ms ?? asRecord(jobs).latency_ms)}
             />
-            <StatCard label="API" value={str(asRecord(api).status ?? health.data?.status, "—")} />
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              label="Avg Latency"
+              label="Latency"
               value={
                 Number.isFinite(num(m.request_latency_ms_avg))
                   ? `${formatNumber(num(m.request_latency_ms_avg), 1)} ms`
                   : lat(asRecord(api).latency_ms)
               }
             />
+            <StatCard label="Version" value={env.buildVersion} hint={str(health.data?.version, "")} />
+            <StatCard label="Environment" value={env.appEnv} hint={str(health.data?.environment, "")} />
+            <StatCard
+              label="Beta / modes"
+              value={beta.betaMode ? (beta.unlocked ? "beta unlocked" : "invite gate") : "open"}
+              hint={[
+                beta.maintenanceMode ? "maintenance" : null,
+                beta.readOnlyMode ? "read-only" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "normal"}
+            />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Response times</CardTitle>
@@ -138,7 +253,7 @@ export default function OpsPage() {
             </Card>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Ops dashboard</CardTitle>
@@ -193,14 +308,144 @@ export default function OpsPage() {
                     columns={["Metric", "Value"]}
                     rows={[
                       ["Request latency avg", lat(m.request_latency_ms_avg)],
-                      ["Error rate", Number.isFinite(num(m.error_rate)) ? formatNumber(num(m.error_rate), 4) : "—"],
+                      [
+                        "Error rate",
+                        Number.isFinite(num(m.error_rate))
+                          ? formatNumber(num(m.error_rate), 4)
+                          : "—",
+                      ],
                       ["Throughput / min", str(m.throughput_per_minute, "—")],
-                      ["Cache hit ratio", Number.isFinite(num(m.cache_hit_ratio)) ? formatNumber(num(m.cache_hit_ratio), 3) : "—"],
+                      [
+                        "Cache hit ratio",
+                        Number.isFinite(num(m.cache_hit_ratio))
+                          ? formatNumber(num(m.cache_hit_ratio), 3)
+                          : "—",
+                      ],
                       ["Requests", str(m.request_count, "—")],
                       ["Errors", str(m.error_count, "—")],
                     ].map(([a, b]) => [a, b])}
                   />
                 )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Feature flags</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DeskTable
+                  columns={["Flag", "State", "Source"]}
+                  rows={flags.map((f) => [
+                    f.key,
+                    <Badge key="e" tone={f.enabled ? "success" : "neutral"}>
+                      {f.enabled ? "on" : "off"}
+                    </Badge>,
+                    f.source,
+                  ])}
+                />
+                <p className="mt-2 text-xs text-[var(--fg-muted)]">
+                  Toggle via NEXT_PUBLIC_FF_* or localStorage overrides (qf.ff.overrides.v1) — no
+                  redeploy required for overrides.
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent deployments</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DeskTable
+                  columns={["Target", "Version", "Environment", "Source"]}
+                  rows={deployments.map((d) => [d.target, d.version, d.environment, d.note])}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent errors</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {clientErrors.length === 0 ? (
+                  <p className="text-sm text-[var(--fg-muted)]">No client-captured errors yet.</p>
+                ) : (
+                  <DeskTable
+                    columns={["Kind", "Message", "Route", "Request"]}
+                    rows={clientErrors.slice(0, 12).map((e) => [
+                      e.kind,
+                      e.message.slice(0, 60),
+                      e.route,
+                      e.request_id.slice(0, 12),
+                    ])}
+                  />
+                )}
+                {alerts.isError ? (
+                  <p className="mt-2 text-xs text-[var(--fg-muted)]">
+                    Server alerts require owner/admin.
+                  </p>
+                ) : alertRows.length > 0 ? (
+                  <div className="mt-3">
+                    <p className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Server alerts</p>
+                    <DeskTable
+                      columns={["Severity", "Message"]}
+                      rows={alertRows.slice(0, 8).map((a) => [
+                        str(a.severity ?? a.level, "info"),
+                        str(a.message ?? a.summary).slice(0, 80),
+                      ])}
+                    />
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent audit</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {clientAudit.length === 0 ? (
+                  <p className="text-sm text-[var(--fg-muted)]">No client audit events yet.</p>
+                ) : (
+                  <DeskTable
+                    columns={["Action", "Outcome", "Summary"]}
+                    rows={clientAudit.slice(0, 12).map((a) => [
+                      a.action,
+                      <Badge
+                        key="o"
+                        tone={
+                          a.outcome === "success"
+                            ? "success"
+                            : a.outcome === "failure"
+                              ? "danger"
+                              : "neutral"
+                        }
+                      >
+                        {a.outcome}
+                      </Badge>,
+                      a.summary.slice(0, 60),
+                    ])}
+                  />
+                )}
+                {serverAudit.isError ? (
+                  <p className="mt-2 text-xs text-[var(--fg-muted)]">
+                    Server audit requires owner/admin.
+                  </p>
+                ) : serverAuditRows.length > 0 ? (
+                  <div className="mt-3">
+                    <p className="mb-1 text-xs font-medium text-[var(--fg-muted)]">Server audit</p>
+                    <DeskTable
+                      columns={["Action", "Detail"]}
+                      rows={serverAuditRows.slice(0, 8).map((a) => [
+                        str(a.action ?? a.event_type, "—"),
+                        str(a.summary ?? a.message ?? a.detail).slice(0, 80),
+                      ])}
+                    />
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>

@@ -3,12 +3,28 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { AuthLayoutProviders } from "@/providers/auth-layout-providers";
 import { RealtimeProvider } from "@/providers/realtime-provider";
+import { ObservabilityBootstrap } from "@/components/platform/observability-bootstrap";
+import { FeedbackWidget } from "@/components/platform/feedback-widget";
+import {
+  BetaBanner,
+  BetaInviteGate,
+  MaintenanceGate,
+} from "@/components/platform/beta-controls";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <AuthLayoutProviders>
+      <ObservabilityBootstrap />
       <RealtimeProvider>
-        <AppShell>{children}</AppShell>
+        <MaintenanceGate>
+          <BetaInviteGate>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <BetaBanner />
+              <AppShell>{children}</AppShell>
+              <FeedbackWidget />
+            </div>
+          </BetaInviteGate>
+        </MaintenanceGate>
       </RealtimeProvider>
     </AuthLayoutProviders>
   );

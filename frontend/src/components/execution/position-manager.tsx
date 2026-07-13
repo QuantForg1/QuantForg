@@ -76,6 +76,12 @@ export function PositionManager({ connected }: { connected: boolean }) {
     if (outcome !== "success") {
       throw new ApiError(str(asRecord(result).message, outcome), 400, outcome);
     }
+    const { recordAudit } = await import("@/lib/observability/audit");
+    recordAudit("position_close", "success", "Position close submitted", {
+      ticket: str(row.ticket),
+      symbol: str(row.symbol),
+      volume: vol,
+    });
     toast.success("Close submitted", {
       description: `Ticket ${str(asRecord(result).order_ticket)}`,
     });

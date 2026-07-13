@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
+import { FeatureGate } from "@/components/platform/feature-gate";
 
 const schema = z.object({
   login: z.coerce.number().int().positive(),
@@ -34,21 +35,38 @@ export default function Mt5Page() {
     mutationFn: mt5Api.connect,
     onSuccess: async () => {
       toast.success("MT5 connected");
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit("broker_connect", "success", "MT5 terminal connected", { server: form.getValues("server") });
       await qc.invalidateQueries({ queryKey: ["mt5-status"] });
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Connect failed"),
+    onError: async (e) => {
+      const { recordAudit } = await import("@/lib/observability/audit");
+      const { captureError } = await import("@/lib/observability/error-monitor");
+      recordAudit("broker_connect", "failure", "MT5 connect failed");
+      captureError("mt5", e, { path: "/mt5/connect" });
+      toast.error(e instanceof ApiError ? e.message : "Connect failed");
+    },
   });
 
   const disconnect = useMutation({
     mutationFn: mt5Api.disconnect,
     onSuccess: async () => {
       toast.success("MT5 disconnected");
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit("broker_disconnect", "success", "MT5 terminal disconnected");
       await qc.invalidateQueries({ queryKey: ["mt5-status"] });
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Disconnect failed"),
+    onError: async (e) => {
+      const { recordAudit } = await import("@/lib/observability/audit");
+      const { captureError } = await import("@/lib/observability/error-monitor");
+      recordAudit("broker_disconnect", "failure", "MT5 disconnect failed");
+      captureError("mt5", e, { path: "/mt5/disconnect" });
+      toast.error(e instanceof ApiError ? e.message : "Disconnect failed");
+    },
   });
 
   return (
+    <FeatureGate flag="mt5" label="MT5">
     <div>
       <PageHeader
         title="MT5 Accounts"
@@ -129,5 +147,6 @@ export default function Mt5Page() {
       </div>
       )}
     </div>
+    </FeatureGate>
   );
 }
