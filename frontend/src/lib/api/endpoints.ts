@@ -30,6 +30,11 @@ export const authApi = {
       body: { token_hash, type },
       auth: false,
     }),
+  changePassword: (new_password: string) =>
+    apiFetch<{ message: string }>("/auth/change-password", {
+      method: "POST",
+      body: { new_password },
+    }),
 };
 
 export const portfolioApi = {
@@ -84,28 +89,28 @@ export const strategyApi = {
       method: "POST",
       body,
     }),
-  signals: () => apiFetch<unknown[]>("/strategy/signals"),
+  signals: () => apiFetch<Record<string, unknown>>("/strategy/signals"),
 };
 
 export const backtestApi = {
   run: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/backtests/run", { method: "POST", body }),
-  list: () => apiFetch<unknown[]>("/backtests"),
+  list: () => apiFetch<Record<string, unknown>>("/backtests"),
   get: (id: string) => apiFetch<Record<string, unknown>>(`/backtests/${id}`),
 };
 
 export const paperApi = {
   place: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/paper/orders", { method: "POST", body }),
-  positions: () => apiFetch<unknown[]>("/paper/positions"),
-  history: () => apiFetch<unknown[]>("/paper/history"),
+  positions: () => apiFetch<Record<string, unknown>>("/paper/positions"),
+  history: () => apiFetch<Record<string, unknown>>("/paper/history"),
   performance: () => apiFetch<Record<string, unknown>>("/paper/performance"),
 };
 
 export const walkforwardApi = {
   list: () => apiFetch<Record<string, unknown>>("/walkforward/results"),
   get: (id: string) =>
-    apiFetch<Record<string, unknown>>(`/walkforward/results/${id}`),
+    apiFetch<Record<string, unknown>>(`/walkforward/${id}`),
   run: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/walkforward/run", {
       method: "POST",
@@ -126,10 +131,42 @@ export const opsApi = {
 };
 
 export const platformApi = {
-  notifications: () => apiFetch<unknown[]>("/notifications"),
+  notifications: (unread_only = false) =>
+    apiFetch<unknown[]>(
+      unread_only ? "/notifications?unread_only=true" : "/notifications",
+    ),
+  markNotificationRead: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/notifications/${id}/read`, {
+      method: "POST",
+      body: {},
+    }),
+  notificationPreferences: () =>
+    apiFetch<unknown[]>("/notifications/preferences"),
   organizations: () => apiFetch<unknown[]>("/organizations"),
+  createOrganization: (body: { name: string; slug: string }) =>
+    apiFetch<Record<string, unknown>>("/organizations", {
+      method: "POST",
+      body,
+    }),
+  inviteMember: (organizationId: string, body: { email: string; role?: string }) =>
+    apiFetch<Record<string, unknown>>(
+      `/organizations/${organizationId}/invitations`,
+      { method: "POST", body },
+    ),
   profile: () => apiFetch<Record<string, unknown>>("/profile"),
+  updateProfile: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/profile", { method: "PATCH", body }),
+  activity: () => apiFetch<unknown[]>("/profile/activity"),
   settings: () => apiFetch<Record<string, unknown>>("/settings"),
+  updateSettings: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/settings", { method: "PATCH", body }),
+  devices: () => apiFetch<unknown[]>("/settings/devices"),
+  sessions: () => apiFetch<unknown[]>("/settings/sessions"),
+  revokeSession: (sessionId: string) =>
+    apiFetch<Record<string, unknown>>(`/settings/sessions/${sessionId}/revoke`, {
+      method: "POST",
+      body: {},
+    }),
   version: () => apiFetch<Record<string, unknown>>("/version"),
   health: () =>
     apiFetch<Record<string, unknown>>(

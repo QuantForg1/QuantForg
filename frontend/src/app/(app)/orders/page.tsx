@@ -1,39 +1,136 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { ListOrdered } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
+import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import { portfolioApi } from "@/lib/api/endpoints";
+import { asList, asRecord, num, str } from "@/lib/desk";
 
-export default function Page() {
-  const q = useQuery({
-    queryKey: ["orders"],
-    queryFn: portfolioApi.orders,
-    retry: false,
-  });
+type Row = Record<string, unknown>;
+
+export default function OrdersPage() {
+  const q = useQuery({ queryKey: ["orders"], queryFn: portfolioApi.orders, retry: false });
+  const orders = asList(q.data).map(asRecord);
+
+  const columns: DeskColumn<Row>[] = [
+    {
+      id: "ticket",
+      header: "Ticket",
+      sortable: true,
+      accessor: (r) => str(r.ticket),
+      cell: (r) => <span className="tabular">{str(r.ticket)}</span>,
+    },
+    {
+      id: "symbol",
+      header: "Symbol",
+      sortable: true,
+      accessor: (r) => str(r.symbol),
+      cell: (r) => <span className="font-medium">{str(r.symbol)}</span>,
+    },
+    {
+      id: "side",
+      header: "Side",
+      sortable: true,
+      accessor: (r) => str(r.side),
+      cell: (r) => <Badge tone="neutral">{str(r.side)}</Badge>,
+    },
+    {
+      id: "type",
+      header: "Type",
+      sortable: true,
+      accessor: (r) => str(r.order_type),
+      cell: (r) => str(r.order_type),
+    },
+    {
+      id: "volume",
+      header: "Volume",
+      sortable: true,
+      accessor: (r) => num(r.volume, 0),
+      cell: (r) => <span className="tabular">{str(r.volume)}</span>,
+    },
+    {
+      id: "price",
+      header: "Price",
+      sortable: true,
+      accessor: (r) => num(r.price, 0),
+      cell: (r) => <span className="tabular">{str(r.price)}</span>,
+    },
+    { id: "sl", header: "SL", cell: (r) => str(r.stop_loss) },
+    { id: "tp", header: "TP", cell: (r) => str(r.take_profit) },
+    {
+      id: "created",
+      header: "Created",
+      sortable: true,
+      accessor: (r) => str(r.created_at),
+      cell: (r) => str(r.created_at).slice(0, 16),
+    },
+  ];
 
   return (
     <div>
-      <PageHeader title="Orders" description="Pending and working orders from your connected portfolio." />
-      <Card>
-        <CardHeader>
-          <CardTitle>Live API data</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {q.isLoading ? (
-            <Skeleton className="h-40 w-full" />
-          ) : q.isError ? (
-            <p className="text-sm text-[var(--fg-muted)]">
-              Unable to load this resource. Connect MT5 or ensure your session has access.
-            </p>
-          ) : (
-            <pre className="max-h-[28rem] overflow-auto rounded-lg bg-[var(--bg-elevated)] p-4 text-xs text-[var(--fg-muted)]">
-              {JSON.stringify(q.data, null, 2)}
-            </pre>
-          )}
-        </CardContent>
-      </Card>
+      <PageHeader title="Orders" description="Pending working orders from the synced terminal." />
+      {q.isLoading ? (
+        <DeskSkeleton variant="page" />
+      ) : q.isError ? (
+        <DeskError message="Unable to load orders." onRetry={() => q.refetch()} />
+      ) : (
+        <PageMotion>
+          <StaggerGrid className="grid gap-4 sm:grid-cols-3">
+            <StaggerItem>
+              <StatCard label="Pending" value={String(orders.length)} />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Buy side"
+                value={String(
+                  orders.filter((o) => str(o.side).toLowerCase().includes("buy")).length,
+                )}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard
+                label="Sell side"
+                value={String(
+                  orders.filter((o) => str(o.side).toLowerCase().includes("sell")).length,
+                )}
+              />
+            </StaggerItem>
+          </StaggerGrid>
+          <Card>
+            <CardHeader>
+              <CardTitle>Working orders</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DeskDataTable
+                columns={columns}
+                rows={orders}
+                rowKey={(r, i) => str(r.ticket, String(i))}
+                searchKeys={(r) => `${str(r.symbol)} ${str(r.side)} ${str(r.order_type)}`}
+                searchPlaceholder="Filter orders…"
+                pageSize={12}
+                aria-label="Working orders"
+                empty={
+                  <DeskEmpty
+                    icon={ListOrdered}
+                    title="No pending orders"
+                    description="Limit and stop orders will appear here after sync."
+                    actionLabel="Open execution"
+                    onAction={() => {
+                      window.location.href = "/execution";
+                    }}
+                  />
+                }
+              />
+            </CardContent>
+          </Card>
+        </PageMotion>
+      )}
     </div>
   );
 }

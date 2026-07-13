@@ -26,3 +26,23 @@ export function formatNumber(value: number | string, digits = 2) {
     maximumFractionDigits: digits,
   }).format(n);
 }
+
+export function formatRelativeTime(value: string | number | Date | null | undefined) {
+  if (value == null || value === "") return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  const ts = date.getTime();
+  if (!Number.isFinite(ts)) return "—";
+  const diffSec = Math.round((ts - Date.now()) / 1000);
+  const abs = Math.abs(diffSec);
+  const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+  if (abs < 60) return rtf.format(diffSec, "second");
+  const diffMin = Math.round(diffSec / 60);
+  if (Math.abs(diffMin) < 60) return rtf.format(diffMin, "minute");
+  const diffHr = Math.round(diffMin / 60);
+  if (Math.abs(diffHr) < 24) return rtf.format(diffHr, "hour");
+  const diffDay = Math.round(diffHr / 24);
+  if (Math.abs(diffDay) < 30) return rtf.format(diffDay, "day");
+  const diffMonth = Math.round(diffDay / 30);
+  if (Math.abs(diffMonth) < 12) return rtf.format(diffMonth, "month");
+  return rtf.format(Math.round(diffMonth / 12), "year");
+}

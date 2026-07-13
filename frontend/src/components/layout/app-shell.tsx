@@ -40,8 +40,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onOpenCommand={() => setCmdOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-            <ErrorBoundary>{children}</ErrorBoundary>
+          <main
+            id="main-content"
+            className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"
+            tabIndex={-1}
+          >
+            <ErrorBoundary>
+              <div className="qf-fade-in mx-auto w-full max-w-[1600px]">{children}</div>
+            </ErrorBoundary>
           </main>
         </div>
       </div>
