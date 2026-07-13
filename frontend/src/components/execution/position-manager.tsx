@@ -114,7 +114,21 @@ export function PositionManager({ connected }: { connected: boolean }) {
     });
     if (str(asRecord(check).decision) !== "reject") {
       const result = await executionApi.submit(payload);
-      toast.message(str(asRecord(result).outcome), {
+      const outcome = str(asRecord(result).outcome);
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit(
+        "order_submit",
+        outcome === "success" ? "success" : "info",
+        "Position SL/TP modify submitted",
+        {
+          ticket: str(row.ticket),
+          symbol: str(row.symbol),
+          stop_loss: slTp.sl || null,
+          take_profit: slTp.tp || null,
+          outcome,
+        },
+      );
+      toast.message(outcome, {
         description: str(asRecord(result).message),
       });
     }

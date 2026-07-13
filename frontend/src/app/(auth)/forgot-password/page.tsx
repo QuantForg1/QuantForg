@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
           try {
             await authApi.forgotPassword(
               values.email,
-              `${env.appUrl}/login`,
+              `${env.appUrl}/reset-password`,
             );
             const { recordAudit } = await import("@/lib/observability/audit");
             recordAudit("password_reset", "success", "Password reset requested", {

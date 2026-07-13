@@ -15,18 +15,32 @@ import { executionApi, mt5Api, portfolioApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatRelativeTime } from "@/lib/utils";
+import { isReadOnlyMode } from "@/lib/platform/beta";
 
 type Row = Record<string, unknown>;
+
+function isPendingOrder(row: Row): boolean {
+  const type = str(row.order_type, "").toLowerCase();
+  const state = str(row.state ?? row.status, "").toLowerCase();
+  if (type.includes("market") && !type.includes("stop") && !type.includes("limit")) {
+    return false;
+  }
+  if (state && /filled|closed|canceled|cancelled|rejected|done|executed/.test(state)) {
+    return false;
+  }
+  return true;
+}
 
 export function OrdersWorkspace({ connected }: { connected: boolean }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [modifyPrice, setModifyPrice] = useState("");
+  const [modifyForm, setModifyForm] = useState({ price: "", sl: "", tp: "" });
   const [confirm, setConfirm] = useState<null | {
     title: string;
     description: string;
     action: () => Promise<void>;
     tone?: "default" | "danger";
+    mode?: "modify" | "cancel";
   }>(null);
 
   const ordersQ = useQuery({
@@ -35,18 +49,45 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
     retry: false,
   });
 
-  const orders = useMemo(() => asList(ordersQ.data).map(asRecord), [ordersQ.data]);
+  const orders = useMemo(
+    () => asList(ordersQ.data).map(asRecord).filter(isPendingOrder),
+    [ordersQ.data],
+  );
 
-  const gatewayAction = async (row: Row, intent: "cancel" | "modify") => {
+  const gatewayAction = async (
+    row: Row,
+    intent: "cancel" | "modify",
+    overrides?: { price?: string; sl?: string; tp?: string },
+  ) => {
+    if (isReadOnlyMode()) {
+      throw new ApiError("Read-only mode blocks order changes", 403, "read_only");
+    }
+    const price =
+      intent === "modify"
+        ? overrides?.price || modifyForm.price || str(row.price)
+        : str(row.price) || null;
+    const stopLoss =
+      intent === "modify"
+        ? overrides?.sl || modifyForm.sl || null
+        : str(row.stop_loss) === "—"
+          ? null
+          : str(row.stop_loss, "") || null;
+    const takeProfit =
+      intent === "modify"
+        ? overrides?.tp || modifyForm.tp || null
+        : str(row.take_profit) === "—"
+          ? null
+          : str(row.take_profit, "") || null;
+
     const payload = {
       request_id: `${intent}_${str(row.ticket)}_${Date.now()}`,
       symbol: str(row.symbol),
       side: str(row.side).toLowerCase().includes("sell") ? "sell" : "buy",
       order_type: str(row.order_type, "limit"),
       volume: str(row.volume, "0.01"),
-      price: intent === "modify" ? modifyPrice || str(row.price) : str(row.price) || null,
-      stop_loss: str(row.stop_loss) === "—" ? null : str(row.stop_loss, "") || null,
-      take_profit: str(row.take_profit) === "—" ? null : str(row.take_profit, "") || null,
+      price,
+      stop_loss: stopLoss || null,
+      take_profit: takeProfit || null,
       slippage: 10,
       magic: 0,
       comment: `${intent}:${str(row.ticket)}`,
@@ -61,15 +102,35 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
       );
     }
     const result = await executionApi.submit(payload);
+    const outcome = str(asRecord(result).outcome);
     const { recordAudit } = await import("@/lib/observability/audit");
     if (intent === "cancel") {
-      recordAudit("order_cancel", "success", "Order cancel submitted", {
-        ticket: str(row.ticket),
-        symbol: str(row.symbol),
-        outcome: str(asRecord(result).outcome),
-      });
+      recordAudit(
+        "order_cancel",
+        outcome === "success" ? "success" : "info",
+        "Pending order cancel submitted",
+        {
+          ticket: str(row.ticket),
+          symbol: str(row.symbol),
+          outcome,
+        },
+      );
+    } else {
+      recordAudit(
+        "order_submit",
+        outcome === "success" ? "success" : "info",
+        "Pending order modify submitted",
+        {
+          ticket: str(row.ticket),
+          symbol: str(row.symbol),
+          outcome,
+          price,
+          stop_loss: stopLoss,
+          take_profit: takeProfit,
+        },
+      );
     }
-    toast.message(str(asRecord(result).outcome), {
+    toast.message(outcome, {
       description: str(asRecord(result).message),
     });
     await qc.invalidateQueries({ queryKey: ["orders"] });
@@ -119,6 +180,16 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
       cell: (r) => <span className="tabular">{str(r.price)}</span>,
     },
     {
+      id: "sl",
+      header: "SL",
+      cell: (r) => <span className="tabular">{str(r.stop_loss, "—")}</span>,
+    },
+    {
+      id: "tp",
+      header: "TP",
+      cell: (r) => <span className="tabular">{str(r.take_profit, "—")}</span>,
+    },
+    {
       id: "trigger",
       header: "Trigger",
       cell: (r) => (
@@ -147,10 +218,16 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
             variant="ghost"
             disabled={!connected || busy}
             onClick={() => {
-              setModifyPrice(str(r.price, ""));
+              setModifyForm({
+                price: str(r.price, ""),
+                sl: str(r.stop_loss, "") === "—" ? "" : str(r.stop_loss, ""),
+                tp: str(r.take_profit, "") === "—" ? "" : str(r.take_profit, ""),
+              });
               setConfirm({
                 title: `Modify order ${str(r.ticket)}`,
-                description: "Re-validate and submit modified pending order via Execution Gateway.",
+                description:
+                  "Update price / SL / TP, then re-validate and submit via Execution Gateway.",
+                mode: "modify",
                 action: async () => {
                   setBusy(true);
                   try {
@@ -173,10 +250,11 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
             disabled={!connected || busy}
             onClick={() =>
               setConfirm({
-                title: `Cancel order ${str(r.ticket)}`,
+                title: `Cancel pending ${str(r.ticket)}`,
                 description:
-                  "Cancellation is routed through the Execution Gateway (disabled until EXECUTION_ENABLED).",
+                  "Cancel is routed through Execution Gateway (live send requires EXECUTION_ENABLED).",
                 tone: "danger",
+                mode: "cancel",
                 action: async () => {
                   setBusy(true);
                   try {
@@ -220,13 +298,29 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
           <DeskError message="Unable to load orders." onRetry={() => ordersQ.refetch()} />
         ) : (
           <>
-            {confirm?.title.startsWith("Modify") ? (
-              <div className="mb-3">
+            <p className="mb-3 text-xs text-[var(--fg-muted)]">
+              Pending limit/stop orders only. Filled market orders are managed from Positions
+              (close / partial / SL / TP).
+            </p>
+            {confirm?.mode === "modify" ? (
+              <div className="mb-3 grid gap-2 sm:grid-cols-3">
                 <Input
-                  value={modifyPrice}
-                  onChange={(e) => setModifyPrice(e.target.value)}
-                  placeholder="New price"
+                  value={modifyForm.price}
+                  onChange={(e) => setModifyForm((s) => ({ ...s, price: e.target.value }))}
+                  placeholder="Price"
                   aria-label="Modified order price"
+                />
+                <Input
+                  value={modifyForm.sl}
+                  onChange={(e) => setModifyForm((s) => ({ ...s, sl: e.target.value }))}
+                  placeholder="Stop loss"
+                  aria-label="Modified stop loss"
+                />
+                <Input
+                  value={modifyForm.tp}
+                  onChange={(e) => setModifyForm((s) => ({ ...s, tp: e.target.value }))}
+                  placeholder="Take profit"
+                  aria-label="Modified take profit"
                 />
               </div>
             ) : null}

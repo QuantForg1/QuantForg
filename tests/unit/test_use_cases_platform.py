@@ -31,7 +31,7 @@ from app.application.use_cases.platform import (
     UpdateSettingsUseCase,
 )
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
-from app.domain.entities.platform import Notification, UserSession
+from app.domain.entities.platform import Notification, OrganizationMember, UserSession
 from app.domain.enums.platform import (
     NotificationCategory,
     OrganizationMemberRole,
@@ -157,6 +157,61 @@ class TestOrganizationsNotificationsAvatar:
                     email="x@y.com",
                 )
             )
+        with pytest.raises(AuthorizationError, match="Owner role cannot"):
+            await InviteOrganizationMemberUseCase(uow_factory=factory).execute(
+                InviteMemberCommand(
+                    organization_id=team.id,
+                    invited_by=user_id,
+                    email="boss@quantforg.com",
+                    role=OrganizationMemberRole.OWNER,
+                )
+            )
+
+    @pytest.mark.asyncio
+    async def test_admin_cannot_invite_admin(self) -> None:
+        factory, audit = _wire()
+        owner_id = uuid4()
+        admin_id = uuid4()
+        await EnsurePlatformBootstrapUseCase(uow_factory=factory).execute(
+            EnsurePlatformBootstrapCommand(user_id=owner_id, display_name="Owner")
+        )
+        await EnsurePlatformBootstrapUseCase(uow_factory=factory).execute(
+            EnsurePlatformBootstrapCommand(user_id=admin_id, display_name="Admin")
+        )
+        team = await CreateTeamOrganizationUseCase(
+            uow_factory=factory, audit=audit
+        ).execute(
+            CreateTeamCommand(
+                owner_user_id=owner_id, name="Beta Desk", slug="beta-desk"
+            )
+        )
+        async with factory() as uow:
+            await uow.organization_members.add(
+                OrganizationMember(
+                    organization_id=team.id,
+                    user_id=admin_id,
+                    role=OrganizationMemberRole.ADMIN,
+                )
+            )
+            await uow.commit()
+        with pytest.raises(AuthorizationError, match="traders or viewers"):
+            await InviteOrganizationMemberUseCase(uow_factory=factory).execute(
+                InviteMemberCommand(
+                    organization_id=team.id,
+                    invited_by=admin_id,
+                    email="peer@quantforg.com",
+                    role=OrganizationMemberRole.ADMIN,
+                )
+            )
+        ok = await InviteOrganizationMemberUseCase(uow_factory=factory).execute(
+            InviteMemberCommand(
+                organization_id=team.id,
+                invited_by=admin_id,
+                email="viewer@quantforg.com",
+                role=OrganizationMemberRole.VIEWER,
+            )
+        )
+        assert ok.status == "pending"
 
     @pytest.mark.asyncio
     async def test_notifications_and_preferences(self) -> None:

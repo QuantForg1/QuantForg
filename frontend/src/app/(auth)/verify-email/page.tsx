@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { toast } from "sonner";
 import { AuthShell } from "@/components/auth/auth-shell";
@@ -10,10 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
+import { saveSession, type AuthSession } from "@/lib/auth/session";
 
 function VerifyForm() {
   const params = useSearchParams();
+  const router = useRouter();
   const [token, setToken] = useState(params.get("token_hash") || "");
+  const type = params.get("type") || "email";
 
   return (
     <form
@@ -21,8 +24,15 @@ function VerifyForm() {
       onSubmit={async (e) => {
         e.preventDefault();
         try {
-          await authApi.verifyEmail(token);
-          toast.success("Email verified");
+          const result = await authApi.verifyEmail(token, type);
+          if (result && typeof result === "object" && "access_token" in result) {
+            saveSession(result as AuthSession);
+            toast.success("Email verified");
+            router.replace("/dashboard");
+            return;
+          }
+          toast.success("Email verified — sign in to continue");
+          router.replace("/login");
         } catch (err) {
           toast.error(err instanceof ApiError ? err.message : "Verification failed");
         }

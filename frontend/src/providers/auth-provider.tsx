@@ -13,6 +13,7 @@ import {
   clearSession,
   getAccessToken,
   getStoredUser,
+  onSessionCleared,
   saveSession,
   type AuthSession,
   type AuthUser,
@@ -55,6 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshMe().finally(() => setLoading(false));
   }, [refreshMe]);
+
+  useEffect(() => {
+    return onSessionCleared(() => {
+      setUser(null);
+    });
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     try {

@@ -91,4 +91,35 @@ test.describe("QuantForg beta E2E", () => {
     await page.getByRole("button", { name: /sign out/i }).click();
     await expect(page).toHaveURL(/login/, { timeout: 15_000 });
   });
+
+  test("forgot password page submits request", async ({ page }) => {
+    await page.goto("/forgot-password");
+    await expect(page.getByRole("heading", { name: /reset password/i })).toBeVisible();
+    await page.getByLabel(/^email$/i).fill("reset.probe@example.com");
+    await page.getByRole("button", { name: /send reset link/i }).click();
+    await expect(
+      page.getByText(/if the email exists|reset link|sent|failed/i).first(),
+    ).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("reset password without token shows expired path", async ({ page }) => {
+    await page.goto("/reset-password");
+    await expect(page.getByRole("heading", { name: /choose a new password/i })).toBeVisible();
+    await expect(page.getByText(/invalid|expired|missing|request a new/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("link", { name: /request a new reset link/i })).toBeVisible();
+  });
+
+  test("organizations requires auth", async ({ page }) => {
+    await page.goto("/organizations");
+    await expect(page).toHaveURL(/login/, { timeout: 15_000 });
+  });
+
+  test("execution and positions require auth", async ({ page }) => {
+    await page.goto("/execution");
+    await expect(page).toHaveURL(/login/, { timeout: 15_000 });
+    await page.goto("/positions");
+    await expect(page).toHaveURL(/login/, { timeout: 15_000 });
+  });
 });
