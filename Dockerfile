@@ -33,6 +33,7 @@ RUN poetry install --only main --no-root \
 
 COPY app ./app
 COPY core ./core
+COPY services ./services
 COPY alembic ./alembic
 COPY alembic.ini ./
 
@@ -72,6 +73,7 @@ WORKDIR ${APP_HOME}
 COPY --from=builder /build/.venv ./.venv
 COPY --from=builder /build/app ./app
 COPY --from=builder /build/core ./core
+COPY --from=builder /build/services ./services
 COPY --from=builder /build/alembic ./alembic
 COPY --from=builder /build/alembic.ini ./alembic.ini
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

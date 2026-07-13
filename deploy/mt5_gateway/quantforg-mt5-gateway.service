@@ -1,0 +1,18 @@
+[Unit]
+Description=QuantForg MT5 Gateway
+After=network.target
+
+[Service]
+Type=simple
+User=quantforg
+WorkingDirectory=/opt/quantforg
+EnvironmentFile=/opt/quantforg/gateway.env
+ExecStart=/opt/quantforg/.venv/bin/quantforg-mt5-gateway
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+# gateway.env must contain MT5_GATEWAY_TOKEN only — never broker passwords.
+
+[Install]
+WantedBy=multi-user.target

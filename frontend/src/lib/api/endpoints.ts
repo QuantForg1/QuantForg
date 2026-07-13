@@ -259,6 +259,27 @@ export const brokerConnectivityApi = {
     }),
 };
 
+export const gatewayManagerApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/gateway-manager/dashboard"),
+  list: () => apiFetch<Record<string, unknown>>("/gateway-manager/gateways"),
+  register: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/gateway-manager/gateways", {
+      method: "POST",
+      body,
+    }),
+  route: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/gateway-manager/route", {
+      method: "POST",
+      body,
+    }),
+  refreshHa: () =>
+    apiFetch<Record<string, unknown>>("/gateway-manager/ha/refresh", {
+      method: "POST",
+      body: {},
+    }),
+};
+
 export const opsApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/ops/dashboard"),
   metrics: () => apiFetch<Record<string, unknown>>("/ops/metrics"),

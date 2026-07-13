@@ -1,0 +1,28 @@
+# Example compose: QuantForg API (cloud) + optional Linux gateway sidecar.
+# Windows live MT5 terminal usually runs outside Docker on a Windows VPS.
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: production
+      EXECUTION_ENABLED: "false"
+      MT5_USE_MOCK: "true"
+    # Do NOT set broker passwords here.
+
+  mt5-gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/mt5_gateway/Dockerfile
+    ports:
+      - "8765:8765"
+    environment:
+      MT5_GATEWAY_TOKEN: ${MT5_GATEWAY_TOKEN:?set MT5_GATEWAY_TOKEN}
+      MT5_GATEWAY_HOST: 0.0.0.0
+      MT5_GATEWAY_PORT: "8765"
+      MT5_GATEWAY_ENABLE_WEBSOCKET: "true"
+    # Broker credentials are supplied at runtime via POST /session/connect
+    # on the gateway — never via Compose env.

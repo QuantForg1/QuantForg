@@ -8,6 +8,7 @@ import {
   Building2,
   CandlestickChart,
   ClipboardCheck,
+  Cloud,
   CreditCard,
   FlaskConical,
   Gauge,
@@ -96,6 +97,7 @@ export const appNav: NavGroup[] = [
         icon: ClipboardCheck,
       },
       { href: "/ops", label: "Operations", icon: Gauge },
+      { href: "/cloud-ops", label: "Cloud Operations", icon: Cloud },
     ],
   },
   {
