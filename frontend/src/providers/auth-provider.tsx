@@ -31,7 +31,10 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const stored = getStoredUser();
+    return stored && getAccessToken() ? stored : null;
+  });
   const [loading, setLoading] = useState(true);
 
   const refreshMe = useCallback(async () => {
@@ -49,8 +52,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const stored = getStoredUser();
-    if (stored && getAccessToken()) setUser(stored);
     refreshMe().finally(() => setLoading(false));
   }, [refreshMe]);
 

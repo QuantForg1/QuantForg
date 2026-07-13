@@ -35,7 +35,7 @@ export function OrderTicket() {
       price: "",
       stop_loss: "",
       take_profit: "",
-      request_id: `req_${Date.now()}`,
+      request_id: "req_pending",
     },
   });
 
@@ -51,6 +51,10 @@ export function OrderTicket() {
             try {
               const payload = {
                 ...values,
+                request_id:
+                  values.request_id === "req_pending" || !values.request_id
+                    ? `req_${Date.now()}`
+                    : values.request_id,
                 price: values.price || null,
                 stop_loss: values.stop_loss || null,
                 take_profit: values.take_profit || null,
