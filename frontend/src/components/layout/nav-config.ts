@@ -68,6 +68,7 @@ export const appNav: NavGroup[] = [
       { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
       { href: "/walkforward", label: "Walk Forward", icon: Activity },
       { href: "/risk", label: "Risk Management", icon: Shield },
+      { href: "/risk-lab", label: "Risk Laboratory", icon: FlaskConical },
       { href: "/ai", label: "AI Assistant", icon: Bot },
     ],
   },

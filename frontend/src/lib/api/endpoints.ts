@@ -91,6 +91,31 @@ export const riskApi = {
     apiFetch<Record<string, unknown>>("/risk/check", { method: "POST", body }),
 };
 
+export const portfolioIntelligenceApi = {
+  dashboard: (confidence = 0.95) =>
+    apiFetch<Record<string, unknown>>(
+      `/portfolio-intelligence/dashboard?confidence=${confidence}`,
+    ),
+  risk: () => apiFetch<Record<string, unknown>>("/portfolio-intelligence/risk"),
+  stress: () => apiFetch<Record<string, unknown>>("/portfolio-intelligence/stress"),
+  correlation: () =>
+    apiFetch<Record<string, unknown>>("/portfolio-intelligence/correlation"),
+  journal: () =>
+    apiFetch<Record<string, unknown>>("/portfolio-intelligence/journal"),
+  attribution: () =>
+    apiFetch<Record<string, unknown>>("/portfolio-intelligence/attribution"),
+  optimize: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/portfolio-intelligence/optimize", {
+      method: "POST",
+      body,
+    }),
+  analyze: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/portfolio-intelligence/analyze", {
+      method: "POST",
+      body,
+    }),
+};
+
 export const strategyApi = {
   evaluate: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/strategy/evaluate", {
