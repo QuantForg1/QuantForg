@@ -55,8 +55,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ALLOWED_HOSTS=* \
     DOCS_ENABLED=true \
     WORKERS=1 \
-    HOST=0.0.0.0 \
-    QF_MINIMAL=1
+    HOST=0.0.0.0
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \

@@ -24,18 +24,10 @@ export HOST
 WORKERS=1
 export WORKERS
 
-QF_MINIMAL="${QF_MINIMAL:-1}"
-export QF_MINIMAL
+APP_TARGET="app.main:app"
+LIFESPAN_FLAG="on"
 
-if [ "${QF_MINIMAL}" = "1" ]; then
-  APP_TARGET="app.raw_asgi:app"
-  LIFESPAN_FLAG="off"
-else
-  APP_TARGET="app.main:app"
-  LIFESPAN_FLAG="on"
-fi
-
-echo "quantforg_entrypoint PORT=${PORT} HOST=${HOST} QF_MINIMAL=${QF_MINIMAL} APP_TARGET=${APP_TARGET}"
+echo "quantforg_entrypoint PORT=${PORT} HOST=${HOST} APP_TARGET=${APP_TARGET}"
 
 python - <<'PY'
 import os

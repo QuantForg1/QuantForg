@@ -6,41 +6,64 @@ middleware, exception handlers, and foundation routers.
 
 from __future__ import annotations
 
+import importlib
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from app.presentation.middleware.access_log import RequestAccessLogMiddleware
+from app.presentation.middleware.authentication import AuthenticationMiddleware
 from app.presentation.middleware.error_handler import register_exception_handlers
-from app.presentation.routers import (
-    auth,
-    backtest,
-    broker_accounts,
-    broker_connections,
-    brokers,
-    execution,
-    health,
-    mt5,
-    notifications,
-    ops,
-    organizations,
-    paper,
-    portfolio,
-    profile,
-    risk,
-    settings as settings_router,
-    strategy,
-    version,
-    walkforward,
-)
+from app.presentation.middleware.request_context import RequestContextMiddleware
+from app.presentation.middleware.session import SessionMiddleware
 from core.config.settings import Settings, get_settings
 from core.database.session import DatabaseManager, set_database_manager
 from core.di.container import Container, set_container
 from core.logging import configure_logging, get_logger
+from core.security.headers import SecurityHeaders
 
 logger = get_logger(__name__)
+
+# Routers are registered one-by-one (lazy import) so a single broken module
+# can be skipped via QF_DISABLED_COMPONENTS without taking down the process.
+_ROUTER_SPECS: tuple[tuple[str, str], ...] = (
+    ("health", "app.presentation.routers.health"),
+    ("version", "app.presentation.routers.version"),
+    ("auth", "app.presentation.routers.auth"),
+    ("profile", "app.presentation.routers.profile"),
+    ("settings", "app.presentation.routers.settings"),
+    ("notifications", "app.presentation.routers.notifications"),
+    ("organizations", "app.presentation.routers.organizations"),
+    ("brokers", "app.presentation.routers.brokers"),
+    ("broker_accounts", "app.presentation.routers.broker_accounts"),
+    ("broker_connections", "app.presentation.routers.broker_connections"),
+    ("mt5", "app.presentation.routers.mt5"),
+    ("execution", "app.presentation.routers.execution"),
+    ("portfolio", "app.presentation.routers.portfolio"),
+    ("risk", "app.presentation.routers.risk"),
+    ("strategy", "app.presentation.routers.strategy"),
+    ("backtest", "app.presentation.routers.backtest"),
+    ("paper", "app.presentation.routers.paper"),
+    ("walkforward", "app.presentation.routers.walkforward"),
+    ("ops", "app.presentation.routers.ops"),
+)
+
+
+def _disabled_components() -> set[str]:
+    """Component names to skip (comma-separated QF_DISABLED_COMPONENTS)."""
+    raw = os.environ.get("QF_DISABLED_COMPONENTS", "")
+    return {part.strip().lower() for part in raw.split(",") if part.strip()}
+
+
+def _is_disabled(name: str) -> bool:
+    return name.lower() in _disabled_components()
 
 
 @asynccontextmanager
@@ -109,6 +132,108 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("application_stopped")
 
 
+def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
+    """Register middleware one-by-one; skip components in QF_DISABLED_COMPONENTS."""
+    registered: list[str] = []
+
+    if not _is_disabled("cors"):
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins or ["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["X-Request-ID"],
+            allow_origin_regex=r"https://.*\.up\.railway\.app",
+        )
+        registered.append("cors")
+
+    hosts = settings.allowed_hosts or ["*"]
+    if "*" not in hosts and not _is_disabled("trusted_host"):
+        application.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=hosts,
+        )
+        registered.append("trusted_host")
+        logger.info("trusted_host_middleware_enabled", allowed_hosts=hosts)
+    else:
+        logger.info("trusted_host_middleware_skipped", reason="allowed_hosts=*")
+
+    if not _is_disabled("security_headers"):
+        application.add_middleware(SecurityHeaders)
+        registered.append("security_headers")
+    if not _is_disabled("authentication"):
+        application.add_middleware(AuthenticationMiddleware)
+        registered.append("authentication")
+    if not _is_disabled("session"):
+        application.add_middleware(SessionMiddleware)
+        registered.append("session")
+    if not _is_disabled("request_context"):
+        application.add_middleware(RequestContextMiddleware)
+        registered.append("request_context")
+
+    if not _is_disabled("proxy_headers"):
+        application.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+        registered.append("proxy_headers")
+
+    if not _is_disabled("access_log"):
+        application.add_middleware(RequestAccessLogMiddleware)
+        registered.append("access_log")
+
+    logger.info("middleware_stack_registered", components=registered)
+    return registered
+
+
+def _register_routers(application: FastAPI, settings: Settings) -> dict[str, Any]:
+    """Import and mount routers one-by-one; skip failures and disabled names."""
+    prefix = settings.api_prefix
+    registered: list[str] = []
+    failed: list[str] = []
+    first_failure: str | None = None
+
+    for name, module_path in _ROUTER_SPECS:
+        if _is_disabled(name):
+            logger.warning("router_skipped", router=name, reason="disabled")
+            continue
+        try:
+            module = importlib.import_module(module_path)
+            router = module.router
+            application.include_router(router, prefix=prefix)
+            registered.append(name)
+            logger.info("router_registered", router=name, prefix=prefix)
+        except Exception as exc:
+            failed.append(name)
+            if first_failure is None:
+                first_failure = name
+            logger.exception(
+                "router_registration_failed",
+                router=name,
+                module=module_path,
+                error=str(exc),
+            )
+
+    # Unprefixed health for Railway / platform probes (GET /health).
+    if not _is_disabled("health") and "health" in registered:
+        try:
+            health_module = importlib.import_module("app.presentation.routers.health")
+            application.include_router(health_module.router)
+            logger.info("router_registered", router="health_unprefixed", prefix="")
+        except Exception as exc:
+            logger.exception(
+                "router_registration_failed",
+                router="health_unprefixed",
+                error=str(exc),
+            )
+
+    summary = {
+        "registered": registered,
+        "failed": failed,
+        "first_failure": first_failure,
+    }
+    logger.info("router_registration_complete", **summary)
+    return summary
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Application factory.
 
@@ -139,43 +264,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Middleware temporarily disabled for Railway outage isolation.
-    # Re-enable incrementally after GET / returns 200 at the edge.
-    # (TrustedHost/Proxy/CORS/Auth/Session/AccessLog were candidates for
-    # connection aborts behind railway-hikari.)
-    logger.info("middleware_stack_disabled", reason="railway_outage_isolation")
-
-    # -- Exception handlers ---------------------------------------------------
+    _register_middleware(application, settings)
     register_exception_handlers(application)
 
-    # -- Root + unprefixed health (Railway / platform probes) -----------------
     @application.get("/", tags=["Root"], include_in_schema=False)
     async def root() -> dict[str, str]:
         return {"status": "ok"}
 
-    application.include_router(health.router)
-
-    # -- Versioned API routers ------------------------------------------------
-    prefix = settings.api_prefix
-    application.include_router(health.router, prefix=prefix)
-    application.include_router(version.router, prefix=prefix)
-    application.include_router(auth.router, prefix=prefix)
-    application.include_router(profile.router, prefix=prefix)
-    application.include_router(settings_router.router, prefix=prefix)
-    application.include_router(notifications.router, prefix=prefix)
-    application.include_router(organizations.router, prefix=prefix)
-    application.include_router(brokers.router, prefix=prefix)
-    application.include_router(broker_accounts.router, prefix=prefix)
-    application.include_router(broker_connections.router, prefix=prefix)
-    application.include_router(mt5.router, prefix=prefix)
-    application.include_router(execution.router, prefix=prefix)
-    application.include_router(portfolio.router, prefix=prefix)
-    application.include_router(risk.router, prefix=prefix)
-    application.include_router(strategy.router, prefix=prefix)
-    application.include_router(backtest.router, prefix=prefix)
-    application.include_router(paper.router, prefix=prefix)
-    application.include_router(walkforward.router, prefix=prefix)
-    application.include_router(ops.router, prefix=prefix)
+    _register_routers(application, settings)
 
     return application
 
@@ -197,47 +293,7 @@ def run() -> None:
     )
 
 
-def _select_app() -> Any:
-    """Choose ASGI target.
-
-    Default QF_MINIMAL=1 so Railway returns HTTP 200 even when the platform
-    start command bypasses docker-entrypoint.sh and runs ``uvicorn app.main:app``.
-    Set QF_MINIMAL=0 to restore the full application.
-    """
-    import os
-    import sys
-
-    minimal = os.environ.get("QF_MINIMAL", "1").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    if minimal:
-        from app.raw_asgi import app as raw_app
-
-        print(
-            "qf_main_select_raw"
-            f" type={type(raw_app)!r}"
-            f" id={id(raw_app)}"
-            f" python={sys.version.split()[0]}",
-            flush=True,
-        )
-        return raw_app
-
-    full = create_app()
-    print(
-        "qf_main_select_full"
-        f" type={type(full)!r}"
-        f" id={id(full)}"
-        f" routes={len(full.routes)}"
-        f" python={sys.version.split()[0]}",
-        flush=True,
-    )
-    return full
-
-
-app = _select_app()
+app = create_app()
 
 
 if __name__ == "__main__":
