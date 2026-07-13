@@ -8,6 +8,7 @@ license = "Proprietary"
 packages = [
     { include = "app" },
     { include = "core" },
+    { include = "services" },
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -56,6 +57,7 @@ testcontainers = { extras = ["postgres", "redis"], version = "^4.9.0" }
 
 [tool.poetry.scripts]
 quantforg = "app.main:run"
+quantforg-mt5-gateway = "services.mt5_gateway.main:run"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
@@ -78,7 +80,7 @@ extend-exclude = '''
 [tool.ruff]
 target-version = "py313"
 line-length = 88
-src = ["app", "core", "tests"]
+src = ["app", "core", "services", "tests"]
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
@@ -116,7 +118,7 @@ ignore = [
 "app/infrastructure/cache/redis_client.py" = ["BLE001"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "core"]
+known-first-party = ["app", "core", "services"]
 force-single-line = false
 combine-as-imports = true
 
@@ -134,11 +136,21 @@ show_error_codes = true
 pretty = true
 plugins = ["pydantic.mypy"]
 mypy_path = "."
-packages = ["app", "core"]
+packages = ["app", "core", "services"]
 exclude = ["alembic/versions", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "hiredis.*", "supabase.*", "postgrest.*", "realtime.*", "storage3.*", "supabase_auth.*"]
+module = [
+    "asyncpg.*",
+    "hiredis.*",
+    "supabase.*",
+    "postgrest.*",
+    "realtime.*",
+    "storage3.*",
+    "supabase_auth.*",
+    "MetaTrader5",
+    "MetaTrader5.*",
+]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]
