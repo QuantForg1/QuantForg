@@ -56,15 +56,28 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def authentication_handler(
         request: Request, exc: AuthenticationError
     ) -> JSONResponse:
+        # Map provider-specific auth codes to accurate HTTP statuses.
+        if exc.code == "email_already_registered":
+            http_status = status.HTTP_409_CONFLICT
+            headers: dict[str, str] | None = None
+        elif exc.code == "auth_rate_limited":
+            http_status = status.HTTP_429_TOO_MANY_REQUESTS
+            headers = {"Retry-After": "60"}
+        elif exc.code == "email_not_verified":
+            http_status = status.HTTP_403_FORBIDDEN
+            headers = None
+        else:
+            http_status = status.HTTP_401_UNAUTHORIZED
+            headers = {"WWW-Authenticate": "Bearer"}
         return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=http_status,
             content=_error_body(
                 code=exc.code,
                 message=exc.message,
                 details=exc.details,
                 request_id=_request_id_from(request),
             ),
-            headers={"WWW-Authenticate": "Bearer"},
+            headers=headers,
         )
 
     @app.exception_handler(AuthorizationError)

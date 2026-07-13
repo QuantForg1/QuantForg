@@ -10,6 +10,7 @@ from app.application.dto.platform import UpdateNotificationPreferenceCommand
 from app.domain.enums.platform import NotificationCategory
 from app.presentation.dependencies.auth import CurrentUser
 from app.presentation.dependencies.platform import PlatformSvc
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.platform import (
     NotificationPreferenceResponse,
     NotificationResponse,
@@ -24,7 +25,7 @@ async def list_preferences(
     user: CurrentUser, platform: PlatformSvc
 ) -> list[NotificationPreferenceResponse]:
     items = await platform.list_notification_preferences.execute(user_id=user.id)
-    return [NotificationPreferenceResponse(**i.__dict__) for i in items]
+    return [NotificationPreferenceResponse(**dto_to_dict(i)) for i in items]
 
 
 @router.patch(
@@ -45,7 +46,7 @@ async def update_preference(
             email=body.email,
         )
     )
-    return NotificationPreferenceResponse(**dto.__dict__)
+    return NotificationPreferenceResponse(**dto_to_dict(dto))
 
 
 @router.get("", response_model=list[NotificationResponse])
@@ -57,7 +58,7 @@ async def list_notifications(
     items = await platform.list_notifications.execute(
         user_id=user.id, unread_only=unread_only
     )
-    return [NotificationResponse(**i.__dict__) for i in items]
+    return [NotificationResponse(**dto_to_dict(i)) for i in items]
 
 
 @router.post("/{notification_id}/read", response_model=NotificationResponse)
@@ -67,4 +68,4 @@ async def mark_read(
     dto = await platform.mark_notification_read.execute(
         user_id=user.id, notification_id=notification_id
     )
-    return NotificationResponse(**dto.__dict__)
+    return NotificationResponse(**dto_to_dict(dto))

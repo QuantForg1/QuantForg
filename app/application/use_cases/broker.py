@@ -935,6 +935,14 @@ class ValidateBrokerUseCase:
                     "Broker adapter is not implemented yet",
                     details={"platform_code": broker.platform_code.value},
                 ) from exc
+            except (OSError, RuntimeError, ValueError, TimeoutError) as exc:
+                raise ValidationError(
+                    "Broker credential validation failed",
+                    details={
+                        "platform_code": broker.platform_code.value,
+                        "reason": str(exc),
+                    },
+                ) from exc
 
         await self.audit.execute(
             RecordAuditEventCommand(

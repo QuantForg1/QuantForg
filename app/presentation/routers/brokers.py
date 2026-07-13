@@ -27,6 +27,7 @@ from app.presentation.dependencies.auth import (
     require_roles,
 )
 from app.presentation.dependencies.broker import BrokerSvc
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.broker import (
     BrokerDiagnosticsResponse,
     BrokerHealthResponse,
@@ -44,7 +45,7 @@ AdminUser = Annotated[
 
 
 def _to_response(dto: BrokerDTO) -> BrokerResponse:
-    data = dto.__dict__.copy()
+    data = dto_to_dict(dto)
     data["capabilities"] = list(data.get("capabilities") or ())
     return BrokerResponse(**data)
 

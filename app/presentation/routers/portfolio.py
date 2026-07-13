@@ -22,6 +22,7 @@ from app.presentation.dependencies.portfolio import (
     PositionsDep,
     PositionTicketDep,
 )
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.portfolio import (
     AccountSnapshotResponse,
     DealResponse,
@@ -36,23 +37,23 @@ router = APIRouter(tags=["portfolio"])
 
 
 def _account(dto: AccountSnapshotDTO) -> AccountSnapshotResponse:
-    return AccountSnapshotResponse(**dto.__dict__)
+    return AccountSnapshotResponse(**dto_to_dict(dto))
 
 
 def _position(dto: PositionDTO) -> PositionResponse:
-    return PositionResponse(**dto.__dict__)
+    return PositionResponse(**dto_to_dict(dto))
 
 
 def _pending(dto: PendingOrderDTO) -> PendingOrderResponse:
-    return PendingOrderResponse(**dto.__dict__)
+    return PendingOrderResponse(**dto_to_dict(dto))
 
 
 def _hist_order(dto: HistoryOrderDTO) -> HistoryOrderResponse:
-    return HistoryOrderResponse(**dto.__dict__)
+    return HistoryOrderResponse(**dto_to_dict(dto))
 
 
 def _deal(dto: DealDTO) -> DealResponse:
-    return DealResponse(**dto.__dict__)
+    return DealResponse(**dto_to_dict(dto))
 
 
 @router.get("/portfolio", response_model=PortfolioResponse)

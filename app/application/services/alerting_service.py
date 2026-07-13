@@ -91,36 +91,54 @@ class AlertingService:
     async def evaluate(self, dashboard: MonitoringDashboard) -> list[SystemAlert]:
         created: list[SystemAlert] = []
         events: list[AlertTriggered] = []
-        async with self.uow_factory() as uow:
-            for rule in self.rules:
-                active, message = self._triggered(rule, dashboard)
-                if not active:
-                    continue
-                existing = await uow.alerts.find_open_by_code(rule.code)
-                if existing is not None:
-                    continue
-                alert = SystemAlert.open_alert(
-                    code=rule.code,
-                    name=rule.name,
-                    severity=rule.severity,
-                    component=rule.component,
-                    message=message or rule.description,
-                    details={"rule": rule.to_dict()},
-                )
-                await uow.alerts.add(alert)
-                created.append(alert)
-                events.append(
-                    AlertTriggered(
-                        alert_id=alert.id,
-                        code=alert.code,
-                        severity=alert.severity.value,
-                        component=alert.component.value,
+        try:
+            async with self.uow_factory() as uow:
+                for rule in self.rules:
+                    active, message = self._triggered(rule, dashboard)
+                    if not active:
+                        continue
+                    existing = await uow.alerts.find_open_by_code(rule.code)
+                    if existing is not None:
+                        continue
+                    alert = SystemAlert.open_alert(
+                        code=rule.code,
+                        name=rule.name,
+                        severity=rule.severity,
+                        component=rule.component,
+                        message=message or rule.description,
+                        details={"rule": rule.to_dict()},
                     )
-                )
-            await uow.commit()
+                    await uow.alerts.add(alert)
+                    created.append(alert)
+                    events.append(
+                        AlertTriggered(
+                            alert_id=alert.id,
+                            code=alert.code,
+                            severity=alert.severity.value,
+                            component=alert.component.value,
+                        )
+                    )
+                await uow.commit()
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "ops_alert_evaluate_failed",
+                error=str(exc),
+            )
+            return created
         _ = events
         return created
 
     async def list_alerts(self, *, limit: int = 100) -> list[SystemAlert]:
-        async with self.uow_factory() as uow:
-            return await uow.alerts.list_recent(limit=limit)
+        try:
+            async with self.uow_factory() as uow:
+                return await uow.alerts.list_recent(limit=limit)
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "ops_alert_list_failed",
+                error=str(exc),
+            )
+            return []

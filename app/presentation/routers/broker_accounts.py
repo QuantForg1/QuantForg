@@ -15,6 +15,7 @@ from app.application.dto.broker import (
 from app.domain.enums.broker import BrokerAccountStatus, BrokerEnvironment
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.broker import BrokerSvc
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.broker import (
     BrokerAccountResponse,
     CreateBrokerAccountRequest,
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/broker-accounts", tags=["broker-accounts"])
 
 
 def _to_response(dto: BrokerAccountDTO) -> BrokerAccountResponse:
-    data = dto.__dict__.copy()
+    data = dto_to_dict(dto)
     data["credential_types"] = list(data.get("credential_types") or ())
     return BrokerAccountResponse(**data)
 

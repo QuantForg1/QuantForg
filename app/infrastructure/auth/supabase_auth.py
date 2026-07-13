@@ -95,7 +95,9 @@ def _map_auth_error(exc: Exception) -> AuthenticationError:
     message = str(exc).strip() or "Authentication failed"
     lowered = message.lower()
     code = "authentication_failed"
-    if "invalid login" in lowered or "invalid credentials" in lowered:
+    if "rate limit" in lowered:
+        code = "auth_rate_limited"
+    elif "invalid login" in lowered or "invalid credentials" in lowered:
         code = "invalid_credentials"
     elif "already registered" in lowered or "user already" in lowered:
         code = "email_already_registered"

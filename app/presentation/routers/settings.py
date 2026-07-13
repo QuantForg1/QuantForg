@@ -10,6 +10,7 @@ from app.application.dto.platform import UpdateSettingsCommand
 from app.domain.enums.platform import UiTheme
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.platform import PlatformSvc
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.platform import (
     DeviceResponse,
     SessionResponse,
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.get("", response_model=SettingsResponse)
 async def get_settings(user: CurrentUser, platform: PlatformSvc) -> SettingsResponse:
     dto = await platform.get_settings.execute(user_id=user.id)
-    return SettingsResponse(**dto.__dict__)
+    return SettingsResponse(**dto_to_dict(dto))
 
 
 @router.patch("", response_model=SettingsResponse)
@@ -49,7 +50,7 @@ async def update_settings(
             user_agent=ua,
         )
     )
-    return SettingsResponse(**dto.__dict__)
+    return SettingsResponse(**dto_to_dict(dto))
 
 
 @router.get("/devices", response_model=list[DeviceResponse])
@@ -57,7 +58,7 @@ async def list_devices(
     user: CurrentUser, platform: PlatformSvc
 ) -> list[DeviceResponse]:
     items = await platform.list_devices.execute(user_id=user.id)
-    return [DeviceResponse(**i.__dict__) for i in items]
+    return [DeviceResponse(**dto_to_dict(i)) for i in items]
 
 
 @router.get("/sessions", response_model=list[SessionResponse])
@@ -65,7 +66,7 @@ async def list_sessions(
     user: CurrentUser, platform: PlatformSvc
 ) -> list[SessionResponse]:
     items = await platform.list_sessions.execute(user_id=user.id)
-    return [SessionResponse(**i.__dict__) for i in items]
+    return [SessionResponse(**dto_to_dict(i)) for i in items]
 
 
 @router.post("/sessions/{session_id}/revoke", response_model=SessionResponse)
@@ -73,4 +74,4 @@ async def revoke_session(
     session_id: UUID, user: CurrentUser, platform: PlatformSvc
 ) -> SessionResponse:
     dto = await platform.revoke_session.execute(user_id=user.id, session_id=session_id)
-    return SessionResponse(**dto.__dict__)
+    return SessionResponse(**dto_to_dict(dto))

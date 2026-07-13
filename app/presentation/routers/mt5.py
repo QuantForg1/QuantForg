@@ -13,6 +13,7 @@ from app.application.dto.mt5 import (
 )
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.mt5 import MT5Svc
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.mt5 import (
     MT5AccountResponse,
     MT5CandleResponse,
@@ -35,7 +36,7 @@ async def mt5_status(
     mt5: MT5Svc,
 ) -> MT5StatusResponse:
     dto = await mt5.get_status.execute(user_id=user.id)
-    return MT5StatusResponse(**dto.__dict__)
+    return MT5StatusResponse(**dto_to_dict(dto))
 
 
 @router.post("/connect", response_model=MT5ConnectionResponse)
@@ -88,7 +89,7 @@ async def mt5_disconnect(
             user_agent=ua,
         )
     )
-    return MT5StatusResponse(**dto.__dict__)
+    return MT5StatusResponse(**dto_to_dict(dto))
 
 
 @router.get("/account", response_model=MT5AccountResponse)
@@ -97,7 +98,7 @@ async def mt5_account(
     mt5: MT5Svc,
 ) -> MT5AccountResponse:
     dto = await mt5.get_account.execute(user_id=user.id)
-    return MT5AccountResponse(**dto.__dict__)
+    return MT5AccountResponse(**dto_to_dict(dto))
 
 
 @router.get("/symbols", response_model=list[MT5SymbolResponse])
@@ -106,7 +107,7 @@ async def mt5_symbols(
     mt5: MT5Svc,
 ) -> list[MT5SymbolResponse]:
     items = await mt5.list_symbols.execute(user_id=user.id)
-    return [MT5SymbolResponse(**i.__dict__) for i in items]
+    return [MT5SymbolResponse(**dto_to_dict(i)) for i in items]
 
 
 @router.get("/symbols/{symbol}", response_model=MT5SymbolResponse)
@@ -116,7 +117,7 @@ async def mt5_symbol_info(
     mt5: MT5Svc,
 ) -> MT5SymbolResponse:
     dto = await mt5.get_symbol.execute(user_id=user.id, symbol=symbol)
-    return MT5SymbolResponse(**dto.__dict__)
+    return MT5SymbolResponse(**dto_to_dict(dto))
 
 
 @router.get("/ticks/{symbol}", response_model=MT5TickResponse)
@@ -126,7 +127,7 @@ async def mt5_latest_tick(
     mt5: MT5Svc,
 ) -> MT5TickResponse:
     dto = await mt5.get_tick.execute(user_id=user.id, symbol=symbol)
-    return MT5TickResponse(**dto.__dict__)
+    return MT5TickResponse(**dto_to_dict(dto))
 
 
 @router.get("/candles/{symbol}", response_model=list[MT5CandleResponse])
@@ -149,7 +150,7 @@ async def mt5_candles(
         date_from=date_from,
         date_to=date_to,
     )
-    return [MT5CandleResponse(**i.__dict__) for i in items]
+    return [MT5CandleResponse(**dto_to_dict(i)) for i in items]
 
 
 @router.post("/order/validate", response_model=MT5OrderValidationResponse)

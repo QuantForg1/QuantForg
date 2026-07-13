@@ -14,6 +14,7 @@ from app.application.dto.broker import (
 )
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.broker import BrokerSvc
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.broker import (
     BrokerConnectionResponse,
     ConnectBrokerRequest,
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/broker-connections", tags=["broker-connections"])
 
 
 def _to_response(dto: BrokerConnectionDTO) -> BrokerConnectionResponse:
-    return BrokerConnectionResponse(**dto.__dict__)
+    return BrokerConnectionResponse(**dto_to_dict(dto))
 
 
 @router.get("", response_model=list[BrokerConnectionResponse])
@@ -110,4 +111,4 @@ async def validate_broker(
             user_agent=ua,
         )
     )
-    return ValidateBrokerResponse(**dto.__dict__)
+    return ValidateBrokerResponse(**dto_to_dict(dto))

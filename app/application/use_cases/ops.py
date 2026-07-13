@@ -17,6 +17,9 @@ from app.application.services.monitoring_dashboard import MonitoringDashboardSer
 from app.domain.entities.ops import HealthHistoryEntry, SystemMetricRecord
 from app.domain.events.ops import HealthSnapshotRecorded
 from app.domain.interfaces.ops_uow import OpsUnitOfWorkFactory
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,15 +33,21 @@ class GetMonitoringDashboardUseCase:
         dashboard = await self.monitoring.collect()
         await self.alerting.evaluate(dashboard)
         if self.persist_history:
-            async with self.ops_uow_factory() as uow:
-                await uow.health_history.add(
-                    HealthHistoryEntry(
-                        overall=dashboard.overall,
-                        payload=dashboard.to_dict(),
+            try:
+                async with self.ops_uow_factory() as uow:
+                    await uow.health_history.add(
+                        HealthHistoryEntry(
+                            overall=dashboard.overall,
+                            payload=dashboard.to_dict(),
+                        )
                     )
+                    await uow.commit()
+                _ = HealthSnapshotRecorded(overall=dashboard.overall.value)
+            except Exception as exc:
+                logger.warning(
+                    "ops_dashboard_persist_failed",
+                    error=str(exc),
                 )
-                await uow.commit()
-            _ = HealthSnapshotRecorded(overall=dashboard.overall.value)
         return OpsDashboardDTO(payload=dashboard.to_dict())
 
 
@@ -51,9 +60,12 @@ class GetOpsMetricsUseCase:
         snap = self.metrics.snapshot()
         payload = snap.to_dict()
         if persist:
-            async with self.ops_uow_factory() as uow:
-                await uow.metrics.add(SystemMetricRecord(payload=payload))
-                await uow.commit()
+            try:
+                async with self.ops_uow_factory() as uow:
+                    await uow.metrics.add(SystemMetricRecord(payload=payload))
+                    await uow.commit()
+            except Exception as exc:
+                logger.warning("ops_metrics_persist_failed", error=str(exc))
         return OpsMetricsDTO(payload=payload)
 
 

@@ -10,6 +10,7 @@ from app.application.dto.platform import CreateTeamCommand, InviteMemberCommand
 from app.domain.enums.platform import OrganizationMemberRole
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.platform import PlatformSvc
+from app.presentation.dto_mapping import dto_to_dict
 from app.presentation.schemas.platform import (
     CreateTeamRequest,
     InvitationResponse,
@@ -25,7 +26,7 @@ async def list_organizations(
     user: CurrentUser, platform: PlatformSvc
 ) -> list[OrganizationResponse]:
     items = await platform.list_organizations.execute(user_id=user.id)
-    return [OrganizationResponse(**i.__dict__) for i in items]
+    return [OrganizationResponse(**dto_to_dict(i)) for i in items]
 
 
 @router.post(
@@ -49,7 +50,7 @@ async def create_team(
             user_agent=ua,
         )
     )
-    return OrganizationResponse(**dto.__dict__)
+    return OrganizationResponse(**dto_to_dict(dto))
 
 
 @router.post(
@@ -75,4 +76,4 @@ async def invite_member(
             user_agent=ua,
         )
     )
-    return InvitationResponse(**dto.__dict__)
+    return InvitationResponse(**dto_to_dict(dto))

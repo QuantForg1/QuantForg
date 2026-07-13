@@ -44,10 +44,23 @@ class AuditCenterService:
     platform_uow_factory: PlatformUnitOfWorkFactory
 
     async def collect(self, *, limit: int = 200) -> dict[str, Any]:
-        async with self.platform_uow_factory() as uow:
-            entries = await uow.audit_logs.list_recent(limit=limit)
-
         buckets: dict[str, list[dict[str, Any]]] = {c: [] for c in AUDIT_CATEGORIES}
+        try:
+            async with self.platform_uow_factory() as uow:
+                entries = await uow.audit_logs.list_recent(limit=limit)
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "ops_audit_collect_failed",
+                error=str(exc),
+            )
+            return {
+                "categories": list(AUDIT_CATEGORIES),
+                "events": buckets,
+                "counts": dict.fromkeys(AUDIT_CATEGORIES, 0),
+            }
+
         for entry in entries:
             action = entry.action
             action_val = action.value if hasattr(action, "value") else str(action)
