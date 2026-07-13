@@ -175,6 +175,31 @@ export const executionApi = {
     apiFetch<Record<string, unknown>>("/execution/submit", { method: "POST", body }),
 };
 
+export const executionIntelligenceApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/execution-intelligence/dashboard"),
+  lifecycle: (includeArchived = true) =>
+    apiFetch<Record<string, unknown>>(
+      `/execution-intelligence/lifecycle?include_archived=${includeArchived}`,
+    ),
+  observe: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/execution-intelligence/lifecycle/observe", {
+      method: "POST",
+      body,
+    }),
+  checklist: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/execution-intelligence/checklist", {
+      method: "POST",
+      body,
+    }),
+  analytics: () =>
+    apiFetch<Record<string, unknown>>("/execution-intelligence/analytics"),
+  postTrade: () =>
+    apiFetch<Record<string, unknown>>("/execution-intelligence/post-trade"),
+  broker: () =>
+    apiFetch<Record<string, unknown>>("/execution-intelligence/broker"),
+};
+
 export const opsApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/ops/dashboard"),
   metrics: () => apiFetch<Record<string, unknown>>("/ops/metrics"),

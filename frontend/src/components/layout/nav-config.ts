@@ -55,6 +55,7 @@ export const appNav: NavGroup[] = [
     items: [
       { href: "/workspace", label: "Workspace", icon: LayoutTemplate },
       { href: "/execution", label: "Execution Center", icon: Target },
+      { href: "/execution-intel", label: "Execution Intelligence", icon: Activity },
       { href: "/orders", label: "Orders", icon: ListOrdered },
       { href: "/positions", label: "Positions", icon: Layers3 },
       { href: "/history", label: "Trade History", icon: History },
