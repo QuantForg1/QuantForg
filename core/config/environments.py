@@ -35,11 +35,21 @@ def production_settings(**overrides: object) -> Settings:
         "app_env": AppEnvironment.PRODUCTION,
         "debug": False,
         "reload": False,
+        "docs_enabled": False,
+        "execution_enabled": False,
         "log_level": "INFO",
         "log_format": "json",
         "log_json": True,
         "postgres_echo": False,
         "workers": 4,
+        # Explicit allowlist — never default production to Host=* .
+        "allowed_hosts": [
+            ".up.railway.app",
+            "healthcheck.railway.app",
+            "localhost",
+            "127.0.0.1",
+        ],
+        "cors_origins": [],
     }
     defaults.update(overrides)
     return Settings(**defaults)  # type: ignore[arg-type]

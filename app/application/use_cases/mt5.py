@@ -19,6 +19,7 @@ from app.application.dto.mt5 import (
     MT5TickDTO,
 )
 from app.application.services.mt5_market_data import MT5MarketDataService
+from app.application.services.mt5_session_guard import require_live_mt5_connection
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.mt5 import MT5Connection
 from app.domain.enums.audit import AuditAction, AuditOutcome
@@ -37,6 +38,10 @@ class GetMT5StatusUseCase:
         async with self.uow_factory() as uow:
             connection = await uow.connections.get_active_for_user(user_id)
         if connection is not None and connection.connected:
+            session_ref = (connection.session_ref or "").strip()
+            if not session_ref or not self.adapter.is_live_session(session_ref):
+                # Stale DB row after another tenant claimed the process terminal.
+                return MT5StatusDTO.from_connection(None)
             try:
                 snap = self.adapter.health()
                 connection.mark_heartbeat(latency_ms=snap.latency_ms or 0.0)
@@ -134,13 +139,11 @@ class DisconnectMT5UseCase:
         async with self.uow_factory() as uow:
             connection = await uow.connections.get_active_for_user(command.user_id)
             if connection is None:
-                self.adapter.shutdown()
+                # Never shut down a shared terminal for another tenant.
                 return MT5StatusDTO.from_connection(None)
             session_ref = connection.session_ref
             if session_ref:
                 await self.adapter.disconnect(session_ref=session_ref)
-            else:
-                self.adapter.shutdown()
             connection.mark_disconnected()
             await uow.connections.update(connection)
             await uow.commit()
@@ -167,10 +170,7 @@ class GetMT5AccountUseCase:
     adapter: MT5Adapter
 
     async def execute(self, *, user_id: UUID) -> MT5AccountDTO:
-        async with self.uow_factory() as uow:
-            connection = await uow.connections.get_active_for_user(user_id)
-        if connection is None or not connection.connected:
-            raise NotFoundError("No active MT5 connection")
+        await require_live_mt5_connection(self.uow_factory, self.adapter, user_id)
         try:
             info = self.adapter.account_info()
         except (OSError, RuntimeError, ValueError) as exc:
@@ -187,10 +187,7 @@ class ListMT5SymbolsUseCase:
     adapter: MT5Adapter
 
     async def execute(self, *, user_id: UUID) -> list[MT5SymbolDTO]:
-        async with self.uow_factory() as uow:
-            connection = await uow.connections.get_active_for_user(user_id)
-        if connection is None or not connection.connected:
-            raise NotFoundError("No active MT5 connection")
+        await require_live_mt5_connection(self.uow_factory, self.adapter, user_id)
         try:
             symbols = self.adapter.list_symbols()
         except (OSError, RuntimeError, ValueError) as exc:
@@ -207,7 +204,9 @@ class GetMT5SymbolUseCase:
     market_data: MT5MarketDataService
 
     async def execute(self, *, user_id: UUID, symbol: str) -> MT5SymbolDTO:
-        await _require_active_connection(self.uow_factory, user_id)
+        await require_live_mt5_connection(
+            self.uow_factory, self.market_data.adapter, user_id
+        )
         try:
             info = self.market_data.symbol_info(symbol)
         except (OSError, RuntimeError, ValueError) as exc:
@@ -224,7 +223,9 @@ class GetMT5TickUseCase:
     market_data: MT5MarketDataService
 
     async def execute(self, *, user_id: UUID, symbol: str) -> MT5TickDTO:
-        await _require_active_connection(self.uow_factory, user_id)
+        await require_live_mt5_connection(
+            self.uow_factory, self.market_data.adapter, user_id
+        )
         try:
             tick = self.market_data.latest_tick(symbol)
         except (OSError, RuntimeError, ValueError) as exc:
@@ -251,7 +252,9 @@ class GetMT5CandlesUseCase:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[MT5CandleDTO]:
-        await _require_active_connection(self.uow_factory, user_id)
+        await require_live_mt5_connection(
+            self.uow_factory, self.market_data.adapter, user_id
+        )
         tf = Timeframe.parse(timeframe)
         if count < 1 or count > 5000:
             raise ValidationError(
@@ -273,10 +276,3 @@ class GetMT5CandlesUseCase:
                 details={"symbol": symbol, "error": str(exc)},
             ) from exc
         return [MT5CandleDTO.from_rate(r) for r in rates]
-
-
-async def _require_active_connection(uow_factory: Any, user_id: UUID) -> None:
-    async with uow_factory() as uow:
-        connection = await uow.connections.get_active_for_user(user_id)
-    if connection is None or not connection.connected:
-        raise NotFoundError("No active MT5 connection")

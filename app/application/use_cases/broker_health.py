@@ -10,6 +10,9 @@ from app.application.services.broker_health import (
     AutomaticReconnectManager,
     ConnectionHealthMonitor,
 )
+from app.domain.entities.broker import Broker
+from app.domain.entities.broker_health import BrokerConnectionHealth
+from app.domain.entities.broker_integration import BrokerCapability
 from app.domain.enums.broker import BrokerHealthStatus
 from app.domain.exceptions.base import NotFoundError
 from app.domain.interfaces.broker_capability_discovery import (
@@ -32,53 +35,85 @@ def _worst_status(statuses: list[BrokerHealthStatus]) -> BrokerHealthStatus:
     return max(statuses, key=lambda s: order[s])
 
 
+def _aggregate_health(
+    *,
+    broker_id: UUID,
+    records: list[BrokerConnectionHealth],
+    caps: list[BrokerCapability],
+) -> BrokerHealthDTO:
+    statuses = [r.status for r in records]
+    latencies = [r.latency_ms for r in records if r.latency_ms is not None]
+    reconnect = sum(r.reconnect_attempts for r in records)
+    uptimes = [r.uptime_seconds for r in records]
+    errors = [r.last_error for r in records if r.last_error]
+    heartbeats = [r.last_heartbeat_at for r in records if r.last_heartbeat_at]
+    successes = [
+        r.last_successful_connection_at
+        for r in records
+        if r.last_successful_connection_at
+    ]
+
+    return BrokerHealthDTO(
+        broker_id=broker_id,
+        status=_worst_status(statuses).value,
+        latency_ms=(sum(latencies) / len(latencies)) if latencies else None,
+        uptime_seconds=max(uptimes) if uptimes else 0.0,
+        reconnect_count=reconnect,
+        last_error=errors[-1] if errors else "",
+        capabilities=tuple(c.code.value for c in caps if c.enabled),
+        last_heartbeat_at=max(heartbeats) if heartbeats else None,
+        last_successful_connection_at=max(successes) if successes else None,
+        connection_count=len(records),
+    )
+
+
+async def _tenant_health_records(
+    *,
+    uow_factory: BrokerUnitOfWorkFactory,
+    health_monitor: ConnectionHealthMonitor,
+    broker_id: UUID,
+    user_id: UUID | None,
+) -> tuple[Broker, list[BrokerCapability], list[BrokerConnectionHealth]]:
+    """Load broker health rows; when ``user_id`` is set, scope to that tenant."""
+    async with uow_factory() as uow:
+        broker = await uow.brokers.get_by_id(broker_id)
+        if broker is None:
+            raise NotFoundError(
+                "Broker not found",
+                details={"broker_id": str(broker_id)},
+            )
+        caps = await uow.capabilities.list_for_broker(broker_id)
+        persisted = await uow.health.list_for_broker(broker_id)
+        allowed_account_ids: set[UUID] | None = None
+        if user_id is not None:
+            accounts = await uow.accounts.list_for_user(user_id)
+            allowed_account_ids = {a.id for a in accounts if a.broker_id == broker_id}
+
+    live = health_monitor.list_for_broker(broker_id)
+    by_connection = {h.connection_id: h for h in persisted}
+    for item in live:
+        by_connection[item.connection_id] = item
+    records = list(by_connection.values())
+    if allowed_account_ids is not None:
+        records = [r for r in records if r.broker_account_id in allowed_account_ids]
+    return broker, caps, records
+
+
 @dataclass(frozen=True, slots=True)
 class GetBrokerHealthUseCase:
     uow_factory: BrokerUnitOfWorkFactory
     health_monitor: ConnectionHealthMonitor
 
-    async def execute(self, *, broker_id: UUID) -> BrokerHealthDTO:
-        async with self.uow_factory() as uow:
-            broker = await uow.brokers.get_by_id(broker_id)
-            if broker is None:
-                raise NotFoundError(
-                    "Broker not found",
-                    details={"broker_id": str(broker_id)},
-                )
-            caps = await uow.capabilities.list_for_broker(broker_id)
-            persisted = await uow.health.list_for_broker(broker_id)
-
-        # Prefer live monitor snapshots; fall back to persisted rows.
-        live = self.health_monitor.list_for_broker(broker_id)
-        by_connection = {h.connection_id: h for h in persisted}
-        for item in live:
-            by_connection[item.connection_id] = item
-        records = list(by_connection.values())
-
-        statuses = [r.status for r in records]
-        latencies = [r.latency_ms for r in records if r.latency_ms is not None]
-        reconnect = sum(r.reconnect_attempts for r in records)
-        uptimes = [r.uptime_seconds for r in records]
-        errors = [r.last_error for r in records if r.last_error]
-        heartbeats = [r.last_heartbeat_at for r in records if r.last_heartbeat_at]
-        successes = [
-            r.last_successful_connection_at
-            for r in records
-            if r.last_successful_connection_at
-        ]
-
-        return BrokerHealthDTO(
+    async def execute(
+        self, *, broker_id: UUID, user_id: UUID | None = None
+    ) -> BrokerHealthDTO:
+        _broker, caps, records = await _tenant_health_records(
+            uow_factory=self.uow_factory,
+            health_monitor=self.health_monitor,
             broker_id=broker_id,
-            status=_worst_status(statuses).value,
-            latency_ms=(sum(latencies) / len(latencies)) if latencies else None,
-            uptime_seconds=max(uptimes) if uptimes else 0.0,
-            reconnect_count=reconnect,
-            last_error=errors[-1] if errors else "",
-            capabilities=tuple(c.code.value for c in caps if c.enabled),
-            last_heartbeat_at=max(heartbeats) if heartbeats else None,
-            last_successful_connection_at=max(successes) if successes else None,
-            connection_count=len(records),
+            user_id=user_id,
         )
+        return _aggregate_health(broker_id=broker_id, records=records, caps=caps)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,29 +123,22 @@ class GetBrokerDiagnosticsUseCase:
     reconnect_manager: AutomaticReconnectManager
     registry: BrokerRegistryPort
 
-    async def execute(self, *, broker_id: UUID) -> BrokerDiagnosticsDTO:
-        health = await GetBrokerHealthUseCase(
+    async def execute(
+        self, *, broker_id: UUID, user_id: UUID | None = None
+    ) -> BrokerDiagnosticsDTO:
+        """Diagnostics for a broker. ``user_id=None`` returns all (admin)."""
+        broker, caps, records = await _tenant_health_records(
             uow_factory=self.uow_factory,
             health_monitor=self.health_monitor,
-        ).execute(broker_id=broker_id)
+            broker_id=broker_id,
+            user_id=user_id,
+        )
+        health = _aggregate_health(broker_id=broker_id, records=records, caps=caps)
 
-        async with self.uow_factory() as uow:
-            broker = await uow.brokers.get_by_id(broker_id)
-            if broker is None:
-                raise NotFoundError(
-                    "Broker not found",
-                    details={"broker_id": str(broker_id)},
-                )
-            persisted = await uow.health.list_for_broker(broker_id)
-
-        live = self.health_monitor.list_for_broker(broker_id)
-        by_connection = {h.connection_id: h for h in persisted}
-        for item in live:
-            by_connection[item.connection_id] = item
-
-        connection_snapshots = tuple(h.to_dict() for h in by_connection.values())
+        connection_snapshots = tuple(h.to_dict() for h in records)
         reconnect_snapshots: list[dict[str, object]] = []
-        for connection_id in by_connection:
+        for item in records:
+            connection_id = item.connection_id
             state = self.reconnect_manager.state_for(connection_id)
             reconnect_snapshots.append(
                 {

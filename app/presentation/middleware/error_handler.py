@@ -20,7 +20,6 @@ from app.domain.exceptions.base import (
     NotFoundError,
     ValidationError,
 )
-from core.config.settings import get_settings
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -200,14 +199,15 @@ def register_exception_handlers(app: FastAPI) -> None:
             "unhandled_exception",
             path=str(request.url.path),
             method=request.method,
+            error_type=type(exc).__name__,
         )
-        settings = get_settings()
-        message = str(exc) if settings.debug else "An unexpected error occurred"
+        # Never echo exception text to clients — paths, credentials, and
+        # infrastructure details must stay in server logs only.
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_error_body(
                 code="internal_error",
-                message=message,
+                message="An unexpected error occurred",
                 request_id=_request_id_from(request),
             ),
         )

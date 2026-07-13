@@ -102,3 +102,62 @@ class TestMT5UseCases:
             await GetMT5AccountUseCase(uow_factory=factory, adapter=adapter).execute(
                 user_id=uuid4()
             )
+
+    @pytest.mark.asyncio
+    async def test_cross_tenant_terminal_isolation(self) -> None:
+        """User A must not read terminal data after User B claims the process login."""
+        factory, adapter, audit = _wire()
+        user_a = uuid4()
+        user_b = uuid4()
+
+        await ConnectMT5UseCase(
+            uow_factory=factory, adapter=adapter, audit=audit
+        ).execute(
+            MT5ConnectCommand(
+                user_id=user_a,
+                login=1001,
+                password="secret-a",
+                server="Demo-Server",
+            )
+        )
+        account_a = await GetMT5AccountUseCase(
+            uow_factory=factory, adapter=adapter
+        ).execute(user_id=user_a)
+        assert account_a.login == 1001
+
+        await ConnectMT5UseCase(
+            uow_factory=factory, adapter=adapter, audit=audit
+        ).execute(
+            MT5ConnectCommand(
+                user_id=user_b,
+                login=2002,
+                password="secret-b",
+                server="Demo-Server",
+            )
+        )
+
+        with pytest.raises(NotFoundError):
+            await GetMT5AccountUseCase(uow_factory=factory, adapter=adapter).execute(
+                user_id=user_a
+            )
+
+        account_b = await GetMT5AccountUseCase(
+            uow_factory=factory, adapter=adapter
+        ).execute(user_id=user_b)
+        assert account_b.login == 2002
+
+        # Stale disconnect must not tear down the live tenant terminal.
+        await DisconnectMT5UseCase(
+            uow_factory=factory, adapter=adapter, audit=audit
+        ).execute(MT5DisconnectCommand(user_id=user_a))
+        assert adapter.client.is_connected is True
+        account_b2 = await GetMT5AccountUseCase(
+            uow_factory=factory, adapter=adapter
+        ).execute(user_id=user_b)
+        assert account_b2.login == 2002
+
+        # Disconnect with no connection must not shut down another tenant.
+        await DisconnectMT5UseCase(
+            uow_factory=factory, adapter=adapter, audit=audit
+        ).execute(MT5DisconnectCommand(user_id=uuid4()))
+        assert adapter.client.is_connected is True

@@ -25,9 +25,7 @@ from httpx import ASGITransport, AsyncClient  # noqa: E402
 from core.config.settings import get_settings  # noqa: E402
 
 
-async def _run_wave(
-    client: AsyncClient, path: str, concurrency: int
-) -> dict[str, Any]:
+async def _run_wave(client: AsyncClient, path: str, concurrency: int) -> dict[str, Any]:
     latencies: list[float] = []
     errors = 0
 
@@ -80,7 +78,7 @@ async def main() -> None:
     results = []
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         async with app.router.lifespan_context(app):
-            for n in (100, 500, 1000):
+            for n in (100, 500, 1000, 5000):
                 for path in ("/", "/health/live", "/api/v1/version"):
                     wave = await _run_wave(client, path, n)
                     results.append(wave)

@@ -90,9 +90,7 @@ def main() -> int:
                 audit=audit,
                 default_redirect_to="http://localhost:3000",
             ),
-            get_current_user=GetCurrentUserUseCase(
-                auth=provider, uow_factory=factory
-            ),
+            get_current_user=GetCurrentUserUseCase(auth=provider, uow_factory=factory),
         )
 
     application.dependency_overrides[auth_deps.get_auth_service] = _auth_service
@@ -422,7 +420,11 @@ def main() -> int:
                     expect=200,
                 )
                 call(
-                    client, "GET", "/api/v1/broker-connections", token=access, expect=200
+                    client,
+                    "GET",
+                    "/api/v1/broker-connections",
+                    token=access,
+                    expect=200,
                 )
                 call(
                     client,
@@ -678,7 +680,14 @@ def main() -> int:
             expect=[200, 400, 403, 404, 422],
         )
 
-        call(client, "POST", "/api/v1/auth/logout", json_body={}, token=access, expect=200)
+        call(
+            client,
+            "POST",
+            "/api/v1/auth/logout",
+            json_body={},
+            token=access,
+            expect=200,
+        )
 
     passed = sum(1 for r in results if r["ok"])
     failed = [r for r in results if not r["ok"]]

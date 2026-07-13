@@ -72,10 +72,10 @@ async def get_broker(
 @router.get("/{broker_id}/health", response_model=BrokerHealthResponse)
 async def get_broker_health(
     broker_id: UUID,
-    _user: CurrentUser,
+    user: CurrentUser,
     brokers: BrokerSvc,
 ) -> BrokerHealthResponse:
-    dto = await brokers.get_broker_health.execute(broker_id=broker_id)
+    dto = await brokers.get_broker_health.execute(broker_id=broker_id, user_id=user.id)
     return BrokerHealthResponse(
         broker_id=dto.broker_id,
         status=dto.status,
@@ -93,9 +93,10 @@ async def get_broker_health(
 @router.get("/{broker_id}/diagnostics", response_model=BrokerDiagnosticsResponse)
 async def get_broker_diagnostics(
     broker_id: UUID,
-    _user: CurrentUser,
+    _admin: AdminUser,
     brokers: BrokerSvc,
 ) -> BrokerDiagnosticsResponse:
+    # Admin/owner only — connection_id / account UUIDs must not leak cross-tenant.
     dto = await brokers.get_broker_diagnostics.execute(broker_id=broker_id)
     return BrokerDiagnosticsResponse(
         broker_id=dto.broker_id,

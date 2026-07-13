@@ -122,6 +122,7 @@ class TestHealthEndpoints:
         assert response.status_code == 401
         body = response.json()
         assert body["error"]["code"] == "missing_token"
+
     def test_health_healthy(self) -> None:
         client = TestClient(_build_test_app())
         response = client.get("/api/v1/health")

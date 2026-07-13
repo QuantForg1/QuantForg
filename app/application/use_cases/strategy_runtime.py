@@ -161,11 +161,22 @@ class EvaluateStrategyUseCase:
 
         assert isinstance(user_id, UUID)
         connected = False
+        session_ref = ""
         async with self.mt5_uow_factory() as uow:
             connection = await uow.connections.get_active_for_user(user_id)
-            connected = connection is not None and connection.connected
+            if connection is not None and connection.connected:
+                session_ref = (connection.session_ref or "").strip()
+                connected = True
 
-        if connected and self.portfolio_sync is not None:
+        adapter = None
+        if self.portfolio_sync is not None:
+            adapter = getattr(self.portfolio_sync, "adapter", None)
+        if (
+            connected
+            and self.portfolio_sync is not None
+            and adapter is not None
+            and adapter.is_live_session(session_ref)
+        ):
             try:
                 return (
                     self.portfolio_sync.account_snapshot(),

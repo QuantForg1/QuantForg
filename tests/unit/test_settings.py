@@ -141,6 +141,29 @@ class TestSettings:
         )
         assert settings.allowed_hosts == ["*"]
 
+    def test_production_rejects_wildcard_hosts(self) -> None:
+        settings = production_settings(
+            secret_key="a-real-production-secret-key-with-enough-entropy-here",
+            postgres_password="a-real-production-password-here",
+            allowed_hosts=["*"],  # type: ignore[arg-type]
+            railway_public_domain="quantforg-production.up.railway.app",
+        )
+        assert "*" not in settings.allowed_hosts
+        assert "quantforg-production.up.railway.app" in settings.allowed_hosts
+        assert ".up.railway.app" in settings.allowed_hosts
+        assert settings.execution_enabled is False
+        assert settings.docs_enabled is False
+        assert "https://quantforg-production.up.railway.app" in settings.cors_origins
+
+    def test_cors_allowed_origins_alias(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+            app_env=AppEnvironment.TESTING,
+            cors_origins="https://app.example.com",  # type: ignore[arg-type]
+        )
+        assert settings.cors_origins == ["https://app.example.com"]
+
     def test_environment_alias_maps_to_app_env(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

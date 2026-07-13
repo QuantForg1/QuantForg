@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 from app.application.dto.audit import RecordAuditEventCommand
 from app.application.dto.execution import ExecutionSubmitCommand, ExecutionSubmitDTO
 from app.application.services.execution_gateway import ExecutionGateway
+from app.application.services.mt5_session_guard import require_live_mt5_connection
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.execution_gateway import ExecutionAttempt, ExecutionResult
 from app.domain.entities.mt5_order import OrderIntent
@@ -17,7 +17,7 @@ from app.domain.enums.audit import AuditAction, AuditOutcome
 from app.domain.enums.execution import ExecutionOutcome
 from app.domain.enums.order import OrderSide, OrderType
 from app.domain.exceptions.auth import AuthorizationError
-from app.domain.exceptions.base import NotFoundError, ValidationError
+from app.domain.exceptions.base import ValidationError
 from app.domain.value_objects.mt5_order import (
     LotSize,
     MagicNumber,
@@ -58,13 +58,6 @@ def _parse_intent(command: ExecutionSubmitCommand) -> OrderIntent:
         ) from exc
 
 
-async def _require_active_connection(uow_factory: Any, user_id: UUID) -> None:
-    async with uow_factory() as uow:
-        connection = await uow.connections.get_active_for_user(user_id)
-    if connection is None or not connection.connected:
-        raise NotFoundError("No active MT5 connection")
-
-
 @dataclass(frozen=True, slots=True)
 class SubmitExecutionUseCase:
     mt5_uow_factory: Any
@@ -80,7 +73,9 @@ class SubmitExecutionUseCase:
                 details={"field": "request_id"},
             )
 
-        await _require_active_connection(self.mt5_uow_factory, command.user_id)
+        await require_live_mt5_connection(
+            self.mt5_uow_factory, self.gateway.adapter, command.user_id
+        )
         intent = _parse_intent(command)
 
         async with self.execution_uow_factory() as uow:

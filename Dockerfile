@@ -52,10 +52,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DEBUG=false \
     RELOAD=false \
     EXECUTION_ENABLED=false \
-    ALLOWED_HOSTS=* \
     DOCS_ENABLED=false \
     WORKERS=1 \
     HOST=0.0.0.0
+# ALLOWED_HOSTS / CORS_ALLOWED_ORIGINS are set at runtime by docker-entrypoint.sh
+# from RAILWAY_PUBLIC_DOMAIN (never bake Host=* into the image).
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \

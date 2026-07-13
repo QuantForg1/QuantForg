@@ -142,9 +142,7 @@ async def upload_avatar(
         )
     if content_type == "image/png" and not content.startswith(b"\x89PNG\r\n\x1a\n"):
         raise ValidationError("PNG content does not match type", code="invalid_avatar")
-    if content_type == "image/jpeg" and not (
-        content.startswith(b"\xff\xd8\xff")
-    ):
+    if content_type == "image/jpeg" and not (content.startswith(b"\xff\xd8\xff")):
         raise ValidationError("JPEG content does not match type", code="invalid_avatar")
     ext = allowed_types[content_type]
     auth_folder = str(user.auth_user_id or user.id)

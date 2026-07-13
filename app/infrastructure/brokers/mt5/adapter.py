@@ -58,6 +58,8 @@ class MT5Adapter:
     ) -> None:
         self._client: MT5ClientPort = client or MockMT5Client()
         self._sessions: dict[str, MT5LoginRequest] = {}
+        # Single live binding: process-global MT5 client holds one login at a time.
+        self._live_session_ref: str | None = None
         self._execution_enabled = bool(execution_enabled)
 
     @property
@@ -100,11 +102,21 @@ class MT5Adapter:
             f"mt5-{uuid.uuid4().hex}"
         )
         self._sessions[session_ref] = request
+        self._live_session_ref = session_ref
         return session_ref
+
+    def is_live_session(self, session_ref: str) -> bool:
+        """True if ``session_ref`` is bound to the live terminal login."""
+        return (
+            bool(session_ref)
+            and session_ref == self._live_session_ref
+            and bool(getattr(self._client, "is_connected", False))
+        )
 
     def shutdown(self) -> None:
         self._client.shutdown()
         self._sessions.clear()
+        self._live_session_ref = None
 
     def reconnect(self, request: MT5LoginRequest) -> str:
         if not self._client.reconnect(request):
@@ -115,6 +127,7 @@ class MT5Adapter:
             f"mt5-{uuid.uuid4().hex}"
         )
         self._sessions[session_ref] = request
+        self._live_session_ref = session_ref
         return session_ref
 
     def ping(self) -> float:
@@ -275,7 +288,10 @@ class MT5Adapter:
 
     async def disconnect(self, *, session_ref: str) -> None:
         self._sessions.pop(session_ref, None)
-        if not self._sessions:
+        if session_ref == self._live_session_ref:
+            # Only tear down the terminal when the live tenant disconnects.
+            self.shutdown()
+        elif not self._sessions and self._live_session_ref is None:
             self.shutdown()
 
     async def validate_credentials(self, request: BrokerConnectRequest) -> bool:
@@ -375,7 +391,7 @@ class MT5Adapter:
         ]
 
     def _require_session(self, session_ref: str) -> None:
-        if session_ref not in self._sessions and not self._client.is_connected:
+        if not self.is_live_session(session_ref):
             msg = f"Unknown or inactive MT5 session: {session_ref}"
             raise ValueError(msg)
 

@@ -10,6 +10,7 @@ from uuid import UUID
 from app.application.dto.audit import RecordAuditEventCommand
 from app.application.dto.execution import ExecutionCheckCommand, ExecutionCheckDTO
 from app.application.services.execution_safety import ExecutionSafetyService
+from app.application.services.mt5_session_guard import live_connection_meta
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.mt5_order import OrderIntent
 from app.domain.enums.audit import AuditAction, AuditOutcome
@@ -56,13 +57,9 @@ def _parse_intent(command: ExecutionCheckCommand) -> OrderIntent:
 
 
 async def _active_connection_meta(
-    uow_factory: Any, user_id: UUID
+    uow_factory: Any, adapter: Any, user_id: UUID
 ) -> tuple[bool, int | None]:
-    async with uow_factory() as uow:
-        connection = await uow.connections.get_active_for_user(user_id)
-    if connection is None or not connection.connected:
-        return False, None
-    return True, connection.login
+    return await live_connection_meta(uow_factory, adapter, user_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +79,7 @@ class CheckExecutionSafetyUseCase:
 
         intent = _parse_intent(command)
         connected, login = await _active_connection_meta(
-            self.mt5_uow_factory, command.user_id
+            self.mt5_uow_factory, self.safety_service.adapter, command.user_id
         )
         if not connected:
             raise NotFoundError("No active MT5 connection")

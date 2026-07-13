@@ -163,15 +163,23 @@ def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
     # Never pair allow_credentials with wildcard origins.
     cors_origins = [o for o in (settings.cors_origins or []) if o and o != "*"]
     if not _is_disabled("cors"):
-        application.add_middleware(
-            CORSMiddleware,
-            allow_origins=cors_origins,
-            allow_credentials=bool(cors_origins),
-            allow_methods=["*"],
-            allow_headers=["*"],
-            expose_headers=["X-Request-ID"],
-            allow_origin_regex=r"https://.*\.up\.railway\.app",
-        )
+        cors_kwargs: dict[str, Any] = {
+            "allow_origins": cors_origins,
+            "allow_credentials": bool(cors_origins),
+            "allow_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": [
+                "Authorization",
+                "Content-Type",
+                "X-Request-ID",
+                "Accept",
+                "Origin",
+            ],
+            "expose_headers": ["X-Request-ID"],
+        }
+        # Broad Railway preview regex only outside production.
+        if not settings.is_production:
+            cors_kwargs["allow_origin_regex"] = r"https://.*\.up\.railway\.app"
+        application.add_middleware(CORSMiddleware, **cors_kwargs)
         registered.append("cors")
 
     hosts = settings.allowed_hosts or ["*"]
@@ -183,7 +191,10 @@ def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
         registered.append("trusted_host")
         logger.info("trusted_host_middleware_enabled", allowed_hosts=hosts)
     else:
-        logger.info("trusted_host_middleware_skipped", reason="allowed_hosts=*")
+        logger.info(
+            "trusted_host_middleware_skipped",
+            reason="allowed_hosts=*" if "*" in hosts else "disabled",
+        )
 
     if not _is_disabled("security_headers"):
         application.add_middleware(SecurityHeaders)

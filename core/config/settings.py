@@ -67,15 +67,27 @@ class Settings(BaseSettings):
         NoDecode,
         Field(
             description=(
-                "Trusted hostnames for Host header validation. "
-                "Use '*' behind a platform reverse proxy (Railway, etc.)."
-            )
+                "Trusted hostnames for Host header validation "
+                "(ALLOWED_HOSTS). Production never uses '*'; "
+                "defaults derive from RAILWAY_PUBLIC_DOMAIN."
+            ),
+            validation_alias=AliasChoices("ALLOWED_HOSTS", "allowed_hosts"),
         ),
     ] = ["*"]
     cors_origins: Annotated[
         list[str],
         NoDecode,
-        Field(description="Allowed CORS origins"),
+        Field(
+            description=(
+                "Allowed CORS origins (CORS_ORIGINS / CORS_ALLOWED_ORIGINS). "
+                "Wildcards are stripped; production uses an explicit allowlist."
+            ),
+            validation_alias=AliasChoices(
+                "CORS_ORIGINS",
+                "CORS_ALLOWED_ORIGINS",
+                "cors_origins",
+            ),
+        ),
     ] = ["http://localhost:3000", "http://localhost:8000"]
     docs_enabled: Annotated[
         bool,
@@ -335,6 +347,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Settings:
         """Harden production: coerce unsafe toggles; reject insecure secrets."""
+        from urllib.parse import urlparse
+
         if self.app_env == AppEnvironment.PRODUCTION:
             # Platform dashboards often sync RELOAD=true / DEBUG=true from .env
             # templates. Coerce instead of crashing the container.
@@ -342,6 +356,9 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "reload", False)
             if self.debug:
                 object.__setattr__(self, "debug", False)
+            # Live trading must never ship enabled.
+            if self.execution_enabled:
+                object.__setattr__(self, "execution_enabled", False)
             insecure_markers = ("change-me", "dev_password", "secret-key-at-least")
             secret = self.secret_key.get_secret_value()
             if any(marker in secret for marker in insecure_markers):
@@ -356,14 +373,53 @@ class Settings(BaseSettings):
                     raise ValueError(msg)
 
         domain = (self.railway_public_domain or "").strip()
-        hosts = list(self.allowed_hosts)
-        # Empty or missing hosts reject every request behind Railway → edge 502.
-        if not hosts:
-            hosts = ["*"]
-        if domain and "*" not in hosts and domain not in hosts:
-            hosts = [*hosts, domain]
+        hosts = [h.strip() for h in self.allowed_hosts if h and h.strip()]
+
+        # Production: never leave Host validation as a bare wildcard.
+        railway_probe_hosts = (
+            ".up.railway.app",
+            "healthcheck.railway.app",
+            "localhost",
+            "127.0.0.1",
+        )
+        if self.app_env == AppEnvironment.PRODUCTION:
+            hosts = [h for h in hosts if h != "*"]
+            if domain and domain not in hosts:
+                hosts = [domain, *hosts]
+            if not hosts:
+                hosts = [domain] if domain else []
+                hosts.extend(railway_probe_hosts)
+            else:
+                for probe in railway_probe_hosts:
+                    if probe not in hosts:
+                        hosts.append(probe)
+        else:
+            # Empty or missing hosts reject every request behind Railway → edge 502.
+            if not hosts:
+                hosts = ["*"]
+            if domain and "*" not in hosts and domain not in hosts:
+                hosts = [*hosts, domain]
+
         if hosts != self.allowed_hosts:
             object.__setattr__(self, "allowed_hosts", hosts)
+
+        # CORS: strip wildcards; production seeds from Railway / auth redirect.
+        origins = [o.strip() for o in self.cors_origins if o and o.strip() and o != "*"]
+        if self.app_env == AppEnvironment.PRODUCTION:
+            if domain:
+                railway_origin = f"https://{domain}"
+                if railway_origin not in origins:
+                    origins.append(railway_origin)
+            redirect = (self.auth_redirect_url or "").strip()
+            if redirect:
+                parsed = urlparse(redirect)
+                if parsed.scheme in {"http", "https"} and parsed.netloc:
+                    origin = f"{parsed.scheme}://{parsed.netloc}"
+                    if origin not in origins:
+                        origins.append(origin)
+        if origins != self.cors_origins:
+            object.__setattr__(self, "cors_origins", origins)
+
         return self
 
     # -- Computed properties --------------------------------------------------

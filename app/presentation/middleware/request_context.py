@@ -35,7 +35,7 @@ class RequestContextMiddleware:
         request_id = headers.get(REQUEST_ID_HEADER.lower()) or new_request_id()
         state = scope.setdefault("state", {})
         with suppress(Exception):
-            state["request_id"] = request_id  # type: ignore[index]
+            state["request_id"] = request_id
 
         clear_context()
         bind_context(request_id=request_id)

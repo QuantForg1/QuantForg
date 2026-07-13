@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
 
 from app.application.dto.audit import RecordAuditEventCommand
 from app.application.dto.mt5 import (
@@ -14,11 +13,12 @@ from app.application.dto.mt5 import (
     MT5OrderValidationDTO,
 )
 from app.application.services.mt5_order_validation import MT5OrderValidationService
+from app.application.services.mt5_session_guard import require_live_mt5_connection
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.mt5_order import OrderIntent, TradeValidation
 from app.domain.enums.audit import AuditAction, AuditOutcome
 from app.domain.enums.order import OrderSide, OrderType
-from app.domain.exceptions.base import NotFoundError, ValidationError
+from app.domain.exceptions.base import ValidationError
 from app.domain.interfaces.mt5_order import RETCODE_DONE
 from app.domain.value_objects.mt5_order import (
     LotSize,
@@ -60,13 +60,6 @@ def _parse_intent(command: MT5OrderValidateCommand) -> OrderIntent:
         ) from exc
 
 
-async def _require_active_connection(uow_factory: Any, user_id: UUID) -> None:
-    async with uow_factory() as uow:
-        connection = await uow.connections.get_active_for_user(user_id)
-    if connection is None or not connection.connected:
-        raise NotFoundError("No active MT5 connection")
-
-
 @dataclass(frozen=True, slots=True)
 class ValidateMT5OrderUseCase:
     uow_factory: Any
@@ -74,7 +67,9 @@ class ValidateMT5OrderUseCase:
     audit: RecordAuditEventUseCase
 
     async def execute(self, command: MT5OrderValidateCommand) -> MT5OrderValidationDTO:
-        await _require_active_connection(self.uow_factory, command.user_id)
+        await require_live_mt5_connection(
+            self.uow_factory, self.validation_service.adapter, command.user_id
+        )
         intent = _parse_intent(command)
         try:
             result = self.validation_service.validate_order(intent)
@@ -131,7 +126,9 @@ class CalculateMT5OrderUseCase:
     validation_service: MT5OrderValidationService
 
     async def execute(self, command: MT5OrderValidateCommand) -> MT5OrderCalculateDTO:
-        await _require_active_connection(self.uow_factory, command.user_id)
+        await require_live_mt5_connection(
+            self.uow_factory, self.validation_service.adapter, command.user_id
+        )
         intent = _parse_intent(command)
         try:
             request, margin, profit = self.validation_service.calculate(intent)

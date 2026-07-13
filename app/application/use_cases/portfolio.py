@@ -16,15 +16,15 @@ from app.application.dto.portfolio import (
     PortfolioDTO,
     PositionDTO,
 )
+from app.application.services.mt5_session_guard import require_live_mt5_connection
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.domain.exceptions.base import NotFoundError
 
 
-async def _require_active_connection(uow_factory: Any, user_id: UUID) -> None:
-    async with uow_factory() as uow:
-        connection = await uow.connections.get_active_for_user(user_id)
-    if connection is None or not connection.connected:
-        raise NotFoundError("No active MT5 connection")
+async def _require_active_connection(
+    uow_factory: Any, sync_service: PortfolioSyncService, user_id: UUID
+) -> None:
+    await require_live_mt5_connection(uow_factory, sync_service.adapter, user_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +34,9 @@ class GetPortfolioUseCase:
     sync_service: PortfolioSyncService
 
     async def execute(self, *, user_id: UUID) -> PortfolioDTO:
-        await _require_active_connection(self.mt5_uow_factory, user_id)
+        await _require_active_connection(
+            self.mt5_uow_factory, self.sync_service, user_id
+        )
         record = self.sync_service.synchronize(user_id=user_id)
         _ = self.sync_service.drain_events()
         async with self.portfolio_uow_factory() as uow:
@@ -73,7 +75,9 @@ class ListPositionsUseCase:
     async def execute(
         self, *, user_id: UUID, symbol: str | None = None
     ) -> list[PositionDTO]:
-        await _require_active_connection(self.mt5_uow_factory, user_id)
+        await _require_active_connection(
+            self.mt5_uow_factory, self.sync_service, user_id
+        )
         if symbol:
             rows = self.sync_service.position_by_symbol(symbol)
         else:
@@ -87,7 +91,9 @@ class GetPositionByTicketUseCase:
     sync_service: PortfolioSyncService
 
     async def execute(self, *, user_id: UUID, ticket: int) -> PositionDTO:
-        await _require_active_connection(self.mt5_uow_factory, user_id)
+        await _require_active_connection(
+            self.mt5_uow_factory, self.sync_service, user_id
+        )
         pos = self.sync_service.position_by_ticket(ticket)
         if pos is None:
             raise NotFoundError(f"Position ticket {ticket} not found")
@@ -100,7 +106,9 @@ class ListOrdersUseCase:
     sync_service: PortfolioSyncService
 
     async def execute(self, *, user_id: UUID) -> list[PendingOrderDTO]:
-        await _require_active_connection(self.mt5_uow_factory, user_id)
+        await _require_active_connection(
+            self.mt5_uow_factory, self.sync_service, user_id
+        )
         return [PendingOrderDTO.from_entity(o) for o in self.sync_service.list_orders()]
 
 
@@ -110,7 +118,9 @@ class GetOrderByTicketUseCase:
     sync_service: PortfolioSyncService
 
     async def execute(self, *, user_id: UUID, ticket: int) -> PendingOrderDTO:
-        await _require_active_connection(self.mt5_uow_factory, user_id)
+        await _require_active_connection(
+            self.mt5_uow_factory, self.sync_service, user_id
+        )
         order = self.sync_service.order_by_ticket(ticket)
         if order is None:
             raise NotFoundError(f"Pending order ticket {ticket} not found")
@@ -129,7 +139,9 @@ class GetHistoryUseCase:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> HistoryDTO:
-        await _require_active_connection(self.mt5_uow_factory, user_id)
+        await _require_active_connection(
+            self.mt5_uow_factory, self.sync_service, user_id
+        )
         orders = self.sync_service.history_orders(date_from=date_from, date_to=date_to)
         deals = self.sync_service.history_deals(date_from=date_from, date_to=date_to)
         return HistoryDTO(
@@ -144,5 +156,7 @@ class GetAccountSnapshotUseCase:
     sync_service: PortfolioSyncService
 
     async def execute(self, *, user_id: UUID) -> AccountSnapshotDTO:
-        await _require_active_connection(self.mt5_uow_factory, user_id)
+        await _require_active_connection(
+            self.mt5_uow_factory, self.sync_service, user_id
+        )
         return AccountSnapshotDTO.from_entity(self.sync_service.account_snapshot())
