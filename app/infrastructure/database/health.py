@@ -9,7 +9,12 @@ from core.database.session import DatabaseManager
 
 @dataclass(frozen=True, slots=True)
 class PostgresHealthCheck:
-    """Health probe for the PostgreSQL dependency."""
+    """Health probe for the PostgreSQL dependency.
+
+    Delegates to :meth:`DatabaseManager.health_check`, which runs
+    ``SELECT 1`` on the shared SQLAlchemy/asyncpg engine (same
+    ``DATABASE_URL`` / :attr:`Settings.database_url` as the application).
+    """
 
     database: DatabaseManager
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -23,13 +25,40 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _dsn_source(settings: Settings) -> str:
+    if (settings.database_url_override or "").strip():
+        return "DATABASE_URL"
+    if settings.supabase_db_password is not None:
+        password = settings.supabase_db_password.get_secret_value().strip()
+        if password and settings._supabase_project_ref:
+            return "SUPABASE_DB_PASSWORD"
+    return "POSTGRES_COMPOSED"
+
+
+def _sslmode_label(settings: Settings) -> str:
+    if settings.asyncpg_connect_args.get("ssl"):
+        return "require"
+    return "disable"
+
+
+def _safe_endpoint(settings: Settings) -> dict[str, Any]:
+    """Host/port/driver/ssl diagnostics — never includes credentials."""
+    raw = settings.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    parsed = urlparse(raw)
+    return {
+        "database_dsn_source": _dsn_source(settings),
+        "database_host": parsed.hostname or "",
+        "database_port": parsed.port or 5432,
+        "database_sslmode": _sslmode_label(settings),
+        "database_driver": "postgresql+asyncpg",
+    }
+
+
 def create_engine(settings: Settings) -> AsyncEngine:
     """Create a configured async SQLAlchemy engine.
 
-    Parameters
-    ----------
-    settings:
-        Application settings providing the database URL and pool options.
+    Uses :attr:`Settings.database_url` (honours ``DATABASE_URL`` / pooler
+    composition) with the same ``connect_args`` as the rest of the app.
     """
     return create_async_engine(
         settings.database_url,
@@ -66,10 +95,27 @@ class DatabaseManager:
         return self._session_factory
 
     async def start(self) -> None:
-        """Create the engine and session factory."""
+        """Create the engine and session factory from application settings."""
         if self._engine is not None:
             return
+        endpoint = _safe_endpoint(self._settings)
+        if (
+            self._settings.is_production
+            and endpoint["database_dsn_source"] == "POSTGRES_COMPOSED"
+            and endpoint["database_host"] in {"localhost", "127.0.0.1"}
+        ):
+            logger.error(
+                "database_localhost_fallback_in_production",
+                **endpoint,
+                hint=(
+                    "DATABASE_URL / SUPABASE_DB_URL / SUPABASE_DB_PASSWORD "
+                    "not visible to this process; composed DSN uses "
+                    "POSTGRES_HOST default localhost"
+                ),
+            )
         self._engine = create_engine(self._settings)
+        # Ground truth from the live engine URL (password never logged).
+        engine_url = self._engine.url
         self._session_factory = async_sessionmaker(
             bind=self._engine,
             class_=AsyncSession,
@@ -79,8 +125,10 @@ class DatabaseManager:
         )
         logger.info(
             "database_engine_started",
-            host=self._settings.postgres_host,
-            database=self._settings.postgres_db,
+            **endpoint,
+            engine_url_host=engine_url.host or "",
+            engine_url_port=engine_url.port or 5432,
+            engine_url_driver=engine_url.drivername,
             pool_size=self._settings.postgres_pool_size,
         )
 
@@ -93,15 +141,51 @@ class DatabaseManager:
         self._session_factory = None
 
     async def health_check(self) -> bool:
-        """Return True if a trivial query against PostgreSQL succeeds."""
+        """Return True if ``SELECT 1`` succeeds on the application engine.
+
+        Uses the same SQLAlchemy/asyncpg engine created at startup (driven by
+        ``DATABASE_URL`` via :attr:`Settings.database_url`) — never a separate
+        ``POSTGRES_HOST``/localhost client.
+        """
         from sqlalchemy import text
 
+        endpoint = _safe_endpoint(self._settings)
         try:
-            async with self.session_factory() as session:
-                await session.execute(text("SELECT 1"))
+            engine = self.engine
+        except RuntimeError:
+            logger.error(
+                "database_health_check_failed",
+                reason="engine_not_started",
+                **endpoint,
+            )
+            return False
+
+        # Prefer engine URL host (actual pool target) over settings fields.
+        engine_host = engine.url.host or endpoint["database_host"]
+        engine_port = engine.url.port or endpoint["database_port"]
+        try:
+            async with engine.connect() as connection:
+                result = await connection.execute(text("SELECT 1"))
+                result.scalar_one()
+            logger.info(
+                "database_health_check_ok",
+                database_host=engine_host,
+                database_port=engine_port,
+                database_driver=engine.url.drivername,
+                database_sslmode=endpoint["database_sslmode"],
+                database_dsn_source=endpoint["database_dsn_source"],
+            )
             return True
-        except Exception:
-            logger.exception("database_health_check_failed")
+        except Exception as exc:
+            logger.exception(
+                "database_health_check_failed",
+                database_host=engine_host,
+                database_port=engine_port,
+                database_driver=engine.url.drivername,
+                database_sslmode=endpoint["database_sslmode"],
+                database_dsn_source=endpoint["database_dsn_source"],
+                error_type=type(exc).__name__,
+            )
             return False
 
     @asynccontextmanager
