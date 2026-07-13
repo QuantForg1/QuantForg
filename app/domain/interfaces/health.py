@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.application.dto.health import HealthStatus
-
 
 class HealthCheckPort(Protocol):
     """Contract for a single dependency health probe."""
@@ -19,10 +17,10 @@ class HealthCheckPort(Protocol):
         """Human-readable dependency name (e.g. ``postgres``, ``redis``)."""
         ...
 
-    async def check(self) -> bool | HealthStatus:
-        """Return ``True``/``HEALTHY``, ``False``/``UNHEALTHY``, or an explicit status.
+    async def check(self) -> bool | str:
+        """Return ``True``/``False`` or a status string (e.g. ``\"disabled\"``).
 
-        Explicit :class:`HealthStatus` values (e.g. ``DISABLED``) are used when a
-        dependency is intentionally not provisioned.
+        Status strings mirror health vocabulary used by the application layer
+        without importing application DTOs into the domain.
         """
         ...

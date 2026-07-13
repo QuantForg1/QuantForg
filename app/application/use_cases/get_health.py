@@ -20,10 +20,17 @@ from app.domain.interfaces.health import HealthCheckPort
 _OPTIONAL_DEPENDENCIES = frozenset({"redis"})
 
 
-def _coerce_status(result: bool | HealthStatus) -> HealthStatus:
+def _coerce_status(result: object) -> HealthStatus:
     if isinstance(result, HealthStatus):
         return result
-    return HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY
+    if isinstance(result, bool):
+        return HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY
+    if isinstance(result, str):
+        try:
+            return HealthStatus(result)
+        except ValueError:
+            return HealthStatus.UNHEALTHY
+    return HealthStatus.UNHEALTHY
 
 
 @dataclass(frozen=True, slots=True)
