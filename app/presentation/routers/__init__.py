@@ -20,6 +20,7 @@ from app.presentation.routers import (
     strategy,
     version,
     walkforward,
+    intelligence,
 )
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "brokers",
     "execution",
     "health",
+    "intelligence",
     "mt5",
     "notifications",
     "ops",

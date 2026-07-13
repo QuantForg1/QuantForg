@@ -82,8 +82,11 @@ class MT5AccountDTO:
     leverage: int
     balance: str
     equity: str
-    company: str
-    trade_mode: str
+    margin: str = "0"
+    free_margin: str = "0"
+    margin_level: str = "0"
+    company: str = ""
+    trade_mode: str = ""
 
     @classmethod
     def from_entity(cls, info: MT5AccountInfo) -> MT5AccountDTO:
@@ -95,6 +98,9 @@ class MT5AccountDTO:
             leverage=info.leverage,
             balance=str(info.balance),
             equity=str(info.equity),
+            margin=str(info.margin),
+            free_margin=str(info.free_margin),
+            margin_level=str(info.margin_level),
             company=info.company,
             trade_mode=info.trade_mode,
         )

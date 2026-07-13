@@ -311,6 +311,34 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Market Intelligence (optional licensed feeds) -----------------------
+    news_intelligence_feed_url: Annotated[
+        str,
+        Field(
+            description=(
+                "Optional HTTPS JSON feed for financial news. "
+                "Empty = no news items (never invents headlines)."
+            ),
+            validation_alias=AliasChoices(
+                "NEWS_INTELLIGENCE_FEED_URL",
+                "news_intelligence_feed_url",
+            ),
+        ),
+    ] = ""
+    economic_calendar_feed_url: Annotated[
+        str,
+        Field(
+            description=(
+                "Optional HTTPS JSON feed for economic calendar events. "
+                "Empty = no calendar items (never invents events)."
+            ),
+            validation_alias=AliasChoices(
+                "ECONOMIC_CALENDAR_FEED_URL",
+                "economic_calendar_feed_url",
+            ),
+        ),
+    ] = ""
+
     # -- Persistence ----------------------------------------------------------
     durable_persistence: Annotated[
         bool,

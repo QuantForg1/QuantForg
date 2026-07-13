@@ -53,6 +53,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("paper", "app.presentation.routers.paper"),
     ("walkforward", "app.presentation.routers.walkforward"),
     ("ops", "app.presentation.routers.ops"),
+    ("intelligence", "app.presentation.routers.intelligence"),
 )
 
 

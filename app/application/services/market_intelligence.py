@@ -1,0 +1,214 @@
+"""Market Intelligence orchestration — MT5 sync + context + news + advisor."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+from app.application.services.ai_market_advisor import AiMarketAdvisor
+from app.application.services.news_intelligence import NewsIntelligenceService
+from app.application.services.portfolio_sync import PortfolioSyncService
+from app.application.use_cases.mt5 import GetMT5StatusUseCase, ListMT5SymbolsUseCase
+from app.domain.market_context.engine import MarketContextEngine
+
+
+def _dec(value: Any) -> str:
+    if value is None:
+        return "0"
+    if isinstance(value, Decimal):
+        return str(value)
+    return str(value)
+
+
+@dataclass(frozen=True, slots=True)
+class MarketIntelligenceService:
+    status: GetMT5StatusUseCase
+    symbols: ListMT5SymbolsUseCase
+    portfolio_sync: PortfolioSyncService
+    market_context: MarketContextEngine
+    news: NewsIntelligenceService
+    advisor: AiMarketAdvisor
+
+    async def dashboard(
+        self,
+        *,
+        user_id: UUID,
+        market_code: str = "FX",
+        symbol: str | None = None,
+    ) -> dict[str, Any]:
+        status = await self.status.execute(user_id=user_id)
+        broker = {
+            "connected": status.connected,
+            "status": status.status,
+            "latency_ms": status.latency_ms,
+            "server": status.server,
+            "login": status.login,
+            "login_status": status.login_status,
+            "last_error": status.last_error,
+        }
+
+        account: dict[str, Any] = {}
+        positions: list[dict[str, Any]] = []
+        pending: list[dict[str, Any]] = []
+        history_deals = 0
+        history_orders = 0
+        spread_movers: list[dict[str, Any]] = []
+        quotes: list[dict[str, Any]] = []
+
+        if status.connected:
+            try:
+                snap = self.portfolio_sync.account_snapshot()
+                account = {
+                    "login": snap.login,
+                    "balance": _dec(snap.balance),
+                    "equity": _dec(snap.equity),
+                    "margin": _dec(snap.margin),
+                    "free_margin": _dec(snap.free_margin),
+                    "margin_level": _dec(snap.margin_level),
+                    "profit": _dec(snap.profit),
+                    "leverage": snap.leverage,
+                    "currency": snap.currency,
+                    "server": snap.server,
+                }
+            except Exception:  # noqa: BLE001
+                account = {}
+
+            try:
+                positions = [
+                    {
+                        "ticket": p.ticket,
+                        "symbol": p.symbol,
+                        "side": getattr(p, "side", None) or str(getattr(p, "type", "")),
+                        "volume": _dec(p.volume),
+                        "profit": _dec(getattr(p, "profit", 0)),
+                        "open_price": _dec(getattr(p, "open_price", 0)),
+                    }
+                    for p in self.portfolio_sync.list_positions()
+                ]
+                pending = [
+                    {
+                        "ticket": o.ticket,
+                        "symbol": o.symbol,
+                        "order_type": str(getattr(o, "order_type", "")),
+                        "volume": _dec(o.volume),
+                        "price": _dec(o.price),
+                    }
+                    for o in self.portfolio_sync.list_orders()
+                ]
+                history_deals = len(self.portfolio_sync.history_deals())
+                history_orders = len(self.portfolio_sync.history_orders())
+            except Exception:  # noqa: BLE001
+                pass
+
+            try:
+                symbol_rows = await self.symbols.execute(user_id=user_id)
+                scored: list[tuple[float, dict[str, Any]]] = []
+                for s in symbol_rows[:80]:
+                    bid = getattr(s, "bid", None)
+                    ask = getattr(s, "ask", None)
+                    if bid is None or ask is None:
+                        continue
+                    try:
+                        spread = float(Decimal(str(ask)) - Decimal(str(bid)))
+                    except Exception:  # noqa: BLE001
+                        continue
+                    row = {
+                        "symbol": s.code,
+                        "bid": str(bid),
+                        "ask": str(ask),
+                        "spread": f"{spread:.5f}",
+                    }
+                    quotes.append(row)
+                    scored.append((spread, row))
+                scored.sort(key=lambda x: x[0], reverse=True)
+                spread_movers = [r for _, r in scored[:8]]
+            except Exception:  # noqa: BLE001
+                quotes = []
+                spread_movers = []
+
+        ctx = self.market_context.build(
+            market_code,
+            symbol_code=symbol,
+        )
+        market_context = {
+            "market_code": ctx.market_code,
+            "session": ctx.session.value,
+            "market_state": ctx.market_state.value,
+            "day_type": ctx.day_type.value,
+            "liquidity_level": ctx.liquidity_level.value,
+            "volatility_level": ctx.volatility_level.value,
+            "timezone": ctx.timezone,
+            "as_of_utc": ctx.as_of_utc.isoformat(),
+            "local_time": ctx.local_time.isoformat(),
+        }
+
+        news_items = [
+            {
+                "id": n.id,
+                "title": n.title,
+                "summary": n.summary,
+                "source": n.source,
+                "url": n.url,
+                "published_at": n.published_at,
+                "symbols": list(n.symbols),
+            }
+            for n in self.news.news(limit=15)
+        ]
+        economic_events = [
+            {
+                "id": e.id,
+                "title": e.title,
+                "country": e.country,
+                "impact": e.impact,
+                "scheduled_at": e.scheduled_at,
+                "actual": e.actual,
+                "forecast": e.forecast,
+                "previous": e.previous,
+                "source": e.source,
+            }
+            for e in self.news.economic_events(limit=15)
+        ]
+
+        snapshot = {
+            "broker": broker,
+            "account": account,
+            "positions": positions,
+            "pending_orders": pending,
+            "history": {
+                "deals_count": history_deals,
+                "orders_count": history_orders,
+            },
+            "market_context": market_context,
+            "market": {
+                "quotes_sampled": len(quotes),
+                "quotes": quotes[:24],
+                "spread_movers": spread_movers,
+            },
+            "news": news_items,
+            "economic_events": economic_events,
+            "providers": self.news.provider_status(),
+        }
+        snapshot["analysis"] = self.advisor.summarize(snapshot)
+        return snapshot
+
+    def market_context_only(
+        self,
+        *,
+        market_code: str = "FX",
+        symbol: str | None = None,
+    ) -> dict[str, Any]:
+        ctx = self.market_context.build(market_code, symbol_code=symbol)
+        return {
+            "market_code": ctx.market_code,
+            "session": ctx.session.value,
+            "market_state": ctx.market_state.value,
+            "day_type": ctx.day_type.value,
+            "liquidity_level": ctx.liquidity_level.value,
+            "volatility_level": ctx.volatility_level.value,
+            "timezone": ctx.timezone,
+            "as_of_utc": ctx.as_of_utc.isoformat(),
+            "local_time": ctx.local_time.isoformat(),
+            "symbol": symbol,
+        }

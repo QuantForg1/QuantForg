@@ -53,6 +53,9 @@ class MT5AccountResponse(BaseModel):
     leverage: int
     balance: str
     equity: str
+    margin: str = "0"
+    free_margin: str = "0"
+    margin_level: str = "0"
     company: str = ""
     trade_mode: str = ""
 

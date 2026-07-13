@@ -140,6 +140,31 @@ export const opsApi = {
   audit: () => apiFetch<Record<string, unknown>>("/ops/audit"),
 };
 
+export const intelligenceApi = {
+  dashboard: (market_code = "FX", symbol?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/intelligence/dashboard?market_code=${encodeURIComponent(market_code)}${
+        symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""
+      }`,
+    ),
+  marketContext: (market_code = "FX", symbol?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/intelligence/market-context?market_code=${encodeURIComponent(market_code)}${
+        symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""
+      }`,
+    ),
+  news: (limit = 20) =>
+    apiFetch<unknown[]>(`/intelligence/news?limit=${limit}`),
+  calendar: (limit = 20) =>
+    apiFetch<unknown[]>(`/intelligence/calendar?limit=${limit}`),
+  analysis: (market_code = "FX", symbol?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/intelligence/analysis?market_code=${encodeURIComponent(market_code)}${
+        symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""
+      }`,
+    ),
+};
+
 export const platformApi = {
   notifications: (unread_only = false) =>
     apiFetch<unknown[]>(

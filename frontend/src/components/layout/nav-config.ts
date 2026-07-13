@@ -43,6 +43,7 @@ export const appNav: NavGroup[] = [
     title: "Overview",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/intelligence", label: "Market Intelligence", icon: Sparkles },
       { href: "/portfolio", label: "Portfolio", icon: Briefcase },
       { href: "/performance", label: "Performance", icon: LineChart },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
