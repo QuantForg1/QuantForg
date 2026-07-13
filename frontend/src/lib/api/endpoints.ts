@@ -163,6 +163,10 @@ export const intelligenceApi = {
         symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""
       }`,
     ),
+  events: (limit = 30) =>
+    apiFetch<unknown[]>(`/intelligence/events?limit=${limit}`),
+  providers: () => apiFetch<unknown[]>(`/intelligence/providers`),
+  status: () => apiFetch<Record<string, unknown>>(`/intelligence/status`),
 };
 
 export const platformApi = {

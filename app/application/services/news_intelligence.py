@@ -27,10 +27,12 @@ class NewsIntelligenceService:
     def provider_status(self) -> dict[str, object]:
         news = self.news(limit=1)
         events = self.economic_events(limit=1)
+        feed_name = type(self.news_feed).__name__
+        cal_name = type(self.calendar).__name__
         return {
-            "news_configured": type(self.news_feed).__name__ != "NullNewsFeed",
-            "calendar_configured": type(self.calendar).__name__
-            != "NullEconomicCalendar",
+            "news_configured": feed_name != "NullNewsFeed",
+            "calendar_configured": cal_name != "NullEconomicCalendar",
             "news_sample_count": len(news),
             "calendar_sample_count": len(events),
+            "provider_layer": "registry",
         }

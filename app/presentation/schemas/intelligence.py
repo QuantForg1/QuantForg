@@ -64,3 +64,47 @@ class AnalysisResponse(BaseModel):
     news_impact: list[str] = Field(default_factory=list)
     portfolio_exposure: list[str] = Field(default_factory=list)
     disclaimer: str = ""
+
+
+class IntelligenceEventResponse(BaseModel):
+    id: str
+    title: str
+    summary: str = ""
+    classification: str
+    severity: str
+    affected_currencies: list[str] = Field(default_factory=list)
+    affected_assets: list[str] = Field(default_factory=list)
+    affected_sectors: list[str] = Field(default_factory=list)
+    expected_volatility: str = ""
+    portfolio_impact: str = ""
+    risk_score: float = 0.0
+    provider: str = ""
+    source_url: str = ""
+    published_at: str = ""
+    deterministic_summary: str = ""
+
+
+class ProviderHealthResponse(BaseModel):
+    name: str
+    kind: str
+    status: str
+    configured: bool
+    priority: int
+    latency_ms: float | None = None
+    last_error: str = ""
+    last_success_at: str = ""
+    requests: int = 0
+    failures: int = 0
+    cache_hits: int = 0
+    rate_limited: int = 0
+
+
+class IntelligenceStatusResponse(BaseModel):
+    provider_count: int
+    configured_count: int
+    healthy_count: int
+    kinds: dict[str, Any] = Field(default_factory=dict)
+    failover: str = "priority_ascending"
+    caching: str = "ttl"
+    rate_limits: str = "token_bucket"
+    timeouts: str = "per_provider"

@@ -339,6 +339,65 @@ class Settings(BaseSettings):
         ),
     ] = ""
 
+    # Official intelligence provider credentials (empty = disabled / unconfigured)
+    finnhub_api_key: Annotated[
+        str,
+        Field(
+            default="",
+            validation_alias=AliasChoices("FINNHUB_API_KEY", "finnhub_api_key"),
+            description="Finnhub API key for news/calendar/sentiment",
+        ),
+    ] = ""
+    trading_economics_api_key: Annotated[
+        str,
+        Field(
+            default="",
+            validation_alias=AliasChoices(
+                "TRADING_ECONOMICS_API_KEY",
+                "trading_economics_api_key",
+            ),
+            description="Trading Economics API client key",
+        ),
+    ] = ""
+    twelvedata_api_key: Annotated[
+        str,
+        Field(
+            default="",
+            validation_alias=AliasChoices("TWELVEDATA_API_KEY", "twelvedata_api_key"),
+            description="Twelve Data API key",
+        ),
+    ] = ""
+    alphavantage_api_key: Annotated[
+        str,
+        Field(
+            default="",
+            validation_alias=AliasChoices(
+                "ALPHAVANTAGE_API_KEY",
+                "alphavantage_api_key",
+            ),
+            description="Alpha Vantage API key",
+        ),
+    ] = ""
+    polygon_api_key: Annotated[
+        str,
+        Field(
+            default="",
+            validation_alias=AliasChoices("POLYGON_API_KEY", "polygon_api_key"),
+            description="Polygon.io API key",
+        ),
+    ] = ""
+    binance_market_data_enabled: Annotated[
+        bool,
+        Field(
+            default=True,
+            validation_alias=AliasChoices(
+                "BINANCE_MARKET_DATA_ENABLED",
+                "binance_market_data_enabled",
+            ),
+            description="Enable Binance public market-data adapter",
+        ),
+    ] = True
+
     # -- Persistence ----------------------------------------------------------
     durable_persistence: Annotated[
         bool,

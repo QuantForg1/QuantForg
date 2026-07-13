@@ -5,13 +5,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 
 from app.presentation.dependencies.auth import CurrentUser
-from app.presentation.dependencies.intelligence import MarketIntelSvc, NewsIntelSvc
+from app.presentation.dependencies.intelligence import (
+    MarketIntelSvc,
+    NewsIntelSvc,
+    ProviderRegistrySvc,
+)
 from app.presentation.schemas.intelligence import (
     AnalysisResponse,
     EconomicEventResponse,
     IntelligenceDashboardResponse,
+    IntelligenceEventResponse,
+    IntelligenceStatusResponse,
     MarketContextResponse,
     NewsItemResponse,
+    ProviderHealthResponse,
 )
 
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
@@ -107,3 +114,80 @@ async def intelligence_analysis(
         symbol=symbol,
     )
     return AnalysisResponse(**data["analysis"])
+
+
+@router.get("/events", response_model=list[IntelligenceEventResponse])
+async def intelligence_events(
+    user: CurrentUser,
+    registry: ProviderRegistrySvc,
+    intel: MarketIntelSvc,
+    limit: int = Query(default=30, ge=1, le=100),
+) -> list[IntelligenceEventResponse]:
+    """Classify real news/calendar payloads into intelligence events (no fabrication)."""
+    portfolio_symbols: tuple[str, ...] = ()
+    try:
+        dash = await intel.dashboard(user_id=user.id)
+        portfolio_symbols = tuple(
+            str(p.get("symbol"))
+            for p in (dash.get("positions") or [])
+            if isinstance(p, dict) and p.get("symbol")
+        )
+    except Exception:  # noqa: BLE001
+        portfolio_symbols = ()
+    events = registry.build_events(limit=limit, portfolio_symbols=portfolio_symbols)
+    return [
+        IntelligenceEventResponse(
+            id=e.id,
+            title=e.title,
+            summary=e.summary,
+            classification=e.classification,
+            severity=e.severity,
+            affected_currencies=list(e.affected_currencies),
+            affected_assets=list(e.affected_assets),
+            affected_sectors=list(e.affected_sectors),
+            expected_volatility=e.expected_volatility,
+            portfolio_impact=e.portfolio_impact,
+            risk_score=e.risk_score,
+            provider=e.provider,
+            source_url=e.source_url,
+            published_at=e.published_at,
+            deterministic_summary=e.deterministic_summary,
+        )
+        for e in events
+    ]
+
+
+@router.get("/providers", response_model=list[ProviderHealthResponse])
+async def intelligence_providers(
+    user: CurrentUser,
+    registry: ProviderRegistrySvc,
+) -> list[ProviderHealthResponse]:
+    """Provider inventory with configuration, health, and metrics."""
+    _ = user
+    return [
+        ProviderHealthResponse(
+            name=h.name,
+            kind=h.kind.value,
+            status=h.status.value,
+            configured=h.configured,
+            priority=h.priority,
+            latency_ms=h.latency_ms,
+            last_error=h.last_error,
+            last_success_at=h.last_success_at,
+            requests=h.requests,
+            failures=h.failures,
+            cache_hits=h.cache_hits,
+            rate_limited=h.rate_limited,
+        )
+        for h in registry.list_providers()
+    ]
+
+
+@router.get("/status", response_model=IntelligenceStatusResponse)
+async def intelligence_status(
+    user: CurrentUser,
+    registry: ProviderRegistrySvc,
+) -> IntelligenceStatusResponse:
+    """Aggregate provider layer status (failover / cache / rate-limit posture)."""
+    _ = user
+    return IntelligenceStatusResponse(**registry.status())
