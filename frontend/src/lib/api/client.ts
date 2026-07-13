@@ -90,11 +90,13 @@ export async function apiFetch<T>(
     });
   } catch (err) {
     const safePath = path.startsWith("http") ? new URL(path).pathname : path;
-    console.error("api_network_error", {
-      path: safePath,
-      method,
-      message: err instanceof Error ? err.message : "network_error",
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.error("api_network_error", {
+        path: safePath,
+        method,
+        message: err instanceof Error ? err.message : "network_error",
+      });
+    }
     throw err;
   }
 
@@ -116,11 +118,13 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const safePath = path.startsWith("http") ? new URL(path).pathname : path;
-    console.error("api_request_failed", {
-      path: safePath,
-      method,
-      status: res.status,
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.error("api_request_failed", {
+        path: safePath,
+        method,
+        status: res.status,
+      });
+    }
     await parseError(res);
   }
   if (res.status === 204) return undefined as T;

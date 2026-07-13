@@ -11,12 +11,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { useActivityStream } from "@/hooks/realtime";
 import { authApi, platformApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
 
 export default function ProfilePage() {
   const qc = useQueryClient();
+  const realtime = useActivityStream();
   const profileQ = useQuery({
     queryKey: ["profile"],
     queryFn: platformApi.profile,
@@ -102,11 +105,15 @@ export default function ProfilePage() {
         title="Profile"
         description="Identity, trading preferences, and security controls."
         actions={
-          <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
-            Save profile
-          </Button>
+          <div className="flex items-center gap-2">
+            <RealtimeConnectionBadge status={realtime} />
+            <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+              Save profile
+            </Button>
+          </div>
         }
       />
+      <RealtimeMeta status={realtime} className="mb-3" />
 
       {profileQ.isLoading ? (
         <DeskSkeleton rows={5} />

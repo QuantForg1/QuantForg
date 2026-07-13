@@ -107,12 +107,18 @@ export default function StrategyPage() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => {
-                toast.success("Strategy snapshot copied to clipboard context");
-                void navigator.clipboard.writeText(
-                  JSON.stringify({ symbol, timeframe, structureBias, rules }, null, 2),
-                );
-              }}
+            onClick={() => {
+              void (async () => {
+                try {
+                  await navigator.clipboard.writeText(
+                    JSON.stringify({ symbol, timeframe, structureBias, rules }, null, 2),
+                  );
+                  toast.success("Strategy snapshot copied");
+                } catch {
+                  toast.error("Clipboard unavailable");
+                }
+              })();
+            }}
             >
               <Copy className="h-3.5 w-3.5" /> Duplicate
             </Button>

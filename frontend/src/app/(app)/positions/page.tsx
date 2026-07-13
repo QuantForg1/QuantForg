@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
+import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { usePositionsStream } from "@/hooks/realtime";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatCurrency } from "@/lib/utils";
@@ -18,6 +20,7 @@ import { formatCurrency } from "@/lib/utils";
 type Row = Record<string, unknown>;
 
 export default function PositionsPage() {
+  const realtime = usePositionsStream();
   const q = useQuery({
     queryKey: ["positions"],
     queryFn: () => portfolioApi.positions(),
@@ -106,11 +109,15 @@ export default function PositionsPage() {
         title="Positions"
         description="Open exposure across symbols and sides."
         actions={
-          <Button variant="secondary" size="sm" asChild>
-            <Link href="/execution">Trade</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <RealtimeConnectionBadge status={realtime} />
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/execution">Trade</Link>
+            </Button>
+          </div>
         }
       />
+      <RealtimeMeta status={realtime} className="mb-3" />
       {q.isLoading ? (
         <DeskSkeleton variant="page" />
       ) : q.isError ? (

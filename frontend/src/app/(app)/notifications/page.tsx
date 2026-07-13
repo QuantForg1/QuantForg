@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { PageMotion } from "@/components/desk/motion";
+import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { useNotificationsStream } from "@/hooks/realtime";
 import { platformApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
@@ -20,13 +22,14 @@ const SECTIONS = ["all", "trading", "risk", "system", "execution"] as const;
 
 export default function NotificationsPage() {
   const qc = useQueryClient();
+  const realtime = useNotificationsStream();
   const [section, setSection] = useState<(typeof SECTIONS)[number]>("all");
   const [q, setQ] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
 
   const list = useQuery({
-    queryKey: ["notifications", unreadOnly],
-    queryFn: () => platformApi.notifications(unreadOnly),
+    queryKey: ["notifications"],
+    queryFn: () => platformApi.notifications(false),
     retry: false,
   });
 
@@ -43,13 +46,14 @@ export default function NotificationsPage() {
 
   const items = useMemo(() => {
     return allItems.filter((n) => {
+      if (unreadOnly && n.is_read) return false;
       const cat = str(n.category, "").toLowerCase();
       if (section !== "all" && !cat.includes(section)) return false;
       if (!q.trim()) return true;
       const hay = `${str(n.title)} ${str(n.body)}`.toLowerCase();
       return hay.includes(q.trim().toLowerCase());
     });
-  }, [allItems, section, q]);
+  }, [allItems, section, q, unreadOnly]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof items>();
@@ -84,6 +88,7 @@ export default function NotificationsPage() {
         description="Trading, risk, system, and execution inbox."
         actions={
           <>
+            <RealtimeConnectionBadge status={realtime} />
             {unreadCount > 0 ? (
               <Badge tone="accent" aria-label={`${unreadCount} unread`}>
                 {unreadCount} unread
@@ -109,6 +114,8 @@ export default function NotificationsPage() {
           </>
         }
       />
+
+      <RealtimeMeta status={realtime} className="mb-3" />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Notification categories">

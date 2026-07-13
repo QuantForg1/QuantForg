@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DeskSkeleton } from "@/components/desk/primitives";
+import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 
@@ -49,6 +49,11 @@ export default function SupportPage() {
 
       {health.isLoading ? (
         <DeskSkeleton rows={3} />
+      ) : health.isError ? (
+        <DeskError
+          message="Unable to load platform health."
+          onRetry={() => health.refetch()}
+        />
       ) : (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

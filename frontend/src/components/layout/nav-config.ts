@@ -13,6 +13,7 @@ import {
   History,
   LayoutDashboard,
   Layers3,
+  LayoutTemplate,
   LifeBuoy,
   LineChart,
   ListOrdered,
@@ -51,6 +52,7 @@ export const appNav: NavGroup[] = [
   {
     title: "Trading",
     items: [
+      { href: "/workspace", label: "Workspace", icon: LayoutTemplate },
       { href: "/execution", label: "Execution Center", icon: Target },
       { href: "/orders", label: "Orders", icon: ListOrdered },
       { href: "/positions", label: "Positions", icon: Layers3 },

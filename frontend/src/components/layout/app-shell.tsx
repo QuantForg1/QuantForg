@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { CommandPalette } from "@/components/layout/command-palette";
@@ -9,15 +9,36 @@ import { useAuth } from "@/providers/auth-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OfflineBanner } from "@/components/system/offline-banner";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const isWorkspace = pathname === "/workspace" || pathname.startsWith("/workspace/");
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");
   }, [loading, isAuthenticated, router]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === "1") {
+        e.preventDefault();
+        router.push("/dashboard");
+      } else if (e.key === "2") {
+        e.preventDefault();
+        router.push("/execution");
+      } else if (e.key === "3") {
+        e.preventDefault();
+        router.push("/portfolio");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
 
   if (loading) {
     return (
@@ -42,11 +63,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Topbar onOpenCommand={() => setCmdOpen(true)} />
           <main
             id="main-content"
-            className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"
+            className={cn(
+              "flex-1",
+              isWorkspace
+                ? "overflow-hidden p-0"
+                : "overflow-y-auto p-4 sm:p-6 lg:p-8",
+            )}
             tabIndex={-1}
           >
             <ErrorBoundary>
-              <div className="qf-fade-in mx-auto w-full max-w-[1600px]">{children}</div>
+              <div
+                className={cn(
+                  "qf-fade-in",
+                  isWorkspace
+                    ? "h-[calc(100dvh-4rem)] w-full max-w-none"
+                    : "mx-auto w-full max-w-[1600px]",
+                )}
+              >
+                {children}
+              </div>
             </ErrorBoundary>
           </main>
         </div>

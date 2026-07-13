@@ -184,9 +184,10 @@ export default function OpsPage() {
                 {metrics.isLoading ? (
                   <DeskSkeleton rows={2} />
                 ) : metrics.isError ? (
-                  <p className="text-sm text-[var(--fg-muted)]">
-                    Metrics endpoint restricted to privileged operators.
-                  </p>
+                  <DeskError
+                    message="Metrics endpoint restricted to privileged operators."
+                    onRetry={() => metrics.refetch()}
+                  />
                 ) : (
                   <DeskTable
                     columns={["Metric", "Value"]}

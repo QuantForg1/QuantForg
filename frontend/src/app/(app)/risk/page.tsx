@@ -48,20 +48,25 @@ export default function RiskPage() {
             onSubmit={form.handleSubmit(async (values) => {
               try {
                 const result = await riskApi.check(values);
-                toast.success("Risk check completed");
-                void result;
+                const decision = String(
+                  (result as Record<string, unknown>).decision ??
+                    (result as Record<string, unknown>).status ??
+                    "completed",
+                );
+                toast.success(`Risk check: ${decision}`);
               } catch (e) {
                 toast.error(e instanceof ApiError ? e.message : "Risk check failed");
               }
             })}
           >
             <div className="space-y-1.5">
-              <Label>Symbol</Label>
-              <Input {...form.register("symbol")} />
+              <Label htmlFor="risk-symbol">Symbol</Label>
+              <Input id="risk-symbol" {...form.register("symbol")} />
             </div>
             <div className="space-y-1.5">
-              <Label>Side</Label>
+              <Label htmlFor="risk-side">Side</Label>
               <select
+                id="risk-side"
                 className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
                 {...form.register("side")}
               >
@@ -70,17 +75,17 @@ export default function RiskPage() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Volume</Label>
-              <Input {...form.register("volume")} />
+              <Label htmlFor="risk-volume">Volume</Label>
+              <Input id="risk-volume" {...form.register("volume")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Stop loss</Label>
-                <Input {...form.register("stop_loss")} />
+                <Label htmlFor="risk-sl">Stop loss</Label>
+                <Input id="risk-sl" {...form.register("stop_loss")} />
               </div>
               <div className="space-y-1.5">
-                <Label>Take profit</Label>
-                <Input {...form.register("take_profit")} />
+                <Label htmlFor="risk-tp">Take profit</Label>
+                <Input id="risk-tp" {...form.register("take_profit")} />
               </div>
             </div>
             <Button type="submit">Run risk check</Button>

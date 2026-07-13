@@ -4,12 +4,22 @@ function normalizeApiBaseUrl(raw: string): string {
   return `${trimmed}/api/v1`;
 }
 
-const configuredApi =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
-  "https://quantforg-production.up.railway.app/api/v1";
+function resolveApiBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (configured) return normalizeApiBaseUrl(configured);
+
+  // Local/dev fallback only — never silently bind production builds to a hardcoded host.
+  if (process.env.NODE_ENV !== "production") {
+    return normalizeApiBaseUrl("http://127.0.0.1:8000/api/v1");
+  }
+
+  throw new Error(
+    "NEXT_PUBLIC_API_BASE_URL is required for production builds. Set it in the environment.",
+  );
+}
 
 export const env = {
-  apiBaseUrl: normalizeApiBaseUrl(configuredApi),
+  apiBaseUrl: resolveApiBaseUrl(),
   appUrl:
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
     "http://localhost:3000",

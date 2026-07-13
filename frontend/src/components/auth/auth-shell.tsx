@@ -10,10 +10,17 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+    <main
+      id="main-content"
+      className="flex min-h-screen items-center justify-center px-4 py-10"
+      tabIndex={-1}
+    >
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] font-bold text-[var(--accent-fg)]">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] font-bold text-[var(--accent-fg)]"
+            aria-hidden
+          >
             Q
           </div>
           <span className="font-[family-name:var(--font-display)] text-lg">QuantForg</span>
@@ -24,6 +31,6 @@ export function AuthShell({
           <div className="mt-6">{children}</div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -1,9 +1,9 @@
-import { AuthLayoutProviders } from "@/providers/auth-layout-providers";
+import { AuthFormProviders } from "@/providers/auth-form-providers";
 
 export default function AuthGroupLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AuthLayoutProviders>{children}</AuthLayoutProviders>;
+  return <AuthFormProviders>{children}</AuthFormProviders>;
 }

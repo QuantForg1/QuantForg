@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 
@@ -44,6 +45,7 @@ export default function Mt5Page() {
       toast.success("MT5 disconnected");
       await qc.invalidateQueries({ queryKey: ["mt5-status"] });
     },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Disconnect failed"),
   });
 
   return (
@@ -53,10 +55,22 @@ export default function Mt5Page() {
         description="Connect, monitor, and disconnect MetaTrader 5 terminals."
         actions={
           <Badge tone={status.data?.connected ? "success" : "warning"}>
-            {status.data?.connected ? "Connected" : "Disconnected"}
+            {status.isLoading
+              ? "Checking…"
+              : status.data?.connected
+                ? "Connected"
+                : "Disconnected"}
           </Badge>
         }
       />
+      {status.isLoading ? (
+        <DeskSkeleton rows={4} />
+      ) : status.isError ? (
+        <DeskError
+          message="Unable to load MT5 status."
+          onRetry={() => status.refetch()}
+        />
+      ) : (
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -68,20 +82,20 @@ export default function Mt5Page() {
               onSubmit={form.handleSubmit((values) => connect.mutate(values))}
             >
               <div className="space-y-1.5">
-                <Label>Login</Label>
-                <Input type="number" {...form.register("login")} />
+                <Label htmlFor="mt5-login">Login</Label>
+                <Input id="mt5-login" type="number" {...form.register("login")} />
               </div>
               <div className="space-y-1.5">
-                <Label>Password</Label>
-                <Input type="password" {...form.register("password")} />
+                <Label htmlFor="mt5-password">Password</Label>
+                <Input id="mt5-password" type="password" autoComplete="current-password" {...form.register("password")} />
               </div>
               <div className="space-y-1.5">
-                <Label>Server</Label>
-                <Input {...form.register("server")} />
+                <Label htmlFor="mt5-server">Server</Label>
+                <Input id="mt5-server" {...form.register("server")} />
               </div>
               <div className="space-y-1.5">
-                <Label>Terminal path (optional)</Label>
-                <Input {...form.register("path")} />
+                <Label htmlFor="mt5-path">Terminal path (optional)</Label>
+                <Input id="mt5-path" {...form.register("path")} />
               </div>
               <div className="flex gap-2">
                 <Button type="submit" disabled={connect.isPending}>
@@ -107,12 +121,13 @@ export default function Mt5Page() {
             <p>Server: {String(status.data?.server || "—")}</p>
             <p>Login status: {String(status.data?.login_status || "—")}</p>
             <p>Latency: {String(status.data?.latency_ms ?? "—")} ms</p>
-            <p className="text-xs text-[var(--fg-subtle)]">
+            <p className="text-xs text-[var(--fg-muted)]">
               Shared process terminals are session-bound on the API — only the live tenant can read market state.
             </p>
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }

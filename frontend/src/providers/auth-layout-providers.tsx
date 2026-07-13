@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/providers/auth-provider";
 
-/** Client providers for authenticated / auth-form route groups only. */
+/** Client providers for authenticated / auth-form route groups. */
 export function AuthLayoutProviders({ children }: { children: React.ReactNode }) {
   const [client] = useState(
     () =>

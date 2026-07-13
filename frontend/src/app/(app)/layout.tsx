@@ -1,14 +1,17 @@
-import { AppShell } from "@/components/layout/app-shell";
-import { AuthLayoutProviders } from "@/providers/auth-layout-providers";
+import type { Metadata } from "next";
+import { AppProviders } from "@/providers/app-providers";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <AuthLayoutProviders>
-      <AppShell>{children}</AppShell>
-    </AuthLayoutProviders>
-  );
+  return <AppProviders>{children}</AppProviders>;
 }

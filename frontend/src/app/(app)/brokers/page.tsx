@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { useBrokerStatusStream } from "@/hooks/realtime";
 import { brokersApi, mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 
@@ -21,6 +23,7 @@ const FEATURED = [
 ];
 
 export default function BrokersPage() {
+  const realtime = useBrokerStatusStream();
   const brokers = useQuery({ queryKey: ["brokers"], queryFn: brokersApi.list, retry: false });
   const accounts = useQuery({
     queryKey: ["broker-accounts"],
@@ -67,13 +70,17 @@ export default function BrokersPage() {
         title="Broker Accounts"
         description="Manage venue connectivity, sync health, and session latency."
         actions={
-          <Button asChild size="sm">
-            <Link href="/mt5">
-              <PlugZap className="h-3.5 w-3.5" /> Connect MT5
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <RealtimeConnectionBadge status={realtime} />
+            <Button asChild size="sm">
+              <Link href="/mt5">
+                <PlugZap className="h-3.5 w-3.5" /> Connect MT5
+              </Link>
+            </Button>
+          </div>
         }
       />
+      <RealtimeMeta status={realtime} className="mb-3" />
 
       {loading ? (
         <DeskSkeleton rows={4} />

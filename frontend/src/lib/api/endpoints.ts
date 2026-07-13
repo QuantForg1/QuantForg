@@ -59,6 +59,14 @@ export const mt5Api = {
     apiFetch<Record<string, unknown>>("/mt5/disconnect", { method: "POST", body: {} }),
   account: () => apiFetch<Record<string, unknown>>("/mt5/account"),
   symbols: () => apiFetch<unknown[]>("/mt5/symbols"),
+  symbol: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(`/mt5/symbols/${encodeURIComponent(symbol)}`),
+  tick: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(`/mt5/ticks/${encodeURIComponent(symbol)}`),
+  candles: (symbol: string, timeframe = "H1", count = 48) =>
+    apiFetch<unknown[]>(
+      `/mt5/candles/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
+    ),
   validateOrder: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/mt5/order/validate", {
       method: "POST",

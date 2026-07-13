@@ -10,11 +10,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { usePortfolioStream } from "@/hooks/realtime";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, metric, num, str, toneFromNumber } from "@/lib/desk";
 import { formatCurrency } from "@/lib/utils";
 
 export default function PortfolioPage() {
+  const realtime = usePortfolioStream();
   const q = useQuery({ queryKey: ["portfolio"], queryFn: portfolioApi.get, retry: false });
   const account = asRecord(q.data?.account);
   const positions = asList(q.data?.positions).map(asRecord);
@@ -27,11 +30,15 @@ export default function PortfolioPage() {
         title="Portfolio"
         description="Synchronized account snapshot, positions, and pending orders."
         actions={
-          <Button variant="secondary" asChild>
-            <Link href="/mt5">Sync MT5</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <RealtimeConnectionBadge status={realtime} />
+            <Button variant="secondary" asChild>
+              <Link href="/mt5">Sync MT5</Link>
+            </Button>
+          </div>
         }
       />
+      <RealtimeMeta status={realtime} className="mb-3" />
       {q.isLoading ? (
         <DeskSkeleton rows={4} />
       ) : q.isError ? (

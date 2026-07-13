@@ -93,6 +93,7 @@ export default function AiPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about risk, strategy, or markets…"
+            aria-label="Message to AI assistant"
           />
           <Button type="submit">Send</Button>
         </form>

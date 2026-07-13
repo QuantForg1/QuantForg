@@ -9,12 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
+import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { useOrdersStream } from "@/hooks/realtime";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 
 type Row = Record<string, unknown>;
 
 export default function OrdersPage() {
+  const realtime = useOrdersStream();
   const q = useQuery({ queryKey: ["orders"], queryFn: portfolioApi.orders, retry: false });
   const orders = asList(q.data).map(asRecord);
 
@@ -74,7 +77,12 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <PageHeader title="Orders" description="Pending working orders from the synced terminal." />
+      <PageHeader
+        title="Orders"
+        description="Pending working orders from the synced terminal."
+        actions={<RealtimeConnectionBadge status={realtime} />}
+      />
+      <RealtimeMeta status={realtime} className="mb-3" />
       {q.isLoading ? (
         <DeskSkeleton variant="page" />
       ) : q.isError ? (

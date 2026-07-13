@@ -50,7 +50,7 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="relative mx-auto grid min-h-[78vh] w-full max-w-6xl items-center gap-10 px-6 pb-20 pt-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="qf-fade-in">
             <p className="mb-4 text-sm font-medium tracking-[0.18em] text-[var(--accent)] uppercase">
