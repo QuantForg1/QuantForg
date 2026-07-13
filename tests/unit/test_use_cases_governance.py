@@ -148,18 +148,30 @@ class TestGetHealthAndVersionUseCases:
         assert report.dependencies[0].name == "dep"
 
     @pytest.mark.asyncio
-    async def test_health_unhealthy(self) -> None:
-        class _Fail:
+    async def test_health_redis_disabled_does_not_fail_overall(self) -> None:
+        class _OkPg:
             @property
             def name(self) -> str:
-                return "dep"
+                return "postgres"
 
             async def check(self) -> bool:
-                return False
+                return True
 
-        use_case = GetHealthUseCase(app_info=FakeAppInfo(), probes=(_Fail(),))
+        class _DisabledRedis:
+            @property
+            def name(self) -> str:
+                return "redis"
+
+            async def check(self) -> HealthStatus:
+                return HealthStatus.DISABLED
+
+        use_case = GetHealthUseCase(
+            app_info=FakeAppInfo(),
+            probes=(_OkPg(), _DisabledRedis()),
+        )
         report = await use_case.execute()
-        assert report.status == HealthStatus.UNHEALTHY
+        assert report.status == HealthStatus.HEALTHY
+        assert report.dependencies[1].status == HealthStatus.DISABLED
 
     def test_version(self) -> None:
         info = GetVersionUseCase(app_info=FakeAppInfo(app_version="9.9.9")).execute()

@@ -51,15 +51,31 @@ class TestSettings:
         assert settings.database_url.startswith("postgresql+asyncpg://")
         assert "quantforg_test" in settings.database_url
 
-    def test_database_url_from_override(self) -> None:
+    def test_database_url_strips_sslmode_and_enables_ssl(self) -> None:
         settings = Settings(
             _env_file=None,
             secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
             app_env=AppEnvironment.TESTING,
-            database_url_override="postgres://user:pass@db:5432/app",
+            database_url_override=(
+                "postgresql://user:pass@db.example.supabase.co:5432/postgres"
+                "?sslmode=require&channel_binding=require"
+            ),
         )
-        assert settings.database_url.startswith("postgresql+asyncpg://")
-        assert "user:pass@db:5432/app" in settings.database_url
+        assert "sslmode" not in settings.database_url
+        assert "channel_binding" not in settings.database_url
+        assert "ssl" in settings.asyncpg_connect_args
+
+    def test_supabase_db_password_composes_pooler_dsn(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",
+            app_env=AppEnvironment.TESTING,
+            supabase_url="https://abcdef.supabase.co",
+            supabase_db_password="s3cret",  # type: ignore[arg-type]
+        )
+        assert "postgres.abcdef" in settings.database_url
+        assert "pooler.supabase.com" in settings.database_url
+        assert "ssl" in settings.asyncpg_connect_args
 
     def test_production_accepts_database_url_without_postgres_password(
         self,

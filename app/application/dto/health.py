@@ -12,6 +12,7 @@ class HealthStatus(StrEnum):
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
     DEGRADED = "degraded"
+    DISABLED = "disabled"
 
 
 @dataclass(frozen=True, slots=True)

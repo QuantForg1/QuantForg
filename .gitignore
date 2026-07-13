@@ -246,3 +246,13 @@ id_ed25519*
 credentials.json
 secrets.json
 .tools/
+
+# Frontend / Node
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/playwright-report/
+frontend/test-results/
+frontend/tsconfig.tsbuildinfo
+frontend/.env*
+!frontend/.env.example

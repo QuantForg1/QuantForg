@@ -20,7 +20,11 @@ def get_settings_dependency() -> Settings:
 
 def get_health_service() -> HealthService:
     """Build a :class:`HealthService` wired to live infrastructure probes."""
-    from app.infrastructure.health.unavailable import UnavailableHealthCheck
+    from app.application.dto.health import HealthStatus
+    from app.infrastructure.health.unavailable import (
+        StaticHealthCheck,
+        UnavailableHealthCheck,
+    )
 
     try:
         container = get_container()
@@ -39,8 +43,12 @@ def get_health_service() -> HealthService:
         probes.append(PostgresHealthCheck(database=container.database))
     if container.redis is not None:
         probes.append(RedisHealthCheck(redis=container.redis))
-    else:
+    elif container.settings.redis_configured:
+        # Provisioned via REDIS_URL but connect failed at startup.
         probes.append(UnavailableHealthCheck(name="redis"))
+    else:
+        # Optional cache intentionally not provisioned — not a failure.
+        probes.append(StaticHealthCheck(name="redis", status=HealthStatus.DISABLED))
     use_case = GetHealthUseCase(
         app_info=app_info,
         probes=tuple(probes),  # type: ignore[arg-type]

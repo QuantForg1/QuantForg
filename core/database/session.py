@@ -39,6 +39,7 @@ def create_engine(settings: Settings) -> AsyncEngine:
         pool_pre_ping=True,
         pool_recycle=3600,
         pool_timeout=30,
+        connect_args=settings.asyncpg_connect_args,
     )
 
 

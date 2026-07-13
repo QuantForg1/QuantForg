@@ -20,6 +20,12 @@ from app.domain.interfaces.health import HealthCheckPort
 _OPTIONAL_DEPENDENCIES = frozenset({"redis"})
 
 
+def _coerce_status(result: bool | HealthStatus) -> HealthStatus:
+    if isinstance(result, HealthStatus):
+        return result
+    return HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY
+
+
 @dataclass(frozen=True, slots=True)
 class GetHealthUseCase:
     """Run readiness probes and return an aggregated health report."""
@@ -34,15 +40,16 @@ class GetHealthUseCase:
         async def _run(probe: HealthCheckPort) -> DependencyStatus:
             started = asyncio.get_running_loop().time()
             try:
-                healthy = await asyncio.wait_for(probe.check(), timeout=timeout)
+                raw = await asyncio.wait_for(probe.check(), timeout=timeout)
+                status = _coerce_status(raw)
             except TimeoutError:
-                healthy = False
+                status = HealthStatus.UNHEALTHY
             except Exception:
-                healthy = False
+                status = HealthStatus.UNHEALTHY
             latency_ms = (asyncio.get_running_loop().time() - started) * 1000.0
             return DependencyStatus(
                 name=probe.name,
-                status=HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY,
+                status=status,
                 latency_ms=round(latency_ms, 2),
             )
 
@@ -50,6 +57,7 @@ class GetHealthUseCase:
         dependencies = list(results)
         critical = [d for d in dependencies if d.name not in _OPTIONAL_DEPENDENCIES]
         # No critical probes (e.g. testing/memory mode) → process is healthy.
+        # DISABLED is only valid for optional deps; treat as non-critical success.
         overall = (
             HealthStatus.HEALTHY
             if not critical or all(d.status == HealthStatus.HEALTHY for d in critical)

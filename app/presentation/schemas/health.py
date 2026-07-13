@@ -11,7 +11,7 @@ class DependencyStatusSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     name: str = Field(description="Dependency identifier")
-    status: str = Field(description="healthy | unhealthy | degraded")
+    status: str = Field(description="healthy | unhealthy | degraded | disabled")
     latency_ms: float = Field(description="Probe latency in milliseconds")
 
 

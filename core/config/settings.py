@@ -160,12 +160,25 @@ class Settings(BaseSettings):
     postgres_echo: Annotated[bool, Field(description="Echo SQL statements to log")] = (
         False
     )
+    postgres_ssl: Annotated[
+        bool | None,
+        Field(
+            description=(
+                "Force TLS for Postgres (asyncpg). None = auto from DATABASE_URL "
+                "sslmode / known managed hosts"
+            )
+        ),
+    ] = None
     database_url_override: Annotated[
         str | None,
         Field(
             default=None,
             description="Full Postgres DSN from the platform (DATABASE_URL)",
-            validation_alias=AliasChoices("DATABASE_URL", "database_url_override"),
+            validation_alias=AliasChoices(
+                "DATABASE_URL",
+                "SUPABASE_DB_URL",
+                "database_url_override",
+            ),
         ),
     ] = None
 
@@ -189,6 +202,20 @@ class Settings(BaseSettings):
                 "Supabase service-role key for server-side profile sync "
                 "(never expose to clients)"
             )
+        ),
+    ] = None
+    supabase_db_password: Annotated[
+        SecretStr | None,
+        Field(
+            default=None,
+            description=(
+                "Supabase database password used to compose DATABASE_URL when "
+                "DATABASE_URL is unset (pooler session mode)"
+            ),
+            validation_alias=AliasChoices(
+                "SUPABASE_DB_PASSWORD",
+                "supabase_db_password",
+            ),
         ),
     ] = None
     auth_redirect_url: Annotated[
@@ -438,15 +465,108 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Async SQLAlchemy connection URL (asyncpg driver)."""
+        """Async SQLAlchemy connection URL (asyncpg driver), query-cleaned."""
+        return self._asyncpg_dsn_and_ssl()[0]
+
+    def _asyncpg_dsn_and_ssl(self) -> tuple[str, bool]:
+        """Normalize DSN for asyncpg and decide whether TLS is required."""
+        from urllib.parse import quote
+
         override = (self.database_url_override or "").strip()
+        if not override and self.supabase_db_password is not None:
+            password = self.supabase_db_password.get_secret_value().strip()
+            ref = self._supabase_project_ref
+            if password and ref:
+                override = (
+                    f"postgresql://postgres.{ref}:{quote(password, safe='')}"
+                    f"@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
+                )
         if override:
-            return self._as_asyncpg_url(override)
-        password = self.postgres_password.get_secret_value()
-        return (
-            f"postgresql+asyncpg://{self.postgres_user}:{password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            raw = self._as_asyncpg_url(override)
+        else:
+            password = self.postgres_password.get_secret_value()
+            raw = (
+                f"postgresql+asyncpg://{self.postgres_user}:{password}"
+                f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            )
+        return self._strip_libpq_ssl_params(raw)
+
+    @property
+    def _supabase_project_ref(self) -> str | None:
+        """Extract project ref from ``SUPABASE_URL`` when present."""
+        from urllib.parse import urlparse
+
+        raw = (self.supabase_url or "").strip()
+        if not raw:
+            return None
+        host = (urlparse(raw).hostname or "").lower()
+        # <ref>.supabase.co
+        if host.endswith(".supabase.co"):
+            return host.split(".", 1)[0] or None
+        return None
+
+    def _strip_libpq_ssl_params(self, url: str) -> tuple[str, bool]:
+        """Remove libpq-only query params; return (clean_url, use_ssl)."""
+        from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+        parsed = urlparse(url)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        sslmode = (query.pop("sslmode", "") or "").lower()
+        query.pop("channel_binding", None)
+        query.pop("sslrootcert", None)
+        query.pop("sslcert", None)
+        query.pop("sslkey", None)
+
+        host = (parsed.hostname or "").lower()
+        supabase_host = "supabase.co" in host or "supabase.com" in host
+        private_host = host.endswith(".railway.internal") or host in {
+            "localhost",
+            "127.0.0.1",
+        }
+
+        if self.postgres_ssl is True:
+            use_ssl = True
+        elif self.postgres_ssl is False:
+            use_ssl = False
+        elif sslmode in {"require", "verify-ca", "verify-full"}:
+            use_ssl = True
+        elif sslmode in {"disable", "allow", "prefer"}:
+            use_ssl = False
+        else:
+            # Supabase public/pooler endpoints expect TLS (often with a
+            # non-standard chain). Private Railway hosts stay cleartext.
+            use_ssl = supabase_host and not private_host
+
+        cleaned = urlunparse(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                urlencode(query),
+                parsed.fragment,
+            )
         )
+        return cleaned, use_ssl
+
+    @property
+    def asyncpg_connect_args(self) -> dict[str, Any]:
+        """Connect args for ``create_async_engine`` (SSL when required)."""
+        import ssl
+        from urllib.parse import urlparse
+
+        url, use_ssl = self._asyncpg_dsn_and_ssl()
+        if not use_ssl:
+            return {}
+        host = (urlparse(url).hostname or "").lower()
+        # Supabase pooler presents a chain that fails default CA verification
+        # on many runtimes; encrypt the socket without hostname CA pin.
+        if "supabase.co" in host or "supabase.com" in host:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            return {"ssl": ctx}
+        return {"ssl": True}
 
     @staticmethod
     def _as_asyncpg_url(url: str) -> str:
@@ -458,6 +578,11 @@ class Settings(BaseSettings):
         if url.startswith("postgresql://"):
             return "postgresql+asyncpg://" + url.removeprefix("postgresql://")
         return url
+
+    @property
+    def redis_configured(self) -> bool:
+        """True when Redis was explicitly provisioned via ``REDIS_URL``."""
+        return bool((self.redis_url_override or "").strip())
 
     @property
     def redis_url(self) -> str:

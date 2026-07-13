@@ -90,12 +90,16 @@ class Container:
         from app.infrastructure.cache.redis_client import RedisClient
         from app.infrastructure.persistence.factory import build_persistence_factories
 
-        self.redis = RedisClient(self.settings)
-        try:
-            await self.redis.connect()
-        except Exception as exc:
-            logger.warning("redis_startup_failed", error=str(exc))
+        if self.settings.redis_configured:
+            self.redis = RedisClient(self.settings)
+            try:
+                await self.redis.connect()
+            except Exception as exc:
+                logger.warning("redis_startup_failed", error=str(exc))
+                self.redis = None
+        else:
             self.redis = None
+            logger.info("redis_disabled", reason="REDIS_URL not configured")
 
         if self.settings.supabase_configured:
             try:
