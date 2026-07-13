@@ -109,6 +109,24 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings)
 
+    from urllib.parse import urlparse
+
+    override = (settings.database_url_override or "").strip()
+    supabase_pw = (
+        settings.supabase_db_password.get_secret_value().strip()
+        if settings.supabase_db_password is not None
+        else ""
+    )
+    if override:
+        dsn_source = "DATABASE_URL"
+    elif supabase_pw and settings._supabase_project_ref:
+        dsn_source = "SUPABASE_DB_PASSWORD"
+    else:
+        dsn_source = "POSTGRES_COMPOSED"
+    resolved_host = urlparse(
+        settings.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    ).hostname
+
     logger.info(
         "startup_diagnostics",
         python_version=sys.version.split()[0],
@@ -119,9 +137,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         debug=settings.debug,
         execution_enabled=bool(settings.execution_enabled),
         allowed_hosts=settings.allowed_hosts,
-        database_url_configured=bool(
-            (settings.database_url_override or "").strip() or settings.postgres_host
-        ),
+        database_url_configured=bool(override),
+        database_dsn_source=dsn_source,
+        database_resolved_host=resolved_host or "",
         redis_url_configured=bool((settings.redis_url_override or "").strip()),
         railway_public_domain=settings.railway_public_domain or "",
     )
