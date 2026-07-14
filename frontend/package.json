@@ -8,8 +8,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=chromium --workers=1",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:all": "playwright test --workers=1",
+    "test:e2e:chromium": "playwright test --project=chromium --workers=1",
     "lighthouse": "node scripts/lighthouse-audit.mjs"
   },
   "dependencies": {

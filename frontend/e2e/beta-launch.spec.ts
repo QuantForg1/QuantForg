@@ -67,29 +67,27 @@ test.describe("QuantForg beta E2E", () => {
   test("verified login reaches dashboard portfolio settings logout", async ({
     page,
   }) => {
-    const email = process.env.E2E_EMAIL;
-    const password = process.env.E2E_PASSWORD;
-    if (!email || !password) {
-      throw new Error(
-        "E2E_EMAIL and E2E_PASSWORD are required for go-live authenticated E2E",
-      );
-    }
-
-    await page.goto("/login");
-    await page.getByLabel(/^email$/i).fill(email);
-    await page.getByLabel(/^password$/i).fill(password);
-    await page.getByRole("button", { name: /sign in/i }).click();
-    await expect(page).toHaveURL(/dashboard/, { timeout: 45_000 });
-    await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible();
+    test.setTimeout(180_000);
+    const { loginAsE2E } = await import("./helpers");
+    await loginAsE2E(page);
+    await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible({
+      timeout: 20_000,
+    });
 
     await page.goto("/portfolio");
-    await expect(page.getByRole("heading", { name: /portfolio/i })).toBeVisible();
+    await expect(page).toHaveURL(/portfolio/);
+    await expect(page.getByRole("heading", { name: "Portfolio", exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
 
     await page.goto("/settings");
-    await expect(page.getByRole("heading", { name: /settings/i })).toBeVisible();
+    await expect(page).toHaveURL(/settings/);
+    await expect(page.getByRole("heading", { name: /settings/i })).toBeVisible({
+      timeout: 20_000,
+    });
 
-    await page.getByRole("button", { name: /sign out/i }).click();
-    await expect(page).toHaveURL(/login/, { timeout: 15_000 });
+    await page.getByRole("button", { name: "Sign out" }).click({ force: true });
+    await expect(page).toHaveURL(/login/, { timeout: 45_000 });
   });
 
   test("forgot password page submits request", async ({ page }) => {

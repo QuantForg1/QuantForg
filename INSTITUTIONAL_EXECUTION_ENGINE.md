@@ -64,18 +64,26 @@ FE (ticket / OMS)
 
 | Check | Result |
 |-------|--------|
-| pytest unit | **410 passed** |
-| frontend typecheck | **pass** |
-| frontend lint | **pass** |
-| frontend build | **pass** |
-| E2E | webServer timeout locally (`npm run start` not reachable in 120s) — suite config present (`e2e/beta-launch.spec.ts`) |
+| pytest unit | **410 passed** (prior engine commit) |
+| frontend typecheck / lint / build | **pass** (prior engine commit) |
+| E2E (chromium gate) | **13 passed** — Playwright binds `0.0.0.0:3000`, base URL `http://localhost:3000` (Railway CORS), loads `.env.e2e` |
+
+### E2E coverage verified live against Railway API
+
+- Broker Workspace
+- Trading Terminal (`/workspace` shell shared with `/execution`)
+- Execution pipeline surfaces (order ticket + pre-trade checklist UI)
+- Order management (positions / pending book)
+- Journal + Execution Log analytics tape
+- Execution Intelligence (fill rate / EXECUTION_ENABLED / lifecycle)
 
 ## Commit SHA
 
-`6ef13a9bc82d946ee9f982ca3921f7ad7b55743b`
+See git HEAD after E2E fix push (supersedes `982787e` with E2E harness commits).
 
 ## Production notes
 
 - Live fills still require `EXECUTION_ENABLED=true` and a trade-capable gateway attach.
 - Journal/lifecycle stores are process-scoped (no DB schema change).
 - Close/reverse/modify use the same gated `order_send` path; gateway v1 no-trade configurations still block honestly.
+- Default `npm run test:e2e` runs Chromium only (`--workers=1`). Use `test:e2e:all` for mobile viewport project.
