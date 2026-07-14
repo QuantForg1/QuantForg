@@ -299,6 +299,32 @@ class Settings(BaseSettings):
         float,
         Field(gt=0, description="MT5 connect timeout in seconds"),
     ] = 60.0
+    mt5_gateway_base_url: Annotated[
+        str,
+        Field(
+            description=(
+                "Windows MT5 Gateway base URL for Railway→Gateway data plane "
+                "(e.g. https://win-mt5.internal:8765). Empty = use in-process mock."
+            ),
+            validation_alias=AliasChoices(
+                "MT5_GATEWAY_BASE_URL",
+                "mt5_gateway_base_url",
+            ),
+        ),
+    ] = ""
+    mt5_gateway_caller_token: Annotated[
+        str,
+        Field(
+            description=(
+                "Shared gateway bearer token used by the API to call the Windows "
+                "gateway. Must match host MT5_GATEWAY_TOKEN. Not a broker password."
+            ),
+            validation_alias=AliasChoices(
+                "MT5_GATEWAY_CALLER_TOKEN",
+                "mt5_gateway_caller_token",
+            ),
+        ),
+    ] = ""
 
     # -- Execution Gateway (DISABLED by default) -----------------------------
     execution_enabled: Annotated[

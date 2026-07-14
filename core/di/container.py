@@ -148,16 +148,31 @@ class Container:
         self.broker_health_monitor = ConnectionHealthMonitor()
         self.broker_reconnect_manager = AutomaticReconnectManager()
 
-        from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
+        from app.infrastructure.brokers.mt5 import (
+            GatewayMT5Client,
+            MockMT5Client,
+            MT5Adapter,
+        )
 
         execution_enabled = bool(self.settings.execution_enabled)
         try:
             if self.settings.mt5_enabled:
-                client = MockMT5Client()
-                if not self.settings.mt5_use_mock:
-                    # Live MetaTrader5 package is Windows-only and optional.
-                    # Sprint 1 defaults to mock; live client is a future enhancement.
+                gateway_url = (self.settings.mt5_gateway_base_url or "").strip()
+                gateway_token = (self.settings.mt5_gateway_caller_token or "").strip()
+                if gateway_url and gateway_token:
+                    client: Any = GatewayMT5Client(
+                        base_url=gateway_url,
+                        token=gateway_token,
+                        timeout_seconds=float(
+                            self.settings.mt5_connect_timeout_seconds
+                        ),
+                    )
+                else:
                     client = MockMT5Client()
+                    if not self.settings.mt5_use_mock:
+                        # Live MetaTrader5 package is Windows-only; without a
+                        # configured gateway URL the process keeps the mock client.
+                        client = MockMT5Client()
                 self.mt5_adapter = MT5Adapter(
                     client=client, execution_enabled=execution_enabled
                 )

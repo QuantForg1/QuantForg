@@ -101,7 +101,39 @@ class MT5Adapter:
         session_ref = getattr(self._client, "session_token", "") or (
             f"mt5-{uuid.uuid4().hex}"
         )
-        self._sessions[session_ref] = request
+        # When credentials live only on the Windows gateway, keep a redacted
+        # login record on Railway (never store broker passwords here).
+        if getattr(self._client, "stores_credentials_remotely", False):
+            stored = MT5LoginRequest(
+                login=request.login,
+                password="",
+                server=request.server,
+                path=request.path,
+            )
+        else:
+            stored = request
+        self._sessions[session_ref] = stored
+        self._live_session_ref = session_ref
+        return session_ref
+
+    def attach(self, *, path: str = "") -> str:
+        """Bind to an already logged-in terminal session (gateway clients only)."""
+        attach_fn = getattr(self._client, "attach", None)
+        if attach_fn is None:
+            raise RuntimeError("MT5 attach is not supported by this client")
+        if not attach_fn(path=path):
+            raise RuntimeError("MT5 attach failed")
+        session_ref = getattr(self._client, "session_token", "") or (
+            f"mt5-{uuid.uuid4().hex}"
+        )
+        login = int(getattr(self._client, "_login", 0) or 0)
+        server = str(getattr(self._client, "_server", "") or "")
+        self._sessions[session_ref] = MT5LoginRequest(
+            login=login or 1,
+            password="",
+            server=server or "attached",
+            path=path,
+        )
         self._live_session_ref = session_ref
         return session_ref
 
@@ -126,7 +158,16 @@ class MT5Adapter:
         session_ref = getattr(self._client, "session_token", "") or (
             f"mt5-{uuid.uuid4().hex}"
         )
-        self._sessions[session_ref] = request
+        if getattr(self._client, "stores_credentials_remotely", False):
+            stored = MT5LoginRequest(
+                login=request.login,
+                password="",
+                server=request.server,
+                path=request.path,
+            )
+        else:
+            stored = request
+        self._sessions[session_ref] = stored
         self._live_session_ref = session_ref
         return session_ref
 

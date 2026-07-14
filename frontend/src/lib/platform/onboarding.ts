@@ -127,9 +127,9 @@ export const CHECKLIST_ITEMS: {
   },
   {
     id: "broker",
-    title: "Connect a broker (MT5)",
-    href: "/get-started#broker",
-    description: "Wizard → compatibility → /mt5",
+    title: "Connect Weltrade MT5",
+    href: "/broker",
+    description: "Railway → Windows Gateway → MetaTrader",
   },
   {
     id: "feedback",

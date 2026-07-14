@@ -280,6 +280,39 @@ export const gatewayManagerApi = {
     }),
 };
 
+export const weltradeApi = {
+  profile: () => apiFetch<Record<string, unknown>>("/weltrade/profile"),
+  dashboard: () => apiFetch<Record<string, unknown>>("/weltrade/dashboard"),
+  connect: (body: {
+    login: number;
+    password?: string;
+    server?: string;
+    account_type?: "demo" | "live";
+    prefer_attach?: boolean;
+    path?: string;
+    remember_on_gateway?: boolean;
+  }) =>
+    apiFetch<Record<string, unknown>>("/weltrade/connect", {
+      method: "POST",
+      body,
+    }),
+  attach: (body: { path?: string } = {}) =>
+    apiFetch<Record<string, unknown>>("/weltrade/attach", {
+      method: "POST",
+      body,
+    }),
+  disconnect: () =>
+    apiFetch<Record<string, unknown>>("/weltrade/disconnect", {
+      method: "POST",
+      body: {},
+    }),
+  reconnect: () =>
+    apiFetch<Record<string, unknown>>("/weltrade/reconnect", {
+      method: "POST",
+      body: {},
+    }),
+};
+
 export const opsApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/ops/dashboard"),
   metrics: () => apiFetch<Record<string, unknown>>("/ops/metrics"),

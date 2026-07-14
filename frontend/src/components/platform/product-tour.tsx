@@ -27,9 +27,9 @@ const STEPS = [
     href: "/paper",
   },
   {
-    title: "Connect a broker",
-    body: "Use the broker wizard on Get Started, then Compatibility and /mt5 with the exact portal server string.",
-    href: "/get-started#broker",
+    title: "Connect Weltrade",
+    body: "Open /broker. The browser never talks to MT5 directly — Railway reaches your Windows gateway.",
+    href: "/broker",
   },
   {
     title: "Research & risk",

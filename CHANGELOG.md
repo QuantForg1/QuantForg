@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- Production Weltrade integration: `/broker` UX, `/api/v1/weltrade/*`
+  orchestration, Railway→Windows Gateway HTTP client (`GatewayMT5Client`),
+  `WELTRADE_INTEGRATION.md`. Multi-broker marketplace UI redirected to Weltrade.
 - MT5 Gateway session attach: `POST /session/attach` reuses an already
   logged-in Windows terminal without collecting the broker password;
   optional `MT5_GATEWAY_AUTO_ATTACH` for local DX; `symbol_select` before

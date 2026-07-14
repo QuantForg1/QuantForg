@@ -7,7 +7,6 @@ import {
   Briefcase,
   Building2,
   CandlestickChart,
-  ClipboardCheck,
   Cloud,
   CreditCard,
   FlaskConical,
@@ -28,7 +27,6 @@ import {
   UserRound,
   Wallet,
   Waypoints,
-  Network,
 } from "lucide-react";
 
 export type NavItem = {
@@ -80,23 +78,8 @@ export const appNav: NavGroup[] = [
   {
     title: "Connectivity",
     items: [
-      { href: "/brokers", label: "Broker Accounts", icon: Building2 },
-      { href: "/mt5", label: "MT5 Accounts", icon: CandlestickChart },
-      {
-        href: "/broker-connectivity",
-        label: "Broker Connectivity",
-        icon: Network,
-      },
-      {
-        href: "/broker-compatibility",
-        label: "Broker Compatibility",
-        icon: Shield,
-      },
-      {
-        href: "/broker-certification",
-        label: "Broker Certification",
-        icon: ClipboardCheck,
-      },
+      { href: "/broker", label: "Weltrade", icon: Building2 },
+      { href: "/mt5", label: "MT5 Terminal", icon: CandlestickChart },
       { href: "/ops", label: "Operations", icon: Gauge },
       { href: "/cloud-ops", label: "Cloud Operations", icon: Cloud },
     ],

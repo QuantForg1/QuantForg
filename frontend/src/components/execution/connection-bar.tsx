@@ -44,13 +44,13 @@ export const ConnectionBar = memo(function ConnectionBar({
       </div>
       <div className="flex gap-2">
         <Button size="sm" variant="secondary" asChild>
-          <Link href="/mt5">
-            <Cable className="h-3.5 w-3.5" /> MT5
+          <Link href="/broker">
+            <Cable className="h-3.5 w-3.5" /> Weltrade
           </Link>
         </Button>
         <Button size="sm" variant="ghost" asChild>
-          <Link href="/brokers">
-            <Radio className="h-3.5 w-3.5" /> Brokers
+          <Link href="/mt5">
+            <Radio className="h-3.5 w-3.5" /> MT5
           </Link>
         </Button>
       </div>

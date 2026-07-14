@@ -25,6 +25,7 @@ from app.presentation.routers import (
     strategy,
     version,
     walkforward,
+    weltrade,
 )
 
 __all__ = [
@@ -52,4 +53,5 @@ __all__ = [
     "strategy",
     "version",
     "walkforward",
+    "weltrade",
 ]

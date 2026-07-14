@@ -19,25 +19,23 @@ import {
 
 const BROKER_STEPS = [
   {
-    title: "Pick a priority broker",
-    detail:
-      "Weltrade, XM, Exness, IC Markets, or Pepperstone — all via MetaTrader 5.",
+    title: "Open Weltrade MT5",
+    detail: "Production v1 connects only Weltrade via MetaTrader 5.",
+    href: "/broker",
   },
   {
-    title: "Read the onboarding guide",
-    detail:
-      "Open Broker Compatibility for the exact portal server hints (never invent a server name).",
-    href: "/broker-compatibility",
+    title: "Start the Windows gateway",
+    detail: "Keep MetaTrader logged into Weltrade and run the local MT5 Gateway.",
   },
   {
     title: "Connect in QuantForg",
-    detail: "Enter login, password, and server on MT5 Accounts.",
-    href: "/mt5",
+    detail: "Use /broker — browser talks to Railway, Railway talks to the gateway.",
+    href: "/broker",
   },
   {
-    title: "Validate",
-    detail: "Run compatibility / certification only against a live session.",
-    href: "/broker-certification",
+    title: "Confirm sync",
+    detail: "Verify balance, equity, margin, positions, and history after connect.",
+    href: "/broker",
   },
 ];
 
