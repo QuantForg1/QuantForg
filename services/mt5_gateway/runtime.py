@@ -7,6 +7,7 @@ They are never written to Railway env, logs, or API responses.
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass, field
@@ -30,6 +31,78 @@ _TIMEFRAME_MAP: dict[str, int] = {
 }
 
 SessionMode = Literal["none", "connected", "attached"]
+
+_DATE_TOKEN_RE = re.compile(
+    r"^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$|^\d{4}-\d{2}-\d{2}"
+)
+
+
+def _looks_like_date(value: Any) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if _DATE_TOKEN_RE.match(text):
+        return True
+    # e.g. "28 Apr 2026", "15 Jan 2027"
+    parts = text.split()
+    return bool(len(parts) == 3 and parts[1].isalpha())
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Convert MT5 numeric fields without crashing on date strings."""
+    if value is None or value is False:
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return default
+    if _looks_like_date(text):
+        return default
+    try:
+        return int(text)
+    except ValueError:
+        try:
+            return int(float(text))
+        except ValueError:
+            return default
+
+
+def _parse_mt5_version(raw: Any) -> tuple[int, int, str]:
+    """Parse MetaTrader5.version().
+
+    Official package returns ``(version, build, release_date)`` where
+    ``release_date`` is often a human string such as ``\"28 Apr 2026\"``.
+    Never coerce that third element with ``int()``.
+    """
+    if not raw:
+        return (0, 0, "")
+    try:
+        parts = list(raw)
+    except TypeError:
+        return (_safe_int(raw, 0), 0, "")
+    while len(parts) < 3:
+        parts.append(0)
+    major = _safe_int(parts[0], 0)
+    build = _safe_int(parts[1], 0)
+    release = parts[2]
+    if _looks_like_date(release):
+        release_str = str(release).strip()
+    elif isinstance(release, (int, float)) and not isinstance(release, bool):
+        release_str = str(int(release))
+    else:
+        text = str(release or "").strip()
+        release_str = text if text else ""
+        # Legacy numeric third element stored as string.
+        if text and not _looks_like_date(text):
+            as_int = _safe_int(text, default=-1)
+            if as_int >= 0 and text.replace(".", "", 1).isdigit():
+                release_str = str(as_int)
+    return major, build, release_str
 
 
 @dataclass
@@ -114,11 +187,13 @@ class LiveMT5Bridge:
     def account_info(self) -> Any:
         return self.require().account_info()
 
-    def version(self) -> tuple[int, int, int]:
+    def version(self) -> tuple[int, int, str]:
+        """Return ``(version, build, release_date)``.
+
+        MetaTrader5 may supply ``release_date`` as ``\"28 Apr 2026\"``.
+        """
         raw = self.require().version()
-        if not raw:
-            return (0, 0, 0)
-        return int(raw[0]), int(raw[1]), int(raw[2])
+        return _parse_mt5_version(raw)
 
     def last_error(self) -> Any:
         return self.require().last_error()
@@ -284,7 +359,7 @@ class MT5GatewayRuntime:
                 self._record_failure(msg)
                 self.bridge.shutdown()
                 raise RuntimeError(msg)
-            login = int(info.login)
+            login = _safe_int(info.login)
             server = str(getattr(info, "server", "") or "")
             self._mark_session(
                 login=login,
@@ -335,32 +410,78 @@ class MT5GatewayRuntime:
         connected = False
         latency_ms: float | None = None
         terminal_build: int | None = None
+        build_date = ""
         server = self.diagnostics.server
         login_status = "disconnected"
         version = ""
+        if not (self.bridge.available and self.diagnostics.connected):
+            return {
+                "connected": False,
+                "session_mode": self.diagnostics.session_mode,
+                "latency_ms": None,
+                "terminal_build": None,
+                "build_date": None,
+                "server": server or None,
+                "login_status": login_status,
+                "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
+                "version": version,
+                "bridge_available": self.bridge.available,
+            }
+
         try:
-            if self.bridge.available and self.diagnostics.connected:
-                t0 = time.perf_counter()
-                info = self.bridge.account_info()
-                latency_ms = round((time.perf_counter() - t0) * 1000.0, 3)
-                connected = info is not None
-                login_status = "ok" if connected else "error"
-                term = self.bridge.terminal_info()
-                if term is not None:
-                    terminal_build = int(getattr(term, "build", 0) or 0)
-                ver = self.bridge.version()
-                version = f"{ver[0]}.{ver[1]}.{ver[2]}"
-                if info is not None:
-                    server = str(getattr(info, "server", server) or server)
+            t0 = time.perf_counter()
+            info = self.bridge.account_info()
+            latency_ms = round((time.perf_counter() - t0) * 1000.0, 3)
+            connected = info is not None
+            login_status = "connected" if connected else "error"
+            if info is not None:
+                server = str(getattr(info, "server", server) or server)
         except Exception as exc:
-            login_status = f"error:{type(exc).__name__}"
-            self._record_failure(str(exc))
+            logger.exception("mt5_gateway_health_account_failed")
+            self._record_failure(f"{type(exc).__name__}: {exc}")
+            login_status = "error"
             connected = False
+            return {
+                "connected": False,
+                "session_mode": self.diagnostics.session_mode,
+                "latency_ms": latency_ms,
+                "terminal_build": None,
+                "build_date": None,
+                "server": server or None,
+                "login_status": login_status,
+                "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
+                "version": version,
+                "bridge_available": self.bridge.available,
+            }
+
+        # Metadata must never flip a healthy session to disconnected.
+        try:
+            term = self.bridge.terminal_info()
+            if term is not None:
+                terminal_build = _safe_int(getattr(term, "build", 0), 0)
+        except Exception as exc:
+            logger.exception("mt5_gateway_health_terminal_failed")
+            self._record_failure(f"terminal_info: {type(exc).__name__}: {exc}")
+
+        try:
+            major, build, release = self.bridge.version()
+            build_date = release
+            if terminal_build is None or terminal_build == 0:
+                terminal_build = build or None
+            if release and _looks_like_date(release):
+                version = f"{major}.{build} ({release})"
+            else:
+                version = f"{major}.{build}.{release}".rstrip(".")
+        except Exception as exc:
+            logger.exception("mt5_gateway_health_version_failed")
+            self._record_failure(f"version: {type(exc).__name__}: {exc}")
+
         return {
             "connected": connected,
             "session_mode": self.diagnostics.session_mode,
             "latency_ms": latency_ms,
             "terminal_build": terminal_build,
+            "build_date": build_date or None,
             "server": server or None,
             "login_status": login_status,
             "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
@@ -419,7 +540,7 @@ class MT5GatewayRuntime:
                         "attached session lost — terminal has no account; "
                         "use POST /session/connect"
                     )
-                creds.login = int(info.login)
+                creds.login = _safe_int(info.login)
                 creds.server = str(getattr(info, "server", "") or creds.server)
                 self.diagnostics.login = creds.login
                 self.diagnostics.server = creds.server
@@ -461,14 +582,14 @@ class MT5GatewayRuntime:
     def account(self) -> dict[str, Any]:
         info = self._require_account()
         return {
-            "login": int(info.login),
+            "login": _safe_int(info.login),
             "balance": str(info.balance),
             "equity": str(info.equity),
             "margin": str(info.margin),
             "free_margin": str(getattr(info, "margin_free", 0)),
             "margin_level": str(getattr(info, "margin_level", 0)),
             "profit": str(info.profit),
-            "leverage": int(info.leverage),
+            "leverage": _safe_int(info.leverage, 1),
             "currency": str(getattr(info, "currency", "")),
             "server": str(getattr(info, "server", "")),
             "name": str(getattr(info, "name", "")),
@@ -482,7 +603,7 @@ class MT5GatewayRuntime:
             {
                 "code": str(getattr(s, "name", "")),
                 "description": str(getattr(s, "description", "")),
-                "digits": int(getattr(s, "digits", 0)),
+                "digits": _safe_int(getattr(s, "digits", 0)),
             }
             for s in rows
         ]
@@ -498,7 +619,7 @@ class MT5GatewayRuntime:
             "symbol": symbol.upper(),
             "bid": str(tick.bid),
             "ask": str(tick.ask),
-            "time": int(getattr(tick, "time", 0)),
+            "time": _safe_int(getattr(tick, "time", 0)),
         }
 
     def candles(
@@ -514,7 +635,7 @@ class MT5GatewayRuntime:
             raise RuntimeError(f"candles unavailable for {symbol}")
         items = [
             {
-                "time": int(r["time"]),
+                "time": _safe_int(r["time"]),
                 "open": str(r["open"]),
                 "high": str(r["high"]),
                 "low": str(r["low"]),
@@ -533,9 +654,9 @@ class MT5GatewayRuntime:
         rows = self.bridge.positions_get() or []
         items = [
             {
-                "ticket": int(p.ticket),
+                "ticket": _safe_int(p.ticket),
                 "symbol": str(p.symbol),
-                "type": int(p.type),
+                "type": _safe_int(p.type),
                 "volume": str(p.volume),
                 "price_open": str(p.price_open),
                 "price_current": str(p.price_current),
@@ -550,9 +671,9 @@ class MT5GatewayRuntime:
         rows = self.bridge.orders_get() or []
         items = [
             {
-                "ticket": int(o.ticket),
+                "ticket": _safe_int(o.ticket),
                 "symbol": str(o.symbol),
-                "type": int(o.type),
+                "type": _safe_int(o.type),
                 "volume_current": str(o.volume_current),
                 "price_open": str(o.price_open),
             }
@@ -569,9 +690,9 @@ class MT5GatewayRuntime:
         rows = self.bridge.history_orders_get(date_from, date_to) or []
         items = [
             {
-                "ticket": int(o.ticket),
+                "ticket": _safe_int(o.ticket),
                 "symbol": str(o.symbol),
-                "state": int(getattr(o, "state", 0)),
+                "state": _safe_int(getattr(o, "state", 0)),
             }
             for o in rows
         ]
@@ -586,7 +707,7 @@ class MT5GatewayRuntime:
         rows = self.bridge.history_deals_get(date_from, date_to) or []
         items = [
             {
-                "ticket": int(d.ticket),
+                "ticket": _safe_int(d.ticket),
                 "symbol": str(d.symbol),
                 "profit": str(d.profit),
                 "volume": str(d.volume),

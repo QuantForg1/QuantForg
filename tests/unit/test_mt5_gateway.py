@@ -72,8 +72,8 @@ class _FakeBridge(LiveMT5Bridge):
     def terminal_info(self) -> Any:
         return SimpleNamespace(build=4000)
 
-    def version(self) -> tuple[int, int, int]:
-        return (5, 0, 4000)
+    def version(self) -> tuple[int, int, str]:
+        return (5, 0, "4000")
 
     def symbols_get(self) -> Any:
         return [SimpleNamespace(name="EURUSD", description="Euro", digits=5)]
@@ -295,3 +295,71 @@ class TestMT5Gateway:
         headers = {"X-Gateway-Token": "test-gateway-token"}
         res = client.get("/session/status", headers=headers)
         assert res.status_code == 200
+
+
+@pytest.mark.unit
+class TestMT5VersionDateParsing:
+    """Regression: MetaTrader5.version()[2] is often a human date string."""
+
+    @pytest.mark.parametrize(
+        "release",
+        ["28 Apr 2026", "15 Jan 2027", "2026-04-28", "16 Dec 2020"],
+    )
+    def test_parse_mt5_version_keeps_date_strings(self, release: str) -> None:
+        from services.mt5_gateway.runtime import _parse_mt5_version, _safe_int
+
+        major, build, date_str = _parse_mt5_version((500, 3815, release))
+        assert major == 500
+        assert build == 3815
+        assert date_str == release
+        assert _safe_int(release) == 0
+
+    def test_safe_int_never_raises_on_dates(self) -> None:
+        from services.mt5_gateway.runtime import _safe_int
+
+        for value in ("28 Apr 2026", "15 Jan 2027", "2026-04-28", "01 May 2025"):
+            assert _safe_int(value, default=0) == 0
+
+    def test_health_survives_mt5_release_date_string(
+        self, client: TestClient
+    ) -> None:
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        runtime = client.app.state.runtime
+
+        class _DateBridge(_FakeBridge):
+            def version(self) -> tuple[int, int, str]:
+                return (500, 3815, "28 Apr 2026")
+
+            def terminal_info(self) -> Any:
+                # Some terminals may surface unexpected build shapes.
+                return SimpleNamespace(build="28 Apr 2026")
+
+        runtime.bridge = _DateBridge(prelogged=False)
+        res = client.post(
+            "/session/connect",
+            headers=headers,
+            json={
+                "login": 111,
+                "password": "secret",
+                "server": "Weltrade-Demo",
+            },
+        )
+        assert res.status_code == 200
+
+        health = client.get("/health")
+        assert health.status_code == 200
+        mt5 = health.json()["mt5"]
+        assert mt5["connected"] is True
+        assert mt5["login_status"] == "connected"
+        assert "ValueError" not in str(mt5.get("login_status"))
+        assert mt5["build_date"] == "28 Apr 2026"
+
+        status = client.get("/session/status", headers=headers)
+        assert status.status_code == 200
+        assert status.json()["connected"] is True
+        assert status.json()["health"]["login_status"] == "connected"
+        assert status.json()["health"]["connected"] is True
+
+        diag = client.get("/diagnostics", headers=headers)
+        assert diag.status_code == 200
+        assert diag.json()["connected"] is True
