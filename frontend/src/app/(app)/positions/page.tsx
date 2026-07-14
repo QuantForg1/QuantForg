@@ -162,7 +162,7 @@ export default function PositionsPage() {
                     description="Live positions appear after MT5 sync."
                     actionLabel="Go to MT5"
                     onAction={() => {
-                      window.location.href = "/mt5";
+                      window.location.href = "/broker";
                     }}
                     secondaryLabel="Paper trade"
                     onSecondary={() => {

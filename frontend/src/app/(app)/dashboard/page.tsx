@@ -522,7 +522,7 @@ export default function DashboardPage() {
           <>
             <RealtimeConnectionBadge status={realtime} />
             <Button variant="secondary" asChild>
-              <Link href="/mt5">
+              <Link href="/broker">
                 <Cable className="h-4 w-4" /> Broker
               </Link>
             </Button>
@@ -664,7 +664,7 @@ export default function DashboardPage() {
                   description="Connect MT5 to load symbol universe, spreads, and market status."
                   actionLabel="Connect MT5"
                   onAction={() => {
-                    window.location.href = "/mt5";
+                    window.location.href = "/broker";
                   }}
                 />
               ) : symbolsQ.isLoading ? (
@@ -810,7 +810,7 @@ export default function DashboardPage() {
                     description="Connect MT5 and sync to populate live exposure."
                     actionLabel="Connect MT5"
                     onAction={() => {
-                      window.location.href = "/mt5";
+                      window.location.href = "/broker";
                     }}
                     secondaryLabel="Paper trade"
                     onSecondary={() => {
@@ -993,7 +993,7 @@ export default function DashboardPage() {
                   description="Symbol bids and asks load from the connected terminal."
                   actionLabel="Connect MT5"
                   onAction={() => {
-                    window.location.href = "/mt5";
+                    window.location.href = "/broker";
                   }}
                 />
               ) : displayWatch.length === 0 ? (
@@ -1173,7 +1173,7 @@ export default function DashboardPage() {
                 </Link>
               </Button>
               <Button variant="secondary" className="justify-start" asChild>
-                <Link href="/mt5">
+                <Link href="/broker">
                   <Cable className="h-4 w-4" /> Connect Broker
                 </Link>
               </Button>

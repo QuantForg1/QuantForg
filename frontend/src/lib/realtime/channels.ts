@@ -1,4 +1,4 @@
-import { mt5Api, platformApi, portfolioApi, brokersApi } from "@/lib/api/endpoints";
+import { mt5Api, platformApi, portfolioApi, brokersApi, weltradeApi } from "@/lib/api/endpoints";
 import type { ChannelDefinition, ChannelSubscriptionOptions } from "@/lib/realtime/types";
 
 export const CHANNEL_DEFINITIONS: ChannelDefinition[] = [
@@ -43,6 +43,14 @@ export const CHANNEL_DEFINITIONS: ChannelDefinition[] = [
     requiresAuth: true,
   },
   {
+    channel: "history",
+    queryKey: () => ["history"],
+    fetcher: () => portfolioApi.history(),
+    intervalMs: 20_000,
+    hiddenIntervalMs: 60_000,
+    requiresAuth: true,
+  },
+  {
     channel: "notifications",
     queryKey: () => ["notifications"],
     fetcher: () => platformApi.notifications(false),
@@ -64,6 +72,14 @@ export const CHANNEL_DEFINITIONS: ChannelDefinition[] = [
     fetcher: () => mt5Api.status(),
     intervalMs: 10_000,
     hiddenIntervalMs: 40_000,
+    requiresAuth: true,
+  },
+  {
+    channel: "weltrade-health",
+    queryKey: () => ["weltrade-health"],
+    fetcher: () => weltradeApi.health(),
+    intervalMs: 15_000,
+    hiddenIntervalMs: 45_000,
     requiresAuth: true,
   },
   {

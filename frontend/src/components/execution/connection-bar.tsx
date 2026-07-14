@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import { Cable, Radio } from "lucide-react";
+import { Cable } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { str } from "@/lib/desk";
@@ -45,12 +45,7 @@ export const ConnectionBar = memo(function ConnectionBar({
       <div className="flex gap-2">
         <Button size="sm" variant="secondary" asChild>
           <Link href="/broker">
-            <Cable className="h-3.5 w-3.5" /> Weltrade
-          </Link>
-        </Button>
-        <Button size="sm" variant="ghost" asChild>
-          <Link href="/mt5">
-            <Radio className="h-3.5 w-3.5" /> MT5
+            <Cable className="h-3.5 w-3.5" /> Broker Connection
           </Link>
         </Button>
       </div>

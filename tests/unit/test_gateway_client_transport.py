@@ -241,7 +241,8 @@ class TestGatewayHttpTransport:
 
 @pytest.mark.unit
 class TestWeltradeSurfacesUpstreamError:
-    def test_health_includes_exact_upstream_message(self) -> None:
+    @pytest.mark.asyncio
+    async def test_health_includes_exact_upstream_message(self) -> None:
         from uuid import uuid4
 
         from app.application.services.weltrade_integration import (
@@ -270,7 +271,7 @@ class TestWeltradeSurfacesUpstreamError:
                 )
 
         svc = WeltradeIntegrationService(adapter=MT5Adapter(client=BoomGateway()))
-        out = svc.health(user_id=uuid4())
+        out = await svc.health(user_id=uuid4())
         assert out["gateway_online"] is False
         assert "Connection refused" in str(out["upstream_error"])
         assert out["detail"] == out["upstream_error"]

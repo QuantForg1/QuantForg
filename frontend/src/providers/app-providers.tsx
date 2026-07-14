@@ -3,6 +3,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { AuthLayoutProviders } from "@/providers/auth-layout-providers";
 import { RealtimeProvider } from "@/providers/realtime-provider";
+import { TradingSessionProvider } from "@/providers/trading-session-provider";
 import { ObservabilityBootstrap } from "@/components/platform/observability-bootstrap";
 import { FeedbackWidget } from "@/components/platform/feedback-widget";
 import {
@@ -18,6 +19,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <AuthLayoutProviders>
       <ObservabilityBootstrap />
       <RealtimeProvider>
+        <TradingSessionProvider>
         <MaintenanceGate>
           <BetaInviteGate>
             <div className="flex min-h-0 flex-1 flex-col">
@@ -29,6 +31,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
             </div>
           </BetaInviteGate>
         </MaintenanceGate>
+        </TradingSessionProvider>
       </RealtimeProvider>
     </AuthLayoutProviders>
   );

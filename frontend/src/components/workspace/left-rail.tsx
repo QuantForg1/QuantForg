@@ -169,7 +169,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
               })}
             </select>
             <Button size="sm" variant="secondary" className="h-8 px-2" asChild>
-              <Link href="/mt5" aria-label="Manage MT5 connection">
+              <Link href="/broker" aria-label="Manage MT5 connection">
                 <Cable className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -244,7 +244,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
               description="Connect MT5 to load the symbol universe."
               actionLabel="Connect"
               onAction={() => {
-                window.location.href = "/mt5";
+                window.location.href = "/broker";
               }}
             />
           </div>

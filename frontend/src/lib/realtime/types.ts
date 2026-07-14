@@ -5,10 +5,12 @@ export type RealtimeChannel =
   | "portfolio"
   | "orders"
   | "positions"
+  | "history"
   | "notifications"
   | "market"
   | "tick"
   | "mt5-status"
+  | "weltrade-health"
   | "activity"
   | "health"
   | "brokers";

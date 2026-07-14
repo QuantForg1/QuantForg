@@ -67,7 +67,7 @@ export default function BrokerCompatibilityPage() {
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" asChild>
-              <Link href="/mt5">Connect MT5</Link>
+              <Link href="/broker">Connect MT5</Link>
             </Button>
             <Button size="sm" variant="secondary" onClick={() => dashQ.refetch()}>
               Refresh

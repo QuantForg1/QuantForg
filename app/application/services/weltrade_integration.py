@@ -6,11 +6,13 @@ Broker passwords are forwarded once to the gateway and never persisted here.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from app.domain.entities.mt5 import MT5Connection
 from app.domain.interfaces.mt5_client import MT5LoginRequest
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
@@ -27,9 +29,14 @@ WELTRADE_SERVERS = {
 
 @dataclass
 class WeltradeIntegrationService:
-    """Thin orchestration for the Weltrade-only production connection UX."""
+    """Thin orchestration for the Weltrade-only production connection UX.
+
+    After connect/attach, persists ``MT5Connection`` so Dashboard / Portfolio /
+    Execution / Ops share the same live session as ``/broker``.
+    """
 
     adapter: MT5Adapter
+    uow_factory: Any = None
     _last_sync_at: str | None = field(default=None, init=False)
 
     def profile(self) -> dict[str, Any]:
@@ -75,7 +82,7 @@ class WeltradeIntegrationService:
             "execution_enabled": self.adapter.execution_enabled,
         }
 
-    def health(self, *, user_id: UUID) -> dict[str, Any]:
+    async def health(self, *, user_id: UUID) -> dict[str, Any]:
         """Production health probe for tunnel + gateway + MT5 session."""
         _ = user_id
         cfg = self._configuration()
@@ -189,6 +196,9 @@ class WeltradeIntegrationService:
                 diagnostic = "MT5 session probe failed"
                 logger.warning("weltrade_mt5_probe_failed", error=str(exc))
 
+        if gateway_reachable and mt5_attached:
+            await self.ensure_user_session_bound(user_id=user_id)
+
         cfg = self._configuration()
         transport = gw.diagnostics_probe()
         upstream = gw.last_upstream()
@@ -257,9 +267,10 @@ class WeltradeIntegrationService:
             ),
         }
 
-    def dashboard(self, *, user_id: UUID) -> dict[str, Any]:
-        _ = user_id
+    async def dashboard(self, *, user_id: UUID) -> dict[str, Any]:
         gw = self._gateway()
+        if gw is not None:
+            await self.ensure_user_session_bound(user_id=user_id)
         gateway_online = False
         gateway_payload: dict[str, Any] = {}
         if gw is not None:
@@ -389,7 +400,121 @@ class WeltradeIntegrationService:
             ),
         }
 
-    def connect(
+
+    async def bind_user_session(
+        self,
+        *,
+        user_id: UUID,
+        login: int | None = None,
+        server: str | None = None,
+        path: str = "",
+        session_ref: str | None = None,
+    ) -> str | None:
+        """Persist the live adapter session for this user (single source of truth)."""
+        if self.uow_factory is None:
+            logger.warning("weltrade_bind_skipped", reason="uow_factory_missing")
+            return None
+        live_ref = (
+            (session_ref or "").strip()
+            or (getattr(self.adapter, "_live_session_ref", None) or "")
+            or (getattr(self.adapter.client, "session_token", "") or "")
+        )
+        live_ref = live_ref.strip()
+        if not live_ref or not getattr(self.adapter.client, "is_connected", False):
+            return None
+
+        resolved_login = int(login or 0)
+        resolved_server = (server or "").strip()
+        if resolved_login <= 0 or not resolved_server:
+            try:
+                info = self.adapter.account_info()
+                resolved_login = resolved_login or int(info.login)
+                resolved_server = resolved_server or str(info.server or "")
+            except Exception:
+                stored = None
+                if live_ref in getattr(self.adapter, "_sessions", {}):
+                    stored = self.adapter._sessions.get(live_ref)
+                if stored is not None:
+                    resolved_login = resolved_login or int(stored.login or 0)
+                    resolved_server = resolved_server or str(stored.server or "")
+        if resolved_login <= 0:
+            resolved_login = 1
+        if not resolved_server:
+            resolved_server = "Weltrade-MT5"
+
+        build: int | None = None
+        version = ""
+        latency: float | None = None
+        with contextlib.suppress(Exception):
+            snap = self.adapter.health()
+            build = snap.terminal_build
+            version = snap.version or ""
+            latency = snap.latency_ms
+        with contextlib.suppress(Exception):
+            terminal = self.adapter.terminal_info()
+            build = build or terminal.build
+
+        connection = MT5Connection.create(
+            user_id=user_id,
+            login=resolved_login,
+            server=resolved_server,
+            terminal_path=path,
+        )
+        connection.mark_connected(
+            session_ref=live_ref,
+            terminal_build=build,
+            terminal_version=version,
+            latency_ms=latency,
+        )
+        async with self.uow_factory() as uow:
+            await uow.connections.upsert_for_user(connection)
+            await uow.commit()
+        logger.info(
+            "weltrade_session_bound",
+            user_id=str(user_id),
+            login=resolved_login,
+            server=resolved_server,
+            session_ref=live_ref[:24],
+        )
+        return live_ref
+
+    async def unbind_user_session(self, *, user_id: UUID) -> None:
+        """Mark the user's DB connection disconnected (does not stop other tenants)."""
+        if self.uow_factory is None:
+            return
+        async with self.uow_factory() as uow:
+            connection = await uow.connections.get_active_for_user(user_id)
+            if connection is None:
+                return
+            session_ref = (connection.session_ref or "").strip()
+            live = getattr(self.adapter, "_live_session_ref", None)
+            if session_ref and live and session_ref == live:
+                self.adapter.shutdown()
+            connection.mark_disconnected()
+            await uow.connections.update(connection)
+            await uow.commit()
+
+    async def ensure_user_session_bound(self, *, user_id: UUID) -> None:
+        """Heal: if gateway session is live but DB row missing, bind it."""
+        if self.uow_factory is None:
+            return
+        if not getattr(self.adapter.client, "is_connected", False):
+            return
+        live_ref = (getattr(self.adapter, "_live_session_ref", None) or "").strip()
+        if not live_ref:
+            return
+        async with self.uow_factory() as uow:
+            existing = await uow.connections.get_active_for_user(user_id)
+        if (
+            existing is not None
+            and existing.connected
+            and (existing.session_ref or "").strip() == live_ref
+            and self.adapter.is_live_session(live_ref)
+        ):
+            return
+        await self.bind_user_session(user_id=user_id, session_ref=live_ref)
+
+    async def connect(
         self,
         *,
         user_id: UUID,
@@ -462,15 +587,17 @@ class WeltradeIntegrationService:
             raise RuntimeError(detail) from exc
 
         attached = False
+        session_ref = ""
         if prefer_attach:
             try:
-                self.adapter.attach(path=path)
+                session_ref = self.adapter.attach(path=path)
                 attached = True
                 steps.append(
                     {
                         "step": "attach",
                         "ok": True,
                         "detail": "Attached to existing MT5 session",
+                        "session_ref": session_ref,
                     }
                 )
                 logger.info(
@@ -517,7 +644,14 @@ class WeltradeIntegrationService:
             # Password falls out of scope — adapter stores redacted copy for GW.
             del request
 
-        sync = self.dashboard(user_id=user_id)
+        await self.bind_user_session(
+            user_id=user_id,
+            login=login,
+            server=server_name,
+            path=path,
+            session_ref=session_ref,
+        )
+        sync = await self.dashboard(user_id=user_id)
         steps.append({"step": "sync", "ok": True, "detail": "Account synchronized"})
         logger.info(
             "weltrade_connect_ok",
@@ -540,20 +674,28 @@ class WeltradeIntegrationService:
             "status": sync.get("status"),
         }
 
-    def attach(self, *, user_id: UUID, path: str = "") -> dict[str, Any]:
-        self.adapter.attach(path=path)
-        dash = self.dashboard(user_id=user_id)
+    async def attach(self, *, user_id: UUID, path: str = "") -> dict[str, Any]:
+        session_ref = self.adapter.attach(path=path)
+        await self.bind_user_session(
+            user_id=user_id, path=path, session_ref=session_ref
+        )
+        dash = await self.dashboard(user_id=user_id)
         return {"ok": True, "broker": WELTRADE_BROKER, "dashboard": dash}
 
-    def disconnect(self, *, user_id: UUID) -> dict[str, Any]:
-        self.adapter.shutdown()
+    async def disconnect(self, *, user_id: UUID) -> dict[str, Any]:
+        await self.unbind_user_session(user_id=user_id)
+        # Explicit desk disconnect always clears the process terminal session.
+        if getattr(self.adapter.client, "is_connected", False) or getattr(
+            self.adapter, "_live_session_ref", None
+        ):
+            self.adapter.shutdown()
         return {
             "ok": True,
             "broker": WELTRADE_BROKER,
-            "dashboard": self.dashboard(user_id=user_id),
+            "dashboard": await self.dashboard(user_id=user_id),
         }
 
-    def reconnect(self, *, user_id: UUID) -> dict[str, Any]:
+    async def reconnect(self, *, user_id: UUID) -> dict[str, Any]:
         # Prefer gateway-side passwordless reconnect / attach.
         request = MT5LoginRequest(login=1, password="", server="Weltrade-MT5")
         live = self.adapter._live_session_ref
@@ -566,9 +708,16 @@ class WeltradeIntegrationService:
                 path=prior.path,
             )
         logger.info("weltrade_reconnect_start", login=request.login)
-        self.adapter.reconnect(request)
+        session_ref = self.adapter.reconnect(request)
+        await self.bind_user_session(
+            user_id=user_id,
+            login=request.login,
+            server=request.server,
+            path=request.path,
+            session_ref=session_ref,
+        )
         return {
             "ok": True,
             "broker": WELTRADE_BROKER,
-            "dashboard": self.dashboard(user_id=user_id),
+            "dashboard": await self.dashboard(user_id=user_id),
         }

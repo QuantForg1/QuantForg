@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
@@ -11,6 +12,7 @@ from app.domain.interfaces.mt5_client import MT5LoginRequest
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 from app.infrastructure.brokers.mt5.client import MockMT5Client
 from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
+from app.infrastructure.persistence.memory_mt5 import MemoryMT5UnitOfWorkFactory
 
 
 class _StubGateway(GatewayMT5Client):
@@ -135,14 +137,15 @@ class TestWeltradeIntegration:
         assert profile["broker"] == "weltrade"
         assert profile["gateway_backed"] is False
 
-    def test_connect_prefer_attach(self) -> None:
-        from uuid import uuid4
-
+    @pytest.mark.asyncio
+    async def test_connect_prefer_attach_binds_db_session(self) -> None:
         client = _StubGateway()
         adapter = MT5Adapter(client=client)
-        svc = WeltradeIntegrationService(adapter=adapter)
-        result = svc.connect(
-            user_id=uuid4(),
+        factory = MemoryMT5UnitOfWorkFactory()
+        svc = WeltradeIntegrationService(adapter=adapter, uow_factory=factory)
+        user_id = uuid4()
+        result = await svc.connect(
+            user_id=user_id,
             login=4242,
             password="",
             server="auto",
@@ -151,9 +154,14 @@ class TestWeltradeIntegration:
         )
         assert result["ok"] is True
         assert result["dashboard"]["connection"]["mt5_connected"] is True
-        # Adapter must not retain broker password
         for req in adapter._sessions.values():
             assert req.password == ""
+        async with factory() as uow:
+            conn = await uow.connections.get_active_for_user(user_id)
+        assert conn is not None
+        assert conn.connected is True
+        assert conn.login == 4242
+        assert adapter.is_live_session(conn.session_ref)
 
     def test_adapter_redacts_password_for_gateway_client(self) -> None:
         client = _StubGateway()
@@ -165,15 +173,16 @@ class TestWeltradeIntegration:
         )
         assert adapter._sessions[ref].password == ""
 
-    def test_health_reports_gateway(self) -> None:
-        from uuid import uuid4
-
+    @pytest.mark.asyncio
+    async def test_health_reports_gateway(self) -> None:
         client = _StubGateway()
         assert client.attach()
-        svc = WeltradeIntegrationService(adapter=MT5Adapter(client=client))
-        # Mark adapter session via attach path so health sees MT5
+        factory = MemoryMT5UnitOfWorkFactory()
+        svc = WeltradeIntegrationService(
+            adapter=MT5Adapter(client=client), uow_factory=factory
+        )
         svc.adapter.attach()
-        out = svc.health(user_id=uuid4())
+        out = await svc.health(user_id=uuid4())
         assert out["gateway_reachable"] is True
         assert out["tunnel_reachable"] is True
         assert out["mt5_attached"] is True
@@ -188,12 +197,17 @@ class TestWeltradeIntegration:
         from core.di import container as container_mod
 
         adapter = MT5Adapter(client=_StubGateway())
-        fake = SimpleNamespace(mt5_adapter=adapter, weltrade_integration=None)
+        fake = SimpleNamespace(
+            mt5_adapter=adapter,
+            weltrade_integration=None,
+            mt5_uow_factory=MemoryMT5UnitOfWorkFactory(),
+        )
         previous = container_mod._container
         container_mod._container = fake  # type: ignore[assignment]
         try:
             svc = get_weltrade_service()
             assert isinstance(svc, WeltradeIntegrationService)
             assert fake.weltrade_integration is svc
+            assert svc.uow_factory is fake.mt5_uow_factory
         finally:
             container_mod._container = previous

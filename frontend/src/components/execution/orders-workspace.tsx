@@ -289,7 +289,7 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
             description="Connect MT5 to load and manage pending orders."
             actionLabel="Connect MT5"
             onAction={() => {
-              window.location.href = "/mt5";
+              window.location.href = "/broker";
             }}
           />
         ) : ordersQ.isLoading ? (

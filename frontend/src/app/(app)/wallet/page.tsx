@@ -145,7 +145,7 @@ export default function WalletPage() {
                 </p>
               </div>
               <Button size="sm" variant="secondary" asChild>
-                <Link href="/mt5">Open MT5</Link>
+                <Link href="/broker">Open MT5</Link>
               </Button>
             </CardContent>
           </Card>

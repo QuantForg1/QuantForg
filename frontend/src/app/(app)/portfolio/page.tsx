@@ -33,7 +33,7 @@ export default function PortfolioPage() {
           <div className="flex items-center gap-2">
             <RealtimeConnectionBadge status={realtime} />
             <Button variant="secondary" asChild>
-              <Link href="/mt5">Sync MT5</Link>
+              <Link href="/broker">Sync MT5</Link>
             </Button>
           </div>
         }
@@ -79,7 +79,7 @@ export default function PortfolioPage() {
                     description="Connect MT5 and sync to populate live exposure."
                     actionLabel="Connect MT5"
                     onAction={() => {
-                      window.location.href = "/mt5";
+                      window.location.href = "/broker";
                     }}
                   />
                 ) : (

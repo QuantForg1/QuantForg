@@ -6,7 +6,6 @@ import {
   Bot,
   Briefcase,
   Building2,
-  CandlestickChart,
   Cloud,
   CreditCard,
   FlaskConical,
@@ -78,8 +77,7 @@ export const appNav: NavGroup[] = [
   {
     title: "Connectivity",
     items: [
-      { href: "/broker", label: "Weltrade", icon: Building2 },
-      { href: "/mt5", label: "MT5 Terminal", icon: CandlestickChart },
+      { href: "/broker", label: "Broker Connection", icon: Building2 },
       { href: "/ops", label: "Operations", icon: Gauge },
       { href: "/cloud-ops", label: "Cloud Operations", icon: Cloud },
     ],

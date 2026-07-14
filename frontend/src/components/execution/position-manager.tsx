@@ -408,7 +408,7 @@ export function PositionManager({ connected }: { connected: boolean }) {
             description="Connect MT5 to manage live positions."
             actionLabel="Connect MT5"
             onAction={() => {
-              window.location.href = "/mt5";
+              window.location.href = "/broker";
             }}
           />
         ) : positionsQ.isLoading ? (

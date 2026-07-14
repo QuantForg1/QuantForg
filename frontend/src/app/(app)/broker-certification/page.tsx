@@ -56,7 +56,7 @@ export default function BrokerCertificationPage() {
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" asChild>
-              <Link href="/mt5">Connect MT5</Link>
+              <Link href="/broker">Connect MT5</Link>
             </Button>
             <Button
               size="sm"

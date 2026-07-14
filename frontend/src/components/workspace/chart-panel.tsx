@@ -351,7 +351,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
               description="Connect MT5 to load candles from the production market data API."
               actionLabel="Connect MT5"
               onAction={() => {
-                window.location.href = "/mt5";
+                window.location.href = "/broker";
               }}
             />
           </div>

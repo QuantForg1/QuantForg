@@ -63,6 +63,7 @@ export function useActivityStream(enabled = true) {
 
 export function useBrokerStatusStream(enabled = true) {
   useChannel("mt5-status", undefined, enabled);
+  useChannel("weltrade-health", undefined, enabled);
   useChannel("brokers", undefined, enabled);
   useChannel("health", undefined, enabled);
   return useRealtimeContext().status;
@@ -72,6 +73,7 @@ export function useDashboardStream(enabled = true) {
   usePortfolioStream(enabled);
   usePositionsStream(enabled);
   useOrdersStream(enabled);
+  useChannel("history", undefined, enabled);
   useNotificationsStream(enabled);
   useActivityStream(enabled);
   useBrokerStatusStream(enabled);

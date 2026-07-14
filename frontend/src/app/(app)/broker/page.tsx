@@ -138,6 +138,11 @@ export default function WeltradeBrokerPage() {
       qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] }),
       qc.invalidateQueries({ queryKey: ["weltrade-health"] }),
       qc.invalidateQueries({ queryKey: ["mt5-status"] }),
+      qc.invalidateQueries({ queryKey: ["portfolio"] }),
+      qc.invalidateQueries({ queryKey: ["orders"] }),
+      qc.invalidateQueries({ queryKey: ["positions"] }),
+      qc.invalidateQueries({ queryKey: ["history"] }),
+      qc.invalidateQueries({ queryKey: ["mt5-symbols"] }),
       qc.invalidateQueries({ queryKey: ["brokers"] }),
     ]);
   };
@@ -254,9 +259,11 @@ export default function WeltradeBrokerPage() {
             </div>
             <div>
               <p className="font-display text-2xl tracking-tight text-[var(--fg)] sm:text-3xl">
-                Weltrade MT5
+                Broker Connection
               </p>
-              <p className="mt-1 text-sm text-[var(--fg-muted)]">Professional Trading Connection</p>
+              <p className="mt-1 text-sm text-[var(--fg-muted)]">
+                Weltrade MT5 — connection, account, sync, and diagnostics
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
