@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
 import { gatewayManagerApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
@@ -77,6 +78,7 @@ export default function CloudOpsPage() {
         />
       ) : (
         <div className="space-y-4">
+          <WeltradeGatewayStatus />
           <p className="text-xs text-[var(--fg-subtle)]">{str(data.notes)}</p>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

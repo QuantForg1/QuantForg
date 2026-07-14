@@ -24,6 +24,10 @@ import { useBrokerStatusStream } from "@/hooks/realtime";
 import { weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, str } from "@/lib/desk";
+import {
+  gatewayDiagnosticDetail,
+  gatewayStatusLabel,
+} from "@/lib/gateway-diagnostics";
 import { cn } from "@/lib/utils";
 
 type AccountType = "demo" | "live";
@@ -73,6 +77,8 @@ export default function WeltradeBrokerPage() {
   const orders = asRecord(asRecord(dash.data).orders);
   const history = asRecord(asRecord(dash.data).history);
   const health = asRecord(healthQ.data);
+  const dashBody = asRecord(dash.data);
+  const configuration = asRecord(health.configuration || dashBody.configuration);
 
   const connected = Boolean(
     connection.mt5_connected || health.mt5_connected || health.mt5_attached,
@@ -83,6 +89,25 @@ export default function WeltradeBrokerPage() {
   const weltradeConnected = Boolean(
     connection.weltrade_connected || health.weltrade_connected,
   );
+  const upstreamDetail = gatewayDiagnosticDetail({
+    ...health,
+    ...dashBody,
+    last_upstream_error:
+      health.last_upstream_error || dashBody.last_upstream_error,
+    upstream_error: health.upstream_error || dashBody.upstream_error,
+    detail: health.detail || dashBody.detail,
+    diagnostic: health.diagnostic || dashBody.diagnostic,
+  });
+  const gatewayLabel = gatewayOnline
+    ? "Gateway Online"
+    : gatewayStatusLabel({
+        ...health,
+        ...dashBody,
+        gateway_online: gatewayOnline,
+        diagnostic: health.diagnostic || dashBody.diagnostic,
+        last_upstream_error: upstreamDetail,
+        detail: upstreamDetail,
+      });
 
   const [accountType, setAccountType] = useState<AccountType>("demo");
   const [serverMode, setServerMode] = useState<"auto" | "manual">("auto");
@@ -273,13 +298,39 @@ export default function WeltradeBrokerPage() {
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <StatusDot on={gatewayOnline} label={gatewayOnline ? "Gateway Online" : "Gateway Offline"} />
+              <StatusDot on={gatewayOnline} label={gatewayLabel} />
               <StatusDot on={connected} label={connected ? "MT5 Connected" : "MT5 Not Connected"} />
               <StatusDot
                 on={weltradeConnected}
                 label={weltradeConnected ? "Weltrade Connected" : "Weltrade Not Connected"}
               />
             </div>
+            {!gatewayOnline && upstreamDetail && upstreamDetail !== "ok" ? (
+              <div className="mt-4 rounded-lg border border-[var(--danger-border,var(--border))] bg-[var(--surface-2)] px-3 py-3 text-sm text-[var(--fg-muted)]">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                  {gatewayLabel}
+                </p>
+                <p className="mt-1 break-words font-mono text-xs text-[var(--fg)]">
+                  {upstreamDetail}
+                </p>
+                {str(health.gateway_url || configuration.mt5_gateway_base_url) ? (
+                  <p className="mt-2 text-[11px] text-[var(--fg-subtle)]">
+                    Base URL: {str(health.gateway_url || configuration.mt5_gateway_base_url)}
+                  </p>
+                ) : null}
+                {health.last_http_status != null ? (
+                  <p className="mt-1 text-[11px] text-[var(--fg-subtle)]">
+                    HTTP {str(health.last_http_status)}
+                    {health.redirects_followed != null
+                      ? ` · redirects ${str(health.redirects_followed)}`
+                      : ""}
+                    {health.latency != null || health.latency_ms != null
+                      ? ` · ${str(health.latency ?? health.latency_ms)} ms`
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </motion.section>
 
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

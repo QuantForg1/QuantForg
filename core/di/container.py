@@ -160,19 +160,37 @@ class Container:
                 gateway_url = (self.settings.mt5_gateway_base_url or "").strip()
                 gateway_token = (self.settings.mt5_gateway_caller_token or "").strip()
                 if gateway_url and gateway_token:
-                    client: Any = GatewayMT5Client(
-                        base_url=gateway_url,
-                        token=gateway_token,
-                        timeout_seconds=float(
-                            self.settings.mt5_connect_timeout_seconds
-                        ),
-                    )
+                    try:
+                        client: Any = GatewayMT5Client(
+                            base_url=gateway_url,
+                            token=gateway_token,
+                            timeout_seconds=float(
+                                self.settings.mt5_connect_timeout_seconds
+                            ),
+                        )
+                        logger.info(
+                            "mt5_gateway_client_configured",
+                            base_url=client.base_url,
+                            token_configured=True,
+                            timeout_seconds=float(
+                                self.settings.mt5_connect_timeout_seconds
+                            ),
+                        )
+                    except ValueError as exc:
+                        logger.warning(
+                            "mt5_gateway_base_url_invalid",
+                            raw=gateway_url,
+                            error=str(exc),
+                        )
+                        client = MockMT5Client()
                 else:
                     client = MockMT5Client()
-                    if not self.settings.mt5_use_mock:
-                        # Live MetaTrader5 package is Windows-only; without a
-                        # configured gateway URL the process keeps the mock client.
-                        client = MockMT5Client()
+                    logger.info(
+                        "mt5_gateway_client_not_configured",
+                        base_url_set=bool(gateway_url),
+                        token_set=bool(gateway_token),
+                        using="MockMT5Client",
+                    )
                 self.mt5_adapter = MT5Adapter(
                     client=client, execution_enabled=execution_enabled
                 )

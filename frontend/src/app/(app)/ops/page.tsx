@@ -8,6 +8,7 @@ import { LazyBarChart } from "@/components/charts/lazy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
 import { PageMotion } from "@/components/desk/motion";
 import { mt5Api, opsApi, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
@@ -144,6 +145,8 @@ export default function OpsPage() {
         title="Operations"
         description="System health, infrastructure latency, and admin monitoring."
       />
+
+      <WeltradeGatewayStatus className="mb-4" />
 
       {health.isLoading ? (
         <DeskSkeleton variant="page" />

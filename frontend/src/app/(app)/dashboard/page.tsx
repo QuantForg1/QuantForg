@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import {
   brokersApi,
@@ -535,6 +536,7 @@ export default function DashboardPage() {
       />
 
       <RealtimeMeta status={realtime} className="mb-3" />
+      <WeltradeGatewayStatus className="mb-4" compact />
 
       <PageMotion className="space-y-5">
         {/* KPI row */}

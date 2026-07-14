@@ -58,13 +58,20 @@ class WeltradeIntegrationService:
         gw = self._gateway()
         base_url = ""
         token_configured = False
+        timeout_seconds: float | None = None
+        last_upstream: dict[str, Any] = {}
         if gw is not None:
             base_url = gw.base_url
             token_configured = bool(gw.token)
+            timeout_seconds = float(gw.timeout_seconds)
+            last_upstream = gw.last_upstream()
         return {
             "gateway_backed": gw is not None,
+            "mt5_gateway_base_url": base_url or None,
             "mt5_gateway_base_url_configured": bool(base_url),
             "mt5_gateway_caller_token_configured": token_configured,
+            "timeout_seconds": timeout_seconds,
+            "last_upstream": last_upstream,
             "execution_enabled": self.adapter.execution_enabled,
         }
 
@@ -81,14 +88,20 @@ class WeltradeIntegrationService:
         server: str | None = None
         account: dict[str, Any] | None = None
         session_mode = "none"
+        login_status = "logged_out"
         detail = "ok"
+        diagnostic = "ok"
         gateway_payload: dict[str, Any] = {}
+        upstream_error: str | None = None
 
         if gw is None:
             detail = (
-                "Railway is not configured for the Windows gateway. "
-                "Set MT5_GATEWAY_BASE_URL and MT5_GATEWAY_CALLER_TOKEN."
+                "Railway is not using GatewayMT5Client. "
+                "Confirm MT5_GATEWAY_BASE_URL and MT5_GATEWAY_CALLER_TOKEN are set "
+                "on the Railway service (absolute HTTPS URL, e.g. "
+                "https://xxxx.trycloudflare.com) and redeploy."
             )
+            diagnostic = "Gateway not configured"
             return {
                 "ok": False,
                 "healthy": False,
@@ -98,11 +111,26 @@ class WeltradeIntegrationService:
                 "tunnel_reachable": False,
                 "mt5_attached": False,
                 "latency_ms": None,
+                "latency": None,
                 "version": None,
                 "server": None,
                 "account": None,
                 "session": {"mode": "none"},
                 "detail": detail,
+                "upstream_error": detail,
+                "last_upstream_error": detail,
+                "last_http_status": None,
+                "last_body_preview": None,
+                "redirects_followed": None,
+                "gateway_url": None,
+                "cloudflare": {"detected": False, "ray": None, "cache": None},
+                "diagnostic": diagnostic,
+                "login_status": login_status,
+                "gateway_online": False,
+                "mt5_connected": False,
+                "weltrade_connected": False,
+                "status": "offline",
+                "transport": {},
             }
 
         try:
@@ -110,10 +138,23 @@ class WeltradeIntegrationService:
             tunnel_reachable = True
             gateway_reachable = gateway_payload.get("status") == "ok"
             if not gateway_reachable:
-                detail = str(gateway_payload.get("detail") or "Gateway unhealthy")
+                detail = (
+                    f"Gateway /health returned unexpected payload: {gateway_payload}"
+                )
+                upstream_error = detail
+                diagnostic = "Gateway unhealthy"
         except Exception as exc:
-            detail = f"Gateway unreachable: {exc}"
-            logger.warning("weltrade_gateway_health_failed", error=str(exc))
+            detail = str(exc)
+            upstream_error = detail
+            diagnostic = str(
+                gw.last_upstream().get("diagnostic") or "Gateway unreachable"
+            )
+            logger.warning(
+                "weltrade_gateway_health_failed",
+                error=str(exc),
+                base_url=gw.base_url,
+                last_upstream=gw.last_upstream(),
+            )
 
         if gateway_reachable:
             try:
@@ -122,6 +163,9 @@ class WeltradeIntegrationService:
                 version = snap.version or ""
                 server = snap.server or None
                 mt5_attached = bool(snap.connected)
+                login_status = snap.login_status or (
+                    "connected" if mt5_attached else "logged_out"
+                )
                 session_mode = str(
                     getattr(self.adapter.client, "session_mode", "none") or "none"
                 )
@@ -141,9 +185,24 @@ class WeltradeIntegrationService:
                     server = info.server or server
             except Exception as exc:
                 detail = f"MT5 session probe failed: {exc}"
+                upstream_error = detail
+                diagnostic = "MT5 session probe failed"
                 logger.warning("weltrade_mt5_probe_failed", error=str(exc))
 
-        healthy = gateway_reachable and (mt5_attached or tunnel_reachable)
+        cfg = self._configuration()
+        transport = gw.diagnostics_probe()
+        upstream = gw.last_upstream()
+        transport_latency = upstream.get("latency_ms")
+        if latency_ms is None and transport_latency is not None:
+            latency_ms = float(transport_latency)
+
+        if gateway_reachable and mt5_attached:
+            detail = "ok"
+            diagnostic = "ok"
+            upstream_error = None
+        elif gateway_reachable and diagnostic == "ok":
+            diagnostic = "Gateway Online"
+
         return {
             "ok": tunnel_reachable,
             "healthy": bool(gateway_reachable),
@@ -153,22 +212,49 @@ class WeltradeIntegrationService:
             "tunnel_reachable": tunnel_reachable,
             "mt5_attached": mt5_attached,
             "latency_ms": latency_ms,
+            "latency": latency_ms,
             "version": version or None,
             "server": server,
             "account": account,
-            "session": {"mode": session_mode},
+            "session": {
+                "mode": session_mode,
+                "login_status": login_status,
+                "server": server,
+            },
             "gateway": {
                 "status": gateway_payload.get("status"),
                 "service": gateway_payload.get("service"),
                 "bridge_available": gateway_payload.get("bridge_available"),
                 "token_configured": gateway_payload.get("token_configured"),
             },
-            "detail": detail if not gateway_reachable or not mt5_attached else "ok",
-            # Aliases matching UI copy
+            "transport": transport,
+            "detail": detail,
+            "upstream_error": upstream_error,
+            "last_upstream_error": upstream_error or upstream.get("error"),
+            "last_http_status": upstream.get("status_code"),
+            "last_body_preview": upstream.get("body_preview"),
+            "redirects_followed": upstream.get("redirects_followed"),
+            "gateway_url": gw.base_url,
+            "cloudflare": {
+                "detected": bool(
+                    transport.get("cloudflare") or upstream.get("cloudflare")
+                ),
+                "ray": upstream.get("cloudflare_ray"),
+                "cache": upstream.get("cloudflare_cache"),
+                "http_version": upstream.get("http_version"),
+            },
+            "diagnostic": diagnostic,
+            "login_status": login_status,
             "gateway_online": gateway_reachable,
             "mt5_connected": mt5_attached,
             "weltrade_connected": bool(gateway_reachable and mt5_attached),
-            "status": "healthy" if healthy else "degraded",
+            "status": (
+                "healthy"
+                if gateway_reachable and mt5_attached
+                else "degraded"
+                if gateway_reachable
+                else "offline"
+            ),
         }
 
     def dashboard(self, *, user_id: UUID) -> dict[str, Any]:
@@ -222,6 +308,29 @@ class WeltradeIntegrationService:
             except Exception as exc:
                 diagnostics = {"error": str(exc)}
 
+        upstream = gw.last_upstream() if gw is not None else {}
+        transport = gw.diagnostics_probe() if gw is not None else {}
+        upstream_error: str | None = None
+        diagnostic = "ok"
+        if not gateway_online:
+            if gw is None:
+                upstream_error = (
+                    "Railway is not using GatewayMT5Client. "
+                    "Confirm MT5_GATEWAY_BASE_URL and MT5_GATEWAY_CALLER_TOKEN."
+                )
+                diagnostic = "Gateway not configured"
+            else:
+                upstream_error = str(
+                    gateway_payload.get("detail")
+                    or upstream.get("error")
+                    or "Gateway /health failed"
+                )
+                diagnostic = str(
+                    upstream.get("diagnostic") or "Gateway Offline"
+                )
+        elif not mt5_connected:
+            diagnostic = "Gateway Online"
+
         return {
             "broker": WELTRADE_BROKER,
             "profile": self.profile(),
@@ -240,6 +349,31 @@ class WeltradeIntegrationService:
                 "last_sync_at": self._last_sync_at,
             },
             "gateway": gateway_payload,
+            "transport": transport,
+            "detail": upstream_error or "ok",
+            "upstream_error": upstream_error,
+            "last_upstream_error": upstream_error or upstream.get("error"),
+            "last_http_status": upstream.get("status_code"),
+            "last_body_preview": upstream.get("body_preview"),
+            "redirects_followed": upstream.get("redirects_followed"),
+            "gateway_url": gw.base_url if gw is not None else None,
+            "latency": health.latency_ms or upstream.get("latency_ms"),
+            "cloudflare": {
+                "detected": bool(transport.get("cloudflare")),
+                "ray": upstream.get("cloudflare_ray"),
+                "cache": upstream.get("cloudflare_cache"),
+                "http_version": upstream.get("http_version"),
+            },
+            "diagnostic": diagnostic,
+            "login_status": health.login_status,
+            "session": {
+                "mode": session_mode,
+                "login_status": health.login_status,
+                "server": health.server or None,
+            },
+            "gateway_online": gateway_online,
+            "gateway_reachable": gateway_online,
+            "mt5_connected": mt5_connected,
             "account": account,
             "positions": {"items": positions, "count": len(positions)},
             "orders": {"items": orders, "count": len(orders)},
@@ -297,19 +431,35 @@ class WeltradeIntegrationService:
         try:
             health = gw.gateway_health()
             ok = health.get("status") == "ok"
+            if not ok:
+                raise RuntimeError(
+                    f"Gateway /health unexpected payload at {gw.base_url}: {health}"
+                )
             steps.append(
                 {
                     "step": "gateway_check",
-                    "ok": ok,
-                    "detail": "Gateway reachable" if ok else "Gateway unhealthy",
+                    "ok": True,
+                    "detail": f"Gateway reachable ({gw.base_url})",
                 }
             )
-            if not ok:
-                raise RuntimeError("Gateway health check failed")
         except Exception as exc:
-            steps.append({"step": "gateway_check", "ok": False, "detail": str(exc)})
-            logger.warning("weltrade_connect_gateway_unavailable", error=str(exc))
-            raise RuntimeError(f"Gateway unavailable: {exc}") from exc
+            upstream = gw.last_upstream()
+            detail = str(exc)
+            steps.append(
+                {
+                    "step": "gateway_check",
+                    "ok": False,
+                    "detail": detail,
+                    "upstream": upstream,
+                }
+            )
+            logger.warning(
+                "weltrade_connect_gateway_unavailable",
+                error=detail,
+                base_url=gw.base_url,
+                last_upstream=upstream,
+            )
+            raise RuntimeError(detail) from exc
 
         attached = False
         if prefer_attach:
