@@ -11,7 +11,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settings
 
@@ -29,6 +29,8 @@ _TIMEFRAME_MAP: dict[str, int] = {
     "MN1": 49153,
 }
 
+SessionMode = Literal["none", "connected", "attached"]
+
 
 @dataclass
 class SessionCredentials:
@@ -38,6 +40,7 @@ class SessionCredentials:
     password: str
     server: str
     path: str = ""
+    mode: SessionMode = "connected"
 
 
 @dataclass
@@ -50,10 +53,12 @@ class GatewayDiagnostics:
     connected: bool = False
     server: str = ""
     login: int | None = None
+    session_mode: SessionMode = "none"
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "connected": self.connected,
+            "session_mode": self.session_mode,
             "server": self.server or None,
             "login": self.login,
             "last_heartbeat_at": self.last_heartbeat_at,
@@ -117,6 +122,13 @@ class LiveMT5Bridge:
 
     def last_error(self) -> Any:
         return self.require().last_error()
+
+    def symbol_select(self, symbol: str, enable: bool = True) -> bool:
+        mt5 = self.require()
+        select = getattr(mt5, "symbol_select", None)
+        if select is None:
+            return True
+        return bool(select(symbol, enable))
 
     def symbol_info_tick(self, symbol: str) -> Any:
         return self.require().symbol_info_tick(symbol)
@@ -183,6 +195,28 @@ class MT5GatewayRuntime:
         )
         self.diagnostics.failures = self.diagnostics.failures[-50:]
 
+    def _mark_session(
+        self,
+        *,
+        login: int,
+        server: str,
+        path: str,
+        password: str,
+        mode: SessionMode,
+    ) -> None:
+        self._creds = SessionCredentials(
+            login=login,
+            password=password,
+            server=server,
+            path=path,
+            mode=mode,
+        )
+        self.diagnostics.connected = True
+        self.diagnostics.server = server
+        self.diagnostics.login = login
+        self.diagnostics.session_mode = mode
+        self.diagnostics.reconnect_attempts = 0
+
     def connect(
         self, *, login: int, password: str, server: str, path: str = ""
     ) -> dict[str, Any]:
@@ -204,20 +238,71 @@ class MT5GatewayRuntime:
                 self.bridge.shutdown()
                 raise RuntimeError(msg)
             # Credentials stay in memory for reconnect only — never returned.
-            self._creds = SessionCredentials(
-                login=login, password=password, server=server, path=term_path
+            self._mark_session(
+                login=login,
+                server=server,
+                path=term_path,
+                password=password,
+                mode="connected",
             )
-            self.diagnostics.connected = True
-            self.diagnostics.server = server
-            self.diagnostics.login = login
-            self.diagnostics.reconnect_attempts = 0
             return {
                 "connected": True,
+                "session_mode": "connected",
                 "server": server,
                 "login": login,
                 "note": (
                     "Credentials retained in gateway memory for reconnect only. "
                     "Not stored in Railway."
+                ),
+            }
+
+    def attach(self, *, path: str = "") -> dict[str, Any]:
+        """Adopt an already logged-in MT5 terminal without collecting a password.
+
+        Requires the Windows MetaTrader 5 terminal session to already be
+        authenticated. Reconnect without a stored password reuses initialize()
+        + account_info(); full re-login needs POST /session/connect.
+        """
+        with self._lock:
+            term_path = path or self.settings.mt5_terminal_path
+            if not self.bridge.initialize(term_path):
+                err = (
+                    self.bridge.last_error()
+                    if self.bridge.available
+                    else self.bridge._import_error
+                )
+                msg = f"MT5 initialize failed: {err}"
+                self._record_failure(msg)
+                raise RuntimeError(msg)
+            info = self.bridge.account_info()
+            if info is None:
+                msg = (
+                    "MT5 terminal has no active account session. "
+                    "Log in via the MetaTrader UI first, or use "
+                    "POST /session/connect with login/password/server."
+                )
+                self._record_failure(msg)
+                self.bridge.shutdown()
+                raise RuntimeError(msg)
+            login = int(info.login)
+            server = str(getattr(info, "server", "") or "")
+            self._mark_session(
+                login=login,
+                server=server,
+                path=term_path,
+                password="",
+                mode="attached",
+            )
+            return {
+                "connected": True,
+                "session_mode": "attached",
+                "server": server or None,
+                "login": login,
+                "currency": str(getattr(info, "currency", "")),
+                "note": (
+                    "Attached to existing MT5 terminal session. "
+                    "Broker password was not collected and is not stored. "
+                    "Password-based reconnect requires POST /session/connect."
                 ),
             }
 
@@ -231,13 +316,15 @@ class MT5GatewayRuntime:
             self.diagnostics.connected = False
             self.diagnostics.server = ""
             self.diagnostics.login = None
-            return {"connected": False}
+            self.diagnostics.session_mode = "none"
+            return {"connected": False, "session_mode": "none"}
 
     def status(self) -> dict[str, Any]:
         with self._lock:
             health = self.health()
             return {
                 "connected": self.diagnostics.connected,
+                "session_mode": self.diagnostics.session_mode,
                 "server": self.diagnostics.server or None,
                 "login": self.diagnostics.login,
                 "bridge_available": self.bridge.available,
@@ -271,6 +358,7 @@ class MT5GatewayRuntime:
             connected = False
         return {
             "connected": connected,
+            "session_mode": self.diagnostics.session_mode,
             "latency_ms": latency_ms,
             "terminal_build": terminal_build,
             "server": server or None,
@@ -293,7 +381,12 @@ class MT5GatewayRuntime:
             now = datetime.now(UTC).isoformat()
             self.diagnostics.last_heartbeat_at = now
             self.diagnostics.last_heartbeat_ms = ms
-            return {"ok": True, "ping_ms": ms, "at": now}
+            return {
+                "ok": True,
+                "ping_ms": ms,
+                "at": now,
+                "session_mode": self.diagnostics.session_mode,
+            }
 
     def _try_reconnect(self) -> bool:
         if not self.settings.mt5_reconnect_enabled:
@@ -307,17 +400,31 @@ class MT5GatewayRuntime:
         ):
             return False
         self.diagnostics.reconnect_attempts += 1
-        event = {
+        event: dict[str, Any] = {
             "at": datetime.now(UTC).isoformat(),
             "attempt": self.diagnostics.reconnect_attempts,
+            "mode": creds.mode,
         }
         try:
             path = creds.path or self.settings.mt5_terminal_path
             if not self.bridge.initialize(path):
                 raise RuntimeError(f"initialize failed: {self.bridge.last_error()}")
-            if not self.bridge.login(creds.login, creds.password, creds.server):
-                raise RuntimeError(f"login failed: {self.bridge.last_error()}")
+            if creds.password:
+                if not self.bridge.login(creds.login, creds.password, creds.server):
+                    raise RuntimeError(f"login failed: {self.bridge.last_error()}")
+            else:
+                info = self.bridge.account_info()
+                if info is None:
+                    raise RuntimeError(
+                        "attached session lost — terminal has no account; "
+                        "use POST /session/connect"
+                    )
+                creds.login = int(info.login)
+                creds.server = str(getattr(info, "server", "") or creds.server)
+                self.diagnostics.login = creds.login
+                self.diagnostics.server = creds.server
             self.diagnostics.connected = True
+            self.diagnostics.session_mode = creds.mode
             event["result"] = "ok"
             self.diagnostics.reconnect_events.append(event)
             return True
@@ -337,7 +444,7 @@ class MT5GatewayRuntime:
         interval = self.settings.mt5_heartbeat_interval_seconds
         while not self._stop.wait(interval):
             with self._lock:
-                if not self._creds:
+                if not self.diagnostics.connected or self._creds is None:
                     continue
                 try:
                     self.heartbeat()
@@ -345,6 +452,11 @@ class MT5GatewayRuntime:
                     backoff = self.settings.mt5_reconnect_backoff_seconds
                     self._try_reconnect()
                     time.sleep(backoff)
+
+    def _ensure_symbol(self, symbol: str) -> None:
+        if not self.bridge.symbol_select(symbol, True):
+            err = self.bridge.last_error()
+            raise RuntimeError(f"symbol_select failed for {symbol}: {err}")
 
     def account(self) -> dict[str, Any]:
         info = self._require_account()
@@ -360,6 +472,7 @@ class MT5GatewayRuntime:
             "currency": str(getattr(info, "currency", "")),
             "server": str(getattr(info, "server", "")),
             "name": str(getattr(info, "name", "")),
+            "session_mode": self.diagnostics.session_mode,
         }
 
     def symbols(self) -> dict[str, Any]:
@@ -377,6 +490,7 @@ class MT5GatewayRuntime:
 
     def quote(self, symbol: str) -> dict[str, Any]:
         self._require_connected()
+        self._ensure_symbol(symbol)
         tick = self.bridge.symbol_info_tick(symbol)
         if tick is None:
             raise RuntimeError(f"symbol unavailable: {symbol}")
@@ -391,6 +505,7 @@ class MT5GatewayRuntime:
         self, symbol: str, *, timeframe: str = "H1", count: int = 100
     ) -> dict[str, Any]:
         self._require_connected()
+        self._ensure_symbol(symbol)
         tf = _TIMEFRAME_MAP.get(timeframe.strip().upper())
         if tf is None:
             raise RuntimeError(f"unsupported timeframe: {timeframe}")
@@ -481,20 +596,26 @@ class MT5GatewayRuntime:
         return {"items": items}
 
     def diagnostics_snapshot(self) -> dict[str, Any]:
+        password_in_memory = bool(self._creds and self._creds.password)
         return {
             **self.diagnostics.to_dict(),
             "bridge_available": self.bridge.available,
             "import_error": self.bridge._import_error,
             "credentials_in_memory": self._creds is not None,
+            "password_in_memory": password_in_memory,
+            "auto_attach_enabled": self.settings.mt5_gateway_auto_attach,
             "credentials_note": (
                 "Broker password never leaves Windows gateway memory / "
-                "never stored in Railway"
+                "never stored in Railway. Attached sessions store no password."
             ),
         }
 
     def _require_connected(self) -> None:
         if not self.diagnostics.connected:
-            raise RuntimeError("MT5 not connected")
+            raise RuntimeError(
+                "MT5 not connected. Call POST /session/attach "
+                "(terminal already logged in) or POST /session/connect."
+            )
         if not self.bridge.available:
             raise RuntimeError("MetaTrader5 bridge unavailable")
 

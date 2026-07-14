@@ -33,22 +33,47 @@ Save `gateway_id` and `gateway_token` from the response.
 ```powershell
 cd C:\QuantForg
 # create venv, install deps
+# Copy deploy\mt5_gateway\gateway.env.example values into .env or process env:
 $env:MT5_GATEWAY_TOKEN="<from registration>"
 $env:MT5_GATEWAY_HOST="0.0.0.0"
 $env:MT5_GATEWAY_PORT="8765"
 $env:MT5_TERMINAL_PATH="C:\Program Files\MetaTrader 5\terminal64.exe"
+# Optional local DX — reuse already logged-in XM terminal:
+$env:MT5_GATEWAY_AUTO_ATTACH="true"
 quantforg-mt5-gateway
 ```
 
 Or install as a service — see `deploy/mt5_gateway/windows-service.ps1`.
 
-## 3. Connect broker session (on gateway)
+## 3. Bind broker session (on gateway)
+
+Prefer **attach** when MetaTrader is already logged in (no password to the API):
+
+```bash
+curl -X POST https://win-mt5-1.internal:8765/session/attach \
+  -H "Authorization: Bearer $MT5_GATEWAY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Or explicit login:
 
 ```bash
 curl -X POST https://win-mt5-1.internal:8765/session/connect \
   -H "Authorization: Bearer $MT5_GATEWAY_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"login":123456,"password":"...","server":"Exness-MT5"}'
+```
+
+Then verify:
+
+```bash
+curl https://win-mt5-1.internal:8765/account \
+  -H "Authorization: Bearer $MT5_GATEWAY_TOKEN"
+curl https://win-mt5-1.internal:8765/quotes/EURUSD \
+  -H "Authorization: Bearer $MT5_GATEWAY_TOKEN"
+curl https://win-mt5-1.internal:8765/positions \
+  -H "Authorization: Bearer $MT5_GATEWAY_TOKEN"
 ```
 
 ## 4. Heartbeat agent (mutual auth)

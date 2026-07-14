@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- MT5 Gateway session attach: `POST /session/attach` reuses an already
+  logged-in Windows terminal without collecting the broker password;
+  optional `MT5_GATEWAY_AUTO_ATTACH` for local DX; `symbol_select` before
+  quotes/candles; `deploy/mt5_gateway/gateway.env.example`.
 - Closed Beta onboarding: Get Started hub, first-run checklist, product tour,
   broker connection wizard, paper trading tutorial, in-app What’s New,
   and beta docs (`BETA_ONBOARDING.md`, `BETA_OPERATIONS.md`,

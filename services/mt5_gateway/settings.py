@@ -34,6 +34,15 @@ class MT5GatewaySettings(BaseSettings):
     mt5_reconnect_backoff_seconds: float = Field(default=2.0, gt=0)
     mt5_gateway_allow_unauthenticated_health: bool = Field(default=True)
     mt5_gateway_enable_websocket: bool = Field(default=True)
+    mt5_gateway_auto_attach: bool = Field(
+        default=False,
+        description=(
+            "On startup, initialize MetaTrader5 and adopt an already logged-in "
+            "terminal session without collecting the broker password. "
+            "Recommended for local Windows DX; leave false in hardened production "
+            "unless the host is private and the terminal is operator-managed."
+        ),
+    )
 
 
 @lru_cache(maxsize=1)

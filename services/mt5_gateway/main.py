@@ -5,6 +5,7 @@ Does not replace QuantForg `/api/v1/mt5`. Credentials stay on this host.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -16,12 +17,40 @@ from services.mt5_gateway.runtime import MT5GatewayRuntime
 from services.mt5_gateway.settings import get_gateway_settings
 from services.mt5_gateway.websocket import ws_router
 
+logger = logging.getLogger("quantforg.mt5_gateway")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    runtime = MT5GatewayRuntime()
+    settings = get_gateway_settings()
+    if not (settings.mt5_gateway_token or "").strip():
+        logger.warning(
+            "MT5_GATEWAY_TOKEN is not set. Protected routes return 503 until "
+            "you set a strong token in the Windows host .env "
+            "(see deploy/mt5_gateway/gateway.env.example). "
+            "Never put broker passwords in Railway."
+        )
+
+    runtime = MT5GatewayRuntime(settings=settings)
     runtime.start_background()
     app.state.runtime = runtime
+
+    if settings.mt5_gateway_auto_attach:
+        try:
+            result = runtime.attach(path=settings.mt5_terminal_path)
+            logger.info(
+                "Auto-attached to MT5 terminal session login=%s server=%s",
+                result.get("login"),
+                result.get("server"),
+            )
+        except Exception as exc:
+            logger.warning(
+                "MT5_GATEWAY_AUTO_ATTACH enabled but attach failed: %s. "
+                "Log into the MetaTrader UI, then POST /session/attach or "
+                "/session/connect.",
+                exc,
+            )
+
     try:
         yield
     finally:
@@ -33,10 +62,12 @@ def create_app() -> FastAPI:
     settings = get_gateway_settings()
     app = FastAPI(
         title="QuantForg MT5 Gateway",
-        version="1.0.0",
+        version="1.1.0",
         description=(
             "Windows MetaTrader 5 runtime gateway. "
-            "Broker credentials stay in gateway memory — not Railway."
+            "Broker credentials stay in gateway memory — not Railway. "
+            "Use POST /session/attach to reuse an already logged-in terminal, "
+            "or POST /session/connect with login/password/server."
         ),
         lifespan=lifespan,
     )

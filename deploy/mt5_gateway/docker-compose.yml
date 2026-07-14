@@ -24,5 +24,6 @@ services:
       MT5_GATEWAY_HOST: 0.0.0.0
       MT5_GATEWAY_PORT: "8765"
       MT5_GATEWAY_ENABLE_WEBSOCKET: "true"
+      MT5_GATEWAY_AUTO_ATTACH: "false"
     # Broker credentials are supplied at runtime via POST /session/connect
     # on the gateway — never via Compose env.

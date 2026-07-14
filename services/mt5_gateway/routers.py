@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.mt5_gateway.auth import require_gateway_token
 from services.mt5_gateway.runtime import MT5GatewayRuntime
-from services.mt5_gateway.schemas import ConnectRequest
+from services.mt5_gateway.schemas import AttachRequest, ConnectRequest
 from services.mt5_gateway.settings import get_gateway_settings
 
 router = APIRouter(tags=["mt5-gateway"])
@@ -48,7 +48,14 @@ async def health(request: Request) -> dict[str, Any]:
         "service": "mt5-gateway",
         "token_configured": bool(settings.mt5_gateway_token),
         "websocket_enabled": settings.mt5_gateway_enable_websocket,
+        "auto_attach_enabled": settings.mt5_gateway_auto_attach,
     }
+    if not settings.mt5_gateway_token:
+        payload["setup_hint"] = (
+            "Set MT5_GATEWAY_TOKEN on this Windows host "
+            "(see deploy/mt5_gateway/gateway.env.example), then restart. "
+            "After that POST /session/attach or /session/connect."
+        )
     if runtime is not None:
         payload["mt5"] = runtime.health()
         payload["bridge_available"] = runtime.bridge.available
@@ -72,6 +79,14 @@ async def connect(
             path=body.path,
         )
     )
+
+
+@router.post("/session/attach")
+async def attach(
+    body: AttachRequest, _: TokenDep, runtime: RuntimeDep
+) -> dict[str, Any]:
+    """Reuse an already logged-in MT5 terminal (no broker password)."""
+    return _call(lambda: runtime.attach(path=body.path))
 
 
 @router.post("/session/disconnect")

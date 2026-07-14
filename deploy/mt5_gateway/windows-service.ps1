@@ -9,10 +9,12 @@
 #      MT5_GATEWAY_HOST=0.0.0.0
 #      MT5_GATEWAY_PORT=8765
 #      MT5_TERMINAL_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
+#      MT5_GATEWAY_AUTO_ATTACH=true
 # 4. Start:
 #    nssm start QuantForgMT5Gateway
 #
 # NEVER put broker login/password in the service environment.
-# Connect via POST /session/connect after the service is up.
+# Prefer MT5_GATEWAY_AUTO_ATTACH=true when the terminal stays logged in,
+# or call POST /session/attach / POST /session/connect after the service is up.
 
 Write-Host "See comments in this script for NSSM install steps."

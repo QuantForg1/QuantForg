@@ -15,13 +15,15 @@ from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settin
 
 
 class _FakeBridge(LiveMT5Bridge):
-    def __init__(self) -> None:
+    def __init__(self, *, prelogged: bool = False) -> None:
         self._mt5 = object()
         self._import_error: str | None = None
         self._initialized = False
-        self._logged_in = False
-        self._login = 0
-        self._server = ""
+        self._logged_in = prelogged
+        self._login = 99901 if prelogged else 0
+        self._server = "XMGlobal-Demo" if prelogged else ""
+        self.selected: list[str] = []
+        self.login_calls = 0
 
     def initialize(self, path: str = "") -> bool:
         _ = path
@@ -32,6 +34,7 @@ class _FakeBridge(LiveMT5Bridge):
         _ = password
         if not self._initialized:
             return False
+        self.login_calls += 1
         self._logged_in = True
         self._login = login
         self._server = server
@@ -43,6 +46,11 @@ class _FakeBridge(LiveMT5Bridge):
 
     def last_error(self) -> Any:
         return (1, "fake")
+
+    def symbol_select(self, symbol: str, enable: bool = True) -> bool:
+        _ = enable
+        self.selected.append(symbol)
+        return True
 
     def account_info(self) -> Any:
         if not self._logged_in:
@@ -89,7 +97,17 @@ class _FakeBridge(LiveMT5Bridge):
         ]
 
     def positions_get(self) -> Any:
-        return []
+        return [
+            SimpleNamespace(
+                ticket=1,
+                symbol="EURUSD",
+                type=0,
+                volume=0.1,
+                price_open=1.1,
+                price_current=1.11,
+                profit=1.0,
+            )
+        ]
 
     def orders_get(self) -> Any:
         return []
@@ -100,13 +118,14 @@ class _FakeBridge(LiveMT5Bridge):
 
     def history_deals_get(self, date_from: Any, date_to: Any) -> Any:
         _ = date_from, date_to
-        return []
+        return [SimpleNamespace(ticket=9, symbol="EURUSD", profit=2.5, volume=0.1)]
 
 
 @pytest.fixture
 def gateway_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[MT5GatewaySettings]:
     monkeypatch.setenv("MT5_GATEWAY_TOKEN", "test-gateway-token")
     monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
+    monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "false")
     get_gateway_settings.cache_clear()
     settings = get_gateway_settings()
     yield settings
@@ -136,6 +155,24 @@ class TestMT5Gateway:
         body = res.json()
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
+        assert body["auto_attach_enabled"] is False
+
+    def test_health_hints_when_token_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("MT5_GATEWAY_TOKEN", raising=False)
+        monkeypatch.setenv("MT5_GATEWAY_TOKEN", "")
+        monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
+        monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "false")
+        get_gateway_settings.cache_clear()
+        app = create_app()
+        with TestClient(app) as test_client:
+            res = test_client.get("/health")
+            assert res.status_code == 200
+            body = res.json()
+            assert body["token_configured"] is False
+            assert "MT5_GATEWAY_TOKEN" in body["setup_hint"]
+        get_gateway_settings.cache_clear()
 
     def test_requires_token(self, client: TestClient) -> None:
         res = client.get("/account")
@@ -154,6 +191,7 @@ class TestMT5Gateway:
         )
         assert res.status_code == 200
         assert res.json()["connected"] is True
+        assert res.json()["session_mode"] == "connected"
         assert "password" not in res.json()
 
         acct = client.get("/account", headers=headers)
@@ -164,23 +202,94 @@ class TestMT5Gateway:
         quotes = client.get("/quotes/EURUSD", headers=headers)
         assert quotes.status_code == 200
         assert "bid" in quotes.json()
+        runtime = client.app.state.runtime
+        assert "EURUSD" in runtime.bridge.selected
 
         candles = client.get("/candles/EURUSD", headers=headers)
         assert candles.status_code == 200
         assert candles.json()["items"]
 
-        assert client.get("/positions", headers=headers).status_code == 200
+        positions = client.get("/positions", headers=headers)
+        assert positions.status_code == 200
+        assert positions.json()["items"][0]["ticket"] == 1
+
         assert client.get("/orders", headers=headers).status_code == 200
-        assert client.get("/history/deals", headers=headers).status_code == 200
+        deals = client.get("/history/deals", headers=headers)
+        assert deals.status_code == 200
+        assert deals.json()["items"]
 
         diag = client.get("/diagnostics", headers=headers)
         assert diag.status_code == 200
         assert diag.json()["credentials_in_memory"] is True
+        assert diag.json()["password_in_memory"] is True
         assert "Railway" in diag.json()["credentials_note"]
 
         hb = client.get("/heartbeat", headers=headers)
         assert hb.status_code == 200
         assert hb.json()["ok"] is True
+
+    def test_attach_reuses_logged_in_terminal(self, client: TestClient) -> None:
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        runtime = client.app.state.runtime
+        runtime.bridge = _FakeBridge(prelogged=True)
+
+        res = client.post("/session/attach", headers=headers, json={})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["connected"] is True
+        assert body["session_mode"] == "attached"
+        assert body["login"] == 99901
+        assert body["server"] == "XMGlobal-Demo"
+        assert "password" not in body
+        assert runtime.bridge.login_calls == 0
+
+        acct = client.get("/account", headers=headers)
+        assert acct.status_code == 200
+        assert acct.json()["login"] == 99901
+        assert acct.json()["session_mode"] == "attached"
+
+        diag = client.get("/diagnostics", headers=headers)
+        assert diag.json()["session_mode"] == "attached"
+        assert diag.json()["password_in_memory"] is False
+
+        quotes = client.get("/quotes/EURUSD", headers=headers)
+        assert quotes.status_code == 200
+
+    def test_attach_fails_without_terminal_session(
+        self, client: TestClient
+    ) -> None:
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        res = client.post("/session/attach", headers=headers, json={})
+        assert res.status_code == 503
+        assert "no active account" in res.json()["detail"].lower()
+
+    def test_auto_attach_on_startup(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MT5_GATEWAY_TOKEN", "test-gateway-token")
+        monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
+        monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "true")
+        get_gateway_settings.cache_clear()
+
+        prelogged = _FakeBridge(prelogged=True)
+        original_init = MT5GatewayRuntime.__init__
+
+        def _patched_init(self: MT5GatewayRuntime, *args: Any, **kwargs: Any) -> None:
+            kwargs["bridge"] = prelogged
+            original_init(self, *args, **kwargs)
+
+        monkeypatch.setattr(MT5GatewayRuntime, "__init__", _patched_init)
+        app = create_app()
+        with TestClient(app) as test_client:
+            headers = {"Authorization": "Bearer test-gateway-token"}
+            status = test_client.get("/session/status", headers=headers)
+            assert status.status_code == 200
+            assert status.json()["connected"] is True
+            assert status.json()["session_mode"] == "attached"
+            assert status.json()["login"] == 99901
+            acct = test_client.get("/account", headers=headers)
+            assert acct.status_code == 200
+        get_gateway_settings.cache_clear()
 
     def test_x_gateway_token_header(self, client: TestClient) -> None:
         headers = {"X-Gateway-Token": "test-gateway-token"}
