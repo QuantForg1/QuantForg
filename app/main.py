@@ -148,15 +148,25 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         database_resolved_host=resolved_host or "",
         redis_url_configured=bool((settings.redis_url_override or "").strip()),
         railway_public_domain=settings.railway_public_domain or "",
+        mt5_gateway_base_url_configured=bool(
+            (settings.mt5_gateway_base_url or "").strip()
+        ),
+        mt5_gateway_caller_token_configured=bool(
+            (settings.mt5_gateway_caller_token or "").strip()
+        ),
     )
 
     database = DatabaseManager(settings)
     container = Container(settings=settings, database=database)
     set_container(container)
     set_database_manager(database)
+    # Keep FastAPI state in sync for any code that inspects app.state.container.
+    _app.state.container = container
 
     try:
         await container.startup()
+        gw_url = (settings.mt5_gateway_base_url or "").strip()
+        gw_tok = bool((settings.mt5_gateway_caller_token or "").strip())
         logger.info(
             "application_started",
             name=settings.app_name,
@@ -165,6 +175,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             execution_enabled=bool(settings.execution_enabled),
             redis_connected=container.redis is not None,
             supabase_connected=container.supabase is not None,
+            mt5_gateway_base_url_configured=bool(gw_url),
+            mt5_gateway_caller_token_configured=gw_tok,
+            mt5_gateway_backed=bool(
+                gw_url
+                and gw_tok
+                and getattr(container, "mt5_adapter", None) is not None
+            ),
         )
         logger.info("startup_complete")
     except Exception as exc:

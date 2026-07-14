@@ -14,6 +14,9 @@ from uuid import UUID
 from app.domain.interfaces.mt5_client import MT5LoginRequest
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 WELTRADE_BROKER = "weltrade"
 WELTRADE_SERVERS = {
@@ -51,6 +54,123 @@ class WeltradeIntegrationService:
         client = self.adapter.client
         return client if isinstance(client, GatewayMT5Client) else None
 
+    def _configuration(self) -> dict[str, Any]:
+        gw = self._gateway()
+        base_url = ""
+        token_configured = False
+        if gw is not None:
+            base_url = gw.base_url
+            token_configured = bool(gw.token)
+        return {
+            "gateway_backed": gw is not None,
+            "mt5_gateway_base_url_configured": bool(base_url),
+            "mt5_gateway_caller_token_configured": token_configured,
+            "execution_enabled": self.adapter.execution_enabled,
+        }
+
+    def health(self, *, user_id: UUID) -> dict[str, Any]:
+        """Production health probe for tunnel + gateway + MT5 session."""
+        _ = user_id
+        cfg = self._configuration()
+        gw = self._gateway()
+        latency_ms: float | None = None
+        tunnel_reachable = False
+        gateway_reachable = False
+        mt5_attached = False
+        version = ""
+        server: str | None = None
+        account: dict[str, Any] | None = None
+        session_mode = "none"
+        detail = "ok"
+        gateway_payload: dict[str, Any] = {}
+
+        if gw is None:
+            detail = (
+                "Railway is not configured for the Windows gateway. "
+                "Set MT5_GATEWAY_BASE_URL and MT5_GATEWAY_CALLER_TOKEN."
+            )
+            return {
+                "ok": False,
+                "healthy": False,
+                "broker": WELTRADE_BROKER,
+                "configuration": cfg,
+                "gateway_reachable": False,
+                "tunnel_reachable": False,
+                "mt5_attached": False,
+                "latency_ms": None,
+                "version": None,
+                "server": None,
+                "account": None,
+                "session": {"mode": "none"},
+                "detail": detail,
+            }
+
+        try:
+            gateway_payload = gw.gateway_health()
+            tunnel_reachable = True
+            gateway_reachable = gateway_payload.get("status") == "ok"
+            if not gateway_reachable:
+                detail = str(gateway_payload.get("detail") or "Gateway unhealthy")
+        except Exception as exc:
+            detail = f"Gateway unreachable: {exc}"
+            logger.warning("weltrade_gateway_health_failed", error=str(exc))
+
+        if gateway_reachable:
+            try:
+                snap = self.adapter.health()
+                latency_ms = snap.latency_ms
+                version = snap.version or ""
+                server = snap.server or None
+                mt5_attached = bool(snap.connected)
+                session_mode = str(
+                    getattr(self.adapter.client, "session_mode", "none") or "none"
+                )
+                if mt5_attached:
+                    info = self.adapter.account_info()
+                    account = {
+                        "login": info.login,
+                        "name": info.name,
+                        "balance": str(info.balance),
+                        "equity": str(info.equity),
+                        "margin": str(info.margin),
+                        "free_margin": str(info.free_margin),
+                        "leverage": info.leverage,
+                        "currency": info.currency,
+                        "server": info.server,
+                    }
+                    server = info.server or server
+            except Exception as exc:
+                detail = f"MT5 session probe failed: {exc}"
+                logger.warning("weltrade_mt5_probe_failed", error=str(exc))
+
+        healthy = gateway_reachable and (mt5_attached or tunnel_reachable)
+        return {
+            "ok": tunnel_reachable,
+            "healthy": bool(gateway_reachable),
+            "broker": WELTRADE_BROKER,
+            "configuration": cfg,
+            "gateway_reachable": gateway_reachable,
+            "tunnel_reachable": tunnel_reachable,
+            "mt5_attached": mt5_attached,
+            "latency_ms": latency_ms,
+            "version": version or None,
+            "server": server,
+            "account": account,
+            "session": {"mode": session_mode},
+            "gateway": {
+                "status": gateway_payload.get("status"),
+                "service": gateway_payload.get("service"),
+                "bridge_available": gateway_payload.get("bridge_available"),
+                "token_configured": gateway_payload.get("token_configured"),
+            },
+            "detail": detail if not gateway_reachable or not mt5_attached else "ok",
+            # Aliases matching UI copy
+            "gateway_online": gateway_reachable,
+            "mt5_connected": mt5_attached,
+            "weltrade_connected": bool(gateway_reachable and mt5_attached),
+            "status": "healthy" if healthy else "degraded",
+        }
+
     def dashboard(self, *, user_id: UUID) -> dict[str, Any]:
         _ = user_id
         gw = self._gateway()
@@ -62,6 +182,7 @@ class WeltradeIntegrationService:
                 gateway_online = gateway_payload.get("status") == "ok"
             except Exception as exc:
                 gateway_payload = {"status": "error", "detail": str(exc)}
+                logger.warning("weltrade_dashboard_gateway_error", error=str(exc))
 
         health = self.adapter.health()
         mt5_connected = bool(health.connected)
@@ -91,6 +212,7 @@ class WeltradeIntegrationService:
                 self._last_sync_at = datetime.now(UTC).isoformat()
             except Exception as exc:
                 account = {"error": str(exc)}
+                logger.warning("weltrade_dashboard_sync_error", error=str(exc))
 
         session_mode = getattr(self.adapter.client, "session_mode", "none")
         diagnostics: dict[str, Any] = {}
@@ -103,6 +225,7 @@ class WeltradeIntegrationService:
         return {
             "broker": WELTRADE_BROKER,
             "profile": self.profile(),
+            "configuration": self._configuration(),
             "connection": {
                 "gateway_online": gateway_online,
                 "mt5_connected": mt5_connected,
@@ -123,6 +246,13 @@ class WeltradeIntegrationService:
             "history": {"items": history, "count": len(history)},
             "diagnostics": diagnostics,
             "execution_enabled": self.adapter.execution_enabled,
+            "status": (
+                "healthy"
+                if gateway_online and mt5_connected
+                else "degraded"
+                if gateway_online
+                else "offline"
+            ),
         }
 
     def connect(
@@ -136,29 +266,50 @@ class WeltradeIntegrationService:
         prefer_attach: bool = True,
         path: str = "",
     ) -> dict[str, Any]:
-        _ = user_id
         account_type = (account_type or "demo").strip().lower()
         if account_type not in {"demo", "live"}:
             raise ValueError("account_type must be demo or live")
+        if login <= 0:
+            raise ValueError("login must be a positive integer")
         server_name = (server or "").strip()
         if not server_name or server_name.lower() in {"auto", "auto detect"}:
             server_name = WELTRADE_SERVERS[account_type][0]
 
+        logger.info(
+            "weltrade_connect_start",
+            login=login,
+            server=server_name,
+            account_type=account_type,
+            prefer_attach=prefer_attach,
+            password_provided=bool(password),
+            gateway_backed=self._gateway() is not None,
+        )
+
         steps: list[dict[str, Any]] = []
         gw = self._gateway()
-        if gw is not None:
-            try:
-                health = gw.gateway_health()
-                steps.append(
-                    {
-                        "step": "gateway_check",
-                        "ok": health.get("status") == "ok",
-                        "detail": "Gateway reachable",
-                    }
-                )
-            except Exception as exc:
-                steps.append({"step": "gateway_check", "ok": False, "detail": str(exc)})
-                raise RuntimeError(f"Gateway unavailable: {exc}") from exc
+        if gw is None:
+            raise RuntimeError(
+                "Windows MT5 Gateway is not configured on Railway. "
+                "Set MT5_GATEWAY_BASE_URL and MT5_GATEWAY_CALLER_TOKEN "
+                "(must match Windows MT5_GATEWAY_TOKEN)."
+            )
+
+        try:
+            health = gw.gateway_health()
+            ok = health.get("status") == "ok"
+            steps.append(
+                {
+                    "step": "gateway_check",
+                    "ok": ok,
+                    "detail": "Gateway reachable" if ok else "Gateway unhealthy",
+                }
+            )
+            if not ok:
+                raise RuntimeError("Gateway health check failed")
+        except Exception as exc:
+            steps.append({"step": "gateway_check", "ok": False, "detail": str(exc)})
+            logger.warning("weltrade_connect_gateway_unavailable", error=str(exc))
+            raise RuntimeError(f"Gateway unavailable: {exc}") from exc
 
         attached = False
         if prefer_attach:
@@ -172,8 +323,14 @@ class WeltradeIntegrationService:
                         "detail": "Attached to existing MT5 session",
                     }
                 )
+                logger.info(
+                    "weltrade_connect_attached",
+                    login=login,
+                    server=server_name,
+                )
             except Exception as exc:
                 steps.append({"step": "attach", "ok": False, "detail": str(exc)})
+                logger.info("weltrade_attach_unavailable", error=str(exc))
 
         if not attached:
             if not password:
@@ -189,7 +346,16 @@ class WeltradeIntegrationService:
             )
             if not self.adapter.initialize(path=path):
                 raise RuntimeError("Gateway initialize failed")
-            session_ref = self.adapter.login(request)
+            try:
+                session_ref = self.adapter.login(request)
+            except Exception as exc:
+                logger.warning(
+                    "weltrade_login_failed",
+                    login=login,
+                    server=server_name,
+                    error=str(exc),
+                )
+                raise RuntimeError(f"Weltrade authentication failed: {exc}") from exc
             steps.append(
                 {
                     "step": "connect",
@@ -203,6 +369,12 @@ class WeltradeIntegrationService:
 
         sync = self.dashboard(user_id=user_id)
         steps.append({"step": "sync", "ok": True, "detail": "Account synchronized"})
+        logger.info(
+            "weltrade_connect_ok",
+            login=login,
+            server=server_name,
+            mt5_connected=sync["connection"]["mt5_connected"],
+        )
         return {
             "ok": True,
             "broker": WELTRADE_BROKER,
@@ -210,15 +382,18 @@ class WeltradeIntegrationService:
             "account_type": account_type,
             "steps": steps,
             "dashboard": sync,
+            "account": sync.get("account"),
+            "session": {
+                "mode": sync["connection"].get("session_mode"),
+                "server": sync["connection"].get("server"),
+            },
+            "status": sync.get("status"),
         }
 
     def attach(self, *, user_id: UUID, path: str = "") -> dict[str, Any]:
         self.adapter.attach(path=path)
-        return {
-            "ok": True,
-            "broker": WELTRADE_BROKER,
-            "dashboard": self.dashboard(user_id=user_id),
-        }
+        dash = self.dashboard(user_id=user_id)
+        return {"ok": True, "broker": WELTRADE_BROKER, "dashboard": dash}
 
     def disconnect(self, *, user_id: UUID) -> dict[str, Any]:
         self.adapter.shutdown()
@@ -240,6 +415,7 @@ class WeltradeIntegrationService:
                 server=prior.server or "Weltrade-MT5",
                 path=prior.path,
             )
+        logger.info("weltrade_reconnect_start", login=request.login)
         self.adapter.reconnect(request)
         return {
             "ok": True,

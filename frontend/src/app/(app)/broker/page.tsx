@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -53,11 +53,17 @@ function Metric({ label, value }: { label: string; value: string }) {
 export default function WeltradeBrokerPage() {
   const qc = useQueryClient();
   const realtime = useBrokerStatusStream(true);
+  const healthQ = useQuery({
+    queryKey: ["weltrade-health"],
+    queryFn: weltradeApi.health,
+    refetchInterval: 5_000,
+    retry: 2,
+  });
   const dash = useQuery({
     queryKey: ["weltrade-dashboard"],
     queryFn: weltradeApi.dashboard,
-    refetchInterval: false,
-    retry: false,
+    refetchInterval: 8_000,
+    retry: 2,
   });
 
   const connection = asRecord(asRecord(dash.data).connection);
@@ -66,9 +72,17 @@ export default function WeltradeBrokerPage() {
   const positions = asRecord(asRecord(dash.data).positions);
   const orders = asRecord(asRecord(dash.data).orders);
   const history = asRecord(asRecord(dash.data).history);
+  const health = asRecord(healthQ.data);
 
-  const connected = Boolean(connection.mt5_connected);
-  const gatewayOnline = Boolean(connection.gateway_online);
+  const connected = Boolean(
+    connection.mt5_connected || health.mt5_connected || health.mt5_attached,
+  );
+  const gatewayOnline = Boolean(
+    connection.gateway_online || health.gateway_online || health.gateway_reachable,
+  );
+  const weltradeConnected = Boolean(
+    connection.weltrade_connected || health.weltrade_connected,
+  );
 
   const [accountType, setAccountType] = useState<AccountType>("demo");
   const [serverMode, setServerMode] = useState<"auto" | "manual">("auto");
@@ -77,6 +91,8 @@ export default function WeltradeBrokerPage() {
   const [password, setPassword] = useState("");
   const [rememberGateway, setRememberGateway] = useState(true);
   const [progress, setProgress] = useState<string | null>(null);
+  const [wasConnected, setWasConnected] = useState(false);
+  const recoveringRef = useRef(false);
 
   const serverOptions = useMemo(() => {
     const servers = asRecord(profile.servers);
@@ -93,20 +109,28 @@ export default function WeltradeBrokerPage() {
   }, [serverMode, serverOptions, server]);
 
   const refresh = async () => {
-    await qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] });
-    await qc.invalidateQueries({ queryKey: ["mt5-status"] });
-    await qc.invalidateQueries({ queryKey: ["brokers"] });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] }),
+      qc.invalidateQueries({ queryKey: ["weltrade-health"] }),
+      qc.invalidateQueries({ queryKey: ["mt5-status"] }),
+      qc.invalidateQueries({ queryKey: ["brokers"] }),
+    ]);
   };
 
   const connectMut = useMutation({
     mutationFn: weltradeApi.connect,
     onMutate: () => setProgress("Checking gateway…"),
-    onSuccess: async () => {
+    onSuccess: async (data) => {
       setProgress("Synchronizing account…");
       setPassword("");
+      const dashBody = asRecord(asRecord(data).dashboard);
+      if (Object.keys(dashBody).length > 0) {
+        qc.setQueryData(["weltrade-dashboard"], dashBody);
+      }
       toast.success("Weltrade connected");
       await refresh();
       setProgress(null);
+      setWasConnected(true);
     },
     onError: (e) => {
       setProgress(null);
@@ -118,6 +142,7 @@ export default function WeltradeBrokerPage() {
     mutationFn: weltradeApi.disconnect,
     onSuccess: async () => {
       toast.success("Disconnected");
+      setWasConnected(false);
       await refresh();
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Disconnect failed"),
@@ -130,14 +155,39 @@ export default function WeltradeBrokerPage() {
       toast.success("Session restored");
       await refresh();
       setProgress(null);
+      setWasConnected(true);
     },
     onError: (e) => {
       setProgress(null);
-      toast.error(e instanceof ApiError ? e.message : "Reconnect failed");
+      // Silent retry path — avoid toast spam during auto-recovery
+      if (!wasConnected) {
+        toast.error(e instanceof ApiError ? e.message : "Reconnect failed");
+      }
     },
   });
 
   const busy = connectMut.isPending || disconnectMut.isPending || reconnectMut.isPending;
+
+  // Automatic recovery: if we had a live session and it drops, reconnect quietly.
+  useEffect(() => {
+    if (connected) {
+      setWasConnected(true);
+      recoveringRef.current = false;
+      return;
+    }
+    if (!wasConnected || !gatewayOnline) return;
+    if (busy || recoveringRef.current) return;
+    recoveringRef.current = true;
+    const t = window.setTimeout(() => {
+      reconnectMut.mutate(undefined, {
+        onSettled: () => {
+          recoveringRef.current = false;
+        },
+      });
+    }, 1500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional recovery trigger
+  }, [connected, gatewayOnline, wasConnected, busy]);
 
   const onConnect = () => {
     const loginNum = Number(login);
@@ -193,7 +243,7 @@ export default function WeltradeBrokerPage() {
         </div>
       </motion.header>
 
-      {dash.isLoading ? (
+      {dash.isLoading && healthQ.isLoading ? (
         <DeskSkeleton rows={6} />
       ) : (
         <div className="relative space-y-6">
@@ -207,10 +257,18 @@ export default function WeltradeBrokerPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={dash.isFetching}
-                onClick={() => dash.refetch()}
+                disabled={dash.isFetching || healthQ.isFetching}
+                onClick={() => {
+                  void dash.refetch();
+                  void healthQ.refetch();
+                }}
               >
-                <RefreshCw className={cn("h-3.5 w-3.5", dash.isFetching && "animate-spin")} />
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    (dash.isFetching || healthQ.isFetching) && "animate-spin",
+                  )}
+                />
                 Refresh
               </Button>
             </div>
@@ -218,10 +276,8 @@ export default function WeltradeBrokerPage() {
               <StatusDot on={gatewayOnline} label={gatewayOnline ? "Gateway Online" : "Gateway Offline"} />
               <StatusDot on={connected} label={connected ? "MT5 Connected" : "MT5 Not Connected"} />
               <StatusDot
-                on={Boolean(connection.weltrade_connected)}
-                label={
-                  connection.weltrade_connected ? "Weltrade Connected" : "Weltrade Not Connected"
-                }
+                on={weltradeConnected}
+                label={weltradeConnected ? "Weltrade Connected" : "Weltrade Not Connected"}
               />
             </div>
           </motion.section>
@@ -413,6 +469,10 @@ export default function WeltradeBrokerPage() {
                 </div>
                 {connected && !account.error ? (
                   <div className="grid grid-cols-2 gap-2">
+                    <Metric label="Account" value={str(account.login, "—")} />
+                    <Metric label="Name" value={str(account.name, "—")} />
+                    <Metric label="Server" value={str(account.server ?? connection.server, "—")} />
+                    <Metric label="Leverage" value={str(account.leverage, "—")} />
                     <Metric label="Balance" value={str(account.balance, "—")} />
                     <Metric label="Equity" value={str(account.equity, "—")} />
                     <Metric label="Margin" value={str(account.margin, "—")} />

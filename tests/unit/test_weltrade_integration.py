@@ -164,3 +164,36 @@ class TestWeltradeIntegration:
             MT5LoginRequest(login=7, password="never-store", server="Weltrade-MT5")
         )
         assert adapter._sessions[ref].password == ""
+
+    def test_health_reports_gateway(self) -> None:
+        from uuid import uuid4
+
+        client = _StubGateway()
+        assert client.attach()
+        svc = WeltradeIntegrationService(adapter=MT5Adapter(client=client))
+        # Mark adapter session via attach path so health sees MT5
+        svc.adapter.attach()
+        out = svc.health(user_id=uuid4())
+        assert out["gateway_reachable"] is True
+        assert out["tunnel_reachable"] is True
+        assert out["mt5_attached"] is True
+        assert out["weltrade_connected"] is True
+        assert out["account"] is not None
+        assert out["account"]["login"] == 4242
+
+    def test_dependency_uses_get_container(self) -> None:
+        from types import SimpleNamespace
+
+        from app.presentation.dependencies.weltrade import get_weltrade_service
+        from core.di import container as container_mod
+
+        adapter = MT5Adapter(client=_StubGateway())
+        fake = SimpleNamespace(mt5_adapter=adapter, weltrade_integration=None)
+        previous = container_mod._container
+        container_mod._container = fake  # type: ignore[assignment]
+        try:
+            svc = get_weltrade_service()
+            assert isinstance(svc, WeltradeIntegrationService)
+            assert fake.weltrade_integration is svc
+        finally:
+            container_mod._container = previous

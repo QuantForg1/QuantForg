@@ -15,6 +15,9 @@ from app.presentation.schemas.weltrade import (
     WeltradeAttachRequest,
     WeltradeConnectRequest,
 )
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/weltrade", tags=["weltrade"])
 
@@ -24,6 +27,14 @@ async def weltrade_profile(
     _user: CurrentUser, svc: WeltradeSvc
 ) -> dict[str, Any]:
     return svc.profile()
+
+
+@router.get("/health")
+async def weltrade_health(
+    user: CurrentUser, svc: WeltradeSvc
+) -> dict[str, Any]:
+    """Gateway / tunnel / MT5 session health for the Weltrade production desk."""
+    return svc.health(user_id=user.id)
 
 
 @router.get("/dashboard")
@@ -53,6 +64,7 @@ async def weltrade_connect(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
     except RuntimeError as exc:
+        logger.warning("weltrade_connect_http_error", error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc

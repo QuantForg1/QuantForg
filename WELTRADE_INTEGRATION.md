@@ -101,6 +101,7 @@ Reachability: private network / VPN / tunnel to the Windows host. Never put Welt
 | Method | Path |
 |--------|------|
 | GET | `/api/v1/weltrade/profile` |
+| GET | `/api/v1/weltrade/health` |
 | GET | `/api/v1/weltrade/dashboard` |
 | POST | `/api/v1/weltrade/connect` |
 | POST | `/api/v1/weltrade/attach` |

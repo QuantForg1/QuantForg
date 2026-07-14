@@ -282,6 +282,7 @@ export const gatewayManagerApi = {
 
 export const weltradeApi = {
   profile: () => apiFetch<Record<string, unknown>>("/weltrade/profile"),
+  health: () => apiFetch<Record<string, unknown>>("/weltrade/health"),
   dashboard: () => apiFetch<Record<string, unknown>>("/weltrade/dashboard"),
   connect: (body: {
     login: number;
