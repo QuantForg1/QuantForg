@@ -352,6 +352,42 @@ export const opsApi = {
   audit: () => apiFetch<Record<string, unknown>>("/ops/audit"),
 };
 
+export const quantStudioApi = {
+  workspace: () => apiFetch<Record<string, unknown>>("/quant-studio/workspace"),
+  blocks: () => apiFetch<Record<string, unknown>>("/quant-studio/blocks"),
+  compile: (graph: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/quant-studio/builder/compile", {
+      method: "POST",
+      body: { graph },
+    }),
+  backtest: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/quant-studio/backtest", {
+      method: "POST",
+      body,
+    }),
+  walkforward: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/quant-studio/walkforward", {
+      method: "POST",
+      body,
+    }),
+  portfolioLab: () =>
+    apiFetch<Record<string, unknown>>("/quant-studio/portfolio-lab"),
+  liveMonitor: () =>
+    apiFetch<Record<string, unknown>>("/quant-studio/live-monitor"),
+  marketplace: () =>
+    apiFetch<Record<string, unknown>>("/quant-studio/marketplace"),
+  marketplaceSave: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/quant-studio/marketplace/save", {
+      method: "POST",
+      body,
+    }),
+  marketplaceAction: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/quant-studio/marketplace/action", {
+      method: "POST",
+      body,
+    }),
+};
+
 export const quantAiApi = {
   dashboard: (symbol?: string, forceRefresh = false) => {
     const params = new URLSearchParams();

@@ -25,6 +25,7 @@ import {
   Target,
   UserRound,
   Wallet,
+  Wand2,
   Waypoints,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export const appNav: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/quant-ai", label: "Quant AI", icon: Bot },
+      { href: "/quant-studio", label: "Quant Studio", icon: Wand2 },
       { href: "/intelligence", label: "Market Intelligence", icon: Sparkles },
       { href: "/portfolio", label: "Portfolio", icon: Briefcase },
       { href: "/performance", label: "Performance", icon: LineChart },
