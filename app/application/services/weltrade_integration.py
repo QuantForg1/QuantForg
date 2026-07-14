@@ -495,14 +495,40 @@ class WeltradeIntegrationService:
             await uow.commit()
 
     async def ensure_user_session_bound(self, *, user_id: UUID) -> None:
-        """Heal: if gateway session is live but DB row missing, bind it."""
+        """Heal: if gateway session is live but DB row missing, bind it.
+
+        After a Railway redeploy the Windows terminal can still be logged in while
+        this process has no ``_live_session_ref``. Probe/attach first, then bind.
+        """
         if self.uow_factory is None:
             return
-        if not getattr(self.adapter.client, "is_connected", False):
+
+        client = self.adapter.client
+        # Sync in-process connected flag from gateway /session/status.
+        with contextlib.suppress(Exception):
+            self.adapter.health()
+
+        if not getattr(client, "is_connected", False):
             return
+
         live_ref = (getattr(self.adapter, "_live_session_ref", None) or "").strip()
         if not live_ref:
+            live_ref = (getattr(client, "session_token", "") or "").strip()
+        if not live_ref:
+            # Terminal is live on Windows but this process has no session handle yet.
+            try:
+                live_ref = self.adapter.attach(path="")
+            except Exception as exc:
+                logger.warning(
+                    "weltrade_ensure_attach_failed",
+                    error=str(exc),
+                    user_id=str(user_id),
+                )
+                return
+            live_ref = (live_ref or "").strip()
+        if not live_ref:
             return
+
         async with self.uow_factory() as uow:
             existing = await uow.connections.get_active_for_user(user_id)
         if (

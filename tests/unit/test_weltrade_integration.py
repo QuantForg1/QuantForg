@@ -190,7 +190,28 @@ class TestWeltradeIntegration:
         assert out["account"] is not None
         assert out["account"]["login"] == 4242
 
-    def test_dependency_uses_get_container(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ensure_binds_when_gateway_live_without_session_ref(self) -> None:
+        """After process restart: gateway connected, no local session_ref yet."""
+        client = _StubGateway()
+        # Simulate gateway-live state without an adapter session handle.
+        client._connected = True
+        client._login = 12260878
+        client._server = "Weltrade-Real"
+        client._session_token = ""
+        adapter = MT5Adapter(client=client)
+        adapter._live_session_ref = None
+        factory = MemoryMT5UnitOfWorkFactory()
+        svc = WeltradeIntegrationService(adapter=adapter, uow_factory=factory)
+        user_id = uuid4()
+        await svc.ensure_user_session_bound(user_id=user_id)
+        async with factory() as uow:
+            conn = await uow.connections.get_active_for_user(user_id)
+        assert conn is not None
+        assert conn.connected is True
+        assert conn.login == 12260878
+        assert adapter.is_live_session(conn.session_ref)
+
         from types import SimpleNamespace
 
         from app.presentation.dependencies.weltrade import get_weltrade_service
