@@ -11,55 +11,95 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { SessionStrip } from "@/components/broker/session-strip";
 import { usePortfolioStream } from "@/hooks/realtime";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, metric, num, str, toneFromNumber } from "@/lib/desk";
 import { formatCurrency } from "@/lib/utils";
 
 export default function PortfolioPage() {
   const realtime = usePortfolioStream();
-  const q = useQuery({ queryKey: ["portfolio"], queryFn: portfolioApi.get, retry: false });
+  const session = useTradingSession();
+  const q = useQuery({
+    queryKey: ["portfolio"],
+    queryFn: portfolioApi.get,
+    retry: false,
+    staleTime: 12_000,
+    enabled: session.connected,
+  });
   const account = asRecord(q.data?.account);
-  const positions = asList(q.data?.positions).map(asRecord);
-  const pending = asList(q.data?.pending_orders).map(asRecord);
-  const profit = metric(account, "profit");
+  const fromPortfolio = asList(q.data?.positions).map(asRecord);
+  const positions = fromPortfolio.length > 0 ? fromPortfolio : session.positions;
+  const fromPending = asList(q.data?.pending_orders).map(asRecord);
+  const pending = fromPending.length > 0 ? fromPending : session.orders;
+  const profit = metric(account, "profit") || num(session.profit, 0);
 
   return (
     <div>
       <PageHeader
         title="Portfolio"
-        description="Synchronized account snapshot, positions, and pending orders."
+        description="Live broker account snapshot — balance, equity, margin, and exposure from the attached MT5 session."
         actions={
           <div className="flex items-center gap-2">
             <RealtimeConnectionBadge status={realtime} />
             <Button variant="secondary" asChild>
-              <Link href="/broker">Sync MT5</Link>
+              <Link href="/broker">Broker Workspace</Link>
             </Button>
           </div>
         }
       />
       <RealtimeMeta status={realtime} className="mb-3" />
-      {q.isLoading ? (
+      <SessionStrip className="mb-4" />
+      {!session.connected ? (
+        <DeskEmpty
+          icon={Briefcase}
+          title="No live session"
+          description="Attach MT5 in Broker Workspace to load balance, equity, and positions."
+          actionLabel="Open Broker Workspace"
+          onAction={() => {
+            window.location.href = "/broker";
+          }}
+        />
+      ) : q.isLoading ? (
         <DeskSkeleton rows={4} />
       ) : q.isError ? (
         <DeskError
-          message="Unable to load portfolio. Connect MT5 and retry."
+          message="Unable to load portfolio. Sync the trading session and retry."
           onRetry={() => q.refetch()}
         />
       ) : (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4"
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
             <StatCard
               label="Balance"
-              value={formatCurrency(metric(account, "balance"))}
-              hint={str(account.currency, "USD")}
+              value={formatCurrency(metric(account, "balance") || num(session.balance, 0))}
+              hint={session.currency || str(account.currency, "USD")}
             />
             <StatCard
               label="Equity"
-              value={formatCurrency(metric(account, "equity"))}
+              value={formatCurrency(metric(account, "equity") || num(session.equity, 0))}
               tone={toneFromNumber(profit)}
             />
-            <StatCard label="Free Margin" value={formatCurrency(metric(account, "free_margin"))} />
+            <StatCard
+              label="Free Margin"
+              value={formatCurrency(
+                metric(account, "free_margin") || num(session.freeMargin, 0),
+              )}
+            />
+            <StatCard
+              label="Margin Level"
+              value={str(account.margin_level || session.marginLevel, "—")}
+            />
+            <StatCard
+              label="Floating P/L"
+              value={formatCurrency(profit)}
+              tone={toneFromNumber(profit)}
+            />
             <StatCard
               label="Open Positions"
               value={String(q.data?.position_count ?? positions.length)}
@@ -69,18 +109,14 @@ export default function PortfolioPage() {
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Positions</CardTitle>
-                <Badge tone="accent">{str(account.server, "Desk")}</Badge>
+                <Badge tone="accent">{session.server}</Badge>
               </CardHeader>
               <CardContent>
                 {positions.length === 0 ? (
                   <DeskEmpty
                     icon={Briefcase}
                     title="No open positions"
-                    description="Connect MT5 and sync to populate live exposure."
-                    actionLabel="Connect MT5"
-                    onAction={() => {
-                      window.location.href = "/broker";
-                    }}
+                    description="Flat book — exposure will appear when positions sync from MT5."
                   />
                 ) : (
                   <DeskTable
@@ -96,10 +132,12 @@ export default function PortfolioPage() {
                       <span
                         key="p"
                         className={
-                          num(p.profit, 0) >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
+                          num(p.profit, 0) >= 0
+                            ? "text-[var(--success)]"
+                            : "text-[var(--danger)]"
                         }
                       >
-                        {formatCurrency(num(p.profit, 0))}
+                        {str(p.profit)}
                       </span>,
                     ])}
                   />
@@ -107,11 +145,8 @@ export default function PortfolioPage() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle>Pending orders</CardTitle>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/orders">View all</Link>
-                </Button>
+              <CardHeader>
+                <CardTitle>Pending Orders</CardTitle>
               </CardHeader>
               <CardContent>
                 {pending.length === 0 ? (
@@ -119,24 +154,14 @@ export default function PortfolioPage() {
                 ) : (
                   <DeskTable
                     columns={["Symbol", "Type", "Volume", "Price"]}
-                    rows={pending.slice(0, 8).map((o) => [
+                    rows={pending.map((o) => [
                       str(o.symbol),
-                      str(o.order_type),
+                      str(o.order_type || o.type),
                       str(o.volume),
                       str(o.price),
                     ])}
                   />
                 )}
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-[var(--fg-subtle)]">
-                  <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
-                    <p>Margin level</p>
-                    <p className="mt-1 text-sm text-[var(--fg)]">{str(account.margin_level, "—")}</p>
-                  </div>
-                  <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
-                    <p>Leverage</p>
-                    <p className="mt-1 text-sm text-[var(--fg)]">{str(account.leverage, "—")}</p>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>

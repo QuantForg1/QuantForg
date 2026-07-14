@@ -147,6 +147,15 @@ class MT5SymbolDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class MT5SymbolsPageDTO:
+    items: list[MT5SymbolDTO]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+
+
+@dataclass(frozen=True, slots=True)
 class MT5TickDTO:
     symbol: str
     bid: str

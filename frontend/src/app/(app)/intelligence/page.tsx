@@ -8,16 +8,27 @@ import { Badge } from "@/components/ui/badge";
 import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { PageMotion } from "@/components/desk/motion";
 import { intelligenceApi } from "@/lib/api/endpoints";
+import { SessionStrip } from "@/components/broker/session-strip";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
 import { Newspaper, Radio } from "lucide-react";
 
 export default function MarketIntelligencePage() {
+  const session = useTradingSession();
   const dash = useQuery({
     queryKey: ["intelligence-dashboard"],
     queryFn: () => intelligenceApi.dashboard("FX"),
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: 45_000,
+    staleTime: 12_000,
+  });
+  const contextQ = useQuery({
+    queryKey: ["intelligence-market-context"],
+    queryFn: () => intelligenceApi.marketContext("FX"),
+    retry: false,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
   if (dash.isLoading) return <DeskSkeleton variant="page" />;
@@ -36,7 +47,10 @@ export default function MarketIntelligencePage() {
   const data = asRecord(dash.data);
   const broker = asRecord(data.broker);
   const account = asRecord(data.account);
-  const context = asRecord(data.market_context);
+  const context = {
+    ...asRecord(data.market_context),
+    ...asRecord(contextQ.data),
+  };
   const market = asRecord(data.market);
   const analysis = asRecord(data.analysis);
   const providers = asRecord(data.providers);
@@ -53,16 +67,28 @@ export default function MarketIntelligencePage() {
         title="Market Intelligence"
         description="Real broker sync and market context. News only from configured licensed feeds — never invented."
       />
+      <SessionStrip className="mb-4" />
       <PageMotion>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
           <StatCard
             label="Broker"
-            value={broker.connected ? "connected" : "disconnected"}
-            hint={str(broker.server || broker.status)}
+            value={session.connected || broker.connected ? "connected" : "disconnected"}
+            hint={session.server !== "—" ? session.server : str(broker.server || broker.status)}
           />
-          <StatCard label="Balance" value={str(account.balance, "—")} hint={str(account.currency, "")} />
-          <StatCard label="Equity" value={str(account.equity, "—")} />
-          <StatCard label="Margin" value={str(account.margin, "—")} hint={`Free ${str(account.free_margin, "—")}`} />
+          <StatCard
+            label="Balance"
+            value={session.balance !== "—" ? session.balance : str(account.balance, "—")}
+            hint={session.currency || str(account.currency, "")}
+          />
+          <StatCard
+            label="Equity"
+            value={session.equity !== "—" ? session.equity : str(account.equity, "—")}
+          />
+          <StatCard
+            label="Margin"
+            value={session.margin !== "—" ? session.margin : str(account.margin, "—")}
+            hint={`Free ${session.freeMargin !== "—" ? session.freeMargin : str(account.free_margin, "—")}`}
+          />
           <StatCard label="Session" value={str(context.session, "—")} hint={str(context.market_state)} />
           <StatCard label="Volatility" value={str(context.volatility_level, "—")} hint={str(context.liquidity_level)} />
           <StatCard

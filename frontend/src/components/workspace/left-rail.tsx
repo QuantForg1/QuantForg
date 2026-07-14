@@ -57,10 +57,11 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
   const [showFavOnly, setShowFavOnly] = useState(false);
 
   const symbolsQ = useQuery({
-    queryKey: ["mt5-symbols"],
-    queryFn: mt5Api.symbols,
+    queryKey: ["mt5-symbols", "", 0],
+    queryFn: () => mt5Api.symbols({ limit: 100, offset: 0, include_quotes: false }),
     retry: false,
     enabled: connected,
+    staleTime: 45_000,
   });
   const brokersQ = useQuery({
     queryKey: ["brokers"],

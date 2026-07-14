@@ -5,21 +5,26 @@ import Link from "next/link";
 import { Cable } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { str } from "@/lib/desk";
 
 export const ConnectionBar = memo(function ConnectionBar({
-  connected,
+  connected: connectedProp,
   server,
   login,
   latencyMs,
   tradingEnabled,
 }: {
-  connected: boolean;
+  connected?: boolean;
   server?: unknown;
   login?: unknown;
   latencyMs?: unknown;
-  tradingEnabled: boolean;
+  tradingEnabled?: boolean;
 }) {
+  const session = useTradingSession();
+  const connected = connectedProp ?? session.connected;
+  const enabled = tradingEnabled ?? connected;
+
   return (
     <div
       className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -31,13 +36,16 @@ export const ConnectionBar = memo(function ConnectionBar({
           <span className="qf-status-dot h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
           {connected ? "Connected" : "Disconnected"}
         </Badge>
-        <Badge tone={tradingEnabled ? "accent" : "neutral"}>
-          {tradingEnabled ? "Gateway ready" : "Live send gated"}
+        <Badge tone={enabled ? "accent" : "neutral"}>
+          {enabled ? "Gateway ready" : "Live send gated"}
         </Badge>
         <span className="text-xs text-[var(--fg-subtle)]">
           {connected
-            ? `${str(server, "MT5")} · login ${str(login, "—")}${
-                latencyMs != null ? ` · ${str(latencyMs)} ms` : ""
+            ? `${str(server ?? session.server, "MT5")} · login ${str(login ?? session.login, "—")}${
+                (latencyMs ?? session.latencyMs) != null &&
+                str(latencyMs ?? session.latencyMs) !== "—"
+                  ? ` · ${str(latencyMs ?? session.latencyMs)} ms`
+                  : ""
               }`
             : "Connect a terminal before placing live orders"}
         </span>
@@ -45,7 +53,7 @@ export const ConnectionBar = memo(function ConnectionBar({
       <div className="flex gap-2">
         <Button size="sm" variant="secondary" asChild>
           <Link href="/broker">
-            <Cable className="h-3.5 w-3.5" /> Broker Connection
+            <Cable className="h-3.5 w-3.5" /> Broker Workspace
           </Link>
         </Button>
       </div>

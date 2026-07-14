@@ -228,9 +228,37 @@ class MockMT5Client:
 
     # -- Market data ---------------------------------------------------------
 
-    def list_symbols(self) -> list[MT5SymbolInfo]:
+    def list_symbols(
+        self,
+        *,
+        include_quotes: bool = True,
+        codes: list[str] | None = None,
+    ) -> list[MT5SymbolInfo]:
         self._require_connected()
-        return [self.symbol_info(code) for code in _MOCK_CATALOGUE]
+        wanted = (
+            {c.strip().upper() for c in codes if c and c.strip()} if codes else None
+        )
+        out: list[MT5SymbolInfo] = []
+        for code in _MOCK_CATALOGUE:
+            if wanted is not None and code not in wanted:
+                continue
+            info = self.symbol_info(code)
+            if not include_quotes:
+                info = MT5SymbolInfo(
+                    code=info.code,
+                    description=info.description,
+                    digits=info.digits,
+                    point=info.point,
+                    contract_size=info.contract_size,
+                    selected=info.selected,
+                    trade_mode=info.trade_mode,
+                    currency_base=info.currency_base,
+                    currency_profit=info.currency_profit,
+                    bid=Decimal("0"),
+                    ask=Decimal("0"),
+                )
+            out.append(info)
+        return out
 
     def symbol_info(self, symbol: str) -> MT5SymbolInfo:
         self._require_connected()

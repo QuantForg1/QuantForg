@@ -102,10 +102,11 @@ export function WorkspaceShell() {
     enabled: Boolean(statusQ.data?.connected) && Boolean(symbol),
   });
   const symbolsQ = useQuery({
-    queryKey: ["mt5-symbols"],
-    queryFn: mt5Api.symbols,
+    queryKey: ["mt5-symbols", "", 0],
+    queryFn: () => mt5Api.symbols({ limit: 100, offset: 0, include_quotes: false }),
     retry: false,
     enabled: Boolean(statusQ.data?.connected),
+    staleTime: 45_000,
   });
 
   const connected = Boolean(statusQ.data?.connected);

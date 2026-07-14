@@ -191,8 +191,16 @@ class MT5Adapter:
 
     # -- Market data (Sprint 2) ----------------------------------------------
 
-    def list_symbols(self) -> list[MT5SymbolInfo]:
-        return self._client.list_symbols()
+    def list_symbols(
+        self,
+        *,
+        include_quotes: bool = False,
+        codes: list[str] | None = None,
+    ) -> list[MT5SymbolInfo]:
+        return self._client.list_symbols(
+            include_quotes=include_quotes,
+            codes=codes,
+        )
 
     def symbol_info(self, symbol: str) -> MT5SymbolInfo:
         return self._client.symbol_info(symbol)

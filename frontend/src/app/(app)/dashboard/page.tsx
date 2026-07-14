@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
+import { SessionStrip } from "@/components/broker/session-strip";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import {
   brokersApi,
@@ -119,10 +120,11 @@ export default function DashboardPage() {
     retry: false,
   });
   const symbolsQ = useQuery({
-    queryKey: ["mt5-symbols"],
-    queryFn: mt5Api.symbols,
+    queryKey: ["mt5-symbols", "", 0],
+    queryFn: () => mt5Api.symbols({ limit: 100, offset: 0, include_quotes: false }),
     retry: false,
     enabled: Boolean(mt5.data?.connected),
+    staleTime: 45_000,
   });
   const brokers = useQuery({
     queryKey: ["brokers"],
@@ -536,6 +538,7 @@ export default function DashboardPage() {
       />
 
       <RealtimeMeta status={realtime} className="mb-3" />
+      <SessionStrip className="mb-3" />
       <WeltradeGatewayStatus className="mb-4" compact />
 
       <PageMotion className="space-y-5">

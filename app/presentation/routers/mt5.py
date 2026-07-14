@@ -24,6 +24,7 @@ from app.presentation.schemas.mt5 import (
     MT5OrderValidationResponse,
     MT5StatusResponse,
     MT5SymbolResponse,
+    MT5SymbolsPageResponse,
     MT5TickResponse,
 )
 
@@ -101,13 +102,29 @@ async def mt5_account(
     return MT5AccountResponse(**dto_to_dict(dto))
 
 
-@router.get("/symbols", response_model=list[MT5SymbolResponse])
+@router.get("/symbols", response_model=MT5SymbolsPageResponse)
 async def mt5_symbols(
     user: CurrentUser,
     mt5: MT5Svc,
-) -> list[MT5SymbolResponse]:
-    items = await mt5.list_symbols.execute(user_id=user.id)
-    return [MT5SymbolResponse(**dto_to_dict(i)) for i in items]
+    q: str = Query(default="", max_length=64),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    include_quotes: bool = Query(default=False),
+) -> MT5SymbolsPageResponse:
+    page = await mt5.list_symbols.execute(
+        user_id=user.id,
+        q=q,
+        offset=offset,
+        limit=limit,
+        include_quotes=include_quotes,
+    )
+    return MT5SymbolsPageResponse(
+        items=[MT5SymbolResponse(**dto_to_dict(i)) for i in page.items],
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
+        has_more=page.has_more,
+    )
 
 
 @router.get("/symbols/{symbol}", response_model=MT5SymbolResponse)

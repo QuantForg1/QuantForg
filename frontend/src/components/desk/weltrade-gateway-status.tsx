@@ -1,12 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { weltradeApi } from "@/lib/api/endpoints";
-import { asRecord, str } from "@/lib/desk";
-import {
-  gatewayDiagnosticDetail,
-  gatewayStatusLabel,
-} from "@/lib/gateway-diagnostics";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -14,24 +8,15 @@ type Props = {
   compact?: boolean;
 };
 
-/** Compact Railway ↔ Cloudflare ↔ MT5 Gateway status strip for ops surfaces. */
+/** Compact Railway ↔ Gateway ↔ MT5 status — reads TradingSession only (no duplicate poll). */
 export function WeltradeGatewayStatus({ className, compact = false }: Props) {
-  const healthQ = useQuery({
-    queryKey: ["weltrade-health"],
-    queryFn: weltradeApi.health,
-    refetchInterval: 10_000,
-    retry: 1,
-  });
-
-  const health = asRecord(healthQ.data);
-  const online = Boolean(health.gateway_online || health.gateway_reachable);
-  const mt5 = Boolean(health.mt5_connected || health.mt5_attached);
-  const label = gatewayStatusLabel(health);
-  const detail = gatewayDiagnosticDetail(health);
-  const gatewayUrl = str(health.gateway_url);
-  const latency = health.latency ?? health.latency_ms;
-  const redirects = health.redirects_followed;
-  const cf = asRecord(health.cloudflare);
+  const session = useTradingSession();
+  const online = session.gatewayOnline;
+  const mt5 = session.connected;
+  const label = session.gatewayLabel;
+  const detail = session.gatewayDetail;
+  const gatewayUrl = session.gatewayUrl;
+  const latency = session.latencyMs;
 
   return (
     <div
@@ -42,7 +27,7 @@ export function WeltradeGatewayStatus({ className, compact = false }: Props) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          MT5 Gateway
+          Broker Gateway
         </p>
         <span
           className={cn(
@@ -50,25 +35,15 @@ export function WeltradeGatewayStatus({ className, compact = false }: Props) {
             online ? "text-[var(--success)]" : "text-[var(--fg)]",
           )}
         >
-          {healthQ.isLoading ? "Checking…" : label}
+          {session.refreshing && !online ? "Checking…" : label}
         </span>
       </div>
       {!compact ? (
         <div className="mt-2 grid gap-1 text-[11px] text-[var(--fg-muted)] sm:grid-cols-2">
           <span>MT5: {mt5 ? "Connected" : "Not connected"}</span>
-          <span>
-            Latency:{" "}
-            {latency != null && latency !== "" ? `${String(latency)} ms` : "—"}
-          </span>
-          <span>
-            Cloudflare: {cf.detected ? "yes" : "no"}
-            {redirects != null && redirects !== ""
-              ? ` · redirects ${String(redirects)}`
-              : ""}
-          </span>
-          <span className="truncate">
-            Login: {str(health.login_status, "—")}
-          </span>
+          <span>Latency: {latency !== "—" ? `${latency} ms` : "—"}</span>
+          <span className="truncate">Login: {session.loginStatus}</span>
+          <span className="truncate">Server: {session.server}</span>
         </div>
       ) : null}
       {!online && detail && detail !== "ok" ? (
@@ -77,9 +52,7 @@ export function WeltradeGatewayStatus({ className, compact = false }: Props) {
         </p>
       ) : null}
       {gatewayUrl ? (
-        <p className="mt-1 truncate text-[10px] text-[var(--fg-subtle)]">
-          {gatewayUrl}
-        </p>
+        <p className="mt-1 truncate text-[10px] text-[var(--fg-subtle)]">{gatewayUrl}</p>
       ) : null}
     </div>
   );

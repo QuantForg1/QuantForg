@@ -6,18 +6,24 @@ export type AssetClass =
   | "stocks"
   | "indices"
   | "commodities"
+  | "etf"
+  | "futures"
   | "cash"
   | "other";
 
 const CRYPTO = /^(BTC|ETH|XRP|SOL|ADA|DOGE|LTC|BNB|DOT|AVAX|LINK|MATIC|USDT|USDC)/i;
 const INDEX = /(US30|US500|NAS100|NASDAQ|SPX|DAX|FTSE|NI225|JP225|GER40|UK100|EU50)/i;
-const COMMODITY = /(XAU|XAG|GOLD|SILVER|OIL|WTI|BRENT|COPPER|NATGAS)/i;
+const COMMODITY = /(XAU|XAG|GOLD|SILVER|OIL|WTI|BRENT|COPPER|NATGAS|XTI|XBR)/i;
+const ETF = /(ETF|SPY|QQQ|IWM|GLD|SLV|EEM|VTI)/i;
+const FUTURES = /(FUT|CONT|\/F$|_F$)/i;
 const FOREX = /^[A-Z]{6}$|^[A-Z]{3}[A-Z]{3}/;
 
 export function classifySymbol(symbol: string): AssetClass {
   const s = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!s) return "other";
   if (CRYPTO.test(s) || s.includes("USDT") || s.includes("BTC")) return "crypto";
+  if (ETF.test(s)) return "etf";
+  if (FUTURES.test(symbol.toUpperCase())) return "futures";
   if (INDEX.test(s)) return "indices";
   if (COMMODITY.test(s)) return "commodities";
   if (s.length <= 6 && FOREX.test(s) && !/\d/.test(s)) return "forex";
@@ -89,6 +95,8 @@ export function allocationFromPositions(
     stocks: "Stocks",
     indices: "Indices",
     commodities: "Commodities",
+    etf: "ETF",
+    futures: "Futures",
     cash: "Cash",
     other: "Other",
   };

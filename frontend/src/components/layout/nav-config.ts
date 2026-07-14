@@ -55,7 +55,7 @@ export const appNav: NavGroup[] = [
     title: "Trading",
     items: [
       { href: "/workspace", label: "Workspace", icon: LayoutTemplate },
-      { href: "/execution", label: "Execution Center", icon: Target },
+      { href: "/execution", label: "Trading Terminal", icon: Target },
       { href: "/execution-intel", label: "Execution Intelligence", icon: Activity },
       { href: "/orders", label: "Orders", icon: ListOrdered },
       { href: "/positions", label: "Positions", icon: Layers3 },
@@ -77,7 +77,7 @@ export const appNav: NavGroup[] = [
   {
     title: "Connectivity",
     items: [
-      { href: "/broker", label: "Broker Connection", icon: Building2 },
+      { href: "/broker", label: "Broker Workspace", icon: Building2 },
       { href: "/ops", label: "Operations", icon: Gauge },
       { href: "/cloud-ops", label: "Cloud Operations", icon: Cloud },
     ],

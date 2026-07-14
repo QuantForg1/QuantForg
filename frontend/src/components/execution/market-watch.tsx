@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Bookmark, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,18 +15,31 @@ import { formatNumber } from "@/lib/utils";
 import { Cable } from "lucide-react";
 
 const FAV_KEY = "qf.execution.watch.favorites";
-const CATS = ["all", "forex", "crypto", "indices", "commodities", "stocks"] as const;
+const CATS = [
+  "all",
+  "forex",
+  "indices",
+  "commodities",
+  "crypto",
+  "stocks",
+  "etf",
+  "futures",
+] as const;
+const PAGE_SIZE = 100;
 
 export const MarketWatch = memo(function MarketWatch({
   connected,
   selected,
   onSelect,
+  latencyMs,
 }: {
   connected: boolean;
   selected: string;
   onSelect: (symbol: string) => void;
+  latencyMs?: string;
 }) {
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [cat, setCat] = useState<(typeof CATS)[number]>("all");
   const [favorites, setFavorites] = useState<string[]>([]);
 
@@ -39,11 +52,26 @@ export const MarketWatch = memo(function MarketWatch({
     }
   }, []);
 
-  const symbolsQ = useQuery({
-    queryKey: ["mt5-symbols"],
-    queryFn: mt5Api.symbols,
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [q]);
+
+  const symbolsQ = useInfiniteQuery({
+    queryKey: ["mt5-symbols", debouncedQ],
+    queryFn: ({ pageParam }) =>
+      mt5Api.symbols({
+        q: debouncedQ,
+        offset: pageParam,
+        limit: PAGE_SIZE,
+        include_quotes: false,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (last) =>
+      last.has_more ? last.offset + last.limit : undefined,
     retry: false,
     enabled: connected,
+    staleTime: 45_000,
   });
 
   const tickQ = useQuery({
@@ -51,21 +79,27 @@ export const MarketWatch = memo(function MarketWatch({
     queryFn: () => mt5Api.tick(selected),
     retry: false,
     enabled: connected && Boolean(selected),
+    refetchInterval: connected && selected ? 3_000 : false,
   });
 
-  const symbols = useMemo(() => asList(symbolsQ.data).map(asRecord), [symbolsQ.data]);
+  const symbols = useMemo(
+    () =>
+      (symbolsQ.data?.pages ?? []).flatMap((page) =>
+        asList(page.items).map(asRecord),
+      ),
+    [symbolsQ.data],
+  );
   const tick = asRecord(tickQ.data);
+  const total = symbolsQ.data?.pages?.[0]?.total ?? symbols.length;
 
   const filtered = useMemo(() => {
     return symbols.filter((s) => {
       const code = str(s.code);
       const cls = classifySymbol(code);
       if (cat !== "all" && cls !== cat) return false;
-      if (!q.trim()) return true;
-      const hay = `${code} ${str(s.description)}`.toLowerCase();
-      return hay.includes(q.trim().toLowerCase());
+      return true;
     });
-  }, [symbols, cat, q]);
+  }, [symbols, cat]);
 
   const ordered = useMemo(() => {
     const favs = filtered.filter((s) => favorites.includes(str(s.code)));
@@ -90,9 +124,16 @@ export const MarketWatch = memo(function MarketWatch({
       <CardHeader className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Market Watch</CardTitle>
-          <Badge tone={connected ? "success" : "warning"}>
-            {connected ? "Live" : "Offline"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {latencyMs && latencyMs !== "—" ? (
+              <span className="text-[10px] tabular text-[var(--fg-subtle)]">
+                {latencyMs} ms
+              </span>
+            ) : null}
+            <Badge tone={connected ? "success" : "warning"}>
+              {connected ? "Live" : "Offline"}
+            </Badge>
+          </div>
         </div>
         <div className="relative">
           <Search
@@ -165,80 +206,102 @@ export const MarketWatch = memo(function MarketWatch({
         ) : ordered.length === 0 ? (
           <p className="py-8 text-center text-sm text-[var(--fg-muted)]">No symbols match.</p>
         ) : (
-          <div className="max-h-[22rem] overflow-y-auto rounded-lg border border-[var(--border)]">
-            <table className="w-full text-left text-xs" aria-label="Market watch">
-              <thead className="sticky top-0 z-10 bg-[var(--surface-2)]/95 backdrop-blur">
-                <tr className="text-[var(--fg-subtle)]">
-                  <th className="px-2 py-2 font-medium">Symbol</th>
-                  <th className="px-2 py-2 font-medium">Bid</th>
-                  <th className="px-2 py-2 font-medium">Ask</th>
-                  <th className="px-2 py-2 font-medium">Spread</th>
-                  <th className="px-2 py-2 font-medium">Δ</th>
-                  <th className="px-2 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {ordered.slice(0, 200).map((s) => {
-                  const code = str(s.code);
-                  const active = code === selected;
-                  const bid = num(s.bid);
-                  const ask = num(s.ask);
-                  const spread = symbolSpread(s);
-                  const fav = favorites.includes(code);
-                  return (
-                    <tr
-                      key={code}
-                      className={`cursor-pointer border-t border-[var(--border)] transition hover:bg-[var(--surface-2)]/80 ${
-                        active ? "bg-[var(--accent-soft)]" : ""
-                      }`}
-                      onClick={() => onSelect(code)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onSelect(code);
-                        }
-                      }}
-                      tabIndex={0}
-                      aria-selected={active}
-                    >
-                      <td className="px-2 py-1.5 font-medium">{code}</td>
-                      <td className="tabular px-2 py-1.5 text-[var(--danger)]">
-                        {Number.isFinite(bid) ? formatNumber(bid, 5) : "—"}
-                      </td>
-                      <td className="tabular px-2 py-1.5 text-[var(--success)]">
-                        {Number.isFinite(ask) ? formatNumber(ask, 5) : "—"}
-                      </td>
-                      <td className="tabular px-2 py-1.5">
-                        {Number.isFinite(spread) ? formatNumber(spread, 5) : "—"}
-                      </td>
-                      <td className="px-2 py-1.5 text-[var(--fg-subtle)]" title="Daily change not provided by symbol API">
-                        —
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          aria-label={fav ? `Unfavorite ${code}` : `Favorite ${code}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFav(code);
-                          }}
+          <div className="flex max-h-[22rem] flex-col gap-2">
+            <div className="overflow-y-auto rounded-lg border border-[var(--border)]">
+              <table className="w-full text-left text-xs" aria-label="Market watch">
+                <thead className="sticky top-0 z-10 bg-[var(--surface-2)]/95 backdrop-blur">
+                  <tr className="text-[var(--fg-subtle)]">
+                    <th className="px-2 py-2 font-medium">Symbol</th>
+                    <th className="px-2 py-2 font-medium">Bid</th>
+                    <th className="px-2 py-2 font-medium">Ask</th>
+                    <th className="px-2 py-2 font-medium">Spread</th>
+                    <th className="px-2 py-2 font-medium">Δ</th>
+                    <th className="px-2 py-2 font-medium" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordered.map((s) => {
+                    const code = str(s.code);
+                    const active = code === selected;
+                    const bid = num(s.bid);
+                    const ask = num(s.ask);
+                    const spread = symbolSpread(s);
+                    const fav = favorites.includes(code);
+                    return (
+                      <tr
+                        key={code}
+                        className={`cursor-pointer border-t border-[var(--border)] transition hover:bg-[var(--surface-2)]/80 ${
+                          active ? "bg-[var(--accent-soft)]" : ""
+                        }`}
+                        onClick={() => onSelect(code)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSelect(code);
+                          }
+                        }}
+                        tabIndex={0}
+                        aria-selected={active}
+                      >
+                        <td className="px-2 py-1.5 font-medium">{code}</td>
+                        <td className="tabular px-2 py-1.5 text-[var(--danger)]">
+                          {Number.isFinite(bid) ? formatNumber(bid, 5) : "—"}
+                        </td>
+                        <td className="tabular px-2 py-1.5 text-[var(--success)]">
+                          {Number.isFinite(ask) ? formatNumber(ask, 5) : "—"}
+                        </td>
+                        <td className="tabular px-2 py-1.5">
+                          {Number.isFinite(spread) ? formatNumber(spread, 5) : "—"}
+                        </td>
+                        <td
+                          className="px-2 py-1.5 text-[var(--fg-subtle)]"
+                          title="Daily change not provided by symbol API"
                         >
-                          <Bookmark
-                            className={
-                              fav
-                                ? "h-3.5 w-3.5 fill-[var(--accent)] text-[var(--accent)]"
-                                : "h-3.5 w-3.5"
-                            }
-                          />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          —
+                        </td>
+                        <td className="px-1 py-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            aria-label={fav ? `Unfavorite ${code}` : `Favorite ${code}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFav(code);
+                            }}
+                          >
+                            <Bookmark
+                              className={
+                                fav
+                                  ? "h-3.5 w-3.5 fill-[var(--accent)] text-[var(--accent)]"
+                                  : "h-3.5 w-3.5"
+                              }
+                            />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--fg-subtle)]">
+              <span>
+                Showing {ordered.length}
+                {total ? ` of ${total}` : ""} symbols
+              </span>
+              {symbolsQ.hasNextPage ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7"
+                  disabled={symbolsQ.isFetchingNextPage}
+                  onClick={() => void symbolsQ.fetchNextPage()}
+                >
+                  {symbolsQ.isFetchingNextPage ? "Loading…" : "Load more"}
+                </Button>
+              ) : null}
+            </div>
           </div>
         )}
       </CardContent>

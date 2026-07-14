@@ -18,7 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { PageMotion } from "@/components/desk/motion";
+import { SessionStrip } from "@/components/broker/session-strip";
 import { portfolioApi } from "@/lib/api/endpoints";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { asList, asRecord, mapEquityCurve, metric, num, str, toneFromNumber } from "@/lib/desk";
 import { formatCurrency } from "@/lib/utils";
 
@@ -28,15 +30,20 @@ function money(v: unknown) {
 }
 
 export default function WalletPage() {
+  const session = useTradingSession();
   const portfolio = useQuery({
     queryKey: ["portfolio"],
     queryFn: portfolioApi.get,
     retry: false,
+    staleTime: 12_000,
+    enabled: session.connected,
   });
   const history = useQuery({
     queryKey: ["history"],
     queryFn: portfolioApi.history,
     retry: false,
+    staleTime: 20_000,
+    enabled: session.connected,
   });
 
   const account = asRecord(portfolio.data?.account);
@@ -126,6 +133,8 @@ export default function WalletPage() {
         }
       />
 
+      <SessionStrip className="mb-4" />
+
       {portfolio.isLoading ? (
         <DeskSkeleton variant="page" />
       ) : portfolio.isError ? (
@@ -145,7 +154,7 @@ export default function WalletPage() {
                 </p>
               </div>
               <Button size="sm" variant="secondary" asChild>
-                <Link href="/broker">Open MT5</Link>
+                <Link href="/broker">Broker Workspace</Link>
               </Button>
             </CardContent>
           </Card>

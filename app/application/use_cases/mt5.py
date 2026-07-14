@@ -16,6 +16,7 @@ from app.application.dto.mt5 import (
     MT5DisconnectCommand,
     MT5StatusDTO,
     MT5SymbolDTO,
+    MT5SymbolsPageDTO,
     MT5TickDTO,
 )
 from app.application.services.mt5_market_data import MT5MarketDataService
@@ -186,16 +187,81 @@ class ListMT5SymbolsUseCase:
     uow_factory: Any
     adapter: MT5Adapter
 
-    async def execute(self, *, user_id: UUID) -> list[MT5SymbolDTO]:
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        q: str = "",
+        offset: int = 0,
+        limit: int = 100,
+        include_quotes: bool = False,
+        codes: list[str] | None = None,
+    ) -> MT5SymbolsPageDTO:
         await require_live_mt5_connection(self.uow_factory, self.adapter, user_id)
+        safe_offset = max(0, int(offset))
+        safe_limit = max(1, min(500, int(limit)))
+        query = (q or "").strip().upper()
         try:
-            symbols = self.adapter.list_symbols()
+            # Catalogue without quote fan-out; optional quotes only for the page.
+            catalogue = self.adapter.list_symbols(
+                include_quotes=False,
+                codes=codes,
+            )
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
                 "Failed to list MT5 symbols",
                 details={"error": str(exc)},
             ) from exc
-        return [MT5SymbolDTO.from_symbol_info(s) for s in symbols]
+
+        filtered: list[Any] = []
+        for item in catalogue:
+            code = (getattr(item, "code", "") or "").upper()
+            desc = (getattr(item, "description", "") or "").upper()
+            if query and query not in code and query not in desc:
+                continue
+            filtered.append(item)
+
+        total = len(filtered)
+        page = filtered[safe_offset : safe_offset + safe_limit]
+        if include_quotes and page:
+            try:
+                quoted = self.adapter.list_symbols(
+                    include_quotes=True,
+                    codes=[getattr(s, "code", "") for s in page],
+                )
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise ValidationError(
+                    "Failed to fetch MT5 symbol quotes",
+                    details={"error": str(exc)},
+                ) from exc
+            by_code = {s.code.upper(): s for s in quoted if s.code}
+            page = [by_code.get(s.code.upper(), s) for s in page]
+
+        items = [MT5SymbolDTO.from_symbol_info(s) for s in page]
+        if not include_quotes:
+            items = [
+                MT5SymbolDTO(
+                    code=i.code,
+                    description=i.description,
+                    digits=i.digits,
+                    contract_size=i.contract_size,
+                    point=i.point,
+                    selected=i.selected,
+                    trade_mode=i.trade_mode,
+                    currency_base=i.currency_base,
+                    currency_profit=i.currency_profit,
+                    bid=None,
+                    ask=None,
+                )
+                for i in items
+            ]
+        return MT5SymbolsPageDTO(
+            items=items,
+            total=total,
+            offset=safe_offset,
+            limit=safe_limit,
+            has_more=safe_offset + safe_limit < total,
+        )
 
 
 @dataclass(frozen=True, slots=True)

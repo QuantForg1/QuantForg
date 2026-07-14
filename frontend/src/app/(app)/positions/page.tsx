@@ -13,6 +13,8 @@ import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
 import { usePositionsStream } from "@/hooks/realtime";
+import { useTradingSession } from "@/providers/trading-session-provider";
+import { SessionStrip } from "@/components/broker/session-strip";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatCurrency } from "@/lib/utils";
@@ -21,12 +23,16 @@ type Row = Record<string, unknown>;
 
 export default function PositionsPage() {
   const realtime = usePositionsStream();
+  const session = useTradingSession();
   const q = useQuery({
     queryKey: ["positions"],
     queryFn: () => portfolioApi.positions(),
     retry: false,
+    staleTime: 12_000,
+    enabled: session.connected,
   });
-  const positions = asList(q.data).map(asRecord);
+  const fromApi = asList(q.data).map(asRecord);
+  const positions = fromApi.length > 0 ? fromApi : session.positions;
   const totalPnl = positions.reduce((s, p) => s + num(p.profit, 0), 0);
 
   const columns: DeskColumn<Row>[] = [
@@ -118,6 +124,7 @@ export default function PositionsPage() {
         }
       />
       <RealtimeMeta status={realtime} className="mb-3" />
+      <SessionStrip className="mb-4" />
       {q.isLoading ? (
         <DeskSkeleton variant="page" />
       ) : q.isError ? (

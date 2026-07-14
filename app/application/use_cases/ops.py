@@ -59,6 +59,16 @@ class GetOpsMetricsUseCase:
     async def execute(self, *, persist: bool = True) -> OpsMetricsDTO:
         snap = self.metrics.snapshot()
         payload = snap.to_dict()
+        try:
+            from app.application.services.market_intelligence import (
+                dashboard_cache_stats,
+            )
+            from app.infrastructure.brokers.mt5.metrics import gateway_metrics
+
+            payload["gateway"] = gateway_metrics.snapshot()
+            payload["intelligence_dashboard_cache"] = dashboard_cache_stats()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ops_gateway_metrics_attach_failed", error=str(exc))
         if persist:
             try:
                 async with self.ops_uow_factory() as uow:

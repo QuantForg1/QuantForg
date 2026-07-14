@@ -74,6 +74,14 @@ class MT5SymbolResponse(BaseModel):
     ask: str | None = None
 
 
+class MT5SymbolsPageResponse(BaseModel):
+    items: list[MT5SymbolResponse]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+
+
 class MT5TickResponse(BaseModel):
     symbol: str
     bid: str

@@ -9,23 +9,36 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { mt5Api, portfolioApi, weltradeApi } from "@/lib/api/endpoints";
-import { asRecord, str } from "@/lib/desk";
+import { asList, asRecord, str } from "@/lib/desk";
 import { useBrokerStatusStream } from "@/hooks/realtime";
+import {
+  gatewayDiagnosticDetail,
+  gatewayStatusLabel,
+} from "@/lib/gateway-diagnostics";
 
 export type TradingSessionState = {
   connected: boolean;
   gatewayOnline: boolean;
+  brokerConnected: boolean;
   login: string;
   server: string;
   balance: string;
   equity: string;
   freeMargin: string;
   margin: string;
+  marginLevel: string;
+  profit: string;
   leverage: string;
   currency: string;
   loginStatus: string;
   latencyMs: string;
   heartbeatAt: string;
+  gatewayLabel: string;
+  gatewayDetail: string;
+  gatewayUrl: string;
+  positions: Record<string, unknown>[];
+  orders: Record<string, unknown>[];
+  historyDeals: Record<string, unknown>[];
   refreshing: boolean;
   invalidateAll: () => Promise<void>;
 };
@@ -40,21 +53,44 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const statusQ = useQuery({
     queryKey: ["mt5-status"],
     queryFn: mt5Api.status,
-    refetchInterval: 10_000,
+    staleTime: 10_000,
     retry: 1,
   });
+  const connectedFlag = Boolean(asRecord(statusQ.data).connected);
+
   const portfolioQ = useQuery({
     queryKey: ["portfolio"],
     queryFn: portfolioApi.get,
-    refetchInterval: 12_000,
+    staleTime: 12_000,
     retry: 1,
-    enabled: Boolean(asRecord(statusQ.data).connected),
+    enabled: connectedFlag,
   });
   const healthQ = useQuery({
     queryKey: ["weltrade-health"],
     queryFn: weltradeApi.health,
-    refetchInterval: 15_000,
+    staleTime: 15_000,
     retry: 1,
+  });
+  const positionsQ = useQuery({
+    queryKey: ["positions"],
+    queryFn: () => portfolioApi.positions(),
+    staleTime: 12_000,
+    retry: 1,
+    enabled: connectedFlag,
+  });
+  const ordersQ = useQuery({
+    queryKey: ["orders"],
+    queryFn: portfolioApi.orders,
+    staleTime: 12_000,
+    retry: 1,
+    enabled: connectedFlag,
+  });
+  const historyQ = useQuery({
+    queryKey: ["history"],
+    queryFn: portfolioApi.history,
+    staleTime: 20_000,
+    retry: 1,
+    enabled: connectedFlag,
   });
 
   const status = asRecord(statusQ.data);
@@ -66,6 +102,14 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const gatewayOnline = Boolean(
     health.gateway_online || health.gateway_reachable || connected,
   );
+  const brokerConnected = Boolean(
+    health.weltrade_connected || health.mt5_connected || connected,
+  );
+
+  const gatewayDetail = gatewayDiagnosticDetail(health);
+  const gatewayLabel = gatewayOnline
+    ? "Gateway Online"
+    : gatewayStatusLabel(health);
 
   const invalidateAll = useCallback(async () => {
     await Promise.all([
@@ -79,37 +123,79 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
       qc.invalidateQueries({ queryKey: ["weltrade-health"] }),
       qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] }),
       qc.invalidateQueries({ queryKey: ["brokers"] }),
+      qc.invalidateQueries({ queryKey: ["mt5-account"] }),
     ]);
   }, [qc]);
+
+  const positions = useMemo(() => {
+    const fromPortfolio = asList(portfolio.positions).map(asRecord);
+    if (fromPortfolio.length) return fromPortfolio;
+    return asList(positionsQ.data).map(asRecord);
+  }, [portfolio.positions, positionsQ.data]);
+
+  const orders = useMemo(() => {
+    const fromPortfolio = asList(portfolio.pending_orders).map(asRecord);
+    if (fromPortfolio.length) return fromPortfolio;
+    return asList(ordersQ.data).map(asRecord);
+  }, [portfolio.pending_orders, ordersQ.data]);
+
+  const historyDeals = useMemo(() => {
+    const hist = asRecord(historyQ.data);
+    const deals = asList(hist.deals ?? historyQ.data).map(asRecord);
+    return deals;
+  }, [historyQ.data]);
 
   const value = useMemo<TradingSessionState>(
     () => ({
       connected,
       gatewayOnline,
+      brokerConnected,
       login: str(account.login || status.login, "—"),
       server: str(account.server || status.server, "—"),
       balance: str(account.balance, "—"),
       equity: str(account.equity, "—"),
       freeMargin: str(account.free_margin, "—"),
       margin: str(account.margin, "—"),
+      marginLevel: str(account.margin_level, "—"),
+      profit: str(account.profit, "—"),
       leverage: str(account.leverage, "—"),
       currency: str(account.currency, ""),
       loginStatus: str(status.login_status || health.login_status, "logged_out"),
       latencyMs: str(status.latency_ms ?? health.latency_ms ?? health.latency, "—"),
-      heartbeatAt: str(status.last_heartbeat_at || health.detail, ""),
+      heartbeatAt: str(status.last_heartbeat_at || health.last_heartbeat_at, ""),
+      gatewayLabel,
+      gatewayDetail,
+      gatewayUrl: str(health.gateway_url, ""),
+      positions,
+      orders,
+      historyDeals,
       refreshing:
-        statusQ.isFetching || portfolioQ.isFetching || healthQ.isFetching,
+        statusQ.isFetching ||
+        portfolioQ.isFetching ||
+        healthQ.isFetching ||
+        positionsQ.isFetching ||
+        ordersQ.isFetching ||
+        historyQ.isFetching,
       invalidateAll,
     }),
     [
       connected,
       gatewayOnline,
+      brokerConnected,
       account,
       status,
       health,
+      gatewayLabel,
+      gatewayDetail,
+      positions,
+      orders,
+      historyDeals,
       statusQ.isFetching,
       portfolioQ.isFetching,
       healthQ.isFetching,
+      positionsQ.isFetching,
+      ordersQ.isFetching,
+      historyQ.isFetching,
       invalidateAll,
     ],
   );

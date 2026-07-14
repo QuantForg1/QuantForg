@@ -44,6 +44,7 @@ from app.domain.interfaces.mt5_order import (
     MT5ProfitResult,
 )
 from app.domain.market_data.timeframe import Timeframe
+from app.infrastructure.brokers.mt5.metrics import gateway_metrics
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -188,6 +189,14 @@ class GatewayMT5Client:
     _session_mode: str = field(default="none", init=False)
     _last_gateway_health: dict[str, Any] = field(default_factory=dict, init=False)
     _last_upstream: dict[str, Any] = field(default_factory=dict, init=False)
+    _catalogue_cache: list[BrokerSymbolInfo] = field(default_factory=list, init=False)
+    _catalogue_cached_at: float = field(default=0.0, init=False)
+    _catalogue_ttl_seconds: float = field(default=60.0, init=False)
+    _account_cache: MT5AccountInfo | None = field(default=None, init=False)
+    _account_cache_at: float = field(default=0.0, init=False)
+    _positions_cache: list[MT5Position] | None = field(default=None, init=False)
+    _positions_cache_at: float = field(default=0.0, init=False)
+    _snapshot_ttl_seconds: float = field(default=2.5, init=False)
 
     def __post_init__(self) -> None:
         self.base_url = normalize_gateway_base_url(self.base_url)
@@ -314,6 +323,7 @@ class GatewayMT5Client:
                 )
         except httpx.TooManyRedirects as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+            gateway_metrics.record_request(latency_ms=latency_ms, error=True)
             detail = f"Redirect loop calling {method} {url}: {exc}"
             label = classify_gateway_failure(
                 error=detail,
@@ -347,6 +357,7 @@ class GatewayMT5Client:
             raise RuntimeError(f"{label}: {detail}") from exc
         except httpx.TimeoutException as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+            gateway_metrics.record_request(latency_ms=latency_ms, error=True)
             detail = (
                 f"Gateway timeout calling {method} {url} "
                 f"(timeout={self.timeout_seconds}s): {exc}"
@@ -384,6 +395,7 @@ class GatewayMT5Client:
             raise RuntimeError(f"{label}: {detail}") from exc
         except httpx.HTTPError as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+            gateway_metrics.record_request(latency_ms=latency_ms, error=True)
             detail = f"Gateway unreachable calling {method} {url}: {exc}"
             label = classify_gateway_failure(
                 error=detail,
@@ -424,6 +436,10 @@ class GatewayMT5Client:
         cf_ray = response.headers.get("cf-ray", "")
         cf_cache = response.headers.get("cf-cache-status", "")
         http_version = getattr(response, "http_version", "") or ""
+        gateway_metrics.record_request(
+            latency_ms=latency_ms,
+            error=response.status_code >= 400,
+        )
 
         upstream = {
             "ok": response.is_success,
@@ -548,6 +564,7 @@ class GatewayMT5Client:
             "connected": self._connected,
             "redirects_followed": upstream.get("redirects_followed"),
             "latency_ms": upstream.get("latency_ms"),
+            "gateway_metrics": gateway_metrics.snapshot(),
             "last_http_status": upstream.get("status_code"),
             "last_body_preview": upstream.get("body_preview"),
             "last_upstream_error": upstream.get("error"),
@@ -629,6 +646,15 @@ class GatewayMT5Client:
         self._session_mode = mode
         self._session_token = f"gw-mt5-{uuid4().hex[:12]}"
         self._last_heartbeat = datetime.now(UTC)
+        self._clear_data_caches()
+
+    def _clear_data_caches(self) -> None:
+        self._catalogue_cache = []
+        self._catalogue_cached_at = 0.0
+        self._account_cache = None
+        self._account_cache_at = 0.0
+        self._positions_cache = None
+        self._positions_cache_at = 0.0
 
     def shutdown(self) -> None:
         if self._initialized and self.token:
@@ -640,6 +666,7 @@ class GatewayMT5Client:
         self._login = 0
         self._server = ""
         self._session_mode = "none"
+        self._clear_data_caches()
 
     def reconnect(self, request: MT5LoginRequest) -> bool:
         if request.password:
@@ -699,8 +726,16 @@ class GatewayMT5Client:
 
     def account_info(self) -> MT5AccountInfo:
         self._require_connected()
+        now = time.monotonic()
+        if (
+            self._account_cache is not None
+            and now - self._account_cache_at <= self._snapshot_ttl_seconds
+        ):
+            gateway_metrics.record_cache(hit=True)
+            return self._account_cache
+        gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/account")
-        return MT5AccountInfo(
+        info = MT5AccountInfo(
             login=int(data.get("login") or self._login),
             name=str(data.get("name") or f"Account {data.get('login', '')}"),
             server=str(data.get("server") or self._server),
@@ -715,6 +750,9 @@ class GatewayMT5Client:
             company="Weltrade",
             trade_mode="demo",
         )
+        self._account_cache = info
+        self._account_cache_at = now
+        return info
 
     def server_info(self) -> MT5Server:
         return MT5Server(
@@ -725,9 +763,14 @@ class GatewayMT5Client:
 
     def symbols(self) -> list[BrokerSymbolInfo]:
         self._require_connected()
+        cached = self._catalogue_cached()
+        if cached is not None:
+            gateway_metrics.record_cache(hit=True)
+            return list(cached)
+        gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/symbols")
         items = data.get("items") or []
-        return [
+        out = [
             BrokerSymbolInfo(
                 code=str(row.get("code") or ""),
                 description=str(row.get("description") or ""),
@@ -737,6 +780,16 @@ class GatewayMT5Client:
             for row in items
             if row.get("code")
         ]
+        self._catalogue_cache = out
+        self._catalogue_cached_at = time.monotonic()
+        return list(out)
+
+    def _catalogue_cached(self) -> list[BrokerSymbolInfo] | None:
+        if not self._catalogue_cache:
+            return None
+        if time.monotonic() - self._catalogue_cached_at > self._catalogue_ttl_seconds:
+            return None
+        return self._catalogue_cache
 
     def health(self) -> MT5HealthSnapshot:
         latency: float | None = None
@@ -800,20 +853,63 @@ class GatewayMT5Client:
             version=version,
         )
 
-    def list_symbols(self) -> list[MT5SymbolInfo]:
-        return [self.symbol_info(s.code) for s in self.symbols() if s.code]
+    def list_symbols(
+        self,
+        *,
+        include_quotes: bool = False,
+        codes: list[str] | None = None,
+    ) -> list[MT5SymbolInfo]:
+        """Return catalogue symbols without N+1 quote fan-out by default."""
+        catalogue = self.symbols()
+        wanted: set[str] | None = None
+        if codes:
+            wanted = {c.strip().upper() for c in codes if c and c.strip()}
+        rows = [
+            s
+            for s in catalogue
+            if s.code and (wanted is None or s.code.upper() in wanted)
+        ]
+        out: list[MT5SymbolInfo] = []
+        for meta in rows:
+            code = meta.code.upper()
+            bid = Decimal("0")
+            ask = Decimal("0")
+            if include_quotes:
+                try:
+                    tick = self._request("GET", f"/quotes/{code}")
+                    bid = _dec(tick.get("bid"))
+                    ask = _dec(tick.get("ask"))
+                except RuntimeError:
+                    pass
+            out.append(
+                MT5SymbolInfo(
+                    code=code,
+                    description=meta.description or code,
+                    digits=meta.digits or 5,
+                    point=Decimal("0.00001"),
+                    contract_size=meta.contract_size or Decimal("100000"),
+                    selected=True,
+                    trade_mode="full",
+                    currency_base="",
+                    currency_profit="",
+                    bid=bid,
+                    ask=ask,
+                )
+            )
+        return out
 
     def symbol_info(self, symbol: str) -> MT5SymbolInfo:
         self._require_connected()
         code = symbol.strip().upper()
+        catalogue = self.symbols()
+        meta = next((s for s in catalogue if s.code.upper() == code), None)
         tick = self._request("GET", f"/quotes/{code}")
-        meta = next((s for s in self.symbols() if s.code.upper() == code), None)
         return MT5SymbolInfo(
             code=code,
             description=meta.description if meta else code,
             digits=meta.digits if meta else 5,
             point=Decimal("0.00001"),
-            contract_size=Decimal("100000"),
+            contract_size=(meta.contract_size if meta else Decimal("100000")),
             selected=True,
             trade_mode="full",
             currency_base="",
@@ -953,6 +1049,14 @@ class GatewayMT5Client:
 
     def list_positions(self) -> list[MT5Position]:
         self._require_connected()
+        now = time.monotonic()
+        if (
+            self._positions_cache is not None
+            and now - self._positions_cache_at <= self._snapshot_ttl_seconds
+        ):
+            gateway_metrics.record_cache(hit=True)
+            return list(self._positions_cache)
+        gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/positions")
         out: list[MT5Position] = []
         for row in data.get("items") or []:
@@ -968,7 +1072,9 @@ class GatewayMT5Client:
                     profit=_dec(row.get("profit")),
                 )
             )
-        return out
+        self._positions_cache = out
+        self._positions_cache_at = now
+        return list(out)
 
     def position_by_ticket(self, ticket: int) -> MT5Position | None:
         for pos in self.list_positions():

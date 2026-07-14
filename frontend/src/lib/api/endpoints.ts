@@ -58,7 +58,30 @@ export const mt5Api = {
   disconnect: () =>
     apiFetch<Record<string, unknown>>("/mt5/disconnect", { method: "POST", body: {} }),
   account: () => apiFetch<Record<string, unknown>>("/mt5/account"),
-  symbols: () => apiFetch<unknown[]>("/mt5/symbols"),
+  symbols: (params?: {
+    q?: string;
+    offset?: number;
+    limit?: number;
+    include_quotes?: boolean;
+  }) => {
+    const q = params?.q?.trim() ?? "";
+    const offset = params?.offset ?? 0;
+    const limit = params?.limit ?? 100;
+    const include_quotes = params?.include_quotes ?? false;
+    const search = new URLSearchParams({
+      offset: String(offset),
+      limit: String(limit),
+      include_quotes: include_quotes ? "true" : "false",
+    });
+    if (q) search.set("q", q);
+    return apiFetch<{
+      items: unknown[];
+      total: number;
+      offset: number;
+      limit: number;
+      has_more: boolean;
+    }>(`/mt5/symbols?${search.toString()}`);
+  },
   symbol: (symbol: string) =>
     apiFetch<Record<string, unknown>>(`/mt5/symbols/${encodeURIComponent(symbol)}`),
   tick: (symbol: string) =>

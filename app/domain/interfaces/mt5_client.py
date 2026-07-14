@@ -82,7 +82,12 @@ class MT5ClientPort(Protocol):
 
     # -- Market data (Sprint 2) ----------------------------------------------
 
-    def list_symbols(self) -> list[MT5SymbolInfo]: ...
+    def list_symbols(
+        self,
+        *,
+        include_quotes: bool = False,
+        codes: list[str] | None = None,
+    ) -> list[MT5SymbolInfo]: ...
 
     def symbol_info(self, symbol: str) -> MT5SymbolInfo: ...
 

@@ -10,7 +10,9 @@ import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
+import { SessionStrip } from "@/components/broker/session-strip";
 import { useOrdersStream } from "@/hooks/realtime";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 
@@ -18,8 +20,18 @@ type Row = Record<string, unknown>;
 
 export default function OrdersPage() {
   const realtime = useOrdersStream();
-  const q = useQuery({ queryKey: ["orders"], queryFn: portfolioApi.orders, retry: false });
-  const orders = asList(q.data).map(asRecord);
+  const session = useTradingSession();
+  const q = useQuery({
+    queryKey: ["orders"],
+    queryFn: portfolioApi.orders,
+    retry: false,
+    staleTime: 12_000,
+    enabled: session.connected,
+  });
+  const orders =
+    asList(q.data).map(asRecord).length > 0
+      ? asList(q.data).map(asRecord)
+      : session.orders;
 
   const columns: DeskColumn<Row>[] = [
     {
@@ -83,6 +95,7 @@ export default function OrdersPage() {
         actions={<RealtimeConnectionBadge status={realtime} />}
       />
       <RealtimeMeta status={realtime} className="mb-3" />
+      <SessionStrip className="mb-4" />
       {q.isLoading ? (
         <DeskSkeleton variant="page" />
       ) : q.isError ? (

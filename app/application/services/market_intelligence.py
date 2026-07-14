@@ -12,6 +12,31 @@ from app.application.services.news_intelligence import NewsIntelligenceService
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.use_cases.mt5 import GetMT5StatusUseCase, ListMT5SymbolsUseCase
 from app.domain.market_context.engine import MarketContextEngine
+from app.infrastructure.intelligence.runtime import TtlCache
+
+# Prefer majors when sampling quotes — never fan-out the full catalogue.
+_QUOTE_SAMPLE = (
+    "EURUSD",
+    "GBPUSD",
+    "USDJPY",
+    "USDCHF",
+    "AUDUSD",
+    "USDCAD",
+    "NZDUSD",
+    "XAUUSD",
+    "XAGUSD",
+    "BTCUSD",
+    "ETHUSD",
+    "US500",
+    "NAS100",
+    "GER40",
+    "UK100",
+    "XTIUSD",
+)
+
+# Short TTL so concurrent dashboard/analysis/events share one broker snap.
+_DASHBOARD_CACHE = TtlCache(ttl_seconds=12.0, max_items=128)
+_DASHBOARD_CACHE_STATS = {"hits": 0, "misses": 0}
 
 
 def _dec(value: Any) -> str:
@@ -20,6 +45,19 @@ def _dec(value: Any) -> str:
     if isinstance(value, Decimal):
         return str(value)
     return str(value)
+
+
+def dashboard_cache_stats() -> dict[str, Any]:
+    looked = _DASHBOARD_CACHE_STATS["hits"] + _DASHBOARD_CACHE_STATS["misses"]
+    ratio = (
+        _DASHBOARD_CACHE_STATS["hits"] / looked if looked else None
+    )
+    return {
+        "hits": _DASHBOARD_CACHE_STATS["hits"],
+        "misses": _DASHBOARD_CACHE_STATS["misses"],
+        "hit_ratio": round(ratio, 4) if ratio is not None else None,
+        "ttl_seconds": _DASHBOARD_CACHE.ttl_seconds,
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +75,16 @@ class MarketIntelligenceService:
         user_id: UUID,
         market_code: str = "FX",
         symbol: str | None = None,
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
+        cache_key = f"{user_id}:{market_code}:{symbol or ''}"
+        if not force_refresh:
+            cached = _DASHBOARD_CACHE.get(cache_key)
+            if cached is not None:
+                _DASHBOARD_CACHE_STATS["hits"] += 1
+                return cached
+        _DASHBOARD_CACHE_STATS["misses"] += 1
+
         status = await self.status.execute(user_id=user_id)
         broker = {
             "connected": status.connected,
@@ -103,9 +150,18 @@ class MarketIntelligenceService:
                 pass
 
             try:
-                symbol_rows = await self.symbols.execute(user_id=user_id)
+                sample_codes = list(_QUOTE_SAMPLE)
+                if symbol:
+                    sample_codes = [symbol.strip().upper(), *sample_codes]
+                page = await self.symbols.execute(
+                    user_id=user_id,
+                    codes=sample_codes,
+                    include_quotes=True,
+                    limit=len(sample_codes),
+                    offset=0,
+                )
                 scored: list[tuple[float, dict[str, Any]]] = []
-                for s in symbol_rows[:80]:
+                for s in page.items:
                     bid = getattr(s, "bid", None)
                     ask = getattr(s, "ask", None)
                     if bid is None or ask is None:
@@ -113,6 +169,8 @@ class MarketIntelligenceService:
                     try:
                         spread = float(Decimal(str(ask)) - Decimal(str(bid)))
                     except Exception:  # noqa: BLE001
+                        continue
+                    if spread <= 0:
                         continue
                     row = {
                         "symbol": s.code,
@@ -191,6 +249,7 @@ class MarketIntelligenceService:
             "providers": self.news.provider_status(),
         }
         snapshot["analysis"] = self.advisor.summarize(snapshot)
+        _DASHBOARD_CACHE.set(cache_key, snapshot)
         return snapshot
 
     def market_context_only(

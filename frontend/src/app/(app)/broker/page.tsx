@@ -18,19 +18,37 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { DeskSkeleton } from "@/components/desk/primitives";
+import { DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { RealtimeConnectionBadge } from "@/components/realtime/connection-badge";
 import { useBrokerStatusStream } from "@/hooks/realtime";
 import { weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
-import { asRecord, str } from "@/lib/desk";
+import { asList, asRecord, num, str } from "@/lib/desk";
 import {
   gatewayDiagnosticDetail,
   gatewayStatusLabel,
 } from "@/lib/gateway-diagnostics";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn } from "@/lib/utils";
 
 type AccountType = "demo" | "live";
+
+const SECTIONS = [
+  "Broker",
+  "Gateway",
+  "Connection",
+  "Synchronization",
+  "Diagnostics",
+  "Health",
+  "Performance",
+  "Account",
+  "Risk",
+  "Market",
+  "Positions",
+  "Orders",
+  "Trades",
+  "Timeline",
+] as const;
 
 function StatusDot({ on, label }: { on: boolean; label: string }) {
   return (
@@ -54,41 +72,63 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function WeltradeBrokerPage() {
+function Section({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.section
+      id={id}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="scroll-mt-24 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]"
+    >
+      <h2 className="mb-4 text-sm font-medium tracking-wide text-[var(--fg)]">{title}</h2>
+      {children}
+    </motion.section>
+  );
+}
+
+export default function BrokerWorkspacePage() {
   const qc = useQueryClient();
+  const session = useTradingSession();
   const realtime = useBrokerStatusStream(true);
+
   const healthQ = useQuery({
     queryKey: ["weltrade-health"],
     queryFn: weltradeApi.health,
-    refetchInterval: 5_000,
+    staleTime: 15_000,
     retry: 2,
   });
   const dash = useQuery({
     queryKey: ["weltrade-dashboard"],
     queryFn: weltradeApi.dashboard,
-    refetchInterval: 8_000,
+    staleTime: 12_000,
     retry: 2,
   });
 
   const connection = asRecord(asRecord(dash.data).connection);
   const account = asRecord(asRecord(dash.data).account);
   const profile = asRecord(asRecord(dash.data).profile);
-  const positions = asRecord(asRecord(dash.data).positions);
-  const orders = asRecord(asRecord(dash.data).orders);
-  const history = asRecord(asRecord(dash.data).history);
   const health = asRecord(healthQ.data);
   const dashBody = asRecord(dash.data);
   const configuration = asRecord(health.configuration || dashBody.configuration);
 
-  const connected = Boolean(
+  const connected = session.connected || Boolean(
     connection.mt5_connected || health.mt5_connected || health.mt5_attached,
   );
-  const gatewayOnline = Boolean(
-    connection.gateway_online || health.gateway_online || health.gateway_reachable,
-  );
-  const weltradeConnected = Boolean(
-    connection.weltrade_connected || health.weltrade_connected,
-  );
+  const gatewayOnline =
+    session.gatewayOnline ||
+    Boolean(connection.gateway_online || health.gateway_online || health.gateway_reachable);
+  const brokerConnected =
+    session.brokerConnected ||
+    Boolean(connection.weltrade_connected || health.weltrade_connected);
+
   const upstreamDetail = gatewayDiagnosticDetail({
     ...health,
     ...dashBody,
@@ -118,33 +158,30 @@ export default function WeltradeBrokerPage() {
   const [progress, setProgress] = useState<string | null>(null);
   const [wasConnected, setWasConnected] = useState(false);
   const recoveringRef = useRef(false);
+  const [activeNav, setActiveNav] = useState<(typeof SECTIONS)[number]>("Broker");
 
   const serverOptions = useMemo(() => {
     const servers = asRecord(profile.servers);
-    const list = Array.isArray(servers[accountType]) ? (servers[accountType] as string[]) : [];
-    return list.length > 0 ? list : accountType === "demo" ? ["Weltrade-Demo"] : ["Weltrade-MT5"];
+    const list = Array.isArray(servers[accountType])
+      ? (servers[accountType] as string[])
+      : [];
+    return list.length > 0
+      ? list
+      : accountType === "demo"
+        ? ["Weltrade-Demo"]
+        : ["Weltrade-Real"];
   }, [profile.servers, accountType]);
 
   useEffect(() => {
     if (serverMode === "auto") {
       setServer("auto");
     } else if (!serverOptions.includes(server)) {
-      setServer(serverOptions[0] ?? "Weltrade-MT5");
+      setServer(serverOptions[0] ?? "Weltrade-Real");
     }
   }, [serverMode, serverOptions, server]);
 
   const refresh = async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] }),
-      qc.invalidateQueries({ queryKey: ["weltrade-health"] }),
-      qc.invalidateQueries({ queryKey: ["mt5-status"] }),
-      qc.invalidateQueries({ queryKey: ["portfolio"] }),
-      qc.invalidateQueries({ queryKey: ["orders"] }),
-      qc.invalidateQueries({ queryKey: ["positions"] }),
-      qc.invalidateQueries({ queryKey: ["history"] }),
-      qc.invalidateQueries({ queryKey: ["mt5-symbols"] }),
-      qc.invalidateQueries({ queryKey: ["brokers"] }),
-    ]);
+    await session.invalidateAll();
   };
 
   const connectMut = useMutation({
@@ -153,11 +190,11 @@ export default function WeltradeBrokerPage() {
     onSuccess: async (data) => {
       setProgress("Synchronizing account…");
       setPassword("");
-      const dashBody = asRecord(asRecord(data).dashboard);
-      if (Object.keys(dashBody).length > 0) {
-        qc.setQueryData(["weltrade-dashboard"], dashBody);
+      const body = asRecord(asRecord(data).dashboard);
+      if (Object.keys(body).length > 0) {
+        qc.setQueryData(["weltrade-dashboard"], body);
       }
-      toast.success("Weltrade connected");
+      toast.success("Broker session attached");
       await refresh();
       setProgress(null);
       setWasConnected(true);
@@ -175,7 +212,8 @@ export default function WeltradeBrokerPage() {
       setWasConnected(false);
       await refresh();
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : "Disconnect failed"),
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Disconnect failed"),
   });
 
   const reconnectMut = useMutation({
@@ -189,16 +227,15 @@ export default function WeltradeBrokerPage() {
     },
     onError: (e) => {
       setProgress(null);
-      // Silent retry path — avoid toast spam during auto-recovery
       if (!wasConnected) {
         toast.error(e instanceof ApiError ? e.message : "Reconnect failed");
       }
     },
   });
 
-  const busy = connectMut.isPending || disconnectMut.isPending || reconnectMut.isPending;
+  const busy =
+    connectMut.isPending || disconnectMut.isPending || reconnectMut.isPending;
 
-  // Automatic recovery: if we had a live session and it drops, reconnect quietly.
   useEffect(() => {
     if (connected) {
       setWasConnected(true);
@@ -216,7 +253,7 @@ export default function WeltradeBrokerPage() {
       });
     }, 1500);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional recovery trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recovery trigger
   }, [connected, gatewayOnline, wasConnected, busy]);
 
   const onConnect = () => {
@@ -236,8 +273,13 @@ export default function WeltradeBrokerPage() {
     });
   };
 
+  const positions = session.positions;
+  const orders = session.orders;
+  const deals = session.historyDeals.slice(0, 12);
+  const floating = num(session.profit, num(account.profit, 0));
+
   return (
-    <div className="relative mx-auto max-w-5xl">
+    <div className="relative mx-auto max-w-6xl">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 -top-8 h-56 opacity-70"
@@ -250,19 +292,21 @@ export default function WeltradeBrokerPage() {
       <motion.header
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative mb-8"
+        className="relative mb-6"
       >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
-              <span className="font-display text-lg tracking-tight text-[var(--accent)]">W</span>
+              <span className="font-display text-lg tracking-tight text-[var(--accent)]">
+                QF
+              </span>
             </div>
             <div>
               <p className="font-display text-2xl tracking-tight text-[var(--fg)] sm:text-3xl">
-                Broker Connection
+                Broker Workspace
               </p>
               <p className="mt-1 text-sm text-[var(--fg-muted)]">
-                Weltrade MT5 — connection, account, sync, and diagnostics
+                Single live MT5 session — gateway, sync, diagnostics, and desk state
               </p>
             </div>
           </div>
@@ -271,84 +315,101 @@ export default function WeltradeBrokerPage() {
             <Badge tone={connected ? "success" : gatewayOnline ? "warning" : "neutral"}>
               {connected ? "Connected" : gatewayOnline ? "Gateway ready" : "Offline"}
             </Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={session.refreshing || dash.isFetching}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw
+                className={cn(
+                  "h-3.5 w-3.5",
+                  (session.refreshing || dash.isFetching) && "animate-spin",
+                )}
+              />
+              Sync all
+            </Button>
           </div>
         </div>
+
+        <nav
+          className="mt-5 flex gap-1 overflow-x-auto pb-1"
+          aria-label="Broker workspace sections"
+        >
+          {SECTIONS.map((s) => (
+            <a
+              key={s}
+              href={`#bw-${s.toLowerCase()}`}
+              onClick={() => setActiveNav(s)}
+              className={cn(
+                "shrink-0 rounded-md px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] transition",
+                activeNav === s
+                  ? "bg-[var(--accent-soft)] text-[var(--fg)]"
+                  : "text-[var(--fg-subtle)] hover:text-[var(--fg-muted)]",
+              )}
+            >
+              {s}
+            </a>
+          ))}
+        </nav>
       </motion.header>
 
-      {dash.isLoading && healthQ.isLoading ? (
-        <DeskSkeleton rows={6} />
+      {dash.isLoading && healthQ.isLoading && !session.login ? (
+        <DeskSkeleton rows={8} />
       ) : (
-        <div className="relative space-y-6">
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]"
-          >
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-medium tracking-wide text-[var(--fg)]">Connection Status</h2>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={dash.isFetching || healthQ.isFetching}
-                onClick={() => {
-                  void dash.refetch();
-                  void healthQ.refetch();
-                }}
-              >
-                <RefreshCw
-                  className={cn(
-                    "h-3.5 w-3.5",
-                    (dash.isFetching || healthQ.isFetching) && "animate-spin",
-                  )}
-                />
-                Refresh
-              </Button>
-            </div>
+        <div className="relative space-y-5">
+          <Section id="bw-broker" title="Broker">
             <div className="grid gap-3 sm:grid-cols-3">
               <StatusDot on={gatewayOnline} label={gatewayLabel} />
-              <StatusDot on={connected} label={connected ? "MT5 Connected" : "MT5 Not Connected"} />
               <StatusDot
-                on={weltradeConnected}
-                label={weltradeConnected ? "Weltrade Connected" : "Weltrade Not Connected"}
+                on={connected}
+                label={connected ? "MT5 Session Attached" : "MT5 Not Attached"}
+              />
+              <StatusDot
+                on={brokerConnected}
+                label={brokerConnected ? "Broker Connected" : "Broker Idle"}
+              />
+            </div>
+          </Section>
+
+          <Section id="bw-gateway" title="Gateway">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <Metric label="Status" value={gatewayOnline ? "Online" : "Offline"} />
+              <Metric
+                label="Latency"
+                value={
+                  session.latencyMs !== "—"
+                    ? `${session.latencyMs} ms`
+                    : connection.latency_ms != null
+                      ? `${str(connection.latency_ms)} ms`
+                      : "—"
+                }
+              />
+              <Metric
+                label="Base URL"
+                value={str(
+                  health.gateway_url || configuration.mt5_gateway_base_url,
+                  "—",
+                ).replace(/^https?:\/\//, "")}
+              />
+              <Metric
+                label="HTTP"
+                value={
+                  health.last_http_status != null
+                    ? String(health.last_http_status)
+                    : "—"
+                }
               />
             </div>
             {!gatewayOnline && upstreamDetail && upstreamDetail !== "ok" ? (
-              <div className="mt-4 rounded-lg border border-[var(--danger-border,var(--border))] bg-[var(--surface-2)] px-3 py-3 text-sm text-[var(--fg-muted)]">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-                  {gatewayLabel}
-                </p>
-                <p className="mt-1 break-words font-mono text-xs text-[var(--fg)]">
-                  {upstreamDetail}
-                </p>
-                {str(health.gateway_url || configuration.mt5_gateway_base_url) ? (
-                  <p className="mt-2 text-[11px] text-[var(--fg-subtle)]">
-                    Base URL: {str(health.gateway_url || configuration.mt5_gateway_base_url)}
-                  </p>
-                ) : null}
-                {health.last_http_status != null ? (
-                  <p className="mt-1 text-[11px] text-[var(--fg-subtle)]">
-                    HTTP {str(health.last_http_status)}
-                    {health.redirects_followed != null
-                      ? ` · redirects ${str(health.redirects_followed)}`
-                      : ""}
-                    {health.latency != null || health.latency_ms != null
-                      ? ` · ${str(health.latency ?? health.latency_ms)} ms`
-                      : ""}
-                  </p>
-                ) : null}
-              </div>
+              <p className="mt-3 break-words font-mono text-xs text-[var(--fg)]">
+                {upstreamDetail}
+              </p>
             ) : null}
-          </motion.section>
+          </Section>
 
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <motion.section
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]"
-            >
-              <h2 className="mb-4 text-sm font-medium text-[var(--fg)]">Account</h2>
-
+          <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <Section id="bw-connection" title="Connection">
               <div className="mb-4">
                 <Label className="mb-2 block">Account Type</Label>
                 <div className="grid grid-cols-2 gap-2">
@@ -414,25 +475,25 @@ export default function WeltradeBrokerPage() {
               </div>
 
               <div className="mb-3 space-y-2">
-                <Label htmlFor="wt-login">Login</Label>
+                <Label htmlFor="bw-login">Login</Label>
                 <Input
-                  id="wt-login"
+                  id="bw-login"
                   inputMode="numeric"
                   autoComplete="username"
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
-                  placeholder="Weltrade account number"
+                  placeholder="Account number"
                 />
               </div>
               <div className="mb-4 space-y-2">
-                <Label htmlFor="wt-password">Password</Label>
+                <Label htmlFor="bw-password">Password</Label>
                 <Input
-                  id="wt-password"
+                  id="bw-password"
                   type="password"
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Required only if terminal is not logged in"
+                  placeholder="Only if terminal is not already logged in"
                 />
               </div>
 
@@ -444,7 +505,7 @@ export default function WeltradeBrokerPage() {
                   onChange={(e) => setRememberGateway(e.target.checked)}
                 />
                 <span>
-                  Remember this account on the local gateway only — never stored in the browser,
+                  Remember on the local gateway only — never stored in the browser,
                   Railway, or the database.
                 </span>
               </label>
@@ -489,68 +550,207 @@ export default function WeltradeBrokerPage() {
                   </motion.p>
                 )}
               </AnimatePresence>
-            </motion.section>
+            </Section>
 
-            <motion.section
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08 }}
-              className="space-y-6"
-            >
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]">
-                <div className="mb-4 flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-[var(--accent)]" />
-                  <h2 className="text-sm font-medium text-[var(--fg)]">Connection Diagnostics</h2>
+            <div className="space-y-5">
+              <Section id="bw-diagnostics" title="Diagnostics">
+                <div className="mb-2 flex items-center gap-2 text-[var(--accent)]">
+                  <Activity className="h-4 w-4" />
+                  <span className="text-xs uppercase tracking-[0.14em]">Transport</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Metric
                     label="Latency"
                     value={
-                      connection.latency_ms != null ? `${str(connection.latency_ms)} ms` : "—"
+                      session.latencyMs !== "—"
+                        ? `${session.latencyMs} ms`
+                        : "—"
                     }
                   />
                   <Metric
                     label="Heartbeat"
-                    value={str(connection.heartbeat_at, "—").replace("T", " ").slice(0, 19)}
+                    value={(session.heartbeatAt || str(connection.heartbeat_at, "—"))
+                      .replace("T", " ")
+                      .slice(0, 19)}
                   />
-                  <Metric label="Gateway" value={gatewayOnline ? "Online" : "Offline"} />
-                  <Metric label="MT5" value={connected ? "Connected" : "Idle"} />
-                  <Metric label="Session" value={str(connection.session_mode, "none")} />
-                  <Metric label="Version" value={str(connection.broker_version, "—")} />
+                  <Metric label="Session mode" value={str(connection.session_mode, "none")} />
+                  <Metric label="Login status" value={session.loginStatus} />
                 </div>
-              </div>
+              </Section>
 
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]">
-                <div className="mb-4 flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-[var(--accent)]" />
-                  <h2 className="text-sm font-medium text-[var(--fg)]">Recent Synchronization</h2>
+              <Section id="bw-health" title="Health">
+                <div className="grid grid-cols-2 gap-2">
+                  <Metric label="Gateway" value={gatewayOnline ? "Healthy" : "Degraded"} />
+                  <Metric label="MT5" value={connected ? "Healthy" : "Idle"} />
+                  <Metric label="Realtime" value={realtime.connected ? "Synced" : "Polling"} />
+                  <Metric
+                    label="Redirects"
+                    value={
+                      health.redirects_followed != null
+                        ? String(health.redirects_followed)
+                        : "—"
+                    }
+                  />
                 </div>
-                {connected && !account.error ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Metric label="Account" value={str(account.login, "—")} />
-                    <Metric label="Name" value={str(account.name, "—")} />
-                    <Metric label="Server" value={str(account.server ?? connection.server, "—")} />
-                    <Metric label="Leverage" value={str(account.leverage, "—")} />
-                    <Metric label="Balance" value={str(account.balance, "—")} />
-                    <Metric label="Equity" value={str(account.equity, "—")} />
-                    <Metric label="Margin" value={str(account.margin, "—")} />
-                    <Metric label="Free Margin" value={str(account.free_margin, "—")} />
-                    <Metric label="Positions" value={str(positions.count, "0")} />
-                    <Metric label="Orders" value={str(orders.count, "0")} />
-                    <Metric label="History" value={str(history.count, "0")} />
-                    <Metric
-                      label="Last Sync"
-                      value={str(connection.last_sync_at, "—").replace("T", " ").slice(0, 19)}
-                    />
-                  </div>
-                ) : (
-                  <p className="text-sm text-[var(--fg-muted)]">
-                    Connect Weltrade to synchronize balance, equity, margin, positions, and history.
-                  </p>
-                )}
-              </div>
-            </motion.section>
+              </Section>
+            </div>
           </div>
+
+          <Section id="bw-synchronization" title="Synchronization">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
+              <Metric label="Positions" value={String(positions.length)} />
+              <Metric label="Orders" value={String(orders.length)} />
+              <Metric label="Recent deals" value={String(deals.length)} />
+              <Metric
+                label="Last sync"
+                value={str(connection.last_sync_at, "live").replace("T", " ").slice(0, 19)}
+              />
+              <Metric label="Refreshing" value={session.refreshing ? "yes" : "no"} />
+              <Metric label="Source" value="Trading Session" />
+            </div>
+          </Section>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Section id="bw-account" title="Account Information">
+              {connected ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Metric label="Login" value={session.login} />
+                  <Metric label="Name" value={str(account.name, "—")} />
+                  <Metric label="Server" value={session.server} />
+                  <Metric label="Currency" value={session.currency || "—"} />
+                  <Metric label="Balance" value={session.balance} />
+                  <Metric label="Equity" value={session.equity} />
+                  <Metric label="Leverage" value={session.leverage} />
+                  <Metric label="Company" value={str(account.company, "Broker")} />
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--fg-muted)]">
+                  Attach the live session to populate account fields from MT5.
+                </p>
+              )}
+            </Section>
+
+            <Section id="bw-risk" title="Risk Information">
+              {connected ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Metric label="Margin" value={session.margin} />
+                  <Metric label="Free margin" value={session.freeMargin} />
+                  <Metric label="Margin level" value={session.marginLevel} />
+                  <Metric
+                    label="Floating P/L"
+                    value={Number.isFinite(floating) ? String(floating) : session.profit}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--fg-muted)]">
+                  Risk metrics appear once margin data syncs from the attached terminal.
+                </p>
+              )}
+            </Section>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Section id="bw-performance" title="Performance">
+              <div className="grid grid-cols-2 gap-2">
+                <Metric
+                  label="Desk latency"
+                  value={
+                    realtime.latencyMs != null ? `${realtime.latencyMs} ms` : "—"
+                  }
+                />
+                <Metric
+                  label="Broker latency"
+                  value={
+                    session.latencyMs !== "—" ? `${session.latencyMs} ms` : "—"
+                  }
+                />
+                <Metric label="Open risk units" value={String(positions.length)} />
+                <Metric label="Pending risk" value={String(orders.length)} />
+              </div>
+            </Section>
+
+            <Section id="bw-market" title="Market Status">
+              <div className="grid grid-cols-2 gap-2">
+                <Metric label="Session" value={connected ? "Live quotes" : "Offline"} />
+                <Metric label="Watch source" value="Connected broker" />
+                <Metric label="Terminal" value={str(connection.broker_version, "MT5")} />
+                <Metric label="Trade mode" value={str(account.trade_mode, "—")} />
+              </div>
+            </Section>
+          </div>
+
+          <Section id="bw-positions" title="Open Positions">
+            {positions.length === 0 ? (
+              <p className="text-sm text-[var(--fg-muted)]">No open positions.</p>
+            ) : (
+              <DeskTable
+                columns={["Symbol", "Side", "Volume", "Open", "P/L"]}
+                rows={positions.slice(0, 20).map((p) => [
+                  str(p.symbol),
+                  str(p.side),
+                  str(p.volume),
+                  str(p.open_price),
+                  str(p.profit),
+                ])}
+              />
+            )}
+          </Section>
+
+          <Section id="bw-orders" title="Pending Orders">
+            {orders.length === 0 ? (
+              <p className="text-sm text-[var(--fg-muted)]">No pending orders.</p>
+            ) : (
+              <DeskTable
+                columns={["Symbol", "Type", "Volume", "Price"]}
+                rows={orders.slice(0, 20).map((o) => [
+                  str(o.symbol),
+                  str(o.order_type || o.type),
+                  str(o.volume),
+                  str(o.price),
+                ])}
+              />
+            )}
+          </Section>
+
+          <Section id="bw-trades" title="Recent Trades">
+            {deals.length === 0 ? (
+              <p className="text-sm text-[var(--fg-muted)]">No recent deals synced.</p>
+            ) : (
+              <DeskTable
+                columns={["Symbol", "Volume", "Profit", "Time"]}
+                rows={deals.map((d) => [
+                  str(d.symbol),
+                  str(d.volume),
+                  str(d.profit),
+                  str(d.time, "—").replace("T", " ").slice(0, 19),
+                ])}
+              />
+            )}
+          </Section>
+
+          <Section id="bw-timeline" title="Connection Timeline">
+            <ul className="space-y-2 text-sm text-[var(--fg-muted)]">
+              <li className="flex items-center gap-2">
+                <Shield className="h-3.5 w-3.5 text-[var(--accent)]" />
+                Gateway: {gatewayOnline ? "reachable" : "unreachable"}
+              </li>
+              <li className="flex items-center gap-2">
+                <Cable className="h-3.5 w-3.5 text-[var(--accent)]" />
+                Session: {connected ? "attached" : "detached"}
+              </li>
+              <li className="flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5 text-[var(--accent)]" />
+                Heartbeat:{" "}
+                {(session.heartbeatAt || str(connection.heartbeat_at, "—"))
+                  .replace("T", " ")
+                  .slice(0, 19)}
+              </li>
+              <li className="flex items-center gap-2">
+                <RefreshCw className="h-3.5 w-3.5 text-[var(--accent)]" />
+                Auto-reconnect: {wasConnected ? "armed" : "idle"}
+              </li>
+            </ul>
+          </Section>
         </div>
       )}
     </div>

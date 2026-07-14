@@ -10,15 +10,27 @@ import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import { portfolioApi } from "@/lib/api/endpoints";
+import { SessionStrip } from "@/components/broker/session-strip";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
 
 export default function HistoryPage() {
-  const q = useQuery({ queryKey: ["history"], queryFn: portfolioApi.history, retry: false });
+  const session = useTradingSession();
+  const q = useQuery({
+    queryKey: ["history"],
+    queryFn: portfolioApi.history,
+    retry: false,
+    staleTime: 20_000,
+    enabled: session.connected,
+  });
   const orders = asList(q.data?.orders).map(asRecord);
-  const deals = asList(q.data?.deals).map(asRecord);
+  const deals =
+    asList(q.data?.deals).map(asRecord).length > 0
+      ? asList(q.data?.deals).map(asRecord)
+      : session.historyDeals;
   const pnl = deals.reduce((s, d) => s + num(d.profit, 0), 0);
 
   const orderCols: DeskColumn<Row>[] = [
@@ -108,6 +120,7 @@ export default function HistoryPage() {
   return (
     <div>
       <PageHeader title="History" description="Closed orders and deals from the terminal ledger." />
+      <SessionStrip className="mb-4" />
       {q.isLoading ? (
         <DeskSkeleton variant="page" />
       ) : q.isError ? (
