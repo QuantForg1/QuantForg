@@ -70,3 +70,72 @@ class ExecutionSubmitResponse(BaseModel):
     retryable: bool = False
     idempotent_replay: bool = False
     submitted_at: datetime
+    stages: list[dict[str, object]] = Field(default_factory=list)
+    latency_ms: float | None = None
+    journal_entry: dict[str, object] | None = None
+
+
+class ExecutionCancelRequest(BaseModel):
+    request_id: str = Field(default="", max_length=128)
+    ticket: int = Field(ge=1)
+    symbol: str = Field(default="", max_length=32)
+
+
+class ExecutionCancelResponse(BaseModel):
+    request_id: str
+    outcome: str
+    message: str
+    ticket: int
+    stages: list[dict[str, object]] = Field(default_factory=list)
+    latency_ms: float = 0
+    journal_entry: dict[str, object] | None = None
+    rejection_reasons: list[str] = Field(default_factory=list)
+
+
+class ExecutionManageRequest(BaseModel):
+    request_id: str = Field(default="", max_length=128)
+    action: str = Field(
+        description=(
+            "close | partial_close | close_all | reverse | modify | modify_sltp | "
+            "move_sl | move_tp | trailing_stop | break_even | cancel_pending"
+        )
+    )
+    symbol: str = Field(min_length=1, max_length=32)
+    ticket: int | None = None
+    side: str | None = None
+    order_type: str | None = None
+    volume: str | None = None
+    price: str | None = None
+    stop_loss: str | None = None
+    take_profit: str | None = None
+    slippage: int = Field(default=10, ge=0)
+    magic: int = Field(default=0, ge=0)
+    comment: str = Field(default="", max_length=64)
+    trailing_points: str | None = None
+
+
+class ExecutionManageResponse(BaseModel):
+    request_id: str
+    action: str
+    outcome: str
+    message: str
+    stages: list[dict[str, object]] = Field(default_factory=list)
+    latency_ms: float = 0
+    rejection_reasons: list[str] = Field(default_factory=list)
+    journal_entry: dict[str, object] | None = None
+    order_ticket: int | None = None
+    deal_ticket: int | None = None
+    price: str | None = None
+
+
+class ExecutionJournalResponse(BaseModel):
+    items: list[dict[str, object]] = Field(default_factory=list)
+    count: int = 0
+
+
+class ExecutionAnalyticsResponse(BaseModel):
+    status: str
+    metrics: dict[str, object] = Field(default_factory=dict)
+    sample_sizes: dict[str, object] = Field(default_factory=dict)
+    data_source: str = ""
+    journal_count: int = 0

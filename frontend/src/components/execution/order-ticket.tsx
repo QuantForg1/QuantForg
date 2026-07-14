@@ -291,8 +291,9 @@ export const ExecutionOrderTicket = forwardRef<
           side: payload.side,
           ticket: str(asRecord(result).order_ticket),
         });
+        const stages = asListish(asRecord(result).stages);
         toast.success("Order submitted", {
-          description: `Ticket ${str(asRecord(result).order_ticket)}`,
+          description: `Ticket ${str(asRecord(result).order_ticket)} · ${stages.length} pipeline stages`,
         });
         await session.invalidateAll();
       } else if (asRecord(result).retryable) {

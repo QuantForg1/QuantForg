@@ -98,6 +98,9 @@ class ExecutionSubmitDTO:
     retryable: bool
     idempotent_replay: bool
     submitted_at: datetime
+    stages: list[dict[str, object]] | None = None
+    latency_ms: float | None = None
+    journal_entry: dict[str, object] | None = None
 
     @classmethod
     def from_entity(cls, entity: ExecutionAttempt) -> ExecutionSubmitDTO:
@@ -118,3 +121,61 @@ class ExecutionSubmitDTO:
             idempotent_replay=entity.idempotent_replay,
             submitted_at=entity.submitted_at,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionCancelCommand:
+    user_id: UUID
+    request_id: str
+    ticket: int
+    symbol: str = ""
+    ip_address: str = ""
+    user_agent: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionCancelDTO:
+    request_id: str
+    outcome: str
+    message: str
+    ticket: int
+    stages: list[dict[str, object]]
+    latency_ms: float
+    journal_entry: dict[str, object] | None = None
+    rejection_reasons: list[str] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionManageCommand:
+    user_id: UUID
+    request_id: str
+    action: str
+    symbol: str
+    ticket: int | None = None
+    side: str | None = None
+    order_type: str | None = None
+    volume: str | None = None
+    price: str | None = None
+    stop_loss: str | None = None
+    take_profit: str | None = None
+    slippage: int = 10
+    magic: int = 0
+    comment: str = ""
+    trailing_points: str | None = None
+    ip_address: str = ""
+    user_agent: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionPipelineDTO:
+    request_id: str
+    action: str
+    outcome: str
+    message: str
+    stages: list[dict[str, object]]
+    latency_ms: float
+    rejection_reasons: list[str] | None = None
+    journal_entry: dict[str, object] | None = None
+    order_ticket: int | None = None
+    deal_ticket: int | None = None
+    price: str | None = None

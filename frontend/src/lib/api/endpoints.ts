@@ -196,6 +196,14 @@ export const executionApi = {
     apiFetch<Record<string, unknown>>("/execution/check", { method: "POST", body }),
   submit: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/execution/submit", { method: "POST", body }),
+  cancel: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/execution/cancel", { method: "POST", body }),
+  manage: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/execution/manage", { method: "POST", body }),
+  journal: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/execution/journal?limit=${limit}`),
+  analytics: (limit = 200) =>
+    apiFetch<Record<string, unknown>>(`/execution/analytics?limit=${limit}`),
 };
 
 export const executionIntelligenceApi = {

@@ -15,6 +15,7 @@ from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.mt5_order import OrderIntent
 from app.domain.enums.audit import AuditAction, AuditOutcome
 from app.domain.enums.order import OrderSide, OrderType
+from app.domain.execution_engine.reasons import humanize_reasons
 from app.domain.exceptions.base import NotFoundError, ValidationError
 from app.domain.value_objects.mt5_order import (
     LotSize,
@@ -23,6 +24,7 @@ from app.domain.value_objects.mt5_order import (
     StopLoss,
     TakeProfit,
 )
+from app.domain.entities.execution_safety import ExecutionDecisionRecord
 
 
 def _parse_intent(command: ExecutionCheckCommand) -> OrderIntent:
@@ -105,6 +107,26 @@ class CheckExecutionSafetyUseCase:
                 "Execution safety check failed",
                 details={"error": str(exc)},
             ) from exc
+
+        # Human-readable rejection reasons for the desk
+        if record.rejection_reasons:
+            record = ExecutionDecisionRecord.record(
+                user_id=record.user_id,
+                request_id=record.request_id,
+                decision=record.decision,
+                symbol=record.symbol,
+                side=record.side,
+                order_type=record.order_type,
+                volume=record.volume,
+                rejection_reasons=humanize_reasons(record.rejection_reasons),
+                warnings=list(record.warnings),
+                calculated_risk=dict(record.calculated_risk),
+                checks=dict(record.checks),
+                request_fingerprint=record.request_fingerprint,
+                request_snapshot=dict(record.request_snapshot),
+                idempotent_replay=record.idempotent_replay,
+                entity_id=record.id,
+            )
 
         if not record.idempotent_replay:
             async with self.execution_uow_factory() as uow:

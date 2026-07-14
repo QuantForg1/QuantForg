@@ -9,6 +9,11 @@ import pytest
 from app.application.dto.execution import ExecutionSubmitCommand
 from app.application.dto.mt5 import MT5ConnectCommand
 from app.application.services.execution_gateway import ExecutionGateway
+from app.application.services.execution_intelligence import ExecutionIntelligenceService
+from app.application.services.execution_safety import ExecutionSafetyService
+from app.application.services.institutional_execution_engine import (
+    InstitutionalExecutionEngine,
+)
 from app.application.services.mt5_order_validation import MT5OrderValidationService
 from app.application.use_cases.execution_gateway import SubmitExecutionUseCase
 from app.application.use_cases.mt5 import ConnectMT5UseCase
@@ -22,6 +27,7 @@ from app.domain.entities.mt5_order import OrderIntent
 from app.domain.enums.execution import ExecutionOutcome
 from app.domain.enums.order import OrderSide, OrderType
 from app.domain.exceptions.auth import AuthorizationError
+from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.domain.interfaces.mt5_client import MT5LoginRequest
 from app.domain.interfaces.mt5_order import RETCODE_DONE, RETCODE_NO_MONEY
 from app.domain.value_objects.mt5_order import LotSize
@@ -49,17 +55,26 @@ def _wire(*, execution_enabled: bool = False) -> tuple[
     ExecutionGateway,
     RecordAuditEventUseCase,
     MockMT5Client,
+    InstitutionalExecutionEngine,
 ]:
     client = MockMT5Client()
     adapter = MT5Adapter(client=client, execution_enabled=execution_enabled)
     validation = MT5OrderValidationService(adapter=adapter)
     gateway = ExecutionGateway(adapter=adapter, order_validation=validation)
+    safety = ExecutionSafetyService(adapter=adapter, order_validation=validation)
+    engine = InstitutionalExecutionEngine(
+        gateway=gateway,
+        safety=safety,
+        order_validation=validation,
+        intelligence=ExecutionIntelligenceService(),
+        journal=ExecutionJournalStore(),
+    )
     mt5_factory = MemoryMT5UnitOfWorkFactory()
     exec_factory = MemoryExecutionUnitOfWorkFactory()
     audit = RecordAuditEventUseCase(
         uow_factory=MemoryBrokerUnitOfWorkFactory()  # type: ignore[arg-type]
     )
-    return mt5_factory, exec_factory, adapter, gateway, audit, client
+    return mt5_factory, exec_factory, adapter, gateway, audit, client, engine
 
 
 async def _connect(
@@ -194,7 +209,7 @@ class TestExecutionGatewayEnabled:
 class TestSubmitExecutionUseCase:
     @pytest.mark.asyncio
     async def test_disabled_raises_403(self) -> None:
-        mt5_factory, exec_factory, adapter, gateway, audit, _ = _wire(
+        mt5_factory, exec_factory, adapter, _gateway, audit, _, engine = _wire(
             execution_enabled=False
         )
         user_id = uuid4()
@@ -202,7 +217,7 @@ class TestSubmitExecutionUseCase:
         use_case = SubmitExecutionUseCase(
             mt5_uow_factory=mt5_factory,
             execution_uow_factory=exec_factory,
-            gateway=gateway,
+            engine=engine,
             audit=audit,
         )
         with pytest.raises(AuthorizationError) as exc:
@@ -219,7 +234,7 @@ class TestSubmitExecutionUseCase:
 
     @pytest.mark.asyncio
     async def test_idempotency(self) -> None:
-        mt5_factory, exec_factory, adapter, gateway, audit, _ = _wire(
+        mt5_factory, exec_factory, adapter, _gateway, audit, _, engine = _wire(
             execution_enabled=True
         )
         user_id = uuid4()
@@ -227,7 +242,7 @@ class TestSubmitExecutionUseCase:
         use_case = SubmitExecutionUseCase(
             mt5_uow_factory=mt5_factory,
             execution_uow_factory=exec_factory,
-            gateway=gateway,
+            engine=engine,
             audit=audit,
         )
         cmd = ExecutionSubmitCommand(
@@ -239,6 +254,7 @@ class TestSubmitExecutionUseCase:
         )
         first = await use_case.execute(cmd)
         assert first.outcome == "success"
+        assert first.stages
         second = await use_case.execute(cmd)
         assert second.idempotent_replay is True
         assert second.id == first.id

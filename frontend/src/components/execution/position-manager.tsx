@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { ConfirmDialog } from "@/components/execution/confirm-dialog";
-import { executionApi, mt5Api, portfolioApi } from "@/lib/api/endpoints";
+import { executionApi, portfolioApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { durationLabel } from "@/lib/dashboard/derive";
@@ -43,9 +43,11 @@ export function PositionManager({ connected }: { connected: boolean }) {
   const submitClose = async (row: Row, volume?: string) => {
     const side = str(row.side).toLowerCase() === "buy" ? "sell" : "buy";
     const vol = volume || str(row.volume, "0.01");
-    const payload = {
+    const result = await executionApi.manage({
       request_id: `close_${str(row.ticket)}_${Date.now()}`,
+      action: volume ? "partial_close" : "close",
       symbol: str(row.symbol),
+      ticket: Number(str(row.ticket)) || null,
       side,
       order_type: "market",
       volume: vol,
@@ -54,18 +56,8 @@ export function PositionManager({ connected }: { connected: boolean }) {
       take_profit: null,
       slippage: 10,
       magic: 0,
-      comment: `close:${str(row.ticket)}`,
-    };
-    await mt5Api.validateOrder(payload);
-    const check = await executionApi.check(payload);
-    if (str(asRecord(check).decision) === "reject") {
-      throw new ApiError(
-        asList(asRecord(check).rejection_reasons).map(String).join(" · ") || "Rejected",
-        400,
-        "execution_rejected",
-      );
-    }
-    const result = await executionApi.submit(payload);
+      comment: "",
+    });
     const outcome = str(asRecord(result).outcome);
     if (outcome === "disabled") {
       toast.message("Live send disabled", {
@@ -83,16 +75,51 @@ export function PositionManager({ connected }: { connected: boolean }) {
       volume: vol,
     });
     toast.success("Close submitted", {
-      description: `Ticket ${str(asRecord(result).order_ticket)}`,
+      description: `Ticket ${str(asRecord(result).order_ticket)} · ${asList(asRecord(result).stages).length} stages`,
     });
-    await qc.invalidateQueries({ queryKey: ["positions"] });
-    await qc.invalidateQueries({ queryKey: ["portfolio"] });
+    const { invalidatePostTrade } = await import("@/lib/execution/post-trade-invalidate");
+    await invalidatePostTrade(qc);
+  };
+
+  const submitReverse = async (row: Row) => {
+    const closeSide = str(row.side).toLowerCase() === "buy" ? "sell" : "buy";
+    await submitClose(row);
+    const result = await executionApi.manage({
+      request_id: `reverse_${str(row.ticket)}_${Date.now()}`,
+      action: "reverse",
+      symbol: str(row.symbol),
+      ticket: Number(str(row.ticket)) || null,
+      side: closeSide === "sell" ? "buy" : "sell",
+      order_type: "market",
+      volume: str(row.volume, "0.01"),
+      price: null,
+      stop_loss: null,
+      take_profit: null,
+      slippage: 10,
+      magic: 0,
+      comment: "",
+    });
+    const outcome = str(asRecord(result).outcome);
+    if (outcome === "disabled") {
+      toast.message("Reverse open disabled", {
+        description: str(asRecord(result).message),
+      });
+      return;
+    }
+    if (outcome !== "success") {
+      throw new ApiError(str(asRecord(result).message, outcome), 400, outcome);
+    }
+    toast.success("Reverse submitted");
+    const { invalidatePostTrade } = await import("@/lib/execution/post-trade-invalidate");
+    await invalidatePostTrade(qc);
   };
 
   const submitSlTp = async (row: Row) => {
-    const payload = {
+    const result = await executionApi.manage({
       request_id: `sltp_${str(row.ticket)}_${Date.now()}`,
+      action: "modify_sltp",
       symbol: str(row.symbol),
+      ticket: Number(str(row.ticket)) || null,
       side: str(row.side).toLowerCase() === "buy" ? "buy" : "sell",
       order_type: "market",
       volume: str(row.volume, "0.01"),
@@ -101,36 +128,28 @@ export function PositionManager({ connected }: { connected: boolean }) {
       take_profit: slTp.tp || null,
       slippage: 10,
       magic: 0,
-      comment: `modify-sltp:${str(row.ticket)}`,
-    };
-    const v = await mt5Api.validateOrder(payload);
-    if (!v.valid) {
-      throw new ApiError("SL/TP validation failed", 400, "invalid_stops");
-    }
-    const check = await executionApi.check(payload);
-    toast.message(`SL/TP safety: ${str(asRecord(check).decision)}`, {
-      description:
-        "Modify goes through the Execution Gateway when enabled; otherwise validation + check only.",
+      comment: "",
     });
-    if (str(asRecord(check).decision) !== "reject") {
-      const result = await executionApi.submit(payload);
-      const outcome = str(asRecord(result).outcome);
-      const { recordAudit } = await import("@/lib/observability/audit");
-      recordAudit(
-        "order_submit",
-        outcome === "success" ? "success" : "info",
-        "Position SL/TP modify submitted",
-        {
-          ticket: str(row.ticket),
-          symbol: str(row.symbol),
-          stop_loss: slTp.sl || null,
-          take_profit: slTp.tp || null,
-          outcome,
-        },
-      );
-      toast.message(outcome, {
-        description: str(asRecord(result).message),
-      });
+    const outcome = str(asRecord(result).outcome);
+    const { recordAudit } = await import("@/lib/observability/audit");
+    recordAudit(
+      "order_submit",
+      outcome === "success" ? "success" : "info",
+      "Position SL/TP modify submitted",
+      {
+        ticket: str(row.ticket),
+        symbol: str(row.symbol),
+        stop_loss: slTp.sl || null,
+        take_profit: slTp.tp || null,
+        outcome,
+      },
+    );
+    toast.message(outcome, {
+      description: str(asRecord(result).message),
+    });
+    if (outcome === "success") {
+      const { invalidatePostTrade } = await import("@/lib/execution/post-trade-invalidate");
+      await invalidatePostTrade(qc);
     }
   };
 
@@ -326,6 +345,32 @@ export function PositionManager({ connected }: { connected: boolean }) {
             }}
           >
             SL/TP
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={!connected || busy}
+            onClick={() =>
+              setConfirm({
+                title: `Reverse ${str(r.symbol)}`,
+                description:
+                  "Close the position then open the opposite side at market via the Execution Engine.",
+                tone: "danger",
+                action: async () => {
+                  setBusy(true);
+                  try {
+                    await submitReverse(r);
+                    setConfirm(null);
+                  } catch (e) {
+                    toast.error(e instanceof ApiError ? e.message : "Reverse failed");
+                  } finally {
+                    setBusy(false);
+                  }
+                },
+              })
+            }
+          >
+            Reverse
           </Button>
         </div>
       ),

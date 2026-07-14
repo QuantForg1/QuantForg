@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { ConfirmDialog } from "@/components/execution/confirm-dialog";
-import { executionApi, mt5Api, portfolioApi } from "@/lib/api/endpoints";
+import { executionApi, portfolioApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatRelativeTime } from "@/lib/utils";
@@ -62,26 +62,34 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
     if (isReadOnlyMode()) {
       throw new ApiError("Read-only mode blocks order changes", 403, "read_only");
     }
-    const price =
-      intent === "modify"
-        ? overrides?.price || modifyForm.price || str(row.price)
-        : str(row.price) || null;
-    const stopLoss =
-      intent === "modify"
-        ? overrides?.sl || modifyForm.sl || null
-        : str(row.stop_loss) === "—"
-          ? null
-          : str(row.stop_loss, "") || null;
-    const takeProfit =
-      intent === "modify"
-        ? overrides?.tp || modifyForm.tp || null
-        : str(row.take_profit) === "—"
-          ? null
-          : str(row.take_profit, "") || null;
+    if (intent === "cancel") {
+      const result = await executionApi.cancel({
+        request_id: `cancel_${str(row.ticket)}_${Date.now()}`,
+        ticket: Number(str(row.ticket)),
+        symbol: str(row.symbol),
+      });
+      const outcome = str(asRecord(result).outcome);
+      const { recordAudit } = await import("@/lib/observability/audit");
+      recordAudit(
+        "order_cancel",
+        outcome === "success" ? "success" : "info",
+        "Pending order cancel submitted",
+        { ticket: str(row.ticket), symbol: str(row.symbol), outcome },
+      );
+      toast.message(outcome, { description: str(asRecord(result).message) });
+      const { invalidatePostTrade } = await import("@/lib/execution/post-trade-invalidate");
+      await invalidatePostTrade(qc);
+      return;
+    }
 
-    const payload = {
-      request_id: `${intent}_${str(row.ticket)}_${Date.now()}`,
+    const price = overrides?.price || modifyForm.price || str(row.price);
+    const stopLoss = overrides?.sl || modifyForm.sl || null;
+    const takeProfit = overrides?.tp || modifyForm.tp || null;
+    const result = await executionApi.manage({
+      request_id: `modify_${str(row.ticket)}_${Date.now()}`,
+      action: "modify",
       symbol: str(row.symbol),
+      ticket: Number(str(row.ticket)) || null,
       side: str(row.side).toLowerCase().includes("sell") ? "sell" : "buy",
       order_type: str(row.order_type, "limit"),
       volume: str(row.volume, "0.01"),
@@ -90,50 +98,28 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
       take_profit: takeProfit || null,
       slippage: 10,
       magic: 0,
-      comment: `${intent}:${str(row.ticket)}`,
-    };
-    await mt5Api.validateOrder(payload);
-    const check = await executionApi.check(payload);
-    if (str(asRecord(check).decision) === "reject") {
-      throw new ApiError(
-        asList(asRecord(check).rejection_reasons).map(String).join(" · ") || "Rejected",
-        400,
-        "execution_rejected",
-      );
-    }
-    const result = await executionApi.submit(payload);
+      comment: "",
+    });
     const outcome = str(asRecord(result).outcome);
     const { recordAudit } = await import("@/lib/observability/audit");
-    if (intent === "cancel") {
-      recordAudit(
-        "order_cancel",
-        outcome === "success" ? "success" : "info",
-        "Pending order cancel submitted",
-        {
-          ticket: str(row.ticket),
-          symbol: str(row.symbol),
-          outcome,
-        },
-      );
-    } else {
-      recordAudit(
-        "order_submit",
-        outcome === "success" ? "success" : "info",
-        "Pending order modify submitted",
-        {
-          ticket: str(row.ticket),
-          symbol: str(row.symbol),
-          outcome,
-          price,
-          stop_loss: stopLoss,
-          take_profit: takeProfit,
-        },
-      );
-    }
+    recordAudit(
+      "order_submit",
+      outcome === "success" ? "success" : "info",
+      "Pending order modify submitted",
+      {
+        ticket: str(row.ticket),
+        symbol: str(row.symbol),
+        outcome,
+        price,
+        stop_loss: stopLoss,
+        take_profit: takeProfit,
+      },
+    );
     toast.message(outcome, {
       description: str(asRecord(result).message),
     });
-    await qc.invalidateQueries({ queryKey: ["orders"] });
+    const { invalidatePostTrade } = await import("@/lib/execution/post-trade-invalidate");
+    await invalidatePostTrade(qc);
   };
 
   const columns: DeskColumn<Row>[] = [

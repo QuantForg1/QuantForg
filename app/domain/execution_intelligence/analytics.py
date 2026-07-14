@@ -114,6 +114,13 @@ def compute_execution_analytics(
             ),
             "fill_rate": round(fill_rate, 4) if fill_rate is not None else None,
             "reject_rate": round(reject_rate, 4) if reject_rate is not None else None,
+            "rejected_orders": len(rejects),
+            "cancelled_orders": sum(
+                1
+                for a in attempts
+                if str(a.get("outcome", "")).lower() == "cancelled"
+            ),
+            "success_rate": round(fill_rate, 4) if fill_rate is not None else None,
             "average_slippage": round(avg_slip, 6) if avg_slip is not None else None,
             "average_slippage_status": "available" if slips else "unavailable",
             "average_slippage_reason": (
@@ -122,6 +129,11 @@ def compute_execution_analytics(
             "execution_quality": quality,
             "order_duration_ms_avg": (
                 round(avg_duration, 4) if avg_duration is not None else None
+            ),
+            "execution_time_ms_avg": (
+                round(avg_duration, 4)
+                if avg_duration is not None
+                else (round(avg_latency, 4) if avg_latency is not None else None)
             ),
             "order_duration_status": (
                 "available" if durations else "unavailable"
