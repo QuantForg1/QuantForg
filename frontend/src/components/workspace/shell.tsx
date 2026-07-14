@@ -21,7 +21,9 @@ import {
   type WorkspacePresetId,
 } from "@/components/workspace/layout-store";
 import type { OrderTicketHandle } from "@/components/execution/order-ticket";
+import { SessionStrip } from "@/components/broker/session-strip";
 import { useExecutionStream, useNotificationsStream, useActivityStream } from "@/hooks/realtime";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 
@@ -89,27 +91,23 @@ export function WorkspaceShell() {
   const realtime = useExecutionStream(symbol);
   useNotificationsStream();
   useActivityStream();
+  const session = useTradingSession();
+  const connected = session.connected;
 
-  const statusQ = useQuery({
-    queryKey: ["mt5-status"],
-    queryFn: mt5Api.status,
-    retry: false,
-  });
   const tickQ = useQuery({
     queryKey: ["mt5-tick", symbol],
     queryFn: () => mt5Api.tick(symbol),
     retry: false,
-    enabled: Boolean(statusQ.data?.connected) && Boolean(symbol),
+    enabled: connected && Boolean(symbol),
   });
   const symbolsQ = useQuery({
     queryKey: ["mt5-symbols", "", 0],
     queryFn: () => mt5Api.symbols({ limit: 100, offset: 0, include_quotes: false }),
     retry: false,
-    enabled: Boolean(statusQ.data?.connected),
+    enabled: connected,
     staleTime: 45_000,
   });
 
-  const connected = Boolean(statusQ.data?.connected);
   const tick = asRecord(tickQ.data);
   const fromSymbols = asList(symbolsQ.data)
     .map(asRecord)
@@ -182,12 +180,16 @@ export function WorkspaceShell() {
   const showBottom = !layout.bottomCollapsed && !layout.chartFullscreen;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--bg)]" role="application" aria-label="Advanced trading workspace">
+    <div
+      className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
+      role="application"
+      aria-label="Institutional trading terminal"
+    >
       <div className="shrink-0 border-b border-[var(--border)] px-3 py-2">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-sm font-semibold tracking-tight text-[var(--fg)]">
-              Advanced Trading Workspace
+            <h1 className="font-display text-sm font-semibold tracking-tight text-[var(--fg)]">
+              Institutional Trading Terminal
             </h1>
             <RealtimeMeta status={realtime} />
           </div>
@@ -225,15 +227,16 @@ export function WorkspaceShell() {
               className="h-8 text-xs"
               onClick={() => patchLayout({ bottomCollapsed: !layout.bottomCollapsed })}
             >
-              {layout.bottomCollapsed ? "Show bottom" : "Hide bottom"}
+              {layout.bottomCollapsed ? "Show book" : "Hide book"}
             </Button>
           </div>
         </div>
+        <SessionStrip className="mb-2" />
         <ConnectionBar
           connected={connected}
-          server={statusQ.data?.server}
-          login={statusQ.data?.login}
-          latencyMs={realtime.latencyMs ?? statusQ.data?.latency_ms}
+          server={session.server}
+          login={session.login}
+          latencyMs={realtime.latencyMs ?? session.latencyMs}
           tradingEnabled={connected}
         />
       </div>
@@ -248,6 +251,7 @@ export function WorkspaceShell() {
                 onSelect={setSymbol}
                 preset={layout.preset}
                 onPresetChange={applyPreset}
+                latencyMs={session.latencyMs}
               />
             </div>
             <SplitHandle

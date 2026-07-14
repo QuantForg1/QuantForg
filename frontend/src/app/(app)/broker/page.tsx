@@ -23,7 +23,7 @@ import { RealtimeConnectionBadge } from "@/components/realtime/connection-badge"
 import { useBrokerStatusStream } from "@/hooks/realtime";
 import { weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
-import { asList, asRecord, num, str } from "@/lib/desk";
+import { asRecord, num, str } from "@/lib/desk";
 import {
   gatewayDiagnosticDetail,
   gatewayStatusLabel,

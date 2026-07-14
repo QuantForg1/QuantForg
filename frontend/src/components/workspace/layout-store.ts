@@ -14,19 +14,28 @@ export type WorkspaceLayoutState = {
   chartType: "candles" | "line" | "area";
   timeframe: string;
   showVolume: boolean;
-  bottomTab: "history" | "execution" | "system" | "notifications";
+  bottomTab:
+    | "positions"
+    | "orders"
+    | "history"
+    | "journal"
+    | "execution"
+    | "gateway"
+    | "broker"
+    | "system"
+    | "notifications";
 };
 
-export const WORKSPACE_LAYOUT_KEY = "qf.workspace.layout.v1";
+export const WORKSPACE_LAYOUT_KEY = "qf.workspace.layout.v2";
 export const WORKSPACE_SYMBOL_KEY = "qf.workspace.symbol";
 export const WORKSPACE_FAV_KEY = "qf.execution.watch.favorites";
 export const WORKSPACE_WATCHLIST_KEY = "qf.workspace.watchlists";
 
 export const DEFAULT_LAYOUT: WorkspaceLayoutState = {
   preset: "default",
-  leftWidth: 280,
-  rightWidth: 340,
-  bottomHeight: 220,
+  leftWidth: 300,
+  rightWidth: 360,
+  bottomHeight: 240,
   leftCollapsed: false,
   rightCollapsed: false,
   bottomCollapsed: false,
@@ -34,7 +43,7 @@ export const DEFAULT_LAYOUT: WorkspaceLayoutState = {
   chartType: "candles",
   timeframe: "H1",
   showVolume: true,
-  bottomTab: "history",
+  bottomTab: "positions",
 };
 
 export const PRESET_LAYOUTS: Record<WorkspacePresetId, Partial<WorkspaceLayoutState>> = {

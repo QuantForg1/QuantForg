@@ -1,14 +1,14 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { Bookmark, ChevronDown, Search } from "lucide-react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Bookmark, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
-import { brokersApi, mt5Api } from "@/lib/api/endpoints";
+import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { classifySymbol } from "@/lib/dashboard/derive";
 import { formatNumber } from "@/lib/utils";
@@ -21,7 +21,27 @@ import {
 } from "@/components/workspace/layout-store";
 import { Cable } from "lucide-react";
 
-const CATS = ["all", "forex", "crypto", "indices", "commodities", "stocks"] as const;
+const CATS = [
+  "all",
+  "favorites",
+  "forex",
+  "indices",
+  "crypto",
+  "gold",
+  "silver",
+  "oil",
+  "stocks",
+  "commodities",
+] as const;
+
+function matchesCategory(code: string, cat: (typeof CATS)[number]): boolean {
+  const u = code.toUpperCase();
+  if (cat === "all" || cat === "favorites") return true;
+  if (cat === "gold") return u.includes("XAU") || u.includes("GOLD");
+  if (cat === "silver") return u.includes("XAG") || u.includes("SILVER");
+  if (cat === "oil") return /XTI|XBR|OIL|BRENT|WTI|NATGAS/.test(u);
+  return classifySymbol(code) === cat;
+}
 
 function loadFavorites(): string[] {
   try {
@@ -38,14 +58,17 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
   onSelect,
   preset,
   onPresetChange,
+  latencyMs,
 }: {
   connected: boolean;
   selected: string;
   onSelect: (symbol: string) => void;
   preset: WorkspacePresetId;
   onPresetChange: (p: WorkspacePresetId) => void;
+  latencyMs?: string;
 }) {
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [cat, setCat] = useState<(typeof CATS)[number]>("all");
   const [favorites, setFavorites] = useState<string[]>(() =>
     typeof window === "undefined" ? [] : loadFavorites(),
@@ -56,45 +79,58 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
   const [activeListId, setActiveListId] = useState("default");
   const [showFavOnly, setShowFavOnly] = useState(false);
 
-  const symbolsQ = useQuery({
-    queryKey: ["mt5-symbols", "", 0],
-    queryFn: () => mt5Api.symbols({ limit: 100, offset: 0, include_quotes: false }),
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
+  const symbolsQ = useInfiniteQuery({
+    queryKey: ["mt5-symbols", debouncedQ],
+    queryFn: ({ pageParam }) =>
+      mt5Api.symbols({
+        q: debouncedQ,
+        offset: pageParam,
+        limit: 100,
+        include_quotes: false,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.has_more ? last.offset + last.limit : undefined),
     retry: false,
     enabled: connected,
     staleTime: 45_000,
   });
-  const brokersQ = useQuery({
-    queryKey: ["brokers"],
-    queryFn: brokersApi.list,
+  const tickQ = useQuery({
+    queryKey: ["mt5-tick", selected],
+    queryFn: () => mt5Api.tick(selected),
     retry: false,
-  });
-  const mt5Q = useQuery({
-    queryKey: ["mt5-status"],
-    queryFn: mt5Api.status,
-    retry: false,
+    enabled: connected && Boolean(selected),
   });
 
-  const symbols = useMemo(() => asList(symbolsQ.data).map(asRecord), [symbolsQ.data]);
+  const symbols = useMemo(
+    () =>
+      (symbolsQ.data?.pages ?? []).flatMap((page) => asList(page.items).map(asRecord)),
+    [symbolsQ.data],
+  );
   const activeList = watchlists.find((w) => w.id === activeListId) ?? watchlists[0];
+  const tick = asRecord(tickQ.data);
 
   const filtered = useMemo(() => {
+    const favMode = cat === "favorites" || showFavOnly;
     return symbols.filter((s) => {
       const code = str(s.code);
-      if (showFavOnly && !favorites.includes(code)) return false;
+      if (favMode && !favorites.includes(code)) return false;
       if (
-        !showFavOnly &&
+        !favMode &&
         activeList &&
         activeList.symbols.length > 0 &&
         !activeList.symbols.includes(code)
       ) {
         return false;
       }
-      const cls = classifySymbol(code);
-      if (cat !== "all" && cls !== cat) return false;
-      if (!q.trim()) return true;
-      return `${code} ${str(s.description)}`.toLowerCase().includes(q.trim().toLowerCase());
+      if (!matchesCategory(code, cat)) return false;
+      return true;
     });
-  }, [symbols, cat, q, favorites, showFavOnly, activeList]);
+  }, [symbols, cat, favorites, showFavOnly, activeList]);
 
   const ordered = useMemo(() => {
     const favs = filtered.filter((s) => favorites.includes(str(s.code)));
@@ -120,21 +156,23 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
     saveWatchlists(next);
   };
 
-  const brokerName = (() => {
-    const first = asList(brokersQ.data)[0];
-    return str(asRecord(first).name, "MT5");
-  })();
+  const brokerName = "MT5";
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)]/60" aria-label="Market sidebar">
+    <aside className="flex h-full min-h-0 flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)]/60" aria-label="Market watch">
       <div className="space-y-2 border-b border-[var(--border)] p-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-            Workspace
+            Market Watch
           </p>
-          <Badge tone={connected ? "success" : "warning"} className="text-[10px]">
-            {connected ? "Live" : "Offline"}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {latencyMs && latencyMs !== "—" ? (
+              <span className="text-[10px] tabular text-[var(--fg-subtle)]">{latencyMs} ms</span>
+            ) : null}
+            <Badge tone={connected ? "success" : "warning"} className="text-[10px]">
+              {connected ? "Live" : "Offline"}
+            </Badge>
+          </div>
         </div>
         <label className="block space-y-1">
           <span className="text-[11px] text-[var(--fg-subtle)]">Layout preset</span>
@@ -149,33 +187,38 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
             <option value="tape-focus">Tape focus</option>
           </select>
         </label>
-        <label className="block space-y-1">
-          <span className="text-[11px] text-[var(--fg-subtle)]">Broker</span>
-          <div className="flex gap-1">
-            <select
-              className="flex h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-xs"
-              aria-label="Broker selector"
-              defaultValue="mt5"
-            >
-              <option value="mt5">
-                MT5 {mt5Q.data?.connected ? "· connected" : "· offline"}
-              </option>
-              {asList(brokersQ.data).map((b) => {
-                const row = asRecord(b);
-                return (
-                  <option key={str(row.id, str(row.slug))} value={str(row.id, str(row.slug))}>
-                    {str(row.name, brokerName)}
-                  </option>
-                );
-              })}
-            </select>
-            <Button size="sm" variant="secondary" className="h-8 px-2" asChild>
-              <Link href="/broker" aria-label="Manage MT5 connection">
-                <Cable className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
+        <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--fg-muted)]">
+          <span>{brokerName} · live session</span>
+          <Button size="sm" variant="secondary" className="h-7 px-2" asChild>
+            <Link href="/broker" aria-label="Manage broker connection">
+              <Cable className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+        {connected && selected ? (
+          <div className="grid grid-cols-3 gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)]/80 px-2 py-1.5 text-[10px]">
+            <div>
+              <p className="text-[var(--fg-subtle)]">Bid</p>
+              <p className="tabular text-[var(--danger)]">
+                {Number.isFinite(num(tick.bid)) ? formatNumber(num(tick.bid), 5) : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[var(--fg-subtle)]">Ask</p>
+              <p className="tabular text-[var(--success)]">
+                {Number.isFinite(num(tick.ask)) ? formatNumber(num(tick.ask), 5) : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[var(--fg-subtle)]">Spread</p>
+              <p className="tabular">
+                {Number.isFinite(num(tick.bid)) && Number.isFinite(num(tick.ask))
+                  ? formatNumber(num(tick.ask) - num(tick.bid), 5)
+                  : "—"}
+              </p>
+            </div>
           </div>
-        </label>
+        ) : null}
         <label className="block space-y-1">
           <span className="text-[11px] text-[var(--fg-subtle)]">Watchlist</span>
           <select
@@ -311,7 +354,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
                         title="Add to watchlist"
                         onClick={() => addToWatchlist(code)}
                       >
-                        <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
+                        <Plus className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
@@ -320,6 +363,19 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
             })}
           </ul>
         )}
+        {connected && symbolsQ.hasNextPage ? (
+          <div className="border-t border-[var(--border)] p-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-full text-[11px]"
+              disabled={symbolsQ.isFetchingNextPage}
+              onClick={() => void symbolsQ.fetchNextPage()}
+            >
+              {symbolsQ.isFetchingNextPage ? "Loading…" : "Load more"}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </aside>
   );

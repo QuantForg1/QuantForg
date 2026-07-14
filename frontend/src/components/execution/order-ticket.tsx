@@ -14,9 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/execution/confirm-dialog";
+import {
+  PreTradeChecklist,
+  preTradeAllowsExecution,
+} from "@/components/execution/pre-trade-checklist";
 import { executionApi, mt5Api, riskApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, num, str } from "@/lib/desk";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 
 const ORDER_TYPES = ["market", "limit", "stop", "stop_limit"] as const;
@@ -51,12 +56,17 @@ export const ExecutionOrderTicket = forwardRef<
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
   const [riskPct, setRiskPct] = useState("1");
+  const [comment, setComment] = useState("");
+  const [trailingStop, setTrailingStop] = useState("");
+  const [breakEven, setBreakEven] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"oneclick" | "ticket">("ticket");
   const [lastCheck, setLastCheck] = useState<Record<string, unknown> | null>(null);
+  const [lastRisk, setLastRisk] = useState<Record<string, unknown> | null>(null);
   const [calc, setCalc] = useState<Record<string, unknown> | null>(null);
   const [validation, setValidation] = useState<Record<string, unknown> | null>(null);
+  const session = useTradingSession();
 
   const accountQ = useQuery({
     queryKey: ["mt5-account"],
@@ -77,19 +87,24 @@ export const ExecutionOrderTicket = forwardRef<
 
   const needsPrice = orderType !== "market";
 
-  const buildPayload = () => ({
-    request_id: `exec_${Date.now()}`,
-    symbol: symbol.trim().toUpperCase(),
-    side,
-    order_type: orderType,
-    volume,
-    price: price || null,
-    stop_loss: stopLoss || null,
-    take_profit: takeProfit || null,
-    slippage: 10,
-    magic: 0,
-    comment: "quantforg-execution",
-  });
+  const buildPayload = () => {
+    const parts = [comment.trim() || "quantforg-execution"];
+    if (trailingStop.trim()) parts.push(`trail:${trailingStop.trim()}`);
+    if (breakEven) parts.push("be:1");
+    return {
+      request_id: `exec_${Date.now()}`,
+      symbol: symbol.trim().toUpperCase(),
+      side,
+      order_type: orderType,
+      volume,
+      price: price || null,
+      stop_loss: stopLoss || null,
+      take_profit: takeProfit || null,
+      slippage: 10,
+      magic: 0,
+      comment: parts.join(" | ").slice(0, 31),
+    };
+  };
 
   const refreshEstimates = async () => {
     if (!connected || !symbol) return;
@@ -149,12 +164,18 @@ export const ExecutionOrderTicket = forwardRef<
         stop_loss_distance: stopLoss || undefined,
         equity: Number.isFinite(equity) ? String(equity) : undefined,
       });
+      setLastRisk(asRecord(risk));
       const check = await executionApi.check(payload);
       setLastCheck(asRecord(check));
       toast.success(`Safety: ${str(asRecord(check).decision)}`);
       if (asListish(asRecord(risk).warnings).length) {
         toast.message("Risk warnings", {
           description: asListish(asRecord(risk).warnings).slice(0, 2).join(" · "),
+        });
+      }
+      if (str(asRecord(risk).decision).toUpperCase() === "REJECT") {
+        toast.error("Risk engine blocked this order", {
+          description: asListish(asRecord(risk).warnings).join(" · ") || "REJECT",
         });
       }
     } catch (e) {
@@ -200,7 +221,47 @@ export const ExecutionOrderTicket = forwardRef<
         side: confirmMode === "oneclick" ? side : side,
         order_type: confirmMode === "oneclick" ? "market" : orderType,
       };
-      await mt5Api.validateOrder(payload);
+      const v = await mt5Api.validateOrder(payload);
+      setValidation(asRecord(v));
+      if (!v.valid) {
+        toast.error("Order validation failed");
+        return;
+      }
+      const risk = await riskApi.check({
+        request_id: payload.request_id,
+        symbol: payload.symbol,
+        side: payload.side,
+        requested_lots: payload.volume,
+        entry_price: payload.price || String(mid || 1),
+        stop_loss_distance: stopLoss || undefined,
+        equity: Number.isFinite(equity) ? String(equity) : session.equity,
+      });
+      setLastRisk(asRecord(risk));
+      const riskDecision = str(asRecord(risk).decision).toUpperCase();
+      if (riskDecision === "REJECT") {
+        toast.error("Risk engine blocked execution", {
+          description: asListish(asRecord(risk).warnings).join(" · ") || "REJECT",
+        });
+        return;
+      }
+      const gateOk = preTradeAllowsExecution(
+        {
+          symbol: payload.symbol,
+          volume: payload.volume,
+          bid,
+          ask,
+          stopLoss: stopLoss || undefined,
+          takeProfit: takeProfit || undefined,
+          validationValid: true,
+          riskDecision,
+          marginRequired: str(asRecord(calc).expected_margin, ""),
+        },
+        session,
+      );
+      if (!gateOk) {
+        toast.error("Pre-trade checklist failed — execution blocked");
+        return;
+      }
       const check = await executionApi.check(payload);
       setLastCheck(asRecord(check));
       if (str(asRecord(check).decision) === "reject") {
@@ -233,6 +294,7 @@ export const ExecutionOrderTicket = forwardRef<
         toast.success("Order submitted", {
           description: `Ticket ${str(asRecord(result).order_ticket)}`,
         });
+        await session.invalidateAll();
       } else if (asRecord(result).retryable) {
         recordAudit("order_submit", "failure", "Order submit retryable failure", {
           symbol: payload.symbol,
@@ -302,6 +364,25 @@ export const ExecutionOrderTicket = forwardRef<
             SELL
           </Button>
         </div>
+
+        <PreTradeChecklist
+          inputs={{
+            symbol,
+            volume,
+            bid,
+            ask,
+            stopLoss: stopLoss || undefined,
+            takeProfit: takeProfit || undefined,
+            validationValid:
+              validation == null ? null : Boolean(validation.valid),
+            riskDecision: lastRisk ? str(lastRisk.decision).toUpperCase() : null,
+            marginRequired: str(asRecord(calc).expected_margin, ""),
+          }}
+        />
+
+        <p className="text-[10px] text-[var(--fg-subtle)]">
+          Supported: Market Buy/Sell · Buy/Sell Limit · Buy/Sell Stop · Buy/Sell Stop Limit
+        </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
@@ -398,6 +479,36 @@ export const ExecutionOrderTicket = forwardRef<
               disabled={!connected}
             />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="exec-trail">Trailing stop</Label>
+            <Input
+              id="exec-trail"
+              value={trailingStop}
+              onChange={(e) => setTrailingStop(e.target.value)}
+              placeholder="points"
+              disabled={!connected}
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="exec-comment">Order comment</Label>
+            <Input
+              id="exec-comment"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Optional (MT5 ≤31 chars)"
+              disabled={!connected}
+              maxLength={24}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-[var(--fg-muted)] sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={breakEven}
+              onChange={(e) => setBreakEven(e.target.checked)}
+              disabled={!connected}
+            />
+            Break even (tag order for SL→entry handling)
+          </label>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="exec-risk">Risk per trade (%)</Label>
             <Input
