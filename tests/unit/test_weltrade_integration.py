@@ -194,6 +194,7 @@ class TestWeltradeIntegration:
     async def test_ensure_binds_when_gateway_live_without_session_ref(self) -> None:
         """After process restart: gateway connected, no local session_ref yet."""
         client = _StubGateway()
+        client._account_login = 12260878
         # Simulate gateway-live state without an adapter session handle.
         client._connected = True
         client._login = 12260878
@@ -211,6 +212,7 @@ class TestWeltradeIntegration:
         assert conn.connected is True
         assert conn.login == 12260878
         assert adapter.is_live_session(conn.session_ref)
+        assert ("POST", "/session/attach") in client.calls
 
         from types import SimpleNamespace
 
