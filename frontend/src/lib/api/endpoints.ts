@@ -352,6 +352,30 @@ export const opsApi = {
   audit: () => apiFetch<Record<string, unknown>>("/ops/audit"),
 };
 
+export const quantAiApi = {
+  dashboard: (symbol?: string, forceRefresh = false) => {
+    const params = new URLSearchParams();
+    if (symbol) params.set("symbol", symbol);
+    if (forceRefresh) params.set("force_refresh", "true");
+    const q = params.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/quant-ai/dashboard${q ? `?${q}` : ""}`,
+    );
+  },
+  symbol: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/quant-ai/symbol/${encodeURIComponent(symbol)}`,
+    ),
+  portfolio: () => apiFetch<Record<string, unknown>>("/quant-ai/portfolio"),
+  risk: () => apiFetch<Record<string, unknown>>("/quant-ai/risk"),
+  execution: () => apiFetch<Record<string, unknown>>("/quant-ai/execution"),
+  tradeReview: (trade: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/quant-ai/trade-review", {
+      method: "POST",
+      body: { trade },
+    }),
+};
+
 export const intelligenceApi = {
   dashboard: (market_code = "FX", symbol?: string) =>
     apiFetch<Record<string, unknown>>(

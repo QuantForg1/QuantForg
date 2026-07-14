@@ -44,6 +44,7 @@ export const appNav: NavGroup[] = [
     title: "Overview",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/quant-ai", label: "Quant AI", icon: Bot },
       { href: "/intelligence", label: "Market Intelligence", icon: Sparkles },
       { href: "/portfolio", label: "Portfolio", icon: Briefcase },
       { href: "/performance", label: "Performance", icon: LineChart },

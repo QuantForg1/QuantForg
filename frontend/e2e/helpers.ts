@@ -30,12 +30,14 @@ export async function loginAsE2E(page: Page): Promise<void> {
   if (!email || !password) {
     throw new Error("E2E_EMAIL and E2E_PASSWORD are required");
   }
+  const e2eEmail: string = email;
+  const e2ePassword: string = password;
   await seedDeskOnboarding(page);
 
   async function attempt(): Promise<void> {
     await page.goto("/login");
-    await page.getByLabel(/^email$/i).fill(email);
-    await page.getByLabel(/^password$/i).fill(password);
+    await page.getByLabel(/^email$/i).fill(e2eEmail);
+    await page.getByLabel(/^password$/i).fill(e2ePassword);
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL(/dashboard/, { timeout: 60_000 });
     await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible({
