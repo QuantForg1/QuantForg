@@ -9,7 +9,10 @@ from fastapi.testclient import TestClient
 
 from services.mt5_gateway.main import create_app
 from services.mt5_gateway.runtime import MT5GatewayRuntime
-from services.mt5_gateway.settings import get_gateway_settings
+from services.mt5_gateway.settings import (
+    _PLACEHOLDER_TOKEN,
+    get_gateway_settings,
+)
 from services.mt5_gateway.token_util import (
     mask_gateway_token,
     normalize_gateway_token,
@@ -42,6 +45,9 @@ class TestGatewayTokenUtil:
         assert parse_authorization_bearer("Token xyz") == ""
         assert parse_authorization_bearer(None) == ""
 
+    def test_placeholder_is_exactly_32_chars(self) -> None:
+        assert len(_PLACEHOLDER_TOKEN) == 32
+
 
 @pytest.mark.unit
 class TestGatewayAuthHardening:
@@ -49,7 +55,6 @@ class TestGatewayAuthHardening:
     def client(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         token = "HardenedGatewayToken99"
         env_path = tmp_path / ".env"
-        # File has the real token; process env has a stale conflicting value.
         env_path.write_text(
             f"MT5_GATEWAY_TOKEN={token}\nMT5_GATEWAY_ENABLE_WEBSOCKET=false\n",
             encoding="utf-8",
@@ -82,17 +87,17 @@ class TestGatewayAuthHardening:
         http, token = client
         health = http.get("/health")
         assert health.status_code == 200
-        preview = health.json()["token_fingerprint"]["preview"]
-        assert preview == mask_gateway_token(token)
+        fp = health.json()["token_fingerprint"]
+        assert fp["preview"] == mask_gateway_token(token)
+        assert fp["source"].startswith("dotenv:")
+        assert fp["length"] == len(token)
 
-        # Bearer matching the .env file succeeds even though process env differs.
         status = http.get(
             "/session/status",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert status.status_code == 200
 
-        # Stale process-env token must fail.
         bad = http.get(
             "/session/status",
             headers={"Authorization": "Bearer STALE-WRONG-TOKEN-VALUE-XX"},
@@ -131,3 +136,62 @@ class TestGatewayAuthHardening:
             ).status_code
             == 200
         )
+
+
+@pytest.mark.unit
+class TestPlaceholderVsRealDotenv:
+    def test_ignores_32_char_placeholder_process_env(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """expected_len=32 was the example placeholder; real token is ~43 chars."""
+        import secrets
+
+        real = secrets.token_urlsafe(32)
+        assert len(real) == 43
+        assert len(_PLACEHOLDER_TOKEN) == 32
+
+        env_path = tmp_path / ".env"
+        env_path.write_text(
+            f"MT5_GATEWAY_TOKEN={real}\nMT5_GATEWAY_ENABLE_WEBSOCKET=false\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MT5_GATEWAY_TOKEN", _PLACEHOLDER_TOKEN)
+        monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
+        monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "false")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "services.mt5_gateway.settings.gateway_env_file_candidates",
+            lambda: [env_path],
+        )
+        get_gateway_settings.cache_clear()
+        try:
+            app = create_app()
+            with TestClient(app) as http:
+                existing = getattr(http.app.state, "runtime", None)
+                if existing is not None:
+                    existing.stop_background()
+                http.app.state.runtime = MT5GatewayRuntime(
+                    settings=get_gateway_settings(),
+                    bridge=_FakeBridge(prelogged=True),
+                )
+                health = http.get("/health").json()
+                fp = health["token_fingerprint"]
+                assert fp["length"] == 43
+                assert fp["source"].startswith("dotenv:")
+                assert fp["process_is_placeholder"] is True
+                assert fp["process_env_len"] == 32
+                assert fp["dotenv_len"] == 43
+
+                ok = http.get(
+                    "/session/status",
+                    headers={"Authorization": f"Bearer {real}"},
+                )
+                assert ok.status_code == 200
+
+                placeholder = http.get(
+                    "/session/status",
+                    headers={"Authorization": f"Bearer {_PLACEHOLDER_TOKEN}"},
+                )
+                assert placeholder.status_code == 401
+        finally:
+            get_gateway_settings.cache_clear()

@@ -38,9 +38,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
     else:
         logger.info(
-            "MT5_GATEWAY_TOKEN ready length=%s fingerprint=%s",
+            "MT5_GATEWAY_TOKEN ready source=%s length=%s fingerprint=%s repr=%r",
+            getattr(settings, "token_source", "unknown"),
             len(token),
             mask_gateway_token(token),
+            token if settings.mt5_gateway_auth_debug else mask_gateway_token(token),
         )
 
     runtime = MT5GatewayRuntime(settings=settings)

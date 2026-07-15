@@ -41,22 +41,27 @@ def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
 @router.get("/health")
 async def health(request: Request) -> dict[str, Any]:
     """Liveness/readiness — open without token (auth intentionally bypassed)."""
+    from services.mt5_gateway.settings import token_load_meta
     from services.mt5_gateway.token_util import mask_gateway_token, normalize_gateway_token
 
     settings = get_gateway_settings()
     runtime = getattr(request.app.state, "runtime", None)
     token = normalize_gateway_token(settings.mt5_gateway_token)
+    meta = token_load_meta()
     payload: dict[str, Any] = {
         "status": "ok",
         "service": "mt5-gateway",
-        "token_configured": bool(token),
+        "token_configured": bool(token) and len(token) > 0,
         "websocket_enabled": settings.mt5_gateway_enable_websocket,
         "auto_attach_enabled": settings.mt5_gateway_auto_attach,
-        # Safe fingerprint so ops can confirm which secret is loaded without
-        # exposing the full token (first 6 + last 6 only).
         "token_fingerprint": {
             "length": len(token),
             "preview": mask_gateway_token(token),
+            "source": getattr(settings, "token_source", meta.get("source")),
+            "process_env_len": meta.get("process_env_len"),
+            "dotenv_len": meta.get("dotenv_len"),
+            "dotenv_path": meta.get("dotenv_path"),
+            "process_is_placeholder": meta.get("process_is_placeholder"),
         },
     }
     if not token:

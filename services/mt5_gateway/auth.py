@@ -62,6 +62,9 @@ def require_gateway_token(
     """Validate shared gateway token. Broker passwords are never involved."""
     cfg = get_gateway_settings()
     expected = normalize_gateway_token(cfg.mt5_gateway_token)
+    from services.mt5_gateway.settings import token_load_meta
+
+    meta = token_load_meta()
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -73,36 +76,47 @@ def require_gateway_token(
             ),
         )
 
-    provided, source = _extract_token(
+    provided, header_source = _extract_token(
         authorization=authorization,
         credentials=credentials,
         x_gateway_token=x_gateway_token,
     )
     equal = tokens_equal(provided, expected)
 
-    # Temporary / ops-safe auth diagnostics (never log full secrets).
     logger.info(
-        "gateway_auth_check loaded=%s expected_len=%s expected=%s "
-        "authorization_present=%s x_gateway_token_present=%s "
-        "source=%s received_len=%s received=%s equal=%s",
-        bool(expected),
+        "gateway_auth_check token_source=%s expected_len=%s expected=%s "
+        "authorization_present=%s header_source=%s received_len=%s "
+        "received=%s equal=%s meta=%s",
+        getattr(cfg, "token_source", meta.get("source")),
         len(expected),
         mask_gateway_token(expected),
         bool((authorization or "").strip()),
-        bool((x_gateway_token or "").strip()),
-        source,
+        header_source,
         len(provided),
         mask_gateway_token(provided),
         equal,
+        meta,
     )
+    if cfg.mt5_gateway_auth_debug:
+        logger.info(
+            "gateway_auth_debug settings.mt5_gateway_token=%r "
+            "settings_len=%s received=%r received_len=%s",
+            cfg.mt5_gateway_token,
+            len(expected),
+            provided,
+            len(provided),
+        )
 
     if not equal:
         logger.warning(
-            "gateway_auth_rejected expected=%s received=%s source=%s "
-            "expected_len=%s received_len=%s",
+            "gateway_auth_rejected token_source=%s expected=%s received=%s "
+            "expected_len=%s received_len=%s "
+            "(hint: len 32 often means example placeholder "
+            "'replace-with-strong-random-token' is still loaded from "
+            "process_env/NSSM instead of the repo .env)",
+            getattr(cfg, "token_source", meta.get("source")),
             mask_gateway_token(expected),
             mask_gateway_token(provided),
-            source,
             len(expected),
             len(provided),
         )
