@@ -27,6 +27,27 @@ WELTRADE_SERVERS = {
 }
 
 
+def _gateway_mt5_already_connected(health: dict[str, Any]) -> bool:
+    """True when gateway /health shows an active MT5 session.
+
+    Supports both nested ``mt5.connected`` (current gateway) and flattened
+    top-level ``connected`` / ``session_mode`` (public health probes).
+    """
+    if bool(health.get("connected")):
+        return True
+    nested = health.get("mt5")
+    if isinstance(nested, dict) and bool(nested.get("connected")):
+        return True
+    mode = str(health.get("session_mode") or "").strip().lower()
+    if mode in {"attached", "connected"}:
+        return True
+    if isinstance(nested, dict):
+        nested_mode = str(nested.get("session_mode") or "").strip().lower()
+        if nested_mode in {"attached", "connected"}:
+            return True
+    return False
+
+
 @dataclass
 class WeltradeIntegrationService:
     """Thin orchestration for the Weltrade-only production connection UX.
@@ -604,17 +625,62 @@ class WeltradeIntegrationService:
                     "upstream": upstream,
                 }
             )
-            logger.warning(
+            logger.exception(
                 "weltrade_connect_gateway_unavailable",
                 error=detail,
                 base_url=gw.base_url,
                 last_upstream=upstream,
             )
-            raise RuntimeError(detail) from exc
+            raise RuntimeError(
+                f"MT5 gateway unavailable at {gw.base_url}: {detail}"
+            ) from exc
 
         attached = False
         session_ref = ""
-        if prefer_attach:
+        already_connected = _gateway_mt5_already_connected(health)
+
+        # Gateway already has a live MT5 session: adopt it and never re-login.
+        if already_connected:
+            try:
+                session_ref = self.adapter.attach(path=path)
+                attached = True
+                steps.append(
+                    {
+                        "step": "reuse_session",
+                        "ok": True,
+                        "detail": (
+                            "Reused attached MT5 gateway session "
+                            "(skipped broker login)"
+                        ),
+                        "session_ref": session_ref,
+                    }
+                )
+                logger.info(
+                    "weltrade_connect_reused_attached_session",
+                    login=login,
+                    server=server_name,
+                    gateway_health_connected=True,
+                )
+            except Exception as exc:
+                steps.append(
+                    {
+                        "step": "reuse_session",
+                        "ok": False,
+                        "detail": str(exc),
+                    }
+                )
+                logger.exception(
+                    "weltrade_reuse_attached_session_failed",
+                    login=login,
+                    server=server_name,
+                    error=str(exc),
+                )
+                raise RuntimeError(
+                    "Gateway reports an attached MT5 session, but Railway "
+                    f"could not adopt it: {exc}"
+                ) from exc
+
+        elif prefer_attach:
             try:
                 session_ref = self.adapter.attach(path=path)
                 attached = True
@@ -633,7 +699,12 @@ class WeltradeIntegrationService:
                 )
             except Exception as exc:
                 steps.append({"step": "attach", "ok": False, "detail": str(exc)})
-                logger.info("weltrade_attach_unavailable", error=str(exc))
+                logger.exception(
+                    "weltrade_attach_unavailable",
+                    error=str(exc),
+                    login=login,
+                    server=server_name,
+                )
 
         if not attached:
             if not password:
@@ -652,13 +723,18 @@ class WeltradeIntegrationService:
             try:
                 session_ref = self.adapter.login(request)
             except Exception as exc:
-                logger.warning(
+                logger.exception(
                     "weltrade_login_failed",
                     login=login,
                     server=server_name,
                     error=str(exc),
+                    last_upstream=(
+                        gw.last_upstream() if hasattr(gw, "last_upstream") else None
+                    ),
                 )
-                raise RuntimeError(f"Weltrade authentication failed: {exc}") from exc
+                raise RuntimeError(
+                    f"Weltrade authentication failed: {exc}"
+                ) from exc
             steps.append(
                 {
                     "step": "connect",

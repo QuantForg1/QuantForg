@@ -596,6 +596,14 @@ class GatewayMT5Client:
     def login(self, request: MT5LoginRequest) -> bool:
         if not self._initialized and not self.initialize(path=request.path):
             return False
+        # Never re-login over a live attached gateway session.
+        if self.adopt_existing_session():
+            logger.info(
+                "gateway_login_skipped_existing_session",
+                login=self._login,
+                session_mode=self._session_mode,
+            )
+            return True
         body = {
             "login": int(request.login),
             "password": request.password,
@@ -605,9 +613,20 @@ class GatewayMT5Client:
         try:
             data = self._request("POST", "/session/connect", json_body=body)
         except RuntimeError as exc:
-            logger.warning("gateway_login_failed", error=str(exc), login=request.login)
+            logger.exception(
+                "gateway_login_failed",
+                error=str(exc),
+                login=request.login,
+                last_upstream=self.last_upstream(),
+            )
             return False
         if not data.get("connected"):
+            logger.warning(
+                "gateway_login_not_connected",
+                login=request.login,
+                response=data,
+                last_upstream=self.last_upstream(),
+            )
             return False
         self._apply_session(
             login=int(data.get("login") or request.login),
@@ -616,11 +635,48 @@ class GatewayMT5Client:
         )
         return True
 
+    def adopt_existing_session(self) -> bool:
+        """Adopt a live gateway MT5 session via GET /session/status (no re-login).
+
+        Always probe status before POST /session/attach or POST /session/connect.
+        When ``connected=true`` OR ``session_mode`` is ``attached``/``connected``,
+        bind to that session and skip another login.
+        """
+        if not self.base_url:
+            return False
+        if not self._initialized and not self.initialize():
+            return False
+        try:
+            status = self._request("GET", "/session/status")
+        except RuntimeError as exc:
+            logger.warning("gateway_adopt_status_failed", error=str(exc))
+            return False
+        mode = str(status.get("session_mode") or "").strip().lower()
+        live = bool(status.get("connected")) or mode in {"attached", "connected"}
+        if not live:
+            return False
+        self._apply_session(
+            login=int(status.get("login") or 0),
+            server=str(status.get("server") or ""),
+            mode=mode or "attached",
+        )
+        self._initialized = True
+        logger.info(
+            "gateway_session_adopted",
+            login=self._login,
+            server=self._server,
+            session_mode=self._session_mode,
+        )
+        return True
+
     def attach(self, *, path: str = "") -> bool:
         """Reuse an already logged-in terminal — no broker password on Railway."""
         term_path = (path or self._path or "").strip()
         if not self._initialized and not self.initialize(path=term_path):
             return False
+        # Already attached on Windows: adopt via status — do not re-init/login.
+        if self.adopt_existing_session():
+            return True
         try:
             data = self._request(
                 "POST",
@@ -628,7 +684,7 @@ class GatewayMT5Client:
                 json_body={"path": term_path},
             )
         except RuntimeError as exc:
-            logger.warning("gateway_attach_failed", error=str(exc))
+            logger.exception("gateway_attach_failed", error=str(exc))
             return False
         if not data.get("connected"):
             return False

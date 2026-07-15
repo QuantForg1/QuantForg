@@ -74,6 +74,26 @@ class MT5Adapter:
     def client(self) -> MT5ClientPort:
         return self._client
 
+    def _mt5_failure_message(self, prefix: str) -> str:
+        """Preserve gateway upstream detail so HTTP 503s are not generic."""
+        detail_parts: list[str] = []
+        last_fn = getattr(self._client, "last_upstream", None)
+        if callable(last_fn):
+            upstream = last_fn() or {}
+            for key in (
+                "diagnostic",
+                "error",
+                "status_code",
+                "body_preview",
+                "path",
+            ):
+                value = upstream.get(key)
+                if value not in (None, "", {}):
+                    detail_parts.append(f"{key}={value}")
+        if not detail_parts:
+            return prefix
+        return f"{prefix}: {'; '.join(detail_parts)}"
+
     def discover_capabilities(self) -> list[BrokerCapabilityCode]:
         return [
             BrokerCapabilityCode.CONNECT,
@@ -96,8 +116,7 @@ class MT5Adapter:
 
     def login(self, request: MT5LoginRequest) -> str:
         if not self._client.login(request):
-            msg = "MT5 login failed"
-            raise RuntimeError(msg)
+            raise RuntimeError(self._mt5_failure_message("MT5 login failed"))
         session_ref = getattr(self._client, "session_token", "") or (
             f"mt5-{uuid.uuid4().hex}"
         )
@@ -122,7 +141,7 @@ class MT5Adapter:
         if attach_fn is None:
             raise RuntimeError("MT5 attach is not supported by this client")
         if not attach_fn(path=path):
-            raise RuntimeError("MT5 attach failed")
+            raise RuntimeError(self._mt5_failure_message("MT5 attach failed"))
         session_ref = getattr(self._client, "session_token", "") or (
             f"mt5-{uuid.uuid4().hex}"
         )

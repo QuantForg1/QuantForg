@@ -60,13 +60,20 @@ async def weltrade_connect(
             path=body.path,
         )
     except ValueError as exc:
+        logger.exception("weltrade_connect_validation_error", error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
     except RuntimeError as exc:
-        logger.warning("weltrade_connect_http_error", error=str(exc))
+        logger.exception("weltrade_connect_http_error", error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        logger.exception("weltrade_connect_unexpected_error", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Weltrade connect failed: {exc}",
         ) from exc
 
 
@@ -77,6 +84,7 @@ async def weltrade_attach(
     try:
         return await svc.attach(user_id=user.id, path=body.path)
     except RuntimeError as exc:
+        logger.exception("weltrade_attach_http_error", error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
@@ -96,6 +104,7 @@ async def weltrade_reconnect(
     try:
         return await svc.reconnect(user_id=user.id)
     except RuntimeError as exc:
+        logger.exception("weltrade_reconnect_http_error", error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
