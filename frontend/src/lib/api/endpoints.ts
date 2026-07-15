@@ -451,6 +451,83 @@ export const researchLabApi = {
   },
 };
 
+export const ecosystemApi = {
+  hub: () => apiFetch<Record<string, unknown>>("/ecosystem/hub"),
+  journal: (q = "", tag?: string) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (tag) params.set("tag", tag);
+    const qs = params.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/ecosystem/journal${qs ? `?${qs}` : ""}`,
+    );
+  },
+  journalSave: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/journal", {
+      method: "POST",
+      body,
+    }),
+  journalIngestPaper: () =>
+    apiFetch<Record<string, unknown>>("/ecosystem/journal/ingest-paper", {
+      method: "POST",
+      body: {},
+    }),
+  playbooks: () => apiFetch<Record<string, unknown>>("/ecosystem/playbooks"),
+  playbookSave: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/playbooks", {
+      method: "POST",
+      body,
+    }),
+  coach: () => apiFetch<Record<string, unknown>>("/ecosystem/coach"),
+  watchlists: () => apiFetch<Record<string, unknown>>("/ecosystem/watchlists"),
+  watchlistSave: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/watchlists", {
+      method: "POST",
+      body,
+    }),
+  workspaces: () => apiFetch<Record<string, unknown>>("/ecosystem/workspaces"),
+  workspaceSave: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/workspaces", {
+      method: "POST",
+      body,
+    }),
+  alerts: () => apiFetch<Record<string, unknown>>("/ecosystem/alerts"),
+  alertCreate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/alerts", {
+      method: "POST",
+      body,
+    }),
+  learning: () => apiFetch<Record<string, unknown>>("/ecosystem/learning"),
+  learningComplete: (lessonId: string) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/learning/complete", {
+      method: "POST",
+      body: { lesson_id: lessonId },
+    }),
+  reports: (period = "weekly") =>
+    apiFetch<Record<string, unknown>>(
+      `/ecosystem/reports?period=${encodeURIComponent(period)}`,
+    ),
+  preferences: () =>
+    apiFetch<Record<string, unknown>>("/ecosystem/preferences"),
+  preferencesSave: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/preferences", {
+      method: "POST",
+      body,
+    }),
+  syncStatus: () =>
+    apiFetch<Record<string, unknown>>("/ecosystem/sync/status"),
+  syncExport: () =>
+    apiFetch<Record<string, unknown>>("/ecosystem/sync/export", {
+      method: "POST",
+      body: {},
+    }),
+  syncImport: (bundle: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ecosystem/sync/import", {
+      method: "POST",
+      body: { bundle },
+    }),
+};
+
 export const quantAiApi = {
   dashboard: (symbol?: string, forceRefresh = false) => {
     const params = new URLSearchParams();
