@@ -10,12 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- Trading Ecosystem (`/ecosystem`): journal, playbooks, performance coach,
+  watchlists, workspaces, alerts, learning center, report center, prefs, and
+  cloud sync — advisory-only; Decision Engine remains gatekeeper.
 - Closed Beta V6.1 What’s New entry (`6.1.0-closed-beta`) and
   `CLOSED_BETA_V6_1_RELEASE_CERTIFICATE.md` (ops release; no locked-module changes).
 - Closed Beta production readiness pack (audit-only, no locked-module changes):
   `CLOSED_BETA_PRODUCTION_AUDIT.md`, `CLOSED_BETA_KIT.md`,
   `CLOSED_BETA_MONITORING.md`, `CLOSED_BETA_GO_NO_GO.md` — page/UX/security/
   performance/reliability audits, invitee kit, monitoring prep, conditional GO.
+
+### Known limitations (Closed Beta)
+
+- Trading Ecosystem data is **process-memory** and may reset after an API restart.
 - Production Weltrade integration: `/broker` UX, `/api/v1/weltrade/*`
   orchestration, Railway→Windows Gateway HTTP client (`GatewayMT5Client`),
   `WELTRADE_INTEGRATION.md`. Multi-broker marketplace UI redirected to Weltrade.

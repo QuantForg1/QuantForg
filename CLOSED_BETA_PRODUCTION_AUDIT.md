@@ -126,7 +126,8 @@ Formal chaos automation is **not** in CI — reliability verified via code paths
 3. Incomplete Playwright coverage for ops / wallet / order book routes.  
 4. Cross-region Postgres latency floor.  
 5. Ops alerts not wired to mandatory on-call (webhook optional).  
-6. No automated gateway/Railway chaos suite.
+6. No automated gateway/Railway chaos suite.  
+7. **Trading Ecosystem persistence is process-memory** — user journal/playbooks/watchlists/workspaces/alerts/learning/prefs may reset when the API process restarts (Closed Beta limitation; cloud sync export/import is best-effort within a live process).
 
 ### Minor
 1. DeskEmpty gaps (wallet, analytics, settings, etc.).  

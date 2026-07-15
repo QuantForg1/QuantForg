@@ -86,7 +86,8 @@ A: No — it is an operator cohort gate. Auth remains JWT on the API.
 7. No dedicated `/admin` UI — use `/ops`.  
 8. Research archetypes without engine plugins cannot run OHLC validation.  
 9. External pager/Slack for ops alerts is optional, not mandatory.  
-10. Chaos/failover drills are operator runbook-driven, not automated in CI.
+10. Chaos/failover drills are operator runbook-driven, not automated in CI.  
+11. **Trading Ecosystem (`/ecosystem`) data is process-memory** — journal, playbooks, watchlists, workspaces, alerts, learning progress, preferences, and sync bundles live in API process RAM and **may reset after an API restart** (no durable DB schema in Closed Beta). Export a sync bundle before planned restarts when possible.
 
 ---
 
@@ -99,6 +100,7 @@ A: No — it is an operator cohort gate. Auth remains JWT on the API.
 - Quant Studio V3 (research workspace).  
 - Decision Engine V4 (WAIT-biased gate).  
 - Quant Research Lab V5 (library, validation, promotion eligibility).  
+- Trading Ecosystem (`/ecosystem`) — journal, playbooks, coach, watchlists, workspaces, alerts, learning, reports, prefs, cloud sync (**process-memory; may reset on API restart**).  
 - Closed Beta onboarding / invite / maintenance / read-only gates.  
 - Weltrade + MT5 Gateway attach/reconnect path.
 
