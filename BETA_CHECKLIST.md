@@ -6,11 +6,15 @@
 - [x] Portfolio / Execution Intelligence preserved  
 - [x] Broker Connectivity + certification (real sessions only)  
 - [x] MT5 Gateway + Cloud Gateway Manager  
+- [x] Quant AI / Quant Studio / Decision Engine / Research Lab (advisory)  
 - [x] Beta invite / maintenance / read-only gates  
 - [x] Get Started + tour + paper tutorial + What’s New  
+- [x] Closed Beta audit + kit + monitoring prep (`CLOSED_BETA_*.md`)  
 - [ ] Live Windows MT5 hosts registered (operator)  
 - [ ] Invite codes distributed (operator)  
 - [ ] Feedback webhook configured (optional)
+- [ ] What’s New curated for current SHA (operator)  
+- [ ] `/ops` + `/cloud-ops` owner smoke on production (operator)
 
 ## Safety
 

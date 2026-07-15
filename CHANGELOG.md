@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- Closed Beta production readiness pack (audit-only, no locked-module changes):
+  `CLOSED_BETA_PRODUCTION_AUDIT.md`, `CLOSED_BETA_KIT.md`,
+  `CLOSED_BETA_MONITORING.md`, `CLOSED_BETA_GO_NO_GO.md` — page/UX/security/
+  performance/reliability audits, invitee kit, monitoring prep, conditional GO.
 - Production Weltrade integration: `/broker` UX, `/api/v1/weltrade/*`
   orchestration, Railway→Windows Gateway HTTP client (`GatewayMT5Client`),
   `WELTRADE_INTEGRATION.md`. Multi-broker marketplace UI redirected to Weltrade.
