@@ -40,17 +40,26 @@ def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
 
 @router.get("/health")
 async def health(request: Request) -> dict[str, Any]:
-    """Liveness/readiness — optionally open without token."""
+    """Liveness/readiness — open without token (auth intentionally bypassed)."""
+    from services.mt5_gateway.token_util import mask_gateway_token, normalize_gateway_token
+
     settings = get_gateway_settings()
     runtime = getattr(request.app.state, "runtime", None)
+    token = normalize_gateway_token(settings.mt5_gateway_token)
     payload: dict[str, Any] = {
         "status": "ok",
         "service": "mt5-gateway",
-        "token_configured": bool(settings.mt5_gateway_token),
+        "token_configured": bool(token),
         "websocket_enabled": settings.mt5_gateway_enable_websocket,
         "auto_attach_enabled": settings.mt5_gateway_auto_attach,
+        # Safe fingerprint so ops can confirm which secret is loaded without
+        # exposing the full token (first 6 + last 6 only).
+        "token_fingerprint": {
+            "length": len(token),
+            "preview": mask_gateway_token(token),
+        },
     }
-    if not settings.mt5_gateway_token:
+    if not token:
         payload["setup_hint"] = (
             "Set MT5_GATEWAY_TOKEN on this Windows host "
             "(see deploy/mt5_gateway/gateway.env.example), then restart. "

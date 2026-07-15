@@ -22,13 +22,25 @@ logger = logging.getLogger("quantforg.mt5_gateway")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Always reload settings at process start so Windows .env / NSSM env
+    # changes apply after restart (clears lru_cache from import-time).
+    get_gateway_settings.cache_clear()
     settings = get_gateway_settings()
-    if not (settings.mt5_gateway_token or "").strip():
+    from services.mt5_gateway.token_util import mask_gateway_token
+
+    token = (settings.mt5_gateway_token or "").strip()
+    if not token:
         logger.warning(
             "MT5_GATEWAY_TOKEN is not set. Protected routes return 503 until "
             "you set a strong token in the Windows host .env "
             "(see deploy/mt5_gateway/gateway.env.example). "
             "Never put broker passwords in Railway."
+        )
+    else:
+        logger.info(
+            "MT5_GATEWAY_TOKEN ready length=%s fingerprint=%s",
+            len(token),
+            mask_gateway_token(token),
         )
 
     runtime = MT5GatewayRuntime(settings=settings)

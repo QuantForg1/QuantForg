@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from services.mt5_gateway.settings import get_gateway_settings
+from services.mt5_gateway.token_util import (
+    mask_gateway_token,
+    normalize_gateway_token,
+    tokens_equal,
+)
+
+logger = logging.getLogger("quantforg.mt5_gateway.auth")
 
 ws_router = APIRouter(tags=["mt5-gateway-ws"])
 
@@ -19,11 +27,24 @@ async def gateway_ws(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
 
-    token = websocket.query_params.get("token") or websocket.headers.get(
+    raw = websocket.query_params.get("token") or websocket.headers.get(
         "x-gateway-token", ""
     )
-    expected = (settings.mt5_gateway_token or "").strip()
-    if not expected or token != expected:
+    # Also accept Authorization: Bearer for clients that only set that header.
+    if not raw:
+        auth = websocket.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            raw = auth[7:]
+    token = normalize_gateway_token(raw)
+    expected = normalize_gateway_token(settings.mt5_gateway_token)
+    equal = tokens_equal(token, expected)
+    logger.info(
+        "gateway_ws_auth expected=%s received=%s equal=%s",
+        mask_gateway_token(expected),
+        mask_gateway_token(token),
+        equal,
+    )
+    if not expected or not equal:
         await websocket.close(code=4401)
         return
 
