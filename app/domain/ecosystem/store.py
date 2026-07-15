@@ -346,43 +346,34 @@ class EcosystemStore:
     # --- cloud sync snapshot ---------------------------------------------
 
     def export_sync_bundle(self, user_id: UUID) -> dict[str, Any]:
+        journal = self.list_journal(user_id, limit=500)
+        playbooks = self.list_playbooks(user_id)
+        watchlists = self.list_watchlists(user_id)
+        workspaces = self.list_workspaces(user_id)
+        alerts = self.list_alerts(user_id, limit=200)
+        learning = self.learning_progress(user_id)
+        preferences = self.get_preferences(user_id)
         bundle = {
             "version": 1,
             "exported_at": self._now(),
-            "journal": self.list_journal(user_id, limit=500),
-            "playbooks": self.list_playbooks(user_id),
-            "watchlists": self.list_watchlists(user_id),
-            "workspaces": self.list_workspaces(user_id),
-            "alerts": self.list_alerts(user_id, limit=200),
-            "learning": self.learning_progress(user_id),
-            "preferences": self.get_preferences(user_id),
+            "journal": journal,
+            "playbooks": playbooks,
+            "watchlists": watchlists,
+            "workspaces": workspaces,
+            "alerts": alerts,
+            "learning": learning,
+            "preferences": preferences,
             "advisory_only": True,
             "never_submits_orders": True,
         }
-        raw_journal = bundle.get("journal")
-        raw_playbooks = bundle.get("playbooks")
-        raw_watchlists = bundle.get("watchlists")
-        raw_workspaces = bundle.get("workspaces")
-        journal_rows = cast(
-            list[Any], raw_journal if isinstance(raw_journal, list) else []
-        )
-        playbook_rows = cast(
-            list[Any], raw_playbooks if isinstance(raw_playbooks, list) else []
-        )
-        watch_rows = cast(
-            list[Any], raw_watchlists if isinstance(raw_watchlists, list) else []
-        )
-        workspace_rows = cast(
-            list[Any], raw_workspaces if isinstance(raw_workspaces, list) else []
-        )
         with self._lock:
             self._sync_meta[self._uid(user_id)] = {
                 "last_sync_at": self._now(),
                 "items": {
-                    "journal": len(journal_rows),
-                    "playbooks": len(playbook_rows),
-                    "watchlists": len(watch_rows),
-                    "workspaces": len(workspace_rows),
+                    "journal": len(journal),
+                    "playbooks": len(playbooks),
+                    "watchlists": len(watchlists),
+                    "workspaces": len(workspaces),
                 },
             }
             meta = deepcopy(self._sync_meta[self._uid(user_id)])
