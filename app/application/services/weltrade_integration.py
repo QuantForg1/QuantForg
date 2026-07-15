@@ -675,9 +675,18 @@ class WeltradeIntegrationService:
                     server=server_name,
                     error=str(exc),
                 )
+                detail = str(exc)
+                if "Invalid Gateway Token" in detail or "HTTP 401" in detail:
+                    raise RuntimeError(
+                        "Gateway MT5 session is attached, but Railway auth to the "
+                        "gateway failed (HTTP 401 Invalid Gateway Token). "
+                        "Set MT5_GATEWAY_CALLER_TOKEN on Railway to the same value "
+                        "as Windows MT5_GATEWAY_TOKEN, then redeploy. "
+                        f"Upstream: {detail}"
+                    ) from exc
                 raise RuntimeError(
                     "Gateway reports an attached MT5 session, but Railway "
-                    f"could not adopt it: {exc}"
+                    f"could not adopt it: {detail}"
                 ) from exc
 
         elif prefer_attach:
