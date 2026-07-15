@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- Closed Beta V6.1 What’s New entry (`6.1.0-closed-beta`) and
+  `CLOSED_BETA_V6_1_RELEASE_CERTIFICATE.md` (ops release; no locked-module changes).
 - Closed Beta production readiness pack (audit-only, no locked-module changes):
   `CLOSED_BETA_PRODUCTION_AUDIT.md`, `CLOSED_BETA_KIT.md`,
   `CLOSED_BETA_MONITORING.md`, `CLOSED_BETA_GO_NO_GO.md` — page/UX/security/

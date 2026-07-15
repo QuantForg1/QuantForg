@@ -10,6 +10,24 @@ export type ReleaseNote = {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "6.1.0-closed-beta",
+    date: "2026-07-15",
+    title: "Closed Beta V6.1 — platform complete",
+    highlights: [
+      "Feature-complete Closed Beta cut: Execution, Quant AI, Quant Studio, Decision Engine, Research Lab",
+      "Live order_send remains off (EXECUTION_ENABLED=false in production)",
+      "Invite-only cohort, Closed Beta banner, feedback widget, and issue reporting via Support",
+      "Paper-first path: Get Started → paper trade → advisory desks",
+      "Ops surfaces: /ops health & audit, /cloud-ops gateway heartbeats",
+    ],
+    links: [
+      { label: "Get started", href: "/get-started" },
+      { label: "Decision Engine", href: "/decision-engine" },
+      { label: "Research Lab", href: "/research-lab" },
+      { label: "Support / feedback", href: "/support#feedback" },
+    ],
+  },
+  {
     version: "1.1.0-beta",
     date: "2026-07-13",
     title: "Closed Beta",
