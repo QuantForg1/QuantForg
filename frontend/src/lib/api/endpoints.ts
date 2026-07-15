@@ -408,6 +408,49 @@ export const quantStudioApi = {
     }),
 };
 
+export const researchLabApi = {
+  dashboard: (symbol = "EURUSD") =>
+    apiFetch<Record<string, unknown>>(
+      `/research-lab/dashboard?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  library: () => apiFetch<Record<string, unknown>>("/research-lab/library"),
+  validate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-lab/validate", {
+      method: "POST",
+      body,
+    }),
+  compare: () => apiFetch<Record<string, unknown>>("/research-lab/compare"),
+  regime: (symbol = "EURUSD") =>
+    apiFetch<Record<string, unknown>>(
+      `/research-lab/regime?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  parameters: () => apiFetch<Record<string, unknown>>("/research-lab/parameters"),
+  setParameters: (overrides: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-lab/parameters", {
+      method: "POST",
+      body: { overrides },
+    }),
+  paper: () => apiFetch<Record<string, unknown>>("/research-lab/paper"),
+  promotionCriteria: () =>
+    apiFetch<Record<string, unknown>>("/research-lab/promotion/criteria"),
+  setPromotionCriteria: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-lab/promotion/criteria", {
+      method: "POST",
+      body,
+    }),
+  promote: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-lab/promotion/evaluate", {
+      method: "POST",
+      body,
+    }),
+  report: (strategyKey?: string) => {
+    const q = strategyKey
+      ? `?strategy_key=${encodeURIComponent(strategyKey)}`
+      : "";
+    return apiFetch<Record<string, unknown>>(`/research-lab/report${q}`);
+  },
+};
+
 export const quantAiApi = {
   dashboard: (symbol?: string, forceRefresh = false) => {
     const params = new URLSearchParams();

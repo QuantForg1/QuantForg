@@ -48,6 +48,7 @@ export const appNav: NavGroup[] = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/quant-ai", label: "Quant AI", icon: Bot },
       { href: "/quant-studio", label: "Quant Studio", icon: Wand2 },
+      { href: "/research-lab", label: "Research Lab", icon: FlaskConical },
       { href: "/decision-engine", label: "Decision Engine", icon: Scale },
       { href: "/intelligence", label: "Market Intelligence", icon: Sparkles },
       { href: "/portfolio", label: "Portfolio", icon: Briefcase },
