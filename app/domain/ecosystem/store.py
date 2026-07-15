@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from copy import deepcopy
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 DEFAULT_PREFERENCES: dict[str, Any] = {
