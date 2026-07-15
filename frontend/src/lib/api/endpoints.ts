@@ -352,6 +352,26 @@ export const opsApi = {
   audit: () => apiFetch<Record<string, unknown>>("/ops/audit"),
 };
 
+export const decisionEngineApi = {
+  dashboard: (symbol = "EURUSD") =>
+    apiFetch<Record<string, unknown>>(
+      `/decision-engine/dashboard?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/decision-engine/evaluate", {
+      method: "POST",
+      body,
+    }),
+  paperPerformance: () =>
+    apiFetch<Record<string, unknown>>("/decision-engine/paper/performance"),
+  reports: () => apiFetch<Record<string, unknown>>("/decision-engine/reports"),
+  paperOutcome: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/decision-engine/paper/outcome", {
+      method: "POST",
+      body,
+    }),
+};
+
 export const quantStudioApi = {
   workspace: () => apiFetch<Record<string, unknown>>("/quant-studio/workspace"),
   blocks: () => apiFetch<Record<string, unknown>>("/quant-studio/blocks"),
