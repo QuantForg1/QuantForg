@@ -20,6 +20,80 @@ logger = logging.getLogger("quantforg.mt5_gateway.auth")
 
 _bearer = HTTPBearer(auto_error=False)
 
+# TEMPORARY — prove this file was imported (remove after diagnosis).
+print(
+    f"TEMPORARY_AUTH_IMPORT auth_file={__file__!s}",
+    flush=True,
+)
+
+# TEMPORARY — remove after auth diagnosis. Do not ship permanently.
+_ZERO_WIDTH_CHARS = (
+    "\u200b",
+    "\u200c",
+    "\u200d",
+    "\u2060",
+    "\ufeff",
+)
+
+
+def _temporary_token_diff_debug(
+    *,
+    expected: str,
+    provided: str,
+    header_source: str,
+) -> None:
+    """TEMPORARY DEBUG: full token repr + first differing codepoint.
+
+    Remove this helper and its call site once the 401 middle-diff is identified.
+    """
+    py_equal = expected == provided
+    diff_index: int | None = None
+    expected_cp: str | None = None
+    provided_cp: str | None = None
+    limit = min(len(expected), len(provided))
+    for i in range(limit):
+        if expected[i] != provided[i]:
+            diff_index = i
+            expected_cp = f"U+{ord(expected[i]):04X} ({expected[i]!r})"
+            provided_cp = f"U+{ord(provided[i]):04X} ({provided[i]!r})"
+            break
+    if diff_index is None and len(expected) != len(provided):
+        diff_index = limit
+        if len(expected) > len(provided):
+            expected_cp = f"U+{ord(expected[limit]):04X} ({expected[limit]!r})"
+            provided_cp = "<missing>"
+        else:
+            expected_cp = "<missing>"
+            provided_cp = f"U+{ord(provided[limit]):04X} ({provided[limit]!r})"
+
+    def _flags(label: str, value: str) -> str:
+        return (
+            f"{label}: contains_CR={('\\r' in value)} contains_LF={('\\n' in value)} "
+            f"contains_TAB={('\\t' in value)} contains_BOM={('\\ufeff' in value)} "
+            f"contains_zero_width={any(z in value for z in _ZERO_WIDTH_CHARS)} "
+            f"trailing_whitespace={bool(value) and value[-1].isspace()} "
+            f"leading_whitespace={bool(value) and value[0].isspace()} "
+            f"len={len(value)} utf8_bytes={len(value.encode('utf-8'))}"
+        )
+
+    lines = [
+        "TEMPORARY_GATEWAY_TOKEN_DIFF header_source=%s" % header_source,
+        "repr(expected)=%r" % expected,
+        "repr(provided)=%r" % provided,
+        "expected == provided → %s" % py_equal,
+        "first_differing_index=%s" % diff_index,
+        "expected_codepoint_at_diff=%s" % expected_cp,
+        "provided_codepoint_at_diff=%s" % provided_cp,
+        _flags("expected", expected),
+        _flags("provided", provided),
+        "codepoint_lists expected=%s" % [f"U+{ord(c):04X}" for c in expected],
+        "codepoint_lists provided=%s" % [f"U+{ord(c):04X}" for c in provided],
+    ]
+    message = "\n".join(lines)
+    # print() so it always hits the gateway console even if log level filters.
+    print(message, flush=True)
+    logger.warning(message)
+
 
 def _token_candidates(
     *,
@@ -97,6 +171,12 @@ def require_gateway_token(
     )
 
     for provided, header_source in candidates:
+        # TEMPORARY DEBUG — remove after diagnosis (does not affect accept/reject).
+        _temporary_token_diff_debug(
+            expected=expected,
+            provided=provided,
+            header_source=header_source,
+        )
         equal = tokens_equal(provided, expected)
         logger.info(
             "gateway_auth_check token_source=%s expected_len=%s expected=%s "
