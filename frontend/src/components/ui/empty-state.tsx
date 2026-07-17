@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -8,8 +9,10 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  actionHref,
   secondaryLabel,
   onSecondary,
+  secondaryHref,
   className,
 }: {
   icon: LucideIcon;
@@ -17,10 +20,16 @@ export function EmptyState({
   description: string;
   actionLabel?: string;
   onAction?: () => void;
+  /** Prefer over onAction for in-app navigation (client-side, no full reload). */
+  actionHref?: string;
   secondaryLabel?: string;
   onSecondary?: () => void;
+  secondaryHref?: string;
   className?: string;
 }) {
+  const hasPrimary = Boolean(actionLabel && (actionHref || onAction));
+  const hasSecondary = Boolean(secondaryLabel && (secondaryHref || onSecondary));
+
   return (
     <div
       role="status"
@@ -41,15 +50,27 @@ export function EmptyState({
       <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--fg-muted)]">
         {description}
       </p>
-      {(actionLabel && onAction) || (secondaryLabel && onSecondary) ? (
+      {hasPrimary || hasSecondary ? (
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-          {actionLabel && onAction ? (
-            <Button onClick={onAction}>{actionLabel}</Button>
+          {hasPrimary ? (
+            actionHref ? (
+              <Button asChild>
+                <Link href={actionHref}>{actionLabel}</Link>
+              </Button>
+            ) : (
+              <Button onClick={onAction}>{actionLabel}</Button>
+            )
           ) : null}
-          {secondaryLabel && onSecondary ? (
-            <Button variant="secondary" onClick={onSecondary}>
-              {secondaryLabel}
-            </Button>
+          {hasSecondary ? (
+            secondaryHref ? (
+              <Button variant="secondary" asChild>
+                <Link href={secondaryHref}>{secondaryLabel}</Link>
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={onSecondary}>
+                {secondaryLabel}
+              </Button>
+            )
           ) : null}
         </div>
       ) : null}

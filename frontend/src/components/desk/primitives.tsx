@@ -97,16 +97,20 @@ export function DeskEmpty({
   description,
   actionLabel,
   onAction,
+  actionHref,
   secondaryLabel,
   onSecondary,
+  secondaryHref,
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
   actionLabel?: string;
   onAction?: () => void;
+  actionHref?: string;
   secondaryLabel?: string;
   onSecondary?: () => void;
+  secondaryHref?: string;
 }) {
   return (
     <EmptyState
@@ -115,8 +119,10 @@ export function DeskEmpty({
       description={description}
       actionLabel={actionLabel}
       onAction={onAction}
+      actionHref={actionHref}
       secondaryLabel={secondaryLabel}
       onSecondary={onSecondary}
+      secondaryHref={secondaryHref}
     />
   );
 }

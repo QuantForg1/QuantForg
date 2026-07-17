@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { DeskEmpty, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { backtestApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, mapEquityCurve, metric, num, str } from "@/lib/desk";
@@ -122,11 +123,14 @@ export default function BacktestingPage() {
         </div>
       </div>
 
-      {listQ.isLoading ? (
-        <DeskSkeleton rows={4} />
-      ) : listQ.isError ? (
-        <DeskError message="Unable to load backtests." onRetry={() => listQ.refetch()} />
-      ) : (
+      <DeskQueryState
+        isLoading={listQ.isLoading}
+        isError={listQ.isError}
+        errorMessage="Unable to load backtests."
+        onRetry={() => listQ.refetch()}
+        skeleton="list"
+        skeletonRows={4}
+      >
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard label="Sharpe" value={fmt(metric(metrics, "sharpe_ratio"))} />
@@ -264,7 +268,7 @@ export default function BacktestingPage() {
             </Card>
           </div>
         </motion.div>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

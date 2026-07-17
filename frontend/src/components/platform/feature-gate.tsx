@@ -22,9 +22,7 @@ export function FeatureGate({
         title={`${label || flag} is disabled`}
         description="This capability is turned off by a production feature flag. Contact an operator to enable it."
         actionLabel="Operations"
-        onAction={() => {
-          window.location.href = "/ops";
-        }}
+        actionHref="/ops"
       />
       <p className="mt-3 text-center text-xs text-[var(--fg-muted)]">
         <Link href="/dashboard" className="text-[var(--accent)]">

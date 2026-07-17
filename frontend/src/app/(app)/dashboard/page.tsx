@@ -55,7 +55,7 @@ import {
   symbolSpread,
   topBySpread,
 } from "@/lib/dashboard/derive";
-import { formatCurrency, formatNumber, formatPct, formatRelativeTime } from "@/lib/utils";
+import { formatCurrency, formatNumber, formatRelativeTime } from "@/lib/utils";
 import { useDashboardStream } from "@/hooks/realtime";
 import {
   RealtimeConnectionBadge,
@@ -542,113 +542,88 @@ export default function DashboardPage() {
       <WeltradeGatewayStatus className="mb-4" compact />
 
       <PageMotion className="space-y-5">
-        {/* KPI row */}
-        <StaggerGrid className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-          {[
-            {
-              label: "Portfolio Value",
-              value: money(equity),
-              tone: toneFromNumber(floating),
-              trend: Number.isFinite(floating) ? formatPct((floating / (equity || 1)) * 100) : undefined,
-              hint: "Account equity",
-              status: mt5.data?.connected ? ("live" as const) : ("sync" as const),
-            },
-            {
-              label: "Today's PnL",
-              value: money(dailyPnl),
-              tone: toneFromNumber(dailyPnl),
-              trend: toneFromNumber(dailyPnl) === "up" ? "Positive session" : toneFromNumber(dailyPnl) === "down" ? "Negative session" : "Flat",
-            },
-            {
-              label: "Weekly PnL",
-              value: money(weeklyPnl),
-              tone: toneFromNumber(weeklyPnl),
-            },
-            {
-              label: "Monthly PnL",
-              value: money(monthlyPnl),
-              tone: toneFromNumber(monthlyPnl),
-            },
-            {
-              label: "Account Equity",
-              value: money(equity),
-              hint: `Balance ${money(balance)}`,
-            },
-            {
-              label: "Free Margin",
-              value: money(freeMargin),
-              hint: "Buying power",
-            },
-            {
-              label: "Margin Level",
-              value: pct(marginLevel),
-              tone: Number.isFinite(marginLevel) && marginLevel < 200 ? ("down" as const) : ("neutral" as const),
-              status: Number.isFinite(marginLevel) && marginLevel < 200 ? ("warn" as const) : ("ok" as const),
-            },
-          ].map((k) => (
-            <StaggerItem key={k.label}>
-              <KpiMetricCard {...k} spark={spark} />
-            </StaggerItem>
-          ))}
+        {/* Primary KPIs — one focused row (no duplicate equity / identical sparklines) */}
+        <StaggerGrid className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <StaggerItem>
+            <KpiMetricCard
+              label="Equity"
+              value={money(equity)}
+              tone={toneFromNumber(floating)}
+              trend={
+                Number.isFinite(floating)
+                  ? `Floating ${money(floating)}`
+                  : undefined
+              }
+              hint={`Balance ${money(balance)}`}
+              status={mt5.data?.connected ? "live" : "sync"}
+              spark={spark}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <KpiMetricCard
+              label="Today's PnL"
+              value={money(dailyPnl)}
+              tone={toneFromNumber(dailyPnl)}
+              trend={
+                toneFromNumber(dailyPnl) === "up"
+                  ? "Positive session"
+                  : toneFromNumber(dailyPnl) === "down"
+                    ? "Negative session"
+                    : "Flat"
+              }
+              hint={`Week ${money(weeklyPnl)} · Month ${money(monthlyPnl)}`}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <KpiMetricCard
+              label="Margin Level"
+              value={pct(marginLevel)}
+              tone={
+                Number.isFinite(marginLevel) && marginLevel < 200
+                  ? "down"
+                  : "neutral"
+              }
+              hint={
+                Number.isFinite(usedMarginPct)
+                  ? `Used ${pct(usedMarginPct)} of equity`
+                  : "Used margin vs equity"
+              }
+              status={
+                Number.isFinite(marginLevel) && marginLevel < 200 ? "warn" : "ok"
+              }
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <KpiMetricCard
+              label="Open Positions"
+              value={String(portfolio.data?.position_count ?? positions.length)}
+              hint={
+                Number.isFinite(exposure) && exposure > 0
+                  ? `Exposure ${money(exposure)}`
+                  : "Live book"
+              }
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <KpiMetricCard
+              label="Pending Orders"
+              value={String(pending.length)}
+              hint="Working limits & stops"
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <KpiMetricCard
+              label="Broker"
+              value={connectedBroker}
+              hint={
+                mt5.data?.connected
+                  ? `Login ${str(mt5.data?.login)}`
+                  : "Connect via MT5"
+              }
+              status={mt5.data?.connected ? "live" : "offline"}
+            />
+          </StaggerItem>
         </StaggerGrid>
-
-        <StaggerGrid className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          {[
-            {
-              label: "Drawdown",
-              value: pct(drawdown),
-              tone: Number.isFinite(drawdown) && drawdown > 0 ? ("down" as const) : ("neutral" as const),
-            },
-            {
-              label: "Win Rate",
-              value: Number.isFinite(winRate)
-                ? `${formatNumber(winRate * (winRate <= 1 ? 100 : 1), 1)}%`
-                : "—",
-              tone: "neutral" as const,
-            },
-            {
-              label: "Profit Factor",
-              value: Number.isFinite(profitFactor) ? formatNumber(profitFactor, 2) : "—",
-              tone: "neutral" as const,
-            },
-            {
-              label: "Sharpe Ratio",
-              value: Number.isFinite(sharpe) ? formatNumber(sharpe, 2) : "—",
-              tone: "neutral" as const,
-            },
-            {
-              label: "Open Positions",
-              value: String(portfolio.data?.position_count ?? positions.length),
-              tone: "neutral" as const,
-            },
-            {
-              label: "Open Orders",
-              value: String(pending.length),
-              tone: "neutral" as const,
-            },
-          ].map((k) => (
-            <StaggerItem key={k.label}>
-              <KpiMetricCard {...k} spark={spark} />
-            </StaggerItem>
-          ))}
-        </StaggerGrid>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <KpiMetricCard
-            label="Connected Broker"
-            value={connectedBroker}
-            hint={mt5.data?.connected ? `Login ${str(mt5.data?.login)}` : "Connect via MT5"}
-            status={mt5.data?.connected ? "live" : "offline"}
-            spark={spark}
-          />
-          <KpiMetricCard
-            label="API Status"
-            value={str(health.data?.status, "…")}
-            hint={str(health.data?.environment, "health probe")}
-            status={str(health.data?.status) === "healthy" ? "ok" : "warn"}
-            spark={spark}
-          />
-        </div>
 
         {/* Market + Portfolio */}
         <div className="grid gap-4 xl:grid-cols-2">
@@ -666,9 +641,7 @@ export default function DashboardPage() {
                   title="No live market session"
                   description="Connect MT5 to load symbol universe, spreads, and market status."
                   actionLabel="Connect MT5"
-                  onAction={() => {
-                    window.location.href = "/broker";
-                  }}
+                  actionHref="/broker"
                 />
               ) : symbolsQ.isLoading ? (
                 <DeskSkeleton rows={4} />
@@ -733,20 +706,43 @@ export default function DashboardPage() {
           </Card>
 
           <Card className="qf-card-interactive">
-            <CardHeader>
-              <CardTitle>Portfolio Overview</CardTitle>
+            <CardHeader className="flex-row items-center justify-between gap-2">
+              <CardTitle>Account &amp; performance</CardTitle>
+              <Badge
+                tone={str(health.data?.status) === "healthy" ? "success" : "warning"}
+              >
+                API {str(health.data?.status, "…")}
+              </Badge>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
-                  ["Current Balance", money(balance)],
-                  ["Equity", money(equity)],
+                  ["Balance", money(balance)],
                   ["Margin", money(margin)],
-                  ["Free Margin", money(freeMargin)],
-                  ["Used Margin", money(margin)],
+                  ["Free margin", money(freeMargin)],
                   ["Exposure", money(exposure)],
-                  ["Buying Power", money(freeMargin)],
                   ["Currency", str(account.currency, "USD")],
+                  [
+                    "Drawdown",
+                    Number.isFinite(drawdown) ? pct(drawdown) : "—",
+                  ],
+                  [
+                    "Win rate",
+                    Number.isFinite(winRate)
+                      ? `${formatNumber(winRate * (winRate <= 1 ? 100 : 1), 1)}%`
+                      : "—",
+                  ],
+                  [
+                    "Profit factor",
+                    Number.isFinite(profitFactor)
+                      ? formatNumber(profitFactor, 2)
+                      : "—",
+                  ],
+                  [
+                    "Sharpe",
+                    Number.isFinite(sharpe) ? formatNumber(sharpe, 2) : "—",
+                  ],
+                  ["VaR 95%", Number.isFinite(var95) ? money(var95) : "—"],
                 ].map(([label, value]) => (
                   <div
                     key={label}
@@ -755,12 +751,18 @@ export default function DashboardPage() {
                     <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
                       {label}
                     </p>
-                    <p className="mt-1 tabular text-lg font-semibold text-[var(--fg)]">{value}</p>
+                    <p className="mt-1 tabular text-lg font-semibold text-[var(--fg)]">
+                      {value}
+                    </p>
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-[var(--fg-subtle)]">
-                Refreshes with portfolio sync · last sync {str(portfolio.data?.synced_at).slice(0, 19) || "—"}
+              <p className="text-xs text-[var(--fg-subtle)]">
+                Refreshes with portfolio sync · last sync{" "}
+                {str(portfolio.data?.synced_at).slice(0, 19) || "—"}
+                {str(health.data?.environment)
+                  ? ` · ${str(health.data?.environment)}`
+                  : ""}
               </p>
             </CardContent>
           </Card>
@@ -812,13 +814,9 @@ export default function DashboardPage() {
                     title="No open positions"
                     description="Connect MT5 and sync to populate live exposure."
                     actionLabel="Connect MT5"
-                    onAction={() => {
-                      window.location.href = "/broker";
-                    }}
+                    actionHref="/broker"
                     secondaryLabel="Paper trade"
-                    onSecondary={() => {
-                      window.location.href = "/paper";
-                    }}
+                    secondaryHref="/paper"
                   />
                 }
               />
@@ -845,9 +843,7 @@ export default function DashboardPage() {
                     title="No pending orders"
                     description="Working limit and stop orders will appear after sync."
                     actionLabel="Open execution"
-                    onAction={() => {
-                      window.location.href = "/execution";
-                    }}
+                    actionHref="/execution"
                   />
                 }
               />
@@ -878,9 +874,7 @@ export default function DashboardPage() {
                     title="No recent fills"
                     description="Deal history appears after terminal sync."
                     actionLabel="Open history"
-                    onAction={() => {
-                      window.location.href = "/history";
-                    }}
+                    actionHref="/history"
                   />
                 }
               />
@@ -961,13 +955,9 @@ export default function DashboardPage() {
                 title="Calendar feed not connected"
                 description="No economic calendar endpoint is available in this deployment. QuantForg will not invent events."
                 actionLabel="Open support"
-                onAction={() => {
-                  window.location.href = "/support";
-                }}
+                actionHref="/support"
                 secondaryLabel="View ops"
-                onSecondary={() => {
-                  window.location.href = "/ops";
-                }}
+                secondaryHref="/ops"
               />
             </CardContent>
           </Card>
@@ -995,9 +985,7 @@ export default function DashboardPage() {
                   title="Watchlist requires MT5"
                   description="Symbol bids and asks load from the connected terminal."
                   actionLabel="Connect MT5"
-                  onAction={() => {
-                    window.location.href = "/broker";
-                  }}
+                  actionHref="/broker"
                 />
               ) : displayWatch.length === 0 ? (
                 <p className="text-sm text-[var(--fg-muted)]">
@@ -1137,9 +1125,7 @@ export default function DashboardPage() {
                   title="No insights yet"
                   description="Sync portfolio or generate strategy signals to populate this panel."
                   actionLabel="Strategy builder"
-                  onAction={() => {
-                    window.location.href = "/strategy";
-                  }}
+                  actionHref="/strategy"
                 />
               ) : (
                 <ul className="space-y-2">

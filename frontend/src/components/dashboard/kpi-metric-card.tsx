@@ -74,9 +74,11 @@ export const KpiMetricCard = memo(function KpiMetricCard({
             ) : null}
             {hint ? <p className="truncate text-[11px] text-[var(--fg-subtle)]">{hint}</p> : null}
           </div>
-          <div className="w-20 shrink-0 sm:w-24">
-            <Sparkline values={spark ?? []} tone={tone} />
-          </div>
+          {spark && spark.length > 0 ? (
+            <div className="w-20 shrink-0 sm:w-24" aria-hidden>
+              <Sparkline values={spark} tone={tone} />
+            </div>
+          ) : null}
         </div>
       </CardContent>
     </Card>

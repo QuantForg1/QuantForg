@@ -3,12 +3,14 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { BarChart3 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { LazyBarChart } from "@/components/charts/lazy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { DeskEmpty, DeskTable } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { paperApi, portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, metric, num, str, toneFromNumber } from "@/lib/desk";
 import { formatCurrency, formatNumber, formatPct } from "@/lib/utils";
@@ -113,11 +115,14 @@ export default function AnalyticsPage() {
         description="Returns, volatility, distribution, and symbol exposure from live and paper fills."
       />
 
-      {paper.isLoading && history.isLoading ? (
-        <DeskSkeleton rows={5} />
-      ) : paper.isError && history.isError ? (
-        <DeskError message="Unable to load analytics." onRetry={() => paper.refetch()} />
-      ) : (
+      <DeskQueryState
+        isLoading={paper.isLoading && history.isLoading}
+        isError={paper.isError && history.isError}
+        errorMessage="Unable to load analytics."
+        onRetry={() => paper.refetch()}
+        skeleton="list"
+        skeletonRows={5}
+      >
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -185,7 +190,11 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 {analytics.best.length === 0 ? (
-                  <p className="text-sm text-[var(--fg-muted)]">No symbol performance yet.</p>
+                  <DeskEmpty
+                    icon={BarChart3}
+                    title="No symbol performance yet"
+                    description="Best performers appear after synced fills."
+                  />
                 ) : (
                   <DeskTable
                     columns={["Symbol", "PnL"]}
@@ -205,7 +214,11 @@ export default function AnalyticsPage() {
               </CardHeader>
               <CardContent>
                 {analytics.worst.length === 0 ? (
-                  <p className="text-sm text-[var(--fg-muted)]">No symbol performance yet.</p>
+                  <DeskEmpty
+                    icon={BarChart3}
+                    title="No symbol performance yet"
+                    description="Underperformers appear after synced fills."
+                  />
                 ) : (
                   <DeskTable
                     columns={["Symbol", "PnL"]}
@@ -224,7 +237,7 @@ export default function AnalyticsPage() {
             </Card>
           </div>
         </motion.div>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

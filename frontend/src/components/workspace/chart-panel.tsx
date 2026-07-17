@@ -350,9 +350,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
               title="Broker disconnected"
               description="Connect MT5 to load candles from the production market data API."
               actionLabel="Connect MT5"
-              onAction={() => {
-                window.location.href = "/broker";
-              }}
+              actionHref="/broker"
             />
           </div>
         ) : candlesQ.isLoading ? (

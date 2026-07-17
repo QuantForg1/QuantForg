@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { DeskEmpty, DeskTable } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { walkforwardApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, mapEquityCurve, metric, num, str } from "@/lib/desk";
@@ -119,11 +120,14 @@ export default function WalkForwardPage() {
         <Input className="w-40" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} />
       </div>
 
-      {listQ.isLoading ? (
-        <DeskSkeleton rows={4} />
-      ) : listQ.isError ? (
-        <DeskError message="Unable to load walk-forward results." onRetry={() => listQ.refetch()} />
-      ) : (
+      <DeskQueryState
+        isLoading={listQ.isLoading}
+        isError={listQ.isError}
+        errorMessage="Unable to load walk-forward results."
+        onRetry={() => listQ.refetch()}
+        skeleton="list"
+        skeletonRows={4}
+      >
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
@@ -239,7 +243,7 @@ export default function WalkForwardPage() {
             </CardContent>
           </Card>
         </motion.div>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

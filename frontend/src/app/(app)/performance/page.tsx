@@ -6,7 +6,8 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { LazyBarChart, LazyEquityChart } from "@/components/charts/lazy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { DeskTable } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { PageMotion } from "@/components/desk/motion";
 import { paperApi, portfolioApi } from "@/lib/api/endpoints";
 import {
@@ -93,11 +94,13 @@ export default function PerformancePage() {
         description="Net profit, risk-adjusted returns, and equity trajectory across paper and live history."
       />
 
-      {loading ? (
-        <DeskSkeleton variant="page" />
-      ) : errored ? (
-        <DeskError message="Unable to load performance." onRetry={() => paper.refetch()} />
-      ) : (
+      <DeskQueryState
+        isLoading={loading}
+        isError={errored}
+        errorMessage="Unable to load performance."
+        onRetry={() => paper.refetch()}
+        skeleton="page"
+      >
         <PageMotion>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             <StatCard
@@ -203,7 +206,7 @@ export default function PerformancePage() {
             </Card>
           </div>
         </PageMotion>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

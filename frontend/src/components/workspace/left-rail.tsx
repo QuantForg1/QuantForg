@@ -287,9 +287,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
               title="No market feed"
               description="Connect MT5 to load the symbol universe."
               actionLabel="Connect"
-              onAction={() => {
-                window.location.href = "/broker";
-              }}
+              actionHref="/broker"
             />
           </div>
         ) : symbolsQ.isLoading ? (

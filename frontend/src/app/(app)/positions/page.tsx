@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
 import { usePositionsStream } from "@/hooks/realtime";
@@ -125,11 +126,13 @@ export default function PositionsPage() {
       />
       <RealtimeMeta status={realtime} className="mb-3" />
       <SessionStrip className="mb-4" />
-      {q.isLoading ? (
-        <DeskSkeleton variant="page" />
-      ) : q.isError ? (
-        <DeskError message="Unable to load positions." onRetry={() => q.refetch()} />
-      ) : (
+      <DeskQueryState
+        isLoading={q.isLoading}
+        isError={q.isError}
+        errorMessage="Unable to load positions."
+        onRetry={() => q.refetch()}
+        skeleton="page"
+      >
         <PageMotion>
           <StaggerGrid className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
@@ -168,20 +171,16 @@ export default function PositionsPage() {
                     title="No open positions"
                     description="Live positions appear after MT5 sync."
                     actionLabel="Go to MT5"
-                    onAction={() => {
-                      window.location.href = "/broker";
-                    }}
+                    actionHref="/broker"
                     secondaryLabel="Paper trade"
-                    onSecondary={() => {
-                      window.location.href = "/paper";
-                    }}
+                    secondaryHref="/paper"
                   />
                 }
               />
             </CardContent>
           </Card>
         </PageMotion>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

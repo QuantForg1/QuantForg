@@ -57,9 +57,7 @@ export default function PortfolioPage() {
           title="No live session"
           description="Attach MT5 in Broker Workspace to load balance, equity, and positions."
           actionLabel="Open Broker Workspace"
-          onAction={() => {
-            window.location.href = "/broker";
-          }}
+          actionHref="/broker"
         />
       ) : q.isLoading ? (
         <DeskSkeleton rows={4} />

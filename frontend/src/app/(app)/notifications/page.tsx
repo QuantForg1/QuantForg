@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { PageMotion } from "@/components/desk/motion";
 import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
 import { useNotificationsStream } from "@/hooks/realtime";
@@ -148,17 +148,20 @@ export default function NotificationsPage() {
         </div>
       </div>
 
-      {list.isLoading ? (
-        <DeskSkeleton rows={5} />
-      ) : list.isError ? (
-        <DeskError message="Unable to load notifications." onRetry={() => list.refetch()} />
-      ) : items.length === 0 ? (
-        <DeskEmpty
-          icon={Bell}
-          title="Inbox clear"
-          description="No notifications match this filter."
-        />
-      ) : (
+      <DeskQueryState
+        isLoading={list.isLoading}
+        isError={list.isError}
+        isEmpty={items.length === 0}
+        errorMessage="Unable to load notifications."
+        onRetry={() => list.refetch()}
+        skeleton="list"
+        skeletonRows={5}
+        empty={{
+          icon: Bell,
+          title: "Inbox clear",
+          description: "No notifications match this filter.",
+        }}
+      >
         <PageMotion className="space-y-6">
           {grouped.map(([category, rows]) => (
             <section key={category} aria-label={`${category} notifications`}>
@@ -209,7 +212,7 @@ export default function NotificationsPage() {
             </section>
           ))}
         </PageMotion>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

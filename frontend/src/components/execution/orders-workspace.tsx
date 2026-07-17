@@ -274,9 +274,7 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
             title="Orders unavailable offline"
             description="Connect MT5 to load and manage pending orders."
             actionLabel="Connect MT5"
-            onAction={() => {
-              window.location.href = "/broker";
-            }}
+            actionHref="/broker"
           />
         ) : ordersQ.isLoading ? (
           <DeskSkeleton rows={4} />

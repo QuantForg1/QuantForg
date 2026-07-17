@@ -195,9 +195,7 @@ export const MarketWatch = memo(function MarketWatch({
             title="Broker disconnected"
             description="Connect MT5 to load the symbol universe and live quotes."
             actionLabel="Connect MT5"
-            onAction={() => {
-              window.location.href = "/broker";
-            }}
+            actionHref="/broker"
           />
         ) : symbolsQ.isLoading ? (
           <DeskSkeleton rows={8} />

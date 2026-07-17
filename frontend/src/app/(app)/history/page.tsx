@@ -7,7 +7,8 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { SessionStrip } from "@/components/broker/session-strip";
@@ -121,11 +122,13 @@ export default function HistoryPage() {
     <div>
       <PageHeader title="History" description="Closed orders and deals from the terminal ledger." />
       <SessionStrip className="mb-4" />
-      {q.isLoading ? (
-        <DeskSkeleton variant="page" />
-      ) : q.isError ? (
-        <DeskError message="Unable to load history." onRetry={() => q.refetch()} />
-      ) : (
+      <DeskQueryState
+        isLoading={q.isLoading}
+        isError={q.isError}
+        errorMessage="Unable to load history."
+        onRetry={() => q.refetch()}
+        skeleton="page"
+      >
         <PageMotion>
           <StaggerGrid className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
@@ -178,16 +181,20 @@ export default function HistoryPage() {
                   pageSize={10}
                   aria-label="Deal history"
                   empty={
-                    <p className="py-8 text-center text-sm text-[var(--fg-muted)]">
-                      No deals synced yet.
-                    </p>
+                    <DeskEmpty
+                      icon={History}
+                      title="No deals synced yet"
+                      description="Deal fills appear here after terminal sync."
+                      actionLabel="Open broker"
+                      actionHref="/broker"
+                    />
                   }
                 />
               </CardContent>
             </Card>
           </div>
         </PageMotion>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

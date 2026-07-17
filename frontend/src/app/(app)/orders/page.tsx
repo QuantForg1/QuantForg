@@ -7,7 +7,8 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty } from "@/components/desk/primitives";
+import { DeskQueryState } from "@/components/desk/query-state";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
 import { SessionStrip } from "@/components/broker/session-strip";
@@ -96,11 +97,13 @@ export default function OrdersPage() {
       />
       <RealtimeMeta status={realtime} className="mb-3" />
       <SessionStrip className="mb-4" />
-      {q.isLoading ? (
-        <DeskSkeleton variant="page" />
-      ) : q.isError ? (
-        <DeskError message="Unable to load orders." onRetry={() => q.refetch()} />
-      ) : (
+      <DeskQueryState
+        isLoading={q.isLoading}
+        isError={q.isError}
+        errorMessage="Unable to load orders."
+        onRetry={() => q.refetch()}
+        skeleton="page"
+      >
         <PageMotion>
           <StaggerGrid className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
@@ -142,16 +145,14 @@ export default function OrdersPage() {
                     title="No pending orders"
                     description="Limit and stop orders will appear here after sync."
                     actionLabel="Open execution"
-                    onAction={() => {
-                      window.location.href = "/execution";
-                    }}
+                    actionHref="/execution"
                   />
                 }
               />
             </CardContent>
           </Card>
         </PageMotion>
-      )}
+      </DeskQueryState>
     </div>
   );
 }

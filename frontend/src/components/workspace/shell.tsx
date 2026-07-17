@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConnectionBar } from "@/components/execution/connection-bar";
-import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
 import { WorkspaceLeftRail } from "@/components/workspace/left-rail";
 import { WorkspaceRightRail } from "@/components/workspace/right-rail";
 import { WorkspaceBottomPanel } from "@/components/workspace/bottom-panel";
@@ -21,7 +20,6 @@ import {
   type WorkspacePresetId,
 } from "@/components/workspace/layout-store";
 import type { OrderTicketHandle } from "@/components/execution/order-ticket";
-import { SessionStrip } from "@/components/broker/session-strip";
 import { useExecutionStream, useNotificationsStream, useActivityStream } from "@/hooks/realtime";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { mt5Api } from "@/lib/api/endpoints";
@@ -185,20 +183,16 @@ export function WorkspaceShell() {
       role="application"
       aria-label="Institutional trading terminal"
     >
-      <div className="shrink-0 border-b border-[var(--border)] px-3 py-2">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="font-display text-sm font-semibold tracking-tight text-[var(--fg)]">
-              Institutional Trading Terminal
-            </h1>
-            <RealtimeMeta status={realtime} />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <RealtimeConnectionBadge status={realtime} />
+      <header className="shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5">
+          <h1 className="font-display text-xs font-semibold tracking-tight text-[var(--fg)] sm:text-sm">
+            Trading Terminal
+          </h1>
+          <div className="flex items-center gap-1">
             <Button
               size="sm"
               variant="ghost"
-              className="h-8"
+              className="h-7 w-7 px-0"
               aria-label={layout.leftCollapsed ? "Expand left panel" : "Collapse left panel"}
               onClick={() => patchLayout({ leftCollapsed: !layout.leftCollapsed })}
             >
@@ -211,7 +205,7 @@ export function WorkspaceShell() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-8"
+              className="h-7 w-7 px-0"
               aria-label={layout.rightCollapsed ? "Expand right panel" : "Collapse right panel"}
               onClick={() => patchLayout({ rightCollapsed: !layout.rightCollapsed })}
             >
@@ -224,22 +218,23 @@ export function WorkspaceShell() {
             <Button
               size="sm"
               variant="secondary"
-              className="h-8 text-xs"
+              className="h-7 text-xs"
               onClick={() => patchLayout({ bottomCollapsed: !layout.bottomCollapsed })}
             >
               {layout.bottomCollapsed ? "Show book" : "Hide book"}
             </Button>
           </div>
         </div>
-        <SessionStrip className="mb-2" />
         <ConnectionBar
+          compact
           connected={connected}
           server={session.server}
           login={session.login}
           latencyMs={realtime.latencyMs ?? session.latencyMs}
           tradingEnabled={connected}
+          realtime={realtime}
         />
-      </div>
+      </header>
 
       <div className="flex min-h-0 flex-1">
         {showLeft ? (

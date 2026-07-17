@@ -452,9 +452,7 @@ export function PositionManager({ connected }: { connected: boolean }) {
             title="Trading disabled while disconnected"
             description="Connect MT5 to manage live positions."
             actionLabel="Connect MT5"
-            onAction={() => {
-              window.location.href = "/broker";
-            }}
+            actionHref="/broker"
           />
         ) : positionsQ.isLoading ? (
           <DeskSkeleton rows={4} />
