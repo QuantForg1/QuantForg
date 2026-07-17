@@ -543,13 +543,18 @@ class Settings(BaseSettings):
         if hosts != self.allowed_hosts:
             object.__setattr__(self, "allowed_hosts", hosts)
 
-        # CORS: strip wildcards; production seeds from Railway / auth redirect.
+        # CORS: strip wildcards; production seeds Railway + canonical frontends.
         origins = [o.strip() for o in self.cors_origins if o and o.strip() and o != "*"]
         if self.app_env == AppEnvironment.PRODUCTION:
+            from core.config.frontend_origins import PRODUCTION_FRONTEND_ORIGINS
+
             if domain:
                 railway_origin = f"https://{domain}"
                 if railway_origin not in origins:
                     origins.append(railway_origin)
+            for frontend_origin in PRODUCTION_FRONTEND_ORIGINS:
+                if frontend_origin not in origins:
+                    origins.append(frontend_origin)
             redirect = (self.auth_redirect_url or "").strip()
             if redirect:
                 parsed = urlparse(redirect)

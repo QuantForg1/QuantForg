@@ -5,6 +5,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from app.domain.exceptions.base import ValidationError
+from core.config.frontend_origins import is_trusted_frontend_origin
 from core.config.settings import Settings
 
 
@@ -49,6 +50,12 @@ def sanitize_redirect_to(
     for base in allowed:
         if normalized == base or candidate.startswith(base + "/"):
             return candidate
+
+    # Trust canonical product hosts (custom domain + Vercel + local) even when
+    # AUTH_REDIRECT_URL still points at a legacy preview URL.
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    if is_trusted_frontend_origin(origin):
+        return candidate
 
     raise ValidationError(
         "redirect_to is not an allowed application origin",

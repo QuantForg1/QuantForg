@@ -224,11 +224,11 @@ def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
             "max_age": 600,
         }
         if settings.is_production:
-            # Vercel production + preview hosts (never "*"). Exact origins from
-            # CORS_ALLOWED_ORIGINS remain in allow_origins.
-            cors_kwargs["allow_origin_regex"] = (
-                r"https://([a-zA-Z0-9-]+\.)*vercel\.app"
-            )
+            # Vercel previews (*.vercel.app) + custom domain (*.quantforg.com).
+            # Exact origins from CORS_ALLOWED_ORIGINS remain in allow_origins.
+            from core.config.frontend_origins import PRODUCTION_CORS_ORIGIN_REGEX
+
+            cors_kwargs["allow_origin_regex"] = PRODUCTION_CORS_ORIGIN_REGEX
             # Bearer-token SPA calls still need credentials flag when an origin
             # matches via regex even if the static allowlist is empty.
             if not cors_origins:

@@ -25,7 +25,12 @@ export const metadata: Metadata = {
   description:
     "Enterprise quantitative trading terminal — portfolio, risk, MT5, and research.",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`
+        : process.env.NODE_ENV === "production"
+          ? "https://www.quantforg.com"
+          : "http://localhost:3000"),
   ),
   applicationName: "QuantForg",
   robots: {

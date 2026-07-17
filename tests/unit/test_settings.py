@@ -182,6 +182,8 @@ class TestSettings:
         assert settings.execution_enabled is False
         assert settings.docs_enabled is False
         assert "https://quantforg-production.up.railway.app" in settings.cors_origins
+        assert "https://www.quantforg.com" in settings.cors_origins
+        assert "https://quantforg.com" in settings.cors_origins
 
     def test_cors_allowed_origins_alias(self) -> None:
         settings = Settings(

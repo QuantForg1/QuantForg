@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api/endpoints";
-import { env } from "@/lib/env";
+import { getClientAppOrigin } from "@/lib/env";
 import { ApiError } from "@/lib/api/client";
 
 const schema = z.object({ email: z.string().email() });
@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
           try {
             await authApi.forgotPassword(
               values.email,
-              `${env.appUrl}/reset-password`,
+              `${getClientAppOrigin()}/reset-password`,
             );
             const { recordAudit } = await import("@/lib/observability/audit");
             recordAudit("password_reset", "success", "Password reset requested", {
