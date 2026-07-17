@@ -21,33 +21,47 @@ logger = logging.getLogger("quantforg.mt5_gateway.auth")
 _bearer = HTTPBearer(auto_error=False)
 
 
-def _extract_token(
+def _token_candidates(
     *,
     authorization: str | None,
     credentials: HTTPAuthorizationCredentials | None,
     x_gateway_token: str | None,
-) -> tuple[str, str]:
-    """Return ``(token, source)`` preferring Authorization Bearer.
+) -> list[tuple[str, str]]:
+    """Collect unique normalized secrets from every supported header.
 
-    Sources (first win):
-    1. Raw ``Authorization`` header (manual Bearer parse)
-    2. FastAPI ``HTTPBearer`` credentials
-    3. ``X-Gateway-Token`` header
+    Important: do **not** prefer Authorization exclusively. Cloudflare tunnels and
+    some proxies rewrite ``Authorization`` while leaving ``X-Gateway-Token``
+    intact (or the reverse). A first-match-only extractor returns 401 even when
+    another header carries the correct shared secret — and masks can still look
+    identical when only the middle of the Bearer value was altered.
     """
-    from_header = parse_authorization_bearer(authorization)
-    if from_header:
-        return from_header, "authorization_bearer"
+    candidates: list[tuple[str, str]] = []
+    seen: set[str] = set()
 
+    def add(token: str, source: str) -> None:
+        if not token or token in seen:
+            return
+        seen.add(token)
+        candidates.append((token, source))
+
+    # Prefer X-Gateway-Token first: Railway sends it alongside Authorization
+    # specifically because tunnels/proxies may rewrite Bearer while leaving
+    # this dedicated header intact.
+    add(normalize_gateway_token(x_gateway_token), "x_gateway_token")
+
+    # Explicit Bearer parse (handles BOM / odd spacing before "Bearer").
+    add(parse_authorization_bearer(authorization), "authorization_bearer")
+
+    # FastAPI HTTPBearer credentials (may differ if Authorization was rewritten).
     if credentials is not None and credentials.scheme.lower() == "bearer":
-        token = normalize_gateway_token(credentials.credentials)
-        if token:
-            return token, "http_bearer"
+        add(normalize_gateway_token(credentials.credentials), "http_bearer")
 
-    x_tok = normalize_gateway_token(x_gateway_token)
-    if x_tok:
-        return x_tok, "x_gateway_token"
+    # Some proxies strip the scheme and forward only the secret in Authorization.
+    auth_stripped = (authorization or "").lstrip("\ufeff").strip()
+    if auth_stripped and not auth_stripped.lower().startswith("bearer"):
+        add(normalize_gateway_token(authorization), "authorization_raw")
 
-    return "", "missing"
+    return candidates
 
 
 def require_gateway_token(
@@ -76,53 +90,62 @@ def require_gateway_token(
             ),
         )
 
-    provided, header_source = _extract_token(
+    candidates = _token_candidates(
         authorization=authorization,
         credentials=credentials,
         x_gateway_token=x_gateway_token,
     )
-    equal = tokens_equal(provided, expected)
 
-    logger.info(
-        "gateway_auth_check token_source=%s expected_len=%s expected=%s "
-        "authorization_present=%s header_source=%s received_len=%s "
-        "received=%s equal=%s meta=%s",
-        getattr(cfg, "token_source", meta.get("source")),
-        len(expected),
-        mask_gateway_token(expected),
-        bool((authorization or "").strip()),
-        header_source,
-        len(provided),
-        mask_gateway_token(provided),
-        equal,
-        meta,
-    )
-    if cfg.mt5_gateway_auth_debug:
+    for provided, header_source in candidates:
+        equal = tokens_equal(provided, expected)
         logger.info(
-            "gateway_auth_debug settings.mt5_gateway_token=%r "
-            "settings_len=%s received=%r received_len=%s",
-            cfg.mt5_gateway_token,
-            len(expected),
-            provided,
-            len(provided),
-        )
-
-    if not equal:
-        logger.warning(
-            "gateway_auth_rejected token_source=%s expected=%s received=%s "
-            "expected_len=%s received_len=%s "
-            "(hint: len 32 often means example placeholder "
-            "'replace-with-strong-random-token' is still loaded from "
-            "process_env/NSSM instead of the repo .env)",
+            "gateway_auth_check token_source=%s expected_len=%s expected=%s "
+            "authorization_present=%s header_source=%s received_len=%s "
+            "received=%s equal=%s meta=%s",
             getattr(cfg, "token_source", meta.get("source")),
-            mask_gateway_token(expected),
-            mask_gateway_token(provided),
             len(expected),
+            mask_gateway_token(expected),
+            bool((authorization or "").strip()),
+            header_source,
             len(provided),
+            mask_gateway_token(provided),
+            equal,
+            meta,
         )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing gateway token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return provided
+        if cfg.mt5_gateway_auth_debug:
+            logger.info(
+                "gateway_auth_debug settings.mt5_gateway_token=%r "
+                "settings_len=%s received=%r received_len=%s header_source=%s",
+                cfg.mt5_gateway_token,
+                len(expected),
+                provided,
+                len(provided),
+                header_source,
+            )
+        if equal:
+            return provided
+
+    # Exact 401 raise site — reached only when every candidate failed compare.
+    best = candidates[0] if candidates else ("", "missing")
+    provided, header_source = best
+    logger.warning(
+        "gateway_auth_rejected token_source=%s expected=%s received=%s "
+        "expected_len=%s received_len=%s header_source=%s candidates=%s "
+        "(hint: len 32 often means example placeholder "
+        "'replace-with-strong-random-token' is still loaded from "
+        "process_env/NSSM instead of the repo .env; "
+        "matching masks with equal=false usually means the middle differs "
+        "or Authorization was rewritten while X-Gateway-Token is intact)",
+        getattr(cfg, "token_source", meta.get("source")),
+        mask_gateway_token(expected),
+        mask_gateway_token(provided),
+        len(expected),
+        len(provided),
+        header_source,
+        [(src, mask_gateway_token(tok), len(tok)) for tok, src in candidates],
+    )
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing gateway token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )

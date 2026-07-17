@@ -44,6 +44,15 @@ class TestGatewayTokenUtil:
         assert parse_authorization_bearer("bearer xyz") == "xyz"
         assert parse_authorization_bearer("Token xyz") == ""
         assert parse_authorization_bearer(None) == ""
+        assert parse_authorization_bearer("\ufeffBearer secret") == "secret"
+
+    def test_normalize_strips_invisible_middle_chars(self) -> None:
+        # Soft hyphen / zero-width in the middle keep first/last-6 masks identical
+        # while breaking naive compares — normalize must remove them.
+        clean = "QuantForgTokenValueWithFortyThree!!Qw8Rt5"
+        dirty = "QuantForgTokenValueWith\u00adFortyThree!!Qw8Rt5"
+        assert mask_gateway_token(clean) == mask_gateway_token(dirty)
+        assert tokens_equal(clean, dirty)
 
     def test_placeholder_is_exactly_32_chars(self) -> None:
         assert len(_PLACEHOLDER_TOKEN) == 32
@@ -103,6 +112,20 @@ class TestGatewayAuthHardening:
             headers={"Authorization": "Bearer STALE-WRONG-TOKEN-VALUE-XX"},
         )
         assert bad.status_code == 401
+
+    def test_accepts_x_gateway_token_when_authorization_is_wrong(
+        self, client: tuple[TestClient, str]
+    ) -> None:
+        """Tunnel proxies may rewrite Authorization; X-Gateway-Token must still win."""
+        http, token = client
+        res = http.get(
+            "/session/status",
+            headers={
+                "Authorization": "Bearer WRONG-TOKEN-BUT-SAME-LENGTH-XXXXXX",
+                "X-Gateway-Token": token,
+            },
+        )
+        assert res.status_code == 200
 
     def test_bearer_with_trailing_whitespace(
         self, client: tuple[TestClient, str]
