@@ -142,8 +142,10 @@ exclude = ["alembic/versions", "tests"]
 
 [[tool.mypy.overrides]]
 module = [
+    "asyncpg",
     "asyncpg.*",
     "hiredis.*",
+    "supabase",
     "supabase.*",
     "postgrest.*",
     "realtime.*",
