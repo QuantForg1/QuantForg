@@ -30,8 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
-import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
-import { SessionStrip } from "@/components/broker/session-strip";
+import { SessionBar } from "@/components/broker/session-bar";
 import { PageMotion, StaggerGrid, StaggerItem } from "@/components/desk/motion";
 import {
   brokersApi,
@@ -341,7 +340,7 @@ export default function DashboardPage() {
       header: "Actions",
       cell: (r) => (
         <Button size="sm" variant="ghost" asChild>
-          <Link href={`/execution?symbol=${encodeURIComponent(str(r.symbol))}`}>Manage</Link>
+          <Link href={`/terminal?symbol=${encodeURIComponent(str(r.symbol))}`}>Manage</Link>
         </Button>
       ),
     },
@@ -495,7 +494,7 @@ export default function DashboardPage() {
     return (
       <div>
         <PageHeader
-          title="Dashboard"
+          title="Book"
           description="Institutional trading terminal — live desk overview."
         />
         <DeskSkeleton variant="page" />
@@ -506,7 +505,7 @@ export default function DashboardPage() {
   if (portfolio.isError) {
     return (
       <div>
-        <PageHeader title="Dashboard" description="Institutional trading terminal." />
+        <PageHeader title="Book" description="Portfolio, risk, and P&L from live session data." />
         <DeskError
           message="Unable to load portfolio snapshot. Connect MT5 and retry."
           onRetry={() => portfolio.refetch()}
@@ -518,8 +517,8 @@ export default function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title="Dashboard"
-        description="Institutional trading terminal — equity, risk, markets, and desk activity from live APIs."
+        title="Book"
+        description="Portfolio, risk, and P&L from live session data."
         actions={
           <>
             <RealtimeConnectionBadge status={realtime} />
@@ -529,7 +528,7 @@ export default function DashboardPage() {
               </Link>
             </Button>
             <Button asChild>
-              <Link href="/execution">
+              <Link href="/terminal">
                 Trade <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -538,8 +537,7 @@ export default function DashboardPage() {
       />
 
       <RealtimeMeta status={realtime} className="mb-3" />
-      <SessionStrip className="mb-3" />
-      <WeltradeGatewayStatus className="mb-4" compact />
+      <SessionBar className="mb-3" />
 
       <PageMotion className="space-y-5">
         {/* Primary KPIs — one focused row (no duplicate equity / identical sparklines) */}
@@ -843,7 +841,7 @@ export default function DashboardPage() {
                     title="No pending orders"
                     description="Working limit and stop orders will appear after sync."
                     actionLabel="Open execution"
-                    actionHref="/execution"
+                    actionHref="/terminal"
                   />
                 }
               />
@@ -1157,7 +1155,7 @@ export default function DashboardPage() {
                 <Wallet className="h-4 w-4" /> Withdraw
               </Button>
               <Button className="justify-start" asChild>
-                <Link href="/execution">
+                <Link href="/terminal">
                   <ArrowUpRight className="h-4 w-4" /> Trade
                 </Link>
               </Button>

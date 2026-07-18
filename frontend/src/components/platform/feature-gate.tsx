@@ -21,12 +21,12 @@ export function FeatureGate({
         icon={ShieldOff}
         title={`${label || flag} is disabled`}
         description="This capability is turned off by a production feature flag. Contact an operator to enable it."
-        actionLabel="Operations"
-        actionHref="/ops"
+        actionLabel="Settings"
+        actionHref="/settings"
       />
       <p className="mt-3 text-center text-xs text-[var(--fg-muted)]">
-        <Link href="/dashboard" className="text-[var(--accent)]">
-          Back to dashboard
+        <Link href="/terminal" className="text-[var(--accent)]">
+          Back to Terminal
         </Link>
       </p>
     </div>

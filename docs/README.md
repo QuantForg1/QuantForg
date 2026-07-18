@@ -5,6 +5,7 @@
 - [Architecture](architecture.md)
 - [Architecture Governance Guide](architecture-governance.md)
 - [Architecture Decision Records](adr/README.md)
+- [**Design Bible & Product Governance**](design/README.md)
 - [Engineering standards](engineering/README.md)
 
 ## Product / domain docs

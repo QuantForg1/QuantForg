@@ -97,8 +97,8 @@ export function TerminalEquityChart({
           <AreaChart data={data} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={`eq-${chartId}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.4} />
-                <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.2} />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
@@ -129,11 +129,10 @@ export function TerminalEquityChart({
             <Area
               type="monotone"
               dataKey="equity"
-              stroke="#2dd4bf"
+              stroke="var(--accent)"
               fill={`url(#eq-${chartId})`}
-              strokeWidth={2.25}
-              animationDuration={900}
-              isAnimationActive
+              strokeWidth={1.75}
+              isAnimationActive={false}
             />
             {data.length > 8 ? (
               <Brush

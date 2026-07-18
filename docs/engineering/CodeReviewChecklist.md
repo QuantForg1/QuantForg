@@ -46,7 +46,17 @@ authors should self-check before requesting review.
 ## Docs & release
 
 - [ ] Docs / ADR / CHANGELOG updated as needed.
-- [ ] Feature flags or migrations called out in PR body.
+- [ ] Feature flags or migrations called out in the PR body.
+
+## Frontend / Trading OS (when UI touched)
+
+- [ ] Complies with [Design Bible](../design/README.md) (ADR-0022).
+- [ ] [Component Acceptance](../design/component-acceptance-checklist.md) for new/redesigned components.
+- [ ] [Feature Acceptance](../design/feature-acceptance-checklist.md) for product features.
+- [ ] Real data or empty states — no production mocks / fabricated metrics.
+- [ ] No new primary nav beyond the eight surfaces without ADR.
+- [ ] Counsel / Research / Book do not submit live orders; Terminal remains execution.
+- [ ] Tokens / typography / a11y / performance budgets respected.
 
 ## Reviewer decision
 

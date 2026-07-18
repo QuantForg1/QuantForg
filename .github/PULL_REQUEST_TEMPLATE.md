@@ -26,6 +26,18 @@
 - [ ] No autonomous AI execution (ADR-0015)
 - [ ] Dependencies point inward (ADR-0001)
 
+## Design Bible (required for UI / product UX)
+
+See [Design Bible](../docs/design/README.md) (ADR-0022).
+
+- [ ] N/A — no product UI change
+- [ ] Complies with Design Bible / UX Principles / Tokens / Typography
+- [ ] [Component Acceptance](../docs/design/component-acceptance-checklist.md) completed (or N/A)
+- [ ] [Feature Acceptance](../docs/design/feature-acceptance-checklist.md) completed (or N/A)
+- [ ] Real data or empty states only (no production mocks)
+- [ ] No live order submit outside Terminal
+- [ ] Accessibility + performance budgets considered
+
 ## Checklist
 
 - [ ] Follows [Definition of Done](../docs/engineering/DefinitionOfDone.md)
@@ -43,4 +55,4 @@
 
 ## Screenshots / notes
 
-<!-- Optional -->
+<!-- Optional — required for visual OS changes -->

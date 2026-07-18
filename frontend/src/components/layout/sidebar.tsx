@@ -51,16 +51,18 @@ function NavBody({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <div className="flex h-16 items-center gap-2 border-b border-[var(--border)] px-5">
+    <div className="flex h-14 items-center gap-2.5 border-b border-[var(--border)] px-4">
       <div
-        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] font-bold text-[var(--accent-fg)]"
+        className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--accent-fg)]"
         aria-hidden
       >
-        Q
+        <span className="text-xs font-semibold tracking-tight">QF</span>
       </div>
       <div>
-        <p className="text-sm font-semibold tracking-tight text-[var(--fg)]">QuantForg</p>
-        <p className="text-[11px] text-[var(--fg-muted)]">Enterprise Terminal</p>
+        <p className="text-sm font-semibold tracking-tight text-[var(--fg)]">
+          QuantForg
+        </p>
+        <p className="qf-caption">Trading OS</p>
       </div>
     </div>
   );
@@ -68,7 +70,7 @@ function Brand() {
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)]/80 backdrop-blur-xl lg:flex lg:flex-col">
+    <aside className="hidden w-64 shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] lg:flex lg:flex-col">
       <Brand />
       <NavBody />
     </aside>

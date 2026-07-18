@@ -43,7 +43,8 @@ export default function AiPage() {
           ...m,
           {
             role: "assistant",
-            content: `[mock] Received: “${text}”. Disable NEXT_PUBLIC_MOCK_AI to use the real advisor over /intelligence/analysis.`,
+            content:
+              "Mock AI is disabled for production builds. Set NEXT_PUBLIC_MOCK_AI only in local development.",
           },
         ]);
         return;

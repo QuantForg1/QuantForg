@@ -24,6 +24,8 @@ trading, AI, MetaTrader, strategies, indicators, or execution.
 | Versioned events | [ADR-0009](adr/0009-versioned-domain-events.md) |
 | Analysis never trades | [ADR-0010](adr/0010-analysis-never-trades.md) |
 | Strategy / Risk / MT5 / AI roles | [ADR-0012](adr/0012-strategy-is-plugin.md)–[ADR-0015](adr/0015-ai-is-advisor.md) |
+| Trading OS desks | [ADR-0016](adr/0016-trading-os-information-architecture.md)–[ADR-0021](adr/0021-counsel-os-decision-operating-system.md) |
+| Design Bible & product governance | [ADR-0022](adr/0022-design-bible-and-product-governance.md) |
 
 ## Non-negotiables
 
@@ -34,6 +36,7 @@ trading, AI, MetaTrader, strategies, indicators, or execution.
 5. **Strategies are plugins**; intentions pass **independent risk** before execution.
 6. **UTC everywhere** for instants; **Decimal only** for prices and money.
 7. **ADRs are append-only.** Deprecate or supersede; do not delete history.
+8. **Design Bible is binding** for product UI (ADR-0022). Real data or empty states; Terminal executes.
 
 ## How to change architecture
 
@@ -61,6 +64,7 @@ the governing ADR in the PR instead.
 | Area | Location |
 |---|---|
 | ADRs | [docs/adr/](adr/README.md) |
+| Design Bible | [docs/design/](design/README.md) |
 | Engineering policies | [docs/engineering/](engineering/README.md) |
 | Layer architecture | [docs/architecture.md](architecture.md) |
 | Contributing | [CONTRIBUTING.md](../CONTRIBUTING.md) |
@@ -72,7 +76,8 @@ the governing ADR in the PR instead.
 Governance is enforced by:
 
 - Human review (checklists + CODEOWNERS)
-- CI quality gates (`make check`)
+- Design Bible acceptance checklists on UI/feature PRs
+- CI quality gates (`make check`) + design-governance docs presence
 - Explicit sprint rules (no trading/AI/MT5/execution in analysis sprints)
 - Future optional lint/import-linter rules aligned to ADR-0001
 

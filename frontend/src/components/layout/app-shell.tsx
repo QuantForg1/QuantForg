@@ -11,12 +11,17 @@ import { OfflineBanner } from "@/components/system/offline-banner";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { cn } from "@/lib/utils";
 
+const TERMINAL_PATHS = ["/terminal", "/workspace", "/execution"];
+const OS_FULLBLEED_PATHS = [...TERMINAL_PATHS, "/book", "/research", "/counsel"];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
-  const isWorkspace = pathname === "/workspace" || pathname.startsWith("/workspace/");
+  const isFullBleed = OS_FULLBLEED_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");
@@ -27,13 +32,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key === "1") {
         e.preventDefault();
-        router.push("/dashboard");
+        router.push("/terminal");
       } else if (e.key === "2") {
         e.preventDefault();
-        router.push("/execution");
+        router.push("/book");
       } else if (e.key === "3") {
         e.preventDefault();
-        router.push("/portfolio");
+        router.push("/research");
+      } else if (e.key === "4") {
+        e.preventDefault();
+        router.push("/counsel");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -65,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             id="main-content"
             className={cn(
               "flex-1",
-              isWorkspace
+              isFullBleed
                 ? "overflow-hidden p-0"
                 : "overflow-y-auto p-4 sm:p-6 lg:p-8",
             )}
@@ -75,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div
                 className={cn(
                   "qf-fade-in",
-                  isWorkspace
+                  isFullBleed
                     ? "h-[calc(100dvh-4rem)] w-full max-w-none"
                     : "mx-auto w-full max-w-[1600px]",
                 )}

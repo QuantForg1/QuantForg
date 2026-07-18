@@ -1,59 +1,86 @@
 @import "tailwindcss";
 
+/* QuantForg OS — institutional steel. Calm. No neon. No atmosphere gradients. */
 :root {
-  --bg: #0b1016;
-  --bg-elevated: #0f1620;
-  --surface: #141c27;
-  --surface-2: #1a2433;
-  --surface-3: #223044;
-  --border: #2a3a4f;
-  --border-strong: #3a4f6a;
-  --fg: #e8eef7;
-  --fg-muted: #a8b8cc;
-  --fg-subtle: #8b9cb3;
-  --accent: #2dd4bf;
-  --accent-fg: #042f2e;
-  --accent-soft: rgba(45, 212, 191, 0.12);
-  --success: #34d399;
-  --success-soft: rgba(52, 211, 153, 0.12);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.12);
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.12);
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 12px 32px rgba(0, 0, 0, 0.32);
-  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 18px 44px rgba(0, 0, 0, 0.42);
-  --grid-line: rgba(42, 58, 79, 0.45);
-  --ring: rgba(45, 212, 191, 0.45);
+  --bg: #0a0c0f;
+  --bg-elevated: #10141a;
+  --surface: #161b22;
+  --surface-2: #1c222b;
+  --surface-3: #242b36;
+  --border: #2a3340;
+  --border-strong: #3d4a5c;
+  --fg: #e8ecf1;
+  --fg-muted: #9aa3b2;
+  --fg-subtle: #6b7380;
+  --accent: #6b8cff;
+  --accent-fg: #0a0c0f;
+  --accent-soft: rgba(107, 140, 255, 0.12);
+  --success: #2f9e7a;
+  --success-soft: rgba(47, 158, 122, 0.12);
+  --warning: #c9a227;
+  --warning-soft: rgba(201, 162, 39, 0.12);
+  --danger: #d45d5d;
+  --danger-soft: rgba(212, 93, 93, 0.12);
+  --buy: #2f9e7a;
+  --sell: #d45d5d;
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --grid-line: transparent;
+  --ring: rgba(107, 140, 255, 0.45);
+
+  /* Type scale (px) — only use these */
+  --text-display: 2.5rem;
+  --text-title: 1.75rem;
+  --text-heading: 1.25rem;
+  --text-body: 0.875rem;
+  --text-label: 0.75rem;
+  --text-caption: 0.6875rem;
+  --text-num-lg: 1.5rem;
+  --text-num: 0.8125rem;
+
+  --leading-display: 1.2;
+  --leading-title: 1.25;
+  --leading-heading: 1.35;
+  --leading-body: 1.5;
+  --leading-label: 1.35;
+  --leading-caption: 1.4;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  --ease-os: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-os: 200ms;
 }
 
 .light {
-  --bg: #f4f7fb;
+  --bg: #f7f8fa;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #eef3f9;
-  --surface-3: #e2eaf4;
-  --border: #d5e0ec;
-  --border-strong: #b8c9dc;
-  --fg: #0f172a;
-  --fg-muted: #475569;
-  --fg-subtle: #64748b;
-  --accent: #0f766e;
-  --accent-fg: #ecfeff;
-  --accent-soft: rgba(15, 118, 110, 0.1);
-  --success: #059669;
-  --success-soft: rgba(5, 150, 105, 0.1);
-  --warning: #d97706;
-  --warning-soft: rgba(217, 119, 6, 0.1);
-  --danger: #dc2626;
-  --danger-soft: rgba(220, 38, 38, 0.1);
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04),
-    0 12px 28px rgba(15, 23, 42, 0.06);
-  --shadow-card-hover: 0 2px 4px rgba(15, 23, 42, 0.06),
-    0 16px 36px rgba(15, 23, 42, 0.1);
-  --grid-line: rgba(213, 224, 236, 0.8);
-  --ring: rgba(15, 118, 110, 0.4);
+  --surface-2: #f0f2f5;
+  --surface-3: #e6e9ef;
+  --border: #d8dde6;
+  --border-strong: #b8c0ce;
+  --fg: #0f1419;
+  --fg-muted: #5c6570;
+  --fg-subtle: #8a93a0;
+  --accent: #3d5fd9;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(61, 95, 217, 0.1);
+  --success: #1f7a5c;
+  --success-soft: rgba(31, 122, 92, 0.1);
+  --warning: #a67c00;
+  --warning-soft: rgba(166, 124, 0, 0.1);
+  --danger: #c44a4a;
+  --danger-soft: rgba(196, 74, 74, 0.1);
+  --buy: #1f7a5c;
+  --sell: #c44a4a;
+  --ring: rgba(61, 95, 217, 0.4);
 }
 
 @theme inline {
@@ -78,13 +105,8 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans), system-ui, sans-serif;
-  background-image:
-    radial-gradient(1200px 600px at 10% -10%, rgba(45, 212, 191, 0.08), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, rgba(56, 189, 248, 0.05), transparent 50%),
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: auto, auto, 48px 48px, 48px 48px;
-  background-attachment: scroll;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -101,13 +123,57 @@ body {
   }
 
   ::selection {
-    background: rgba(45, 212, 191, 0.28);
+    background: rgba(107, 140, 255, 0.28);
+  }
+
+  h1,
+  .qf-title {
+    font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+    font-size: var(--text-title);
+    line-height: var(--leading-title);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  h2,
+  .qf-heading {
+    font-size: var(--text-heading);
+    line-height: var(--leading-heading);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  .qf-label {
+    font-size: var(--text-label);
+    line-height: var(--leading-label);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+  }
+
+  .qf-caption {
+    font-size: var(--text-caption);
+    line-height: var(--leading-caption);
+    color: var(--fg-subtle);
   }
 }
 
-.tabular {
+.tabular,
+.qf-num {
   font-variant-numeric: tabular-nums;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-num);
+  letter-spacing: -0.01em;
+}
+
+.qf-num-lg {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-num-lg);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 500;
 }
 
 .sr-only {
@@ -119,104 +185,86 @@ body {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
-  border-width: 0;
+  border: 0;
 }
 
 .qf-skip-link {
   position: absolute;
-  left: 1rem;
-  top: 1rem;
+  left: -9999px;
   z-index: 100;
-  transform: translateY(-200%);
-  border-radius: 0.375rem;
+  padding: 0.5rem 1rem;
   background: var(--accent);
   color: var(--accent-fg);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-decoration: none;
 }
 
-.qf-skip-link:focus,
-.qf-skip-link:focus-visible {
-  transform: translateY(0);
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+.qf-skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+}
+
+.qf-fade-in {
+  animation: qf-fade-in var(--duration-os) var(--ease-os);
 }
 
 @keyframes qf-fade-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
-}
-
-@keyframes qf-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-@keyframes qf-pulse-soft {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
-  }
-}
-
-.qf-fade-in {
-  animation: qf-fade-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .qf-shimmer {
   background: linear-gradient(
     90deg,
     var(--surface-2) 0%,
-    var(--surface-3) 45%,
-    var(--surface-2) 90%
+    var(--surface-3) 50%,
+    var(--surface-2) 100%
   );
   background-size: 200% 100%;
-  animation: qf-shimmer 1.4s ease-in-out infinite;
+  animation: qf-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes qf-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .qf-status-dot {
-  animation: qf-pulse-soft 2s ease-in-out infinite;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--fg-subtle);
+}
+
+.qf-status-dot[data-state="ok"] {
+  background: var(--success);
+}
+
+.qf-status-dot[data-state="warn"] {
+  background: var(--warning);
+}
+
+.qf-status-dot[data-state="err"] {
+  background: var(--danger);
 }
 
 .qf-card-interactive {
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease,
-    background-color 180ms ease;
+  transition: border-color var(--duration-os) var(--ease-os);
 }
 
 .qf-card-interactive:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-1px);
+  border-color: var(--border-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .qf-fade-in,
-  .qf-shimmer,
-  .qf-status-dot,
-  .qf-card-interactive {
+  .qf-shimmer {
     animation: none;
-    transition: none;
-  }
-
-  .qf-card-interactive:hover {
-    transform: none;
   }
 }

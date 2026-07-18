@@ -9,8 +9,10 @@ and must follow ADRs even when not yet implemented.
 
 1. Read [docs/architecture-governance.md](docs/architecture-governance.md).
 2. Skim binding ADRs in [docs/adr/](docs/adr/README.md) — especially
-   ADR-0001, ADR-0010, ADR-0014, and ADR-0015.
-3. Follow [docs/engineering/CodingStandards.md](docs/engineering/CodingStandards.md).
+   ADR-0001, ADR-0010, ADR-0014, ADR-0015, and ADR-0022.
+3. For product UI: read the [Design Bible](docs/design/README.md) and complete
+   acceptance checklists before introducing components or features.
+4. Follow [docs/engineering/CodingStandards.md](docs/engineering/CodingStandards.md).
 
 ## Development setup
 

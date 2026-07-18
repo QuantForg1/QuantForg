@@ -1,0 +1,45 @@
+---
+description: QuantForg OS P0 baseline — preserve production, releasable gate
+alwaysApply: true
+---
+
+# QuantForg Trading OS — baseline discipline
+
+P0 is the baseline. `tsc --noEmit` must stay clean.
+
+## Priority order (never invert)
+
+1. Preserve production functionality
+2. Preserve MT5 execution
+3. Preserve backend contracts
+4. Preserve authentication
+5. Remove mock/demo UI (real data or empty states)
+6. Collapse duplicate workflows
+7. Eight primary surfaces only (Terminal, Book, Research, Counsel, Journal, Broker, Inbox, Settings)
+8. Institutional design system (IBM Plex Sans/Mono, steel tokens; no neon/atmosphere gradients)
+9. Terminal is flagship
+10. Continuously releasable repository
+
+## Do not touch unless explicitly asked
+
+Backend, APIs, database, auth, MT5 gateway, Cloudflare, Railway, order execution, websockets, TradingView integration, Supabase protocol.
+
+## Quality gate (before every commit)
+
+Run and fix until green:
+
+- TypeScript (`tsc --noEmit`) — zero errors; never weaken types
+- ESLint
+- Production build
+- Unit tests
+- GitHub Actions must be expected green
+
+Never introduce new TypeScript errors. Never reduce type safety.
+Every redesign phase must finish production-ready before the next begins.
+
+P1–P4 flagship desks: Terminal, Book, Research, Counsel.
+P4.5 Design Bible is binding (`docs/design/`, ADR-0022).
+Do not modify `components/terminal/`, `book/`, `research/`, or `counsel/` unless explicitly asked.
+Future features must pass Design Bible + acceptance checklists.
+
+See `docs/adr/0016`–`0022` and `docs/design/README.md`.

@@ -1,40 +1,22 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
-  BarChart3,
   Bell,
-  Bot,
+  BookOpen,
   Briefcase,
   Building2,
-  Cloud,
-  CreditCard,
-  FlaskConical,
-  Gauge,
-  History,
-  LayoutDashboard,
-  Layers3,
   LayoutTemplate,
-  LifeBuoy,
-  LineChart,
-  ListOrdered,
-  Network,
-  Newspaper,
+  NotebookPen,
   Scale,
   Settings,
-  Shield,
-  Rocket,
-  Sparkles,
-  Target,
-  UserRound,
-  Wallet,
-  Wand2,
-  Waypoints,
+  FlaskConical,
 } from "lucide-react";
 
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Short job description for command palette */
+  hint?: string;
 };
 
 export type NavGroup = {
@@ -42,71 +24,74 @@ export type NavGroup = {
   items: NavItem[];
 };
 
+/**
+ * QuantForg OS — maximum eight primary surfaces.
+ * Everything else is drawer, modal, redirect, or admin-only.
+ */
 export const appNav: NavGroup[] = [
   {
-    title: "Overview",
+    title: "Desks",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/quant-ai", label: "Quant AI", icon: Bot },
-      { href: "/quant-studio", label: "Quant Studio", icon: Wand2 },
-      { href: "/research-lab", label: "Research Lab", icon: FlaskConical },
-      { href: "/decision-engine", label: "Decision Engine", icon: Scale },
-      { href: "/ecosystem", label: "Ecosystem", icon: Network },
-      { href: "/intelligence", label: "Market Intelligence", icon: Sparkles },
-      { href: "/portfolio", label: "Portfolio", icon: Briefcase },
-      { href: "/performance", label: "Performance", icon: LineChart },
-      { href: "/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/wallet", label: "Wallet", icon: Wallet },
+      {
+        href: "/terminal",
+        label: "Terminal",
+        icon: LayoutTemplate,
+        hint: "Trade — chart, ticket, blotter",
+      },
+      {
+        href: "/book",
+        label: "Book",
+        icon: Briefcase,
+        hint: "Portfolio, risk, P&L",
+      },
+      {
+        href: "/research",
+        label: "Research",
+        icon: FlaskConical,
+        hint: "Build, test, validate",
+      },
+      {
+        href: "/counsel",
+        label: "Counsel",
+        icon: Scale,
+        hint: "Decision intelligence",
+      },
+      {
+        href: "/journal",
+        label: "Journal",
+        icon: NotebookPen,
+        hint: "Session memory",
+      },
+      {
+        href: "/broker",
+        label: "Broker",
+        icon: Building2,
+        hint: "Session attach & connect",
+      },
     ],
   },
   {
-    title: "Trading",
+    title: "System",
     items: [
-      { href: "/workspace", label: "Trading Terminal", icon: LayoutTemplate },
-      { href: "/execution", label: "Execution Desk", icon: Target },
-      { href: "/execution-intel", label: "Execution Intelligence", icon: Activity },
-      { href: "/orders", label: "Orders", icon: ListOrdered },
-      { href: "/positions", label: "Positions", icon: Layers3 },
-      { href: "/history", label: "Trade History", icon: History },
-      { href: "/paper", label: "Paper Trading", icon: Newspaper },
-    ],
-  },
-  {
-    title: "Research",
-    items: [
-      { href: "/strategy", label: "Strategy Builder", icon: Waypoints },
-      { href: "/backtesting", label: "Backtesting", icon: FlaskConical },
-      { href: "/walkforward", label: "Walk Forward", icon: Activity },
-      { href: "/risk", label: "Risk Management", icon: Shield },
-      { href: "/risk-lab", label: "Risk Laboratory", icon: FlaskConical },
-      { href: "/ai", label: "AI Assistant", icon: Bot },
-    ],
-  },
-  {
-    title: "Connectivity",
-    items: [
-      { href: "/broker", label: "Broker Workspace", icon: Building2 },
-      { href: "/ops", label: "Operations", icon: Gauge },
-      { href: "/cloud-ops", label: "Cloud Operations", icon: Cloud },
-    ],
-  },
-  {
-    title: "Account",
-    items: [
-      { href: "/get-started", label: "Get Started", icon: Rocket },
-      { href: "/whats-new", label: "What's New", icon: Newspaper },
-      { href: "/notifications", label: "Notifications", icon: Bell },
-      { href: "/organizations", label: "Organizations", icon: CreditCard },
-      { href: "/profile", label: "Profile", icon: UserRound },
-      { href: "/settings", label: "Settings", icon: Settings },
-      { href: "/support", label: "Support", icon: LifeBuoy },
+      {
+        href: "/notifications",
+        label: "Inbox",
+        icon: Bell,
+        hint: "Alerts",
+      },
+      {
+        href: "/settings",
+        label: "Settings",
+        icon: Settings,
+        hint: "Profile, org, prefs",
+      },
     ],
   },
 ];
 
 export const commandItems: NavItem[] = [
   ...appNav.flatMap((g) => g.items),
-  { href: "/dashboard", label: "Risk score", icon: Gauge },
-  { href: "/performance", label: "Drawdown", icon: Activity },
-  { href: "/ai", label: "Explain strategy", icon: Sparkles },
+  { href: "/orders", label: "Orders blotter", icon: BookOpen, hint: "Opens in Terminal" },
+  { href: "/positions", label: "Positions", icon: Briefcase, hint: "Opens in Terminal" },
+  { href: "/support", label: "Support", icon: Settings },
 ];

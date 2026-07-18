@@ -28,7 +28,7 @@ function VerifyForm() {
           if (result && typeof result === "object" && "access_token" in result) {
             saveSession(result as AuthSession);
             toast.success("Email verified");
-            router.replace("/dashboard");
+            router.replace("/terminal");
             return;
           }
           toast.success("Email verified — sign in to continue");

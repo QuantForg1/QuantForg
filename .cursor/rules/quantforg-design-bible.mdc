@@ -1,0 +1,28 @@
+---
+description: QuantForg Design Bible — binding product/UI governance
+alwaysApply: true
+---
+
+# Design Bible (ADR-0022)
+
+Before adding or redesigning product UI:
+
+1. Read `docs/design/README.md`
+2. Obey UX Principles, Tokens, Typography, Accessibility, Performance Budgets
+3. Complete Component Acceptance for new components
+4. Complete Feature Acceptance for product features
+
+## Hard rules
+
+- Workflows over pages; eight primary surfaces max
+- Terminal is the only live execution surface
+- Real data or elegant empty states — never fabricate
+- IBM Plex Sans/Mono; steel tokens; no neon/atmosphere gradients
+- Motion 180–220ms; keyboard-first; OS desks zero page-scroll
+- Do not casually modify `components/terminal|book|research|counsel/`
+
+## Quality gate
+
+`tsc` · ESLint · production build · tests · CI green. Never weaken types.
+
+PRs must reference Design Bible compliance when touching frontend product UX.

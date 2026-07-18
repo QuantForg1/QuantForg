@@ -12,6 +12,7 @@ import { useTradingSession } from "@/providers/trading-session-provider";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { num } from "@/lib/desk";
 import type { RefObject } from "react";
+import { ExecutionReadiness } from "@/components/os/execution-readiness";
 
 export const WorkspaceRightRail = memo(function WorkspaceRightRail({
   symbol,
@@ -36,10 +37,15 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
   const profit = num(session.profit);
   const marginLevel = num(session.marginLevel);
   const openPnl = session.positions.reduce((s, p) => s + num(p.profit, 0), 0);
+  const hasQuote =
+    typeof bid === "number" &&
+    typeof ask === "number" &&
+    Number.isFinite(bid) &&
+    Number.isFinite(ask);
 
   return (
     <aside
-      className="flex h-full min-h-0 flex-col border-l border-[var(--border)] bg-[var(--bg-elevated)]/40"
+      className="flex h-full min-h-0 flex-col border-l border-[var(--border)] bg-[var(--bg-elevated)]"
       aria-label="Order & risk rail"
     >
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -55,11 +61,41 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
           />
         </div>
 
+        <div className="border-b border-[var(--border)] p-3">
+          <ExecutionReadiness
+            checks={[
+              {
+                id: "session",
+                label: "Session attached",
+                ok: session.connected,
+              },
+              {
+                id: "quote",
+                label: "Live quote",
+                ok: connected ? hasQuote : null,
+              },
+              {
+                id: "margin",
+                label: "Free margin",
+                ok: session.connected
+                  ? Number.isFinite(free) && free > 0
+                  : null,
+              },
+              {
+                id: "level",
+                label: "Margin level",
+                ok: session.connected
+                  ? !Number.isFinite(marginLevel) || marginLevel === 0 || marginLevel >= 100
+                  : null,
+                detail: Number.isFinite(marginLevel) ? `${marginLevel}` : undefined,
+              },
+            ]}
+          />
+        </div>
+
         <section className="border-b border-[var(--border)] p-3" aria-label="Account">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-              Account
-            </h2>
+            <h2 className="qf-label text-[var(--fg-subtle)]">Account</h2>
             <Badge tone={session.connected ? "success" : "warning"} className="text-[10px]">
               {session.loginStatus}
             </Badge>
@@ -127,7 +163,7 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
             </div>
           </dl>
           <Button size="sm" variant="ghost" className="mt-2 h-7 px-2 text-[10px]" asChild>
-            <Link href="/risk">Full risk desk</Link>
+            <Link href="/book">Open Book</Link>
           </Button>
         </section>
       </div>

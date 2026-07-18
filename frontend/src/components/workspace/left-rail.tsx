@@ -59,6 +59,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
   preset,
   onPresetChange,
   latencyMs,
+  hideStatusChrome = false,
 }: {
   connected: boolean;
   selected: string;
@@ -66,6 +67,8 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
   preset: WorkspacePresetId;
   onPresetChange: (p: WorkspacePresetId) => void;
   latencyMs?: string;
+  /** Terminal SessionBar already shows live status — hide duplicates. */
+  hideStatusChrome?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -156,8 +159,6 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
     saveWatchlists(next);
   };
 
-  const brokerName = "MT5";
-
   return (
     <aside className="flex h-full min-h-0 flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)]/60" aria-label="Market watch">
       <div className="space-y-2 border-b border-[var(--border)] p-3">
@@ -165,14 +166,16 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
             Market Watch
           </p>
-          <div className="flex items-center gap-1.5">
-            {latencyMs && latencyMs !== "—" ? (
-              <span className="text-[10px] tabular text-[var(--fg-subtle)]">{latencyMs} ms</span>
-            ) : null}
-            <Badge tone={connected ? "success" : "warning"} className="text-[10px]">
-              {connected ? "Live" : "Offline"}
-            </Badge>
-          </div>
+          {!hideStatusChrome ? (
+            <div className="flex items-center gap-1.5">
+              {latencyMs && latencyMs !== "—" ? (
+                <span className="text-[10px] tabular text-[var(--fg-subtle)]">{latencyMs} ms</span>
+              ) : null}
+              <Badge tone={connected ? "success" : "warning"} className="text-[10px]">
+                {connected ? "Live" : "Offline"}
+              </Badge>
+            </div>
+          ) : null}
         </div>
         <label className="block space-y-1">
           <span className="text-[11px] text-[var(--fg-subtle)]">Layout preset</span>
@@ -188,12 +191,14 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
           </select>
         </label>
         <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--fg-muted)]">
-          <span>{brokerName} · live session</span>
-          <Button size="sm" variant="secondary" className="h-7 px-2" asChild>
-            <Link href="/broker" aria-label="Manage broker connection">
-              <Cable className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
+          <span>Symbols</span>
+          {!hideStatusChrome ? (
+            <Button size="sm" variant="secondary" className="h-7 px-2" asChild>
+              <Link href="/broker" aria-label="Manage broker connection">
+                <Cable className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : null}
         </div>
         {connected && selected ? (
           <div className="grid grid-cols-3 gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)]/80 px-2 py-1.5 text-[10px]">

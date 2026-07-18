@@ -16,4 +16,5 @@ Production engineering policies for QuantForg contributors and reviewers.
 | [SecurityPolicy.md](SecurityPolicy.md) | Vulnerability reporting and secure build |
 
 Related: [Architecture Governance Guide](../architecture-governance.md),
+[Design Bible](../design/README.md),
 [ADR index](../adr/README.md).

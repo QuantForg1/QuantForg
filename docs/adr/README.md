@@ -36,6 +36,13 @@ Every ADR includes:
 | [0013](0013-risk-engine-independent.md) | Risk Engine Independent | Accepted |
 | [0014](0014-mt5-is-adapter.md) | MT5 Is Adapter | Accepted |
 | [0015](0015-ai-is-advisor.md) | AI Is Advisor | Accepted |
+| [0016](0016-trading-os-information-architecture.md) | Trading OS Information Architecture | Accepted |
+| [0017](0017-continuously-releasable-frontend-baseline.md) | Continuously Releasable Frontend Baseline | Accepted |
+| [0018](0018-terminal-os-flagship-shell.md) | Terminal OS Flagship Shell | Accepted |
+| [0019](0019-book-os-portfolio-operating-system.md) | Book OS Portfolio Operating System | Accepted |
+| [0020](0020-research-os-workflow-shell.md) | Research OS Workflow Shell | Accepted |
+| [0021](0021-counsel-os-decision-operating-system.md) | Counsel OS Decision Operating System | Accepted |
+| [0022](0022-design-bible-and-product-governance.md) | Design Bible and Product Governance | Accepted |
 
 ## Process
 

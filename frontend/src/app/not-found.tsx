@@ -8,7 +8,7 @@ export default function NotFound() {
         The route you requested does not exist in QuantForg.
       </p>
       <Link
-        href="/dashboard"
+        href="/terminal"
         className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--accent-fg)]"
       >
         Back to dashboard

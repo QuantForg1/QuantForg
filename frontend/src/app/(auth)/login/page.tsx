@@ -36,7 +36,7 @@ export default function LoginPage() {
           try {
             await login(values.email, values.password);
             toast.success("Signed in");
-            router.replace("/dashboard");
+            router.replace("/terminal");
           } catch (e) {
             if (e instanceof ApiError && e.code === "email_not_verified") {
               toast.error("Verify your email before signing in.");

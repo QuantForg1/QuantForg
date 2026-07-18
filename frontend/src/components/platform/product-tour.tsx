@@ -17,29 +17,29 @@ import {
 
 const STEPS = [
   {
-    title: "Desk overview",
-    body: "Dashboard and Intelligence summarize markets. Trading tools live under Workspace, Execution, and Paper.",
-    href: "/dashboard",
+    title: "Terminal",
+    body: "Trade here. Chart, ticket, and blotter — keyboard first. ⌘1 opens Terminal anytime.",
+    href: "/terminal",
   },
   {
-    title: "Paper trading first",
-    body: "Practice fills on /paper before connecting a live MT5 account. Live trading stays gated by EXECUTION_ENABLED.",
-    href: "/paper",
+    title: "Book",
+    body: "Portfolio, risk, and P&L from live session data. Empty when disconnected — never fabricated.",
+    href: "/book",
   },
   {
-    title: "Connect Weltrade",
-    body: "Open /broker. The browser never talks to MT5 directly — Railway reaches your Windows gateway.",
+    title: "Research & Counsel",
+    body: "Build and validate strategies in Research. Counsel is decision intelligence — advisory only, never auto-trades.",
+    href: "/research",
+  },
+  {
+    title: "Broker",
+    body: "Attach your MT5 session. The browser never talks to the terminal directly.",
     href: "/broker",
   },
   {
-    title: "Research & risk",
-    body: "Strategy Builder, Risk Lab, and Execution Intelligence are analytics only — they never auto-trade.",
-    href: "/risk-lab",
-  },
-  {
-    title: "Send feedback",
-    body: "Use the floating feedback control anytime. Beta operators triage bugs and feature requests weekly.",
-    href: "/support#feedback",
+    title: "Journal",
+    body: "Session memory and post-trade notes. Use Inbox for alerts.",
+    href: "/journal",
   },
 ] as const;
 
@@ -48,6 +48,10 @@ type ProductTourProps = {
   onClose?: () => void;
 };
 
+/**
+ * Optional orientation. Does not auto-open after first login —
+ * only when forceOpen (Settings) or if never dismissed and explicitly reopened.
+ */
 export function ProductTour({ forceOpen = false, onClose }: ProductTourProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -58,7 +62,8 @@ export function ProductTour({ forceOpen = false, onClose }: ProductTourProps) {
       setStep(0);
       return;
     }
-    if (!isTourDismissed()) setOpen(true);
+    // Do not interrupt the trading day after first login.
+    if (!isTourDismissed()) dismissTour();
   }, [forceOpen]);
 
   function close(dismiss: boolean) {
@@ -78,66 +83,64 @@ export function ProductTour({ forceOpen = false, onClose }: ProductTourProps) {
     >
       <DialogContent className="max-w-md">
         <DialogTitle>
-          Product tour · {step + 1}/{STEPS.length}
-        </DialogTitle>
-        <p className="mt-1 text-sm font-medium text-[var(--fg)]">
           {current.title}
-        </p>
+          <span className="ml-2 text-xs font-normal text-[var(--fg-muted)]">
+            {step + 1}/{STEPS.length}
+          </span>
+        </DialogTitle>
         <p className="mt-2 text-sm text-[var(--fg-muted)]">{current.body}</p>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Button size="sm" variant="secondary" asChild>
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          <Button asChild variant="secondary" size="sm">
             <Link href={current.href} onClick={() => close(false)}>
-              Open page
+              Open
             </Link>
           </Button>
-          <div className="flex gap-2">
+          {step < STEPS.length - 1 ? (
             <Button
               size="sm"
-              variant="ghost"
-              disabled={step === 0}
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              onClick={() => {
+                setStep((s) => s + 1);
+              }}
             >
-              Back
+              Next
             </Button>
-            {step < STEPS.length - 1 ? (
-              <Button size="sm" onClick={() => setStep((s) => s + 1)}>
-                Next
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                onClick={() => {
-                  setChecklistItem("tour", true);
-                  close(true);
-                }}
-              >
-                Finish
-              </Button>
-            )}
-          </div>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => {
+                setChecklistItem("tour", true);
+                close(true);
+              }}
+            >
+              Done
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => close(true)}>
+            Skip
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
+export { reopenTour };
+
 export function ProductTourTrigger() {
-  const [force, setForce] = useState(false);
+  const [open, setOpen] = useState(false);
   return (
     <>
       <Button
-        size="sm"
         variant="secondary"
+        size="sm"
         onClick={() => {
           reopenTour();
-          setForce(true);
+          setOpen(true);
         }}
       >
-        Restart tour
+        Orient me
       </Button>
-      {force ? (
-        <ProductTour forceOpen onClose={() => setForce(false)} />
-      ) : null}
+      {open ? <ProductTour forceOpen onClose={() => setOpen(false)} /> : null}
     </>
   );
 }

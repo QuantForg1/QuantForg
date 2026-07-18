@@ -80,7 +80,7 @@ export default function GlobalError({
             <button
               type="button"
               onClick={() => {
-                window.location.href = "/dashboard";
+                window.location.href = "/terminal";
               }}
               style={{
                 border: "1px solid #2a3a4f",

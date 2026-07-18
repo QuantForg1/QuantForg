@@ -34,9 +34,19 @@ A change is **done** only when all applicable criteria below are met.
 - [ ] Migrations (if any) are forward-only and reviewed.
 - [ ] Observability: logs/metrics/errors remain actionable.
 
+## Frontend / Trading OS changes
+
+- [ ] Follows [Design Bible](../design/README.md) (ADR-0022).
+- [ ] [Feature Acceptance](../design/feature-acceptance-checklist.md) completed when shipping product UX.
+- [ ] New components passed [Component Acceptance](../design/component-acceptance-checklist.md).
+- [ ] `frontend` typecheck / lint / build expectations met (ADR-0017).
+- [ ] No fabricated trading data; empty states when unavailable.
+- [ ] Locked OS trees (`terminal/`, `book/`, `research/`, `counsel/`) only changed with explicit intent.
+
 ## Explicitly not done if
 
 - Trading, MT5, AI execution, or strategy logic appears in analysis PRs
   without an accepted ADR exception.
 - Tests were deleted to make CI green.
 - Review checklist items were unchecked without justification.
+- UI ships neon/gradient debt, mock balances, or execution outside Terminal.

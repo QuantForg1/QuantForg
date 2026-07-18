@@ -46,7 +46,7 @@ export default function RegisterPage() {
               return;
             }
             toast.success("Account created");
-            router.replace("/dashboard");
+            router.replace("/terminal");
           } catch (e) {
             if (e instanceof ApiError && e.code === "auth_rate_limited") {
               toast.error("Too many attempts. Please wait a few minutes and try again.");

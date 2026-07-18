@@ -29,6 +29,14 @@ env:
   DEBUG: "true"
 
 jobs:
+  design-governance:
+    name: Design Governance Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify Design Bible documents (ADR-0022)
+        run: bash scripts/check-design-governance.sh
+
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
