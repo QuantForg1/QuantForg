@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, cast
@@ -141,7 +142,10 @@ class QuantStudioService:
             if graph
             else {"status": "skipped", "assumptions": {}}
         )
-        merged = dict(compiled.get("assumptions") or {})
+        raw_assumptions = compiled.get("assumptions")
+        merged: dict[str, Any] = (
+            dict(raw_assumptions) if isinstance(raw_assumptions, Mapping) else {}
+        )
         if assumptions:
             merged.update({k: str(v) for k, v in assumptions.items()})
 

@@ -154,8 +154,7 @@ class PostgresPaperPortfolioRepository:
     async def save(self, portfolio: PaperPortfolio) -> PaperPortfolio:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO paper_portfolios (
                     id, user_id, initial_balance, balance, equity, floating_pnl,
                     realized_pnl, margin, peak_equity, max_drawdown_pct, snapshot
@@ -175,8 +174,7 @@ class PostgresPaperPortfolioRepository:
                     max_drawdown_pct = EXCLUDED.max_drawdown_pct,
                     snapshot = EXCLUDED.snapshot,
                     updated_at = timezone('utc', now())
-                """
-            ),
+                """),
             {
                 "id": str(uuid4()),
                 "user_id": str(portfolio.user_id),
@@ -201,8 +199,7 @@ class PostgresPaperOrderRepository:
     async def add(self, order: PaperOrder) -> PaperOrder:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO paper_orders (
                     id, user_id, symbol, side, order_type, volume, status,
                     requested_price, fill_price, filled_volume, stop_loss,
@@ -235,8 +232,7 @@ class PostgresPaperOrderRepository:
                     client_order_id = EXCLUDED.client_order_id,
                     submitted_at = EXCLUDED.submitted_at,
                     filled_at = EXCLUDED.filled_at
-                """
-            ),
+                """),
             {
                 "id": str(order.id),
                 "user_id": str(order.user_id),
@@ -278,14 +274,12 @@ class PostgresPaperOrderRepository:
     ) -> list[PaperOrder]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM paper_orders
                 WHERE user_id = :user_id
                 ORDER BY submitted_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_order_from_row(r) for r in result.mappings().all()]
@@ -293,13 +287,11 @@ class PostgresPaperOrderRepository:
     async def list_pending(self, user_id: UUID) -> list[PaperOrder]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM paper_orders
                 WHERE user_id = :user_id AND status = :status
                 ORDER BY submitted_at ASC
-                """
-            ),
+                """),
             {
                 "user_id": str(user_id),
                 "status": PaperOrderStatus.ACCEPTED.value,
@@ -318,8 +310,7 @@ class PostgresPaperPositionRepository:
     async def save(self, position: PaperPosition) -> PaperPosition:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO paper_positions (
                     id, user_id, symbol, side, status, volume, remaining_volume,
                     entry_price, current_price, stop_loss, take_profit,
@@ -349,8 +340,7 @@ class PostgresPaperPositionRepository:
                     opened_at = EXCLUDED.opened_at,
                     closed_at = EXCLUDED.closed_at,
                     updated_at = EXCLUDED.updated_at
-                """
-            ),
+                """),
             {
                 "id": str(position.id),
                 "user_id": str(position.user_id),
@@ -393,14 +383,12 @@ class PostgresPaperPositionRepository:
     async def list_open(self, user_id: UUID) -> list[PaperPosition]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM paper_positions
                 WHERE user_id = :user_id
                   AND status IN ('opened', 'partially_closed')
                 ORDER BY opened_at DESC
-                """
-            ),
+                """),
             {"user_id": str(user_id)},
         )
         return [_position_from_row(r) for r in result.mappings().all()]
@@ -410,14 +398,12 @@ class PostgresPaperPositionRepository:
     ) -> list[PaperPosition]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM paper_positions
                 WHERE user_id = :user_id
                 ORDER BY opened_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_position_from_row(r) for r in result.mappings().all()]
@@ -430,8 +416,7 @@ class PostgresPaperTradeRepository:
     async def add(self, trade: PaperTrade) -> PaperTrade:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO paper_trades (
                     id, user_id, symbol, side, volume, entry_price, exit_price,
                     pnl, commission, spread, slippage, position_id, order_id,
@@ -456,8 +441,7 @@ class PostgresPaperTradeRepository:
                     order_id = EXCLUDED.order_id,
                     opened_at = EXCLUDED.opened_at,
                     closed_at = EXCLUDED.closed_at
-                """
-            ),
+                """),
             {
                 "id": str(trade.id),
                 "user_id": str(trade.user_id),
@@ -484,14 +468,12 @@ class PostgresPaperTradeRepository:
     ) -> list[PaperTrade]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM paper_trades
                 WHERE user_id = :user_id
                 ORDER BY closed_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_trade_from_row(r) for r in result.mappings().all()]
@@ -504,16 +486,14 @@ class PostgresPaperPerformanceRepository:
     async def save(self, user_id: UUID, payload: dict[str, object]) -> None:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO paper_performance (id, user_id, payload)
                 VALUES (:id, :user_id, CAST(:payload AS jsonb))
                 ON CONFLICT (user_id) DO UPDATE SET
                     payload = EXCLUDED.payload,
                     recorded_at = timezone('utc', now()),
                     updated_at = timezone('utc', now())
-                """
-            ),
+                """),
             {
                 "id": str(uuid4()),
                 "user_id": str(user_id),

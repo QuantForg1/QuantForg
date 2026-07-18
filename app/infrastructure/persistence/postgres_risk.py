@@ -58,8 +58,7 @@ class PostgresRiskAssessmentRepository:
     async def add(self, assessment: RiskAssessment) -> RiskAssessment:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO risk_assessments (
                     id, user_id, request_id, symbol, side, decision, risk_score,
                     risk_band, approved_lots, requested_lots, sizing_method,
@@ -91,8 +90,7 @@ class PostgresRiskAssessmentRepository:
                     checks = EXCLUDED.checks,
                     request_snapshot = EXCLUDED.request_snapshot,
                     assessed_at = EXCLUDED.assessed_at
-                """
-            ),
+                """),
             {
                 "id": str(assessment.id),
                 "user_id": str(assessment.user_id),
@@ -122,14 +120,12 @@ class PostgresRiskAssessmentRepository:
     ) -> RiskAssessment | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM risk_assessments
                 WHERE user_id = :user_id AND request_id = :request_id
                 ORDER BY assessed_at DESC
                 LIMIT 1
-                """
-            ),
+                """),
             {"user_id": str(user_id), "request_id": request_id.strip()},
         )
         row = result.mappings().first()
@@ -140,14 +136,12 @@ class PostgresRiskAssessmentRepository:
     ) -> list[RiskAssessment]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM risk_assessments
                 WHERE user_id = :user_id
                 ORDER BY assessed_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_assessment_from_row(r) for r in result.mappings().all()]
