@@ -175,9 +175,7 @@ class BrokerConnectivityService:
     def diagnostics(self, platform: str | None = None) -> dict[str, Any]:
         """Latency, heartbeat, reconnect, failures, capability checks."""
         platforms = (
-            [platform.strip().lower()]
-            if platform
-            else sorted(self._adapters.keys())
+            [platform.strip().lower()] if platform else sorted(self._adapters.keys())
         )
         adapters_out: list[dict[str, Any]] = []
         for code in platforms:
@@ -227,9 +225,7 @@ class BrokerConnectivityService:
             for state in states.values():
                 reconnect_rows.append(
                     {
-                        "connection_id": str(
-                            getattr(state, "connection_id", "")
-                        ),
+                        "connection_id": str(getattr(state, "connection_id", "")),
                         "attempts": getattr(state, "attempts", 0),
                         "last_attempt_at": (
                             state.last_attempt_at.isoformat()
@@ -349,11 +345,7 @@ class BrokerConnectivityService:
     def certification_history(
         self, *, broker_slug: str | None = None, limit: int = 100
     ) -> dict[str, Any]:
-        return {
-            "items": self._cert_store.history(
-                broker_slug=broker_slug, limit=limit
-            )
-        }
+        return {"items": self._cert_store.history(broker_slug=broker_slug, limit=limit)}
 
     def certification_dashboard(self) -> dict[str, Any]:
         return certification_dashboard(self._cert_store)

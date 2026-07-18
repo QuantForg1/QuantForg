@@ -23,24 +23,18 @@ router = APIRouter(prefix="/weltrade", tags=["weltrade"])
 
 
 @router.get("/profile")
-async def weltrade_profile(
-    _user: CurrentUser, svc: WeltradeSvc
-) -> dict[str, Any]:
+async def weltrade_profile(_user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     return svc.profile()
 
 
 @router.get("/health")
-async def weltrade_health(
-    user: CurrentUser, svc: WeltradeSvc
-) -> dict[str, Any]:
+async def weltrade_health(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     """Gateway / tunnel / MT5 session health for the Weltrade production desk."""
     return await svc.health(user_id=user.id)
 
 
 @router.get("/dashboard")
-async def weltrade_dashboard(
-    user: CurrentUser, svc: WeltradeSvc
-) -> dict[str, Any]:
+async def weltrade_dashboard(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     return await svc.dashboard(user_id=user.id)
 
 
@@ -91,16 +85,12 @@ async def weltrade_attach(
 
 
 @router.post("/disconnect")
-async def weltrade_disconnect(
-    user: CurrentUser, svc: WeltradeSvc
-) -> dict[str, Any]:
+async def weltrade_disconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     return await svc.disconnect(user_id=user.id)
 
 
 @router.post("/reconnect")
-async def weltrade_reconnect(
-    user: CurrentUser, svc: WeltradeSvc
-) -> dict[str, Any]:
+async def weltrade_reconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     try:
         return await svc.reconnect(user_id=user.id)
     except RuntimeError as exc:

@@ -22,9 +22,7 @@ from app.presentation.schemas.execution_intelligence import (
 from core.config.settings import get_settings
 from core.di.container import get_container
 
-router = APIRouter(
-    prefix="/execution-intelligence", tags=["execution-intelligence"]
-)
+router = APIRouter(prefix="/execution-intelligence", tags=["execution-intelligence"])
 
 
 async def _load_attempts(user_id: UUID, limit: int = 100) -> list[dict[str, Any]]:

@@ -47,7 +47,9 @@ def build_explanation(
         "Require confidence ≥ threshold with stable execution latency",
     ]
     if decision == "WAIT":
-        improves.insert(0, "Do nothing until score and MTF gates clear — capital preservation")
+        improves.insert(
+            0, "Do nothing until score and MTF gates clear — capital preservation"
+        )
 
     return {
         "why_it_exists": why_exists or ["No strong constructive factors"],

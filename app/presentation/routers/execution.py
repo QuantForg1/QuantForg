@@ -254,25 +254,29 @@ async def execution_analytics(
     attempts = await _load_attempts(user.id, limit=limit)
     # Enrich with journal latency when attempt lacks latency_ms
     journal_rows = journal.list_for_user(str(user.id), limit=limit)
-    by_req = {
-        str(j.get("request_id")): j for j in journal_rows if j.get("request_id")
-    }
+    by_req = {str(j.get("request_id")): j for j in journal_rows if j.get("request_id")}
     enriched: list[dict[str, Any]] = []
     for a in attempts:
         row = dict(a)
         j = by_req.get(str(a.get("request_id")))
         if j and row.get("latency_ms") is None and j.get("latency_ms") is not None:
             row["latency_ms"] = j.get("latency_ms")
-        snap = a.get("request_snapshot") if isinstance(a.get("request_snapshot"), dict) else {}
+        snap = (
+            a.get("request_snapshot")
+            if isinstance(a.get("request_snapshot"), dict)
+            else {}
+        )
         if row.get("latency_ms") is None and isinstance(snap, dict):
             row["latency_ms"] = snap.get("pipeline_latency_ms")
         enriched.append(row)
 
     fills = [
         {
-            "requested_price": (a.get("request_snapshot") or {}).get("price")
-            if isinstance(a.get("request_snapshot"), dict)
-            else None,
+            "requested_price": (
+                (a.get("request_snapshot") or {}).get("price")
+                if isinstance(a.get("request_snapshot"), dict)
+                else None
+            ),
             "fill_price": a.get("price"),
             "slippage": None,
         }
@@ -296,8 +300,7 @@ async def execution_analytics(
     rejects = sum(
         1
         for a in enriched
-        if str(a.get("outcome", "")).lower()
-        in {"failed", "rejected", "disabled"}
+        if str(a.get("outcome", "")).lower() in {"failed", "rejected", "disabled"}
     )
     cancelled = sum(
         1 for a in enriched if str(a.get("outcome", "")).lower() == "cancelled"
@@ -308,9 +311,9 @@ async def execution_analytics(
     metrics["fill_rate"] = metrics.get("fill_rate")
     metrics["average_slippage"] = metrics.get("average_slippage")
     metrics["latency_ms_avg"] = metrics.get("order_latency_ms_avg")
-    metrics["execution_time_ms_avg"] = metrics.get("order_duration_ms_avg") or metrics.get(
-        "order_latency_ms_avg"
-    )
+    metrics["execution_time_ms_avg"] = metrics.get(
+        "order_duration_ms_avg"
+    ) or metrics.get("order_latency_ms_avg")
 
     return ExecutionAnalyticsResponse(
         status=str(analytics.get("status") or "unavailable"),

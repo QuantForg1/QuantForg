@@ -67,7 +67,7 @@ class GetOpsMetricsUseCase:
 
             payload["gateway"] = gateway_metrics.snapshot()
             payload["intelligence_dashboard_cache"] = dashboard_cache_stats()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("ops_gateway_metrics_attach_failed", error=str(exc))
         if persist:
             try:

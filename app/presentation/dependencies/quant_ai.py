@@ -33,7 +33,7 @@ async def _load_attempts(user_id: UUID, limit: int = 100) -> list[dict[str, Any]
         async with factory() as uow:
             rows = await uow.attempts.list_for_user(user_id, limit=limit)
             return [a.to_dict() for a in rows]
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
 
 
@@ -64,7 +64,7 @@ async def _load_paper_trades(user_id: UUID) -> list[dict[str, Any]]:
                 }
             )
         return out
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
 
 

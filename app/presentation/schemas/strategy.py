@@ -119,8 +119,7 @@ class StrategyEngineRunRequest(BaseModel):
     use_mt5_bars: bool = Field(
         default=True,
         description=(
-            "When bars empty, attempt MT5 historical candles "
-            "(never fabricated)"
+            "When bars empty, attempt MT5 historical candles " "(never fabricated)"
         ),
     )
     mt5_bar_count: int = Field(default=200, ge=5, le=5000)

@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from app.application.services.provider_registry import IntelligenceProviderRegistry
 from app.domain.intelligence.event_engine import IntelligenceEventEngine
+from app.domain.intelligence.providers import (
+    EconomicCalendarProvider,
+    MarketDataProvider,
+    NewsProvider,
+    SentimentProvider,
+)
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 from app.infrastructure.intelligence.adapters import (
     AlphaVantageMarketProvider,
@@ -30,10 +36,10 @@ def build_provider_registry(
     *,
     mt5_adapter: MT5Adapter | None = None,
 ) -> IntelligenceProviderRegistry:
-    market_data = []
-    news = []
-    calendars = []
-    sentiment = []
+    market_data: list[MarketDataProvider] = []
+    news: list[NewsProvider] = []
+    calendars: list[EconomicCalendarProvider] = []
+    sentiment: list[SentimentProvider] = []
 
     if mt5_adapter is not None:
         market_data.append(Mt5MarketDataProvider(adapter=mt5_adapter, priority=10))

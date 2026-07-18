@@ -85,9 +85,7 @@ def optimize_allocations(
     }
     est_return = None
     if all(v is not None for v in mean_rets.values()):
-        est_return = sum(
-            weights[s] * float(mean_rets[s] or 0.0) for s in symbols
-        )
+        est_return = sum(weights[s] * float(mean_rets[s] or 0.0) for s in symbols)
 
     recommendations = []
     for s in symbols:

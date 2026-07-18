@@ -5,9 +5,10 @@ from __future__ import annotations
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import httpx
 
@@ -100,7 +101,7 @@ class ProviderRuntime:
             self.metrics.last_success_at = datetime.now(UTC).isoformat()
             self.metrics.last_error = ""
             return value
-        except Exception as exc:  # noqa: BLE001 — soft-fail providers
+        except Exception as exc:
             self.metrics.failures += 1
             self.metrics.last_error = str(exc)[:240]
             self.metrics.last_latency_ms = (time.monotonic() - started) * 1000.0

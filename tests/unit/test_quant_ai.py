@@ -12,12 +12,12 @@ from app.domain.quant_ai.risk_ai import analyze_risk_ai
 def _uptrend_candles(n: int = 80, start: float = 1.08) -> list[dict]:
     out = []
     price = start
-    for i in range(n):
+    for _i in range(n):
         o = price
         c = price + 0.0004
         h = c + 0.0001
-        l = o - 0.00005
-        out.append({"open": o, "high": h, "low": l, "close": c})
+        low = o - 0.00005
+        out.append({"open": o, "high": h, "low": low, "close": c})
         price = c
     return out
 
@@ -84,7 +84,13 @@ def test_review_trade_labels() -> None:
 
 def test_risk_ai_margin_flag() -> None:
     result = analyze_risk_ai(
-        account={"equity": 1000, "balance": 1200, "margin": 800, "free_margin": 50, "leverage": 500},
+        account={
+            "equity": 1000,
+            "balance": 1200,
+            "margin": 800,
+            "free_margin": 50,
+            "leverage": 500,
+        },
         positions=[
             {"symbol": "EURUSD", "volume": 1.5},
             {"symbol": "GBPUSD", "volume": 1.0},

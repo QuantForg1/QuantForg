@@ -397,7 +397,5 @@ def _operator_actions(
         "Keep EXECUTION_ENABLED unchanged until intentional live trading; "
         "use /paper and /execution/check first."
     )
-    actions.append(
-        "Do not treat documented capability profiles as live market data."
-    )
+    actions.append("Do not treat documented capability profiles as live market data.")
     return actions

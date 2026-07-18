@@ -100,9 +100,7 @@ class TestGatewayManager:
         rotated = self.svc.rotate_token(gid)
         assert rotated is not None
         assert rotated["gateway_token"] != created["gateway_token"]
-        replaced = self.svc.replace_gateway(
-            old_gateway_id=gid, hostname="new-host"
-        )
+        replaced = self.svc.replace_gateway(old_gateway_id=gid, hostname="new-host")
         assert replaced is not None
         assert replaced["replaced"] == gid
         old = self.svc.get_gateway(gid)

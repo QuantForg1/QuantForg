@@ -241,7 +241,9 @@ class CancelExecutionUseCase:
     audit: RecordAuditEventUseCase
 
     async def execute(self, command: ExecutionCancelCommand) -> ExecutionCancelDTO:
-        request_id = command.request_id.strip() or f"cancel_{command.ticket}_{uuid4().hex[:8]}"
+        request_id = (
+            command.request_id.strip() or f"cancel_{command.ticket}_{uuid4().hex[:8]}"
+        )
         await require_live_mt5_connection(
             self.mt5_uow_factory,
             self.engine.gateway.adapter,

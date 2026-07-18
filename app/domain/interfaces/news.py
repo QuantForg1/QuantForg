@@ -34,8 +34,7 @@ class EconomicEvent:
 class NewsFeedPort(Protocol):
     """Optional configured news provider. Empty when unset."""
 
-    def list_news(self, *, limit: int = 20) -> list[NewsItem]:
-        ...
+    def list_news(self, *, limit: int = 20) -> list[NewsItem]: ...
 
 
 class EconomicCalendarPort(Protocol):
@@ -46,5 +45,4 @@ class EconomicCalendarPort(Protocol):
         *,
         limit: int = 20,
         as_of: datetime | None = None,
-    ) -> list[EconomicEvent]:
-        ...
+    ) -> list[EconomicEvent]: ...

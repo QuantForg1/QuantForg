@@ -31,7 +31,10 @@ def test_compile_graph_with_exit() -> None:
         {
             "nodes": [
                 {"type": "indicator", "params": {"name": "ema", "period": 20}},
-                {"type": "exit", "params": {"sl_distance": "0.0015", "tp_distance": "0.003"}},
+                {
+                    "type": "exit",
+                    "params": {"sl_distance": "0.0015", "tp_distance": "0.003"},
+                },
                 {"type": "execution", "params": {"side": "buy"}},
             ],
             "edges": [{"from": 0, "to": 2}],
@@ -75,22 +78,38 @@ def test_strategy_review() -> None:
 
 def test_optimizer_advisory_only() -> None:
     result = suggest_optimizations(
-        metrics={"average_r": 0.6, "win_rate": 40, "max_drawdown_pct": 18, "profit_factor": 1.0},
-        assumptions={"stop_loss_distance": "0.002", "take_profit_distance": "0.003", "lot_size": "0.2"},
+        metrics={
+            "average_r": 0.6,
+            "win_rate": 40,
+            "max_drawdown_pct": 18,
+            "profit_factor": 1.0,
+        },
+        assumptions={
+            "stop_loss_distance": "0.002",
+            "take_profit_distance": "0.003",
+            "lot_size": "0.2",
+        },
         symbol="EURUSD",
         timeframe="H1",
     )
     assert result["status"] == "available"
     assert result["applied"] is False
     assert result["never_modifies_user_settings"] is True
-    assert any(s["field"] in {"tp_distance", "rr", "risk", "sl_distance"} for s in result["suggestions"])
+    assert any(
+        s["field"] in {"tp_distance", "rr", "risk", "sl_distance"}
+        for s in result["suggestions"]
+    )
 
 
 def test_analytics_from_equity_trades() -> None:
     equity = [
         {"timestamp": "2024-01-01T00:00:00+00:00", "equity": 10000, "drawdown_pct": 0},
         {"timestamp": "2024-01-15T00:00:00+00:00", "equity": 10100, "drawdown_pct": 1},
-        {"timestamp": "2024-02-01T00:00:00+00:00", "equity": 10200, "drawdown_pct": 0.5},
+        {
+            "timestamp": "2024-02-01T00:00:00+00:00",
+            "equity": 10200,
+            "drawdown_pct": 0.5,
+        },
     ]
     trades = [
         {"pnl": 50, "closed_at": "2024-01-02T10:00:00+00:00"},

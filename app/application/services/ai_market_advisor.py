@@ -65,16 +65,15 @@ class AiMarketAdvisor:
         if margin_level not in (None, "", "0", "0.0"):
             risk_factors.append(f"Reported margin level: {margin_level}.")
         if positions:
-            risk_factors.append(
-                f"{len(positions)} open position(s) synced from MT5."
-            )
+            risk_factors.append(f"{len(positions)} open position(s) synced from MT5.")
         else:
             risk_factors.append("No open positions in the synced portfolio snapshot.")
         if orders:
             risk_factors.append(f"{len(orders)} pending order(s) synced from MT5.")
         if volatility in {"high", "very_high", "HIGH", "VERY_HIGH"}:
             risk_factors.append(
-                "Session volatility profile is elevated — sizing and stops warrant review."
+                "Session volatility profile is elevated — sizing and stops "
+                "warrant review."
             )
 
         news_impact: list[str] = []
@@ -99,15 +98,10 @@ class AiMarketAdvisor:
             exposure.append(
                 "Account snapshot (synced): "
                 f"balance={account.get('balance')}, equity={account.get('equity')}, "
-                f"margin={account.get('margin')}, free_margin={account.get('free_margin')}."
+                f"margin={account.get('margin')}, "
+                f"free_margin={account.get('free_margin')}."
             )
-        symbols = sorted(
-            {
-                str(p.get("symbol"))
-                for p in positions
-                if p.get("symbol")
-            }
-        )
+        symbols = sorted({str(p.get("symbol")) for p in positions if p.get("symbol")})
         if symbols:
             exposure.append("Position symbols: " + ", ".join(symbols) + ".")
         else:

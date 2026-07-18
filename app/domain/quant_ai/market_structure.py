@@ -32,11 +32,11 @@ def _atr(candles: list[dict[str, Any]], period: int = 14) -> float | None:
     for i in range(1, len(candles)):
         try:
             h = float(candles[i].get("high") or candles[i].get("h") or 0)
-            l = float(candles[i].get("low") or candles[i].get("l") or 0)
+            low = float(candles[i].get("low") or candles[i].get("l") or 0)
             pc = float(candles[i - 1].get("close") or candles[i - 1].get("c") or 0)
         except (TypeError, ValueError):
             continue
-        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        trs.append(max(h - low, abs(h - pc), abs(low - pc)))
     if len(trs) < period:
         return None
     return sum(trs[-period:]) / period
@@ -50,7 +50,10 @@ def analyze_symbol_structure(
     ask: float | None = None,
     session: str | None = None,
 ) -> dict[str, Any]:
-    """Trend / momentum / S/R / regime with human-readable reasons — no invented quotes."""
+    """Trend / momentum / S/R / regime with human-readable reasons.
+
+    Never invent quotes.
+    """
     closes = _closes(candles)
     if len(closes) < 30:
         return {
@@ -82,9 +85,13 @@ def analyze_symbol_structure(
             confidence += 0.12
 
     recent = closes[-12:]
-    higher_highs = all(recent[i] >= recent[i - 1] - 1e-12 for i in range(1, len(recent) // 2 + 1))
+    higher_highs = all(
+        recent[i] >= recent[i - 1] - 1e-12 for i in range(1, len(recent) // 2 + 1)
+    )
     higher_lows = len(recent) >= 6 and recent[-1] > recent[-6]
-    lower_highs = all(recent[i] <= recent[i - 1] + 1e-12 for i in range(1, len(recent) // 2 + 1))
+    lower_highs = all(
+        recent[i] <= recent[i - 1] + 1e-12 for i in range(1, len(recent) // 2 + 1)
+    )
 
     if trend == "Bullish" and higher_lows:
         reasons.append("Higher lows on recent swings")
@@ -170,7 +177,9 @@ def analyze_symbol_structure(
         "momentum": momentum,
         "volatility": volatility,
         "market_regime": (
-            "Trending" if trend != "Neutral" and momentum.startswith("Strong") else "Range / mixed"
+            "Trending"
+            if trend != "Neutral" and momentum.startswith("Strong")
+            else "Range / mixed"
         ),
         "support": support,
         "resistance": resistance,
@@ -189,7 +198,10 @@ def analyze_symbol_structure(
         "suggested_tp": suggested_tp,
         "reasons": reasons,
         "why": {
-            "summary": f"{symbol.upper()} {trend.lower()} with {round(confidence * 100)}% confidence",
+            "summary": (
+                f"{symbol.upper()} {trend.lower()} with "
+                f"{round(confidence * 100)}% confidence"
+            ),
             "supporting_factors": reasons,
         },
         "data_source": "mt5_candles|mt5_ticks",

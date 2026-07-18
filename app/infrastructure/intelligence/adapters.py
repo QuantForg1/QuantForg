@@ -54,7 +54,7 @@ class Mt5MarketDataProvider:
             live = getattr(self.adapter, "_live_session_ref", None)
             client = getattr(self.adapter, "client", None)
             return bool(live) and bool(getattr(client, "is_connected", False))
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     def health(self) -> ProviderHealth:
@@ -78,9 +78,11 @@ class Mt5MarketDataProvider:
                 ask=str(tick.ask),
                 mid=str(tick.mid),
                 provider=self.name,
-                as_of=tick.timestamp.isoformat()
-                if getattr(tick, "timestamp", None)
-                else _iso_now(),
+                as_of=(
+                    tick.timestamp.isoformat()
+                    if getattr(tick, "timestamp", None)
+                    else _iso_now()
+                ),
             )
 
         return self.runtime.cached(
@@ -499,7 +501,11 @@ class FinnhubSentimentProvider:
                     score = None
             label = "unknown"
             if score is not None:
-                label = "bullish" if score >= 0.55 else "bearish" if score <= 0.45 else "neutral"
+                label = (
+                    "bullish"
+                    if score >= 0.55
+                    else "bearish" if score <= 0.45 else "neutral"
+                )
             return SentimentSnapshot(
                 symbol=sym,
                 score=score,
@@ -560,9 +566,9 @@ class TradingEconomicsCalendarProvider:
                         id=str(row.get("CalendarId") or title)[:120],
                         title=title[:300],
                         country=str(row.get("Country") or "")[:64],
-                        impact=str(row.get("Importance") or row.get("impact") or "unknown")[
-                            :32
-                        ],
+                        impact=str(
+                            row.get("Importance") or row.get("impact") or "unknown"
+                        )[:32],
                         scheduled_at=str(row.get("Date") or row.get("date") or "")[:64],
                         provider=self.name,
                         actual=str(row.get("Actual") or "")[:64],
@@ -615,17 +621,23 @@ class PolygonNewsProvider:
                 if not title:
                     continue
                 tickers = row.get("tickers") or []
-                symbols = tuple(str(t) for t in tickers if t) if isinstance(tickers, list) else ()
+                symbols = (
+                    tuple(str(t) for t in tickers if t)
+                    if isinstance(tickers, list)
+                    else ()
+                )
                 items.append(
                     NewsArticle(
                         id=str(row.get("id") or title)[:120],
                         title=title[:300],
                         summary=str(row.get("description") or "")[:1000],
-                        source=str((row.get("publisher") or {}).get("name") or "polygon")[
-                            :120
-                        ]
-                        if isinstance(row.get("publisher"), dict)
-                        else "polygon",
+                        source=(
+                            str((row.get("publisher") or {}).get("name") or "polygon")[
+                                :120
+                            ]
+                            if isinstance(row.get("publisher"), dict)
+                            else "polygon"
+                        ),
                         url=str(row.get("article_url") or "")[:500],
                         published_at=str(row.get("published_utc") or "")[:64],
                         provider=self.name,
@@ -682,7 +694,9 @@ class AlphaVantageSentimentProvider:
             first = feed[0] if isinstance(feed[0], dict) else {}
             score = None
             try:
-                score = float(first.get("overall_sentiment_score"))
+                raw_score = first.get("overall_sentiment_score")
+                if isinstance(raw_score, (int, float, str)):
+                    score = float(raw_score)
             except (TypeError, ValueError):
                 score = None
             label = str(first.get("overall_sentiment_label") or "unknown")

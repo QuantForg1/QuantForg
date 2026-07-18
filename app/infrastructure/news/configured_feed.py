@@ -33,6 +33,7 @@ def _as_list(payload: Any) -> list[dict[str, Any]]:
 @dataclass(frozen=True, slots=True)
 class NullNewsFeed:
     def list_news(self, *, limit: int = 20) -> list[NewsItem]:
+        _ = limit
         return []
 
 
@@ -44,6 +45,7 @@ class NullEconomicCalendar:
         limit: int = 20,
         as_of: datetime | None = None,
     ) -> list[EconomicEvent]:
+        _ = limit, as_of
         return []
 
 
@@ -62,7 +64,7 @@ class ConfiguredHttpNewsFeed:
                 response = client.get(self.url.strip())
                 response.raise_for_status()
                 rows = _as_list(response.json())
-        except Exception as exc:  # noqa: BLE001 — soft-fail feed
+        except Exception as exc:
             logger.warning("news_feed_fetch_failed", extra={"error": str(exc)})
             return []
 
@@ -108,6 +110,7 @@ class ConfiguredHttpEconomicCalendar:
         limit: int = 20,
         as_of: datetime | None = None,
     ) -> list[EconomicEvent]:
+        _ = as_of
         if not self.url.strip():
             return []
         try:
@@ -115,13 +118,15 @@ class ConfiguredHttpEconomicCalendar:
                 response = client.get(self.url.strip())
                 response.raise_for_status()
                 rows = _as_list(response.json())
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("economic_calendar_fetch_failed", extra={"error": str(exc)})
             return []
 
         events: list[EconomicEvent] = []
         for row in rows[: max(1, limit)]:
-            title = str(row.get("title") or row.get("event") or row.get("name") or "").strip()
+            title = str(
+                row.get("title") or row.get("event") or row.get("name") or ""
+            ).strip()
             if not title:
                 continue
             events.append(

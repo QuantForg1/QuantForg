@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import TypeVar
 
 from app.domain.intelligence.event_engine import IntelligenceEventEngine
 from app.domain.intelligence.providers import (
@@ -20,6 +21,14 @@ from app.domain.intelligence.providers import (
     SentimentSnapshot,
 )
 
+Provider = TypeVar(
+    "Provider",
+    MarketDataProvider,
+    NewsProvider,
+    EconomicCalendarProvider,
+    SentimentProvider,
+)
+
 
 @dataclass
 class IntelligenceProviderRegistry:
@@ -31,19 +40,19 @@ class IntelligenceProviderRegistry:
         default_factory=IntelligenceEventEngine
     )
 
-    def _sorted(self, providers: list) -> list:
+    def _sorted(self, providers: list[Provider]) -> list[Provider]:
         return sorted(providers, key=lambda p: getattr(p, "priority", 100))
 
     def list_providers(self) -> list[ProviderHealth]:
         health: list[ProviderHealth] = []
-        for p in self._sorted(self.market_data):
-            health.append(p.health())
-        for p in self._sorted(self.news):
-            health.append(p.health())
-        for p in self._sorted(self.calendars):
-            health.append(p.health())
-        for p in self._sorted(self.sentiment):
-            health.append(p.health())
+        for market_provider in self._sorted(self.market_data):
+            health.append(market_provider.health())
+        for news_provider in self._sorted(self.news):
+            health.append(news_provider.health())
+        for calendar_provider in self._sorted(self.calendars):
+            health.append(calendar_provider.health())
+        for sentiment_provider in self._sorted(self.sentiment):
+            health.append(sentiment_provider.health())
         return health
 
     def status(self) -> dict[str, object]:

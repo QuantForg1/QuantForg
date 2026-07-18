@@ -318,9 +318,11 @@ class MT5ConnectivityAdapter:
                     "symbol": tick.symbol,
                     "bid": str(tick.bid),
                     "ask": str(tick.ask),
-                    "time": tick.timestamp.isoformat()
-                    if getattr(tick, "timestamp", None)
-                    else None,
+                    "time": (
+                        tick.timestamp.isoformat()
+                        if getattr(tick, "timestamp", None)
+                        else None
+                    ),
                 },
             )
         except Exception as exc:

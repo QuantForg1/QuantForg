@@ -31,16 +31,12 @@ def _client_ip(request: Request) -> str:
 
 
 @router.get("/dashboard")
-async def cloud_dashboard(
-    _user: CurrentUser, svc: GatewayManagerDep
-) -> dict[str, Any]:
+async def cloud_dashboard(_user: CurrentUser, svc: GatewayManagerDep) -> dict[str, Any]:
     return svc.dashboard()
 
 
 @router.get("/gateways")
-async def list_gateways(
-    _user: CurrentUser, svc: GatewayManagerDep
-) -> dict[str, Any]:
+async def list_gateways(_user: CurrentUser, svc: GatewayManagerDep) -> dict[str, Any]:
     return svc.list_gateways()
 
 
@@ -118,15 +114,11 @@ async def route_user_gateway(
     _user: CurrentUser,
     svc: GatewayManagerDep,
 ) -> dict[str, Any]:
-    return svc.route(
-        broker=body.broker, region=body.region, capability=body.capability
-    )
+    return svc.route(broker=body.broker, region=body.region, capability=body.capability)
 
 
 @router.post("/ha/refresh")
-async def refresh_ha(
-    _user: CurrentUser, svc: GatewayManagerDep
-) -> dict[str, Any]:
+async def refresh_ha(_user: CurrentUser, svc: GatewayManagerDep) -> dict[str, Any]:
     return svc.refresh_ha()
 
 

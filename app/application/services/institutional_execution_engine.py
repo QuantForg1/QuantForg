@@ -20,11 +20,11 @@ from app.domain.entities.execution_gateway import ExecutionResult
 from app.domain.entities.execution_safety import ExecutionDecisionRecord
 from app.domain.entities.mt5_order import OrderIntent
 from app.domain.enums.execution import ExecutionDecision, ExecutionOutcome
-from app.domain.enums.order import OrderType
+from app.domain.enums.order import OrderSide, OrderType
+from app.domain.exceptions.base import ValidationError
 from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.domain.execution_engine.pipeline import STAGE_TO_LIFECYCLE, PipelineStage
 from app.domain.execution_engine.reasons import humanize_reasons
-from app.domain.exceptions.base import ValidationError
 from app.domain.value_objects.mt5_order import (
     LotSize,
     MagicNumber,
@@ -32,7 +32,6 @@ from app.domain.value_objects.mt5_order import (
     StopLoss,
     TakeProfit,
 )
-from app.domain.enums.order import OrderSide
 
 
 @dataclass
@@ -112,7 +111,7 @@ def parse_order_intent(
             side=OrderSide(side.strip().lower()),
             order_type=OrderType(order_type.strip().lower()),
             volume=LotSize.of(volume),
-            price=Decimal(price) if price not in (None, "") else None,
+            price=Decimal(str(price)) if price else None,
             stop_loss=StopLoss.of(stop_loss) if stop_loss else None,
             take_profit=TakeProfit.of(take_profit) if take_profit else None,
             slippage=Slippage.of(slippage),
@@ -379,11 +378,7 @@ class InstitutionalExecutionEngine:
             side=side,
             order_type=order_type,
             volume=volume,
-            stage=(
-                PipelineStage.RISK_CHECK
-                if risk_ok
-                else PipelineStage.REJECTED
-            ),
+            stage=(PipelineStage.RISK_CHECK if risk_ok else PipelineStage.REJECTED),
             reason=f"safety={decision.decision.value}",
             meta={"decision": decision.decision.value},
         )

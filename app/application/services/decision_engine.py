@@ -6,7 +6,7 @@ Never order_send. Never bypasses EXECUTION_ENABLED. Paper mode by default.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.application.services.mt5_market_data import MT5MarketDataService
@@ -76,13 +76,13 @@ class DecisionEngineService:
         if not force_refresh:
             cached = _CACHE.get(cache_key)
             if cached is not None:
-                return cached
+                return cast("dict[str, Any]", cached)
 
         st = await self.status.execute(user_id=user_id)
         sec = _security()
 
         if not st.connected:
-            payload = {
+            unavailable_payload = {
                 "status": "unavailable",
                 "symbol": code,
                 "decision": "WAIT",
@@ -92,8 +92,8 @@ class DecisionEngineService:
                 "mode": mode,
                 **sec,
             }
-            _CACHE.set(cache_key, payload)
-            return payload
+            _CACHE.set(cache_key, unavailable_payload)
+            return unavailable_payload
 
         ctx = self.market_context.build("FX", symbol_code=code)
         session = ctx.session.value
@@ -101,13 +101,15 @@ class DecisionEngineService:
 
         frames: dict[str, dict[str, Any]] = {}
         for tf_name in REQUIRED_TFS:
-            candles = self._load_candles(code, tf_name, 220 if tf_name in {"H1", "H4", "D1"} else 160)
+            candles = self._load_candles(
+                code, tf_name, 220 if tf_name in {"H1", "H4", "D1"} else 160
+            )
             bid = ask = None
             if tf_name == "H1":
                 try:
                     tick = self.market_data.latest_tick(code)
                     bid, ask = float(tick.bid), float(tick.ask)
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: S110 - optional tick unavailable
                     pass
             frames[tf_name] = analyze_symbol_structure(
                 symbol=code,
@@ -118,7 +120,11 @@ class DecisionEngineService:
             )
 
         primary = frames.get("H1") or next(
-            (frames[t] for t in REQUIRED_TFS if frames.get(t, {}).get("status") == "available"),
+            (
+                frames[t]
+                for t in REQUIRED_TFS
+                if frames.get(t, {}).get("status") == "available"
+            ),
             {"status": "unavailable"},
         )
         mtf = summarize_mtf(frames)
@@ -134,15 +140,12 @@ class DecisionEngineService:
             if bal > 0 and eq < bal:
                 dd_pct = (bal - eq) / bal * 100.0
 
+        spread = _dec(primary.get("spread"))
+        atr = _dec(primary.get("atr"))
         score = compute_trade_score(
             mtf=mtf,
             structure=primary,
-            spread_ok=primary.get("spread") is not None
-            and (
-                primary.get("spread", 1) <= ((primary.get("atr") or 1) * 0.15)
-                if primary.get("atr")
-                else True
-            ),
+            spread_ok=spread is not None and (spread <= atr * 0.15 if atr else True),
             volatility=primary.get("volatility"),
             session_ok=session_ok,
             news_risk=news_risk,
@@ -175,7 +178,10 @@ class DecisionEngineService:
         # Live mode still NEVER sends — only annotates that EE gate would apply
         live_gate = {
             "can_forward_to_execution_engine": False,
-            "reason": "Live forwarding disabled in Decision Engine — EXECUTION_ENABLED and safety gates required separately",
+            "reason": (
+                "Live forwarding disabled in Decision Engine — EXECUTION_ENABLED and "
+                "safety gates required separately"
+            ),
         }
         if mode == "live":
             if not sec["execution_enabled"]:
@@ -193,7 +199,8 @@ class DecisionEngineService:
                     "can_forward_to_execution_engine": False,
                     "reason": (
                         "Decision Engine never submits orders. "
-                        "A TRADE_IDEA must be manually reviewed; OMS/EE remain authoritative."
+                        "A TRADE_IDEA must be manually reviewed; "
+                        "OMS/EE remain authoritative."
                     ),
                 }
 
@@ -215,7 +222,8 @@ class DecisionEngineService:
             "confidence_pct": score["confidence_pct"],
             "risk_level": score["risk_level"],
             "expected_rr": risk.get("expected_rr"),
-            "recommended_sl": risk.get("suggested_stop") or primary.get("suggested_stop"),
+            "recommended_sl": risk.get("suggested_stop")
+            or primary.get("suggested_stop"),
             "recommended_tp": risk.get("suggested_tp") or primary.get("suggested_tp"),
             "lot_size": risk.get("lot_size"),
             "analysis": {
@@ -249,7 +257,8 @@ class DecisionEngineService:
 
         if mode == "paper" and record_paper:
             tracker = get_paper_tracker()
-            # Simulate tiny advisory PnL marker only when idea accepted — still not an order
+            # Simulate a tiny advisory PnL marker only when an idea is accepted;
+            # this is still not an order.
             sim_pnl = None
             if decision == "TRADE_IDEA" and risk.get("expected_rr"):
                 # Neutral placeholder outcome not invented as market data —
@@ -270,7 +279,9 @@ class DecisionEngineService:
         _CACHE.set(cache_key, payload)
         return payload
 
-    async def dashboard(self, *, user_id: UUID, symbol: str = "EURUSD") -> dict[str, Any]:
+    async def dashboard(
+        self, *, user_id: UUID, symbol: str = "EURUSD"
+    ) -> dict[str, Any]:
         decision = await self.evaluate(
             user_id=user_id, symbol=symbol, mode="paper", record_paper=True
         )
@@ -304,21 +315,27 @@ class DecisionEngineService:
         """Attach observed paper PnL to an existing recorded idea — no broker calls."""
         updated = get_paper_tracker().update_pnl(user_id, signal_id, simulated_pnl)
         if not updated:
-            return {"status": "unavailable", "reason": "Signal not found", **_security()}
+            return {
+                "status": "unavailable",
+                "reason": "Signal not found",
+                **_security(),
+            }
         return {"status": "available", "signal": updated, **_security()}
 
     # --- helpers ---------------------------------------------------------
 
-    def _load_candles(self, symbol: str, timeframe: str, count: int) -> list[dict[str, Any]]:
+    def _load_candles(
+        self, symbol: str, timeframe: str, count: int
+    ) -> list[dict[str, Any]]:
         try:
             tf = Timeframe.parse(timeframe)
-        except Exception:  # noqa: BLE001
+        except Exception:
             tf = Timeframe.H1
         try:
             rates = self.market_data.historical_candles(
                 symbol, tf, count=count, start_pos=0
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
         rows: list[dict[str, Any]] = []
         for r in rates:
@@ -353,7 +370,7 @@ class DecisionEngineService:
                 "free_margin": _dec(snap.free_margin),
                 "leverage": snap.leverage,
             }
-        except Exception:  # noqa: BLE001
+        except Exception:
             account = {}
         try:
             for p in self.portfolio_sync.list_positions():
@@ -364,14 +381,14 @@ class DecisionEngineService:
                         "profit": _dec(getattr(p, "profit", 0)),
                     }
                 )
-        except Exception:  # noqa: BLE001
+        except Exception:
             positions = []
         return account, positions
 
     def _news_risk(self, symbol: str) -> str:
         try:
             events = self.news.economic_events(limit=20)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return "low"
         high = 0
         moderate = 0

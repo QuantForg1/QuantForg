@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from app.application.services.backtest_engine import (
@@ -71,7 +71,7 @@ class QuantStudioService:
         cache_key = f"qs:ws:{user_id}"
         cached = _WORKSPACE_CACHE.get(cache_key)
         if cached is not None:
-            return cached
+            return cast("dict[str, Any]", cached)
 
         st = await self.status.execute(user_id=user_id)
         market = get_marketplace_store()
@@ -103,7 +103,12 @@ class QuantStudioService:
             "marketplace_preview": strategies[:8],
             "data_policy": {
                 "mock": False,
-                "sources": ["mt5_candles", "backtest_engine", "walkforward_engine", "portfolio"],
+                "sources": [
+                    "mt5_candles",
+                    "backtest_engine",
+                    "walkforward_engine",
+                    "portfolio",
+                ],
             },
         }
         _WORKSPACE_CACHE.set(cache_key, payload)
@@ -131,7 +136,11 @@ class QuantStudioService:
                 **_security_flags(),
             }
 
-        compiled = compile_strategy_graph(graph) if graph else {"status": "skipped", "assumptions": {}}
+        compiled = (
+            compile_strategy_graph(graph)
+            if graph
+            else {"status": "skipped", "assumptions": {}}
+        )
         merged = dict(compiled.get("assumptions") or {})
         if assumptions:
             merged.update({k: str(v) for k, v in assumptions.items()})
@@ -189,19 +198,29 @@ class QuantStudioService:
                 "entry_price": float(t.entry_price),
                 "exit_price": float(t.exit_price) if t.exit_price is not None else None,
                 "stop_loss": float(t.stop_loss) if t.stop_loss is not None else None,
-                "take_profit": float(t.take_profit) if t.take_profit is not None else None,
+                "take_profit": (
+                    float(t.take_profit) if t.take_profit is not None else None
+                ),
                 "opened_at": t.opened_at.isoformat() if t.opened_at else None,
                 "closed_at": t.closed_at.isoformat() if t.closed_at else None,
-                "exit_reason": t.exit_reason.value
-                if t.exit_reason is not None and hasattr(t.exit_reason, "value")
-                else (str(t.exit_reason) if t.exit_reason else None),
+                "exit_reason": (
+                    t.exit_reason.value
+                    if t.exit_reason is not None and hasattr(t.exit_reason, "value")
+                    else (str(t.exit_reason) if t.exit_reason else None)
+                ),
             }
             for t in result.trades
         ]
         analytics = build_professional_analytics(equity_curve=equity, trades=trades)
-        pnls = [t["pnl"] for t in trades if t.get("closed_at")]
+        pnls = [
+            pnl
+            for t in trades
+            if t.get("closed_at") and (pnl := _dec(t["pnl"])) is not None
+        ]
         mc = run_monte_carlo(pnls, initial_equity=float(initial_balance))
-        review = review_strategy(metrics=metrics, assumptions=merged, graph_summary=compiled)
+        review = review_strategy(
+            metrics=metrics, assumptions=merged, graph_summary=compiled
+        )
         optimize = suggest_optimizations(
             metrics=metrics,
             assumptions=merged,
@@ -308,7 +327,7 @@ class QuantStudioService:
         try:
             snap = self.portfolio_sync.account_snapshot()
             positions = self.portfolio_sync.list_positions()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {
                 "status": "unavailable",
                 "reason": str(exc),
@@ -395,10 +414,11 @@ class QuantStudioService:
                             "symbol": p.symbol,
                             "volume": _dec(p.volume),
                             "profit": _dec(getattr(p, "profit", 0)),
-                            "side": getattr(p, "side", None) or str(getattr(p, "type", "")),
+                            "side": getattr(p, "side", None)
+                            or str(getattr(p, "type", "")),
                         }
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 positions = []
 
         alerts: list[str] = []
@@ -417,7 +437,10 @@ class QuantStudioService:
                 "floating_pnl": floating,
             },
             "signals": {
-                "note": "Signal feed from locked Strategy Engine not duplicated — open positions summarized only",
+                "note": (
+                    "Signal feed from locked Strategy Engine not duplicated — "
+                    "open positions summarized only"
+                ),
                 "count": 0,
             },
             "execution_quality": {
@@ -474,10 +497,15 @@ class QuantStudioService:
     ) -> dict[str, Any]:
         store = get_marketplace_store()
         if action == "clone":
-            return {**store.clone(user_id=user_id, strategy_id=strategy_id), **_security_flags()}
+            return {
+                **store.clone(user_id=user_id, strategy_id=strategy_id),
+                **_security_flags(),
+            }
         if action == "publish":
             return {
-                **store.publish(user_id=user_id, strategy_id=strategy_id, published=published),
+                **store.publish(
+                    user_id=user_id, strategy_id=strategy_id, published=published
+                ),
                 **_security_flags(),
             }
         if action == "favorite":
@@ -492,9 +520,17 @@ class QuantStudioService:
         if action == "get":
             item = store.get(strategy_id)
             if not item:
-                return {"status": "unavailable", "reason": "Not found", **_security_flags()}
+                return {
+                    "status": "unavailable",
+                    "reason": "Not found",
+                    **_security_flags(),
+                }
             return {"status": "available", "strategy": item, **_security_flags()}
-        return {"status": "unavailable", "reason": f"Unknown action {action}", **_security_flags()}
+        return {
+            "status": "unavailable",
+            "reason": f"Unknown action {action}",
+            **_security_flags(),
+        }
 
     # --- helpers ---------------------------------------------------------
 
@@ -522,13 +558,13 @@ class QuantStudioService:
     ) -> list[dict[str, Any]]:
         try:
             tf = Timeframe.parse(timeframe)
-        except Exception:  # noqa: BLE001
+        except Exception:
             tf = Timeframe.H1
         try:
             rates = self.market_data.historical_candles(
                 symbol.strip().upper(), tf, count=count, start_pos=0
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
         rows: list[dict[str, Any]] = []
         for r in rates:
@@ -552,9 +588,15 @@ class QuantStudioService:
         for idx, fr in enumerate(getattr(result, "folds", ()) or ()):
             is_m = getattr(fr, "is_metrics", None)
             oos_m = getattr(fr, "oos_metrics", None)
-            is_pf = float(is_m.profit_factor) if is_m and is_m.profit_factor is not None else None
+            is_pf = (
+                float(is_m.profit_factor)
+                if is_m and is_m.profit_factor is not None
+                else None
+            )
             oos_pf = (
-                float(oos_m.profit_factor) if oos_m and oos_m.profit_factor is not None else None
+                float(oos_m.profit_factor)
+                if oos_m and oos_m.profit_factor is not None
+                else None
             )
             folds.append(
                 {
@@ -574,10 +616,14 @@ class QuantStudioService:
                         {
                             "index": idx,
                             "is_profit_factor": _dec(
-                                is_m.get("profit_factor") if isinstance(is_m, dict) else None
+                                is_m.get("profit_factor")
+                                if isinstance(is_m, dict)
+                                else None
                             ),
                             "oos_profit_factor": _dec(
-                                oos_m.get("profit_factor") if isinstance(oos_m, dict) else None
+                                oos_m.get("profit_factor")
+                                if isinstance(oos_m, dict)
+                                else None
                             ),
                         }
                     )

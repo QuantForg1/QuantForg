@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.domain.research_lab.comparison import compare_strategies, pick_dashboard_leaders
+from app.domain.research_lab.comparison import (
+    compare_strategies,
+    pick_dashboard_leaders,
+)
 from app.domain.research_lab.library import get_strategy, list_strategy_library
 from app.domain.research_lab.parameter_lab import sandbox_parameters
 from app.domain.research_lab.regime import classify_regime, strategy_regime_fit
@@ -38,7 +41,11 @@ def test_compare_never_invents_metrics() -> None:
             {
                 "strategy_key": "a",
                 "name": "A",
-                "metrics": {"sharpe_ratio": 1.2, "profit_factor": 1.5, "trade_count": 40},
+                "metrics": {
+                    "sharpe_ratio": 1.2,
+                    "profit_factor": 1.5,
+                    "trade_count": 40,
+                },
             },
             {
                 "strategy_key": "b",

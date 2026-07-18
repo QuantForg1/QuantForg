@@ -105,9 +105,7 @@ def diagnostics_from_probes(
     for capability, result in probes.items():
         status = str(result.get("status") or "")
         reason = str(result.get("reason") or "")
-        code = classify_diagnostic(
-            reason=reason, capability=capability, status=status
-        )
+        code = classify_diagnostic(reason=reason, capability=capability, status=status)
         if code is CertificationDiagnostic.NONE:
             continue
         if status in {"ok", "compatible"}:

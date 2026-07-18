@@ -101,13 +101,9 @@ def compute_execution_analytics(
             "order_latency_ms_avg": (
                 round(avg_latency, 4) if avg_latency is not None else None
             ),
-            "order_latency_status": (
-                "available" if latencies else "unavailable"
-            ),
+            "order_latency_status": ("available" if latencies else "unavailable"),
             "order_latency_reason": (
-                None
-                if latencies
-                else "No latency_ms on attempts — not invented"
+                None if latencies else "No latency_ms on attempts — not invented"
             ),
             "broker_response_time_ms_avg": (
                 round(avg_broker, 4) if avg_broker is not None else None
@@ -116,9 +112,7 @@ def compute_execution_analytics(
             "reject_rate": round(reject_rate, 4) if reject_rate is not None else None,
             "rejected_orders": len(rejects),
             "cancelled_orders": sum(
-                1
-                for a in attempts
-                if str(a.get("outcome", "")).lower() == "cancelled"
+                1 for a in attempts if str(a.get("outcome", "")).lower() == "cancelled"
             ),
             "success_rate": round(fill_rate, 4) if fill_rate is not None else None,
             "average_slippage": round(avg_slip, 6) if avg_slip is not None else None,
@@ -135,8 +129,6 @@ def compute_execution_analytics(
                 if avg_duration is not None
                 else (round(avg_latency, 4) if avg_latency is not None else None)
             ),
-            "order_duration_status": (
-                "available" if durations else "unavailable"
-            ),
+            "order_duration_status": ("available" if durations else "unavailable"),
         },
     }

@@ -51,11 +51,7 @@ def evaluate_checklist(
         },
     ]
 
-    blockers = [
-        i["reason"]
-        for i in items
-        if i["status"] == "fail" and i.get("reason")
-    ]
+    blockers = [i["reason"] for i in items if i["status"] == "fail" and i.get("reason")]
     unknowns = [i["key"] for i in items if i["status"] == "unavailable"]
     ready = len(blockers) == 0 and len(unknowns) == 0
 

@@ -21,7 +21,9 @@ from app.domain.interfaces.mt5_client import MT5LoginRequest
 from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
 
 
-def _engine(*, enabled: bool = True) -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
+def _engine(
+    *, enabled: bool = True
+) -> tuple[InstitutionalExecutionEngine, MockMT5Client]:
     client = MockMT5Client()
     client.initialize()
     client.login(MT5LoginRequest(login=1, password="p", server="S"))

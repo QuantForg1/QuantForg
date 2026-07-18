@@ -36,7 +36,9 @@ def analyze_portfolio_ai(trades: list[dict[str, Any]]) -> dict[str, Any]:
             "autonomous_trading": False,
         }
 
-    pnls = [_f(t.get("pnl") or t.get("profit") or t.get("realized_pnl")) for t in trades]
+    pnls = [
+        _f(t.get("pnl") or t.get("profit") or t.get("realized_pnl")) for t in trades
+    ]
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
     n = len(pnls)
@@ -49,7 +51,9 @@ def analyze_portfolio_ai(trades: list[dict[str, Any]]) -> dict[str, Any]:
     gross_loss = abs(sum(losses))
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else None
     expectancy = (
-        (win_rate * avg_win - (1 - win_rate) * avg_loss) if win_rate is not None else None
+        (win_rate * avg_win - (1 - win_rate) * avg_loss)
+        if win_rate is not None
+        else None
     )
 
     # Drawdown from equity curve of cumulative pnl
@@ -85,7 +89,9 @@ def analyze_portfolio_ai(trades: list[dict[str, Any]]) -> dict[str, Any]:
 
     mistakes: list[str] = []
     if win_rate is not None and win_rate < 0.4 and (avg_rr or 0) < 1.2:
-        mistakes.append("Win rate below 40% with RR under 1.2 — edge not compensating losers")
+        mistakes.append(
+            "Win rate below 40% with RR under 1.2 — edge not compensating losers"
+        )
     if loss_rate is not None and loss_rate > 0.55:
         mistakes.append("Loss rate elevated — review entries and invalidation")
     if max_dd > 0 and gross_profit > 0 and max_dd > gross_profit * 0.5:
@@ -93,7 +99,9 @@ def analyze_portfolio_ai(trades: list[dict[str, Any]]) -> dict[str, Any]:
     if avg_rr is not None and avg_rr < 1.0:
         mistakes.append("Average win smaller than average loss — asymmetric payoff")
     if not mistakes:
-        mistakes.append("No systematic mistake pattern flagged from available trade sample")
+        mistakes.append(
+            "No systematic mistake pattern flagged from available trade sample"
+        )
 
     dow_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -105,7 +113,9 @@ def analyze_portfolio_ai(trades: list[dict[str, Any]]) -> dict[str, Any]:
             "win_rate": round(win_rate, 4) if win_rate is not None else None,
             "loss_rate": round(loss_rate, 4) if loss_rate is not None else None,
             "average_rr": round(avg_rr, 4) if avg_rr is not None else None,
-            "profit_factor": round(profit_factor, 4) if profit_factor is not None else None,
+            "profit_factor": (
+                round(profit_factor, 4) if profit_factor is not None else None
+            ),
             "expectancy": round(expectancy, 4) if expectancy is not None else None,
             "drawdown": round(max_dd, 4),
             "gross_profit": round(gross_profit, 4),
@@ -154,7 +164,7 @@ def review_trade(trade: dict[str, Any]) -> dict[str, Any]:
     entry = trade.get("entry_price") or trade.get("open_price") or trade.get("price")
     exit_ = trade.get("exit_price") or trade.get("close_price")
     sl = trade.get("stop_loss") or trade.get("sl")
-    tp = trade.get("take_profit") or trade.get("tp")
+    trade.get("take_profit") or trade.get("tp")
     labels: list[str] = []
     reasons: list[str] = []
 

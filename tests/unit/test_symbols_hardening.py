@@ -8,10 +8,9 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from app.application.use_cases.mt5 import ListMT5SymbolsUseCase
-from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.application.dto.mt5 import MT5ConnectCommand
-from app.application.use_cases.mt5 import ConnectMT5UseCase
+from app.application.use_cases.mt5 import ConnectMT5UseCase, ListMT5SymbolsUseCase
+from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.infrastructure.brokers.mt5 import MockMT5Client, MT5Adapter
 from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
 from app.infrastructure.brokers.mt5.metrics import gateway_metrics
@@ -61,7 +60,7 @@ class TestGatewayCatalogueCache:
             base_url="https://example.trycloudflare.com",
             token="test-token",
         )
-        client._connected = True  # noqa: SLF001
+        client._connected = True
         calls: list[str] = []
 
         def fake_request(
@@ -117,7 +116,7 @@ class TestGatewayTransportMetrics:
                 timeout=5.0,
             ),
         )
-        data = client._request("GET", "/health", auth=False)  # noqa: SLF001
+        data = client._request("GET", "/health", auth=False)
         assert data.get("status") == "ok"
         after = gateway_metrics.snapshot()["lifetime"]["requests"]
         assert after >= before + 1

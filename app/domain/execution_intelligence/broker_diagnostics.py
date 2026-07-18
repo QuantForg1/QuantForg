@@ -37,17 +37,13 @@ def build_broker_diagnostics(
             None if latency_ms is not None else "No latency_ms on connection status"
         ),
         "uptime_seconds": uptime_seconds,
-        "uptime_status": (
-            "available" if uptime_seconds is not None else "unavailable"
-        ),
+        "uptime_status": ("available" if uptime_seconds is not None else "unavailable"),
         "last_disconnect_reason": last_disconnect_reason,
         "last_disconnect_status": (
             "available" if last_disconnect_reason else "unavailable"
         ),
         "reconnect_history": reconnects,
         "reconnect_count": len(reconnects),
-        "reconnect_history_status": (
-            "available" if reconnects else "unavailable"
-        ),
+        "reconnect_history_status": ("available" if reconnects else "unavailable"),
         "note": "Diagnostics never invent disconnect/reconnect events",
     }

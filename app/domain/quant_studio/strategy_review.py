@@ -39,7 +39,7 @@ def review_strategy(
     wr = _f("win_rate")
     pf = _f("profit_factor")
     sharpe = _f("sharpe_ratio")
-    sortino = _f("sortino_ratio")
+    _f("sortino_ratio")
     dd = _f("max_drawdown_pct")
     exp = _f("expectancy")
     trades = _f("trade_count")
@@ -50,7 +50,9 @@ def review_strategy(
         weaknesses.append(f"Win rate {wr:.1f}% is low — edge must come from RR")
 
     if pf is not None and pf >= 1.5:
-        strengths.append(f"Profit factor {pf:.2f} indicates positive expectancy structure")
+        strengths.append(
+            f"Profit factor {pf:.2f} indicates positive expectancy structure"
+        )
     elif pf is not None and pf < 1.1:
         weaknesses.append(f"Profit factor {pf:.2f} near breakeven")
 
@@ -108,7 +110,9 @@ def review_strategy(
             weaknesses.append(str(w))
 
     if not suitability:
-        suitability.append("Assess regime fit via session + volatility modules before live use")
+        suitability.append(
+            "Assess regime fit via session + volatility modules before live use"
+        )
 
     return {
         "status": "available",
@@ -116,7 +120,8 @@ def review_strategy(
         "weaknesses": weaknesses or ["No critical weaknesses flagged"],
         "risk": risks or ["Residual strategy risk remains"],
         "market_suitability": suitability,
-        "overfitting": overfitting or ["No acute overfitting flag from sample size alone"],
+        "overfitting": overfitting
+        or ["No acute overfitting flag from sample size alone"],
         "parameter_sensitivity": sensitivity
         or ["Insufficient data to grade parameter sensitivity"],
         "why": {

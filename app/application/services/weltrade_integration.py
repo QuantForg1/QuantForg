@@ -282,9 +282,7 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_reachable and mt5_attached
-                else "degraded"
-                if gateway_reachable
-                else "offline"
+                else "degraded" if gateway_reachable else "offline"
             ),
         }
 
@@ -357,9 +355,7 @@ class WeltradeIntegrationService:
                     or upstream.get("error")
                     or "Gateway /health failed"
                 )
-                diagnostic = str(
-                    upstream.get("diagnostic") or "Gateway Offline"
-                )
+                diagnostic = str(upstream.get("diagnostic") or "Gateway Offline")
         elif not mt5_connected:
             diagnostic = "Gateway Online"
 
@@ -415,12 +411,9 @@ class WeltradeIntegrationService:
             "status": (
                 "healthy"
                 if gateway_online and mt5_connected
-                else "degraded"
-                if gateway_online
-                else "offline"
+                else "degraded" if gateway_online else "offline"
             ),
         }
-
 
     async def bind_user_session(
         self,
@@ -741,9 +734,7 @@ class WeltradeIntegrationService:
                         gw.last_upstream() if hasattr(gw, "last_upstream") else None
                     ),
                 )
-                raise RuntimeError(
-                    f"Weltrade authentication failed: {exc}"
-                ) from exc
+                raise RuntimeError(f"Weltrade authentication failed: {exc}") from exc
             steps.append(
                 {
                     "step": "connect",

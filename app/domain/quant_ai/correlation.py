@@ -27,7 +27,7 @@ def _pearson(a: list[float], b: list[float]) -> float | None:
     den_y = sum((yi - mean_y) ** 2 for yi in y) ** 0.5
     if den_x == 0 or den_y == 0:
         return None
-    return num / (den_x * den_y)
+    return float(num / (den_x * den_y))
 
 
 def correlation_from_closes(

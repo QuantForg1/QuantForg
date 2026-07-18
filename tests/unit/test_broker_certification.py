@@ -149,9 +149,7 @@ class TestCertificationRun:
             if capability == "symbols":
                 return _ok("symbols", {"items": [{"code": "EURUSD"}]})
             if capability == "quotes":
-                return _ok(
-                    "quotes", {"symbol": "EURUSD", "bid": "1.1", "ask": "1.2"}
-                )
+                return _ok("quotes", {"symbol": "EURUSD", "bid": "1.1", "ask": "1.2"})
             if capability == "candles":
                 return _ok("candles", {"items": [{"open": "1"}]})
             if capability == "trading":

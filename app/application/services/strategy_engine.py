@@ -277,8 +277,7 @@ class StrategyEngine:
             "strategies": [p.key for p in self.plugins.values()],
             "performance": {
                 "note": (
-                    "Use paper/performance and backtests endpoints; "
-                    "no invented PnL"
+                    "Use paper/performance and backtests endpoints; " "no invented PnL"
                 ),
                 "paper": "GET /paper/performance",
                 "backtests": "GET /backtests",

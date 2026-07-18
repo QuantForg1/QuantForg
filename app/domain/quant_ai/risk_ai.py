@@ -44,7 +44,9 @@ def analyze_risk_ai(
                     "detail": f"Margin level ≈ {margin_level:.1f}%",
                 }
             )
-            reasons.append("Margin level under 200% — capacity to absorb adverse moves is limited")
+            reasons.append(
+                "Margin level under 200% — capacity to absorb adverse moves is limited"
+            )
         elif margin_level < 500:
             flags.append(
                 {
@@ -104,7 +106,9 @@ def analyze_risk_ai(
                 "detail": f"USD-related cluster volume {usd_cluster_volume:.2f}",
             }
         )
-        reasons.append("Multiple USD-sensitive symbols open — correlation stacking risk")
+        reasons.append(
+            "Multiple USD-sensitive symbols open — correlation stacking risk"
+        )
 
     for sym, vol in by_symbol.items():
         if equity > 0 and vol >= 1.0:
@@ -116,7 +120,9 @@ def analyze_risk_ai(
                     "detail": f"{sym} size {vol}",
                 }
             )
-            reasons.append(f"{sym} position size {vol} is large vs typical micro sizing")
+            reasons.append(
+                f"{sym} position size {vol} is large vs typical micro sizing"
+            )
 
     if equity > 0 and balance > 0:
         dd_pct = max(0.0, (balance - equity) / balance * 100.0)
@@ -161,6 +167,8 @@ def analyze_risk_ai(
         "advisory_only": True,
         "news_risk": {
             "status": "unavailable",
-            "reason": "News risk requires configured economic calendar feed — not invented",
+            "reason": (
+                "News risk requires configured economic calendar feed — not invented"
+            ),
         },
     }

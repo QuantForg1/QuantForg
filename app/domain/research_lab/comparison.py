@@ -60,9 +60,7 @@ def compare_strategies(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     def _rank(key: str, *, reverse: bool = True) -> list[str]:
         scored = [
-            (it["strategy_key"], it.get(key))
-            for it in items
-            if it.get(key) is not None
+            (it["strategy_key"], it.get(key)) for it in items if it.get(key) is not None
         ]
         scored.sort(key=lambda x: float(x[1] or 0), reverse=reverse)
         return [str(k) for k, _ in scored]

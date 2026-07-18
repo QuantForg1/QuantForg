@@ -354,16 +354,16 @@ class InviteOrganizationMemberUseCase:
 
             # Prevent privilege escalation via invite role selection.
             if command.role == OrganizationMemberRole.OWNER:
-                raise AuthorizationError(
-                    "Owner role cannot be assigned via invitation"
-                )
-            if membership.role == OrganizationMemberRole.ADMIN and command.role not in {
-                OrganizationMemberRole.MEMBER,
-                OrganizationMemberRole.VIEWER,
-            }:
-                raise AuthorizationError(
-                    "Admins may only invite traders or viewers"
-                )
+                raise AuthorizationError("Owner role cannot be assigned via invitation")
+            if (
+                membership.role == OrganizationMemberRole.ADMIN
+                and command.role
+                not in {
+                    OrganizationMemberRole.MEMBER,
+                    OrganizationMemberRole.VIEWER,
+                }
+            ):
+                raise AuthorizationError("Admins may only invite traders or viewers")
 
             token = token_urlsafe(32)
             invitation = OrganizationInvitation(

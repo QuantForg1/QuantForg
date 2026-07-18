@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.application.services.ai_market_advisor import AiMarketAdvisor
@@ -49,9 +49,7 @@ def _dec(value: Any) -> str:
 
 def dashboard_cache_stats() -> dict[str, Any]:
     looked = _DASHBOARD_CACHE_STATS["hits"] + _DASHBOARD_CACHE_STATS["misses"]
-    ratio = (
-        _DASHBOARD_CACHE_STATS["hits"] / looked if looked else None
-    )
+    ratio = _DASHBOARD_CACHE_STATS["hits"] / looked if looked else None
     return {
         "hits": _DASHBOARD_CACHE_STATS["hits"],
         "misses": _DASHBOARD_CACHE_STATS["misses"],
@@ -82,7 +80,7 @@ class MarketIntelligenceService:
             cached = _DASHBOARD_CACHE.get(cache_key)
             if cached is not None:
                 _DASHBOARD_CACHE_STATS["hits"] += 1
-                return cached
+                return cast("dict[str, Any]", cached)
         _DASHBOARD_CACHE_STATS["misses"] += 1
 
         status = await self.status.execute(user_id=user_id)
@@ -119,7 +117,7 @@ class MarketIntelligenceService:
                     "currency": snap.currency,
                     "server": snap.server,
                 }
-            except Exception:  # noqa: BLE001
+            except Exception:
                 account = {}
 
             try:
@@ -146,7 +144,7 @@ class MarketIntelligenceService:
                 ]
                 history_deals = len(self.portfolio_sync.history_deals())
                 history_orders = len(self.portfolio_sync.history_orders())
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: S110 - portfolio data is optional
                 pass
 
             try:
@@ -168,7 +166,7 @@ class MarketIntelligenceService:
                         continue
                     try:
                         spread = float(Decimal(str(ask)) - Decimal(str(bid)))
-                    except Exception:  # noqa: BLE001
+                    except Exception:  # noqa: S112 - skip an invalid quote
                         continue
                     if spread <= 0:
                         continue
@@ -182,7 +180,7 @@ class MarketIntelligenceService:
                     scored.append((spread, row))
                 scored.sort(key=lambda x: x[0], reverse=True)
                 spread_movers = [r for _, r in scored[:8]]
-            except Exception:  # noqa: BLE001
+            except Exception:
                 quotes = []
                 spread_movers = []
 

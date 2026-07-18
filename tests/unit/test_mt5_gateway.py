@@ -140,9 +140,7 @@ def client(gateway_env: MT5GatewaySettings) -> Iterator[TestClient]:
         existing = getattr(test_client.app.state, "runtime", None)
         if existing is not None:
             existing.stop_background()
-        fake = MT5GatewayRuntime(
-            settings=get_gateway_settings(), bridge=_FakeBridge()
-        )
+        fake = MT5GatewayRuntime(settings=get_gateway_settings(), bridge=_FakeBridge())
         test_client.app.state.runtime = fake
         yield test_client
 
@@ -255,17 +253,13 @@ class TestMT5Gateway:
         quotes = client.get("/quotes/EURUSD", headers=headers)
         assert quotes.status_code == 200
 
-    def test_attach_fails_without_terminal_session(
-        self, client: TestClient
-    ) -> None:
+    def test_attach_fails_without_terminal_session(self, client: TestClient) -> None:
         headers = {"Authorization": "Bearer test-gateway-token"}
         res = client.post("/session/attach", headers=headers, json={})
         assert res.status_code == 503
         assert "no active account" in res.json()["detail"].lower()
 
-    def test_auto_attach_on_startup(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_auto_attach_on_startup(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("MT5_GATEWAY_TOKEN", "test-gateway-token")
         monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
         monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "true")
@@ -320,9 +314,7 @@ class TestMT5VersionDateParsing:
         for value in ("28 Apr 2026", "15 Jan 2027", "2026-04-28", "01 May 2025"):
             assert _safe_int(value, default=0) == 0
 
-    def test_health_survives_mt5_release_date_string(
-        self, client: TestClient
-    ) -> None:
+    def test_health_survives_mt5_release_date_string(self, client: TestClient) -> None:
         headers = {"Authorization": "Bearer test-gateway-token"}
         runtime = client.app.state.runtime
 

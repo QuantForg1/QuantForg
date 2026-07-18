@@ -48,9 +48,7 @@ def build_professional_analytics(
     ]
 
     # Performance timeline (equity)
-    perf = [
-        {"t": d["t"], "equity": d["equity"]} for d in dd_timeline
-    ]
+    perf = [{"t": d["t"], "equity": d["equity"]} for d in dd_timeline]
 
     # Monthly returns from equity points with timestamps
     by_month: dict[str, list[float]] = defaultdict(list)

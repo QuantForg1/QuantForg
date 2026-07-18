@@ -127,7 +127,9 @@ class PostgresExecutionDecisionRepository:
             # Partial unique (user_id, request_id) WHERE NOT replay enforces
             # at most one canonical row; upsert by PK for same-entity re-add.
             await session.execute(
-                text(insert_sql + """
+                text(
+                    insert_sql
+                    + """
                     ON CONFLICT (id) DO UPDATE SET
                         user_id = EXCLUDED.user_id,
                         request_id = EXCLUDED.request_id,
@@ -144,7 +146,8 @@ class PostgresExecutionDecisionRepository:
                         request_snapshot = EXCLUDED.request_snapshot,
                         idempotent_replay = EXCLUDED.idempotent_replay,
                         decided_at = EXCLUDED.decided_at
-                    """),
+                    """
+                ),
                 params,
             )
         return decision
@@ -155,25 +158,29 @@ class PostgresExecutionDecisionRepository:
         session = self._uow._require_session()
         key = request_id.strip()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM execution_decisions
                 WHERE user_id = :user_id AND request_id = :request_id
                   AND idempotent_replay = false
                 ORDER BY decided_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"user_id": str(user_id), "request_id": key},
         )
         row = result.mappings().first()
         if row:
             return _decision_from_row(row)
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM execution_decisions
                 WHERE user_id = :user_id AND request_id = :request_id
                 ORDER BY decided_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"user_id": str(user_id), "request_id": key},
         )
         row = result.mappings().first()
@@ -184,12 +191,14 @@ class PostgresExecutionDecisionRepository:
     ) -> list[ExecutionDecisionRecord]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM execution_decisions
                 WHERE user_id = :user_id
                 ORDER BY decided_at DESC
                 LIMIT :limit
-                """),
+                """
+            ),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_decision_from_row(r) for r in result.mappings().all()]
@@ -271,25 +280,29 @@ class PostgresExecutionAttemptRepository:
         session = self._uow._require_session()
         key = request_id.strip()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM execution_attempts
                 WHERE user_id = :user_id AND request_id = :request_id
                   AND idempotent_replay = false
                 ORDER BY submitted_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"user_id": str(user_id), "request_id": key},
         )
         row = result.mappings().first()
         if row:
             return _attempt_from_row(row)
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM execution_attempts
                 WHERE user_id = :user_id AND request_id = :request_id
                 ORDER BY submitted_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"user_id": str(user_id), "request_id": key},
         )
         row = result.mappings().first()
@@ -300,12 +313,14 @@ class PostgresExecutionAttemptRepository:
     ) -> list[ExecutionAttempt]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM execution_attempts
                 WHERE user_id = :user_id
                 ORDER BY submitted_at DESC
                 LIMIT :limit
-                """),
+                """
+            ),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_attempt_from_row(r) for r in result.mappings().all()]

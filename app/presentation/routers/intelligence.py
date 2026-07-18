@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from fastapi import APIRouter, Query
 
 from app.presentation.dependencies.auth import CurrentUser
@@ -82,7 +84,7 @@ async def intelligence_calendar(
     news: NewsIntelSvc,
     limit: int = Query(default=20, ge=1, le=50),
 ) -> list[EconomicEventResponse]:
-    """Return events only from configured ``ECONOMIC_CALENDAR_FEED_URL`` (else empty)."""
+    """Return events from the configured calendar feed, or an empty list."""
     _ = user
     return [
         EconomicEventResponse(
@@ -123,7 +125,7 @@ async def intelligence_events(
     intel: MarketIntelSvc,
     limit: int = Query(default=30, ge=1, le=100),
 ) -> list[IntelligenceEventResponse]:
-    """Classify real news/calendar payloads into intelligence events (no fabrication)."""
+    """Classify real news and calendar payloads without fabricating events."""
     portfolio_symbols: tuple[str, ...] = ()
     try:
         dash = await intel.dashboard(user_id=user.id)
@@ -132,7 +134,7 @@ async def intelligence_events(
             for p in (dash.get("positions") or [])
             if isinstance(p, dict) and p.get("symbol")
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         portfolio_symbols = ()
     events = registry.build_events(limit=limit, portfolio_symbols=portfolio_symbols)
     return [
@@ -190,4 +192,4 @@ async def intelligence_status(
 ) -> IntelligenceStatusResponse:
     """Aggregate provider layer status (failover / cache / rate-limit posture)."""
     _ = user
-    return IntelligenceStatusResponse(**registry.status())
+    return IntelligenceStatusResponse(**cast("dict[str, Any]", registry.status()))

@@ -52,10 +52,9 @@ class GatewayMetrics:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             self._roll()
+
             def pack(w: _Window) -> dict[str, Any]:
-                avg = (
-                    (w.total_latency_ms / w.count) if w.count else 0.0
-                )
+                avg = (w.total_latency_ms / w.count) if w.count else 0.0
                 looked = w.cache_hits + w.cache_misses
                 hit_ratio = (w.cache_hits / looked) if looked else None
                 return {

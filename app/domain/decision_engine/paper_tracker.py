@@ -51,7 +51,9 @@ class DecisionPaperTracker:
                 del bucket[:-1500]
         return row
 
-    def update_pnl(self, user_id: UUID, signal_id: str, simulated_pnl: float) -> dict[str, Any] | None:
+    def update_pnl(
+        self, user_id: UUID, signal_id: str, simulated_pnl: float
+    ) -> dict[str, Any] | None:
         with self._lock:
             bucket = self._by_user.get(str(user_id), [])
             for i, row in enumerate(bucket):
@@ -141,7 +143,9 @@ class DecisionPaperTracker:
             out = []
             for r in rows:
                 try:
-                    ts = datetime.fromisoformat(str(r["created_at"]).replace("Z", "+00:00"))
+                    ts = datetime.fromisoformat(
+                        str(r["created_at"]).replace("Z", "+00:00")
+                    )
                 except ValueError:
                     continue
                 if ts >= cut:

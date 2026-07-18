@@ -1,4 +1,4 @@
-"""Decision Engine — trade score 0–100; default WAIT when insufficient."""
+"""Decision Engine - trade score 0-100; default WAIT when insufficient."""
 
 from __future__ import annotations
 
@@ -28,7 +28,9 @@ def compute_trade_score(
 
     if mtf.get("aligned"):
         score += 22
-        reasons.append(f"MTF aligned {mtf.get('bias')} ({mtf.get('confirmations')} confirms)")
+        reasons.append(
+            f"MTF aligned {mtf.get('bias')} ({mtf.get('confirmations')} confirms)"
+        )
     else:
         penalties.append(str(mtf.get("why") or "MTF not aligned"))
         score -= 8

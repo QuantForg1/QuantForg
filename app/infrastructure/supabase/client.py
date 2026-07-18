@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from supabase import Client, create_client
+from supabase import Client, create_client  # type: ignore[attr-defined]
 
 from core.config.settings import Settings
 from core.logging import get_logger

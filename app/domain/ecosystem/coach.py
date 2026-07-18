@@ -67,9 +67,7 @@ def coach_from_trades(
         mistakes.append(f"{no_lesson} entries missing lessons learned")
         suggestions.append("Require a one-line lesson before closing the journal card")
     if skipped_de >= max(3, n // 4):
-        mistakes.append(
-            f"{skipped_de}/{n} trades lack Decision Engine score linkage"
-        )
+        mistakes.append(f"{skipped_de}/{n} trades lack Decision Engine score linkage")
         suggestions.append(
             "Only size risk when Decision Engine allows PAPER TRADE_IDEA "
             "— never bypass"
@@ -82,27 +80,19 @@ def coach_from_trades(
     if wr is not None and wr >= 55:
         habits.append(f"Win rate {wr}% across coached sample")
     elif wr is not None and wr < 40:
-        weaknesses.append(
-            f"Win rate {wr}% — edge must come from RR / selection"
-        )
-        suggestions.append(
-            "Review Research Lab candidates before increasing size"
-        )
+        weaknesses.append(f"Win rate {wr}% — edge must come from RR / selection")
+        suggestions.append("Review Research Lab candidates before increasing size")
 
     if wins + losses >= 10 and losses > wins * 1.5:
         weaknesses.append("Loss frequency dominates sample")
-        suggestions.append(
-            "Tighten session playbook — fewer setups, higher quality"
-        )
+        suggestions.append("Tighten session playbook — fewer setups, higher quality")
 
     if not habits:
         habits.append(
             "Continuing to journal is a productive habit — keep tagging session"
         )
     if not mistakes:
-        mistakes.append(
-            "No acute pattern from available fields — keep sample growing"
-        )
+        mistakes.append("No acute pattern from available fields — keep sample growing")
     if not suggestions:
         suggestions.append(
             "Maintain paper-first validation via Research Lab + Decision Engine"

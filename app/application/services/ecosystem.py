@@ -107,9 +107,7 @@ class EcosystemService:
             **_security(),
         }
 
-    def journal_upsert(
-        self, *, user_id: UUID, body: dict[str, Any]
-    ) -> dict[str, Any]:
+    def journal_upsert(self, *, user_id: UUID, body: dict[str, Any]) -> dict[str, Any]:
         store = get_ecosystem_store()
         # Auto-enrich from DE paper when trade/signal id present
         signal_id = body.get("decision_signal_id")
@@ -184,9 +182,7 @@ class EcosystemService:
             **_security(),
         }
 
-    def playbook_save(
-        self, *, user_id: UUID, body: dict[str, Any]
-    ) -> dict[str, Any]:
+    def playbook_save(self, *, user_id: UUID, body: dict[str, Any]) -> dict[str, Any]:
         saved = get_ecosystem_store().save_playbook(
             user_id, body, playbook_id=body.get("id")
         )
@@ -219,9 +215,7 @@ class EcosystemService:
             **_security(),
         }
 
-    def watchlist_save(
-        self, *, user_id: UUID, body: dict[str, Any]
-    ) -> dict[str, Any]:
+    def watchlist_save(self, *, user_id: UUID, body: dict[str, Any]) -> dict[str, Any]:
         saved = get_ecosystem_store().save_watchlist(
             user_id, body, watchlist_id=body.get("id")
         )
@@ -235,9 +229,7 @@ class EcosystemService:
             "note": "Saved layouts are independent of Trading Terminal defaults",
         }
 
-    def workspace_save(
-        self, *, user_id: UUID, body: dict[str, Any]
-    ) -> dict[str, Any]:
+    def workspace_save(self, *, user_id: UUID, body: dict[str, Any]) -> dict[str, Any]:
         saved = get_ecosystem_store().save_workspace(
             user_id, body, workspace_id=body.get("id")
         )
@@ -259,9 +251,7 @@ class EcosystemService:
             **_security(),
         }
 
-    def alert_create(
-        self, *, user_id: UUID, body: dict[str, Any]
-    ) -> dict[str, Any]:
+    def alert_create(self, *, user_id: UUID, body: dict[str, Any]) -> dict[str, Any]:
         saved = get_ecosystem_store().add_alert(user_id, body)
         return {"status": "available", "alert": saved, **_security()}
 
@@ -278,9 +268,7 @@ class EcosystemService:
             **_security(),
         }
 
-    def learning_complete(
-        self, *, user_id: UUID, lesson_id: str
-    ) -> dict[str, Any]:
+    def learning_complete(self, *, user_id: UUID, lesson_id: str) -> dict[str, Any]:
         prog = get_ecosystem_store().complete_lesson(user_id, lesson_id)
         return {"status": "available", "progress": prog, **_security()}
 
@@ -315,9 +303,7 @@ class EcosystemService:
         bundle = get_ecosystem_store().export_sync_bundle(user_id)
         return {"status": "available", "bundle": bundle, **_security()}
 
-    def sync_import(
-        self, *, user_id: UUID, bundle: dict[str, Any]
-    ) -> dict[str, Any]:
+    def sync_import(self, *, user_id: UUID, bundle: dict[str, Any]) -> dict[str, Any]:
         result = get_ecosystem_store().import_sync_bundle(user_id, bundle)
         return {**result, **_security()}
 

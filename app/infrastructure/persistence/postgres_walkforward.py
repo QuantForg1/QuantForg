@@ -58,7 +58,8 @@ class PostgresWalkForwardRunRepository:
     async def add(self, run: WalkForwardRun) -> WalkForwardRun:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO walkforward_runs (
                     id, user_id, request_id, symbol, timeframe, status, promotion,
                     window_config, folds, aggregated_is, aggregated_oos, robustness,
@@ -92,7 +93,8 @@ class PostgresWalkForwardRunRepository:
                     started_at = EXCLUDED.started_at,
                     finished_at = EXCLUDED.finished_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(run.id),
                 "user_id": str(run.user_id),
@@ -131,10 +133,12 @@ class PostgresWalkForwardRunRepository:
     async def get_for_user(self, user_id: UUID, run_id: UUID) -> WalkForwardRun | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM walkforward_runs
                 WHERE id = :id AND user_id = :user_id
-                """),
+                """
+            ),
             {"id": str(run_id), "user_id": str(user_id)},
         )
         row = result.mappings().first()
@@ -145,12 +149,14 @@ class PostgresWalkForwardRunRepository:
     ) -> list[WalkForwardRun]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM walkforward_runs
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT :limit
-                """),
+                """
+            ),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_run_from_row(r) for r in result.mappings().all()]
@@ -170,13 +176,15 @@ class PostgresWalkForwardUnitOfWork(PostgresUnitOfWorkBase):
         self.oos_metrics.append(entry)
         session = self._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO walkforward_oos_metrics (
                     id, walkforward_id, user_id, payload
                 ) VALUES (
                     :id, :walkforward_id, :user_id, CAST(:payload AS jsonb)
                 )
-                """),
+                """
+            ),
             {
                 "id": str(uuid4()),
                 "walkforward_id": str(run_id),
@@ -192,7 +200,8 @@ class PostgresWalkForwardUnitOfWork(PostgresUnitOfWorkBase):
         self.robustness_reports.append(entry)
         session = self._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO walkforward_robustness_reports (
                     id, walkforward_id, user_id, payload
                 ) VALUES (
@@ -202,7 +211,8 @@ class PostgresWalkForwardUnitOfWork(PostgresUnitOfWorkBase):
                     user_id = EXCLUDED.user_id,
                     payload = EXCLUDED.payload,
                     recorded_at = timezone('utc', now())
-                """),
+                """
+            ),
             {
                 "id": str(uuid4()),
                 "walkforward_id": str(run_id),

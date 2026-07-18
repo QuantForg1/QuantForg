@@ -31,7 +31,7 @@ def summarize_walkforward_stability(folds: list[dict[str, Any]]) -> dict[str, An
         if len(xs) < 2:
             return None
         m = sum(xs) / len(xs)
-        return (sum((x - m) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5
+        return float((sum((x - m) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5)
 
     mean_is = _mean(is_pfs)
     mean_oos = _mean(oos_pfs)

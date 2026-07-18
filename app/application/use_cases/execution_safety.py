@@ -12,11 +12,12 @@ from app.application.dto.execution import ExecutionCheckCommand, ExecutionCheckD
 from app.application.services.execution_safety import ExecutionSafetyService
 from app.application.services.mt5_session_guard import live_connection_meta
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
+from app.domain.entities.execution_safety import ExecutionDecisionRecord
 from app.domain.entities.mt5_order import OrderIntent
 from app.domain.enums.audit import AuditAction, AuditOutcome
 from app.domain.enums.order import OrderSide, OrderType
-from app.domain.execution_engine.reasons import humanize_reasons
 from app.domain.exceptions.base import NotFoundError, ValidationError
+from app.domain.execution_engine.reasons import humanize_reasons
 from app.domain.value_objects.mt5_order import (
     LotSize,
     MagicNumber,
@@ -24,7 +25,6 @@ from app.domain.value_objects.mt5_order import (
     StopLoss,
     TakeProfit,
 )
-from app.domain.entities.execution_safety import ExecutionDecisionRecord
 
 
 def _parse_intent(command: ExecutionCheckCommand) -> OrderIntent:

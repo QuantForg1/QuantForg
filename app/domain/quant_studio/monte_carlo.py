@@ -27,7 +27,7 @@ def run_monte_carlo(
     if simulations > 10_000:
         simulations = 10_000
 
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 - deterministic simulation, not security
     n = len(trade_pnls)
     terminal: list[float] = []
     max_dds: list[float] = []
@@ -51,7 +51,7 @@ def run_monte_carlo(
     def pctile(sorted_vals: list[float], q: float) -> float:
         if not sorted_vals:
             return 0.0
-        idx = min(len(sorted_vals) - 1, max(0, int(math.floor(q * (len(sorted_vals) - 1)))))
+        idx = min(len(sorted_vals) - 1, max(0, math.floor(q * (len(sorted_vals) - 1))))
         return sorted_vals[idx]
 
     mean_eq = sum(terminal) / len(terminal)

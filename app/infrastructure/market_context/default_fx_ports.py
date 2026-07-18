@@ -70,12 +70,15 @@ class WeekendCalendarPort:
     """Weekend classification only — no invented holiday vendor data."""
 
     def is_weekend(self, market_code: str, local_date: date) -> bool:
+        _ = market_code
         return local_date.weekday() >= 5
 
     def is_holiday(self, market_code: str, local_date: date) -> bool:
+        _ = market_code, local_date
         return False
 
     def get_holidays(self, market_code: str, year: int) -> tuple[date, ...]:
+        _ = market_code, year
         return ()
 
 

@@ -2,22 +2,33 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 _REASON_MAP: dict[str, str] = {
-    "broker connection not active": "Broker is not connected — open Broker Workspace and attach a live session.",
+    "broker connection not active": (
+        "Broker is not connected — open Broker Workspace and attach a live session."
+    ),
     "symbol not tradable": "Symbol is not tradable on this broker account.",
     "market closed": "Market is closed for this symbol — wait for the next session.",
-    "execution disabled": "Live execution is disabled (EXECUTION_ENABLED=false) — no broker order was sent.",
-    "outside configured trading hours": "Outside configured trading hours for this desk policy.",
+    "execution disabled": (
+        "Live execution is disabled (EXECUTION_ENABLED=false) — "
+        "no broker order was sent."
+    ),
+    "outside configured trading hours": (
+        "Outside configured trading hours for this desk policy."
+    ),
     "not enough money": "Insufficient free margin for this order size.",
     "invalid volume": "Lot size is invalid for this symbol (min/max/step).",
     "invalid stops": "Stop loss / take profit violate broker distance rules.",
     "invalid price": "Order price is invalid for the selected order type.",
     "trade disabled": "Trading is disabled on this account by the broker.",
     "request rejected": "Broker rejected the order request.",
-    "stop loss inside freeze level": "Stop loss is inside the broker freeze level — move it farther from price.",
-    "take profit inside freeze level": "Take profit is inside the broker freeze level — move it farther from price.",
+    "stop loss inside freeze level": (
+        "Stop loss is inside the broker freeze level — move it farther from price."
+    ),
+    "take profit inside freeze level": (
+        "Take profit is inside the broker freeze level — move it farther from price."
+    ),
 }
 
 

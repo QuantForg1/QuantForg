@@ -136,24 +136,28 @@ class PostgresMT5ConnectionRepository:
     async def get_active_for_user(self, user_id: UUID) -> MT5Connection | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM mt5_connections
                 WHERE user_id = :user_id AND connected = true
                 ORDER BY updated_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         row = result.mappings().first()
         if row:
             return _connection_from_row(row)
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM mt5_connections
                 WHERE user_id = :user_id
                 ORDER BY updated_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         row = result.mappings().first()
@@ -162,11 +166,13 @@ class PostgresMT5ConnectionRepository:
     async def list_for_user(self, user_id: UUID) -> list[MT5Connection]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM mt5_connections
                 WHERE user_id = :user_id
                 ORDER BY updated_at DESC
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_connection_from_row(r) for r in result.mappings().all()]
@@ -186,7 +192,8 @@ class PostgresMT5ConnectionRepository:
         session = self._uow._require_session()
         params = _connection_params(connection)
         result = await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO mt5_connections (
                     id, user_id, login, server, status, session_ref, terminal_path,
                     terminal_build, terminal_version, latency_ms, last_heartbeat_at,
@@ -210,7 +217,8 @@ class PostgresMT5ConnectionRepository:
                     last_error = EXCLUDED.last_error,
                     updated_at = EXCLUDED.updated_at
                 RETURNING id
-                """),
+                """
+            ),
             params,
         )
         row = result.mappings().first()
@@ -226,7 +234,8 @@ class PostgresMT5ValidationRepository:
     async def add(self, validation: TradeValidation) -> TradeValidation:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO mt5_order_validations (
                     id, user_id, symbol, side, order_type, volume, valid, retcode,
                     expected_margin, estimated_profit, messages, checks,
@@ -251,7 +260,8 @@ class PostgresMT5ValidationRepository:
                     checks = EXCLUDED.checks,
                     request_snapshot = EXCLUDED.request_snapshot,
                     validated_at = EXCLUDED.validated_at
-                """),
+                """
+            ),
             {
                 "id": str(validation.id),
                 "user_id": str(validation.user_id),
@@ -277,12 +287,14 @@ class PostgresMT5ValidationRepository:
     ) -> list[TradeValidation]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM mt5_order_validations
                 WHERE user_id = :user_id
                 ORDER BY validated_at DESC
                 LIMIT :limit
-                """),
+                """
+            ),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_validation_from_row(r) for r in result.mappings().all()]

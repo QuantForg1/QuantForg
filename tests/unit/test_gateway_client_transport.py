@@ -38,9 +38,7 @@ class TestGatewayDiagnostics:
             classify_gateway_failure(error="SSL: CERTIFICATE_VERIFY_FAILED")
             == "TLS failure"
         )
-        assert (
-            classify_gateway_failure(error="Too many redirects") == "Redirect loop"
-        )
+        assert classify_gateway_failure(error="Too many redirects") == "Redirect loop"
         assert (
             classify_gateway_failure(
                 error="non-JSON body",
@@ -64,7 +62,9 @@ class TestGatewayUrlHelpers:
 
     def test_join_health_and_session_paths(self) -> None:
         base = "https://abc.trycloudflare.com"
-        assert join_gateway_url(base, "/health") == "https://abc.trycloudflare.com/health"
+        assert (
+            join_gateway_url(base, "/health") == "https://abc.trycloudflare.com/health"
+        )
         assert (
             join_gateway_url(base + "/", "/session/status")
             == "https://abc.trycloudflare.com/session/status"
@@ -78,7 +78,8 @@ class TestGatewayUrlHelpers:
         # urljoin without trailing base slash historically ate last segments.
         base = "https://abc.trycloudflare.com/gw"
         assert (
-            join_gateway_url(base, "/health") == "https://abc.trycloudflare.com/gw/health"
+            join_gateway_url(base, "/health")
+            == "https://abc.trycloudflare.com/gw/health"
         )
 
 

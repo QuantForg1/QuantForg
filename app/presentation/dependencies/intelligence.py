@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import Depends
@@ -76,7 +77,12 @@ class _RegistryCalendar:
     def __init__(self, registry: IntelligenceProviderRegistry) -> None:
         self._registry = registry
 
-    def list_events(self, *, limit: int = 20, as_of=None) -> list[EconomicEvent]:
+    def list_events(
+        self,
+        *,
+        limit: int = 20,
+        as_of: datetime | None = None,
+    ) -> list[EconomicEvent]:
         return [
             EconomicEvent(
                 id=e.id,

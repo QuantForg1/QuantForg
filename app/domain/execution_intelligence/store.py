@@ -92,9 +92,7 @@ class LifecycleStore:
             if existing_id and existing_id in self._by_id:
                 return self._by_id[existing_id]
             lid = str(uuid4())
-            event = LifecycleEvent(
-                state=initial, at=now, reason=reason, source=source
-            )
+            event = LifecycleEvent(state=initial, at=now, reason=reason, source=source)
             rec = LifecycleRecord(
                 lifecycle_id=lid,
                 request_id=request_id.strip(),

@@ -47,6 +47,6 @@ def is_trusted_frontend_origin(origin: str) -> bool:
         or value == "https://quantforg.com"
     ):
         return True
-    if value.startswith("http://localhost:") or value.startswith("http://127.0.0.1:"):
-        return True
-    return False
+    return bool(
+        value.startswith("http://localhost:") or value.startswith("http://127.0.0.1:")
+    )

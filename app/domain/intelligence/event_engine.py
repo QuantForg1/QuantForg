@@ -118,7 +118,10 @@ class IntelligenceEventEngine:
 
         assets = tuple(
             dict.fromkeys(
-                [*(a.upper() for a in hinted_assets if a), *self._match_map(_ASSET_HINTS, blob)]
+                [
+                    *(a.upper() for a in hinted_assets if a),
+                    *self._match_map(_ASSET_HINTS, blob),
+                ]
             )
         )
         sectors = self._match_map(_SECTOR_HINTS, blob)
@@ -136,15 +139,12 @@ class IntelligenceEventEngine:
                 s.upper()
                 for s in portfolio_symbols
                 if s
-                and (
-                    s.upper() in assets
-                    or any(c in s.upper() for c in currencies)
-                )
+                and (s.upper() in assets or any(c in s.upper() for c in currencies))
             }
         )
         if portfolio_hit:
-            portfolio_impact = (
-                "Potential relevance to open symbols: " + ", ".join(portfolio_hit)
+            portfolio_impact = "Potential relevance to open symbols: " + ", ".join(
+                portfolio_hit
             )
             risk = {"critical": 0.9, "high": 0.75, "medium": 0.5, "low": 0.25}.get(
                 severity, 0.4
@@ -163,9 +163,9 @@ class IntelligenceEventEngine:
             )
             risk = 0.1
 
-        eid = hashlib.sha256(
-            f"{provider}|{title}|{published_at}".encode()
-        ).hexdigest()[:24]
+        eid = hashlib.sha256(f"{provider}|{title}|{published_at}".encode()).hexdigest()[
+            :24
+        ]
         det = (
             f"[{severity}/{classification}] {title.strip()} — "
             f"currencies={','.join(currencies) or 'n/a'}; "

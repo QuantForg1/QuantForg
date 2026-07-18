@@ -28,12 +28,21 @@ def analyze_execution_ai(
 
     score = None
     if fill_rate is not None and reject_rate is not None:
-        slip_pen = min(1.0, float(avg_slip or 0.0) * 10.0) if avg_slip is not None else 0.0
+        slip_pen = (
+            min(1.0, float(avg_slip or 0.0) * 10.0) if avg_slip is not None else 0.0
+        )
         score = round(
-            max(0.0, min(1.0, float(fill_rate) * (1.0 - float(reject_rate)) - slip_pen * 0.1)),
+            max(
+                0.0,
+                min(
+                    1.0, float(fill_rate) * (1.0 - float(reject_rate)) - slip_pen * 0.1
+                ),
+            ),
             4,
         )
-        reasons.append(f"Fill rate {float(fill_rate):.1%}, reject rate {float(reject_rate):.1%}")
+        reasons.append(
+            f"Fill rate {float(fill_rate):.1%}, reject rate {float(reject_rate):.1%}"
+        )
     if avg_slip is not None:
         reasons.append(f"Average observed slippage {avg_slip}")
     if latency is not None:

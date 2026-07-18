@@ -92,9 +92,7 @@ def normalize_gateway_base_url(raw: str) -> str:
         )
         raise ValueError(msg)
     path = parsed.path.rstrip("/")
-    cleaned = urlunparse(
-        (parsed.scheme.lower(), parsed.netloc, path, "", "", "")
-    )
+    cleaned = urlunparse((parsed.scheme.lower(), parsed.netloc, path, "", "", ""))
     return cleaned.rstrip("/")
 
 
@@ -145,9 +143,7 @@ def classify_gateway_failure(
         return "Cloudflare rate limited"
     if status_code is not None and status_code >= 500:
         return (
-            "Cloudflare upstream error"
-            if cloudflare
-            else f"Gateway HTTP {status_code}"
+            "Cloudflare upstream error" if cloudflare else f"Gateway HTTP {status_code}"
         )
 
     if "too many redirects" in err or "redirect loop" in err:
@@ -307,9 +303,7 @@ class GatewayMT5Client:
             http2=True,
             has_json_body=json_body is not None,
             # Never log password even if present in body keys.
-            json_keys=sorted(
-                k for k in (json_body or {}) if k.lower() != "password"
-            ),
+            json_keys=sorted(k for k in (json_body or {}) if k.lower() != "password"),
         )
 
         try:
@@ -457,9 +451,7 @@ class GatewayMT5Client:
             "cloudflare_cache": cf_cache or None,
             "headers": {
                 "content-type": response.headers.get("content-type", ""),
-                "content-encoding": response.headers.get(
-                    "content-encoding", ""
-                ),
+                "content-encoding": response.headers.get("content-encoding", ""),
                 "server": response.headers.get("server", ""),
             },
             "body_preview": _clip(body_text),
@@ -987,11 +979,7 @@ class GatewayMT5Client:
         self._require_connected()
         data = self._request("GET", f"/quotes/{symbol.strip().upper()}")
         ts = data.get("time")
-        timestamp = (
-            datetime.fromtimestamp(int(ts), tz=UTC)
-            if ts
-            else datetime.now(UTC)
-        )
+        timestamp = datetime.fromtimestamp(int(ts), tz=UTC) if ts else datetime.now(UTC)
         return MT5Tick(
             symbol=str(data.get("symbol") or symbol).upper(),
             bid=_dec(data.get("bid")),

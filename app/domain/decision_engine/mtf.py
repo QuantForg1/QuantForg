@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 REQUIRED_TFS = ("M5", "M15", "H1", "H4", "D1")
 
 
@@ -31,7 +30,11 @@ def summarize_mtf(frames: dict[str, dict[str, Any]]) -> dict[str, Any]:
     bullish = sum(1 for t in trends if t == "Bullish")
     bearish = sum(1 for t in trends if t == "Bearish")
     # Higher-TF weight: H1/H4/D1 must mostly agree
-    higher = [str((available.get(tf) or {}).get("trend") or "Neutral") for tf in ("H1", "H4", "D1") if tf in available]
+    higher = [
+        str((available.get(tf) or {}).get("trend") or "Neutral")
+        for tf in ("H1", "H4", "D1")
+        if tf in available
+    ]
     higher_bull = sum(1 for t in higher if t == "Bullish")
     higher_bear = sum(1 for t in higher if t == "Bearish")
 
@@ -44,8 +47,13 @@ def summarize_mtf(frames: dict[str, dict[str, Any]]) -> dict[str, Any]:
         bias = "Bearish"
         confirmations = bearish
 
-    aligned = bias != "Neutral" and confirmations >= 3 and (
-        (bias == "Bullish" and higher_bull >= 2) or (bias == "Bearish" and higher_bear >= 2)
+    aligned = (
+        bias != "Neutral"
+        and confirmations >= 3
+        and (
+            (bias == "Bullish" and higher_bull >= 2)
+            or (bias == "Bearish" and higher_bear >= 2)
+        )
     )
 
     return {

@@ -77,9 +77,7 @@ def build_certification_report(
         "account_currency": b_data.get("currency") if _ok(balances) else None,
         "leverage": b_data.get("leverage") if _ok(balances) else None,
         "symbols_available": len(symbol_items) if _ok(symbols) else None,
-        "execution_latency_ms": trading.get("latency_ms")
-        if session_matched
-        else None,
+        "execution_latency_ms": trading.get("latency_ms") if session_matched else None,
         "quote_latency_ms": quotes.get("latency_ms") if _ok(quotes) else None,
         "heartbeat_stability": (
             "stable"
@@ -89,13 +87,15 @@ def build_certification_report(
         "heartbeat_ping_ms": hb_data.get("ping_ms") if hb_ok else None,
         "last_certification_time": last_certification_at,
         "paper_available": paper_available,
-        "quote_sample": {
-            "symbol": q_data.get("symbol"),
-            "bid": q_data.get("bid"),
-            "ask": q_data.get("ask"),
-        }
-        if _ok(quotes)
-        else None,
+        "quote_sample": (
+            {
+                "symbol": q_data.get("symbol"),
+                "bid": q_data.get("bid"),
+                "ask": q_data.get("ask"),
+            }
+            if _ok(quotes)
+            else None
+        ),
         "session_matched": session_matched,
         "observed_at": datetime.now(UTC).isoformat() if connected else None,
     }
@@ -321,9 +321,7 @@ def run_certification(
                         CertificationState.NOT_TESTED,
                     }
                     else (
-                        "failed"
-                        if state is CertificationState.FAILED
-                        else "degraded"
+                        "failed" if state is CertificationState.FAILED else "degraded"
                     )
                 )
             ),
@@ -360,9 +358,7 @@ def run_certification(
         }
         or b["result"] == "in_progress"
     ]
-    failed = [
-        b for b in brokers_out if b["state"] == CertificationState.FAILED.value
-    ]
+    failed = [b for b in brokers_out if b["state"] == CertificationState.FAILED.value]
 
     return {
         "version": "1.0",
@@ -437,9 +433,7 @@ def certification_dashboard(store: CertificationStore) -> dict[str, Any]:
         }
         or b.get("result") == "in_progress"
     ]
-    failed = [
-        b for b in brokers if b.get("state") == CertificationState.FAILED.value
-    ]
+    failed = [b for b in brokers if b.get("state") == CertificationState.FAILED.value]
     last_tests = sorted(
         [b for b in brokers if b.get("last_test_at")],
         key=lambda r: str(r.get("last_test_at")),

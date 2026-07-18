@@ -33,9 +33,7 @@ class TestFrontendOrigins:
         pattern = re.compile(PRODUCTION_CORS_ORIGIN_REGEX)
         assert pattern.fullmatch("https://www.quantforg.com")
         assert pattern.fullmatch("https://quantforg.com")
-        assert pattern.fullmatch(
-            "https://quant-forg-ozdtue0ee-quantforg.vercel.app"
-        )
+        assert pattern.fullmatch("https://quant-forg-ozdtue0ee-quantforg.vercel.app")
         assert pattern.fullmatch("https://foo.bar.vercel.app")
         assert not pattern.fullmatch("https://evil.example.com")
         assert not pattern.fullmatch("http://www.quantforg.com")

@@ -22,7 +22,12 @@ def test_mtf_insufficient() -> None:
 
 def test_mtf_aligned_bullish() -> None:
     frames = {
-        tf: {"status": "available", "trend": "Bullish", "momentum": "Strong up", "confidence_pct": 80}
+        tf: {
+            "status": "available",
+            "trend": "Bullish",
+            "momentum": "Strong up",
+            "confidence_pct": 80,
+        }
         for tf in ("M5", "M15", "H1", "H4", "D1")
     }
     result = summarize_mtf(frames)
@@ -65,7 +70,13 @@ def test_score_trade_idea_when_strong() -> None:
 
 def test_risk_rejects_hot_portfolio() -> None:
     result = assess_decision_risk(
-        account={"equity": 10000, "balance": 10000, "margin": 100, "free_margin": 9000, "leverage": 100},
+        account={
+            "equity": 10000,
+            "balance": 10000,
+            "margin": 100,
+            "free_margin": 9000,
+            "leverage": 100,
+        },
         positions=[{"symbol": "EURUSD", "volume": 1, "profit": -400}] * 5,
         atr=0.001,
         price=1.1,
@@ -77,7 +88,13 @@ def test_risk_rejects_hot_portfolio() -> None:
 
 def test_risk_sizes_when_healthy() -> None:
     result = assess_decision_risk(
-        account={"equity": 10000, "balance": 10000, "margin": 50, "free_margin": 9000, "leverage": 100},
+        account={
+            "equity": 10000,
+            "balance": 10000,
+            "margin": 50,
+            "free_margin": 9000,
+            "leverage": 100,
+        },
         positions=[],
         atr=0.0012,
         price=1.085,

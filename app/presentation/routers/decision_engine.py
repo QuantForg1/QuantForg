@@ -18,7 +18,9 @@ router = APIRouter(prefix="/decision-engine", tags=["decision-engine"])
 
 class EvaluateRequest(BaseModel):
     symbol: str = Field(default="EURUSD", max_length=32)
-    mode: str = Field(default="paper", description="paper | live (live never auto-sends)")
+    mode: str = Field(
+        default="paper", description="paper | live (live never auto-sends)"
+    )
     record_paper: bool = True
     force_refresh: bool = False
 

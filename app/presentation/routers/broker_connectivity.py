@@ -18,9 +18,7 @@ from app.presentation.schemas.broker_connectivity import (
     RunCertificationRequest,
 )
 
-router = APIRouter(
-    prefix="/broker-connectivity", tags=["broker-connectivity"]
-)
+router = APIRouter(prefix="/broker-connectivity", tags=["broker-connectivity"])
 
 
 @router.get("/dashboard")

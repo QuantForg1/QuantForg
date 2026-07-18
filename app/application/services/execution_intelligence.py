@@ -69,11 +69,7 @@ class ExecutionIntelligenceService:
 
         existing = self.store.get(user_id, request_id)
         if existing is None:
-            initial = (
-                target
-                if target == LifecycleState.DRAFT
-                else LifecycleState.DRAFT
-            )
+            initial = target if target == LifecycleState.DRAFT else LifecycleState.DRAFT
             self.store.create(
                 user_id=user_id,
                 request_id=request_id,

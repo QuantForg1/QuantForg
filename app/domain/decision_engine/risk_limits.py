@@ -43,9 +43,9 @@ def assess_decision_risk(
         }
 
     if daily_loss_pct is not None and daily_loss_pct <= -2.0:
-        rejects.append(f"Daily loss {daily_loss_pct:.2f}% exceeds −2% limit")
+        rejects.append(f"Daily loss {daily_loss_pct:.2f}% exceeds -2% limit")
     if weekly_loss_pct is not None and weekly_loss_pct <= -5.0:
-        rejects.append(f"Weekly loss {weekly_loss_pct:.2f}% exceeds −5% limit")
+        rejects.append(f"Weekly loss {weekly_loss_pct:.2f}% exceeds -5% limit")
     if max_drawdown_pct is not None and max_drawdown_pct >= 10.0:
         rejects.append(f"Open drawdown {max_drawdown_pct:.2f}% exceeds 10% soft cap")
 
@@ -79,7 +79,9 @@ def assess_decision_risk(
         risk_per_lot = sl_dist * 100_000
         if risk_per_lot > 0:
             lot_size = round(max(0.01, min(1.0, max_risk_amount / risk_per_lot)), 2)
-            margin_est = round(price * lot_size * 100_000 / max(_f(account.get("leverage"), 100), 1), 2)
+            margin_est = round(
+                price * lot_size * 100_000 / max(_f(account.get("leverage"), 100), 1), 2
+            )
 
     if free_margin >= 0 and equity > 0 and free_margin / equity < 0.15:
         rejects.append("Free margin under 15% of equity")

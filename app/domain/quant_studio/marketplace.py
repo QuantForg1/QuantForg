@@ -10,7 +10,10 @@ from uuid import UUID, uuid4
 
 
 class StrategyMarketplaceStore:
-    """Process-memory catalog: save / version / compare / share / clone / publish / favorite."""
+    """Process-memory catalog for strategy lifecycle operations.
+
+    Supports save, version, compare, share, clone, publish, and favorite actions.
+    """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -117,8 +120,18 @@ class StrategyMarketplaceStore:
         bv = (b.get("versions") or [{}])[-1]
         return {
             "status": "available",
-            "a": {"id": a["id"], "name": a["name"], "version": av.get("version"), "assumptions": av.get("assumptions")},
-            "b": {"id": b["id"], "name": b["name"], "version": bv.get("version"), "assumptions": bv.get("assumptions")},
+            "a": {
+                "id": a["id"],
+                "name": a["name"],
+                "version": av.get("version"),
+                "assumptions": av.get("assumptions"),
+            },
+            "b": {
+                "id": b["id"],
+                "name": b["name"],
+                "version": bv.get("version"),
+                "assumptions": bv.get("assumptions"),
+            },
             "diff_keys": sorted(
                 set(dict(av.get("assumptions") or {}))
                 | set(dict(bv.get("assumptions") or {}))
@@ -146,7 +159,9 @@ class StrategyMarketplaceStore:
                 result["strategy"] = deepcopy(self._items[sid])
         return result
 
-    def publish(self, *, user_id: UUID, strategy_id: str, published: bool = True) -> dict[str, Any]:
+    def publish(
+        self, *, user_id: UUID, strategy_id: str, published: bool = True
+    ) -> dict[str, Any]:
         with self._lock:
             item = self._items.get(strategy_id)
             if not item:
@@ -158,7 +173,9 @@ class StrategyMarketplaceStore:
             item["updated_at"] = datetime.now(UTC).isoformat()
             return {"status": "available", "strategy": deepcopy(item)}
 
-    def favorite(self, *, user_id: UUID, strategy_id: str, favorited: bool = True) -> dict[str, Any]:
+    def favorite(
+        self, *, user_id: UUID, strategy_id: str, favorited: bool = True
+    ) -> dict[str, Any]:
         with self._lock:
             if strategy_id not in self._items:
                 return {"status": "unavailable", "reason": "Strategy not found"}

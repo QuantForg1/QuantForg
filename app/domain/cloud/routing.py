@@ -29,11 +29,7 @@ def route_gateway(
         caps = g.capabilities.to_dict()
         return bool(caps.get(require_capability, False))
 
-    healthy = [
-        g
-        for g in rows
-        if g.status is GatewayStatus.ONLINE and _cap_ok(g)
-    ]
+    healthy = [g for g in rows if g.status is GatewayStatus.ONLINE and _cap_ok(g)]
     if region_code:
         regional = [g for g in healthy if g.region.strip().lower() == region_code]
         if regional:
@@ -59,11 +55,7 @@ def route_gateway(
         )
 
     # Failover: degraded same broker
-    degraded = [
-        g
-        for g in rows
-        if g.status is GatewayStatus.DEGRADED and _cap_ok(g)
-    ]
+    degraded = [g for g in rows if g.status is GatewayStatus.DEGRADED and _cap_ok(g)]
     if degraded:
         pick = _lowest_latency(degraded)
         return RouteDecision(

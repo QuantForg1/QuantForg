@@ -6,14 +6,14 @@ from app.domain.execution_engine.journal import (
     ExecutionJournalEntry,
     ExecutionJournalStore,
 )
-from app.domain.execution_engine.pipeline import PipelineStage, STAGE_TO_LIFECYCLE
+from app.domain.execution_engine.pipeline import STAGE_TO_LIFECYCLE, PipelineStage
 from app.domain.execution_engine.reasons import humanize_reason, humanize_reasons
 
 __all__ = [
+    "STAGE_TO_LIFECYCLE",
     "ExecutionJournalEntry",
     "ExecutionJournalStore",
     "PipelineStage",
-    "STAGE_TO_LIFECYCLE",
     "humanize_reason",
     "humanize_reasons",
 ]

@@ -50,7 +50,8 @@ class PostgresPortfolioSyncRepository:
     async def add(self, record: PortfolioSyncRecord) -> PortfolioSyncRecord:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO portfolio_syncs (
                     id, user_id, login, balance, equity, margin, free_margin,
                     margin_level, profit, leverage, position_count,
@@ -78,7 +79,8 @@ class PostgresPortfolioSyncRepository:
                     history_deal_count = EXCLUDED.history_deal_count,
                     snapshot = EXCLUDED.snapshot,
                     synced_at = EXCLUDED.synced_at
-                """),
+                """
+            ),
             {
                 "id": str(record.id),
                 "user_id": str(record.user_id),
@@ -104,12 +106,14 @@ class PostgresPortfolioSyncRepository:
     async def get_latest_for_user(self, user_id: UUID) -> PortfolioSyncRecord | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM portfolio_syncs
                 WHERE user_id = :user_id
                 ORDER BY synced_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         row = result.mappings().first()
@@ -120,12 +124,14 @@ class PostgresPortfolioSyncRepository:
     ) -> list[PortfolioSyncRecord]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM portfolio_syncs
                 WHERE user_id = :user_id
                 ORDER BY synced_at DESC
                 LIMIT :limit
-                """),
+                """
+            ),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_sync_from_row(r) for r in result.mappings().all()]

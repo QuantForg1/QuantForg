@@ -119,9 +119,7 @@ async def journal_upsert(
 
 
 @router.post("/journal/ingest-paper")
-async def journal_ingest_paper(
-    user: CurrentUser, eco: EcosystemSvc
-) -> dict[str, Any]:
+async def journal_ingest_paper(user: CurrentUser, eco: EcosystemSvc) -> dict[str, Any]:
     return eco.journal_ingest_paper(user_id=user.id)
 
 
@@ -138,9 +136,7 @@ async def playbook_save(
 
 
 @router.get("/coach")
-async def performance_coach(
-    user: CurrentUser, eco: EcosystemSvc
-) -> dict[str, Any]:
+async def performance_coach(user: CurrentUser, eco: EcosystemSvc) -> dict[str, Any]:
     return eco.coach(user_id=user.id)
 
 
@@ -209,9 +205,7 @@ async def reports(
 
 
 @router.get("/preferences")
-async def preferences_get(
-    user: CurrentUser, eco: EcosystemSvc
-) -> dict[str, Any]:
+async def preferences_get(user: CurrentUser, eco: EcosystemSvc) -> dict[str, Any]:
     return eco.preferences_get(user_id=user.id)
 
 

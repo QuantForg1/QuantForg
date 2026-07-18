@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.application.services.mt5_market_data import MT5MarketDataService
@@ -93,7 +93,7 @@ class QuantAIService:
             cached = _DASHBOARD_CACHE.get(cache_key)
             if cached is not None:
                 _CACHE_STATS["hits"] += 1
-                return cached
+                return cast("dict[str, Any]", cached)
         _CACHE_STATS["misses"] += 1
 
         focus = (symbol or "EURUSD").strip().upper()
@@ -123,7 +123,7 @@ class QuantAIService:
                     "currency": snap.currency,
                     "profit": _dec(snap.profit),
                 }
-            except Exception:  # noqa: BLE001
+            except Exception:
                 account = {}
 
             try:
@@ -139,7 +139,7 @@ class QuantAIService:
                     }
                     for p in self.portfolio_sync.list_positions()
                 ]
-            except Exception:  # noqa: BLE001
+            except Exception:
                 positions = []
 
             try:
@@ -153,13 +153,15 @@ class QuantAIService:
                             "price": _dec(d.price),
                             "profit": _dec(d.profit),
                             "pnl": _dec(d.profit),
-                            "time": d.time.isoformat() if getattr(d, "time", None) else None,
-                            "closed_at": d.time.isoformat()
-                            if getattr(d, "time", None)
-                            else None,
+                            "time": (
+                                d.time.isoformat() if getattr(d, "time", None) else None
+                            ),
+                            "closed_at": (
+                                d.time.isoformat() if getattr(d, "time", None) else None
+                            ),
                         }
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 deals = []
 
             try:
@@ -183,7 +185,7 @@ class QuantAIService:
                             "spread": round(ask - bid, 6),
                         }
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 quotes = []
 
         ctx = self.market_context.build("FX", symbol_code=focus)
@@ -203,7 +205,7 @@ class QuantAIService:
                 analysis = self._analyze_symbol_live(code, session=session)
                 if analysis.get("status") == "available":
                     structures.append(analysis)
-                    price = analysis.get("price")
+                    analysis.get("price")
                     # Keep closes from candles for correlation later
                     candles = self._load_candles(code, Timeframe.H1, 80)
                     if candles:
@@ -213,20 +215,26 @@ class QuantAIService:
 
         focus_analysis = next(
             (s for s in structures if s.get("symbol") == focus),
-            self._analyze_symbol_live(focus, session=session)
+            (
+                self._analyze_symbol_live(focus, session=session)
+                if status.connected
+                else {
+                    "status": "unavailable",
+                    "symbol": focus,
+                    "reason": "MT5 session not connected",
+                    "autonomous_trading": False,
+                }
+            ),
+        )
+
+        mtf = (
+            self._multi_timeframe(focus, session=session)
             if status.connected
             else {
                 "status": "unavailable",
-                "symbol": focus,
                 "reason": "MT5 session not connected",
-                "autonomous_trading": False,
-            },
+            }
         )
-
-        mtf = self._multi_timeframe(focus, session=session) if status.connected else {
-            "status": "unavailable",
-            "reason": "MT5 session not connected",
-        }
 
         correlation = correlation_from_closes(close_map)
 
@@ -236,7 +244,9 @@ class QuantAIService:
         risk = analyze_risk_ai(account=account, positions=positions)
 
         attempts = await self.load_attempts(user_id, 100)
-        fills = [t for t in paper if t.get("slippage") is not None or t.get("fill_price")]
+        fills = [
+            t for t in paper if t.get("slippage") is not None or t.get("fill_price")
+        ]
         execution = analyze_execution_ai(
             attempts=attempts,
             fills=fills,
@@ -364,9 +374,7 @@ class QuantAIService:
         _DASHBOARD_CACHE.set(cache_key, payload)
         return payload
 
-    async def symbol_brief(
-        self, *, user_id: UUID, symbol: str
-    ) -> dict[str, Any]:
+    async def symbol_brief(self, *, user_id: UUID, symbol: str) -> dict[str, Any]:
         status = await self.status.execute(user_id=user_id)
         code = symbol.strip().upper()
         if not status.connected:
@@ -399,13 +407,15 @@ class QuantAIService:
                             "symbol": d.symbol,
                             "profit": _dec(d.profit),
                             "pnl": _dec(d.profit),
-                            "time": d.time.isoformat() if getattr(d, "time", None) else None,
-                            "closed_at": d.time.isoformat()
-                            if getattr(d, "time", None)
-                            else None,
+                            "time": (
+                                d.time.isoformat() if getattr(d, "time", None) else None
+                            ),
+                            "closed_at": (
+                                d.time.isoformat() if getattr(d, "time", None) else None
+                            ),
                         }
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 deals = []
         paper = await self.load_paper_trades(user_id)
         return analyze_portfolio_ai(deals if deals else paper)
@@ -424,7 +434,7 @@ class QuantAIService:
                     "free_margin": _dec(snap.free_margin),
                     "leverage": snap.leverage,
                 }
-            except Exception:  # noqa: BLE001
+            except Exception:
                 account = {}
             try:
                 positions = [
@@ -435,7 +445,7 @@ class QuantAIService:
                     }
                     for p in self.portfolio_sync.list_positions()
                 ]
-            except Exception:  # noqa: BLE001
+            except Exception:
                 positions = []
         return analyze_risk_ai(account=account, positions=positions)
 
@@ -443,7 +453,9 @@ class QuantAIService:
         status = await self.status.execute(user_id=user_id)
         attempts = await self.load_attempts(user_id, 100)
         paper = await self.load_paper_trades(user_id)
-        fills = [t for t in paper if t.get("slippage") is not None or t.get("fill_price")]
+        fills = [
+            t for t in paper if t.get("slippage") is not None or t.get("fill_price")
+        ]
         return analyze_execution_ai(
             attempts=attempts,
             fills=fills,
@@ -468,7 +480,7 @@ class QuantAIService:
             for c in candles:
                 c.pop("_sort", None)
             return candles
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
 
     def _analyze_symbol_live(
@@ -480,7 +492,7 @@ class QuantAIService:
             tick = self.market_data.latest_tick(symbol)
             bid = float(tick.bid)
             ask = float(tick.ask)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: S110 - missing ticks are represented as unavailable
             pass
         return analyze_symbol_structure(
             symbol=symbol,
@@ -490,9 +502,7 @@ class QuantAIService:
             session=session,
         )
 
-    def _multi_timeframe(
-        self, symbol: str, *, session: str | None
-    ) -> dict[str, Any]:
+    def _multi_timeframe(self, symbol: str, *, session: str | None) -> dict[str, Any]:
         frames = (Timeframe.M15, Timeframe.H1, Timeframe.H4, Timeframe.D1)
         by_tf: dict[str, Any] = {}
         for tf in frames:
@@ -502,9 +512,7 @@ class QuantAIService:
                 candles=candles,
                 session=session,
             )
-        available = [
-            tf for tf, a in by_tf.items() if a.get("status") == "available"
-        ]
+        available = [tf for tf, a in by_tf.items() if a.get("status") == "available"]
         if not available:
             return {
                 "status": "unavailable",
@@ -572,8 +580,7 @@ class QuantAIService:
         weak = [
             s
             for s in structures
-            if s.get("trend") == "Neutral"
-            or float(s.get("confidence_pct") or 0) < 55
+            if s.get("trend") == "Neutral" or float(s.get("confidence_pct") or 0) < 55
         ]
         spread_monitor = sorted(
             quotes, key=lambda q: float(q.get("spread") or 0), reverse=True
