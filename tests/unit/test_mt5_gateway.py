@@ -157,6 +157,7 @@ class _FakeBridge(LiveMT5Bridge):
     def order_check(self, request: dict[str, Any]) -> Any:
         filling = int(request.get("type_filling", -1))
         # Simulate brokers that reject IOC (1) with 10013 but accept FOK (0).
+        # Success uses retcode 0 (common on live MT5) — must not be treated as falsy.
         if filling == 1:
             return SimpleNamespace(
                 retcode=10013,
@@ -168,7 +169,7 @@ class _FakeBridge(LiveMT5Bridge):
                 profit=0.0,
             )
         return SimpleNamespace(
-            retcode=10009,
+            retcode=0,
             comment="Done",
             balance=1000.0,
             equity=1005.0,
@@ -416,11 +417,12 @@ class TestMT5Gateway:
         assert res.status_code == 200
         body = res.json()
         assert body["ok"] is True
-        assert body["retcode"] == 10009
+        assert body["retcode"] == 0
         # Primary pick is IOC (filling_mode=2); fake rejects IOC then accepts FOK.
         assert body["request"]["type_filling"] == 0
         assert body["request"]["price"] == 1.2  # ASK for buy
         assert any(a["retcode"] == 10013 for a in body.get("filling_attempts", []))
+        assert any(a["retcode"] == 0 for a in body.get("filling_attempts", []))
 
     def test_order_send_live_after_check(self, client: TestClient) -> None:
         headers = {"Authorization": "Bearer test-gateway-token"}
@@ -467,6 +469,13 @@ class TestFillingModeSelection:
         from services.mt5_gateway.trade import normalize_price
 
         assert normalize_price(2650.123456, 2) == 2650.12
+
+    def test_mt5_retcode_preserves_zero(self) -> None:
+        from services.mt5_gateway.trade import mt5_retcode
+
+        assert mt5_retcode(SimpleNamespace(retcode=0)) == 0
+        assert mt5_retcode(SimpleNamespace(retcode=10009)) == 10009
+        assert mt5_retcode(None) == 10013
 
     """Regression: MetaTrader5.version()[2] is often a human date string."""
 

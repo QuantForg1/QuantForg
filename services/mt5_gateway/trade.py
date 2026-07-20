@@ -72,6 +72,18 @@ _FILLING_NAME = {
 
 # Retcodes that often mean wrong type_filling / malformed request fields.
 _FILLING_RETRY_RETCODES = {10013, 10030}
+_CHECK_OK_RETCODES = {0, 10009}
+_SEND_OK_RETCODES = {0, 10008, 10009}
+
+
+def mt5_retcode(result: Any, *, default: int = 10013) -> int:
+    """Read broker retcode without collapsing success ``0`` via falsy ``or``."""
+    if result is None:
+        return int(default)
+    raw = getattr(result, "retcode", None)
+    if raw is None:
+        return int(default)
+    return int(raw)
 
 
 def order_type_for_action(action: str) -> int:
@@ -456,12 +468,12 @@ def serialize_check_result(result: Any, request: dict[str, Any]) -> dict[str, An
             "request": mql_trade_request_fields(request),
             "request_raw": request,
         }
-    retcode = int(getattr(result, "retcode", 10013) or 10013)
+    retcode = mt5_retcode(result)
     comment = str(getattr(result, "comment", "") or "")
     return {
         "retcode": retcode,
         "comment": comment,
-        "ok": retcode in {0, 10009},
+        "ok": retcode in _CHECK_OK_RETCODES,
         "balance": str(getattr(result, "balance", 0) or 0),
         "equity": str(getattr(result, "equity", 0) or 0),
         "margin": str(getattr(result, "margin", 0) or 0),
@@ -486,12 +498,12 @@ def serialize_send_result(result: Any, request: dict[str, Any]) -> dict[str, Any
             "request": mql_trade_request_fields(request),
             "request_raw": request,
         }
-    retcode = int(getattr(result, "retcode", 10013) or 10013)
+    retcode = mt5_retcode(result)
     comment = str(getattr(result, "comment", "") or "")
     return {
         "retcode": retcode,
         "comment": comment,
-        "ok": retcode in {0, 10008, 10009},
+        "ok": retcode in _SEND_OK_RETCODES,
         "order_ticket": int(getattr(result, "order", 0) or 0),
         "deal_ticket": int(getattr(result, "deal", 0) or 0),
         "volume": str(getattr(result, "volume", request.get("volume", 0)) or 0),
@@ -526,11 +538,7 @@ def order_check_with_filling_fallback(
         last_req = apply_filling_mode(request, mode)
         log_trade_request(last_req, stage="order_check_attempt")
         last_result = mt5.order_check(last_req)
-        retcode = (
-            10013
-            if last_result is None
-            else int(getattr(last_result, "retcode", 10013) or 10013)
-        )
+        retcode = mt5_retcode(last_result)
         comment = (
             "order_check returned None"
             if last_result is None
@@ -544,9 +552,9 @@ def order_check_with_filling_fallback(
                 "comment": comment,
             }
         )
-        if last_result is not None and retcode not in _FILLING_RETRY_RETCODES:
-            break
-        if last_result is not None and retcode in {0, 10009}:
+        if last_result is not None and (
+            retcode in _CHECK_OK_RETCODES or retcode not in _FILLING_RETRY_RETCODES
+        ):
             break
 
     logger.info("mt5_order_check_filling_attempts attempts=%s", attempts)

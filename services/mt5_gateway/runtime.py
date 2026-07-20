@@ -1045,6 +1045,7 @@ class MT5GatewayRuntime:
             apply_filling_mode,
             build_mt5_trade_request,
             filling_name,
+            mt5_retcode,
             order_check_with_filling_fallback,
             serialize_send_result,
         )
@@ -1086,11 +1087,7 @@ class MT5GatewayRuntime:
                 mt5, request, info=info
             )
             filling_attempts = request.pop("_filling_attempts", [])
-            check_retcode = (
-                10013
-                if check_result is None
-                else int(getattr(check_result, "retcode", 10013) or 10013)
-            )
+            check_retcode = mt5_retcode(check_result)
             if check_result is None or check_retcode not in {0, 10009}:
                 payload = serialize_send_result(None, request)
                 payload["component"] = "mt5_order_send"
