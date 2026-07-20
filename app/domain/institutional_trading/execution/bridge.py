@@ -37,6 +37,16 @@ from app.domain.institutional_trading.execution.models import (
     OmsSubmitResult,
 )
 from app.domain.institutional_trading.execution.oms_port import OmsSubmitPort
+from app.domain.institutional_trading.operations.models import OpsExecutionMode
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.domain.institutional_trading.operations.control_plane import (
+        OperationsControlPlane,
+    )
+    from app.domain.institutional_trading.reliability.platform import (
+        ReliabilityPlatform,
+    )
 
 
 @dataclass
@@ -51,26 +61,56 @@ class ExecutionBridge:
     kill_switch: KillSwitch = field(default_factory=KillSwitch)
     journal: ExecutionAttemptJournal = field(default_factory=ExecutionAttemptJournal)
     metrics: ExecutionBridgeMetrics = field(default_factory=ExecutionBridgeMetrics)
+    ops_plane: OperationsControlPlane | None = None
+    reliability: ReliabilityPlatform | None = None
     _executed_hashes: set[str] = field(default_factory=set, repr=False)
     _canary_day: date | None = field(default=None, repr=False)
     _canary_count: int = field(default=0, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
 
+    def bind_ops(
+        self,
+        plane: OperationsControlPlane,
+        *,
+        reliability: ReliabilityPlatform | None = None,
+    ) -> ExecutionBridge:
+        """Wire shared kill switch + mode source of truth from ops plane."""
+        self.ops_plane = plane
+        self.kill_switch.bind(plane)
+        if reliability is not None:
+            self.reliability = reliability
+        return self
+
+    def effective_mode(self) -> ExecutionMode:
+        """Ops plane mode wins when bound; else bridge config."""
+        if self.ops_plane is not None:
+            m = self.ops_plane.mode
+            if m is OpsExecutionMode.SHADOW:
+                return ExecutionMode.SHADOW
+            if m is OpsExecutionMode.CANARY:
+                return ExecutionMode.CANARY_LIVE
+            return ExecutionMode.LIVE
+        return self.config.mode
+
     def handle(
         self,
         decision: TradeDecision,
         context: ExecutionBridgeContext,
+        *,
+        trace_id: str | None = None,
     ) -> ExecutionBridgeResult:
         """Evaluate a decision. Only BUY/SELL may reach OMS (never WATCH/NO_TRADE)."""
         t0 = time.perf_counter()
+        mode = self.effective_mode()
         d_hash = compute_decision_hash(decision)
         actionable = decision.action in {DecisionAction.BUY, DecisionAction.SELL}
         self.metrics.record_decision(
             confidence=decision.confidence, actionable=actionable
         )
+        tid = self._ensure_trace(trace_id, decision_id=str(decision.id))
 
         if not actionable:
-            return self._abort(
+            result = self._abort(
                 decision=decision,
                 context=context,
                 decision_hash=d_hash,
@@ -79,13 +119,15 @@ class ExecutionBridge:
                 t0=t0,
                 status=ExecutionAttemptStatus.ABORTED,
             )
+            self._span_bridge(tid, t0, ok=True, detail="ignored_action")
+            return result
 
         # --- Duplicate protection (before anything else that could call OMS) ---
         with self._lock:
             is_duplicate = d_hash in self._executed_hashes
         if is_duplicate:
             self.metrics.record_duplicate()
-            return self._abort(
+            result = self._abort(
                 decision=decision,
                 context=context,
                 decision_hash=d_hash,
@@ -95,6 +137,8 @@ class ExecutionBridge:
                 status=ExecutionAttemptStatus.DUPLICATE,
                 count_reject=False,
             )
+            self._span_bridge(tid, t0, ok=False, detail="duplicate")
+            return result
 
         # 1. input_hash unchanged
         if decision.input_hash != context.expected_input_hash:
@@ -182,10 +226,7 @@ class ExecutionBridge:
         self.metrics.record_eligible()
 
         # 7. EXECUTION_ENABLED (required for live/canary; shadow skips OMS)
-        if (
-            self.config.mode is not ExecutionMode.SHADOW
-            and not context.execution_enabled
-        ):
+        if mode is not ExecutionMode.SHADOW and not context.execution_enabled:
             return self._abort(
                 decision=decision,
                 context=context,
@@ -231,7 +272,7 @@ class ExecutionBridge:
             )
 
         # Canary daily cap
-        if self.config.mode is ExecutionMode.CANARY_LIVE:
+        if mode is ExecutionMode.CANARY_LIVE:
             day = context.now.date()
             with self._lock:
                 if self._canary_day != day:
@@ -254,7 +295,7 @@ class ExecutionBridge:
                 )
 
         # --- Shadow mode: journal only, never OMS ---
-        if self.config.mode is ExecutionMode.SHADOW:
+        if mode is ExecutionMode.SHADOW:
             latency = (time.perf_counter() - t0) * 1000.0
             self._mark_executed(d_hash)
             entry = self._record(
@@ -268,8 +309,10 @@ class ExecutionBridge:
                 oms_status="shadow",
                 gateway_status="not_called",
                 execution_result="shadow",
+                mode=mode,
             )
             self.metrics.record_executed(latency)
+            self._complete_shadow_trace(tid, t0)
             return ExecutionBridgeResult(
                 forwarded_to_oms=False,
                 aborted=False,
@@ -285,7 +328,7 @@ class ExecutionBridge:
 
         # Mark hash BEFORE OMS call so retries are impossible even on failure
         self._mark_executed(d_hash)
-        if self.config.mode is ExecutionMode.CANARY_LIVE:
+        if mode is ExecutionMode.CANARY_LIVE:
             with self._lock:
                 self._canary_count += 1
 
@@ -313,6 +356,7 @@ class ExecutionBridge:
             mt5_ticket=oms_result.order_ticket,
             mt5_deal=oms_result.deal_ticket,
             retcode=oms_result.retcode,
+            mode=mode,
         )
 
         if status is ExecutionAttemptStatus.OMS_SUCCESS:
@@ -320,6 +364,12 @@ class ExecutionBridge:
         else:
             self.metrics.record_rejected(latency)
 
+        self._complete_live_trace(
+            tid,
+            t0,
+            oms_result=oms_result,
+            ok=status is ExecutionAttemptStatus.OMS_SUCCESS,
+        )
         return ExecutionBridgeResult(
             forwarded_to_oms=True,
             aborted=status is not ExecutionAttemptStatus.OMS_SUCCESS,
@@ -455,6 +505,7 @@ class ExecutionBridge:
         mt5_ticket: int | None = None,
         mt5_deal: int | None = None,
         retcode: int | None = None,
+        mode: ExecutionMode | None = None,
     ) -> ExecutionAttemptRecord:
         entry = ExecutionAttemptRecord(
             decision_hash=decision_hash,
@@ -473,9 +524,110 @@ class ExecutionBridge:
             latency_ms=latency_ms,
             execution_result=execution_result,
             abort_reason=abort_reason,
-            mode=self.config.mode,
+            mode=mode or self.effective_mode(),
             status=status,
             symbol=decision.symbol,
             request_id=context.request_id or "",
         )
         return self.journal.append(entry)
+
+    def _ensure_trace(
+        self, trace_id: str | None, *, decision_id: str | None
+    ) -> str | None:
+        if self.reliability is None:
+            return None
+        if trace_id:
+            if self.reliability.traces.get(trace_id) is None:
+                self.reliability.traces.start(
+                    trace_id=trace_id, decision_id=decision_id
+                )
+            return trace_id
+        return self.reliability.traces.start(decision_id=decision_id).trace_id
+
+    def _span_bridge(
+        self, tid: str | None, t0: float, *, ok: bool, detail: str = ""
+    ) -> None:
+        if tid is None or self.reliability is None:
+            return
+        from app.domain.institutional_trading.reliability.models import TraceStage
+
+        latency = (time.perf_counter() - t0) * 1000.0
+        self.reliability.traces.span(
+            tid, TraceStage.BRIDGE, latency_ms=latency, ok=ok, detail=detail
+        )
+
+    def _complete_shadow_trace(self, tid: str | None, t0: float) -> None:
+        if tid is None or self.reliability is None:
+            return
+        from app.domain.institutional_trading.reliability.models import (
+            TimelineEvent,
+            TraceStage,
+        )
+        from datetime import UTC, datetime
+
+        latency = (time.perf_counter() - t0) * 1000.0
+        for stage, detail, ok in (
+            (TraceStage.BRIDGE, "shadow_journal", True),
+            (TraceStage.OMS, "not_called_shadow", True),
+            (TraceStage.GATEWAY, "not_called_shadow", True),
+            (TraceStage.MT5, "not_called_shadow", True),
+            (TraceStage.PME, "no_open_position", True),
+            (TraceStage.JOURNAL, "shadow_journal", True),
+        ):
+            self.reliability.traces.span(
+                tid, stage, latency_ms=latency / 6.0, ok=ok, detail=detail
+            )
+        self.reliability.timeline.append(
+            TimelineEvent(
+                timestamp=datetime.now(UTC),
+                category="trace",
+                action="shadow_path",
+                detail=f"trace={tid}",
+                severity="INFO",
+                trace_id=tid,
+            )
+        )
+
+    def _complete_live_trace(
+        self,
+        tid: str | None,
+        t0: float,
+        *,
+        oms_result: OmsSubmitResult,
+        ok: bool,
+    ) -> None:
+        if tid is None or self.reliability is None:
+            return
+        from app.domain.institutional_trading.reliability.models import TraceStage
+
+        latency = (time.perf_counter() - t0) * 1000.0
+        self.reliability.traces.span(
+            tid, TraceStage.BRIDGE, latency_ms=latency * 0.2, ok=True
+        )
+        self.reliability.traces.span(
+            tid,
+            TraceStage.OMS,
+            latency_ms=float(oms_result.latency_ms or latency * 0.3),
+            ok=ok,
+            detail=oms_result.outcome,
+        )
+        self.reliability.traces.span(
+            tid,
+            TraceStage.GATEWAY,
+            latency_ms=latency * 0.2,
+            ok=ok,
+            detail=oms_result.gateway_status,
+        )
+        self.reliability.traces.span(
+            tid,
+            TraceStage.MT5,
+            latency_ms=latency * 0.2,
+            ok=ok,
+            detail=str(oms_result.retcode),
+        )
+        self.reliability.traces.span(
+            tid, TraceStage.PME, latency_ms=0.0, ok=True, detail="pending_manage"
+        )
+        self.reliability.traces.span(
+            tid, TraceStage.JOURNAL, latency_ms=latency * 0.1, ok=True
+        )

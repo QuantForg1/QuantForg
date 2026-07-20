@@ -71,6 +71,7 @@ class Container:
     ops_uow_factory: Any = field(default=None, init=False)
     metrics_collector: Any = field(default=None, init=False)
     alerting_service: Any = field(default=None, init=False)
+    ite_runtime: Any = field(default=None, init=False)
 
     async def startup(self) -> None:
         """Start managed infrastructure; optional deps fail soft with warnings."""
@@ -281,6 +282,39 @@ class Container:
             uow_factory=self.ops_uow_factory,
             metrics=self.metrics_collector,
         )
+
+        # ITE Shadow Production wiring — Guarded OMS + shared kill + orchestrator
+        self.ite_runtime = None
+        try:
+            from app.application.services.institutional_ite_runtime import (
+                build_ite_runtime,
+                set_ite_runtime,
+            )
+
+            interval = float(
+                getattr(self.settings, "shadow_orchestrator_interval_seconds", 60)
+                or 60
+            )
+            self.ite_runtime = build_ite_runtime(
+                settings=self.settings,
+                mt5_adapter=self.mt5_adapter,
+                execution_gateway=self.execution_gateway,
+                execution_safety=self.execution_safety,
+                mt5_order_validation=self.mt5_order_validation,
+                supabase=self.supabase,
+                interval_seconds=interval,
+            )
+            set_ite_runtime(self.ite_runtime)
+            logger.info(
+                "ite_runtime_wired",
+                mode=self.ite_runtime.plane.mode.value,
+                kill_switch=self.ite_runtime.plane.kill_switch_armed,
+                execution_enabled=bool(self.settings.execution_enabled),
+                oms_orders_allowed=self.ite_runtime.plane.oms_orders_allowed(),
+            )
+        except Exception as exc:
+            logger.warning("ite_runtime_wire_failed", error=str(exc))
+
         logger.info(
             "container_startup_complete",
             env=self.settings.app_env.value,
@@ -319,6 +353,20 @@ class Container:
         self.ops_uow_factory = None
         self.metrics_collector = None
         self.alerting_service = None
+        if self.ite_runtime is not None:
+            try:
+                self.ite_runtime.stop()
+            except Exception as exc:
+                logger.warning("ite_runtime_stop_failed", error=str(exc))
+            self.ite_runtime = None
+            try:
+                from app.application.services.institutional_ite_runtime import (
+                    set_ite_runtime,
+                )
+
+                set_ite_runtime(None)
+            except Exception:
+                pass
         if self.supabase is not None:
             self.supabase.disconnect()
             self.supabase = None

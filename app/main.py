@@ -6,6 +6,8 @@ middleware, exception handlers, and foundation routers.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import importlib
 import os
 from collections.abc import AsyncIterator
@@ -174,6 +176,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     set_database_manager(database)
     # Keep FastAPI state in sync for any code that inspects app.state.container.
     _app.state.container = container
+    shadow_task = None
 
     try:
         await container.startup()
@@ -195,6 +198,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 and getattr(container, "mt5_adapter", None) is not None
             ),
         )
+        shadow_task = None
+        runtime = getattr(container, "ite_runtime", None)
+        if runtime is not None and not settings.execution_enabled:
+            shadow_task = asyncio.create_task(
+                runtime.run_forever(), name="ite-shadow-orchestrator"
+            )
+            logger.info("shadow_orchestrator_task_started")
+        elif settings.execution_enabled:
+            logger.warning(
+                "shadow_orchestrator_not_started",
+                reason="EXECUTION_ENABLED=true — refuse auto shadow loop",
+            )
         logger.info("startup_complete")
     except Exception as exc:
         # Last-resort: keep process alive for liveness probes.
@@ -203,6 +218,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
     try:
+        runtime = getattr(container, "ite_runtime", None)
+        if runtime is not None:
+            runtime.stop()
+        if shadow_task is not None:
+            shadow_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await shadow_task
         await container.shutdown()
     except Exception as exc:
         logger.warning("application_shutdown_error", error=str(exc))

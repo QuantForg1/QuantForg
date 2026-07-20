@@ -39,6 +39,7 @@ class ProbeBody(BaseModel):
     execution_latency_ms: float = 0
     decision_latency_ms: float = 0
     pme_latency_ms: float = 0
+    use_live_probes: bool = True
 
 
 class HeartbeatBody(BaseModel):
@@ -62,9 +63,16 @@ def dashboard(_user: OperatorUser) -> dict[str, Any]:
 
 @router.post("/tick")
 def tick(body: ProbeBody, _user: OperatorUser) -> dict[str, Any]:
+    """Health tick — live probes by default (no manual CF/Railway flags required)."""
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+    runtime = get_ite_runtime()
+    if body.use_live_probes and runtime is not None:
+        return runtime.tick_health()
     platform = get_reliability_platform()
+    payload = body.model_dump(exclude={"use_live_probes"})
     return platform.tick(
-        ProbeInputs(**body.model_dump()),
+        ProbeInputs(**payload),
         required_heartbeats=(
             ComponentName.GATEWAY,
             ComponentName.MT5,
@@ -72,6 +80,110 @@ def tick(body: ProbeBody, _user: OperatorUser) -> dict[str, Any]:
             ComponentName.OMS,
         ),
     )
+
+
+@router.post("/tick/live")
+def tick_live(_user: OperatorUser) -> dict[str, Any]:
+    """Always collect live Gateway/MT5/Railway/Supabase/Cloudflare probes."""
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+    runtime = get_ite_runtime()
+    if runtime is None:
+        raise HTTPException(status_code=503, detail="ITE runtime not wired")
+    return runtime.tick_health()
+
+
+@router.get("/shadow/status")
+def shadow_status(_user: OperatorUser) -> dict[str, Any]:
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+    runtime = get_ite_runtime()
+    if runtime is None:
+        raise HTTPException(status_code=503, detail="ITE runtime not wired")
+    return runtime.status()
+
+
+@router.post("/shadow/cycle")
+def shadow_cycle(_user: OperatorUser) -> dict[str, Any]:
+    """Run one automatic shadow cycle (health + optional decision path)."""
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+    runtime = get_ite_runtime()
+    if runtime is None:
+        raise HTTPException(status_code=503, detail="ITE runtime not wired")
+    return runtime.run_shadow_cycle().to_dict()
+
+
+@router.get("/shadow/readiness")
+def shadow_readiness(_user: OperatorUser) -> dict[str, Any]:
+    """Shadow Production readiness — READY only if every blocker is clear."""
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+    from core.di.container import get_container
+
+    blockers: list[str] = []
+    try:
+        container = get_container()
+        settings = container.settings
+    except RuntimeError:
+        return {
+            "result": "NOT READY",
+            "blockers": ["DI container not initialised"],
+        }
+
+    runtime = get_ite_runtime()
+    if runtime is None:
+        blockers.append("ITE runtime not wired (GuardedOMS / orchestrator)")
+    else:
+        if runtime.execution.bridge.ops_plane is None:
+            blockers.append("ExecutionBridge not bound to ops plane")
+        if runtime.execution.bridge.kill_switch.plane is None:
+            blockers.append("Kill switch not bound to shared ops plane")
+        if runtime.position_management.ops_plane is None:
+            blockers.append("PME not bound to shared ops plane")
+        if runtime.plane.mode.value != "SHADOW":
+            blockers.append(f"Ops mode is {runtime.plane.mode.value}, need SHADOW")
+
+    if bool(settings.execution_enabled):
+        blockers.append("EXECUTION_ENABLED=true — must be false for Shadow")
+
+    checks: dict[str, bool] = {}
+    health = None
+    if runtime is not None:
+        health = runtime.tick_health()
+        probes = runtime.probes.collect()
+        checks = {
+            "gateway": probes.gateway_available,
+            "mt5": probes.mt5_connected,
+            "railway": probes.railway_api_up,
+            "supabase": probes.supabase_up,
+            "cloudflare": probes.cloudflare_tunnel_up,
+        }
+        if not (settings.mt5_gateway_base_url or "").strip():
+            blockers.append("MT5_GATEWAY_BASE_URL not configured")
+        else:
+            if not probes.gateway_available:
+                blockers.append("Gateway not reachable")
+            if not probes.cloudflare_tunnel_up:
+                blockers.append("Cloudflare tunnel not reachable")
+            if not probes.mt5_connected:
+                blockers.append("MT5 not connected via gateway")
+        if (settings.railway_public_domain or "").strip() and not probes.railway_api_up:
+            blockers.append("Railway API not reachable")
+        if getattr(settings, "supabase_configured", False) and not probes.supabase_up:
+            blockers.append("Supabase not reachable")
+
+    result = "READY FOR SHADOW" if not blockers else "NOT READY"
+    return {
+        "result": result,
+        "blockers": blockers,
+        "execution_enabled": bool(settings.execution_enabled),
+        "mode": runtime.plane.mode.value if runtime else None,
+        "kill_switch": runtime.plane.kill_switch_armed if runtime else None,
+        "live_probes": checks,
+        "health": health,
+        "orchestrator": runtime.status() if runtime else None,
+        "autotrading": "OFF (terminal-side — confirm manually)",
+    }
 
 
 @router.post("/heartbeat")
