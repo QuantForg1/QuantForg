@@ -24,7 +24,7 @@ from app.domain.enums.order import OrderSide, OrderType
 from app.domain.exceptions.base import ValidationError
 from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.domain.execution_engine.pipeline import STAGE_TO_LIFECYCLE, PipelineStage
-from app.domain.execution_engine.reasons import humanize_reasons
+from app.domain.execution_engine.reasons import humanize_reason, humanize_reasons
 from app.domain.value_objects.mt5_order import (
     LotSize,
     MagicNumber,
@@ -104,6 +104,9 @@ def parse_order_intent(
     slippage: int = 10,
     magic: int = 0,
     comment: str = "",
+    position: int = 0,
+    order_ticket: int = 0,
+    oms_kind: str = "",
 ) -> OrderIntent:
     try:
         return OrderIntent(
@@ -117,11 +120,14 @@ def parse_order_intent(
             slippage=Slippage.of(slippage),
             magic=MagicNumber.of(magic),
             comment=comment,
+            position=int(position or 0),
+            order_ticket=int(order_ticket or 0),
+            oms_kind=(oms_kind or "").strip().lower(),
         )
     except (ValidationError, ValueError) as exc:
         raise ValidationError(
-            "Invalid order intent",
-            details={"error": str(exc)},
+            humanize_reason(str(exc)) if str(exc) else "Invalid order intent",
+            details={"error": str(exc), "component": "validation.intent"},
         ) from exc
 
 
@@ -269,26 +275,47 @@ class InstitutionalExecutionEngine:
         )
 
         t0 = time.perf_counter()
+        check_res: Any = None
+        request: Any = None
+        constraints: Any = None
         try:
+            intent, norm_notes = self.order_validation.normalize_intent(intent)
+            volume = str(intent.volume.value)
             constraints = self.order_validation.constraints_for(intent.symbol)
             ok_vol, msg_vol = self.order_validation.validate_volume(intent, constraints)
             request = self.order_validation.build_order_request(intent)
             ok_stops, msg_stops = self.order_validation.validate_stops(
                 intent, constraints, entry_price=request.price
             )
-            validation_ok = ok_vol and ok_stops
-            val_reasons: list[str] = []
+            check_res = self.order_validation.adapter.order_check(request)
+            ok_check = check_res.ok
+            validation_ok = ok_vol and ok_stops and ok_check
+            val_reasons: list[str] = list(norm_notes)
             if not ok_vol:
                 val_reasons.append(msg_vol)
             if not ok_stops:
                 val_reasons.append(msg_stops)
+            if not ok_check:
+                val_reasons.append(
+                    check_res.comment
+                    or f"MT5 order_check retcode {check_res.retcode}"
+                )
             if not connected:
                 validation_ok = False
                 val_reasons.append("broker connection not active")
-            if not constraints.trade_allowed:
+            if not constraints.trade_allowed and intent.oms_kind not in {
+                "sltp",
+                "modify_sltp",
+                "close",
+                "partial_close",
+            }:
                 validation_ok = False
                 val_reasons.append("symbol not tradable")
-            if not constraints.market_open and intent.order_type is OrderType.MARKET:
+            if (
+                not constraints.market_open
+                and intent.order_type is OrderType.MARKET
+                and intent.oms_kind not in {"sltp", "modify_sltp"}
+            ):
                 validation_ok = False
                 val_reasons.append("market closed")
         except (OSError, RuntimeError, ValueError, ValidationError) as exc:
@@ -313,6 +340,12 @@ class InstitutionalExecutionEngine:
                 status="failed",
                 reason="; ".join(human_val) or "Validation failed",
                 t0=t0,
+                meta={
+                    "component": "validation",
+                    "order_check_retcode": getattr(check_res, "retcode", None),
+                    "order_check_comment": getattr(check_res, "comment", None),
+                    "request": request.to_dict() if request is not None else intent.to_dict(),
+                },
             )
             result = PipelineResult(
                 request_id=request_id,
@@ -342,6 +375,13 @@ class InstitutionalExecutionEngine:
             status="ok",
             reason="Validation passed",
             t0=t0,
+            meta={
+                "component": "validation",
+                "order_check_retcode": getattr(check_res, "retcode", None),
+                "order_check_comment": getattr(check_res, "comment", None),
+                "request": request.to_dict() if request is not None else intent.to_dict(),
+                "constraints": constraints.to_dict() if constraints else {},
+            },
         )
 
         t0 = time.perf_counter()
@@ -509,9 +549,14 @@ class InstitutionalExecutionEngine:
             reason=exec_result.message,
             t0=t0,
             meta={
+                "component": "gateway.mt5_order_send",
                 "outcome": exec_result.outcome.value,
                 "retcode": exec_result.retcode,
-                "ticket": exec_result.order_ticket,
+                "comment": exec_result.message,
+                "order_ticket": exec_result.order_ticket,
+                "deal_ticket": exec_result.deal_ticket,
+                "request": intent.to_dict(),
+                "response": exec_result.to_dict(),
             },
         )
 
@@ -884,5 +929,14 @@ class InstitutionalExecutionEngine:
             order_type=intent.order_type.value,
             action=result.action,
             stages=[s.to_dict() for s in result.stages],
-            meta={"decision": result.decision},
+            meta={
+                "decision": result.decision,
+                "oms_kind": intent.oms_kind,
+                "position": intent.position,
+                "retcode": exec_result.retcode if exec_result else None,
+                "deal_ticket": exec_result.deal_ticket if exec_result else None,
+                "request_payload": intent.to_dict(),
+                "response_payload": exec_result.to_dict() if exec_result else None,
+                "rejection_reasons": list(result.rejection_reasons),
+            },
         )

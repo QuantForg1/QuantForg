@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.mt5_gateway.auth import require_gateway_token
 from services.mt5_gateway.runtime import MT5GatewayRuntime
-from services.mt5_gateway.schemas import AttachRequest, ConnectRequest
+from services.mt5_gateway.schemas import (
+    AttachRequest,
+    CancelRequest,
+    ConnectRequest,
+    TradeRequestBody,
+)
 from services.mt5_gateway.settings import get_gateway_settings
 
 router = APIRouter(tags=["mt5-gateway"])
@@ -128,6 +133,14 @@ async def symbols(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
     return _call(runtime.symbols)
 
 
+@router.get("/symbols/{symbol}")
+async def symbol_specs(
+    symbol: str, _: TokenDep, runtime: RuntimeDep
+) -> dict[str, Any]:
+    """Live MT5 constraints: volume_step, stops_level, filling_mode, trade_mode, …"""
+    return _call(lambda: runtime.symbol_specs(symbol))
+
+
 @router.get("/quotes/{symbol}")
 async def quotes(
     symbol: str, _: TokenDep, runtime: RuntimeDep
@@ -174,3 +187,39 @@ async def history_deals(
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict[str, Any]:
     return _call(lambda: runtime.history_deals(days=days))
+
+
+@router.post("/trade/order_check")
+async def trade_order_check(
+    body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
+) -> dict[str, Any]:
+    return _call(lambda: runtime.order_check(body.as_runtime_dict()))
+
+
+@router.post("/trade/order_calc_margin")
+async def trade_order_calc_margin(
+    body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
+) -> dict[str, Any]:
+    return _call(lambda: runtime.order_calc_margin(body.as_runtime_dict()))
+
+
+@router.post("/trade/order_calc_profit")
+async def trade_order_calc_profit(
+    body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
+) -> dict[str, Any]:
+    return _call(lambda: runtime.order_calc_profit(body.as_runtime_dict()))
+
+
+@router.post("/trade/order_send")
+async def trade_order_send(
+    body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
+) -> dict[str, Any]:
+    """Live MetaTrader5.order_send — never invents tickets."""
+    return _call(lambda: runtime.order_send(body.as_runtime_dict()))
+
+
+@router.post("/trade/order_cancel")
+async def trade_order_cancel(
+    body: CancelRequest, _: TokenDep, runtime: RuntimeDep
+) -> dict[str, Any]:
+    return _call(lambda: runtime.order_cancel(body.ticket))

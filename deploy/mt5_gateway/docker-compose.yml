@@ -9,7 +9,8 @@ services:
       - "8000:8000"
     environment:
       APP_ENV: production
-      EXECUTION_ENABLED: "false"
+      # Live trading remains off unless operators set EXECUTION_ENABLED=true.
+EXECUTION_ENABLED: "${EXECUTION_ENABLED:-false}"
       MT5_USE_MOCK: "true"
     # Do NOT set broker passwords here.
 

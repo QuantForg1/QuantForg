@@ -95,7 +95,7 @@ class MT5OrderSendResult:
 
     @property
     def ok(self) -> bool:
-        return self.retcode in {0, RETCODE_DONE}
+        return self.retcode in {0, RETCODE_DONE, 10008}
 
     def to_dict(self) -> dict[str, object]:
         return {

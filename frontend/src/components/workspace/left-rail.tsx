@@ -13,6 +13,13 @@ import { asList, asRecord, num, str } from "@/lib/desk";
 import { classifySymbol } from "@/lib/dashboard/derive";
 import { formatNumber } from "@/lib/utils";
 import {
+  TRADING_SYMBOL,
+  MULTI_SYMBOL_ENABLED,
+  filterTradingSymbolRecords,
+  goldOnlySearchQuery,
+  resolveTradingSymbol,
+} from "@/lib/trading/gold-only";
+import {
   loadWatchlists,
   saveWatchlists,
   type NamedWatchlist,
@@ -21,7 +28,7 @@ import {
 } from "@/components/workspace/layout-store";
 import { Cable } from "lucide-react";
 
-const CATS = [
+const ALL_CATS = [
   "all",
   "favorites",
   "forex",
@@ -34,7 +41,13 @@ const CATS = [
   "commodities",
 ] as const;
 
-function matchesCategory(code: string, cat: (typeof CATS)[number]): boolean {
+type MarketCategory = (typeof ALL_CATS)[number];
+
+const GOLD_ONLY_CATS = ["all", "favorites"] as const satisfies readonly MarketCategory[];
+
+const VISIBLE_CATS = MULTI_SYMBOL_ENABLED ? ALL_CATS : GOLD_ONLY_CATS;
+
+function matchesCategory(code: string, cat: MarketCategory): boolean {
   const u = code.toUpperCase();
   if (cat === "all" || cat === "favorites") return true;
   if (cat === "gold") return u.includes("XAU") || u.includes("GOLD");
@@ -72,7 +85,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
 }) {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
-  const [cat, setCat] = useState<(typeof CATS)[number]>("all");
+  const [cat, setCat] = useState<MarketCategory>("all");
   const [favorites, setFavorites] = useState<string[]>(() =>
     typeof window === "undefined" ? [] : loadFavorites(),
   );
@@ -87,11 +100,13 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
     return () => window.clearTimeout(t);
   }, [q]);
 
+  const searchQ = goldOnlySearchQuery(debouncedQ);
+
   const symbolsQ = useInfiniteQuery({
-    queryKey: ["mt5-symbols", debouncedQ],
+    queryKey: ["mt5-symbols", searchQ],
     queryFn: ({ pageParam }) =>
       mt5Api.symbols({
-        q: debouncedQ,
+        q: searchQ ?? TRADING_SYMBOL,
         offset: pageParam,
         limit: 100,
         include_quotes: false,
@@ -99,7 +114,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
     initialPageParam: 0,
     getNextPageParam: (last) => (last.has_more ? last.offset + last.limit : undefined),
     retry: false,
-    enabled: connected,
+    enabled: connected && (MULTI_SYMBOL_ENABLED || searchQ !== null),
     staleTime: 45_000,
   });
   const tickQ = useQuery({
@@ -111,7 +126,9 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
 
   const symbols = useMemo(
     () =>
-      (symbolsQ.data?.pages ?? []).flatMap((page) => asList(page.items).map(asRecord)),
+      filterTradingSymbolRecords(
+        (symbolsQ.data?.pages ?? []).flatMap((page) => asList(page.items).map(asRecord)),
+      ),
     [symbolsQ.data],
   );
   const activeList = watchlists.find((w) => w.id === activeListId) ?? watchlists[0];
@@ -250,7 +267,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
           />
           <Input
             className="h-8 pl-8 text-xs"
-            placeholder="Search markets…"
+            placeholder={MULTI_SYMBOL_ENABLED ? "Search markets…" : "Search XAUUSD…"}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             aria-label="Search symbols"
@@ -258,7 +275,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
           />
         </div>
         <div className="flex flex-wrap gap-1" role="tablist" aria-label="Market categories">
-          {CATS.map((c) => (
+          {VISIBLE_CATS.map((c) => (
             <Button
               key={c}
               size="sm"
@@ -321,7 +338,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
                     <button
                       type="button"
                       className="min-w-0 flex-1 px-3 py-2 text-left"
-                      onClick={() => onSelect(code)}
+                      onClick={() => onSelect(resolveTradingSymbol(code))}
                       aria-current={active ? "true" : undefined}
                     >
                       <div className="flex items-center justify-between gap-2">

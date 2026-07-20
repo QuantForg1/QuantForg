@@ -299,6 +299,36 @@ class Settings(BaseSettings):
         float,
         Field(gt=0, description="MT5 connect timeout in seconds"),
     ] = 60.0
+    gold_only_mode: Annotated[
+        bool,
+        Field(
+            description=(
+                "Restrict trading symbols to XAUUSD (Gold-only terminal). "
+                "Disable only when multi-symbol support is explicitly enabled."
+            ),
+            validation_alias=AliasChoices("GOLD_ONLY_MODE", "gold_only_mode"),
+        ),
+    ] = True
+    multi_symbol_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Allow non-gold symbols. Takes precedence over gold_only_mode when true."
+            ),
+            validation_alias=AliasChoices(
+                "MULTI_SYMBOL_ENABLED", "multi_symbol_enabled"
+            ),
+        ),
+    ] = False
+    default_trading_symbol: Annotated[
+        str,
+        Field(
+            description="Default broker symbol when gold-only mode is active",
+            validation_alias=AliasChoices(
+                "DEFAULT_TRADING_SYMBOL", "default_trading_symbol"
+            ),
+        ),
+    ] = "XAUUSD"
     mt5_gateway_base_url: Annotated[
         str,
         Field(
@@ -326,14 +356,16 @@ class Settings(BaseSettings):
         ),
     ] = ""
 
-    # -- Execution Gateway (DISABLED by default) -----------------------------
+    # -- Execution Gateway ---------------------------------------------------
     execution_enabled: Annotated[
         bool,
         Field(
             description=(
-                "Allow MT5 Execution Gateway order_send. "
-                "DISABLED by default — never enable in production without review"
-            )
+                "Allow MT5 Execution Gateway order_send when a Windows gateway "
+                "is configured. Requires EXECUTION_ENABLED=true. "
+                "Never invents fills; MockMT5Client cannot live-send."
+            ),
+            validation_alias=AliasChoices("EXECUTION_ENABLED", "execution_enabled"),
         ),
     ] = False
 
@@ -496,8 +528,10 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "reload", False)
             if self.debug:
                 object.__setattr__(self, "debug", False)
-            # Live trading must never ship enabled.
-            if self.execution_enabled:
+            # Live trading requires an explicit flag AND a configured gateway.
+            # Do not silently invent fills via MockMT5Client in production.
+            has_gateway = bool((self.mt5_gateway_base_url or "").strip())
+            if self.execution_enabled and not has_gateway:
                 object.__setattr__(self, "execution_enabled", False)
             insecure_markers = ("change-me", "dev_password", "secret-key-at-least")
             secret = self.secret_key.get_secret_value()

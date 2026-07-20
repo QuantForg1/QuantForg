@@ -21,8 +21,9 @@ import { PageMotion } from "@/components/desk/motion";
 import { SessionStrip } from "@/components/broker/session-strip";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { useTradingSession } from "@/providers/trading-session-provider";
-import { asList, asRecord, mapEquityCurve, metric, num, str, toneFromNumber } from "@/lib/desk";
+import { asList, asRecord, metric, num, str, toneFromNumber } from "@/lib/desk";
 import { formatCurrency } from "@/lib/utils";
+import { buildEquitySeries } from "@/lib/dashboard/derive";
 
 function money(v: unknown) {
   const n = num(v);
@@ -63,22 +64,8 @@ export default function WalletPage() {
     const p = num(d.profit, 0);
     return t.includes("withdrawal") || (t.includes("balance") && p < 0);
   });
-  const curve = mapEquityCurve(
-    asList(portfolio.data?.equity_curve).length
-      ? portfolio.data?.equity_curve
-      : deals
-          .slice()
-          .reverse()
-          .reduce<{ t: string; equity: number }[]>((acc, d, i) => {
-            const p = num(d.profit, 0);
-            const prev = acc.length ? acc[acc.length - 1].equity : balance || 0;
-            acc.push({
-              t: str(d.time, String(i + 1)).slice(5, 16),
-              equity: prev + p,
-            });
-            return acc;
-          }, []),
-  );
+  const curve =
+    Number.isFinite(equity) && deals.length ? buildEquitySeries(deals, equity) : [];
 
   const exportCsv = () => {
     const rows = [["ticket", "symbol", "side", "volume", "price", "profit", "time"]];
@@ -184,7 +171,10 @@ export default function WalletPage() {
                 <Badge tone="accent">Live</Badge>
               </CardHeader>
               <CardContent>
-                <LazyEquityChart data={curve} emptyLabel="No equity points yet" />
+                <LazyEquityChart
+                  data={curve}
+                  emptyLabel="No completed trades — equity path appears after deal sync"
+                />
               </CardContent>
             </Card>
             <Card>
@@ -200,7 +190,7 @@ export default function WalletPage() {
                 ) : deals.length === 0 ? (
                   <div className="flex h-64 flex-col items-center justify-center gap-2 text-center">
                     <Wallet className="h-8 w-8 text-[var(--fg-subtle)]" />
-                    <p className="text-sm text-[var(--fg-muted)]">No deal history synced yet.</p>
+                    <p className="text-sm text-[var(--fg-muted)]">No completed trades</p>
                   </div>
                 ) : (
                   <DeskTable

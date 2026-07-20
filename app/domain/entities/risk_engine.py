@@ -38,14 +38,26 @@ class RiskEngineConfig:
     fixed_lot: Decimal = Decimal("0.10")
     fixed_dollar_risk: Decimal = Decimal("100")
     atr_multiplier: Decimal = Decimal("1.5")
-    contract_size: Decimal = Decimal("100000")  # FX default
+    contract_size: Decimal = Decimal("100000")  # FX default; ITE maps XAU to 100
     exposure_leverage: Decimal = Decimal("100")  # margin ≈ notional / leverage
+    # --- Institutional extensions (Phase B) ---
+    max_consecutive_losses: int = 3
+    cooldown_minutes_after_loss_streak: int = 60
+    max_spread: Decimal = Decimal("2.00")
+    min_atr: Decimal = Decimal("0")  # 0 = disabled
+    max_atr: Decimal = Decimal("0")  # 0 = disabled
+    max_atr_pct_of_price: Decimal = Decimal("3.0")  # reject if ATR/price*100 > this
+    enforce_session: bool = True
+    enforce_spread: bool = True
+    enforce_atr: bool = True
 
     def __post_init__(self) -> None:
         require(self.max_lot >= self.min_lot, "max_lot must be >= min_lot")
         require(self.min_lot > 0, "min_lot must be > 0")
         require(self.lot_step > 0, "lot_step must be > 0")
         require(self.exposure_leverage > 0, "exposure_leverage must be > 0")
+        require(self.max_consecutive_losses >= 0, "max_consecutive_losses >= 0")
+        require(self.max_open_positions >= 1, "max_open_positions >= 1")
 
 
 @dataclass(frozen=True, slots=True)

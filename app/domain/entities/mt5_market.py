@@ -95,6 +95,18 @@ class MT5SymbolInfo:
     currency_profit: str = ""
     bid: Decimal | None = None
     ask: Decimal | None = None
+    # Live broker constraints — populated from MT5 when available
+    volume_min: Decimal = Decimal("0.01")
+    volume_max: Decimal = Decimal("100")
+    volume_step: Decimal = Decimal("0.01")
+    stops_level: int = 0
+    freeze_level: int = 0
+    filling_mode: int = 0
+    execution_mode: str = "market"
+    margin_calc_mode: str = ""
+    visible: bool = True
+    market_open: bool = True
+    trade_allowed: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "code", self.code.strip().upper())
@@ -114,4 +126,15 @@ class MT5SymbolInfo:
             "currency_profit": self.currency_profit,
             "bid": str(self.bid) if self.bid is not None else None,
             "ask": str(self.ask) if self.ask is not None else None,
+            "volume_min": str(self.volume_min),
+            "volume_max": str(self.volume_max),
+            "volume_step": str(self.volume_step),
+            "stops_level": self.stops_level,
+            "freeze_level": self.freeze_level,
+            "filling_mode": self.filling_mode,
+            "execution_mode": self.execution_mode,
+            "margin_calc_mode": self.margin_calc_mode,
+            "visible": self.visible,
+            "market_open": self.market_open,
+            "trade_allowed": self.trade_allowed,
         }

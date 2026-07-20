@@ -120,6 +120,9 @@ async def execution_submit(
             slippage=body.slippage,
             magic=body.magic,
             comment=body.comment,
+            position=body.position,
+            order_ticket=body.order_ticket,
+            oms_kind=body.oms_kind,
             ip_address=ip,
             user_agent=ua,
         )

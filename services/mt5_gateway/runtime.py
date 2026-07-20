@@ -230,6 +230,32 @@ class LiveMT5Bridge:
     def history_deals_get(self, date_from: datetime, date_to: datetime) -> Any:
         return self.require().history_deals_get(date_from, date_to)
 
+    def symbol_info(self, symbol: str) -> Any:
+        return self.require().symbol_info(symbol)
+
+    def order_check(self, request: dict[str, Any]) -> Any:
+        return self.require().order_check(request)
+
+    def order_send(self, request: dict[str, Any]) -> Any:
+        return self.require().order_send(request)
+
+    def order_calc_margin(
+        self, order_type: int, symbol: str, volume: float, price: float
+    ) -> Any:
+        return self.require().order_calc_margin(order_type, symbol, volume, price)
+
+    def order_calc_profit(
+        self,
+        order_type: int,
+        symbol: str,
+        volume: float,
+        price_open: float,
+        price_close: float,
+    ) -> Any:
+        return self.require().order_calc_profit(
+            order_type, symbol, volume, price_open, price_close
+        )
+
 
 class MT5GatewayRuntime:
     """Owns the live terminal session + heartbeat / auto-reconnect loop."""
@@ -604,10 +630,30 @@ class MT5GatewayRuntime:
                 "code": str(getattr(s, "name", "")),
                 "description": str(getattr(s, "description", "")),
                 "digits": _safe_int(getattr(s, "digits", 0)),
+                "volume_min": str(getattr(s, "volume_min", 0) or 0),
+                "volume_max": str(getattr(s, "volume_max", 0) or 0),
+                "volume_step": str(getattr(s, "volume_step", 0) or 0),
+                "trade_mode": _safe_int(getattr(s, "trade_mode", 0)),
+                "filling_mode": _safe_int(getattr(s, "filling_mode", 0)),
+                "point": str(getattr(s, "point", 0) or 0),
+                "contract_size": str(getattr(s, "trade_contract_size", 0) or 0),
             }
             for s in rows
         ]
         return {"items": items, "count": len(items)}
+
+    def symbol_specs(self, symbol: str) -> dict[str, Any]:
+        """Live MT5 trading constraints for one symbol — never hardcoded."""
+        from services.mt5_gateway.symbol_specs import serialize_symbol_specs
+
+        self._require_connected()
+        self._ensure_symbol(symbol)
+        info = self.bridge.symbol_info(symbol)
+        if info is None:
+            err = self.bridge.last_error()
+            raise RuntimeError(f"symbol_info failed for {symbol}: {err}")
+        tick = self.bridge.symbol_info_tick(symbol)
+        return serialize_symbol_specs(info, tick=tick)
 
     def quote(self, symbol: str) -> dict[str, Any]:
         self._require_connected()
@@ -615,11 +661,17 @@ class MT5GatewayRuntime:
         tick = self.bridge.symbol_info_tick(symbol)
         if tick is None:
             raise RuntimeError(f"symbol unavailable: {symbol}")
+        specs: dict[str, Any] = {}
+        try:
+            specs = self.symbol_specs(symbol)
+        except RuntimeError:
+            specs = {}
         return {
             "symbol": symbol.upper(),
             "bid": str(tick.bid),
             "ask": str(tick.ask),
             "time": _safe_int(getattr(tick, "time", 0)),
+            "specs": specs,
         }
 
     def candles(
@@ -660,7 +712,13 @@ class MT5GatewayRuntime:
                 "volume": str(p.volume),
                 "price_open": str(p.price_open),
                 "price_current": str(p.price_current),
+                "sl": str(getattr(p, "sl", 0) or 0),
+                "tp": str(getattr(p, "tp", 0) or 0),
                 "profit": str(p.profit),
+                "swap": str(getattr(p, "swap", 0) or 0),
+                "magic": _safe_int(getattr(p, "magic", 0)),
+                "comment": str(getattr(p, "comment", "") or ""),
+                "time": _safe_int(getattr(p, "time", 0)),
             }
             for p in rows
         ]
@@ -676,6 +734,9 @@ class MT5GatewayRuntime:
                 "type": _safe_int(o.type),
                 "volume_current": str(o.volume_current),
                 "price_open": str(o.price_open),
+                "sl": str(getattr(o, "sl", 0) or 0),
+                "tp": str(getattr(o, "tp", 0) or 0),
+                "time_setup": _safe_int(getattr(o, "time_setup", 0)),
             }
             for o in rows
         ]
@@ -708,13 +769,208 @@ class MT5GatewayRuntime:
         items = [
             {
                 "ticket": _safe_int(d.ticket),
+                "order": _safe_int(getattr(d, "order", 0)),
                 "symbol": str(d.symbol),
-                "profit": str(d.profit),
+                "type": _safe_int(getattr(d, "type", 0)),
+                "entry": _safe_int(getattr(d, "entry", 0)),
                 "volume": str(d.volume),
+                "price": str(getattr(d, "price", 0) or 0),
+                "profit": str(d.profit),
+                "swap": str(getattr(d, "swap", 0) or 0),
+                "commission": str(getattr(d, "commission", 0) or 0),
+                "time": _safe_int(getattr(d, "time", 0)),
+                "magic": _safe_int(getattr(d, "magic", 0)),
+                "comment": str(getattr(d, "comment", "") or ""),
             }
             for d in rows
         ]
         return {"items": items}
+
+    def order_check(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Validate a trade request via MetaTrader5.order_check (no fill)."""
+        from services.mt5_gateway.trade import (
+            build_mt5_trade_request,
+            serialize_check_result,
+        )
+
+        self._require_connected()
+        symbol = str(body.get("symbol") or "").strip().upper()
+        if not symbol:
+            raise RuntimeError("symbol is required")
+        self._ensure_symbol(symbol)
+        mt5 = self.bridge.require()
+        request = build_mt5_trade_request(
+            mt5,
+            symbol=symbol,
+            action=str(body.get("action") or "buy"),
+            volume=float(body.get("volume") or 0),
+            price=float(body.get("price") or 0),
+            stop_loss=float(body.get("sl") or body.get("stop_loss") or 0),
+            take_profit=float(body.get("tp") or body.get("take_profit") or 0),
+            deviation=int(body.get("deviation") or body.get("slippage") or 20),
+            magic=int(body.get("magic") or 0),
+            comment=str(body.get("comment") or "quantforg"),
+            position=int(body.get("position") or 0),
+            order_ticket=int(body.get("order_ticket") or body.get("order") or 0),
+            oms_kind=str(body.get("oms_kind") or ""),
+        )
+        if request.get("action") != 6 and float(request.get("price") or 0) <= 0:
+            tick = self.bridge.symbol_info_tick(symbol)
+            if tick is None:
+                raise RuntimeError(f"no quote for {symbol}")
+            order_type = int(request.get("type") or 0)
+            request["price"] = float(tick.ask if order_type % 2 == 0 else tick.bid)
+        result = self.bridge.order_check(request)
+        payload = serialize_check_result(result, request)
+        payload["component"] = "mt5_order_check"
+        try:
+            payload["symbol_specs"] = self.symbol_specs(symbol)
+        except RuntimeError:
+            payload["symbol_specs"] = {}
+        if result is None:
+            err = self.bridge.last_error()
+            payload["comment"] = f"order_check failed: {err}"
+        return payload
+
+    def order_calc_margin(self, body: dict[str, Any]) -> dict[str, Any]:
+        from services.mt5_gateway.trade import order_type_for_action
+
+        self._require_connected()
+        symbol = str(body.get("symbol") or "").strip().upper()
+        action = str(body.get("action") or "buy")
+        volume = float(body.get("volume") or 0)
+        price = float(body.get("price") or 0)
+        if not symbol or volume <= 0:
+            raise RuntimeError("symbol and positive volume are required")
+        self._ensure_symbol(symbol)
+        if price <= 0:
+            tick = self.bridge.symbol_info_tick(symbol)
+            if tick is None:
+                raise RuntimeError(f"no quote for {symbol}")
+            price = float(tick.ask if "buy" in action.lower() else tick.bid)
+        order_type = order_type_for_action(action)
+        margin = self.bridge.order_calc_margin(order_type, symbol, volume, price)
+        if margin is None:
+            err = self.bridge.last_error()
+            return {
+                "margin": "0",
+                "retcode": 10013,
+                "comment": f"order_calc_margin failed: {err}",
+            }
+        return {
+            "margin": str(margin),
+            "retcode": 10009,
+            "comment": "done",
+        }
+
+    def order_calc_profit(self, body: dict[str, Any]) -> dict[str, Any]:
+        from services.mt5_gateway.trade import order_type_for_action
+
+        self._require_connected()
+        symbol = str(body.get("symbol") or "").strip().upper()
+        action = str(body.get("action") or "buy")
+        volume = float(body.get("volume") or 0)
+        price_open = float(body.get("price") or body.get("price_open") or 0)
+        price_close = float(body.get("close_price") or body.get("price_close") or 0)
+        if not symbol or volume <= 0:
+            raise RuntimeError("symbol and positive volume are required")
+        self._ensure_symbol(symbol)
+        tick = self.bridge.symbol_info_tick(symbol)
+        if tick is None:
+            raise RuntimeError(f"no quote for {symbol}")
+        if price_open <= 0:
+            price_open = float(tick.ask if "buy" in action.lower() else tick.bid)
+        if price_close <= 0:
+            price_close = float(tick.bid if "buy" in action.lower() else tick.ask)
+        order_type = order_type_for_action(action)
+        profit = self.bridge.order_calc_profit(
+            order_type, symbol, volume, price_open, price_close
+        )
+        if profit is None:
+            err = self.bridge.last_error()
+            return {
+                "profit": "0",
+                "retcode": 10013,
+                "comment": f"order_calc_profit failed: {err}",
+            }
+        return {
+            "profit": str(profit),
+            "retcode": 10009,
+            "comment": "done",
+        }
+
+    def order_send(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Live MetaTrader5.order_send — returns real broker retcode / ticket."""
+        from services.mt5_gateway.trade import (
+            TRADE_ACTION_SLTP,
+            build_mt5_trade_request,
+            serialize_send_result,
+        )
+
+        self._require_connected()
+        symbol = str(body.get("symbol") or "").strip().upper()
+        if not symbol:
+            raise RuntimeError("symbol is required")
+        oms_kind = str(body.get("oms_kind") or "").strip().lower()
+        action = str(body.get("action") or "buy").strip().lower()
+        is_sltp = oms_kind in {"sltp", "modify_sltp"} or action in {"sltp", "modify_sltp"}
+        volume = float(body.get("volume") or 0)
+        if not is_sltp and volume <= 0:
+            raise RuntimeError("volume must be > 0")
+        self._ensure_symbol(symbol)
+        mt5 = self.bridge.require()
+        request = build_mt5_trade_request(
+            mt5,
+            symbol=symbol,
+            action=action,
+            volume=volume if volume > 0 else 0.01,
+            price=float(body.get("price") or 0),
+            stop_loss=float(body.get("sl") or body.get("stop_loss") or 0),
+            take_profit=float(body.get("tp") or body.get("take_profit") or 0),
+            deviation=int(body.get("deviation") or body.get("slippage") or 20),
+            magic=int(body.get("magic") or 0),
+            comment=str(body.get("comment") or "quantforg"),
+            position=int(body.get("position") or 0),
+            order_ticket=int(body.get("order_ticket") or body.get("order") or 0),
+            oms_kind=oms_kind,
+        )
+        if (
+            int(request.get("action") or 0) != TRADE_ACTION_SLTP
+            and float(request.get("price") or 0) <= 0
+        ):
+            tick = self.bridge.symbol_info_tick(symbol)
+            if tick is None:
+                raise RuntimeError(f"no quote for {symbol}")
+            order_type = int(request.get("type") or 0)
+            request["price"] = float(tick.ask if order_type % 2 == 0 else tick.bid)
+        result = self.bridge.order_send(request)
+        payload = serialize_send_result(result, request)
+        payload["component"] = "mt5_order_send"
+        try:
+            payload["symbol_specs"] = self.symbol_specs(symbol)
+        except RuntimeError:
+            payload["symbol_specs"] = {}
+        if result is None:
+            err = self.bridge.last_error()
+            payload["comment"] = (
+                f"order_send failed: {err}. "
+                "Enable AutoTrading in MT5 and allow algo trading for this EA/account."
+            )
+        return payload
+
+    def order_cancel(self, ticket: int) -> dict[str, Any]:
+        from services.mt5_gateway.trade import TRADE_ACTION_REMOVE, serialize_send_result
+
+        self._require_connected()
+        if ticket <= 0:
+            raise RuntimeError("ticket must be > 0")
+        request = {"action": TRADE_ACTION_REMOVE, "order": int(ticket)}
+        result = self.bridge.order_send(request)
+        payload = serialize_send_result(result, request)
+        if result is None:
+            err = self.bridge.last_error()
+            payload["comment"] = f"order_cancel failed: {err}"
+        return payload
 
     def diagnostics_snapshot(self) -> dict[str, Any]:
         password_in_memory = bool(self._creds and self._creds.password)

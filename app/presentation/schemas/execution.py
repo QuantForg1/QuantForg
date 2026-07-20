@@ -50,6 +50,9 @@ class ExecutionSubmitRequest(BaseModel):
     slippage: int = Field(default=10, ge=0)
     magic: int = Field(default=0, ge=0)
     comment: str = Field(default="", max_length=64)
+    position: int = Field(default=0, ge=0)
+    order_ticket: int = Field(default=0, ge=0)
+    oms_kind: str = Field(default="", max_length=32)
 
 
 class ExecutionSubmitResponse(BaseModel):

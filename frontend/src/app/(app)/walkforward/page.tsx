@@ -19,33 +19,12 @@ import { walkforwardApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, mapEquityCurve, metric, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
-
-function sampleBars(n = 120) {
-  const bars = [];
-  let price = 1.09;
-  const start = Date.now() - n * 15 * 60 * 1000;
-  for (let i = 0; i < n; i++) {
-    const open = price;
-    const close = price + (Math.random() - 0.49) * 0.0012;
-    const high = Math.max(open, close) + Math.random() * 0.0003;
-    const low = Math.min(open, close) - Math.random() * 0.0003;
-    const t = new Date(start + i * 15 * 60 * 1000).toISOString();
-    bars.push({
-      open_time: t,
-      open: open.toFixed(5),
-      high: high.toFixed(5),
-      low: low.toFixed(5),
-      close: close.toFixed(5),
-      volume: "80",
-    });
-    price = close;
-  }
-  return bars;
-}
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { loadBarsFromMt5Gateway } from "@/lib/mt5/bars-from-gateway";
 
 export default function WalkForwardPage() {
   const qc = useQueryClient();
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const listQ = useQuery({
@@ -72,6 +51,28 @@ export default function WalkForwardPage() {
       toast.error(e instanceof ApiError ? e.message : "Walk-forward failed"),
   });
 
+  const runFromMt5 = async () => {
+    try {
+      const bars = await loadBarsFromMt5Gateway(symbol, "M15", 240);
+      if (!bars.length) {
+        toast.error("No MT5 candles for this symbol — connect gateway and retry.");
+        return;
+      }
+      run.mutate({
+        request_id: `wf-${Date.now()}`,
+        symbol,
+        timeframe: "m15",
+        bars,
+        in_sample_bars: 40,
+        out_of_sample_bars: 20,
+        step_bars: 20,
+        optimize_params: true,
+      });
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Unable to load MT5 candles");
+    }
+  };
+
   const items = asList(listQ.data).map(asRecord);
   const report = asRecord(detailQ.data ?? items[0]);
   const robustness = asRecord(report.robustness);
@@ -94,22 +95,7 @@ export default function WalkForwardPage() {
         title="Walk Forward"
         description="Out-of-sample validation, robustness scoring, and parameter stability."
         actions={
-          <Button
-            size="sm"
-            disabled={run.isPending}
-            onClick={() =>
-              run.mutate({
-                request_id: `wf-${Date.now()}`,
-                symbol,
-                timeframe: "m15",
-                bars: sampleBars(120),
-                in_sample_bars: 40,
-                out_of_sample_bars: 20,
-                step_bars: 20,
-                optimize_params: true,
-              })
-            }
-          >
+          <Button size="sm" disabled={run.isPending} onClick={() => void runFromMt5()}>
             Run validation
           </Button>
         }
@@ -118,6 +104,9 @@ export default function WalkForwardPage() {
       <div className="mb-4 space-y-1.5">
         <Label>Symbol</Label>
         <Input className="w-40" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} />
+        <p className="qf-caption text-[var(--fg-subtle)]">
+          Bars load from MT5 gateway only — never generated in the browser.
+        </p>
       </div>
 
       <DeskQueryState

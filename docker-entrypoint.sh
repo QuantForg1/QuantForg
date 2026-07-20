@@ -6,8 +6,9 @@ export APP_ENV="${APP_ENV:-${ENVIRONMENT:-production}}"
 export ENVIRONMENT="${ENVIRONMENT:-$APP_ENV}"
 export DEBUG=false
 export RELOAD=false
-# Live trading must never be enabled from the container entrypoint.
-export EXECUTION_ENABLED=false
+# Live trading defaults off. Operators may set EXECUTION_ENABLED=true in Railway
+# only when MT5_GATEWAY_BASE_URL is configured (gateway order_send path).
+export EXECUTION_ENABLED="${EXECUTION_ENABLED:-false}"
 # OpenAPI docs off by default in production images (set DOCS_ENABLED=true to opt in).
 export DOCS_ENABLED="${DOCS_ENABLED:-false}"
 

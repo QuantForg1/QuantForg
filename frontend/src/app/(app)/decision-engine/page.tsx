@@ -18,11 +18,12 @@ import { decisionEngineApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber, formatPct } from "@/lib/utils";
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 
 export default function DecisionEnginePage() {
   const qc = useQueryClient();
-  const [symbol, setSymbol] = useState("EURUSD");
-  const [focus, setFocus] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
+  const [focus, setFocus] = useState(TRADING_SYMBOL);
 
   const dashQ = useQuery({
     queryKey: ["decision-engine-dashboard", focus],
@@ -79,7 +80,7 @@ export default function DecisionEnginePage() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setFocus(symbol.trim() || "EURUSD")}
+              onClick={() => setFocus(resolveTradingSymbol(symbol.trim()))}
             >
               Focus
             </Button>

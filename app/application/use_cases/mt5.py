@@ -201,6 +201,33 @@ class ListMT5SymbolsUseCase:
         safe_offset = max(0, int(offset))
         safe_limit = max(1, min(500, int(limit)))
         query = (q or "").strip().upper()
+
+        from app.domain.trading.gold_only import (
+            default_trading_symbol,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled():
+            focus = default_trading_symbol()
+            if (
+                query
+                and not is_gold_symbol(query)
+                and "XAU" not in query
+                and "GOLD" not in query
+            ):
+                return MT5SymbolsPageDTO(
+                    items=[],
+                    total=0,
+                    offset=safe_offset,
+                    limit=safe_limit,
+                    has_more=False,
+                )
+            # Prefer requesting the gold focus code; catalogue is still filtered below.
+            if codes is None:
+                codes = [focus]
+            query = ""
+
         try:
             # Catalogue without quote fan-out; optional quotes only for the page.
             catalogue = self.adapter.list_symbols(
@@ -213,10 +240,22 @@ class ListMT5SymbolsUseCase:
                 details={"error": str(exc)},
             ) from exc
 
+        # If broker uses an alternate gold code, fall back to full catalogue filter.
+        if gold_only_enabled() and not catalogue and codes:
+            try:
+                catalogue = self.adapter.list_symbols(
+                    include_quotes=False,
+                    codes=None,
+                )
+            except (OSError, RuntimeError, ValueError):
+                catalogue = []
+
         filtered: list[Any] = []
         for item in catalogue:
             code = (getattr(item, "code", "") or "").upper()
             desc = (getattr(item, "description", "") or "").upper()
+            if gold_only_enabled() and not is_gold_symbol(code):
+                continue
             if query and query not in code and query not in desc:
                 continue
             filtered.append(item)
@@ -270,6 +309,9 @@ class GetMT5SymbolUseCase:
     market_data: MT5MarketDataService
 
     async def execute(self, *, user_id: UUID, symbol: str) -> MT5SymbolDTO:
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
+        symbol = resolve_trading_symbol(symbol)
         await require_live_mt5_connection(
             self.uow_factory, self.market_data.adapter, user_id
         )
@@ -289,6 +331,9 @@ class GetMT5TickUseCase:
     market_data: MT5MarketDataService
 
     async def execute(self, *, user_id: UUID, symbol: str) -> MT5TickDTO:
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
+        symbol = resolve_trading_symbol(symbol)
         await require_live_mt5_connection(
             self.uow_factory, self.market_data.adapter, user_id
         )
@@ -321,6 +366,9 @@ class GetMT5CandlesUseCase:
         await require_live_mt5_connection(
             self.uow_factory, self.market_data.adapter, user_id
         )
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
+        symbol = resolve_trading_symbol(symbol)
         tf = Timeframe.parse(timeframe)
         if count < 1 or count > 5000:
             raise ValidationError(

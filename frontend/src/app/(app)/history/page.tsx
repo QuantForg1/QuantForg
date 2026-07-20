@@ -183,7 +183,7 @@ export default function HistoryPage() {
                   empty={
                     <DeskEmpty
                       icon={History}
-                      title="No deals synced yet"
+                      title="No completed trades"
                       description="Deal fills appear here after terminal sync."
                       actionLabel="Open broker"
                       actionHref="/broker"

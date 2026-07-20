@@ -31,6 +31,7 @@ import { researchLabApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 
 const MODULES = [
   { id: "dashboard", label: "Dashboard", icon: Gauge },
@@ -56,8 +57,8 @@ function metricCell(v: unknown, digits = 2) {
 
 export default function ResearchLabPage() {
   const qc = useQueryClient();
-  const [symbol, setSymbol] = useState("EURUSD");
-  const [focus, setFocus] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
+  const [focus, setFocus] = useState(TRADING_SYMBOL);
   const [module, setModule] = useState<ModuleId>("dashboard");
   const [strategyKey, setStrategyKey] = useState("trend_following");
   const [timeframe, setTimeframe] = useState("H1");
@@ -236,7 +237,7 @@ export default function ResearchLabPage() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setFocus(symbol.trim() || "EURUSD")}
+              onClick={() => setFocus(resolveTradingSymbol(symbol.trim()))}
             >
               Focus
             </Button>

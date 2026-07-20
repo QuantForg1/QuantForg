@@ -1,5 +1,7 @@
 /** Research OS layout — institutional research workflow, not a page collage. */
 
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
+
 export type ResearchStage =
   | "idea"
   | "observe"
@@ -21,7 +23,7 @@ export const RESEARCH_LAYOUT_KEY = "qf.research.layout.v1";
 
 export const DEFAULT_RESEARCH_LAYOUT: ResearchLayoutState = {
   stage: "idea",
-  symbol: "EURUSD",
+  symbol: TRADING_SYMBOL,
   strategyKey: "",
   aiCollapsed: false,
 };
@@ -47,7 +49,8 @@ export function loadResearchLayout(): ResearchLayoutState {
     const raw = localStorage.getItem(RESEARCH_LAYOUT_KEY);
     if (!raw) return DEFAULT_RESEARCH_LAYOUT;
     const parsed = JSON.parse(raw) as Partial<ResearchLayoutState>;
-    return { ...DEFAULT_RESEARCH_LAYOUT, ...parsed };
+    const merged = { ...DEFAULT_RESEARCH_LAYOUT, ...parsed };
+    return { ...merged, symbol: resolveTradingSymbol(merged.symbol) };
   } catch {
     return DEFAULT_RESEARCH_LAYOUT;
   }

@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num } from "@/lib/desk";
+import { resolveTradingSymbol } from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn } from "@/lib/utils";
 
@@ -89,7 +90,7 @@ export function CounselShell() {
     setLayout((prev) => ({ ...prev, ...partial }));
   }, []);
 
-  const focusSymbol = layout.symbol || "EURUSD";
+  const focusSymbol = resolveTradingSymbol(layout.symbol);
 
   const dashQ = useQuery({
     queryKey: ["decision-engine-dashboard", focusSymbol],

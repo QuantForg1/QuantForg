@@ -41,8 +41,8 @@ export const TerminalBlotter = memo(function TerminalBlotter({
     queryKey: ["history"],
     queryFn: portfolioApi.history,
     retry: false,
-    enabled: tab === "history",
-    staleTime: 20_000,
+    enabled: tab === "history" || session.connected,
+    staleTime: 8_000,
   });
 
   const journalQ = useQuery({
@@ -55,9 +55,9 @@ export const TerminalBlotter = memo(function TerminalBlotter({
   });
 
   const deals = useMemo(() => {
-    const fromApi = asList(historyQ.data?.deals).map(asRecord);
-    return fromApi.length ? fromApi : session.historyDeals;
-  }, [historyQ.data, session.historyDeals]);
+    if (historyQ.isFetched) return asList(historyQ.data?.deals).map(asRecord);
+    return session.historyDeals;
+  }, [historyQ.isFetched, historyQ.data, session.historyDeals]);
 
   const journalRows = useMemo(
     () => asList(asRecord(journalQ.data).items).map(asRecord),
@@ -148,7 +148,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
                 aria-label="Trade history"
                 empty={
                   <TerminalEmpty
-                    title="No trade history"
+                    title="No completed trades"
                     description="Filled deals from the live book will list here."
                   />
                 }

@@ -75,49 +75,26 @@ export default function LandingPage() {
 
           <div className="qf-fade-in relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 p-5 shadow-[var(--shadow-card)] [animation-delay:120ms]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.18),transparent_45%)]" />
-            <div className="relative space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-[var(--fg-muted)]">Equity curve</p>
-                <p className="tabular text-sm text-[var(--success)]">+12.4%</p>
-              </div>
-              <svg
-                viewBox="0 0 400 160"
-                className="h-40 w-full"
+            <div className="relative space-y-5">
+              <p className="text-sm text-[var(--fg-muted)]">Live book · MT5 gateway</p>
+              <div
+                className="flex h-40 items-end gap-1.5"
                 role="img"
-                aria-label="Illustrative equity curve trending upward"
+                aria-label="Abstract terminal lattice — no sample trading figures"
               >
-                <defs>
-                  <linearGradient id="eq" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(45,212,191,0.45)" />
-                    <stop offset="100%" stopColor="rgba(45,212,191,0)" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d="M0,120 C40,110 70,130 110,90 C150,50 180,70 220,55 C270,35 300,60 340,40 C370,28 390,35 400,30 L400,160 L0,160 Z"
-                  fill="url(#eq)"
-                />
-                <path
-                  d="M0,120 C40,110 70,130 110,90 C150,50 180,70 220,55 C270,35 300,60 340,40 C370,28 390,35 400,30"
-                  fill="none"
-                  stroke="#2dd4bf"
-                  strokeWidth="2.5"
-                />
-              </svg>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  ["Balance", "$124,820"],
-                  ["Exposure", "38%"],
-                  ["Risk", "Low"],
-                ].map(([k, v]) => (
+                {Array.from({ length: 24 }, (_, i) => (
                   <div
-                    key={k}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]/60 p-3"
-                  >
-                    <p className="text-[11px] text-[var(--fg-subtle)]">{k}</p>
-                    <p className="tabular mt-1 text-sm font-semibold">{v}</p>
-                  </div>
+                    key={i}
+                    className="flex-1 rounded-sm bg-[var(--accent)]/25"
+                    style={{ height: `${28 + ((i * 37) % 55)}%` }}
+                  />
                 ))}
               </div>
+              <ul className="space-y-2 text-sm text-[var(--fg-muted)]">
+                <li>Positions and equity sync from your terminal</li>
+                <li>Empty states when the gateway has no data</li>
+                <li>No demo balances or placeholder trades</li>
+              </ul>
             </div>
           </div>
         </section>

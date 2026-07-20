@@ -10,9 +10,10 @@ import { ExecutionOrderTicket } from "@/components/execution/order-ticket";
 import { useExecutionStream } from "@/hooks/realtime";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asRecord, num } from "@/lib/desk";
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 
 export function OrderTicket() {
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   useExecutionStream(symbol);
   const status = useQuery({
     queryKey: ["mt5-status"],
@@ -30,7 +31,7 @@ export function OrderTicket() {
   return (
     <ExecutionOrderTicket
       symbol={symbol}
-      onSymbolChange={setSymbol}
+      onSymbolChange={(s) => setSymbol(resolveTradingSymbol(s))}
       connected={Boolean(status.data?.connected)}
       bid={Number.isFinite(num(t.bid)) ? num(t.bid) : undefined}
       ask={Number.isFinite(num(t.ask)) ? num(t.ask) : undefined}

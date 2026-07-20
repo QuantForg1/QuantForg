@@ -1,5 +1,11 @@
 /** Persisted Advanced Trading Workspace layout. */
 
+import {
+  TRADING_SYMBOL,
+  isGoldSymbol,
+  MULTI_SYMBOL_ENABLED,
+} from "@/lib/trading/gold-only";
+
 export type WorkspacePresetId = "default" | "chart-focus" | "tape-focus";
 
 export type WorkspaceLayoutState = {
@@ -101,13 +107,23 @@ export function saveWorkspaceLayout(state: WorkspaceLayoutState) {
 export type NamedWatchlist = { id: string; name: string; symbols: string[] };
 
 export function loadWatchlists(): NamedWatchlist[] {
-  if (typeof window === "undefined") return [];
+  const defaultList: NamedWatchlist[] = [
+    { id: "default", name: "Main", symbols: [TRADING_SYMBOL] },
+  ];
+  if (typeof window === "undefined") return defaultList;
   try {
     const raw = localStorage.getItem(WORKSPACE_WATCHLIST_KEY);
-    if (!raw) return [{ id: "default", name: "Main", symbols: [] }];
-    return JSON.parse(raw) as NamedWatchlist[];
+    if (!raw) return defaultList;
+    const lists = JSON.parse(raw) as NamedWatchlist[];
+    if (MULTI_SYMBOL_ENABLED) return lists;
+    return lists.map((w) => ({
+      ...w,
+      symbols: w.symbols.filter((s) => isGoldSymbol(s)).length
+        ? w.symbols.filter((s) => isGoldSymbol(s))
+        : [TRADING_SYMBOL],
+    }));
   } catch {
-    return [{ id: "default", name: "Main", symbols: [] }];
+    return defaultList;
   }
 }
 

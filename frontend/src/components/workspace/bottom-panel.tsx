@@ -160,7 +160,7 @@ export const WorkspaceBottomPanel = memo(function WorkspaceBottomPanel({
           ) : deals.length === 0 ? (
             <DeskEmpty
               icon={History}
-              title="No deals yet"
+              title="No completed trades"
               description="Synced MT5 deals appear here."
             />
           ) : (

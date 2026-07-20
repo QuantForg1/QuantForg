@@ -38,6 +38,7 @@ import {
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asRecord, num } from "@/lib/desk";
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -69,7 +70,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
 export function TerminalShell() {
   const searchParams = useSearchParams();
   const [layout, setLayout] = useState<TerminalLayoutState>(DEFAULT_TERMINAL_LAYOUT);
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const ticketRef = useRef<OrderTicketHandle | null>(null);
@@ -80,8 +81,7 @@ export function TerminalShell() {
     try {
       const fromUrl = searchParams.get("symbol")?.trim();
       const fromLs = localStorage.getItem(TERMINAL_SYMBOL_KEY);
-      if (fromUrl) setSymbol(fromUrl.toUpperCase());
-      else if (fromLs) setSymbol(fromLs);
+      setSymbol(resolveTradingSymbol(fromUrl || fromLs));
     } catch {
       /* ignore */
     }

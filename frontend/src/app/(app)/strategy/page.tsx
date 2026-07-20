@@ -15,6 +15,7 @@ import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives
 import { strategyApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 
 type Mode = "ict" | "engine";
 
@@ -68,7 +69,7 @@ const defaultCustomRules = JSON.stringify(
 export default function StrategyPage() {
   const qc = useQueryClient();
   const [mode, setMode] = useState<Mode>("engine");
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [timeframe, setTimeframe] = useState("H1");
   const [structureBias, setStructureBias] = useState("up");
   const [rules, setRules] = useState<RuleFlags>(defaultRules);

@@ -24,6 +24,7 @@ import { useExecutionStream, useNotificationsStream, useActivityStream } from "@
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -38,7 +39,7 @@ function isTypingTarget(el: EventTarget | null) {
 
 export function WorkspaceShell() {
   const [layout, setLayout] = useState<WorkspaceLayoutState>(DEFAULT_LAYOUT);
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [hydrated, setHydrated] = useState(false);
   const ticketRef = useRef<OrderTicketHandle | null>(null);
 
@@ -47,7 +48,7 @@ export function WorkspaceShell() {
     setLayout(stored);
     try {
       const sym = localStorage.getItem(WORKSPACE_SYMBOL_KEY);
-      if (sym) setSymbol(sym);
+      setSymbol(resolveTradingSymbol(sym));
     } catch {
       /* ignore */
     }

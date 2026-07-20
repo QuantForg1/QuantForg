@@ -65,6 +65,9 @@ class SubmitExecutionUseCase:
             slippage=command.slippage,
             magic=command.magic,
             comment=command.comment,
+            position=command.position,
+            order_ticket=command.order_ticket,
+            oms_kind=command.oms_kind,
         )
 
         async with self.execution_uow_factory() as uow:
@@ -367,41 +370,58 @@ class ManageExecutionUseCase:
         order_type = command.order_type or "market"
         volume = command.volume or "0.01"
         comment = command.comment or ""
+        position = int(command.ticket or 0)
+        order_ticket = 0
+        oms_kind = ""
 
         if action in {"close", "partial_close", "close_all"}:
             if not side:
                 raise ValidationError(
                     "side is required for close (opposite of position)",
-                    details={"field": "side"},
+                    details={"field": "side", "component": "oms.close"},
                 )
             order_type = "market"
+            oms_kind = "close" if action != "partial_close" else "partial_close"
             if command.ticket:
                 comment = f"close:{command.ticket}" + (f"|{comment}" if comment else "")
         elif action == "reverse":
             if not side:
                 raise ValidationError(
                     "side is required for reverse (close side first)",
-                    details={"field": "side"},
+                    details={"field": "side", "component": "oms.reverse"},
                 )
             order_type = "market"
+            oms_kind = "reverse"
             if command.ticket:
                 comment = f"reverse:{command.ticket}"
-        elif action in {"modify", "modify_sltp", "move_sl", "move_tp"}:
+        elif action == "modify":
+            # Pending order modify (price / SL / TP)
+            oms_kind = "modify_pending"
+            order_ticket = int(command.ticket or 0)
+            position = 0
+            if command.ticket:
+                comment = f"modify:{command.ticket}"
+        elif action in {"modify_sltp", "move_sl", "move_tp"}:
+            oms_kind = "sltp"
+            order_type = "market"
             if command.ticket:
                 comment = f"modify-sltp:{command.ticket}"
         elif action == "trailing_stop":
             trail = command.trailing_points or ""
             comment = f"trail:{trail}"
+            oms_kind = "sltp"
             if command.ticket:
                 comment = f"modify-sltp:{command.ticket}|{comment}"
         elif action == "break_even":
             comment = "be:1"
+            oms_kind = "sltp"
             if command.ticket:
                 comment = f"modify-sltp:{command.ticket}|be:1"
         else:
             raise ValidationError(
                 f"Unsupported OMS action '{action}'",
                 details={
+                    "component": "oms",
                     "allowed": [
                         "close",
                         "partial_close",
@@ -414,7 +434,7 @@ class ManageExecutionUseCase:
                         "trailing_stop",
                         "break_even",
                         "cancel_pending",
-                    ]
+                    ],
                 },
             )
 
@@ -432,6 +452,9 @@ class ManageExecutionUseCase:
                 slippage=command.slippage,
                 magic=command.magic,
                 comment=comment[:64],
+                position=position,
+                order_ticket=order_ticket,
+                oms_kind=oms_kind,
                 ip_address=command.ip_address,
                 user_agent=command.user_agent,
             )

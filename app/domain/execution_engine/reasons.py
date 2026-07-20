@@ -9,7 +9,8 @@ _REASON_MAP: dict[str, str] = {
         "Broker is not connected — open Broker Workspace and attach a live session."
     ),
     "symbol not tradable": "Symbol is not tradable on this broker account.",
-    "market closed": "Market is closed for this symbol — wait for the next session.",
+    "market closed": "Market is closed.",
+    "market is closed": "Market is closed.",
     "execution disabled": (
         "Live execution is disabled (EXECUTION_ENABLED=false) — "
         "no broker order was sent."
@@ -17,18 +18,36 @@ _REASON_MAP: dict[str, str] = {
     "outside configured trading hours": (
         "Outside configured trading hours for this desk policy."
     ),
-    "not enough money": "Insufficient free margin for this order size.",
+    "not enough money": "Insufficient free margin.",
+    "insufficient free margin": "Insufficient free margin.",
+    "no money": "Insufficient free margin.",
     "invalid volume": "Lot size is invalid for this symbol (min/max/step).",
+    "volume must align": "Lot size must match the broker volume step.",
+    "lot size must be": "Lot size must use broker volume_step increments.",
+    "lot size below": "Lot size is below the broker minimum.",
+    "lot size above": "Lot size is above the broker maximum.",
     "invalid stops": "Stop loss / take profit violate broker distance rules.",
+    "stop loss too close": "Stop loss is too close to price (broker stop level).",
+    "take profit too close": "Take profit is too close to price (broker stop level).",
     "invalid price": "Order price is invalid for the selected order type.",
     "trade disabled": "Trading is disabled on this account by the broker.",
+    "trading is disabled": "Trading is disabled for this symbol.",
     "request rejected": "Broker rejected the order request.",
+    "unsupported filling": "Unsupported filling mode.",
+    "filling mode": "Unsupported filling mode for this symbol.",
+    "autotrading": "AutoTrading is disabled in MetaTrader 5 — enable it and retry.",
+    "close only": "Symbol is close-only — new entries are blocked.",
+    "close-only": "Symbol is close-only — new entries are blocked.",
+    "freeze level": "Price is inside the broker freeze level.",
     "stop loss inside freeze level": (
         "Stop loss is inside the broker freeze level — move it farther from price."
     ),
     "take profit inside freeze level": (
         "Take profit is inside the broker freeze level — move it farther from price."
     ),
+    "requote": "Broker requoted — retry the order.",
+    "off quotes": "No quotes available — market may be closed.",
+    "timeout": "Broker request timed out — retry.",
 }
 
 

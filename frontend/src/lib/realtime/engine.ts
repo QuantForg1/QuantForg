@@ -307,7 +307,9 @@ export class RealtimeEngine {
 
     // Followers receive data via BroadcastChannel; still keep light heartbeat locally.
     if (!this.isLeader && sub.channel !== "heartbeat") {
-      const delay = this.visible ? def.intervalMs * 2 : def.hiddenIntervalMs;
+      const base = this.visible ? def.intervalMs : def.hiddenIntervalMs;
+      const override = sub.opts?.intervalMs;
+      const delay = (override ?? base) * (this.visible ? 2 : 1);
       this.schedule(key, delay);
       return;
     }

@@ -22,7 +22,7 @@ from app.domain.value_objects.mt5_order import (
 
 @dataclass(frozen=True, slots=True)
 class OrderConstraints:
-    """Symbol trading constraints used during validation."""
+    """Symbol trading constraints used during validation — sourced from MT5."""
 
     symbol: str
     min_volume: Decimal = Decimal("0.01")
@@ -35,7 +35,12 @@ class OrderConstraints:
     digits: int = 5
     point: Decimal = Decimal("0.00001")
     contract_size: Decimal = Decimal("100000")
-    margin_rate: Decimal = Decimal("0.01")  # simplified mock leverage factor
+    margin_rate: Decimal = Decimal("0.01")
+    filling_mode: int = 0
+    execution_mode: str = "market"
+    trade_mode: str = "full"
+    visible: bool = True
+    margin_calc_mode: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.strip().upper())
@@ -58,6 +63,11 @@ class OrderConstraints:
             "point": str(self.point),
             "contract_size": str(self.contract_size),
             "margin_rate": str(self.margin_rate),
+            "filling_mode": self.filling_mode,
+            "execution_mode": self.execution_mode,
+            "trade_mode": self.trade_mode,
+            "visible": self.visible,
+            "margin_calc_mode": self.margin_calc_mode,
         }
 
 
@@ -75,12 +85,19 @@ class OrderIntent:
     slippage: Slippage = field(default_factory=lambda: Slippage.of(10))
     magic: MagicNumber = field(default_factory=lambda: MagicNumber.of(0))
     comment: str = ""
+    position: int = 0
+    order_ticket: int = 0
+    oms_kind: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.strip().upper())
         object.__setattr__(self, "comment", self.comment.strip()[:64])
+        object.__setattr__(self, "oms_kind", (self.oms_kind or "").strip().lower())
         require(len(self.symbol) > 0, "symbol is required")
-        if self.order_type is not OrderType.MARKET:
+        if self.order_type is not OrderType.MARKET and self.oms_kind not in {
+            "sltp",
+            "modify_sltp",
+        }:
             require(
                 self.price is not None and self.price > 0,
                 "pending orders require a positive price",
@@ -98,15 +115,18 @@ class OrderIntent:
             "slippage": self.slippage.value,
             "magic": self.magic.value,
             "comment": self.comment,
+            "position": self.position,
+            "order_ticket": self.order_ticket,
+            "oms_kind": self.oms_kind,
         }
 
 
 @dataclass(frozen=True, slots=True)
 class TradeRequest:
-    """Normalized MT5 trade request payload (check/calc only — never sent)."""
+    """Normalized MT5 trade request payload."""
 
     symbol: str
-    action: str  # buy | sell | buy_limit | sell_limit | buy_stop | sell_stop
+    action: str  # buy | sell | buy_limit | sell_limit | buy_stop | sell_stop | sltp
     volume: Decimal
     price: Decimal
     stop_loss: Decimal
@@ -116,6 +136,9 @@ class TradeRequest:
     comment: str = ""
     type_filling: str = "ioc"
     type_time: str = "gtc"
+    position: int = 0
+    order_ticket: int = 0
+    oms_kind: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -130,6 +153,9 @@ class TradeRequest:
             "comment": self.comment,
             "type_filling": self.type_filling,
             "type_time": self.type_time,
+            "position": self.position,
+            "order_ticket": self.order_ticket,
+            "oms_kind": self.oms_kind,
         }
 
 

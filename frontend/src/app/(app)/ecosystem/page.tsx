@@ -31,6 +31,7 @@ import { ecosystemApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 
 const MODULES = [
   { id: "journal", label: "Journal", icon: NotebookPen },
@@ -51,12 +52,12 @@ export default function EcosystemPage() {
   const qc = useQueryClient();
   const [module, setModule] = useState<ModuleId>("journal");
   const [journalQ, setJournalQ] = useState("");
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [emotion, setEmotion] = useState("focused");
   const [lesson, setLesson] = useState("");
   const [playbookName, setPlaybookName] = useState("London Open Playbook");
-  const [watchName, setWatchName] = useState("FX Majors");
-  const [watchSymbols, setWatchSymbols] = useState("EURUSD,GBPUSD,USDJPY");
+  const [watchName, setWatchName] = useState("Gold Watch");
+  const [watchSymbols, setWatchSymbols] = useState(TRADING_SYMBOL);
   const [wsName, setWsName] = useState("Research desk");
   const [period, setPeriod] = useState("weekly");
   const [tz, setTz] = useState("UTC");
@@ -190,7 +191,7 @@ export default function EcosystemPage() {
         psychology: ["No revenge trades", "Stop after 2 losses"],
         risk_rules: ["Hard daily stop", "No overlapping USD pairs"],
         sessions: ["London", "NY"],
-        markets: ["EURUSD", "GBPUSD"],
+        markets: [TRADING_SYMBOL],
       }),
     onSuccess: async () => {
       toast.success("Playbook saved");
@@ -208,7 +209,7 @@ export default function EcosystemPage() {
         category: "fx",
         symbols: watchSymbols.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
         favorites: [watchSymbols.split(",")[0]?.trim().toUpperCase()].filter(Boolean),
-        notes: { EURUSD: "Primary" },
+        notes: { [TRADING_SYMBOL]: "Primary" },
       }),
     onSuccess: async () => {
       toast.success("Watchlist synced");
@@ -225,7 +226,7 @@ export default function EcosystemPage() {
         name: wsName,
         panels: ["chart", "journal", "decision"],
         widgets: ["watchlist", "alerts"],
-        charts: [{ symbol: "EURUSD", timeframe: "H1" }],
+        charts: [{ symbol: TRADING_SYMBOL, timeframe: "H1" }],
         filters: { session: "London" },
         layout: { columns: 3 },
       }),

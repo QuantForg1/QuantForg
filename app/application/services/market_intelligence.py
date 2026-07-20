@@ -14,24 +14,9 @@ from app.application.use_cases.mt5 import GetMT5StatusUseCase, ListMT5SymbolsUse
 from app.domain.market_context.engine import MarketContextEngine
 from app.infrastructure.intelligence.runtime import TtlCache
 
-# Prefer majors when sampling quotes — never fan-out the full catalogue.
+# Prefer gold when sampling quotes — never fan-out the full catalogue.
 _QUOTE_SAMPLE = (
-    "EURUSD",
-    "GBPUSD",
-    "USDJPY",
-    "USDCHF",
-    "AUDUSD",
-    "USDCAD",
-    "NZDUSD",
     "XAUUSD",
-    "XAGUSD",
-    "BTCUSD",
-    "ETHUSD",
-    "US500",
-    "NAS100",
-    "GER40",
-    "UK100",
-    "XTIUSD",
 )
 
 # Short TTL so concurrent dashboard/analysis/events share one broker snap.

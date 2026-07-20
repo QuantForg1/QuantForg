@@ -16,10 +16,11 @@ import { executionIntelligenceApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber, formatPct } from "@/lib/utils";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 
 export default function ExecutionIntelPage() {
   const [requestId, setRequestId] = useState(`obs-${Date.now()}`);
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [state, setState] = useState("Validated");
 
   const dashQ = useQuery({

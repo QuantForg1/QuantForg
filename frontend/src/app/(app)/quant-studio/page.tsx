@@ -35,6 +35,7 @@ import { quantStudioApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, mapEquityCurve, num, str } from "@/lib/desk";
 import { formatNumber, formatPct } from "@/lib/utils";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 
 type ModuleId =
   | "builder"
@@ -66,7 +67,7 @@ type StudioNode = { id: string; type: string; label: string; params: Record<stri
 export default function QuantStudioPage() {
   const qc = useQueryClient();
   const [module, setModule] = useState<ModuleId>("builder");
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [timeframe, setTimeframe] = useState("H1");
   const [nodes, setNodes] = useState<StudioNode[]>([
     { id: "n1", type: "indicator", label: "EMA 20", params: { name: "ema", period: "20" } },

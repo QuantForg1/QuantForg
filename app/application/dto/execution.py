@@ -77,6 +77,9 @@ class ExecutionSubmitCommand:
     slippage: int = 10
     magic: int = 0
     comment: str = ""
+    position: int = 0
+    order_ticket: int = 0
+    oms_kind: str = ""
     ip_address: str = ""
     user_agent: str = ""
 

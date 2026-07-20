@@ -49,8 +49,6 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Gateway does not expose order_send in v1 — refuse without inventing fills.
-_RETCODE_GATEWAY_NO_TRADE = 10027
 _BODY_PREVIEW_LIMIT = 200
 _CLOUDFLARE_HOST_MARKERS = (
     "trycloudflare.com",
@@ -192,7 +190,7 @@ class GatewayMT5Client:
     _account_cache_at: float = field(default=0.0, init=False)
     _positions_cache: list[MT5Position] | None = field(default=None, init=False)
     _positions_cache_at: float = field(default=0.0, init=False)
-    _snapshot_ttl_seconds: float = field(default=2.5, init=False)
+    _snapshot_ttl_seconds: float = field(default=0.75, init=False)
 
     def __post_init__(self) -> None:
         self.base_url = normalize_gateway_base_url(self.base_url)
@@ -949,21 +947,60 @@ class GatewayMT5Client:
     def symbol_info(self, symbol: str) -> MT5SymbolInfo:
         self._require_connected()
         code = symbol.strip().upper()
-        catalogue = self.symbols()
-        meta = next((s for s in catalogue if s.code.upper() == code), None)
-        tick = self._request("GET", f"/quotes/{code}")
+        # Prefer dedicated live specs endpoint (volume_step, stops, filling, …)
+        try:
+            specs = self._request("GET", f"/symbols/{code}")
+        except RuntimeError:
+            specs = {}
+            try:
+                tick_payload = self._request("GET", f"/quotes/{code}")
+                specs = dict(tick_payload.get("specs") or {})
+                if not specs:
+                    # Fall back to quote + catalogue digits only
+                    catalogue = self.symbols()
+                    meta = next((s for s in catalogue if s.code.upper() == code), None)
+                    return MT5SymbolInfo(
+                        code=code,
+                        description=meta.description if meta else code,
+                        digits=meta.digits if meta else 5,
+                        point=_dec(tick_payload.get("point"), "0.00001"),
+                        contract_size=(
+                            meta.contract_size if meta else Decimal("100000")
+                        ),
+                        selected=True,
+                        trade_mode="full",
+                        bid=_dec(tick_payload.get("bid")),
+                        ask=_dec(tick_payload.get("ask")),
+                    )
+            except RuntimeError as exc:
+                raise RuntimeError(f"symbol_info unavailable for {code}: {exc}") from exc
+
+        trade_mode = str(specs.get("trade_mode") or "full")
+        trade_allowed = bool(specs.get("trade_allowed", trade_mode != "disabled"))
+        market_open = bool(specs.get("market_open", True))
         return MT5SymbolInfo(
             code=code,
-            description=meta.description if meta else code,
-            digits=meta.digits if meta else 5,
-            point=Decimal("0.00001"),
-            contract_size=(meta.contract_size if meta else Decimal("100000")),
-            selected=True,
-            trade_mode="full",
-            currency_base="",
-            currency_profit="",
-            bid=_dec(tick.get("bid")),
-            ask=_dec(tick.get("ask")),
+            description=str(specs.get("description") or code),
+            digits=int(specs.get("digits") or 5),
+            point=_dec(specs.get("point"), "0.00001"),
+            contract_size=_dec(specs.get("contract_size"), "100000"),
+            selected=bool(specs.get("selected", True)),
+            trade_mode=trade_mode,
+            currency_base=str(specs.get("currency_base") or ""),
+            currency_profit=str(specs.get("currency_profit") or ""),
+            bid=_dec(specs.get("bid")) if specs.get("bid") is not None else None,
+            ask=_dec(specs.get("ask")) if specs.get("ask") is not None else None,
+            volume_min=_dec(specs.get("volume_min"), "0.01"),
+            volume_max=_dec(specs.get("volume_max"), "100"),
+            volume_step=_dec(specs.get("volume_step"), "0.01"),
+            stops_level=int(specs.get("stops_level") or 0),
+            freeze_level=int(specs.get("freeze_level") or 0),
+            filling_mode=int(specs.get("filling_mode") or 0),
+            execution_mode=str(specs.get("execution_mode") or "market"),
+            margin_calc_mode=str(specs.get("margin_calc_mode") or ""),
+            visible=bool(specs.get("visible", True)),
+            market_open=market_open,
+            trade_allowed=trade_allowed,
         )
 
     def symbol_select(self, symbol: str, *, enable: bool = True) -> bool:
@@ -1044,18 +1081,52 @@ class GatewayMT5Client:
         return rates
 
     def order_check(self, request: TradeRequest) -> MT5OrderCheckResult:
+        self._require_connected()
+        data = self._request(
+            "POST",
+            "/trade/order_check",
+            json_body={
+                "symbol": request.symbol,
+                "action": request.action,
+                "volume": float(request.volume),
+                "price": float(request.price),
+                "sl": float(request.stop_loss),
+                "tp": float(request.take_profit),
+                "deviation": int(request.deviation),
+                "magic": int(request.magic),
+                "comment": request.comment or "quantforg",
+                "position": int(request.position or 0),
+                "order_ticket": int(request.order_ticket or 0),
+                "oms_kind": request.oms_kind or "",
+            },
+        )
         return MT5OrderCheckResult(
-            retcode=RETCODE_INVALID,
-            comment="order_check is performed by Execution Gateway locally",
+            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            comment=str(data.get("comment") or ""),
             request=request,
+            balance=_dec(data.get("balance")),
+            equity=_dec(data.get("equity")),
+            margin=_dec(data.get("margin")),
+            margin_free=_dec(data.get("margin_free")),
+            profit=_dec(data.get("profit")),
         )
 
     def order_calc_margin(self, request: TradeRequest) -> MT5MarginResult:
-        _ = request
+        self._require_connected()
+        data = self._request(
+            "POST",
+            "/trade/order_calc_margin",
+            json_body={
+                "symbol": request.symbol,
+                "action": request.action,
+                "volume": float(request.volume),
+                "price": float(request.price),
+            },
+        )
         return MT5MarginResult(
-            margin=Decimal("0"),
-            retcode=RETCODE_INVALID,
-            comment="margin calc unavailable via gateway bridge",
+            margin=_dec(data.get("margin")),
+            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            comment=str(data.get("comment") or ""),
         )
 
     def order_calc_profit(
@@ -1064,31 +1135,71 @@ class GatewayMT5Client:
         *,
         close_price: Decimal | None = None,
     ) -> MT5ProfitResult:
-        _ = request, close_price
+        self._require_connected()
+        body: dict[str, Any] = {
+            "symbol": request.symbol,
+            "action": request.action,
+            "volume": float(request.volume),
+            "price": float(request.price),
+        }
+        if close_price is not None:
+            body["close_price"] = float(close_price)
+        data = self._request("POST", "/trade/order_calc_profit", json_body=body)
         return MT5ProfitResult(
-            profit=Decimal("0"),
-            retcode=RETCODE_INVALID,
-            comment="profit calc unavailable via gateway bridge",
+            profit=_dec(data.get("profit")),
+            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            comment=str(data.get("comment") or ""),
         )
 
     def order_send(self, request: TradeRequest) -> MT5OrderSendResult:
-        """Gateway v1 has no trade routes — never invent fills."""
+        """POST /trade/order_send → MetaTrader5.order_send — never invents fills."""
+        self._require_connected()
+        data = self._request(
+            "POST",
+            "/trade/order_send",
+            json_body={
+                "symbol": request.symbol,
+                "action": request.action,
+                "volume": float(request.volume),
+                "price": float(request.price),
+                "sl": float(request.stop_loss),
+                "tp": float(request.take_profit),
+                "deviation": int(request.deviation),
+                "magic": int(request.magic),
+                "comment": request.comment or "quantforg",
+                "position": int(request.position or 0),
+                "order_ticket": int(request.order_ticket or 0),
+                "oms_kind": request.oms_kind or "",
+            },
+        )
+        self._positions_cache = None
+        self._positions_cache_at = 0.0
         return MT5OrderSendResult(
-            retcode=_RETCODE_GATEWAY_NO_TRADE,
-            comment=(
-                "Windows MT5 Gateway v1 is session/market-data only. "
-                "Live order_send requires EXECUTION_ENABLED and a trade-capable path."
-            ),
+            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            comment=str(data.get("comment") or ""),
+            order_ticket=int(data.get("order_ticket") or 0),
+            deal_ticket=int(data.get("deal_ticket") or 0),
+            volume=_dec(data.get("volume"), str(request.volume)),
+            price=_dec(data.get("price"), str(request.price)),
             request=request,
-            volume=request.volume,
-            price=request.price,
         )
 
     def order_cancel(self, ticket: int) -> MT5OrderSendResult:
+        self._require_connected()
+        data = self._request(
+            "POST",
+            "/trade/order_cancel",
+            json_body={"ticket": int(ticket)},
+        )
+        self._positions_cache = None
+        self._positions_cache_at = 0.0
         return MT5OrderSendResult(
-            retcode=_RETCODE_GATEWAY_NO_TRADE,
-            comment="cancel not available on gateway v1 bridge",
-            order_ticket=ticket,
+            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            comment=str(data.get("comment") or ""),
+            order_ticket=int(data.get("order_ticket") or ticket),
+            deal_ticket=int(data.get("deal_ticket") or 0),
+            volume=_dec(data.get("volume")),
+            price=_dec(data.get("price")),
         )
 
     def list_positions(self) -> list[MT5Position]:
@@ -1105,6 +1216,16 @@ class GatewayMT5Client:
         out: list[MT5Position] = []
         for row in data.get("items") or []:
             typ = int(row.get("type") or 0)
+            opened_raw = row.get("time") or row.get("time_msc")
+            opened_at = datetime.now(UTC)
+            if opened_raw:
+                try:
+                    ts = int(opened_raw)
+                    if ts > 10_000_000_000:
+                        ts = ts // 1000
+                    opened_at = datetime.fromtimestamp(ts, tz=UTC)
+                except (TypeError, ValueError, OSError):
+                    opened_at = datetime.now(UTC)
             out.append(
                 MT5Position(
                     ticket=int(row["ticket"]),
@@ -1113,7 +1234,13 @@ class GatewayMT5Client:
                     volume=_dec(row.get("volume"), "0.01"),
                     open_price=_dec(row.get("price_open")),
                     current_price=_dec(row.get("price_current")),
+                    stop_loss=_dec(row.get("sl") or row.get("stop_loss")),
+                    take_profit=_dec(row.get("tp") or row.get("take_profit")),
                     profit=_dec(row.get("profit")),
+                    swap=_dec(row.get("swap")),
+                    magic=int(row.get("magic") or 0),
+                    comment=str(row.get("comment") or ""),
+                    opened_at=opened_at,
                 )
             )
         self._positions_cache = out
@@ -1144,6 +1271,8 @@ class GatewayMT5Client:
                     order_type="limit",
                     volume=_dec(row.get("volume_current"), "0.01"),
                     price=_dec(row.get("price_open")),
+                    stop_loss=_dec(row.get("sl") or row.get("stop_loss")),
+                    take_profit=_dec(row.get("tp") or row.get("take_profit")),
                 )
             )
         return out
@@ -1212,16 +1341,34 @@ class GatewayMT5Client:
             vol = _dec(row.get("volume"), "0.01")
             if vol <= 0:
                 vol = Decimal("0.01")
+            typ = int(row.get("type") or 0)
+            # MT5 DEAL_TYPE_BUY=0, DEAL_TYPE_SELL=1
+            side = "buy" if typ % 2 == 0 else "sell"
+            entry = int(row.get("entry") or 0)
+            deal_type = "entry_in" if entry == 0 else "entry_out" if entry == 1 else "deal"
+            deal_time = datetime.now(UTC)
+            raw_t = row.get("time")
+            if raw_t:
+                try:
+                    ts = int(raw_t)
+                    if ts > 10_000_000_000:
+                        ts = ts // 1000
+                    deal_time = datetime.fromtimestamp(ts, tz=UTC)
+                except (TypeError, ValueError, OSError):
+                    deal_time = datetime.now(UTC)
             out.append(
                 MT5Deal(
                     ticket=ticket,
-                    order_ticket=ticket,
+                    order_ticket=int(row.get("order") or ticket),
                     symbol=symbol,
-                    side="buy",
+                    side=side,
                     volume=vol,
-                    price=Decimal("0"),
+                    price=_dec(row.get("price")),
                     profit=_dec(row.get("profit")),
-                    deal_type="deal",
+                    commission=_dec(row.get("commission")),
+                    swap=_dec(row.get("swap")),
+                    deal_type=deal_type,
+                    time=deal_time,
                 )
             )
         return out

@@ -69,11 +69,20 @@ export function useBrokerStatusStream(enabled = true) {
   return useRealtimeContext().status;
 }
 
-export function useDashboardStream(enabled = true) {
-  usePortfolioStream(enabled);
+/**
+ * Live MT5 book sync — positions, orders, portfolio, history.
+ * Keeps Open Positions / Recent Trades aligned with the terminal without a page refresh.
+ */
+export function useBookStream(enabled = true) {
   usePositionsStream(enabled);
   useOrdersStream(enabled);
+  usePortfolioStream(enabled);
   useChannel("history", undefined, enabled);
+  return useRealtimeContext().status;
+}
+
+export function useDashboardStream(enabled = true) {
+  useBookStream(enabled);
   useNotificationsStream(enabled);
   useActivityStream(enabled);
   useBrokerStatusStream(enabled);
@@ -83,8 +92,6 @@ export function useDashboardStream(enabled = true) {
 
 export function useExecutionStream(symbol?: string, enabled = true) {
   useMarketStream(symbol, enabled);
-  usePositionsStream(enabled);
-  useOrdersStream(enabled);
-  usePortfolioStream(enabled);
+  useBookStream(enabled);
   return useRealtimeContext().status;
 }

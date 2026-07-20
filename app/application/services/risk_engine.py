@@ -58,6 +58,13 @@ class RiskCheckInput:
     atr: Decimal | None = None
     sizing_method: PositionSizingMethod = PositionSizingMethod.PERCENTAGE_RISK
     entry_price: Decimal = Decimal("1")
+    # Institutional extensions (Phase B) — optional; ignored when None / unset
+    consecutive_losses: int = 0
+    cooldown_active: bool = False
+    cooldown_remaining_minutes: int = 0
+    spread: Decimal | None = None
+    session_allowed: bool | None = None
+    session_name: str = ""
 
 
 @dataclass
@@ -391,6 +398,51 @@ class RiskEngine:
         score += min(20, int(drawdown.current_drawdown_pct))
         return max(0, min(100, score))
 
+    def _institutional_gates(self, check: RiskCheckInput) -> tuple[bool, list[str]]:
+        """Consecutive losses, cooldown, session, spread, ATR volatility filters."""
+        cfg = self.config
+        reasons: list[str] = []
+
+        if check.consecutive_losses >= cfg.max_consecutive_losses > 0:
+            reasons.append(
+                f"consecutive losses {check.consecutive_losses} "
+                f"at/above max {cfg.max_consecutive_losses}"
+            )
+        if check.cooldown_active:
+            reasons.append(
+                f"cooldown active"
+                + (
+                    f" ({check.cooldown_remaining_minutes}m remaining)"
+                    if check.cooldown_remaining_minutes > 0
+                    else ""
+                )
+            )
+        if cfg.enforce_session and check.session_allowed is False:
+            reasons.append(
+                f"session restricted"
+                + (f" ({check.session_name})" if check.session_name else "")
+            )
+        if cfg.enforce_spread and check.spread is not None and cfg.max_spread > 0:
+            if check.spread > cfg.max_spread:
+                reasons.append(
+                    f"spread {check.spread} exceeds max {cfg.max_spread}"
+                )
+        if cfg.enforce_atr and check.atr is not None and check.entry_price > 0:
+            atr = check.atr
+            if cfg.min_atr > 0 and atr < cfg.min_atr:
+                reasons.append(f"ATR {atr} below minimum {cfg.min_atr}")
+            if cfg.max_atr > 0 and atr > cfg.max_atr:
+                reasons.append(f"ATR {atr} above maximum {cfg.max_atr}")
+            if cfg.max_atr_pct_of_price > 0:
+                atr_pct = (atr / check.entry_price) * Decimal("100")
+                if atr_pct > cfg.max_atr_pct_of_price:
+                    reasons.append(
+                        f"ATR {atr_pct:.2f}% of price exceeds "
+                        f"max {cfg.max_atr_pct_of_price}%"
+                    )
+
+        return (len(reasons) == 0, reasons)
+
     # -- 6. Full evaluate ----------------------------------------------------
 
     def evaluate(
@@ -464,6 +516,12 @@ class RiskEngine:
         reasons.extend(corr_reasons)
         warnings.extend(corr_warn)
 
+        # --- Institutional extensions (Phase B) ---
+        inst_ok, inst_reasons = self._institutional_gates(check)
+        checks["institutional"] = inst_ok
+        if not inst_ok:
+            reasons.extend(inst_reasons)
+
         score = self.compute_risk_score(
             exposure_ok=exp_ok,
             drawdown_ok=dd_ok,
@@ -472,12 +530,19 @@ class RiskEngine:
             open_positions=open_count,
             drawdown=drawdown,
         )
+        if not inst_ok:
+            score = min(100, score + 40)
         band = self.score_to_band(score)
 
         approved = size.approved_lots
         decision = RiskDecision.ALLOW
 
-        if band is RiskScoreBand.BLOCKED or not dd_ok or not checks["open_positions"]:
+        if (
+            band is RiskScoreBand.BLOCKED
+            or not dd_ok
+            or not checks["open_positions"]
+            or not inst_ok
+        ):
             decision = RiskDecision.REJECT
             approved = Decimal("0")
         elif not exp_ok or not corr_ok or size.capped or band is RiskScoreBand.HIGH:
@@ -533,6 +598,11 @@ class RiskEngine:
                     str(check.stop_loss_distance) if check.stop_loss_distance else None
                 ),
                 "atr": str(check.atr) if check.atr else None,
+                "consecutive_losses": check.consecutive_losses,
+                "cooldown_active": check.cooldown_active,
+                "spread": str(check.spread) if check.spread is not None else None,
+                "session_allowed": check.session_allowed,
+                "session_name": check.session_name,
             },
         )
 

@@ -10,6 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
 import { PageMotion } from "@/components/desk/motion";
+import { IteControlCenter } from "@/components/ops/ite-control-center";
+import { IteReliabilityPanel } from "@/components/ops/ite-reliability-panel";
+import { IteCertificationPanel } from "@/components/ops/ite-certification-panel";
 import { mt5Api, opsApi, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
@@ -143,8 +146,20 @@ export default function OpsPage() {
     <div>
       <PageHeader
         title="Operations"
-        description="System health, infrastructure latency, and admin monitoring."
+        description="Institutional control plane, system health, and admin monitoring."
       />
+
+      <div className="mb-6">
+        <IteControlCenter />
+      </div>
+
+      <div className="mb-6">
+        <IteReliabilityPanel />
+      </div>
+
+      <div className="mb-6">
+        <IteCertificationPanel />
+      </div>
 
       <WeltradeGatewayStatus className="mb-4" />
 

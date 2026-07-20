@@ -47,6 +47,8 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
     queryKey: ["orders"],
     queryFn: portfolioApi.orders,
     retry: false,
+    staleTime: 4_000,
+    refetchOnWindowFocus: true,
   });
 
   const orders = useMemo(

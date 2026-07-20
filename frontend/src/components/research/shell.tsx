@@ -32,6 +32,7 @@ import {
 } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
+import { resolveTradingSymbol } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 
 function isTypingTarget(el: EventTarget | null) {
@@ -84,7 +85,7 @@ export function ResearchShell() {
 
   const dashQ = useQuery({
     queryKey: ["research-lab-dashboard", layout.symbol],
-    queryFn: () => researchLabApi.dashboard(layout.symbol || "EURUSD"),
+    queryFn: () => researchLabApi.dashboard(resolveTradingSymbol(layout.symbol)),
     retry: false,
     staleTime: 20_000,
   });
@@ -183,7 +184,7 @@ export function ResearchShell() {
     mutationFn: () =>
       researchLabApi.validate({
         strategy_key: strategyKey,
-        symbol: layout.symbol || "EURUSD",
+        symbol: resolveTradingSymbol(layout.symbol),
       }),
     onSuccess: (data) => {
       setValidation(asRecord(data));

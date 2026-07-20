@@ -85,7 +85,7 @@ export function allocationFromPositions(
     const cls = classifySymbol(str(p.symbol, ""));
     const notional = Math.abs(num(p.volume, 0) * num(p.current_price ?? p.open_price, 0));
     const exposure = Number.isFinite(notional) && notional > 0 ? notional : Math.abs(num(p.profit, 0));
-    map.set(cls, (map.get(cls) || 0) + (exposure || 0.01));
+    map.set(cls, (map.get(cls) || 0) + exposure);
   }
   if (Number.isFinite(cash) && cash > 0) map.set("cash", (map.get("cash") || 0) + cash);
 

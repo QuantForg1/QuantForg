@@ -144,7 +144,7 @@ export default function GetStartedPage() {
               Open Paper Trading for the interactive tutorial card, or follow:
             </p>
             <ol className="list-decimal space-y-1 pl-5">
-              <li>Set symbol (e.g. EURUSD) and volume (e.g. 0.10)</li>
+              <li>Set symbol (e.g. XAUUSD) and volume (e.g. 0.10)</li>
               <li>Submit a Buy or Sell paper order</li>
               <li>Confirm positions and history update</li>
               <li>Reset when finished practicing</li>

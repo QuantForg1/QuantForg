@@ -60,6 +60,11 @@ import {
   RealtimeConnectionBadge,
   RealtimeMeta,
 } from "@/components/realtime/connection-badge";
+import {
+  TRADING_SYMBOL,
+  filterTradingSymbolRecords,
+  goldOnlySearchQuery,
+} from "@/lib/trading/gold-only";
 
 type Row = Record<string, unknown>;
 
@@ -119,8 +124,14 @@ export default function DashboardPage() {
     retry: false,
   });
   const symbolsQ = useQuery({
-    queryKey: ["mt5-symbols", "", 0],
-    queryFn: () => mt5Api.symbols({ limit: 100, offset: 0, include_quotes: false }),
+    queryKey: ["mt5-symbols", goldOnlySearchQuery("") ?? TRADING_SYMBOL, 0],
+    queryFn: () =>
+      mt5Api.symbols({
+        q: goldOnlySearchQuery("") ?? TRADING_SYMBOL,
+        limit: 100,
+        offset: 0,
+        include_quotes: false,
+      }),
     retry: false,
     enabled: Boolean(mt5.data?.connected),
     staleTime: 45_000,
@@ -158,7 +169,7 @@ export default function DashboardPage() {
   const histOrders = asList(history.data?.orders).map(asRecord);
   const perf = asRecord(paper.data?.performance);
   const paperPortfolio = asRecord(paper.data?.portfolio);
-  const symbols = asList(symbolsQ.data).map(asRecord);
+  const symbols = filterTradingSymbolRecords(asList(symbolsQ.data).map(asRecord));
   const signalItems = asList(signals.data).map(asRecord);
   const notifItems = asList(notifications.data).map(asRecord);
   const activityItems = asList(activity.data).map(asRecord);
@@ -207,7 +218,7 @@ export default function DashboardPage() {
     try {
       const data = await riskApi.check({
         request_id: `dash-${Date.now()}`,
-        symbol: str(positions[0]?.symbol, "EURUSD"),
+        symbol: str(positions[0]?.symbol, TRADING_SYMBOL),
         side: str(positions[0]?.side, "buy"),
         equity: Number.isFinite(equity) ? String(equity) : undefined,
         balance: Number.isFinite(balance) ? String(balance) : undefined,
@@ -243,6 +254,8 @@ export default function DashboardPage() {
   const watched = symbols.filter((s) => {
     const code = str(s.code);
     const hay = `${code} ${str(s.description)}`.toLowerCase();
+    const q = goldOnlySearchQuery(watchQuery);
+    if (q === null) return false;
     if (watchQuery && !hay.includes(watchQuery.toLowerCase())) return false;
     if (favorites.length && !favorites.includes(code)) {
       // still show search hits even if not favorite when searching
@@ -251,10 +264,12 @@ export default function DashboardPage() {
     return true;
   });
 
-  const displayWatch = (watchQuery || favorites.length
-    ? watched
-    : symbols.filter((s) => s.selected).slice(0, 12)
-  ).slice(0, 20);
+  const displayWatch = filterTradingSymbolRecords(
+    (watchQuery || favorites.length
+      ? watched
+      : symbols.filter((s) => s.selected).slice(0, 12)
+    ).slice(0, 20),
+  );
 
   const fundingHint = () =>
     toast.message("Funding is managed at your broker", {
@@ -869,7 +884,7 @@ export default function DashboardPage() {
                 empty={
                   <DeskEmpty
                     icon={Activity}
-                    title="No recent fills"
+                    title="No completed trades"
                     description="Deal history appears after terminal sync."
                     actionLabel="Open history"
                     actionHref="/history"
@@ -969,7 +984,7 @@ export default function DashboardPage() {
                 />
                 <Input
                   className="h-8 pl-8 text-xs"
-                  placeholder="Search symbols…"
+                  placeholder="Search XAUUSD…"
                   value={watchQuery}
                   onChange={(e) => setWatchQuery(e.target.value)}
                   aria-label="Search watchlist"

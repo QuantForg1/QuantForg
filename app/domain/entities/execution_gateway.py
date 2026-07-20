@@ -77,28 +77,55 @@ class ExecutionResult:
 
 def map_retcode_to_outcome(retcode: int) -> tuple[ExecutionOutcome, bool, str]:
     """Map MT5 retcode → (outcome, retryable, default message)."""
-    if retcode in {0, RETCODE_DONE}:
-        return ExecutionOutcome.SUCCESS, False, "done"
+    if retcode in {0, RETCODE_DONE, 10008}:
+        return ExecutionOutcome.SUCCESS, False, "Order filled"
     if retcode == RETCODE_EXECUTION_DISABLED:
-        return ExecutionOutcome.DISABLED, False, "execution disabled"
+        return (
+            ExecutionOutcome.DISABLED,
+            False,
+            "Live execution is disabled. Set EXECUTION_ENABLED=true with a configured MT5 gateway.",
+        )
     if retcode in {RETCODE_REQUOTE, RETCODE_TIMEOUT, RETCODE_PRICE_OFF}:
-        return ExecutionOutcome.RETRY, True, "transient broker condition"
+        return ExecutionOutcome.RETRY, True, "Broker requote / timeout — retry the order"
     if retcode == RETCODE_CANCEL:
-        return ExecutionOutcome.CANCELLED, False, "cancelled"
+        return ExecutionOutcome.CANCELLED, False, "Order cancelled"
     messages = {
-        RETCODE_REJECT: "request rejected",
-        RETCODE_INVALID: "invalid request",
-        RETCODE_INVALID_VOLUME: "invalid volume",
-        RETCODE_INVALID_PRICE: "invalid price",
-        RETCODE_INVALID_STOPS: "invalid stops",
-        RETCODE_TRADE_DISABLED: "trade disabled",
-        RETCODE_MARKET_CLOSED: "market closed",
-        RETCODE_NO_MONEY: "not enough money",
+        RETCODE_REJECT: "Broker rejected the order",
+        RETCODE_INVALID: "Invalid trade request",
+        RETCODE_INVALID_VOLUME: "Invalid lot size for this symbol",
+        RETCODE_INVALID_PRICE: "Invalid price",
+        RETCODE_INVALID_STOPS: "Invalid stop loss / take profit levels",
+        RETCODE_TRADE_DISABLED: "Trading is disabled for this symbol or account",
+        RETCODE_MARKET_CLOSED: "Market is closed",
+        RETCODE_NO_MONEY: "Not enough free margin",
+        10004: "Requote — price moved",
+        10006: "Request rejected by broker",
+        10007: "Request cancelled by trader",
+        10008: "Order placed",
+        10010: "Only part of the request was completed",
+        10011: "Request processing error",
+        10012: "Request timed out",
+        10014: "Invalid volume",
+        10015: "Invalid price",
+        10016: "Invalid stops",
+        10017: "Trade is disabled",
+        10018: "Market is closed",
+        10019: "Not enough money",
+        10020: "Price changed",
+        10021: "No quotes to process the request",
+        10022: "Invalid order expiration",
+        10024: "Too many requests",
+        10027: "AutoTrading disabled in the terminal — enable AutoTrading",
+        10030: "Unsupported filling mode for this symbol",
+        10031: "No connection to the trade server",
+        10033: "Too many pending orders",
+        10034: "Hedge is prohibited",
+        10035: "Prohibited by FIFO rules",
     }
     return (
         ExecutionOutcome.FAILED,
         False,
-        messages.get(retcode, f"broker retcode {retcode}"),
+        messages.get(retcode, f"MT5 rejected the order (retcode {retcode})"),
     )
 
 

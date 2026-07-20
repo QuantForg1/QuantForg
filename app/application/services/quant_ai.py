@@ -21,13 +21,6 @@ from app.infrastructure.intelligence.runtime import TtlCache
 from core.config.settings import get_settings
 
 _QUOTE_SAMPLE = (
-    "EURUSD",
-    "GBPUSD",
-    "USDJPY",
-    "USDCHF",
-    "AUDUSD",
-    "USDCAD",
-    "NZDUSD",
     "XAUUSD",
 )
 
@@ -96,7 +89,10 @@ class QuantAIService:
                 return cast("dict[str, Any]", cached)
         _CACHE_STATS["misses"] += 1
 
-        focus = (symbol or "EURUSD").strip().upper()
+        focus = (symbol or "XAUUSD").strip().upper()
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
+        focus = resolve_trading_symbol(focus)
         status = await self.status.execute(user_id=user_id)
         broker = {
             "connected": status.connected,

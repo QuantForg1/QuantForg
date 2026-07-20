@@ -1,5 +1,7 @@
 /** Counsel OS layout — decision engine, not a chatbot. */
 
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
+
 export type CounselFocus =
   | "pulse"
   | "context"
@@ -18,7 +20,7 @@ export type CounselLayoutState = {
 export const COUNSEL_LAYOUT_KEY = "qf.counsel.layout.v1";
 
 export const DEFAULT_COUNSEL_LAYOUT: CounselLayoutState = {
-  symbol: "EURUSD",
+  symbol: TRADING_SYMBOL,
   focus: "pulse",
   silenceExpanded: true,
 };
@@ -28,7 +30,11 @@ export function loadCounselLayout(): CounselLayoutState {
   try {
     const raw = localStorage.getItem(COUNSEL_LAYOUT_KEY);
     if (!raw) return DEFAULT_COUNSEL_LAYOUT;
-    return { ...DEFAULT_COUNSEL_LAYOUT, ...(JSON.parse(raw) as Partial<CounselLayoutState>) };
+    const merged = {
+      ...DEFAULT_COUNSEL_LAYOUT,
+      ...(JSON.parse(raw) as Partial<CounselLayoutState>),
+    };
+    return { ...merged, symbol: resolveTradingSymbol(merged.symbol) };
   } catch {
     return DEFAULT_COUNSEL_LAYOUT;
   }

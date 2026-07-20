@@ -6,7 +6,7 @@ import {
   useImperativeHandle,
   useState,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,12 @@ import { ApiError } from "@/lib/api/client";
 import { asRecord, num, str } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
+import {
+  MULTI_SYMBOL_ENABLED,
+  TRADING_SYMBOL,
+  resolveTradingSymbol,
+} from "@/lib/trading/gold-only";
+import { humanExecutionError } from "@/lib/execution/humanize";
 
 const ORDER_TYPES = ["market", "limit", "stop", "stop_limit"] as const;
 const VOLUMES = ["0.01", "0.05", "0.10", "0.50", "1.00"];
@@ -67,6 +73,7 @@ export const ExecutionOrderTicket = forwardRef<
   const [calc, setCalc] = useState<Record<string, unknown> | null>(null);
   const [validation, setValidation] = useState<Record<string, unknown> | null>(null);
   const session = useTradingSession();
+  const qc = useQueryClient();
 
   const accountQ = useQuery({
     queryKey: ["mt5-account"],
@@ -148,11 +155,8 @@ export const ExecutionOrderTicket = forwardRef<
       const v = await mt5Api.validateOrder(payload);
       setValidation(asRecord(v));
       if (!v.valid) {
-        toast.error("Order validation failed", {
-          description: asRecord(v).messages
-            ? String((asRecord(v).messages as unknown[])?.[0] ?? "Invalid")
-            : "Invalid",
-        });
+        const err = humanExecutionError(asRecord(v), "Order did not pass validation.");
+        toast.error(err.title, { description: err.description });
         return;
       }
       const risk = await riskApi.check({
@@ -224,7 +228,8 @@ export const ExecutionOrderTicket = forwardRef<
       const v = await mt5Api.validateOrder(payload);
       setValidation(asRecord(v));
       if (!v.valid) {
-        toast.error("Order validation failed");
+        const err = humanExecutionError(asRecord(v), "Order did not pass validation.");
+        toast.error(err.title, { description: err.description });
         return;
       }
       const risk = await riskApi.check({
@@ -239,9 +244,14 @@ export const ExecutionOrderTicket = forwardRef<
       setLastRisk(asRecord(risk));
       const riskDecision = str(asRecord(risk).decision).toUpperCase();
       if (riskDecision === "REJECT") {
-        toast.error("Risk engine blocked execution", {
-          description: asListish(asRecord(risk).warnings).join(" · ") || "REJECT",
-        });
+        const err = humanExecutionError(
+          {
+            message: "Risk engine blocked execution",
+            rejection_reasons: asListish(asRecord(risk).warnings),
+          },
+          "Risk engine blocked execution",
+        );
+        toast.error(err.title, { description: err.description });
         return;
       }
       const gateOk = preTradeAllowsExecution(
@@ -270,9 +280,8 @@ export const ExecutionOrderTicket = forwardRef<
           symbol: payload.symbol,
           side: payload.side,
         });
-        toast.error("Execution rejected", {
-          description: asListish(asRecord(check).rejection_reasons).join(" · ") || "Rejected",
-        });
+        const err = humanExecutionError(asRecord(check), "Execution rejected");
+        toast.error(err.title, { description: err.description });
         return;
       }
       const result = await executionApi.submit(payload);
@@ -283,7 +292,10 @@ export const ExecutionOrderTicket = forwardRef<
           symbol: payload.symbol,
         });
         toast.message("Live send disabled", {
-          description: str(asRecord(result).message, "EXECUTION_ENABLED is false on the server."),
+          description: str(
+            asRecord(result).message,
+            "Set EXECUTION_ENABLED=true on the API with MT5 gateway configured.",
+          ),
         });
       } else if (outcome === "success") {
         recordAudit("order_submit", "success", "Order submitted", {
@@ -291,25 +303,32 @@ export const ExecutionOrderTicket = forwardRef<
           side: payload.side,
           ticket: str(asRecord(result).order_ticket),
         });
-        const stages = asListish(asRecord(result).stages);
-        toast.success("Order submitted", {
-          description: `Ticket ${str(asRecord(result).order_ticket)} · ${stages.length} pipeline stages`,
+        const ticket = str(asRecord(result).order_ticket, "—");
+        const fillPrice = str(asRecord(result).price, "");
+        toast.success("Order filled", {
+          description: fillPrice
+            ? `Ticket ${ticket} · ${payload.side.toUpperCase()} ${payload.volume} @ ${fillPrice}`
+            : `Ticket ${ticket} · ${payload.side.toUpperCase()} ${payload.volume}`,
         });
         await session.invalidateAll();
+        const { invalidatePostTrade } = await import("@/lib/execution/post-trade-invalidate");
+        await invalidatePostTrade(qc);
       } else if (asRecord(result).retryable) {
         recordAudit("order_submit", "failure", "Order submit retryable failure", {
           symbol: payload.symbol,
           outcome,
         });
-        toast.error(str(asRecord(result).message, outcome), {
-          description: "Retryable — try again.",
+        const err = humanExecutionError(asRecord(result), outcome);
+        toast.error(err.title, {
+          description: err.description || "Retryable — try again.",
         });
       } else {
         recordAudit("order_submit", "failure", "Order submit failed", {
           symbol: payload.symbol,
           outcome,
         });
-        toast.error(str(asRecord(result).message, outcome));
+        const err = humanExecutionError(asRecord(result), "Order rejected by MT5");
+        toast.error(err.title, { description: err.description });
       }
       setConfirmOpen(false);
     } catch (e) {
@@ -317,7 +336,17 @@ export const ExecutionOrderTicket = forwardRef<
       const { captureError } = await import("@/lib/observability/error-monitor");
       recordAudit("order_submit", "failure", "Order submit exception");
       captureError("execution", e, { path: "/execution/submit" });
-      toast.error(e instanceof ApiError ? e.message : "Submit failed");
+      if (e instanceof ApiError) {
+        const detail =
+          e.status === 403
+            ? "Execution may be disabled — set EXECUTION_ENABLED=true with a live MT5 gateway."
+            : e.code
+              ? `Code ${e.code}`
+              : undefined;
+        toast.error(e.message || "Submit failed", { description: detail });
+      } else {
+        toast.error("Submit failed");
+      }
     } finally {
       setBusy(false);
     }
@@ -390,8 +419,9 @@ export const ExecutionOrderTicket = forwardRef<
             <Label htmlFor="exec-symbol">Symbol</Label>
             <Input
               id="exec-symbol"
-              value={symbol}
-              onChange={(e) => onSymbolChange(e.target.value.toUpperCase())}
+              value={MULTI_SYMBOL_ENABLED ? symbol : TRADING_SYMBOL}
+              readOnly={!MULTI_SYMBOL_ENABLED}
+              onChange={(e) => onSymbolChange(resolveTradingSymbol(e.target.value))}
               disabled={!connected}
             />
           </div>

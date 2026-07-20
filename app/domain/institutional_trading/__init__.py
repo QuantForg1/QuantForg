@@ -1,0 +1,50 @@
+"""Institutional Trading Engine v1 — deterministic XAUUSD analysis + decision.
+
+Phase A: analysis snapshot pipeline (ADR-0010 — never trades).
+Phase B: confluence → risk → eligibility → trade decision (never calls OMS).
+Execution remains the existing Institutional OMS. No AI on the hot path.
+"""
+
+from __future__ import annotations
+
+from app.domain.institutional_trading.config import ITEConfig
+from app.domain.institutional_trading.confluence import ConfluenceEngine
+from app.domain.institutional_trading.decision_models import (
+    AccountRiskState,
+    ConfluenceResult,
+    DecisionAction,
+    EligibilityResult,
+    PriceZone,
+    TradeDecision,
+    TradeDirection,
+)
+from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
+from app.domain.institutional_trading.models import (
+    MarketAnalysisSnapshot,
+    NewsProtectionStatus,
+    SessionFilterResult,
+    TradeQualityScore,
+    TrendSnapshot,
+)
+from app.domain.institutional_trading.pipeline import InstitutionalAnalysisPipeline
+from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
+
+__all__ = [
+    "AccountRiskState",
+    "ConfluenceEngine",
+    "ConfluenceResult",
+    "DecisionAction",
+    "EligibilityResult",
+    "ITEConfig",
+    "InstitutionalAnalysisPipeline",
+    "MarketAnalysisSnapshot",
+    "NewsProtectionStatus",
+    "PositionEligibilityEngine",
+    "PriceZone",
+    "SessionFilterResult",
+    "TradeDecision",
+    "TradeDecisionEngine",
+    "TradeDirection",
+    "TradeQualityScore",
+    "TrendSnapshot",
+]

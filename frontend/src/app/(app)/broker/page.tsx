@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { RealtimeConnectionBadge } from "@/components/realtime/connection-badge";
+import { Mt5BrokerDashboard } from "@/components/broker/mt5-dashboard";
+import { ExecutionDiagnosticsPanel } from "@/components/execution/execution-diagnostics";
 import { useBrokerStatusStream } from "@/hooks/realtime";
 import { weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
@@ -34,13 +36,13 @@ import { cn } from "@/lib/utils";
 type AccountType = "demo" | "live";
 
 const SECTIONS = [
+  "Dashboard",
   "Broker",
   "Gateway",
   "Connection",
   "Synchronization",
   "Diagnostics",
   "Health",
-  "Performance",
   "Account",
   "Risk",
   "Market",
@@ -158,7 +160,7 @@ export default function BrokerWorkspacePage() {
   const [progress, setProgress] = useState<string | null>(null);
   const [wasConnected, setWasConnected] = useState(false);
   const recoveringRef = useRef(false);
-  const [activeNav, setActiveNav] = useState<(typeof SECTIONS)[number]>("Broker");
+  const [activeNav, setActiveNav] = useState<(typeof SECTIONS)[number]>("Dashboard");
 
   const serverOptions = useMemo(() => {
     const servers = asRecord(profile.servers);
@@ -275,7 +277,7 @@ export default function BrokerWorkspacePage() {
 
   const positions = session.positions;
   const orders = session.orders;
-  const deals = session.historyDeals.slice(0, 12);
+  const deals = session.historyDeals;
   const floating = num(session.profit, num(account.profit, 0));
 
   return (
@@ -306,7 +308,7 @@ export default function BrokerWorkspacePage() {
                 Broker Workspace
               </p>
               <p className="mt-1 text-sm text-[var(--fg-muted)]">
-                Single live MT5 session — gateway, sync, diagnostics, and desk state
+                Live MT5 dashboard — account, book, quotes, and session control
               </p>
             </div>
           </div>
@@ -358,6 +360,10 @@ export default function BrokerWorkspacePage() {
         <DeskSkeleton rows={8} />
       ) : (
         <div className="relative space-y-5">
+          <Mt5BrokerDashboard />
+
+          <ExecutionDiagnosticsPanel />
+
           <Section id="bw-broker" title="Broker">
             <div className="grid gap-3 sm:grid-cols-3">
               <StatusDot on={gatewayOnline} label={gatewayLabel} />
@@ -576,6 +582,9 @@ export default function BrokerWorkspacePage() {
                   <Metric label="Session mode" value={str(connection.session_mode, "none")} />
                   <Metric label="Login status" value={session.loginStatus} />
                 </div>
+                <div className="mt-4">
+                  <ExecutionDiagnosticsPanel dense />
+                </div>
               </Section>
 
               <Section id="bw-health" title="Health">
@@ -650,25 +659,6 @@ export default function BrokerWorkspacePage() {
           </div>
 
           <div className="grid gap-5 lg:grid-cols-2">
-            <Section id="bw-performance" title="Performance">
-              <div className="grid grid-cols-2 gap-2">
-                <Metric
-                  label="Desk latency"
-                  value={
-                    realtime.latencyMs != null ? `${realtime.latencyMs} ms` : "—"
-                  }
-                />
-                <Metric
-                  label="Broker latency"
-                  value={
-                    session.latencyMs !== "—" ? `${session.latencyMs} ms` : "—"
-                  }
-                />
-                <Metric label="Open risk units" value={String(positions.length)} />
-                <Metric label="Pending risk" value={String(orders.length)} />
-              </div>
-            </Section>
-
             <Section id="bw-market" title="Market Status">
               <div className="grid grid-cols-2 gap-2">
                 <Metric label="Session" value={connected ? "Live quotes" : "Offline"} />
@@ -677,19 +667,28 @@ export default function BrokerWorkspacePage() {
                 <Metric label="Trade mode" value={str(account.trade_mode, "—")} />
               </div>
             </Section>
+
+            <Section id="bw-sync-note" title="Live sync">
+              <p className="text-sm text-[var(--fg-muted)]">
+                Account, positions, orders, and deal history refresh automatically via the
+                MT5 book stream. Quote widgets poll {connected ? "every 3s" : "when attached"}.
+              </p>
+            </Section>
           </div>
 
           <Section id="bw-positions" title="Open Positions">
             {positions.length === 0 ? (
-              <p className="text-sm text-[var(--fg-muted)]">No open positions.</p>
+              <p className="text-sm text-[var(--fg-muted)]">No open positions</p>
             ) : (
               <DeskTable
-                columns={["Symbol", "Side", "Volume", "Open", "P/L"]}
+                columns={["Symbol", "Side", "Volume", "Open", "SL", "TP", "P/L"]}
                 rows={positions.slice(0, 20).map((p) => [
                   str(p.symbol),
                   str(p.side),
                   str(p.volume),
                   str(p.open_price),
+                  str(p.stop_loss ?? p.sl, "—"),
+                  str(p.take_profit ?? p.tp, "—"),
                   str(p.profit),
                 ])}
               />
@@ -698,7 +697,7 @@ export default function BrokerWorkspacePage() {
 
           <Section id="bw-orders" title="Pending Orders">
             {orders.length === 0 ? (
-              <p className="text-sm text-[var(--fg-muted)]">No pending orders.</p>
+              <p className="text-sm text-[var(--fg-muted)]">No pending orders</p>
             ) : (
               <DeskTable
                 columns={["Symbol", "Type", "Volume", "Price"]}
@@ -714,12 +713,13 @@ export default function BrokerWorkspacePage() {
 
           <Section id="bw-trades" title="Recent Trades">
             {deals.length === 0 ? (
-              <p className="text-sm text-[var(--fg-muted)]">No recent deals synced.</p>
+              <p className="text-sm text-[var(--fg-muted)]">No completed trades</p>
             ) : (
               <DeskTable
-                columns={["Symbol", "Volume", "Profit", "Time"]}
-                rows={deals.map((d) => [
+                columns={["Symbol", "Side", "Volume", "Profit", "Time"]}
+                rows={deals.slice(0, 20).map((d) => [
                   str(d.symbol),
+                  str(d.side || d.deal_type, "—"),
                   str(d.volume),
                   str(d.profit),
                   str(d.time, "—").replace("T", " ").slice(0, 19),

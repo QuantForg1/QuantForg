@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { riskApi } from "@/lib/api/endpoints";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { ApiError } from "@/lib/api/client";
 
 const schema = z.object({
@@ -24,7 +25,7 @@ export default function RiskPage() {
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
-      symbol: "EURUSD",
+      symbol: TRADING_SYMBOL,
       side: "buy",
       volume: "0.10",
       stop_loss: "",

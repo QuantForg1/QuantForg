@@ -66,7 +66,7 @@ export const appNav: NavGroup[] = [
         href: "/broker",
         label: "Broker",
         icon: Building2,
-        hint: "Session attach & connect",
+        hint: "Live MT5 account dashboard",
       },
     ],
   },
@@ -93,5 +93,17 @@ export const commandItems: NavItem[] = [
   ...appNav.flatMap((g) => g.items),
   { href: "/orders", label: "Orders blotter", icon: BookOpen, hint: "Opens in Terminal" },
   { href: "/positions", label: "Positions", icon: Briefcase, hint: "Opens in Terminal" },
+  {
+    href: "/ops",
+    label: "Operations control",
+    icon: Building2,
+    hint: "ITE control plane · kill switch · modes",
+  },
+  {
+    href: "/execution/diagnostics",
+    label: "Execution diagnostics",
+    icon: Building2,
+    hint: "Validation · Risk · MT5 audit",
+  },
   { href: "/support", label: "Support", icon: Settings },
 ];

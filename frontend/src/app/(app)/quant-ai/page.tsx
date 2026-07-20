@@ -16,6 +16,7 @@ import { SessionStrip } from "@/components/broker/session-strip";
 import { quantAiApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber, formatPct } from "@/lib/utils";
+import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 
 const MODULES = [
   "Market Overview",
@@ -36,8 +37,8 @@ const MODULES = [
 ] as const;
 
 export default function QuantAiPage() {
-  const [symbol, setSymbol] = useState("EURUSD");
-  const [focus, setFocus] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
+  const [focus, setFocus] = useState(TRADING_SYMBOL);
 
   const dashQ = useQuery({
     queryKey: ["quant-ai-dashboard", focus],
@@ -99,7 +100,7 @@ export default function QuantAiPage() {
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setFocus(symbol.trim() || "EURUSD")}
+              onClick={() => setFocus(resolveTradingSymbol(symbol.trim()))}
             >
               Analyze
             </Button>

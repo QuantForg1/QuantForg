@@ -148,7 +148,7 @@ export default function PortfolioPage() {
               </CardHeader>
               <CardContent>
                 {pending.length === 0 ? (
-                  <p className="text-sm text-[var(--fg-muted)]">No pending orders.</p>
+                  <p className="text-sm text-[var(--fg-muted)]">No pending orders</p>
                 ) : (
                   <DeskTable
                     columns={["Symbol", "Type", "Volume", "Price"]}

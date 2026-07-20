@@ -25,13 +25,14 @@ import {
   toneFromNumber,
 } from "@/lib/desk";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { FlaskConical } from "lucide-react";
 import { FeatureGate } from "@/components/platform/feature-gate";
 import { PaperTradingTutorial } from "@/components/platform/paper-tutorial";
 
 export default function PaperPage() {
   const qc = useQueryClient();
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [volume, setVolume] = useState("0.10");
 
   const perfQ = useQuery({
@@ -76,19 +77,22 @@ export default function PaperPage() {
 
   const balance = metric(perf, "balance") || metric(portfolio, "balance");
   const equity = metric(perf, "equity") || metric(portfolio, "equity");
-  const curve = mapEquityCurve(
-    trades
-      .slice()
-      .reverse()
-      .reduce<{ t: string; equity: number }[]>((acc, t, i) => {
-        const prev = acc.length ? acc[acc.length - 1].equity : metric(portfolio, "initial_balance") || 10000;
-        acc.push({
-          t: str(t.closed_at ?? t.opened_at, String(i + 1)).slice(5, 16),
-          equity: prev + num(t.pnl, 0),
-        });
-        return acc;
-      }, []),
-  );
+  const seed = metric(portfolio, "initial_balance");
+  const curve =
+    Number.isFinite(seed) && trades.length
+      ? mapEquityCurve(
+          [...trades]
+            .reverse()
+            .reduce<{ t: string; equity: number }[]>((acc, t, i) => {
+              const prev = acc.length ? acc[acc.length - 1].equity : seed;
+              acc.push({
+                t: str(t.closed_at ?? t.opened_at, String(i + 1)).slice(5, 16),
+                equity: prev + num(t.pnl, 0),
+              });
+              return acc;
+            }, []),
+        )
+      : [];
 
   const submit = (side: "buy" | "sell", reduceId?: string) => {
     place.mutate({
@@ -175,7 +179,10 @@ export default function PaperPage() {
                 <CardTitle>Equity Curve</CardTitle>
               </CardHeader>
               <CardContent>
-                <LazyEquityChart data={curve} emptyLabel="Place paper trades to build an equity curve" />
+                <LazyEquityChart
+                  data={curve}
+                  emptyLabel="No equity series — place paper trades after portfolio seed"
+                />
               </CardContent>
             </Card>
             <Card>
@@ -264,7 +271,7 @@ export default function PaperPage() {
               {histQ.isLoading ? (
                 <DeskSkeleton rows={2} />
               ) : trades.length === 0 ? (
-                <p className="text-sm text-[var(--fg-muted)]">No closed paper trades yet.</p>
+                <p className="text-sm text-[var(--fg-muted)]">No completed trades</p>
               ) : (
                 <DeskTable
                   columns={["Symbol", "Side", "Volume", "Entry", "Exit", "PnL"]}

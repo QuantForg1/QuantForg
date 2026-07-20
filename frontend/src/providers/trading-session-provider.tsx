@@ -10,7 +10,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { mt5Api, portfolioApi, weltradeApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
-import { useBrokerStatusStream } from "@/hooks/realtime";
+import { useBrokerStatusStream, useBookStream } from "@/hooks/realtime";
 import {
   gatewayDiagnosticDetail,
   gatewayStatusLabel,
@@ -53,15 +53,18 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const statusQ = useQuery({
     queryKey: ["mt5-status"],
     queryFn: mt5Api.status,
-    staleTime: 10_000,
+    staleTime: 5_000,
     retry: 1,
   });
   const connectedFlag = Boolean(asRecord(statusQ.data).connected);
 
+  // Keep the MT5 book hot whenever the session is attached (all app surfaces).
+  useBookStream(connectedFlag);
+
   const portfolioQ = useQuery({
     queryKey: ["portfolio"],
     queryFn: portfolioApi.get,
-    staleTime: 12_000,
+    staleTime: 5_000,
     retry: 1,
     enabled: connectedFlag,
   });
@@ -74,21 +77,21 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const positionsQ = useQuery({
     queryKey: ["positions"],
     queryFn: () => portfolioApi.positions(),
-    staleTime: 12_000,
+    staleTime: 4_000,
     retry: 1,
     enabled: connectedFlag,
   });
   const ordersQ = useQuery({
     queryKey: ["orders"],
     queryFn: portfolioApi.orders,
-    staleTime: 12_000,
+    staleTime: 4_000,
     retry: 1,
     enabled: connectedFlag,
   });
   const historyQ = useQuery({
     queryKey: ["history"],
     queryFn: portfolioApi.history,
-    staleTime: 20_000,
+    staleTime: 8_000,
     retry: 1,
     enabled: connectedFlag,
   });
@@ -128,16 +131,15 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   const positions = useMemo(() => {
-    const fromPortfolio = asList(portfolio.positions).map(asRecord);
-    if (fromPortfolio.length) return fromPortfolio;
-    return asList(positionsQ.data).map(asRecord);
-  }, [portfolio.positions, positionsQ.data]);
+    // Dedicated /positions is source of truth so closes leave Open Positions immediately.
+    if (positionsQ.isFetched) return asList(positionsQ.data).map(asRecord);
+    return asList(portfolio.positions).map(asRecord);
+  }, [positionsQ.isFetched, positionsQ.data, portfolio.positions]);
 
   const orders = useMemo(() => {
-    const fromPortfolio = asList(portfolio.pending_orders).map(asRecord);
-    if (fromPortfolio.length) return fromPortfolio;
-    return asList(ordersQ.data).map(asRecord);
-  }, [portfolio.pending_orders, ordersQ.data]);
+    if (ordersQ.isFetched) return asList(ordersQ.data).map(asRecord);
+    return asList(portfolio.pending_orders).map(asRecord);
+  }, [ordersQ.isFetched, ordersQ.data, portfolio.pending_orders]);
 
   const historyDeals = useMemo(() => {
     const hist = asRecord(historyQ.data);

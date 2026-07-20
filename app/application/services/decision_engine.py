@@ -64,13 +64,15 @@ class DecisionEngineService:
         self,
         *,
         user_id: UUID,
-        symbol: str = "EURUSD",
+        symbol: str = "XAUUSD",
         mode: str = "paper",
         record_paper: bool = True,
         force_refresh: bool = False,
     ) -> dict[str, Any]:
         """Produce WAIT (default) or TRADE_IDEA — never sends orders."""
-        code = symbol.strip().upper()
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
+        code = resolve_trading_symbol(symbol)
         mode = "paper" if mode != "live" else "live"
         cache_key = f"de:{user_id}:{code}:{mode}"
         if not force_refresh:
@@ -280,10 +282,15 @@ class DecisionEngineService:
         return payload
 
     async def dashboard(
-        self, *, user_id: UUID, symbol: str = "EURUSD"
+        self, *, user_id: UUID, symbol: str = "XAUUSD"
     ) -> dict[str, Any]:
+        from app.domain.trading.gold_only import resolve_trading_symbol
+
         decision = await self.evaluate(
-            user_id=user_id, symbol=symbol, mode="paper", record_paper=True
+            user_id=user_id,
+            symbol=resolve_trading_symbol(symbol),
+            mode="paper",
+            record_paper=True,
         )
         tracker = get_paper_tracker()
         return {

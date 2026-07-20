@@ -26,7 +26,7 @@ import { buildEquitySeries } from "@/lib/dashboard/derive";
 import { portfolioApi, portfolioIntelligenceApi } from "@/lib/api/endpoints";
 import { asList, asRecord, metric, num } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
-import { usePortfolioStream } from "@/hooks/realtime";
+import { useBookStream } from "@/hooks/realtime";
 import { cn } from "@/lib/utils";
 
 function isTypingTarget(el: EventTarget | null) {
@@ -58,7 +58,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
  */
 export function BookShell() {
   const session = useTradingSession();
-  const realtime = usePortfolioStream();
+  const realtime = useBookStream(session.connected);
   const [layout, setLayout] = useState<BookLayoutState>(DEFAULT_BOOK_LAYOUT);
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -89,7 +89,7 @@ export function BookShell() {
     queryKey: ["history"],
     queryFn: portfolioApi.history,
     retry: false,
-    staleTime: 20_000,
+    staleTime: 8_000,
     enabled: session.connected,
   });
 

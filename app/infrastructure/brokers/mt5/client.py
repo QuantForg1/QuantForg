@@ -279,6 +279,17 @@ class MockMT5Client:
             currency_profit=meta["profit"],
             bid=meta["bid"],
             ask=meta["ask"],
+            volume_min=Decimal("0.01"),
+            volume_max=Decimal("100"),
+            volume_step=Decimal("0.01"),
+            stops_level=0 if code != "XAUUSD" else 50,
+            freeze_level=0,
+            filling_mode=2,  # IOC
+            execution_mode="market",
+            margin_calc_mode="cfd",
+            visible=True,
+            market_open=True,
+            trade_allowed=True,
         )
 
     def symbol_select(self, symbol: str, *, enable: bool = True) -> bool:

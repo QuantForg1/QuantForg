@@ -19,6 +19,7 @@ from app.domain.entities.mt5_order import OrderIntent, TradeValidation
 from app.domain.enums.audit import AuditAction, AuditOutcome
 from app.domain.enums.order import OrderSide, OrderType
 from app.domain.exceptions.base import ValidationError
+from app.domain.execution_engine.reasons import humanize_reason
 from app.domain.interfaces.mt5_order import RETCODE_DONE
 from app.domain.value_objects.mt5_order import (
     LotSize,
@@ -55,8 +56,8 @@ def _parse_intent(command: MT5OrderValidateCommand) -> OrderIntent:
         )
     except (ValidationError, ValueError) as exc:
         raise ValidationError(
-            "Invalid order intent",
-            details={"error": str(exc)},
+            humanize_reason(str(exc)) if str(exc) else "Invalid order intent",
+            details={"error": str(exc), "component": "validation.intent"},
         ) from exc
 
 
@@ -75,8 +76,8 @@ class ValidateMT5OrderUseCase:
             result = self.validation_service.validate_order(intent)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
-                "MT5 order validation failed",
-                details={"error": str(exc)},
+                humanize_reason(str(exc)),
+                details={"error": str(exc), "component": "validation"},
             ) from exc
 
         # Re-bind user_id on a persisted copy

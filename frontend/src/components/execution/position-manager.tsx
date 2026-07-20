@@ -36,6 +36,8 @@ export function PositionManager({ connected }: { connected: boolean }) {
     queryKey: ["positions"],
     queryFn: () => portfolioApi.positions(),
     retry: false,
+    staleTime: 4_000,
+    refetchOnWindowFocus: true,
   });
 
   const positions = useMemo(() => asList(positionsQ.data).map(asRecord), [positionsQ.data]);

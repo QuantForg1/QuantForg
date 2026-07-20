@@ -19,34 +19,12 @@ import { backtestApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, mapEquityCurve, metric, num, str } from "@/lib/desk";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-
-function sampleBars(n = 80) {
-  const bars = [];
-  let price = 1.085;
-  const start = Date.now() - n * 15 * 60 * 1000;
-  for (let i = 0; i < n; i++) {
-    const open = price;
-    const close = price + (Math.random() - 0.48) * 0.0015;
-    const high = Math.max(open, close) + Math.random() * 0.0004;
-    const low = Math.min(open, close) - Math.random() * 0.0004;
-    const t = new Date(start + i * 15 * 60 * 1000).toISOString();
-    bars.push({
-      open_time: t,
-      open: open.toFixed(5),
-      high: high.toFixed(5),
-      low: low.toFixed(5),
-      close: close.toFixed(5),
-      volume: "100",
-      close_time: new Date(start + (i + 1) * 15 * 60 * 1000).toISOString(),
-    });
-    price = close;
-  }
-  return bars;
-}
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { loadBarsFromMt5Gateway } from "@/lib/mt5/bars-from-gateway";
 
 export default function BacktestingPage() {
   const qc = useQueryClient();
-  const [symbol, setSymbol] = useState("EURUSD");
+  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const listQ = useQuery({
@@ -73,6 +51,26 @@ export default function BacktestingPage() {
       toast.error(e instanceof ApiError ? e.message : "Backtest failed"),
   });
 
+  const runFromMt5 = async () => {
+    try {
+      const bars = await loadBarsFromMt5Gateway(symbol, "M15", 200);
+      if (!bars.length) {
+        toast.error("No MT5 candles for this symbol — connect gateway and retry.");
+        return;
+      }
+      run.mutate({
+        request_id: `bt-${Date.now()}`,
+        symbol,
+        timeframe: "m15",
+        initial_balance: "10000",
+        bars,
+        auto_analysis: true,
+      });
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Unable to load MT5 candles");
+    }
+  };
+
   const items = asList(listQ.data).map(asRecord);
   const report = asRecord(detailQ.data ?? items[0]);
   const metrics = asRecord(report.metrics);
@@ -97,20 +95,7 @@ export default function BacktestingPage() {
         title="Backtesting"
         description="Institutional backtest reports — equity, drawdown, and trade ledger."
         actions={
-          <Button
-            size="sm"
-            disabled={run.isPending}
-            onClick={() =>
-              run.mutate({
-                request_id: `bt-${Date.now()}`,
-                symbol,
-                timeframe: "m15",
-                initial_balance: "10000",
-                bars: sampleBars(80),
-                auto_analysis: true,
-              })
-            }
-          >
+          <Button size="sm" disabled={run.isPending} onClick={() => void runFromMt5()}>
             Run backtest
           </Button>
         }
@@ -121,6 +106,9 @@ export default function BacktestingPage() {
           <Label>Symbol</Label>
           <Input className="w-40" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} />
         </div>
+        <p className="qf-caption pb-2 text-[var(--fg-subtle)]">
+          Bars load from MT5 gateway only — never generated in the browser.
+        </p>
       </div>
 
       <DeskQueryState
@@ -150,16 +138,9 @@ export default function BacktestingPage() {
                   <DeskEmpty
                     icon={FlaskConical}
                     title="No backtests yet"
-                    description="Run a backtest to generate an institutional report."
+                    description="Run a backtest using live MT5 candles from the gateway."
                     actionLabel="Run now"
-                    onAction={() =>
-                      run.mutate({
-                        request_id: `bt-${Date.now()}`,
-                        symbol,
-                        timeframe: "m15",
-                        bars: sampleBars(80),
-                      })
-                    }
+                    onAction={() => void runFromMt5()}
                   />
                 ) : (
                   items.map((item) => {

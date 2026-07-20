@@ -12,10 +12,16 @@ import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { classifySymbol, symbolSpread } from "@/lib/dashboard/derive";
 import { formatNumber } from "@/lib/utils";
+import {
+  TRADING_SYMBOL,
+  MULTI_SYMBOL_ENABLED,
+  filterTradingSymbolRecords,
+  goldOnlySearchQuery,
+  resolveTradingSymbol,
+} from "@/lib/trading/gold-only";
 import { Cable } from "lucide-react";
 
-const FAV_KEY = "qf.execution.watch.favorites";
-const CATS = [
+const ALL_CATS = [
   "all",
   "forex",
   "indices",
@@ -25,6 +31,13 @@ const CATS = [
   "etf",
   "futures",
 ] as const;
+
+type MarketCategory = (typeof ALL_CATS)[number];
+
+const GOLD_ONLY_CATS = ["all"] as const satisfies readonly MarketCategory[];
+
+const VISIBLE_CATS = MULTI_SYMBOL_ENABLED ? ALL_CATS : GOLD_ONLY_CATS;
+const FAV_KEY = "qf.execution.watch.favorites";
 const PAGE_SIZE = 100;
 
 export const MarketWatch = memo(function MarketWatch({
@@ -40,7 +53,7 @@ export const MarketWatch = memo(function MarketWatch({
 }) {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
-  const [cat, setCat] = useState<(typeof CATS)[number]>("all");
+  const [cat, setCat] = useState<MarketCategory>("all");
   const [favorites, setFavorites] = useState<string[]>([]);
 
   useEffect(() => {
@@ -57,11 +70,13 @@ export const MarketWatch = memo(function MarketWatch({
     return () => window.clearTimeout(timer);
   }, [q]);
 
+  const searchQ = goldOnlySearchQuery(debouncedQ);
+
   const symbolsQ = useInfiniteQuery({
-    queryKey: ["mt5-symbols", debouncedQ],
+    queryKey: ["mt5-symbols", searchQ],
     queryFn: ({ pageParam }) =>
       mt5Api.symbols({
-        q: debouncedQ,
+        q: searchQ ?? TRADING_SYMBOL,
         offset: pageParam,
         limit: PAGE_SIZE,
         include_quotes: false,
@@ -70,7 +85,7 @@ export const MarketWatch = memo(function MarketWatch({
     getNextPageParam: (last) =>
       last.has_more ? last.offset + last.limit : undefined,
     retry: false,
-    enabled: connected,
+    enabled: connected && (MULTI_SYMBOL_ENABLED || searchQ !== null),
     staleTime: 45_000,
   });
 
@@ -84,8 +99,10 @@ export const MarketWatch = memo(function MarketWatch({
 
   const symbols = useMemo(
     () =>
-      (symbolsQ.data?.pages ?? []).flatMap((page) =>
-        asList(page.items).map(asRecord),
+      filterTradingSymbolRecords(
+        (symbolsQ.data?.pages ?? []).flatMap((page) =>
+          asList(page.items).map(asRecord),
+        ),
       ),
     [symbolsQ.data],
   );
@@ -142,7 +159,7 @@ export const MarketWatch = memo(function MarketWatch({
           />
           <Input
             className="h-9 pl-9"
-            placeholder="Search symbols…"
+            placeholder={MULTI_SYMBOL_ENABLED ? "Search symbols…" : "Search XAUUSD…"}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             aria-label="Search market watch"
@@ -150,7 +167,7 @@ export const MarketWatch = memo(function MarketWatch({
           />
         </div>
         <div className="flex flex-wrap gap-1" role="tablist" aria-label="Symbol categories">
-          {CATS.map((c) => (
+          {VISIBLE_CATS.map((c) => (
             <Button
               key={c}
               size="sm"
@@ -231,11 +248,11 @@ export const MarketWatch = memo(function MarketWatch({
                         className={`cursor-pointer border-t border-[var(--border)] transition hover:bg-[var(--surface-2)]/80 ${
                           active ? "bg-[var(--accent-soft)]" : ""
                         }`}
-                        onClick={() => onSelect(code)}
+                        onClick={() => onSelect(resolveTradingSymbol(code))}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            onSelect(code);
+                            onSelect(resolveTradingSymbol(code));
                           }
                         }}
                         tabIndex={0}

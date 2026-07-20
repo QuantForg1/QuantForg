@@ -1,6 +1,14 @@
 import { apiFetch } from "@/lib/api/client";
 import type { AuthSession, AuthUser } from "@/lib/auth/session";
 import { env } from "@/lib/env";
+import { asList, asRecord } from "@/lib/desk";
+import {
+  filterTradingSymbolRecords,
+  goldOnlySearchQuery,
+  MULTI_SYMBOL_ENABLED,
+  resolveTradingSymbol,
+  TRADING_SYMBOL,
+} from "@/lib/trading/gold-only";
 
 export const authApi = {
   login: (email: string, password: string) =>
@@ -47,6 +55,14 @@ export const portfolioApi = {
   history: () => apiFetch<Record<string, unknown>>("/history"),
 };
 
+type Mt5SymbolsPage = {
+  items: unknown[];
+  total: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+};
+
 export const mt5Api = {
   status: () => apiFetch<Record<string, unknown>>("/mt5/status"),
   connect: (body: {
@@ -58,47 +74,73 @@ export const mt5Api = {
   disconnect: () =>
     apiFetch<Record<string, unknown>>("/mt5/disconnect", { method: "POST", body: {} }),
   account: () => apiFetch<Record<string, unknown>>("/mt5/account"),
-  symbols: (params?: {
+  symbols: async (params?: {
     q?: string;
     offset?: number;
     limit?: number;
     include_quotes?: boolean;
-  }) => {
-    const q = params?.q?.trim() ?? "";
+  }): Promise<Mt5SymbolsPage> => {
     const offset = params?.offset ?? 0;
     const limit = params?.limit ?? 100;
     const include_quotes = params?.include_quotes ?? false;
+
+    if (!MULTI_SYMBOL_ENABLED) {
+      const q = goldOnlySearchQuery(params?.q);
+      if (q === null) {
+        return { items: [], total: 0, offset, limit, has_more: false };
+      }
+      const search = new URLSearchParams({
+        offset: String(offset),
+        limit: String(limit),
+        include_quotes: include_quotes ? "true" : "false",
+        q,
+      });
+      const page = await apiFetch<Mt5SymbolsPage>(`/mt5/symbols?${search.toString()}`);
+      const items = filterTradingSymbolRecords(asList(page.items).map(asRecord));
+      return {
+        ...page,
+        items,
+        total: items.length,
+        has_more: false,
+      };
+    }
+
+    const q = params?.q?.trim() ?? "";
     const search = new URLSearchParams({
       offset: String(offset),
       limit: String(limit),
       include_quotes: include_quotes ? "true" : "false",
     });
     if (q) search.set("q", q);
-    return apiFetch<{
-      items: unknown[];
-      total: number;
-      offset: number;
-      limit: number;
-      has_more: boolean;
-    }>(`/mt5/symbols?${search.toString()}`);
+    return apiFetch<Mt5SymbolsPage>(`/mt5/symbols?${search.toString()}`);
   },
   symbol: (symbol: string) =>
-    apiFetch<Record<string, unknown>>(`/mt5/symbols/${encodeURIComponent(symbol)}`),
+    apiFetch<Record<string, unknown>>(
+      `/mt5/symbols/${encodeURIComponent(resolveTradingSymbol(symbol))}`,
+    ),
   tick: (symbol: string) =>
-    apiFetch<Record<string, unknown>>(`/mt5/ticks/${encodeURIComponent(symbol)}`),
+    apiFetch<Record<string, unknown>>(
+      `/mt5/ticks/${encodeURIComponent(resolveTradingSymbol(symbol))}`,
+    ),
   candles: (symbol: string, timeframe = "H1", count = 48) =>
     apiFetch<unknown[]>(
-      `/mt5/candles/${encodeURIComponent(symbol)}?timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
+      `/mt5/candles/${encodeURIComponent(resolveTradingSymbol(symbol))}?timeframe=${encodeURIComponent(timeframe)}&count=${count}`,
     ),
   validateOrder: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/mt5/order/validate", {
       method: "POST",
-      body,
+      body: {
+        ...body,
+        symbol: resolveTradingSymbol(String(body.symbol ?? "")),
+      },
     }),
   calculateOrder: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/mt5/order/calculate", {
       method: "POST",
-      body,
+      body: {
+        ...body,
+        symbol: resolveTradingSymbol(String(body.symbol ?? "")),
+      },
     }),
 };
 
@@ -143,7 +185,7 @@ export const strategyApi = {
   evaluate: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/strategy/evaluate", {
       method: "POST",
-      body,
+      body: { ...body, symbol: resolveTradingSymbol(String(body.symbol ?? "")) },
     }),
   signals: () => apiFetch<Record<string, unknown>>("/strategy/signals"),
   catalog: () => apiFetch<Record<string, unknown>>("/strategy/catalog"),
@@ -167,14 +209,20 @@ export const strategyApi = {
 
 export const backtestApi = {
   run: (body: Record<string, unknown>) =>
-    apiFetch<Record<string, unknown>>("/backtests/run", { method: "POST", body }),
+    apiFetch<Record<string, unknown>>("/backtests/run", {
+      method: "POST",
+      body: { ...body, symbol: resolveTradingSymbol(String(body.symbol ?? "")) },
+    }),
   list: () => apiFetch<Record<string, unknown>>("/backtests"),
   get: (id: string) => apiFetch<Record<string, unknown>>(`/backtests/${id}`),
 };
 
 export const paperApi = {
   place: (body: Record<string, unknown>) =>
-    apiFetch<Record<string, unknown>>("/paper/orders", { method: "POST", body }),
+    apiFetch<Record<string, unknown>>("/paper/orders", {
+      method: "POST",
+      body: { ...body, symbol: resolveTradingSymbol(String(body.symbol ?? "")) },
+    }),
   positions: () => apiFetch<Record<string, unknown>>("/paper/positions"),
   history: () => apiFetch<Record<string, unknown>>("/paper/history"),
   performance: () => apiFetch<Record<string, unknown>>("/paper/performance"),
@@ -187,15 +235,21 @@ export const walkforwardApi = {
   run: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/walkforward/run", {
       method: "POST",
-      body,
+      body: { ...body, symbol: resolveTradingSymbol(String(body.symbol ?? "")) },
     }),
 };
 
 export const executionApi = {
   check: (body: Record<string, unknown>) =>
-    apiFetch<Record<string, unknown>>("/execution/check", { method: "POST", body }),
+    apiFetch<Record<string, unknown>>("/execution/check", {
+      method: "POST",
+      body: { ...body, symbol: resolveTradingSymbol(String(body.symbol ?? "")) },
+    }),
   submit: (body: Record<string, unknown>) =>
-    apiFetch<Record<string, unknown>>("/execution/submit", { method: "POST", body }),
+    apiFetch<Record<string, unknown>>("/execution/submit", {
+      method: "POST",
+      body: { ...body, symbol: resolveTradingSymbol(String(body.symbol ?? "")) },
+    }),
   cancel: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/execution/cancel", { method: "POST", body }),
   manage: (body: Record<string, unknown>) =>
@@ -259,11 +313,11 @@ export const brokerConnectivityApi = {
     ),
   ecosystem: () =>
     apiFetch<Record<string, unknown>>("/broker-connectivity/ecosystem"),
-  compatibility: (broker?: string, symbol = "EURUSD") =>
+  compatibility: (broker?: string, symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
       broker
-        ? `/broker-connectivity/compatibility?broker=${encodeURIComponent(broker)}&symbol=${encodeURIComponent(symbol)}`
-        : `/broker-connectivity/compatibility?symbol=${encodeURIComponent(symbol)}`,
+        ? `/broker-connectivity/compatibility?broker=${encodeURIComponent(broker)}&symbol=${encodeURIComponent(resolveTradingSymbol(symbol))}`
+        : `/broker-connectivity/compatibility?symbol=${encodeURIComponent(resolveTradingSymbol(symbol))}`,
     ),
   compatibilityDashboard: () =>
     apiFetch<Record<string, unknown>>(
@@ -352,10 +406,142 @@ export const opsApi = {
   audit: () => apiFetch<Record<string, unknown>>("/ops/audit"),
 };
 
-export const decisionEngineApi = {
-  dashboard: (symbol = "EURUSD") =>
+/** Institutional Operations Control Plane (Phase F) */
+export const iteOpsApi = {
+  controlCenter: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/control-center"),
+  readiness: () => apiFetch<Record<string, unknown>>("/ite/ops/readiness"),
+  setMode: (target: string, reason: string, confirmed: boolean) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/mode", {
+      method: "POST",
+      body: { target, reason, confirmed },
+    }),
+  armKill: (reason: string, confirmed: boolean) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/kill-switch/arm", {
+      method: "POST",
+      body: { reason, confirmed },
+    }),
+  disarmKill: (reason: string, confirmed: boolean) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/kill-switch/disarm", {
+      method: "POST",
+      body: { reason, confirmed },
+    }),
+  rollback: (target_config_version: string, reason: string, confirmed: boolean) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/rollback", {
+      method: "POST",
+      body: { target_config_version, reason, confirmed },
+    }),
+  alerts: (unacked_only = false) =>
     apiFetch<Record<string, unknown>>(
-      `/decision-engine/dashboard?symbol=${encodeURIComponent(symbol)}`,
+      `/ite/ops/alerts?unacked_only=${unacked_only ? "true" : "false"}`,
+    ),
+  ackAlert: (alert_id: string) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/alerts/ack", {
+      method: "POST",
+      body: { alert_id },
+    }),
+  audit: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/ite/ops/audit?limit=${limit}`),
+  configs: () => apiFetch<Record<string, unknown>>("/ite/ops/configs"),
+  runbooks: () => apiFetch<Record<string, unknown>>("/ite/ops/runbooks"),
+  executeRunbook: (runbook_id: string) =>
+    apiFetch<Record<string, unknown>>(`/ite/ops/runbooks/${runbook_id}/execute`, {
+      method: "POST",
+      body: {},
+    }),
+  promote: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/config/promote", {
+      method: "POST",
+      body,
+    }),
+};
+
+/** Phase G — Production Reliability & Observability */
+export const iteReliabilityApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/dashboard"),
+  tick: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/tick", {
+      method: "POST",
+      body,
+    }),
+  heartbeat: (component: string, latency_ms = 0) =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/heartbeat", {
+      method: "POST",
+      body: { component, latency_ms },
+    }),
+  metrics: () => apiFetch<Record<string, unknown>>("/ite/reliability/metrics"),
+  incidents: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/incidents"),
+  timeline: (params?: Record<string, string>) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch<Record<string, unknown>>(
+      `/ite/reliability/timeline${q ? `?${q}` : ""}`,
+    );
+  },
+  timelineExport: (fmt: "json" | "csv" = "json") =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/reliability/timeline/export?fmt=${fmt}`,
+    ),
+  chaosInject: (failure: string) =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/chaos/inject", {
+      method: "POST",
+      body: { failure },
+    }),
+  chaosClear: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/chaos/clear", {
+      method: "POST",
+      body: {},
+    }),
+  recoverGateway: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/recovery/gateway", {
+      method: "POST",
+      body: {},
+    }),
+  recoverMt5: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/recovery/mt5", {
+      method: "POST",
+      body: {},
+    }),
+};
+
+/** Phase H — Production Validation & Certification */
+export const iteCertificationApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/ite/certification/dashboard"),
+  run: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ite/certification/run", {
+      method: "POST",
+      body,
+    }),
+  report: () => apiFetch<Record<string, unknown>>("/ite/certification/report"),
+  goNogo: () => apiFetch<Record<string, unknown>>("/ite/certification/go-nogo"),
+  certificate: () =>
+    apiFetch<Record<string, unknown>>("/ite/certification/certificate"),
+  approve: (note = "") =>
+    apiFetch<Record<string, unknown>>("/ite/certification/approve", {
+      method: "POST",
+      body: { note },
+    }),
+  checklist: () =>
+    apiFetch<Record<string, unknown>>("/ite/certification/checklist"),
+  canary: () => apiFetch<Record<string, unknown>>("/ite/certification/canary"),
+  stress: () =>
+    apiFetch<Record<string, unknown>>("/ite/certification/stress", {
+      method: "POST",
+      body: {},
+    }),
+  failures: () =>
+    apiFetch<Record<string, unknown>>("/ite/certification/failures", {
+      method: "POST",
+      body: {},
+    }),
+};
+
+export const decisionEngineApi = {
+  dashboard: (symbol = TRADING_SYMBOL) =>
+    apiFetch<Record<string, unknown>>(
+      `/decision-engine/dashboard?symbol=${encodeURIComponent(resolveTradingSymbol(symbol))}`,
     ),
   evaluate: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/decision-engine/evaluate", {
@@ -409,9 +595,9 @@ export const quantStudioApi = {
 };
 
 export const researchLabApi = {
-  dashboard: (symbol = "EURUSD") =>
+  dashboard: (symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
-      `/research-lab/dashboard?symbol=${encodeURIComponent(symbol)}`,
+      `/research-lab/dashboard?symbol=${encodeURIComponent(resolveTradingSymbol(symbol))}`,
     ),
   library: () => apiFetch<Record<string, unknown>>("/research-lab/library"),
   validate: (body: Record<string, unknown>) =>
@@ -420,9 +606,9 @@ export const researchLabApi = {
       body,
     }),
   compare: () => apiFetch<Record<string, unknown>>("/research-lab/compare"),
-  regime: (symbol = "EURUSD") =>
+  regime: (symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
-      `/research-lab/regime?symbol=${encodeURIComponent(symbol)}`,
+      `/research-lab/regime?symbol=${encodeURIComponent(resolveTradingSymbol(symbol))}`,
     ),
   parameters: () => apiFetch<Record<string, unknown>>("/research-lab/parameters"),
   setParameters: (overrides: Record<string, unknown>) =>
@@ -531,7 +717,7 @@ export const ecosystemApi = {
 export const quantAiApi = {
   dashboard: (symbol?: string, forceRefresh = false) => {
     const params = new URLSearchParams();
-    if (symbol) params.set("symbol", symbol);
+    params.set("symbol", resolveTradingSymbol(symbol));
     if (forceRefresh) params.set("force_refresh", "true");
     const q = params.toString();
     return apiFetch<Record<string, unknown>>(
@@ -540,7 +726,7 @@ export const quantAiApi = {
   },
   symbol: (symbol: string) =>
     apiFetch<Record<string, unknown>>(
-      `/quant-ai/symbol/${encodeURIComponent(symbol)}`,
+      `/quant-ai/symbol/${encodeURIComponent(resolveTradingSymbol(symbol))}`,
     ),
   portfolio: () => apiFetch<Record<string, unknown>>("/quant-ai/portfolio"),
   risk: () => apiFetch<Record<string, unknown>>("/quant-ai/risk"),
@@ -553,16 +739,16 @@ export const quantAiApi = {
 };
 
 export const intelligenceApi = {
-  dashboard: (market_code = "FX", symbol?: string) =>
+  dashboard: (market_code = "XAU", symbol?: string) =>
     apiFetch<Record<string, unknown>>(
       `/intelligence/dashboard?market_code=${encodeURIComponent(market_code)}${
-        symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""
+        `&symbol=${encodeURIComponent(resolveTradingSymbol(symbol))}`
       }`,
     ),
-  marketContext: (market_code = "FX", symbol?: string) =>
+  marketContext: (market_code = "XAU", symbol?: string) =>
     apiFetch<Record<string, unknown>>(
       `/intelligence/market-context?market_code=${encodeURIComponent(market_code)}${
-        symbol ? `&symbol=${encodeURIComponent(symbol)}` : ""
+        `&symbol=${encodeURIComponent(resolveTradingSymbol(symbol))}`
       }`,
     ),
   news: (limit = 20) =>

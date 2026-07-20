@@ -6,7 +6,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { LazyBarChart, LazyEquityChart } from "@/components/charts/lazy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DeskTable } from "@/components/desk/primitives";
+import { DeskEmpty, DeskTable } from "@/components/desk/primitives";
 import { DeskQueryState } from "@/components/desk/query-state";
 import { PageMotion } from "@/components/desk/motion";
 import { paperApi, portfolioApi } from "@/lib/api/endpoints";
@@ -20,6 +20,8 @@ import {
   toneFromNumber,
 } from "@/lib/desk";
 import { formatCurrency, formatNumber, formatPct } from "@/lib/utils";
+import { buildEquitySeries } from "@/lib/dashboard/derive";
+import { CalendarDays } from "lucide-react";
 
 function fmtMoney(v: number) {
   return Number.isFinite(v) ? formatCurrency(v) : "—";
@@ -68,21 +70,30 @@ export default function PerformancePage() {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([label, value]) => ({ label, value }));
 
-  const curve = mapEquityCurve(
-    monthly.map((m, i) => ({
-      t: m.label,
-      equity: (initial || 0) + monthly.slice(0, i + 1).reduce((s, x) => s + x.value, 0),
-    })),
-  );
+  const seed =
+    Number.isFinite(equity) ? equity : Number.isFinite(metric(perf, "balance")) ? metric(perf, "balance") : NaN;
+  const curve =
+    Number.isFinite(seed) && deals.length
+      ? buildEquitySeries(deals, seed)
+      : Number.isFinite(initial) && monthly.length
+        ? mapEquityCurve(
+            monthly.map((m, i) => ({
+              t: m.label,
+              equity: initial + monthly.slice(0, i + 1).reduce((s, x) => s + x.value, 0),
+            })),
+          )
+        : [];
 
-  const heatDays = Array.from({ length: 35 }, (_, i) => {
-    const dayDeals = deals.filter((d) => {
-      const day = str(d.time, "").slice(0, 10);
-      return day && i % 7 === new Date(day + "T00:00:00").getDay();
-    });
-    const pnl = dayDeals.reduce((s, d) => s + num(d.profit, 0), 0);
-    return { i, pnl };
-  });
+  const dailyMap = new Map<string, number>();
+  for (const d of deals) {
+    const day = str(d.time, "").slice(0, 10);
+    if (!day) continue;
+    dailyMap.set(day, (dailyMap.get(day) || 0) + num(d.profit, 0));
+  }
+  const heatDays = [...dailyMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-35)
+    .map(([day, pnl]) => ({ day, pnl }));
 
   const loading = paper.isLoading;
   const errored = paper.isError && history.isError;
@@ -152,31 +163,41 @@ export default function PerformancePage() {
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
             <Card>
               <CardHeader>
-                <CardTitle>Calendar Heatmap</CardTitle>
+                <CardTitle>Daily PnL</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-7 gap-1.5">
-                  {heatDays.map((d) => {
-                    const intensity = Math.min(1, Math.abs(d.pnl) / 500);
-                    const bg =
-                      d.pnl > 0
-                        ? `rgba(52, 211, 153, ${0.15 + intensity * 0.7})`
-                        : d.pnl < 0
-                          ? `rgba(248, 113, 113, ${0.15 + intensity * 0.7})`
-                          : "var(--surface-2)";
-                    return (
-                      <div
-                        key={d.i}
-                        className="aspect-square rounded-md border border-[var(--border)]"
-                        style={{ background: bg }}
-                        title={`PnL ${d.pnl.toFixed(2)}`}
-                      />
-                    );
-                  })}
-                </div>
-                <p className="mt-3 text-xs text-[var(--fg-subtle)]">
-                  Intensity maps to deal profitability by weekday sample.
-                </p>
+                {heatDays.length === 0 ? (
+                  <DeskEmpty
+                    icon={CalendarDays}
+                    title="No completed trades"
+                    description="Daily profitability appears after deal history syncs from MT5."
+                  />
+                ) : (
+                  <>
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {heatDays.map((d) => {
+                        const intensity = Math.min(1, Math.abs(d.pnl) / 500);
+                        const bg =
+                          d.pnl > 0
+                            ? `rgba(52, 211, 153, ${0.15 + intensity * 0.7})`
+                            : d.pnl < 0
+                              ? `rgba(248, 113, 113, ${0.15 + intensity * 0.7})`
+                              : "var(--surface-2)";
+                        return (
+                          <div
+                            key={d.day}
+                            className="aspect-square rounded-md border border-[var(--border)]"
+                            style={{ background: bg }}
+                            title={`${d.day}: ${d.pnl.toFixed(2)}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <p className="mt-3 text-xs text-[var(--fg-subtle)]">
+                      Last {heatDays.length} days with synced deals — intensity maps to daily PnL.
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
             <Card>

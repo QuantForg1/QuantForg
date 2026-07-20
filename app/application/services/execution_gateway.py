@@ -19,6 +19,7 @@ from app.domain.events.execution import (
     ExecutionRequested,
     ExecutionSubmitted,
 )
+from app.domain.execution_engine.reasons import humanize_reason
 from app.domain.interfaces.mt5_order import MT5OrderSendResult
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 
@@ -126,7 +127,11 @@ class ExecutionGateway:
         symbol: str,
     ) -> ExecutionResult:
         outcome, retryable, default_msg = map_retcode_to_outcome(raw.retcode)
-        message = raw.comment or default_msg
+        # Prefer broker comment; fall back to mapped human message
+        raw_msg = (raw.comment or "").strip()
+        message = humanize_reason(raw_msg) if raw_msg else default_msg
+        if not raw_msg:
+            message = default_msg
         result = ExecutionResult(
             outcome=outcome,
             retcode=raw.retcode,

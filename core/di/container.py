@@ -159,6 +159,7 @@ class Container:
             if self.settings.mt5_enabled:
                 gateway_url = (self.settings.mt5_gateway_base_url or "").strip()
                 gateway_token = (self.settings.mt5_gateway_caller_token or "").strip()
+                using_gateway = False
                 if gateway_url and gateway_token:
                     try:
                         client: Any = GatewayMT5Client(
@@ -168,6 +169,7 @@ class Container:
                                 self.settings.mt5_connect_timeout_seconds
                             ),
                         )
+                        using_gateway = True
                         logger.info(
                             "mt5_gateway_client_configured",
                             base_url=client.base_url,
@@ -191,13 +193,20 @@ class Container:
                         token_set=bool(gateway_token),
                         using="MockMT5Client",
                     )
+                # Never enable live send on MockMT5Client — that invents tickets.
+                live_enabled = execution_enabled and using_gateway
+                if execution_enabled and not using_gateway:
+                    logger.warning(
+                        "execution_enabled_ignored_without_gateway",
+                        reason="MockMT5Client cannot place real MT5 orders",
+                    )
                 self.mt5_adapter = MT5Adapter(
-                    client=client, execution_enabled=execution_enabled
+                    client=client, execution_enabled=live_enabled
                 )
                 self.broker_registry.register(self.mt5_adapter)
             else:
                 self.mt5_adapter = MT5Adapter(
-                    client=MockMT5Client(), execution_enabled=execution_enabled
+                    client=MockMT5Client(), execution_enabled=False
                 )
         except Exception as exc:
             logger.warning("mt5_startup_failed", error=str(exc))
