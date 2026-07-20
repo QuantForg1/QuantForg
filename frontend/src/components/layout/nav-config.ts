@@ -60,7 +60,7 @@ export const appNav: NavGroup[] = [
         href: "/journal",
         label: "Journal",
         icon: NotebookPen,
-        hint: "Session memory",
+        hint: "Orders history & session memory",
       },
       {
         href: "/broker",

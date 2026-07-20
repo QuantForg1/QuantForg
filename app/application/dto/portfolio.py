@@ -152,6 +152,9 @@ class DealDTO:
     swap: str
     deal_type: str
     time: datetime
+    magic: int = 0
+    comment: str = ""
+    position_id: int = 0
 
     @classmethod
     def from_entity(cls, deal: MT5Deal) -> DealDTO:
@@ -167,6 +170,9 @@ class DealDTO:
             swap=str(deal.swap),
             deal_type=deal.deal_type,
             time=deal.time,
+            magic=deal.magic,
+            comment=deal.comment,
+            position_id=deal.position_id,
         )
 
 

@@ -63,6 +63,13 @@ def _dec(value: Any, default: str = "0") -> Decimal:
     return Decimal(str(value))
 
 
+def _mt5_retcode(payload: dict[str, Any], *, default: int = RETCODE_INVALID) -> int:
+    """Parse broker retcode without collapsing success ``0`` via falsy ``or``."""
+    if "retcode" not in payload or payload.get("retcode") is None:
+        return int(default)
+    return int(payload["retcode"])
+
+
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
@@ -1103,7 +1110,7 @@ class GatewayMT5Client:
             },
         )
         return MT5OrderCheckResult(
-            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
             request=request,
             balance=_dec(data.get("balance")),
@@ -1127,7 +1134,7 @@ class GatewayMT5Client:
         )
         return MT5MarginResult(
             margin=_dec(data.get("margin")),
-            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
         )
 
@@ -1149,7 +1156,7 @@ class GatewayMT5Client:
         data = self._request("POST", "/trade/order_calc_profit", json_body=body)
         return MT5ProfitResult(
             profit=_dec(data.get("profit")),
-            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
         )
 
@@ -1177,7 +1184,7 @@ class GatewayMT5Client:
         self._positions_cache = None
         self._positions_cache_at = 0.0
         return MT5OrderSendResult(
-            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
             order_ticket=int(data.get("order_ticket") or 0),
             deal_ticket=int(data.get("deal_ticket") or 0),
@@ -1196,7 +1203,7 @@ class GatewayMT5Client:
         self._positions_cache = None
         self._positions_cache_at = 0.0
         return MT5OrderSendResult(
-            retcode=int(data.get("retcode") or RETCODE_INVALID),
+            retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
             order_ticket=int(data.get("order_ticket") or ticket),
             deal_ticket=int(data.get("deal_ticket") or 0),
@@ -1373,6 +1380,9 @@ class GatewayMT5Client:
                     swap=_dec(row.get("swap")),
                     deal_type=deal_type,
                     time=deal_time,
+                    magic=int(row.get("magic") or 0),
+                    comment=str(row.get("comment") or ""),
+                    position_id=int(row.get("position_id") or 0),
                 )
             )
         return out

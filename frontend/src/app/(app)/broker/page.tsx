@@ -712,6 +712,14 @@ export default function BrokerWorkspacePage() {
           </Section>
 
           <Section id="bw-trades" title="Recent Trades">
+            <div className="mb-3">
+              <a
+                href="/journal/orders"
+                className="text-xs text-[var(--accent)] underline-offset-2 hover:underline"
+              >
+                Open full Orders History →
+              </a>
+            </div>
             {deals.length === 0 ? (
               <p className="text-sm text-[var(--fg-muted)]">No completed trades</p>
             ) : (

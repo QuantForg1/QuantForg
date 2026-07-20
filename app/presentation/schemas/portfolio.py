@@ -76,6 +76,9 @@ class DealResponse(BaseModel):
     swap: str = "0"
     deal_type: str = ""
     time: datetime
+    magic: int = 0
+    comment: str = ""
+    position_id: int = 0
 
 
 class PortfolioResponse(BaseModel):

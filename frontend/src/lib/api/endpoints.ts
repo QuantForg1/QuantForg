@@ -53,6 +53,13 @@ export const portfolioApi = {
     ),
   orders: () => apiFetch<unknown[]>("/orders"),
   history: () => apiFetch<Record<string, unknown>>("/history"),
+  historyRange: (params: { date_from?: string; date_to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params.date_from) qs.set("date_from", params.date_from);
+    if (params.date_to) qs.set("date_to", params.date_to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return apiFetch<Record<string, unknown>>(`/history${suffix}`);
+  },
 };
 
 type Mt5SymbolsPage = {

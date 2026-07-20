@@ -150,11 +150,15 @@ class MT5Deal:
     swap: Decimal = Decimal("0")
     deal_type: str = "deal"  # entry_in | entry_out | ...
     time: datetime = field(default_factory=lambda: datetime.now(UTC))
+    magic: int = 0
+    comment: str = ""
+    position_id: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "symbol", self.symbol.strip().upper())
         object.__setattr__(self, "side", self.side.strip().lower())
         object.__setattr__(self, "deal_type", self.deal_type.strip().lower())
+        object.__setattr__(self, "comment", self.comment.strip()[:64])
         require(self.ticket > 0, "ticket must be > 0")
         require(len(self.symbol) > 0, "symbol is required")
 
@@ -171,6 +175,9 @@ class MT5Deal:
             "swap": str(self.swap),
             "deal_type": self.deal_type,
             "time": self.time.isoformat(),
+            "magic": self.magic,
+            "comment": self.comment,
+            "position_id": self.position_id,
         }
 
 

@@ -927,6 +927,7 @@ class MT5GatewayRuntime:
                 "time": _safe_int(getattr(d, "time", 0)),
                 "magic": _safe_int(getattr(d, "magic", 0)),
                 "comment": str(getattr(d, "comment", "") or ""),
+                "position_id": _safe_int(getattr(d, "position_id", 0)),
             }
             for d in rows
         ]
