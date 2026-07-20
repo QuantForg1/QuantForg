@@ -62,9 +62,9 @@ class ResearchAnalyticsEngine:
         recovery = None
         if max_dd > 0 and initial_balance > 0:
             net = final - initial_balance
-            recovery = (
-                net / (initial_balance * max_dd / Decimal("100"))
-            ).quantize(Decimal("0.0001"))
+            recovery = (net / (initial_balance * max_dd / Decimal("100"))).quantize(
+                Decimal("0.0001")
+            )
 
         hold = 0.0
         if closed:
@@ -136,9 +136,7 @@ class ResearchAnalyticsEngine:
             prev = cur
         return out
 
-    def _sharpe(
-        self, curve: list[EquityPoint], initial: Decimal
-    ) -> Decimal | None:
+    def _sharpe(self, curve: list[EquityPoint], initial: Decimal) -> Decimal | None:
         rets = self._period_returns(curve, initial)
         if len(rets) < 2:
             return None
@@ -146,11 +144,11 @@ class ResearchAnalyticsEngine:
         var = sum((r - mean) ** 2 for r in rets) / (len(rets) - 1)
         if var <= 0:
             return None
-        return Decimal(str(round(mean / sqrt(var) * sqrt(float(self.periods_per_year)), 4)))
+        return Decimal(
+            str(round(mean / sqrt(var) * sqrt(float(self.periods_per_year)), 4))
+        )
 
-    def _sortino(
-        self, curve: list[EquityPoint], initial: Decimal
-    ) -> Decimal | None:
+    def _sortino(self, curve: list[EquityPoint], initial: Decimal) -> Decimal | None:
         rets = self._period_returns(curve, initial)
         if len(rets) < 2:
             return None
@@ -161,7 +159,9 @@ class ResearchAnalyticsEngine:
         var = sum(r**2 for r in downside) / len(downside)
         if var <= 0:
             return None
-        return Decimal(str(round(mean / sqrt(var) * sqrt(float(self.periods_per_year)), 4)))
+        return Decimal(
+            str(round(mean / sqrt(var) * sqrt(float(self.periods_per_year)), 4))
+        )
 
     @staticmethod
     def _session_rank(closed: list[ResearchTrade]) -> tuple[str, str]:
@@ -170,9 +170,7 @@ class ResearchAnalyticsEngine:
             buckets[t.session or "unknown"].append(t.pnl)
         if not buckets:
             return "n/a", "n/a"
-        scored = {
-            k: sum(v, Decimal("0")) / Decimal(len(v)) for k, v in buckets.items()
-        }
+        scored = {k: sum(v, Decimal("0")) / Decimal(len(v)) for k, v in buckets.items()}
         best = max(scored, key=lambda k: scored[k])
         worst = min(scored, key=lambda k: scored[k])
         return best, worst

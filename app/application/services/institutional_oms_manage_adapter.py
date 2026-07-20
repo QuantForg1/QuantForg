@@ -24,7 +24,7 @@ def _map_pipeline(pipeline: Any) -> OmsManageResult:
     gateway_status = "unknown"
     for stage in getattr(pipeline, "stages", []) or []:
         name = getattr(stage, "stage", None)
-        stage_name = name.value if hasattr(name, "value") else str(name or "")
+        stage_name = str(getattr(name, "value", name or ""))
         if "broker" in stage_name.lower() or "gateway" in stage_name.lower():
             gateway_status = getattr(stage, "status", gateway_status)
     return OmsManageResult(

@@ -12,10 +12,8 @@ from app.domain.institutional_trading.research.config import (
     ResearchConfig,
 )
 from app.domain.institutional_trading.research.models import (
-    EquityPoint,
     ResearchTrade,
 )
-
 
 MC_COUNTS: tuple[int, ...] = (100, 500, 1000, 5000)
 
@@ -69,7 +67,7 @@ class MonteCarloEngine:
             raise ValueError(f"iterations must be one of {MC_COUNTS}")
         closed = [t for t in trades if t.status == "closed"]
         initial = initial_balance or self.config.initial_balance
-        rng = random.Random(seed)  # deterministic given seed
+        rng = random.Random(seed)  # noqa: S311  # deterministic given seed
 
         finals: list[Decimal] = []
         pfs: list[Decimal] = []
@@ -128,10 +126,13 @@ class MonteCarloEngine:
         passed = True
         if median_pf is None or median_pf < self.config.mc_pass_median_pf:
             passed = False
-        if self.config.mc_pass_p05_equity_positive and p05 < initial:
-            # allow small underwater but fail if p05 << initial (lost money at 5th pct)
-            if p05 < initial * Decimal("0.90"):
-                passed = False
+        if (
+            self.config.mc_pass_p05_equity_positive
+            and p05 < initial
+            and p05 < initial * Decimal("0.90")
+        ):
+            # Fail if p05 << initial (lost money at 5th pct)
+            passed = False
 
         return MonteCarloReport(
             iterations=iterations,
@@ -142,5 +143,7 @@ class MonteCarloEngine:
             median_profit_factor=median_pf,
             median_max_dd=median_dd,
             passed=passed,
-            distribution_final_equity=tuple(str(x) for x in finals_sorted[:: max(1, len(finals_sorted)//50)]),
+            distribution_final_equity=tuple(
+                str(x) for x in finals_sorted[:: max(1, len(finals_sorted) // 50)]
+            ),
         )

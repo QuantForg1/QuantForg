@@ -1,6 +1,6 @@
 """Simulation Engine — candle replay using same institutional decision/manage path.
 
-Uses SimulationOmsPort only. Never MT5 order_send. Never modifies A–D/OMS.
+Uses SimulationOmsPort only. Never MT5 order_send. Never modifies A-D/OMS.
 """
 
 from __future__ import annotations
@@ -107,10 +107,10 @@ class SimulationEngine:
                     confidence=pending_signal.confidence if pending_signal else 0,
                     quality=pending_signal.quality if pending_signal else 0,
                     risk_score=pending_signal.risk_score if pending_signal else 0,
-                    decision_reasons=(
-                        pending_signal.reasons if pending_signal else ()
+                    decision_reasons=(pending_signal.reasons if pending_signal else ()),
+                    confluence=(
+                        dict(pending_signal.confluence) if pending_signal else {}
                     ),
-                    confluence=dict(pending_signal.confluence) if pending_signal else {},
                 )
                 open_trade.events.append(
                     {
@@ -144,18 +144,14 @@ class SimulationEngine:
                     if side == "buy":
                         sl = entry_ref - sig.stop_distance
                         tp = (
-                            entry_ref + sig.take_distance
-                            if sig.take_distance
-                            else None
+                            entry_ref + sig.take_distance if sig.take_distance else None
                         )
                     else:
                         sl = entry_ref + sig.stop_distance
                         tp = (
-                            entry_ref - sig.take_distance
-                            if sig.take_distance
-                            else None
+                            entry_ref - sig.take_distance if sig.take_distance else None
                         )
-                    from app.application.services.institutional_execution_engine import (
+                    from app.application.services.institutional_execution_engine import (  # noqa: E501
                         parse_order_intent,
                     )
 
@@ -188,9 +184,7 @@ class SimulationEngine:
                 if peak > 0 and equity < peak
                 else Decimal("0")
             )
-            curve.append(
-                EquityPoint(time=bar.time, equity=equity, drawdown_pct=dd)
-            )
+            curve.append(EquityPoint(time=bar.time, equity=equity, drawdown_pct=dd))
 
         # Force-close remnant at last close
         if open_trade is not None and open_trade.status == "open":
@@ -205,9 +199,7 @@ class SimulationEngine:
                 if peak > 0 and equity < peak
                 else Decimal("0")
             )
-            curve.append(
-                EquityPoint(time=last.time, equity=equity, drawdown_pct=dd)
-            )
+            curve.append(EquityPoint(time=last.time, equity=equity, drawdown_pct=dd))
 
         report = self.analytics.compute(
             trades=trades,
@@ -335,7 +327,7 @@ class SimulationEngine:
 def _detect_git_commit() -> str | None:
     try:
         out = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=2,
@@ -356,7 +348,9 @@ class RuleSignalProvider:
 
     def signal(self, bars: list[ResearchBar], index: int) -> SimSignal:
         if index < self.lookback:
-            return SimSignal(action="NONE", volume=Decimal("0"), stop_distance=Decimal("0"))
+            return SimSignal(
+                action="NONE", volume=Decimal("0"), stop_distance=Decimal("0")
+            )
         window = bars[index - self.lookback : index + 1]
         if all(window[i].close < window[i + 1].close for i in range(len(window) - 1)):
             return SimSignal(

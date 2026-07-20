@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 
 class Horizon(StrEnum):
@@ -154,7 +154,9 @@ class AnalyticsReport:
             "schema_version": self.schema_version,
             "win_rate": str(self.win_rate),
             "expectancy": str(self.expectancy),
-            "profit_factor": str(self.profit_factor) if self.profit_factor is not None else None,
+            "profit_factor": (
+                str(self.profit_factor) if self.profit_factor is not None else None
+            ),
             "average_rr": str(self.average_rr) if self.average_rr is not None else None,
             "max_drawdown_pct": str(self.max_drawdown_pct),
             "sharpe": str(self.sharpe) if self.sharpe is not None else None,

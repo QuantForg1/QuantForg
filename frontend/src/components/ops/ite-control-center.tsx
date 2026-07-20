@@ -12,8 +12,8 @@ import { asList, asRecord, str } from "@/lib/desk";
 function ModeBadge({ mode }: { mode: string }) {
   const m = mode.toUpperCase();
   const tone =
-    m === "LIVE" ? "default" : m === "CANARY" ? "secondary" : "outline";
-  return <Badge variant={tone}>{m || "—"}</Badge>;
+    m === "LIVE" ? "success" : m === "CANARY" ? "warning" : "neutral";
+  return <Badge tone={tone}>{m || "—"}</Badge>;
 }
 
 export function IteControlCenter() {
@@ -144,7 +144,7 @@ export function IteControlCenter() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Kill switch</div>
-              <Badge variant={cc.kill_switch ? "destructive" : "outline"}>
+              <Badge tone={cc.kill_switch ? "danger" : "neutral"}>
                 {cc.kill_switch ? "ARMED" : "DISARMED"}
               </Badge>
             </div>
@@ -171,9 +171,9 @@ export function IteControlCenter() {
             <div>
               <div className="text-xs text-muted-foreground">Shadow / Canary / Live</div>
               <div className="flex gap-1 pt-1">
-                <Badge variant={cc.shadow_mode ? "default" : "outline"}>S</Badge>
-                <Badge variant={cc.canary_mode ? "default" : "outline"}>C</Badge>
-                <Badge variant={cc.live_mode ? "default" : "outline"}>L</Badge>
+                <Badge tone={cc.shadow_mode ? "accent" : "neutral"}>S</Badge>
+                <Badge tone={cc.canary_mode ? "warning" : "neutral"}>C</Badge>
+                <Badge tone={cc.live_mode ? "success" : "neutral"}>L</Badge>
               </div>
             </div>
             <div>
@@ -211,7 +211,7 @@ export function IteControlCenter() {
             </Button>
             <Button
               size="sm"
-              variant="destructive"
+              variant="danger"
               disabled={!confirm || killMut.isPending}
               onClick={() => killMut.mutate(true)}
             >
@@ -276,7 +276,7 @@ export function IteControlCenter() {
                 className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-sm"
               >
                 <span>
-                  <Badge variant="outline">{str(a.severity)}</Badge> {str(a.message)}
+                  <Badge tone="neutral">{str(a.severity)}</Badge> {str(a.message)}
                 </span>
                 <Button
                   size="sm"

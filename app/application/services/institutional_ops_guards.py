@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.domain.entities.mt5_order import OrderIntent
@@ -44,12 +44,15 @@ class GuardedOmsSubmitPort:
                 gateway_status="not_called",
                 retryable=False,
             )
-        return self.inner.submit_market(
-            user_id=user_id,
-            request_id=request_id,
-            intent=intent,
-            connected=connected,
-            login=login,
+        return cast(
+            "OmsSubmitResult",
+            self.inner.submit_market(
+                user_id=user_id,
+                request_id=request_id,
+                intent=intent,
+                connected=connected,
+                login=login,
+            ),
         )
 
 
@@ -69,7 +72,7 @@ class GuardedOmsManagePort:
                 oms_status="blocked",
                 gateway_status="not_called",
             )
-        return self.inner.modify_sltp(**kwargs)
+        return cast("OmsManageResult", self.inner.modify_sltp(**kwargs))
 
     def partial_close(self, **kwargs: Any) -> OmsManageResult:
         if not self.plane.pme_modifications_allowed():
@@ -80,7 +83,7 @@ class GuardedOmsManagePort:
                 oms_status="blocked",
                 gateway_status="not_called",
             )
-        return self.inner.partial_close(**kwargs)
+        return cast("OmsManageResult", self.inner.partial_close(**kwargs))
 
     def close_position(self, **kwargs: Any) -> OmsManageResult:
         # Flatten during emergency still allowed? Spec: PME stops sending modifications.
@@ -93,4 +96,4 @@ class GuardedOmsManagePort:
                 oms_status="blocked",
                 gateway_status="not_called",
             )
-        return self.inner.close_position(**kwargs)
+        return cast("OmsManageResult", self.inner.close_position(**kwargs))

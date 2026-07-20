@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from app.domain.institutional_trading.certification.models import (
     CertificationEvidence,
+    FailureInjectionResult,
     GateRequirement,
     Scorecard,
     StageCheck,
     StressBatchResult,
-    FailureInjectionResult,
 )
 
 
@@ -33,9 +33,7 @@ class CertificationDashboard:
             if stage_checks
             else 0.0
         )
-        gate_pct = (
-            100.0 * sum(1 for g in gate if g.passed) / len(gate) if gate else 0.0
-        )
+        gate_pct = 100.0 * sum(1 for g in gate if g.passed) / len(gate) if gate else 0.0
         stress_pct = (
             100.0 * sum(1 for s in stress if s.passed) / len(stress) if stress else 0.0
         )
@@ -53,12 +51,7 @@ class CertificationDashboard:
         execution = _clamp(
             0.5 * evidence.execution_score
             + 0.3 * evidence.canary.execution_success_pct
-            + 0.2
-            * (
-                100.0
-                if evidence.canary.duplicate_executions == 0
-                else 0.0
-            )
+            + 0.2 * (100.0 if evidence.canary.duplicate_executions == 0 else 0.0)
         )
         research = _clamp(evidence.research_score)
         risk = _clamp(
@@ -66,9 +59,7 @@ class CertificationDashboard:
             if evidence.critical_incidents == 0
             else evidence.risk_score * 0.5
         )
-        operations = _clamp(
-            0.6 * evidence.operations_score + 0.4 * gate_pct
-        )
+        operations = _clamp(0.6 * evidence.operations_score + 0.4 * gate_pct)
         overall = _clamp(
             0.25 * stage_pct
             + 0.20 * reliability

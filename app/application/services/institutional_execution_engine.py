@@ -297,8 +297,7 @@ class InstitutionalExecutionEngine:
                 val_reasons.append(msg_stops)
             if not ok_check:
                 val_reasons.append(
-                    check_res.comment
-                    or f"MT5 order_check retcode {check_res.retcode}"
+                    check_res.comment or f"MT5 order_check retcode {check_res.retcode}"
                 )
             if not connected:
                 validation_ok = False
@@ -344,7 +343,9 @@ class InstitutionalExecutionEngine:
                     "component": "validation",
                     "order_check_retcode": getattr(check_res, "retcode", None),
                     "order_check_comment": getattr(check_res, "comment", None),
-                    "request": request.to_dict() if request is not None else intent.to_dict(),
+                    "request": (
+                        request.to_dict() if request is not None else intent.to_dict()
+                    ),
                 },
             )
             result = PipelineResult(
@@ -379,7 +380,9 @@ class InstitutionalExecutionEngine:
                 "component": "validation",
                 "order_check_retcode": getattr(check_res, "retcode", None),
                 "order_check_comment": getattr(check_res, "comment", None),
-                "request": request.to_dict() if request is not None else intent.to_dict(),
+                "request": (
+                    request.to_dict() if request is not None else intent.to_dict()
+                ),
                 "constraints": constraints.to_dict() if constraints else {},
             },
         )

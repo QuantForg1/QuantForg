@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from decimal import Decimal
+from datetime import date, timedelta
 from threading import Lock
+
 from app.application.services.institutional_execution_engine import parse_order_intent
 from app.domain.entities.mt5_order import OrderIntent
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
@@ -375,7 +375,7 @@ class ExecutionBridge:
         )
 
     def _build_intent(
-        self, decision: TradeDecision, context: ExecutionBridgeContext
+        self, decision: TradeDecision, _context: ExecutionBridgeContext
     ) -> OrderIntent:
         assert decision.stop_zone is not None
         assert decision.target_zone is not None

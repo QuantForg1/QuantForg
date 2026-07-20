@@ -33,9 +33,8 @@ from app.domain.institutional_trading.certification.models import (
 )
 from app.domain.institutional_trading.certification.stress import StressTester
 
-
 OPERATOR_CHECKLIST: tuple[str, ...] = (
-    "Confirm Phases A–G unit suites green in CI",
+    "Confirm Phases A-G unit suites green in CI",
     "Confirm Shadow mode ran ≥14 calendar days (or accept canary-only path)",
     "Confirm canary trade count and execution metrics from OMS journal (read-only)",
     "Confirm gateway uptime ≥99.9% from reliability probes",
@@ -139,9 +138,7 @@ class CertificationPlatform:
             evidence=evidence,
         )
 
-        passed_tests = [
-            f"pipeline:{s.stage.value}" for s in stage_checks if s.passed
-        ]
+        passed_tests = [f"pipeline:{s.stage.value}" for s in stage_checks if s.passed]
         passed_tests.extend(
             f"stress:{s.batch_size}" for s in stress_results if s.passed
         )
@@ -208,7 +205,9 @@ class CertificationPlatform:
             "production_ready": (
                 report.scorecard.production_ready if report else False
             ),
-            "certificate": report.certificate.to_dict() if report and report.certificate else None,
+            "certificate": (
+                report.certificate.to_dict() if report and report.certificate else None
+            ),
             "canary": self.canary.summary(),
             "operator_checklist": [
                 {"step": i + 1, "text": t, "done": False}

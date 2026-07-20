@@ -116,7 +116,7 @@ class WalkForwardEngine:
                 )
             )
             fold_i += 1
-            start += step if mode is WalkForwardMode.ROLLING else step
+            start += step
             if mode is WalkForwardMode.ANCHORED:
                 # grow train window; advance test
                 pass

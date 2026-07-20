@@ -973,7 +973,9 @@ class GatewayMT5Client:
                         ask=_dec(tick_payload.get("ask")),
                     )
             except RuntimeError as exc:
-                raise RuntimeError(f"symbol_info unavailable for {code}: {exc}") from exc
+                raise RuntimeError(
+                    f"symbol_info unavailable for {code}: {exc}"
+                ) from exc
 
         trade_mode = str(specs.get("trade_mode") or "full")
         trade_allowed = bool(specs.get("trade_allowed", trade_mode != "disabled"))
@@ -1345,7 +1347,9 @@ class GatewayMT5Client:
             # MT5 DEAL_TYPE_BUY=0, DEAL_TYPE_SELL=1
             side = "buy" if typ % 2 == 0 else "sell"
             entry = int(row.get("entry") or 0)
-            deal_type = "entry_in" if entry == 0 else "entry_out" if entry == 1 else "deal"
+            deal_type = (
+                "entry_in" if entry == 0 else "entry_out" if entry == 1 else "deal"
+            )
             deal_time = datetime.now(UTC)
             raw_t = row.get("time")
             if raw_t:

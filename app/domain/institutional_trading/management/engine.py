@@ -28,9 +28,14 @@ from app.domain.institutional_trading.management.models import (
     PositionManageResult,
 )
 from app.domain.institutional_trading.management.oms_port import OmsManagePort
-from app.domain.institutional_trading.management.policies import PlannedAction, plan_action
+from app.domain.institutional_trading.management.policies import (
+    PlannedAction,
+    plan_action,
+)
 from app.domain.institutional_trading.management.r_math import opposite_side, signed_r
-from app.domain.institutional_trading.management.state_machine import PositionStateMachine
+from app.domain.institutional_trading.management.state_machine import (
+    PositionStateMachine,
+)
 
 
 def _fingerprint(
@@ -41,9 +46,7 @@ def _fingerprint(
     tp: Decimal | None,
     volume: Decimal | None,
 ) -> str:
-    payload = (
-        f"{ticket}|{kind.value}|{sl}|{tp}|{volume}"
-    )
+    payload = f"{ticket}|{kind.value}|{sl}|{tp}|{volume}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
@@ -52,9 +55,7 @@ class PositionManagementEngine:
     """Institutional PME orchestrator — one action per evaluate tick."""
 
     oms: OmsManagePort
-    config: PositionManagementConfig = field(
-        default_factory=lambda: DEFAULT_PME_CONFIG
-    )
+    config: PositionManagementConfig = field(default_factory=lambda: DEFAULT_PME_CONFIG)
     journal: PositionManageJournal = field(default_factory=PositionManageJournal)
     metrics: PositionManageMetrics = field(default_factory=PositionManageMetrics)
     _positions: dict[int, ManagedPosition] = field(default_factory=dict, repr=False)
@@ -286,7 +287,10 @@ class PositionManagementEngine:
         comment = f"{self.config.comment_prefix}:{plan.kind.value}:{position.ticket}"
         close_side = opposite_side(position.side)
 
-        if plan.kind is ManageActionKind.BREAK_EVEN or plan.kind is ManageActionKind.TRAIL:
+        if (
+            plan.kind is ManageActionKind.BREAK_EVEN
+            or plan.kind is ManageActionKind.TRAIL
+        ):
             assert plan.new_sl is not None
             return self.oms.modify_sltp(
                 user_id=context.user_id,
@@ -416,7 +420,7 @@ class PositionManagementEngine:
         to_state: PositionLifecycleState,
         comment: str,
         retcode: int | None = None,
-        oms: OmsManageResult | None = None,
+        oms: OmsManageResult | None = None,  # noqa: ARG002
     ) -> PositionManageRecord:
         rec = PositionManageRecord(
             ticket=position.ticket,

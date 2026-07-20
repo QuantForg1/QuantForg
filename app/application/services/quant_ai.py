@@ -20,9 +20,7 @@ from app.domain.quant_ai.risk_ai import analyze_risk_ai
 from app.infrastructure.intelligence.runtime import TtlCache
 from core.config.settings import get_settings
 
-_QUOTE_SAMPLE = (
-    "XAUUSD",
-)
+_QUOTE_SAMPLE = ("XAUUSD",)
 
 _DASHBOARD_CACHE = TtlCache(ttl_seconds=15.0, max_items=64)
 _CACHE_STATS = {"hits": 0, "misses": 0}

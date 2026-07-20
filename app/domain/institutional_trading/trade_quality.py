@@ -1,4 +1,4 @@
-"""Trade Quality Score (0–100) — reject below configured threshold."""
+"""Trade Quality Score (0-100) — reject below configured threshold."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ class TradeQualityEvaluator:
         for f in factors:
             weighted += f.score * f.weight
             total_w += f.weight
-        total = int(round(weighted / total_w)) if total_w else 0
+        total = round(weighted / total_w) if total_w else 0
         total = max(0, min(100, total))
         passed = total >= self.config.min_trade_quality_score
         return TradeQualityScore(
@@ -193,9 +193,7 @@ class TradeQualityEvaluator:
         bos = len(snap.breaks_of_structure or ())
         choch = len(snap.changes_of_character or ())
         swings = len(snap.swings or ())
-        direction = (
-            snap.trend.direction if snap.trend else TrendDirection.UNKNOWN
-        )
+        direction = snap.trend.direction if snap.trend else TrendDirection.UNKNOWN
         score = 30
         if swings >= 4:
             score += 15
@@ -238,7 +236,7 @@ class TradeQualityEvaluator:
         else:
             # Linear decay between tight and reject
             span = reject - tight
-            score = int(max(0, 100 * (1 - (spread - tight) / span)))
+            score = int(max(0.0, float(100 * (1 - (spread - tight) / span))))
         return TradeQualityFactor(
             code="spread",
             weight=_WEIGHTS["spread"],

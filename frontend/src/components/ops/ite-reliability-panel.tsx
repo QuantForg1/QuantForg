@@ -107,7 +107,7 @@ export function IteReliabilityPanel() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Degraded</div>
-              <Badge variant={health.degraded ? "destructive" : "outline"}>
+              <Badge tone={health.degraded ? "danger" : "neutral"}>
                 {health.degraded ? "YES" : "NO"}
               </Badge>
             </div>
@@ -174,7 +174,7 @@ export function IteReliabilityPanel() {
               )}
               {incidents.map((i) => (
                 <div key={str(i.id)} className="mb-1 rounded border px-2 py-1 text-sm">
-                  <Badge variant="outline">{str(i.severity)}</Badge> {str(i.title)}
+                  <Badge tone="neutral">{str(i.severity)}</Badge> {str(i.title)}
                 </div>
               ))}
             </div>

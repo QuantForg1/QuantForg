@@ -139,7 +139,9 @@ class MT5OrderValidationService:
                 action="sltp",
                 volume=intent.volume.value,
                 price=Decimal("0"),
-                stop_loss=(intent.stop_loss.value if intent.stop_loss else Decimal("0")),
+                stop_loss=(
+                    intent.stop_loss.value if intent.stop_loss else Decimal("0")
+                ),
                 take_profit=(
                     intent.take_profit.value if intent.take_profit else Decimal("0")
                 ),
@@ -156,7 +158,9 @@ class MT5OrderValidationService:
                 action="buy_limit",  # placeholder; gateway uses TRADE_ACTION_MODIFY
                 volume=intent.volume.value,
                 price=intent.price or Decimal("0"),
-                stop_loss=(intent.stop_loss.value if intent.stop_loss else Decimal("0")),
+                stop_loss=(
+                    intent.stop_loss.value if intent.stop_loss else Decimal("0")
+                ),
                 take_profit=(
                     intent.take_profit.value if intent.take_profit else Decimal("0")
                 ),
@@ -291,7 +295,9 @@ class MT5OrderValidationService:
             return (
                 True,
                 "margin ok",
-                MT5MarginResult(margin=Decimal("0"), retcode=RETCODE_DONE, comment="sltp"),
+                MT5MarginResult(
+                    margin=Decimal("0"), retcode=RETCODE_DONE, comment="sltp"
+                ),
             )
         margin_res = self.adapter.order_calc_margin(request)
         if margin_res.margin > free_margin:
@@ -389,9 +395,7 @@ class MT5OrderValidationService:
         self._last_check = check_res
         checks["order_check"] = check_res.ok
         mt5_msg = check_res.comment.strip() or "no comment"
-        messages.append(
-            f"MT5 order_check: {mt5_msg} (retcode {check_res.retcode})"
-        )
+        messages.append(f"MT5 order_check: {mt5_msg} (retcode {check_res.retcode})")
         if not check_res.ok and not rejection_component:
             rejection_component = "mt5.order_check"
 
@@ -471,8 +475,12 @@ class MT5OrderValidationService:
         if request.oms_kind in {"sltp", "modify_sltp"}:
             return (
                 request,
-                MT5MarginResult(margin=Decimal("0"), retcode=RETCODE_DONE, comment="sltp"),
-                MT5ProfitResult(profit=Decimal("0"), retcode=RETCODE_DONE, comment="sltp"),
+                MT5MarginResult(
+                    margin=Decimal("0"), retcode=RETCODE_DONE, comment="sltp"
+                ),
+                MT5ProfitResult(
+                    profit=Decimal("0"), retcode=RETCODE_DONE, comment="sltp"
+                ),
             )
         margin = self.adapter.order_calc_margin(request)
         profit = self.adapter.order_calc_profit(request)

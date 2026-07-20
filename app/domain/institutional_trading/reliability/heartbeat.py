@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from threading import Lock
+from typing import Any
 
 from app.domain.institutional_trading.reliability.models import (
     ComponentName,
@@ -26,7 +27,7 @@ class HeartbeatRegistry:
         *,
         latency_ms: float = 0.0,
         now: datetime | None = None,
-        meta: dict | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> Heartbeat:
         hb = Heartbeat(
             component=component,

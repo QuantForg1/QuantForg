@@ -23,7 +23,9 @@ from app.domain.institutional_trading.management.models import (
     PositionLifecycleState,
     PositionManageContext,
 )
-from app.domain.institutional_trading.management.state_machine import PositionStateMachine
+from app.domain.institutional_trading.management.state_machine import (
+    PositionStateMachine,
+)
 
 OPENED = datetime(2026, 7, 20, 14, 0, tzinfo=UTC)
 
@@ -67,7 +69,7 @@ def _ctx(
     spread: Decimal = Decimal("0.30"),
     **kwargs: object,
 ) -> PositionManageContext:
-    base = dict(
+    base = dict(  # noqa: C408
         now=now or OPENED + timedelta(minutes=5),
         current_price=price,
         atr=atr,
@@ -200,7 +202,7 @@ class TestAtrTrailing:
             atr_high_pct=Decimal("0.1"),  # force high regime
             trail_atr_mult_high=Decimal("1.5"),
         )
-        svc, oms = _svc(config=cfg)
+        svc, oms = _svc(config=cfg)  # noqa: RUF059
         pos = _pos(state=PositionLifecycleState.PARTIAL)
         pos.be_moved = True
         pos.partial_done = True
@@ -208,9 +210,7 @@ class TestAtrTrailing:
         pos.remaining_volume = Decimal("0.10")
         svc.register(pos)
         # atr 10 on mid 2325 → high; trail = 2325 - 15 = 2310
-        result = svc.evaluate(
-            100, _ctx(price=Decimal("2325"), atr=Decimal("10"))
-        )
+        result = svc.evaluate(100, _ctx(price=Decimal("2325"), atr=Decimal("10")))
         assert result.action is ManageActionKind.TRAIL
         assert result.position.current_stop == Decimal("2310.00")
 
@@ -243,9 +243,7 @@ class TestTimeStop:
         svc.register(pos)
         late = OPENED + timedelta(minutes=31)
         # price barely moved (0.2R)
-        result = svc.evaluate(
-            100, _ctx(price=Decimal("2302"), now=late)
-        )
+        result = svc.evaluate(100, _ctx(price=Decimal("2302"), now=late))
         assert result.action is ManageActionKind.TIME_STOP
         assert result.position.state is PositionLifecycleState.EXITED
         assert oms.calls[0]["method"] == "close_position"
@@ -256,24 +254,20 @@ class TestEmergencyAndShutdown:
     def test_emergency_structure_break(self) -> None:
         svc, oms = _svc()
         svc.register(_pos())
-        result = svc.evaluate(
-            100, _ctx(price=Decimal("2305"), structure_broken=True)
-        )
+        result = svc.evaluate(100, _ctx(price=Decimal("2305"), structure_broken=True))
         assert result.action is ManageActionKind.EMERGENCY_EXIT
         assert result.position.state is PositionLifecycleState.EXITED
         assert oms.calls[0]["method"] == "close_position"
 
     def test_daily_shutdown_kill_switch(self) -> None:
-        svc, oms = _svc()
+        svc, oms = _svc()  # noqa: RUF059
         svc.register(_pos())
-        result = svc.evaluate(
-            100, _ctx(price=Decimal("2305"), kill_switch_armed=True)
-        )
+        result = svc.evaluate(100, _ctx(price=Decimal("2305"), kill_switch_armed=True))
         assert result.action is ManageActionKind.DAILY_SHUTDOWN
         assert result.position.state is PositionLifecycleState.EXITED
 
     def test_daily_loss_exceeded(self) -> None:
-        svc, oms = _svc()
+        svc, oms = _svc()  # noqa: RUF059
         svc.register(_pos())
         result = svc.evaluate(
             100, _ctx(price=Decimal("2305"), daily_loss_exceeded=True)

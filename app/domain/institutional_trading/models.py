@@ -25,7 +25,7 @@ class TrendSnapshot:
     primary: TrendDirection  # H1
     entry: TrendDirection  # M15
     execution: TrendDirection  # M5
-    alignment_score: int  # 0–100
+    alignment_score: int  # 0-100
     aligned: bool
     frames: dict[str, str] = field(default_factory=dict)
     why: str = ""
@@ -47,7 +47,7 @@ class TrendSnapshot:
 class TradeQualityFactor:
     code: str
     weight: int
-    score: int  # 0–100 component
+    score: int  # 0-100 component
     detail: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -61,7 +61,7 @@ class TradeQualityFactor:
 
 @dataclass(frozen=True, slots=True)
 class TradeQualityScore:
-    """0–100 composite: Trend · Liquidity · OB · FVG · Structure · Session · Spread."""
+    """0-100 composite: Trend · Liquidity · OB · FVG · Structure · Session · Spread."""
 
     total: int
     passed: bool  # total >= min_trade_quality_score

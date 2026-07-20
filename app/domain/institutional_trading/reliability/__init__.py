@@ -9,7 +9,9 @@ from __future__ import annotations
 from app.domain.institutional_trading.reliability.chaos import ChaosHarness
 from app.domain.institutional_trading.reliability.heartbeat import HeartbeatRegistry
 from app.domain.institutional_trading.reliability.incidents import IncidentManager
-from app.domain.institutional_trading.reliability.live_metrics import LiveMetricsRegistry
+from app.domain.institutional_trading.reliability.live_metrics import (
+    LiveMetricsRegistry,
+)
 from app.domain.institutional_trading.reliability.models import (
     IncidentSeverity,
     RecoveryAction,

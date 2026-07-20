@@ -11,18 +11,18 @@ from datetime import datetime
 
 from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.models import SessionFilterResult
-from app.domain.market_context.enums import MarketSession
 from app.domain.market_context.engine import MarketContextEngine
+from app.domain.market_context.enums import MarketSession
 
 
 def classify_session_utc(as_of: datetime) -> MarketSession:
     """Approximate FX session from UTC clock (deterministic).
 
     Windows (UTC hours, inclusive start / exclusive end):
-    - London/NY overlap: 13:00–17:00
-    - London: 07:00–16:00 (when not overlap)
-    - New York: 12:00–21:00 (when not overlap)
-    - Tokyo: 00:00–09:00
+    - London/NY overlap: 13:00-17:00
+    - London: 07:00-16:00 (when not overlap)
+    - New York: 12:00-21:00 (when not overlap)
+    - Tokyo: 00:00-09:00
     - else off-hours
     """
     moment = as_of
@@ -86,6 +86,6 @@ class SessionFilter:
         else:
             reason = (
                 f"Session {active.value} is low-liquidity / outside "
-                f"London–New York window — avoid new entries."
+                f"London-New York window — avoid new entries."
             )
         return SessionFilterResult(session=active, allowed=allowed, reason=reason)

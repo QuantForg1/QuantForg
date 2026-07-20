@@ -313,7 +313,8 @@ class Settings(BaseSettings):
         bool,
         Field(
             description=(
-                "Allow non-gold symbols. Takes precedence over gold_only_mode when true."
+                "Allow non-gold symbols. Takes precedence over "
+                "gold_only_mode when true."
             ),
             validation_alias=AliasChoices(
                 "MULTI_SYMBOL_ENABLED", "multi_symbol_enabled"

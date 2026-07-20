@@ -29,7 +29,9 @@ class HealthMonitor:
     _lock: Lock = field(default_factory=Lock, repr=False)
     high_latency_ms: float = 500.0
 
-    def observe(self, inputs: HealthInputs, *, now: datetime | None = None) -> HealthSnapshot:
+    def observe(
+        self, inputs: HealthInputs, *, now: datetime | None = None
+    ) -> HealthSnapshot:
         score = 100
         if not inputs.gateway_available:
             score -= 30

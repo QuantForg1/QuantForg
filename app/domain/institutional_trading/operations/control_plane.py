@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 from threading import RLock
 from typing import Any
@@ -13,7 +13,10 @@ from uuid import UUID
 from app.domain.institutional_trading.operations.alerts import AlertService
 from app.domain.institutional_trading.operations.audit import AuditLog
 from app.domain.institutional_trading.operations.config_store import ConfigVersionStore
-from app.domain.institutional_trading.operations.health import HealthInputs, HealthMonitor
+from app.domain.institutional_trading.operations.health import (
+    HealthInputs,
+    HealthMonitor,
+)
 from app.domain.institutional_trading.operations.models import (
     ALLOWED_MODE_TRANSITIONS,
     AlertKind,
@@ -105,7 +108,10 @@ class OperationsControlPlane:
         self.alerts.raise_alert(
             kind=AlertKind.KILL_SWITCH,
             severity=AlertSeverity.CRITICAL,
-            message=f"Kill switch ARMED by {operator.display_name or operator.user_id}: {reason}",
+            message=(
+                f"Kill switch ARMED by "
+                f"{operator.display_name or operator.user_id}: {reason}"
+            ),
             now=now,
         )
 
@@ -133,13 +139,14 @@ class OperationsControlPlane:
         )
 
     def oms_orders_allowed(self) -> bool:
-        """Decision/research/sim continue; OMS receives zero when kill armed or SHADOW."""
+        """Decision/research/sim continue.
+
+        OMS receives zero when kill armed or SHADOW.
+        """
         with self._lock:
             if self.kill_switch_armed:
                 return False
-            if self.mode is OpsExecutionMode.SHADOW:
-                return False
-            return True
+            return self.mode is not OpsExecutionMode.SHADOW
 
     def pme_modifications_allowed(self) -> bool:
         with self._lock:
@@ -311,7 +318,9 @@ class OperationsControlPlane:
 
     # --- Health / alerts ---------------------------------------------------
 
-    def update_health(self, inputs: HealthInputs, *, now: datetime | None = None) -> None:
+    def update_health(
+        self, inputs: HealthInputs, *, now: datetime | None = None
+    ) -> None:
         snap = self.health.observe(inputs, now=now)
         if not snap.gateway_available:
             self.alerts.raise_alert(
@@ -401,7 +410,9 @@ class OperationsControlPlane:
         health = self.health.latest()
         with self._lock:
             return {
-                "system_status": "operational" if not self.kill_switch_armed else "halted_oms",
+                "system_status": (
+                    "operational" if not self.kill_switch_armed else "halted_oms"
+                ),
                 "gateway_status": (
                     "up" if health and health.gateway_available else "unknown"
                 ),
@@ -454,7 +465,7 @@ class OperationsControlPlane:
 def _detect_git_commit() -> str | None:
     try:
         out = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
+            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=2,

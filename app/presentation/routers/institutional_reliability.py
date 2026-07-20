@@ -13,7 +13,6 @@ from app.domain.enums.user import UserRole
 from app.domain.institutional_trading.reliability.health import ProbeInputs
 from app.domain.institutional_trading.reliability.models import (
     ComponentName,
-    IncidentSeverity,
 )
 from app.domain.institutional_trading.reliability.platform import (
     get_reliability_platform,
@@ -81,9 +80,7 @@ def heartbeat(body: HeartbeatBody, _user: OperatorUser) -> dict[str, Any]:
         comp = ComponentName(body.component)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="invalid component") from exc
-    hb = get_reliability_platform().heartbeats.publish(
-        comp, latency_ms=body.latency_ms
-    )
+    hb = get_reliability_platform().heartbeats.publish(comp, latency_ms=body.latency_ms)
     return hb.to_dict()
 
 
@@ -124,9 +121,7 @@ def list_incidents(_user: OperatorUser) -> dict[str, Any]:
 
 
 @router.post("/incidents/{incident_id}/ack")
-def ack_incident(
-    incident_id: UUID, user: OperatorUser
-) -> dict[str, Any]:
+def ack_incident(incident_id: UUID, user: OperatorUser) -> dict[str, Any]:
     updated = get_reliability_platform().incidents.acknowledge(
         incident_id, by=user.display_name or str(user.id)
     )
@@ -203,9 +198,7 @@ def chaos_inject(body: ChaosBody, _user: OperatorUser) -> dict[str, Any]:
 
 
 @router.post("/chaos/clear")
-def chaos_clear(
-    _user: OperatorUser, failure: str | None = None
-) -> dict[str, Any]:
+def chaos_clear(_user: OperatorUser, failure: str | None = None) -> dict[str, Any]:
     get_reliability_platform().chaos.clear(failure)
     return {"active": list(get_reliability_platform().chaos.active())}
 

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from threading import Lock
-from typing import Callable
 
 from app.domain.institutional_trading.reliability.models import (
     RecoveryAction,
@@ -34,12 +34,10 @@ class RecoveryOrchestrator:
             try:
                 ok = bool(self.gateway_reconnect_fn())
                 detail = "gateway reconnect attempted"
-            except Exception as exc:  # noqa: BLE001 — ops boundary
+            except Exception as exc:
                 ok = False
                 detail = f"gateway reconnect failed: {exc}"
-        return self._record(
-            RecoveryAction.GATEWAY_RECONNECT, ok, detail, now=now
-        )
+        return self._record(RecoveryAction.GATEWAY_RECONNECT, ok, detail, now=now)
 
     def recover_mt5(self, *, now: datetime | None = None) -> RecoveryEvent:
         ok = False
@@ -48,7 +46,7 @@ class RecoveryOrchestrator:
             try:
                 ok = bool(self.mt5_reconnect_fn())
                 detail = "mt5 reconnect attempted"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 ok = False
                 detail = f"mt5 reconnect failed: {exc}"
         return self._record(RecoveryAction.MT5_RECONNECT, ok, detail, now=now)
@@ -73,7 +71,7 @@ class RecoveryOrchestrator:
                         now=now,
                     )
                 last_err = f"safe read returned false (attempt {attempt})"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 last_err = str(exc)
         return self._record(
             RecoveryAction.SAFE_READ_RETRY,

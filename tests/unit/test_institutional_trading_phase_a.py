@@ -31,12 +31,15 @@ def _make_series(
 ) -> list[Candle]:
     """Deterministic synthetic XAU path with enough bars for swings."""
     base_t = start or datetime(2026, 3, 10, 14, 0, tzinfo=UTC)  # London/NY overlap-ish
-    minutes = step_minutes or {
-        Timeframe.M5: 5,
-        Timeframe.M15: 15,
-        Timeframe.H1: 60,
-        Timeframe.H4: 240,
-    }[tf]
+    minutes = (
+        step_minutes
+        or {
+            Timeframe.M5: 5,
+            Timeframe.M15: 15,
+            Timeframe.H1: 60,
+            Timeframe.H4: 240,
+        }[tf]
+    )
     out: list[Candle] = []
     price = base
     for i in range(n):

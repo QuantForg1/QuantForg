@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
 
 from app.domain.institutional_trading.reliability.chaos import ChaosHarness
 from app.domain.institutional_trading.reliability.health import (
@@ -14,7 +13,9 @@ from app.domain.institutional_trading.reliability.health import (
 )
 from app.domain.institutional_trading.reliability.heartbeat import HeartbeatRegistry
 from app.domain.institutional_trading.reliability.incidents import IncidentManager
-from app.domain.institutional_trading.reliability.live_metrics import LiveMetricsRegistry
+from app.domain.institutional_trading.reliability.live_metrics import (
+    LiveMetricsRegistry,
+)
 from app.domain.institutional_trading.reliability.models import (
     ComponentName,
     IncidentSeverity,

@@ -70,7 +70,11 @@ def _quality(total: int = 90) -> TradeQualityScore:
     return TradeQualityScore(
         total=total,
         passed=total >= 80,
-        band="high_confidence" if total >= 90 else ("tradable" if total >= 80 else "reject"),
+        band=(
+            "high_confidence"
+            if total >= 90
+            else ("tradable" if total >= 80 else "reject")
+        ),
         factors=(
             TradeQualityFactor(code="trend", weight=20, score=total),
             TradeQualityFactor(code="session", weight=10, score=100),
@@ -143,7 +147,7 @@ def _snapshot(
 
 
 def _account(**kwargs: object) -> AccountRiskState:
-    base = dict(
+    base = dict(  # noqa: C408
         equity=Decimal("10000"),
         peak_equity=Decimal("10000"),
         daily_pnl=Decimal("0"),

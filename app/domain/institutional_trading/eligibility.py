@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 
 from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.decision_models import (
@@ -53,9 +52,7 @@ class PositionEligibilityEngine:
             rejects.append("Market is closed")
 
         spread = snapshot.spread
-        checks["spread_acceptable"] = (
-            spread is None or spread <= cfg.max_spread_reject
-        )
+        checks["spread_acceptable"] = spread is None or spread <= cfg.max_spread_reject
         if not checks["spread_acceptable"]:
             rejects.append(f"Spread {spread} not acceptable")
 

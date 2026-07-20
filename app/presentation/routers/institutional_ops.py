@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -237,7 +237,7 @@ def update_risk(
         )
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    return plane.control_center()["risk"]
+    return cast("dict[str, Any]", plane.control_center()["risk"])
 
 
 @router.post("/health")
@@ -292,14 +292,19 @@ def ack_alert(
 @router.get("/audit")
 def audit_log(_user: OperatorUser, limit: int = 200) -> dict[str, Any]:
     rows = get_control_plane().audit.list(limit=limit)
-    return {"entries": [e.to_dict() for e in rows], "count": get_control_plane().audit.count()}
+    return {
+        "entries": [e.to_dict() for e in rows],
+        "count": get_control_plane().audit.count(),
+    }
 
 
 @router.get("/configs")
 def list_configs(_user: OperatorUser) -> dict[str, Any]:
     plane = get_control_plane()
     return {
-        "active": plane.configs.active().to_dict() if plane.configs.active() else None,
+        "active": (
+            active.to_dict() if (active := plane.configs.active()) is not None else None
+        ),
         "versions": [c.to_dict() for c in plane.configs.list()],
     }
 

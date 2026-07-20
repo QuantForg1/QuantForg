@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 from app.domain.institutional_trading.certification.models import CanaryMetrics
 
@@ -40,12 +41,12 @@ class CanaryValidator:
             m,
             total_trades=total,
             wins=wins,
-            profit_factor=profit_factor if profit_factor is not None else m.profit_factor,
+            profit_factor=(
+                profit_factor if profit_factor is not None else m.profit_factor
+            ),
             expectancy=expectancy if expectancy is not None else m.expectancy,
             max_drawdown_pct=(
-                max_drawdown_pct
-                if max_drawdown_pct is not None
-                else m.max_drawdown_pct
+                max_drawdown_pct if max_drawdown_pct is not None else m.max_drawdown_pct
             ),
             execution_attempts=attempts,
             execution_success=success,
@@ -66,5 +67,5 @@ class CanaryValidator:
         self._metrics = metrics
         return self._metrics
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, Any]:
         return self._metrics.to_dict()

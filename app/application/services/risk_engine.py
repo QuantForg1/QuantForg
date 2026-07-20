@@ -410,7 +410,7 @@ class RiskEngine:
             )
         if check.cooldown_active:
             reasons.append(
-                f"cooldown active"
+                "cooldown active"
                 + (
                     f" ({check.cooldown_remaining_minutes}m remaining)"
                     if check.cooldown_remaining_minutes > 0
@@ -419,14 +419,16 @@ class RiskEngine:
             )
         if cfg.enforce_session and check.session_allowed is False:
             reasons.append(
-                f"session restricted"
+                "session restricted"
                 + (f" ({check.session_name})" if check.session_name else "")
             )
-        if cfg.enforce_spread and check.spread is not None and cfg.max_spread > 0:
-            if check.spread > cfg.max_spread:
-                reasons.append(
-                    f"spread {check.spread} exceeds max {cfg.max_spread}"
-                )
+        if (
+            cfg.enforce_spread
+            and check.spread is not None
+            and cfg.max_spread > 0
+            and check.spread > cfg.max_spread
+        ):
+            reasons.append(f"spread {check.spread} exceeds max {cfg.max_spread}")
         if cfg.enforce_atr and check.atr is not None and check.entry_price > 0:
             atr = check.atr
             if cfg.min_atr > 0 and atr < cfg.min_atr:

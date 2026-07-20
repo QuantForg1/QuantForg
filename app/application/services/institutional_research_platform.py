@@ -15,7 +15,6 @@ from app.domain.institutional_trading.research.models import (
     PromotionReport,
     ResearchBar,
     SimulationResult,
-    WalkForwardMode,
 )
 from app.domain.institutional_trading.research.monte_carlo import (
     MonteCarloEngine,

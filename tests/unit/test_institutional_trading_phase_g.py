@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
 
 import pytest
 
@@ -43,7 +42,9 @@ class TestHealthAndHeartbeat:
         assert snap.health_score < 70
         assert snap.degraded is True
 
-    def test_missing_heartbeat_creates_incident(self, platform: ReliabilityPlatform) -> None:
+    def test_missing_heartbeat_creates_incident(
+        self, platform: ReliabilityPlatform
+    ) -> None:
         now = datetime(2026, 7, 20, 10, 0, tzinfo=UTC)
         platform.heartbeats.publish(ComponentName.GATEWAY, now=now)
         # Decision never published
@@ -73,7 +74,7 @@ class TestTracing:
             TraceStage.PME,
             TraceStage.JOURNAL,
         ]
-        assert all(s.trace_id == tid for s in [trace])  # noqa: trivial
+        assert all(s.trace_id == tid for s in [trace])
         assert trace.trace_id == tid
 
 
@@ -88,9 +89,7 @@ class TestIncidentsAndEscalation:
             source="test",
             now=now,
         )
-        bumped = platform.incidents.apply_escalation(
-            now=now + timedelta(minutes=6)
-        )
+        bumped = platform.incidents.apply_escalation(now=now + timedelta(minutes=6))
         assert any(b.id == inc.id for b in bumped)
         latest = platform.incidents.list()[-1]
         assert latest.escalation_level >= 2
@@ -173,9 +172,7 @@ class TestChaos:
         platform.chaos.inject("gateway_offline")
         platform.chaos.inject("mt5_offline")
         platform.chaos.inject("high_latency")
-        snap = platform.chaos.verify_degradation(
-            platform.health, ProbeInputs()
-        )
+        snap = platform.chaos.verify_degradation(platform.health, ProbeInputs())
         assert snap.degraded is True
         assert snap.gateway_available is False
         assert snap.mt5_connected is False

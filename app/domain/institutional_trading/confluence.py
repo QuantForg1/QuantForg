@@ -109,9 +109,7 @@ class ConfluenceEngine:
         if liq and (liq.sweeps or liq.pools or liq.equal_highs or liq.equal_lows):
             sweep_n = len(liq.sweeps)
             factors["liquidity"] = 85 if sweep_n else 65
-            reasons.append(
-                f"Liquidity present sweeps={sweep_n} pools={len(liq.pools)}"
-            )
+            reasons.append(f"Liquidity present sweeps={sweep_n} pools={len(liq.pools)}")
         else:
             factors["liquidity"] = 20
             rejected.append("no_liquidity_context")
@@ -183,7 +181,10 @@ class ConfluenceEngine:
         else:
             span = cfg.max_spread_reject - cfg.max_spread_for_full_score
             factors["spread"] = int(
-                max(0, 100 * (1 - (spread - cfg.max_spread_for_full_score) / span))
+                max(
+                    0.0,
+                    float(100 * (1 - (spread - cfg.max_spread_for_full_score) / span)),
+                )
             )
             reasons.append(f"Spread {spread} elevated")
 
@@ -255,7 +256,7 @@ class ConfluenceEngine:
         for k, w in weights.items():
             weighted += factors.get(k, 0) * w
             total_w += w
-        confidence = int(round(weighted / total_w)) if total_w else 0
+        confidence = round(weighted / total_w) if total_w else 0
         confidence = max(0, min(100, confidence))
 
         # Require SMC pair: OB or FVG (prefer both)

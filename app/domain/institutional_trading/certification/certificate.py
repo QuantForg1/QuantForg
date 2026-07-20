@@ -10,7 +10,6 @@ from app.domain.institutional_trading.certification.models import (
     ProductionCertificate,
 )
 
-
 DEFAULT_LIMITATIONS: tuple[str, ...] = (
     "Live MT5 canary under AutoTrading is operator-gated",
     "In-memory certification store must be flushed to SQL for durability",
@@ -36,9 +35,7 @@ class CertificateIssuer:
             config_version=evidence.config_version,
             promotion_status=go_nogo.value,
             passed_tests=list(passed_tests),
-            known_limitations=list(
-                evidence.known_limitations or DEFAULT_LIMITATIONS
-            ),
+            known_limitations=list(evidence.known_limitations or DEFAULT_LIMITATIONS),
             operator_approval=operator_approval,
             timestamp=now or datetime.now(UTC),
             go_nogo=go_nogo,

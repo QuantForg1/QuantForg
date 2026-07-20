@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
 
 from app.domain.institutional_trading.research.config import (
     DEFAULT_RESEARCH_CONFIG,

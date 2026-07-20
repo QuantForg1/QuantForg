@@ -83,10 +83,15 @@ def map_retcode_to_outcome(retcode: int) -> tuple[ExecutionOutcome, bool, str]:
         return (
             ExecutionOutcome.DISABLED,
             False,
-            "Live execution is disabled. Set EXECUTION_ENABLED=true with a configured MT5 gateway.",
+            "Live execution is disabled. Set EXECUTION_ENABLED=true "
+            "with a configured MT5 gateway.",
         )
     if retcode in {RETCODE_REQUOTE, RETCODE_TIMEOUT, RETCODE_PRICE_OFF}:
-        return ExecutionOutcome.RETRY, True, "Broker requote / timeout — retry the order"
+        return (
+            ExecutionOutcome.RETRY,
+            True,
+            "Broker requote / timeout — retry the order",
+        )
     if retcode == RETCODE_CANCEL:
         return ExecutionOutcome.CANCELLED, False, "Order cancelled"
     messages = {

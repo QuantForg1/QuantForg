@@ -127,7 +127,7 @@ def _snapshot(
 
 
 def _account(**kwargs: object) -> AccountRiskState:
-    base: dict[str, object] = dict(
+    base: dict[str, object] = dict(  # noqa: C408
         equity=Decimal("10000"),
         peak_equity=Decimal("10000"),
         daily_pnl=Decimal("0"),
@@ -439,7 +439,7 @@ class TestExecutionBridgePhaseC:
         assert result.journal_entry.retcode == 10006
 
     def test_eligibility_recheck_blocks(self) -> None:
-        decision, snap, acct = _buy_decision()
+        decision, snap, _acct = _buy_decision()
         oms = RecordingOmsPort()
         integ = _bridge(oms)
         bad_acct = _account(already_in_trade=True, open_positions=1)

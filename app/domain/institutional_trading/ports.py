@@ -40,8 +40,7 @@ class MultiTimeframeBarStore:
         filtered = [
             c
             for c in series
-            if c.symbol_code.value == symbol_code.value
-            and c.timeframe == timeframe
+            if c.symbol_code.value == symbol_code.value and c.timeframe == timeframe
         ]
         if not filtered and series:
             # Allow tests that stamp a single symbol across the bundle
@@ -89,9 +88,7 @@ class SwingFromBarsPort:
         right: int = 2,
         limit: int = 500,
     ) -> Sequence[SwingPoint]:
-        candles = await self.prices.get_candles(
-            symbol_code, timeframe, limit=limit
-        )
+        candles = await self.prices.get_candles(symbol_code, timeframe, limit=limit)
         return self.detector.detect(
             candles, left=left or self.left, right=right or self.right
         )

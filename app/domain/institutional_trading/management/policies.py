@@ -90,10 +90,7 @@ def plan_action(
             volume=position.remaining_volume,
             target_state=PositionLifecycleState.EXITED,
         )
-    if (
-        context.spread is not None
-        and context.spread > config.emergency_spread_max
-    ):
+    if context.spread is not None and context.spread > config.emergency_spread_max:
         return PlannedAction(
             ManageActionKind.EMERGENCY_EXIT,
             f"Spread spike {context.spread} — emergency exit",
@@ -177,10 +174,14 @@ def plan_action(
             target_state=PositionLifecycleState.PARTIAL,
         )
 
-    if position.state in {
-        PositionLifecycleState.PARTIAL,
-        PositionLifecycleState.TRAILING,
-    } and r >= config.trail_after_r:
+    if (
+        position.state
+        in {
+            PositionLifecycleState.PARTIAL,
+            PositionLifecycleState.TRAILING,
+        }
+        and r >= config.trail_after_r
+    ):
         dist = trail_distance(context.atr, regime, config)
         new_sl = trail_stop_price(position, context.current_price, dist)
         if not is_stop_improvement(position, new_sl):
@@ -188,11 +189,7 @@ def plan_action(
                 ManageActionKind.NOOP,
                 f"Trail ({regime.value}) would not improve SL",
             )
-        target = (
-            PositionLifecycleState.TRAILING
-            if position.state is PositionLifecycleState.PARTIAL
-            else PositionLifecycleState.TRAILING
-        )
+        target = PositionLifecycleState.TRAILING
         return PlannedAction(
             ManageActionKind.TRAIL,
             f"ATR trail ({regime.value}) dist={dist} at {r}R",
@@ -201,4 +198,6 @@ def plan_action(
             target_state=target,
         )
 
-    return PlannedAction(ManageActionKind.NOOP, f"No action (R={r}, state={position.state.value})")
+    return PlannedAction(
+        ManageActionKind.NOOP, f"No action (R={r}, state={position.state.value})"
+    )

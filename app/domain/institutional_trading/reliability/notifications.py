@@ -11,8 +11,9 @@ from uuid import uuid4
 class NotificationAdapter(Protocol):
     name: str
 
-    def send(self, *, subject: str, body: str, meta: dict[str, Any] | None = None) -> bool:
-        ...
+    def send(
+        self, *, subject: str, body: str, meta: dict[str, Any] | None = None
+    ) -> bool: ...
 
 
 @dataclass

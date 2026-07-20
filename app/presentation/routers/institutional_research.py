@@ -11,8 +11,13 @@ from pydantic import BaseModel
 from app.application.services.institutional_research_platform import (
     InstitutionalResearchPlatform,
 )
-from app.domain.institutional_trading.research.models import ResearchBar, WalkForwardMode
-from app.domain.institutional_trading.research.simulation_engine import RuleSignalProvider
+from app.domain.institutional_trading.research.models import (
+    ResearchBar,
+    WalkForwardMode,
+)
+from app.domain.institutional_trading.research.simulation_engine import (
+    RuleSignalProvider,
+)
 
 router = APIRouter(prefix="/ite/research", tags=["ite-research"])
 
@@ -61,15 +66,16 @@ def simulate(body: SimulateRequest) -> dict[str, Any]:
     if not body.bars:
         raise HTTPException(status_code=400, detail="bars required")
     bars = _parse_bars(body.bars)
-    result = _platform.run_simulation(
-        bars, RuleSignalProvider(), persist=body.persist
-    )
+    result = _platform.run_simulation(bars, RuleSignalProvider(), persist=body.persist)
     return result.to_dict()
 
 
 @router.get("/versions")
 def list_versions(limit: int = 50) -> dict[str, Any]:
-    return {"runs": _platform.versions.list(limit=limit), "count": _platform.versions.count()}
+    return {
+        "runs": _platform.versions.list(limit=limit),
+        "count": _platform.versions.count(),
+    }
 
 
 @router.get("/dashboard")
@@ -134,7 +140,5 @@ def evaluate_promotion(body: PromoteRequest) -> dict[str, Any]:
         passed=body.monte_carlo_passed,
         distribution_final_equity=(),
     )
-    report = _platform.promotion.evaluate(
-        analytics, walk_forward=wf, monte_carlo=mc
-    )
+    report = _platform.promotion.evaluate(analytics, walk_forward=wf, monte_carlo=mc)
     return report.to_dict()

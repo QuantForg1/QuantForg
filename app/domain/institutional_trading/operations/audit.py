@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from threading import Lock
-from typing import Any
-from uuid import UUID
 
 from app.domain.institutional_trading.operations.models import (
     AuditEntry,
@@ -43,14 +41,12 @@ class AuditLog:
         )
         with self._lock:
             self._entries.append(entry)
-            if len(self._entries) > self.max_entries:
-                # Retain oldest by dropping middle? Spec: never delete.
-                # Cap memory by refusing further growth beyond soft cap is wrong.
-                # Keep all in process tests; for prod DB is source of truth.
-                # Soft trim only if > 2x max — still keep newest + oldest sample.
-                if len(self._entries) > self.max_entries * 2:
-                    keep = self._entries[:1000] + self._entries[-(self.max_entries - 1000) :]
-                    self._entries = keep
+            # Soft trim only if > 2x max - keep newest + oldest sample.
+            if len(self._entries) > self.max_entries * 2:
+                keep = (
+                    self._entries[:1000] + self._entries[-(self.max_entries - 1000) :]
+                )
+                self._entries = keep
             return entry
 
     def list(self, *, limit: int = 200) -> list[AuditEntry]:

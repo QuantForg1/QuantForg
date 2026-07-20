@@ -48,7 +48,7 @@ class IncidentManager:
         return inc
 
     def acknowledge(
-        self, incident_id: UUID, *, by: str, now: datetime | None = None
+        self, incident_id: UUID, *, by: str, _now: datetime | None = None
     ) -> Incident | None:
         with self._lock:
             for i, inc in enumerate(self._incidents):
@@ -113,9 +113,11 @@ class IncidentManager:
                         detail=inc.detail,
                         source=inc.source,
                         created_at=inc.created_at,
-                        status=IncidentStatus.MITIGATING
-                        if inc.status is not IncidentStatus.ACKNOWLEDGED
-                        else inc.status,
+                        status=(
+                            IncidentStatus.MITIGATING
+                            if inc.status is not IncidentStatus.ACKNOWLEDGED
+                            else inc.status
+                        ),
                         escalation_level=level,
                         id=inc.id,
                         resolved_at=inc.resolved_at,
@@ -143,7 +145,5 @@ class IncidentManager:
     def open_count(self) -> int:
         with self._lock:
             return sum(
-                1
-                for i in self._incidents
-                if i.status is not IncidentStatus.RESOLVED
+                1 for i in self._incidents if i.status is not IncidentStatus.RESOLVED
             )

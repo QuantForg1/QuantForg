@@ -1,6 +1,6 @@
 """Phase E — Institutional Research Platform (simulation, analytics, promotion).
 
-Reuses Phase A–D engines via imports/ports. Never modifies OMS or A–D.
+Reuses Phase A-D engines via imports/ports. Never modifies OMS or A-D.
 No AI. No MT5 order_send.
 """
 

@@ -30,8 +30,7 @@ class NewsCalendarPort(Protocol):
         as_of: datetime,
         minutes_before: int,
         minutes_after: int,
-    ) -> Sequence[NewsEvent]:
-        ...
+    ) -> Sequence[NewsEvent]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +69,8 @@ class NewsProtection:
             for e in hits
             if e.impact.lower() == "high"
             and (
-                e.code.upper() in {c.upper() for c in self.config.high_impact_event_codes}
+                e.code.upper()
+                in {c.upper() for c in self.config.high_impact_event_codes}
                 or any(
                     c.upper() in (e.title or "").upper()
                     for c in self.config.high_impact_event_codes

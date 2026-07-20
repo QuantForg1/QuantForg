@@ -66,7 +66,9 @@ def is_stop_improvement(
     new_stop: Decimal,
 ) -> bool:
     """True if new_stop never moves backwards (never widens risk)."""
-    current = position.current_stop if position.current_stop > 0 else position.initial_stop
+    current = (
+        position.current_stop if position.current_stop > 0 else position.initial_stop
+    )
     if position.side.lower() == "buy":
         return new_stop > current
     return new_stop < current if current > 0 else True

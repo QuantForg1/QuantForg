@@ -61,9 +61,7 @@ class AlertService:
                     return updated
         return None
 
-    def list(
-        self, *, limit: int = 100, unacked_only: bool = False
-    ) -> list[OpsAlert]:
+    def list(self, *, limit: int = 100, unacked_only: bool = False) -> list[OpsAlert]:
         with self._lock:
             rows = list(self._alerts)
         if unacked_only:

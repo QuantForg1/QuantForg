@@ -39,9 +39,7 @@ class TrendEngine:
         macro = _dir_from_snapshot(structure_by_tf.get(cfg.macro_bias_tf))
         primary = _dir_from_snapshot(structure_by_tf.get(cfg.primary_structure_tf))
         entry = _dir_from_snapshot(structure_by_tf.get(cfg.entry_confirmation_tf))
-        execution = _dir_from_snapshot(
-            structure_by_tf.get(cfg.execution_management_tf)
-        )
+        execution = _dir_from_snapshot(structure_by_tf.get(cfg.execution_management_tf))
 
         frames = {
             cfg.macro_bias_tf.value: macro.value,

@@ -29,7 +29,7 @@ def _full_stages() -> dict[str, bool]:
 
 
 def _live_ready_evidence(**over: object) -> CertificationEvidence:
-    base = dict(
+    base = dict(  # noqa: C408
         shadow_days=14.0,
         canary=CanaryMetrics(
             total_trades=100,
@@ -68,7 +68,9 @@ def platform() -> CertificationPlatform:
 @pytest.mark.unit
 class TestEndToEndCertification:
     def test_all_pipeline_stages(self, platform: CertificationPlatform) -> None:
-        report = platform.run(_live_ready_evidence(), run_stress=True, run_failures=True)
+        report = platform.run(
+            _live_ready_evidence(), run_stress=True, run_failures=True
+        )
         stages = [c.stage for c in report.stage_checks]
         assert stages == list(CERTIFICATION_PIPELINE)
         assert all(c.passed for c in report.stage_checks)
@@ -164,4 +166,6 @@ class TestGoNoGoAndCertificate:
         assert dash["go_nogo"] == GoNoGoStatus.READY_FOR_LIVE.value
         assert dash["production_ready"] is True
         assert len(dash["operator_checklist"]) >= 8
-        assert dash["certificate"]["title"] == "Institutional Trading Engine Certificate"
+        assert (
+            dash["certificate"]["title"] == "Institutional Trading Engine Certificate"
+        )

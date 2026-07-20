@@ -44,7 +44,7 @@ class PriceZone:
 class ConfluenceResult:
     """Canonical confluence judgment — final score before risk/eligibility."""
 
-    confidence: int  # 0–100
+    confidence: int  # 0-100
     direction: TradeDirection
     reasons: tuple[str, ...]
     rejected_rules: tuple[str, ...]

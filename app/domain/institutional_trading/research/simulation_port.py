@@ -138,7 +138,12 @@ class SimulationOmsPort:
         if take_profit is not None:
             pos["take_profit"] = take_profit
         self.book.events.append(
-            {"type": "sltp", "ticket": position, "sl": str(stop_loss), "comment": comment}
+            {
+                "type": "sltp",
+                "ticket": position,
+                "sl": str(stop_loss),
+                "comment": comment,
+            }
         )
         return OmsManageResult(
             outcome="success",

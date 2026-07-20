@@ -136,7 +136,9 @@ def go_nogo(_user: OperatorUser) -> dict[str, Any]:
     if report is None:
         return {
             "go_nogo": "NOT_READY",
-            "failed_requirements": ["no certification report — run /ite/certification/run"],
+            "failed_requirements": [
+                "no certification report — run /ite/certification/run"
+            ],
             "production_ready": False,
         }
     return {

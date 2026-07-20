@@ -55,7 +55,9 @@ class PositionStateMachine:
             )
 
     @staticmethod
-    def next_progressive(current: PositionLifecycleState) -> PositionLifecycleState | None:
+    def next_progressive(
+        current: PositionLifecycleState,
+    ) -> PositionLifecycleState | None:
         order = [
             PositionLifecycleState.OPEN,
             PositionLifecycleState.BE_MOVED,

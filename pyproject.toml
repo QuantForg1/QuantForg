@@ -113,6 +113,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106", "ARG001", "ARG002", "B017", "RUF002"]
+"app/domain/institutional_trading/research/simulation_port.py" = ["ARG002"]
 "app/domain/interfaces/**/*.py" = ["TC001", "TC002", "TC003"]
 "app/domain/enums/**/*.py" = ["S105"]
 "alembic/**/*.py" = ["INP001"]

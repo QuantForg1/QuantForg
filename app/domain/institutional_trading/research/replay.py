@@ -54,7 +54,11 @@ class HistoricalReplayController:
         if self.state is ReplayState.PAUSED:
             # step allowed while paused
             pass
-        elif self.state not in {ReplayState.RUNNING, ReplayState.IDLE, ReplayState.PAUSED}:
+        elif self.state not in {
+            ReplayState.RUNNING,
+            ReplayState.IDLE,
+            ReplayState.PAUSED,
+        }:
             return None
         if self.index >= len(self.bars):
             self.state = ReplayState.COMPLETED

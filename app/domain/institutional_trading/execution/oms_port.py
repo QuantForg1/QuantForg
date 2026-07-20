@@ -10,7 +10,10 @@ from app.domain.institutional_trading.execution.models import OmsSubmitResult
 
 
 class OmsSubmitPort(Protocol):
-    """Thin port over Institutional OMS submit. Implementations must not invent fills."""
+    """Thin port over Institutional OMS submit.
+
+    Implementations must not invent fills.
+    """
 
     def submit_market(
         self,

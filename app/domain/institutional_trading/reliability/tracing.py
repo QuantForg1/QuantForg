@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import hashlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -9,9 +10,9 @@ from threading import Lock
 from uuid import uuid4
 
 from app.domain.institutional_trading.reliability.models import (
-    TradeTrace,
     TraceSpan,
     TraceStage,
+    TradeTrace,
 )
 
 
@@ -84,12 +85,12 @@ class TradeTraceStore:
         with self._lock:
             return self._traces.get(trace_id)
 
-    def list(self, *, limit: int = 100) -> list[TradeTrace]:
+    def list(self, *, limit: int = 100) -> builtins.list[TradeTrace]:
         with self._lock:
             rows = sorted(self._traces.values(), key=lambda t: t.created_at)
             return list(rows[-limit:])
 
     @staticmethod
-    def fingerprint_stages(stages: list[TraceStage]) -> str:
+    def fingerprint_stages(stages: builtins.list[TraceStage]) -> str:
         raw = "|".join(s.value for s in stages)
         return hashlib.sha256(raw.encode()).hexdigest()[:16]

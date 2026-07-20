@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.application.services.institutional_execution_engine import parse_order_intent
 from app.application.services.institutional_oms_adapter import RecordingOmsPort
 from app.application.services.institutional_oms_manage_adapter import (
     RecordingOmsManagePort,
@@ -16,7 +17,6 @@ from app.application.services.institutional_ops_guards import (
     GuardedOmsManagePort,
     GuardedOmsSubmitPort,
 )
-from app.application.services.institutional_execution_engine import parse_order_intent
 from app.domain.institutional_trading.operations.control_plane import (
     OperationsControlPlane,
     PermissionDenied,
@@ -82,9 +82,7 @@ class TestKillSwitch:
     def test_kill_blocks_oms_and_pme(self) -> None:
         plane = OperationsControlPlane()
         op = _op()
-        plane.transition_mode(
-            op, OpsExecutionMode.CANARY, reason="c", confirmed=True
-        )
+        plane.transition_mode(op, OpsExecutionMode.CANARY, reason="c", confirmed=True)
         assert plane.oms_orders_allowed() is True
         plane.arm_kill_switch(op, reason="emergency", confirmed=True)
         assert plane.oms_orders_allowed() is False
@@ -100,9 +98,7 @@ class TestKillSwitch:
     def test_guarded_ports(self) -> None:
         plane = OperationsControlPlane()
         op = _op()
-        plane.transition_mode(
-            op, OpsExecutionMode.CANARY, reason="c", confirmed=True
-        )
+        plane.transition_mode(op, OpsExecutionMode.CANARY, reason="c", confirmed=True)
         submit = RecordingOmsPort()
         manage = RecordingOmsManagePort()
         g_submit = GuardedOmsSubmitPort(inner=submit, plane=plane)
@@ -155,7 +151,7 @@ class TestConfigRollbackAudit:
         plane = OperationsControlPlane()
         op = _op()
         now = datetime(2026, 7, 20, 8, 0, tzinfo=UTC)
-        a = plane.promote_config(
+        _a = plane.promote_config(
             op,
             config_version="cfg-a",
             strategy_version="strat-a",
@@ -207,9 +203,7 @@ class TestHealthAlertsPermissionsRunbooks:
         assert plane.alerts.unacked_count() >= 1
         alert = plane.alerts.list(unacked_only=True)[0]
         plane.acknowledge_alert(_op(), alert.id)
-        assert alert.id not in {
-            a.id for a in plane.alerts.list(unacked_only=True)
-        }
+        assert alert.id not in {a.id for a in plane.alerts.list(unacked_only=True)}
 
     def test_permissions_viewer_denied(self) -> None:
         plane = OperationsControlPlane()

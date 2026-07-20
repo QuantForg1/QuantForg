@@ -1,7 +1,7 @@
 """Phase F — Institutional Operations Control Plane.
 
 Operator control for modes, kill switch, config, health, alerts, audit.
-Does not modify OMS or Phases A–E.
+Does not modify OMS or Phases A-E.
 """
 
 from __future__ import annotations

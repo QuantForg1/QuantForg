@@ -13,12 +13,17 @@ from app.domain.institutional_trading.research.models import SimulationResult
 
 @dataclass
 class StrategyVersionStore:
-    """In-process append-only research result store (DB schema documented separately)."""
+    """In-process append-only research result store.
+
+    DB schema documented separately.
+    """
 
     _rows: list[dict[str, Any]] = field(default_factory=list, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
 
-    def append(self, result: SimulationResult, *, meta: dict[str, Any] | None = None) -> dict[str, Any]:
+    def append(
+        self, result: SimulationResult, *, meta: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         row = {
             "stored_at": datetime.now(UTC).isoformat(),
             "run_id": str(result.run_id),

@@ -17,7 +17,10 @@ class TradeReplayEngine:
         return {
             "trade_id": trade.trade_id,
             "side": trade.side,
-            "entry": {"time": trade.entry_time.isoformat(), "price": str(trade.entry_price)},
+            "entry": {
+                "time": trade.entry_time.isoformat(),
+                "price": str(trade.entry_price),
+            },
             "stop_loss": str(trade.stop_loss),
             "take_profit": str(trade.take_profit) if trade.take_profit else None,
             "exit": {
@@ -35,7 +38,9 @@ class TradeReplayEngine:
             "risk_score": trade.risk_score,
             "mae": str(trade.mae),
             "mfe": str(trade.mfe),
-            "r_multiple": str(trade.r_multiple) if trade.r_multiple is not None else None,
+            "r_multiple": (
+                str(trade.r_multiple) if trade.r_multiple is not None else None
+            ),
             "pnl": str(trade.pnl),
         }
 

@@ -7,17 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { iteCertificationApi } from "@/lib/api/endpoints";
-import { asList, asRecord, num, str } from "@/lib/desk";
+import { asList, asRecord, bool, num, str } from "@/lib/desk";
 
 function GoBadge({ status }: { status: string }) {
   const s = status.toUpperCase();
   const tone =
     s === "READY_FOR_LIVE"
-      ? "default"
+      ? "success"
       : s === "READY_FOR_CANARY"
-        ? "secondary"
-        : "destructive";
-  return <Badge variant={tone}>{s.replaceAll("_", " ") || "—"}</Badge>;
+        ? "warning"
+        : "danger";
+  return <Badge tone={tone}>{s.replaceAll("_", " ") || "—"}</Badge>;
 }
 
 export function IteCertificationPanel() {
@@ -100,7 +100,7 @@ export function IteCertificationPanel() {
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <GoBadge status={go} />
-            <Badge variant={d.production_ready ? "default" : "outline"}>
+            <Badge tone={d.production_ready ? "success" : "neutral"}>
               {d.production_ready ? "PRODUCTION READY" : "NOT CERTIFIED"}
             </Badge>
           </div>
@@ -150,7 +150,7 @@ export function IteCertificationPanel() {
             </div>
           )}
 
-          {cert.title && (
+          {bool(cert.title) && (
             <div className="rounded border p-3 text-sm">
               <div className="font-medium">{str(cert.title)}</div>
               <div className="mt-1 grid gap-1 sm:grid-cols-2">

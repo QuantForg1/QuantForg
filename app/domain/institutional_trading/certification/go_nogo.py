@@ -37,15 +37,11 @@ class GoNoGoEngine:
 
         for st in stress:
             if not st.passed:
-                failed.append(
-                    f"stress:batch_{st.batch_size} — {st.detail or 'failed'}"
-                )
+                failed.append(f"stress:batch_{st.batch_size} — {st.detail or 'failed'}")
 
         for f in failures:
             if not f.graceful:
-                failed.append(
-                    f"failure_injection:{f.scenario.value} — {f.detail}"
-                )
+                failed.append(f"failure_injection:{f.scenario.value} — {f.detail}")
 
         if evidence.critical_incidents > 0:
             failed.append(
@@ -63,7 +59,9 @@ class GoNoGoEngine:
                 f"live_gate:{g.name} — required {g.required}, actual {g.actual}"
             )
 
-        live_ok = base_ok and not gate_failed and evidence.canary.duplicate_executions == 0
+        live_ok = (
+            base_ok and not gate_failed and evidence.canary.duplicate_executions == 0
+        )
 
         if live_ok:
             return GoNoGoStatus.READY_FOR_LIVE, []

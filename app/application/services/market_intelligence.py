@@ -15,9 +15,7 @@ from app.domain.market_context.engine import MarketContextEngine
 from app.infrastructure.intelligence.runtime import TtlCache
 
 # Prefer gold when sampling quotes — never fan-out the full catalogue.
-_QUOTE_SAMPLE = (
-    "XAUUSD",
-)
+_QUOTE_SAMPLE = ("XAUUSD",)
 
 # Short TTL so concurrent dashboard/analysis/events share one broker snap.
 _DASHBOARD_CACHE = TtlCache(ttl_seconds=12.0, max_items=128)

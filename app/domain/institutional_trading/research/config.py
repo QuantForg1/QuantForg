@@ -1,4 +1,4 @@
-"""Phase E research configuration — separate from A–D configs."""
+"""Phase E research configuration — separate from A-D configs."""
 
 from __future__ import annotations
 

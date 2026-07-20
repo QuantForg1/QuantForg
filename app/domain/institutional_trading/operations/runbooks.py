@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 RUNBOOKS: dict[str, dict[str, Any]] = {
     "start_of_trading_day": {
         "title": "Start of trading day",

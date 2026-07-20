@@ -59,7 +59,7 @@ def map_pipeline_to_oms_result(pipeline: PipelineResult) -> OmsSubmitResult:
     gateway_status = "unknown"
     for stage in pipeline.stages:
         name = getattr(stage, "stage", None)
-        stage_name = name.value if hasattr(name, "value") else str(name or "")
+        stage_name = str(getattr(name, "value", name or ""))
         if "broker" in stage_name.lower() or "gateway" in stage_name.lower():
             gateway_status = getattr(stage, "status", gateway_status)
 

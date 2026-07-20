@@ -144,10 +144,7 @@ class InstitutionalAnalysisPipeline:
         )
         fvg_result = await fvg_engine.analyze(code, primary_tf, as_of=moment)
 
-        typed_structure = {
-            tf: snap  # type: ignore[misc]
-            for tf, snap in structure_by_tf.items()
-        }
+        typed_structure = dict(structure_by_tf.items())
         trend = TrendEngine(config=cfg).analyze(typed_structure)  # type: ignore[arg-type]
 
         # Prefer deterministic UTC classifier (no tzdata / DST variance in v1)

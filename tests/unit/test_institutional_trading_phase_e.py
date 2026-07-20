@@ -11,13 +11,18 @@ from app.application.services.institutional_research_platform import (
     InstitutionalResearchPlatform,
 )
 from app.domain.institutional_trading.research.config import ResearchConfig
-from app.domain.institutional_trading.research.models import ResearchBar, WalkForwardMode
+from app.domain.institutional_trading.research.models import (
+    ResearchBar,
+    WalkForwardMode,
+)
 from app.domain.institutional_trading.research.monte_carlo import MC_COUNTS
 from app.domain.institutional_trading.research.replay import (
     HistoricalReplayController,
     ReplayState,
 )
-from app.domain.institutional_trading.research.simulation_engine import RuleSignalProvider
+from app.domain.institutional_trading.research.simulation_engine import (
+    RuleSignalProvider,
+)
 from app.domain.institutional_trading.research.trade_replay import TradeReplayEngine
 
 
@@ -35,19 +40,19 @@ def _bars(
             o = px
             c = px + Decimal("2")
             h = c + Decimal("1")
-            l = o - Decimal("1")
+            low_px = o - Decimal("1")
             px = c
         elif trend == "down":
             o = px
             c = px - Decimal("2")
             h = o + Decimal("1")
-            l = c - Decimal("1")
+            low_px = c - Decimal("1")
             px = c
         else:
             o = px
             c = px + (Decimal("1") if i % 2 == 0 else Decimal("-1"))
             h = max(o, c) + Decimal("1")
-            l = min(o, c) - Decimal("1")
+            low_px = min(o, c) - Decimal("1")
             px = c
         session = "london" if i % 3 else "overlap"
         out.append(
@@ -55,7 +60,7 @@ def _bars(
                 time=t0 + timedelta(hours=i),
                 open=o,
                 high=h,
-                low=l,
+                low=low_px,
                 close=c,
                 session=session,
             )
@@ -223,7 +228,7 @@ class TestPromotionAndVersioning:
         report = platform.evaluate_promotion(sim)
         assert report.eligible is False
         assert report.checks["min_trades"] is False
-        assert "canary" == report.target
+        assert report.target == "canary"
 
     def test_promotion_gate_pass_with_relaxed_config(self) -> None:
         bars = _bars(80, trend="up")
@@ -238,9 +243,13 @@ class TestPromotionAndVersioning:
         sim = platform.run_simulation(bars, RuleSignalProvider(), persist=False)
         report = platform.evaluate_promotion(sim)
         # May still fail expectancy/pf depending on path; if trades exist and PF ok:
-        if sim.analytics.trade_count >= 1 and sim.analytics.expectancy > 0:
-            if sim.analytics.profit_factor and sim.analytics.profit_factor > Decimal("0.01"):
-                assert report.checks["min_trades"] is True
+        if (
+            sim.analytics.trade_count >= 1
+            and sim.analytics.expectancy > 0
+            and sim.analytics.profit_factor
+            and sim.analytics.profit_factor > Decimal("0.01")
+        ):
+            assert report.checks["min_trades"] is True
 
     def test_versioning_append_only(self) -> None:
         bars = _bars(40, trend="up")

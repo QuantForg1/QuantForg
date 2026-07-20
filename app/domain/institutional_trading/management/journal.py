@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from threading import Lock
 
 from app.domain.institutional_trading.management.models import PositionManageRecord
@@ -20,11 +21,11 @@ class PositionManageJournal:
                 self._entries = self._entries[-self._max :]
             return entry
 
-    def list(self, *, limit: int = 200) -> list[PositionManageRecord]:
+    def list(self, *, limit: int = 200) -> builtins.list[PositionManageRecord]:
         with self._lock:
             return list(self._entries[-limit:])
 
-    def by_ticket(self, ticket: int) -> list[PositionManageRecord]:
+    def by_ticket(self, ticket: int) -> builtins.list[PositionManageRecord]:
         with self._lock:
             return [e for e in self._entries if e.ticket == ticket]
 

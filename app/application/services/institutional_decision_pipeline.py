@@ -1,4 +1,6 @@
-"""Phase B decision orchestrator — Snapshot → Confluence → Risk → Eligibility → Decision.
+"""Phase B decision orchestrator.
+
+Snapshot -> Confluence -> Risk -> Eligibility -> Decision.
 
 Never calls OMS / order_send. Deterministic. No AI.
 """
@@ -42,7 +44,9 @@ def risk_config_from_ite(cfg: ITEConfig) -> RiskEngineConfig:
     )
 
 
-def _account_snapshot(*, equity: Decimal, free_margin: Decimal | None) -> AccountSnapshot:
+def _account_snapshot(
+    *, equity: Decimal, free_margin: Decimal | None
+) -> AccountSnapshot:
     fm = free_margin if free_margin is not None else equity
     return AccountSnapshot(
         login=1,

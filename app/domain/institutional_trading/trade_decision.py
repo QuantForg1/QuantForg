@@ -77,8 +77,10 @@ class TradeDecisionEngine:
             elif confluence.direction is TradeDirection.NONE:
                 reasons.append("No directional confluence — NO_TRADE")
             else:
-                reasons.append("Below institutional confidence/quality gates — NO_TRADE")
-            # Near-miss watch band (70–79) with direction hint
+                reasons.append(
+                    "Below institutional confidence/quality gates — NO_TRADE"
+                )
+            # Near-miss watch band (70-79) with direction hint
             if (
                 eligibility.checks.get("session_valid", False)
                 and not snapshot.news.blocked
@@ -95,7 +97,11 @@ class TradeDecisionEngine:
                 else DecisionAction.SELL
             )
             direction = confluence.direction
-            label = "High-confidence" if confidence >= cfg.high_confidence_score else "Tradable"
+            label = (
+                "High-confidence"
+                if confidence >= cfg.high_confidence_score
+                else "Tradable"
+            )
             reasons.append(
                 f"{label} {direction.value} "
                 f"(confidence={confidence} quality={quality})"
@@ -108,7 +114,7 @@ class TradeDecisionEngine:
                 f"{snapshot.input_hash}|{confluence.input_hash}|"
                 f"{action.value}|{confidence}|{quality}|{risk_score}|"
                 f"{eligibility.eligible}"
-            ).encode("utf-8")
+            ).encode()
         ).hexdigest()[:32]
 
         return TradeDecision(
@@ -155,7 +161,10 @@ class TradeDecisionEngine:
         ob = snapshot.order_blocks
         if ob:
             for block in ob.order_blocks:
-                if block.state not in {OrderBlockState.ACTIVE, OrderBlockState.VALIDATED}:
+                if block.state not in {
+                    OrderBlockState.ACTIVE,
+                    OrderBlockState.VALIDATED,
+                }:
                     continue
                 top = block.zone.high_price.value
                 bottom = block.zone.low_price.value
@@ -197,7 +206,9 @@ class TradeDecisionEngine:
             if snapshot.trend.macro_bias is TrendDirection.DOWN:
                 invalidations.append("H4 flips bearish")
         elif direction is TradeDirection.SELL:
-            stop = _zone(entry.high + stop_dist * Decimal("0.5"), entry.high + stop_dist)
+            stop = _zone(
+                entry.high + stop_dist * Decimal("0.5"), entry.high + stop_dist
+            )
             target = _zone(
                 entry.low - stop_dist * Decimal("2.5"),
                 entry.low - stop_dist * Decimal("2"),
@@ -216,7 +227,7 @@ class TradeDecisionEngine:
     @staticmethod
     def _duration(confidence: int, atr: Decimal | None) -> str:
         if confidence >= 90:
-            return "M15–H1 (high confidence, faster management)"
+            return "M15-H1 (high confidence, faster management)"
         if atr is not None and atr > 0:
-            return "H1–H4 (standard swing hold)"
-        return "H1–H4"
+            return "H1-H4 (standard swing hold)"
+        return "H1-H4"

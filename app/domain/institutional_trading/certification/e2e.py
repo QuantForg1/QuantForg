@@ -5,7 +5,6 @@ from __future__ import annotations
 from app.domain.institutional_trading.certification.models import (
     CERTIFICATION_PIPELINE,
     CertificationEvidence,
-    PipelineStage,
     StageCheck,
 )
 

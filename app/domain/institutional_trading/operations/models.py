@@ -181,7 +181,7 @@ class HealthSnapshot:
     simulation_queue_depth: int
     oms_queue_depth: int
     decision_throughput_per_min: float
-    health_score: int  # 0–100
+    health_score: int  # 0-100
     checked_at: datetime
 
     def to_dict(self) -> dict[str, Any]:

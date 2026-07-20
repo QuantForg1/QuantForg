@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from threading import Lock
 
 from app.domain.institutional_trading.execution.models import ExecutionAttemptRecord
@@ -22,11 +23,13 @@ class ExecutionAttemptJournal:
                 self._entries = self._entries[-self._max :]
             return entry
 
-    def list(self, *, limit: int = 100) -> list[ExecutionAttemptRecord]:
+    def list(self, *, limit: int = 100) -> builtins.list[ExecutionAttemptRecord]:
         with self._lock:
             return list(self._entries[-limit:])
 
-    def by_decision_hash(self, decision_hash: str) -> list[ExecutionAttemptRecord]:
+    def by_decision_hash(
+        self, decision_hash: str
+    ) -> builtins.list[ExecutionAttemptRecord]:
         with self._lock:
             return [e for e in self._entries if e.decision_hash == decision_hash]
 

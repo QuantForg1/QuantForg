@@ -14,7 +14,6 @@ from app.domain.institutional_trading.reliability.health import (
     ProbeInputs,
 )
 
-
 _CHAOS_MAP: dict[FailureScenario, str | None] = {
     FailureScenario.GATEWAY_DOWN: "gateway_offline",
     FailureScenario.MT5_DOWN: "mt5_offline",
@@ -98,9 +97,7 @@ class FailureInjector:
             graceful = (
                 probed.oms_latency_ms >= 1000 or probed.execution_latency_ms >= 1000
             )
-            detail = (
-                f"oms={probed.oms_latency_ms} exec={probed.execution_latency_ms}"
-            )
+            detail = f"oms={probed.oms_latency_ms} exec={probed.execution_latency_ms}"
         else:
             graceful = False
             detail = "unknown scenario"
