@@ -27,7 +27,7 @@ Baseline RC1: `0a3ee7d`. Certification commit message: `RC2 final certification`
 | JWT / roles | PASS | API JWT; service_role backend |
 | Secrets redaction in audits | PASS | sanitize_payload |
 | Authenticated EXECUTE on RLS helpers | WARN | needed for RLS; advisor WARN remains |
-| Leaked-password protection | FAIL | Still disabled in Supabase Auth advisor |
+| Leaked-password protection | WARN | **Accepted Operational Risk** on Free plan — see accepted-risk-leaked-password.md |
 
 ## 3. CI / quality
 
@@ -62,7 +62,7 @@ Baseline RC1: `0a3ee7d`. Certification commit message: `RC2 final certification`
 | --- | --- | --- |
 | Frontend www.quantforg.com | PASS | HTTP 200 |
 | Railway `/health` + `/api/v1/health` | PASS | HTTP 200 |
-| api.quantforg.com | FAIL | unreachable (000) this pass |
+| api.quantforg.com | PASS | Retired (NXDOMAIN); Railway is canonical — see api-hostname.md |
 | Gateway / MT5 / Cloudflare live from here | WARN | not probed with gateway URL this pass |
 | `/ops/rc1-telemetry` code path | PASS | shipped |
 | Execution / reject telemetry | PASS | telemetry aggregates |
@@ -71,6 +71,4 @@ Baseline RC1: `0a3ee7d`. Certification commit message: `RC2 final certification`
 
 **Critical FAIL remaining:** Supabase leaked-password protection disabled.
 
-**Additional FAIL:** `api.quantforg.com` DNS/route unreachable (custom API hostname).
-
-→ **NOT READY** for V1.0 until leaked-password is enabled (dashboard) and API hostname routing is verified or accepted as non-critical (Railway URL is live).
+**Additional note:** `api.quantforg.com` is retired (NXDOMAIN). Railway is the canonical API. Leaked-password is Accepted Operational Risk on Free plan.

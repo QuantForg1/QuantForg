@@ -38,7 +38,7 @@ class RiskEngineConfig:
     fixed_lot: Decimal = Decimal("0.10")
     fixed_dollar_risk: Decimal = Decimal("100")
     atr_multiplier: Decimal = Decimal("1.5")
-    # FX default. Metals/crypto must use symbol-aware size via contract_size_for_symbol().
+    # FX default. Metals/crypto: symbol-aware size via contract_size_for_symbol().
     contract_size: Decimal = Decimal("100000")
     exposure_leverage: Decimal = Decimal("100")  # fallback when account.leverage unset
     # --- Institutional extensions (Phase B) ---
@@ -61,7 +61,9 @@ class RiskEngineConfig:
         require(self.max_open_positions >= 1, "max_open_positions >= 1")
 
 
-def contract_size_for_symbol(symbol: str, *, default: Decimal = Decimal("100000")) -> Decimal:
+def contract_size_for_symbol(
+    symbol: str, *, default: Decimal = Decimal("100000")
+) -> Decimal:
     """Broker contract size by instrument class — never apply FX 100k to gold."""
     u = symbol.strip().upper()
     if u.startswith("XAU") or "GOLD" in u:

@@ -167,7 +167,7 @@ class CheckRiskUseCase:
         equity_override: str | None,
         balance_override: str | None,
     ) -> tuple[AccountSnapshot, list[MT5Position]]:
-        """Prefer live MT5 portfolio. Equity override must not wipe leverage/positions."""
+        """Prefer live MT5; equity override must not wipe leverage/positions."""
         live = await self._try_live_portfolio(user_id)
         if live is not None:
             account, positions = live

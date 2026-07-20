@@ -177,9 +177,9 @@ class RiskEngine:
             volume: Decimal, price: Decimal, *, symbol: str
         ) -> Decimal:
             # Estimate used margin at account leverage (not full notional).
-            return (
-                volume * price * self._contract_size(symbol) / lev
-            ).quantize(Decimal("0.01"))
+            return (volume * price * self._contract_size(symbol) / lev).quantize(
+                Decimal("0.01")
+            )
 
         for pos in positions:
             notion = _margin_exposure(pos.volume, pos.open_price, symbol=pos.symbol)
@@ -222,7 +222,12 @@ class RiskEngine:
             "total_pct": Decimal("0"),
         }
         if equity <= 0:
-            return False, ["equity must be positive for exposure checks"], warnings, metrics
+            return (
+                False,
+                ["equity must be positive for exposure checks"],
+                warnings,
+                metrics,
+            )
 
         def _pct(notional: Decimal) -> Decimal:
             return (notional / equity * Decimal("100")).quantize(Decimal("0.01"))
@@ -279,7 +284,12 @@ class RiskEngine:
         )
 
     @staticmethod
-    def _limit_status(current: Decimal, limit: Decimal, *, warn_ratio: Decimal = Decimal("0.8")) -> str:
+    def _limit_status(
+        current: Decimal,
+        limit: Decimal,
+        *,
+        warn_ratio: Decimal = Decimal("0.8"),
+    ) -> str:
         if limit <= 0:
             return "n/a"
         if current > limit:
@@ -316,9 +326,7 @@ class RiskEngine:
             return "No action required"
 
         # --- Loss / drawdown ---
-        daily_st = self._limit_status(
-            drawdown.daily_loss_pct, cfg.max_daily_loss_pct
-        )
+        daily_st = self._limit_status(drawdown.daily_loss_pct, cfg.max_daily_loss_pct)
         rules.append(
             self._rule(
                 rule_id="daily_loss",
@@ -327,7 +335,8 @@ class RiskEngine:
                 current=f"{drawdown.daily_loss_pct}%",
                 threshold=f"{cfg.max_daily_loss_pct}%",
                 reason=(
-                    f"daily loss {drawdown.daily_loss_pct}% vs max {cfg.max_daily_loss_pct}%"
+                    f"daily loss {drawdown.daily_loss_pct}% vs max "
+                    f"{cfg.max_daily_loss_pct}%"
                 ),
                 suggested_action=action_for(
                     daily_st,
@@ -347,7 +356,8 @@ class RiskEngine:
                 current=f"{drawdown.weekly_loss_pct}%",
                 threshold=f"{cfg.max_weekly_loss_pct}%",
                 reason=(
-                    f"weekly loss {drawdown.weekly_loss_pct}% vs max {cfg.max_weekly_loss_pct}%"
+                    f"weekly loss {drawdown.weekly_loss_pct}% vs max "
+                    f"{cfg.max_weekly_loss_pct}%"
                 ),
                 suggested_action=action_for(
                     weekly_st,
@@ -367,7 +377,8 @@ class RiskEngine:
                 current=f"{drawdown.monthly_loss_pct}%",
                 threshold=f"{cfg.max_monthly_loss_pct}%",
                 reason=(
-                    f"monthly loss {drawdown.monthly_loss_pct}% vs max {cfg.max_monthly_loss_pct}%"
+                    f"monthly loss {drawdown.monthly_loss_pct}% vs max "
+                    f"{cfg.max_monthly_loss_pct}%"
                 ),
                 suggested_action=action_for(
                     monthly_st,
@@ -376,9 +387,7 @@ class RiskEngine:
                 ),
             )
         )
-        dd_st = self._limit_status(
-            drawdown.current_drawdown_pct, cfg.max_drawdown_pct
-        )
+        dd_st = self._limit_status(drawdown.current_drawdown_pct, cfg.max_drawdown_pct)
         rules.append(
             self._rule(
                 rule_id="max_drawdown",
@@ -387,7 +396,8 @@ class RiskEngine:
                 current=f"{drawdown.current_drawdown_pct}%",
                 threshold=f"{cfg.max_drawdown_pct}%",
                 reason=(
-                    f"drawdown {drawdown.current_drawdown_pct}% from peak {drawdown.peak_equity}"
+                    f"drawdown {drawdown.current_drawdown_pct}% from peak "
+                    f"{drawdown.peak_equity}"
                 ),
                 suggested_action=action_for(
                     dd_st,
@@ -469,8 +479,10 @@ class RiskEngine:
             )
         )
         if margin_level > 0:
-            ml_st = "fail" if margin_level < 100 else (
-                "warn" if margin_level < 200 else "pass"
+            ml_st = (
+                "fail"
+                if margin_level < 100
+                else ("warn" if margin_level < 200 else "pass")
             )
             rules.append(
                 self._rule(
@@ -651,7 +663,11 @@ class RiskEngine:
         else:
             atr_st = "pass"
             atr_detail = str(check.atr)
-            if cfg.enforce_atr and check.entry_price > 0 and cfg.max_atr_pct_of_price > 0:
+            if (
+                cfg.enforce_atr
+                and check.entry_price > 0
+                and cfg.max_atr_pct_of_price > 0
+            ):
                 atr_pct = (check.atr / check.entry_price) * Decimal("100")
                 atr_detail = f"{atr_pct.quantize(Decimal('0.01'))}%"
                 atr_st = self._limit_status(atr_pct, cfg.max_atr_pct_of_price)
@@ -772,7 +788,10 @@ class RiskEngine:
                 status="n/a",
                 current="Not available",
                 threshold="See AI Decision Card (live strategy)",
-                reason="AI confidence is sourced from strategy/quant-ai APIs, not risk engine",
+                reason=(
+                    "AI confidence is sourced from strategy/quant-ai APIs, "
+                    "not risk engine"
+                ),
                 suggested_action="Not available",
             )
         )
@@ -882,10 +901,7 @@ class RiskEngine:
         for pos in positions:
             if pos.symbol in members:
                 correlated_notional += (
-                    pos.volume
-                    * pos.open_price
-                    * self._contract_size(pos.symbol)
-                    / lev
+                    pos.volume * pos.open_price * self._contract_size(pos.symbol) / lev
                 )
         correlated_notional += (
             proposed_lots * entry_price * self._contract_size(sym) / lev
@@ -1120,10 +1136,7 @@ class RiskEngine:
             approved = size.approved_lots
 
         proposed_margin = (
-            size.approved_lots
-            * check.entry_price
-            * contract_size
-            / leverage
+            size.approved_lots * check.entry_price * contract_size / leverage
         ).quantize(Decimal("0.01"))
         rule_rows = self._build_rules(
             check=check,
