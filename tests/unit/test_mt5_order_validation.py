@@ -106,7 +106,7 @@ class TestOrderValidationService:
         assert result.checks.get("order_check") is True
         assert result.expected_margin > 0
 
-    def test_invalid_volume_rejected(self) -> None:
+    def test_misaligned_volume_is_normalized(self) -> None:
         adapter = MT5Adapter(client=MockMT5Client())
         adapter.initialize()
         adapter.login(MT5LoginRequest(login=7, password="p", server="S"))
@@ -118,8 +118,10 @@ class TestOrderValidationService:
             volume=LotSize.of("0.015"),  # not aligned to 0.01 step
         )
         result = service.validate_order(intent)
-        assert result.valid is False
-        assert result.checks.get("volume") is False
+        assert result.valid is True
+        assert result.volume == LotSize.of("0.01").value
+        assert result.checks.get("volume") is True
+        assert any("normalized" in m.lower() for m in result.messages)
 
 
 @pytest.mark.unit

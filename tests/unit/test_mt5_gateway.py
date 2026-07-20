@@ -82,6 +82,35 @@ class _FakeBridge(LiveMT5Bridge):
         _ = symbol
         return SimpleNamespace(bid=1.1, ask=1.2, time=1_700_000_000)
 
+    def symbol_info(self, symbol: str) -> Any:
+        return SimpleNamespace(
+            name=symbol,
+            description="Euro",
+            digits=5,
+            point=0.00001,
+            trade_contract_size=100000.0,
+            volume_min=0.01,
+            volume_max=100.0,
+            volume_step=0.01,
+            volume_limit=0.0,
+            trade_stops_level=0,
+            trade_freeze_level=0,
+            filling_mode=2,
+            trade_mode=4,
+            trade_exemode=2,
+            trade_calc_mode=0,
+            visible=True,
+            select=True,
+            currency_base="EUR",
+            currency_profit="USD",
+            currency_margin="USD",
+            swap_mode=0,
+            session_deals=0,
+            session_buy_orders=0,
+            session_sell_orders=0,
+            time=1_700_000_000,
+        )
+
     def copy_rates_from_pos(
         self, symbol: str, timeframe: int, start_pos: int, count: int
     ) -> Any:
@@ -126,6 +155,10 @@ def gateway_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[MT5GatewaySettings]
     monkeypatch.setenv("MT5_GATEWAY_TOKEN", "test-gateway-token")
     monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
     monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "false")
+    monkeypatch.setattr(
+        "services.mt5_gateway.settings._read_token_from_dotenv_files",
+        lambda: ("", ""),
+    )
     get_gateway_settings.cache_clear()
     settings = get_gateway_settings()
     yield settings
@@ -162,6 +195,10 @@ class TestMT5Gateway:
         monkeypatch.setenv("MT5_GATEWAY_TOKEN", "")
         monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
         monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "false")
+        monkeypatch.setattr(
+            "services.mt5_gateway.settings._read_token_from_dotenv_files",
+            lambda: ("", ""),
+        )
         get_gateway_settings.cache_clear()
         app = create_app()
         with TestClient(app) as test_client:
@@ -263,6 +300,10 @@ class TestMT5Gateway:
         monkeypatch.setenv("MT5_GATEWAY_TOKEN", "test-gateway-token")
         monkeypatch.setenv("MT5_GATEWAY_ENABLE_WEBSOCKET", "false")
         monkeypatch.setenv("MT5_GATEWAY_AUTO_ATTACH", "true")
+        monkeypatch.setattr(
+            "services.mt5_gateway.settings._read_token_from_dotenv_files",
+            lambda: ("", ""),
+        )
         get_gateway_settings.cache_clear()
 
         prelogged = _FakeBridge(prelogged=True)

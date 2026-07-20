@@ -22,6 +22,7 @@ from app.application.use_cases.strategy_runtime import (
     EvaluateStrategyUseCase,
     ListStrategySignalsUseCase,
 )
+from app.domain.entities.mt5_portfolio import MT5Position
 from app.domain.entities.risk_engine import RiskEngineConfig
 from app.domain.entities.strategy_runtime import (
     AnalysisContext,
@@ -164,7 +165,7 @@ class TestStrategyRuntimeService:
         assert result.signal is None
 
     def test_risk_reject_blocks_and_rejects_signal(self) -> None:
-        risk = RiskEngine(config=RiskEngineConfig(max_open_positions=0))
+        risk = RiskEngine(config=RiskEngineConfig(max_open_positions=1))
         runtime = StrategyRuntimeService(
             risk_engine=risk,
             config=StrategyRuntimeConfig(consult_risk_engine=True),
@@ -181,6 +182,13 @@ class TestStrategyRuntimeService:
             profit=Decimal("0"),
             leverage=100,
         )
+        open_position = MT5Position(
+            ticket=1,
+            symbol="GBPUSD",
+            side="buy",
+            volume=Decimal("0.10"),
+            open_price=Decimal("1.26000"),
+        )
         result = runtime.evaluate(
             StrategyEvaluateInput(
                 user_id=uuid4(),
@@ -196,7 +204,7 @@ class TestStrategyRuntimeService:
                 stop_loss_distance=Decimal("0.0020"),
             ),
             account=account,
-            positions=[],
+            positions=[open_position],
         )
         assert result.evaluation.decision is StrategyDecisionType.BLOCKED
         assert result.signal is not None

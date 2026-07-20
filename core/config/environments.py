@@ -71,6 +71,9 @@ def testing_settings(**overrides: object) -> Settings:
         "supabase_url": "",
         "supabase_publishable_key": None,
         "supabase_anon_key": None,
+        # Unit tests assert multi-symbol FX catalogue (EURUSD etc.).
+        "gold_only_mode": False,
+        "multi_symbol_enabled": True,
     }
     defaults.update(overrides)
     return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]

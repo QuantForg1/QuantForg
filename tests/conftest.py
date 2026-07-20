@@ -21,6 +21,8 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 os.environ.setdefault("LOG_FORMAT", "console")
 os.environ.setdefault("LOG_JSON", "false")
 os.environ.setdefault("DEBUG", "true")
+os.environ.setdefault("GOLD_ONLY_MODE", "false")
+os.environ.setdefault("MULTI_SYMBOL_ENABLED", "true")
 
 
 @pytest.fixture(scope="session")

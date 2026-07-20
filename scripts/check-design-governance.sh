@@ -3,7 +3,7 @@
 # Docs-only check — does not execute application code.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REQUIRED=(
   "docs/design/README.md"
   "docs/design/product-governance.md"
