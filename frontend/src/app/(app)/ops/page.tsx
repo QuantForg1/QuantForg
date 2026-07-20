@@ -13,6 +13,7 @@ import { PageMotion } from "@/components/desk/motion";
 import { IteControlCenter } from "@/components/ops/ite-control-center";
 import { IteReliabilityPanel } from "@/components/ops/ite-reliability-panel";
 import { IteCertificationPanel } from "@/components/ops/ite-certification-panel";
+import { Rc1TelemetryPanel } from "@/components/ops/rc1-telemetry-panel";
 import { mt5Api, opsApi, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatNumber } from "@/lib/utils";
@@ -150,6 +151,7 @@ export default function OpsPage() {
       />
 
       <div className="mb-6">
+        <Rc1TelemetryPanel />
         <IteControlCenter />
       </div>
 

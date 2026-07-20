@@ -89,7 +89,7 @@ class PostgresExecutionAuditRepository:
 
     async def add(self, audit: ExecutionAudit) -> ExecutionAudit:
         session = self._uow._require_session()
-        await session.execute(
+        result = await session.execute(
             text("""
                 INSERT INTO execution_audits (
                     id, user_id, request_id, stage, symbol, side, volume, outcome,
@@ -108,7 +108,8 @@ class PostgresExecutionAuditRepository:
                     CAST(:payload_in AS jsonb), CAST(:payload_out AS jsonb),
                     CAST(:related_ids AS jsonb), :created_at
                 )
-                ON CONFLICT (id) DO NOTHING
+                ON CONFLICT (user_id, request_id, stage) DO NOTHING
+                RETURNING *
                 """),
             {
                 "id": str(audit.id),
@@ -144,6 +145,26 @@ class PostgresExecutionAuditRepository:
                 "created_at": audit.created_at,
             },
         )
+        row = result.mappings().first()
+        if row is not None:
+            return _audit_from_row(row)
+        existing = await session.execute(
+            text("""
+                SELECT * FROM execution_audits
+                WHERE user_id = :user_id
+                  AND request_id = :request_id
+                  AND stage = :stage
+                LIMIT 1
+                """),
+            {
+                "user_id": str(audit.user_id),
+                "request_id": audit.request_id,
+                "stage": audit.stage.value,
+            },
+        )
+        existing_row = existing.mappings().first()
+        if existing_row is not None:
+            return _audit_from_row(existing_row)
         return audit
 
     async def list_for_user(
@@ -172,6 +193,18 @@ class PostgresExecutionAuditRepository:
                 ORDER BY created_at ASC
                 """),
             {"user_id": str(user_id), "request_id": request_id.strip()},
+        )
+        return [_audit_from_row(r) for r in result.mappings().all()]
+
+    async def list_recent(self, *, limit: int = 500) -> list[ExecutionAudit]:
+        session = self._uow._require_session()
+        result = await session.execute(
+            text("""
+                SELECT * FROM execution_audits
+                ORDER BY created_at DESC
+                LIMIT :limit
+                """),
+            {"limit": max(1, min(limit, 2000))},
         )
         return [_audit_from_row(r) for r in result.mappings().all()]
 

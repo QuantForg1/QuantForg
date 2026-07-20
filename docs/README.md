@@ -24,4 +24,5 @@
 - [Configuration](configuration.md)
 - [Development](development.md)
 - [Deployment](deployment.md)
+- [**RC1 hardening pack**](rc1/README.md)
 - [File reference](file-reference.md)

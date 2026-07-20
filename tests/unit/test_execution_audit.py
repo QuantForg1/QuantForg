@@ -137,3 +137,38 @@ class TestExecutionAuditService:
         assert timeline[0].payload_in["symbol"] == "EURUSD"
         assert timeline[2].latency_ms == 12.5
         assert timeline[2].cloudflare_latency_ms is None
+
+    async def test_idempotent_per_user_request_stage(self) -> None:
+        factory = MemoryExecutionAuditUnitOfWorkFactory()
+        svc = ExecutionAuditService(uow_factory=factory)
+        user_id = uuid4()
+        request_id = "idem-req-1"
+
+        first = await svc.record(
+            user_id=user_id,
+            request_id=request_id,
+            stage=ExecutionAuditStage.VALIDATION,
+            symbol="EURUSD",
+            outcome="valid",
+        )
+        duplicate = await svc.record(
+            user_id=user_id,
+            request_id=request_id,
+            stage=ExecutionAuditStage.VALIDATION,
+            symbol="EURUSD",
+            outcome="valid-again",
+        )
+        assert duplicate.id == first.id
+        listed = await svc.list_for_user(user_id, limit=50)
+        assert len(listed) == 1
+        assert listed[0].outcome == "valid"
+
+        await svc.record(
+            user_id=user_id,
+            request_id=request_id,
+            stage=ExecutionAuditStage.RISK,
+            symbol="EURUSD",
+            outcome="allow",
+        )
+        listed = await svc.list_for_user(user_id, limit=50)
+        assert len(listed) == 2

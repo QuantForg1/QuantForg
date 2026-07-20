@@ -1,7 +1,7 @@
 -- =============================================================================
 -- QuantForg migration: Execution Audit Engine (Phase 11)
--- Version: 20260720180000
--- Reversible: see supabase/migrations/down/20260720180000_execution_audits.down.sql
+-- Version: 20260720190000
+-- Reversible: see supabase/migrations/down/20260720190000_execution_audits.down.sql
 -- Depends on: users
 -- NOTE: Immutable execution-stage history — no credentials. Additive only.
 -- =============================================================================
@@ -49,6 +49,9 @@ CREATE INDEX IF NOT EXISTS execution_audits_user_request_idx
   ON public.execution_audits (user_id, request_id);
 CREATE INDEX IF NOT EXISTS execution_audits_created_at_idx
   ON public.execution_audits (created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS execution_audits_user_request_stage_uidx
+  ON public.execution_audits (user_id, request_id, stage);
 
 COMMENT ON TABLE public.execution_audits IS
   'Execution Audit Engine (Phase 11). Immutable stage history. No credentials.';

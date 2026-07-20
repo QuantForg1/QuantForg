@@ -71,3 +71,26 @@ async def audit_center(
     """Audit Center: auth, broker, strategy, risk, execution, paper events."""
     dto = await uc.execute(limit=limit)
     return AuditCenterResponse(**dto.payload)
+
+
+@router.get("/rc1-telemetry")
+async def rc1_telemetry(_admin: AdminUser) -> dict[str, object]:
+    """RC1 hardening telemetry from execution_audits + live probes."""
+    from app.application.services.rc1_ops_telemetry import Rc1OpsTelemetryService
+    from app.presentation.dependencies.services import get_health_service
+    from core.di.container import get_container
+
+    container = get_container()
+    settings = getattr(container, "settings", None)
+    audit_factory = getattr(container, "execution_audit_uow_factory", None)
+    health = None
+    try:
+        health = get_health_service()
+    except Exception:
+        health = None
+    service = Rc1OpsTelemetryService(
+        execution_audit_uow_factory=audit_factory,
+        settings=settings,
+        health_service=health,
+    )
+    return await service.collect()

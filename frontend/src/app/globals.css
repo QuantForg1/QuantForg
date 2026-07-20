@@ -268,3 +268,35 @@ body {
     animation: none;
   }
 }
+
+/* RC1 mobile certification — desks stay usable on narrow viewports */
+@media (max-width: 767px) {
+  .qf-desk-shell,
+  [data-desk] {
+    overflow-x: clip;
+  }
+
+  button:not([data-compact]),
+  [role="button"]:not([data-compact]),
+  a.qf-nav-link,
+  .qf-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  [data-radix-dialog-content],
+  [role="dialog"] {
+    max-height: min(92dvh, 920px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  table {
+    font-size: 0.75rem;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}

@@ -26,3 +26,7 @@ class ExecutionAuditRepository(Protocol):
     ) -> list[ExecutionAudit]:
         """Return the stage timeline for one request_id (oldest first)."""
         ...
+
+    async def list_recent(self, *, limit: int = 500) -> list[ExecutionAudit]:
+        """Return newest audits across users (ops/service role)."""
+        ...

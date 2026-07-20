@@ -13,6 +13,14 @@ class InMemoryExecutionAuditRepository:
         self.items: dict[UUID, ExecutionAudit] = {}
 
     async def add(self, audit: ExecutionAudit) -> ExecutionAudit:
+        # Idempotent: one immutable row per (user, request, stage)
+        for existing in self.items.values():
+            if (
+                existing.user_id == audit.user_id
+                and existing.request_id == audit.request_id
+                and existing.stage == audit.stage
+            ):
+                return existing
         self.items[audit.id] = audit
         return audit
 
@@ -34,6 +42,11 @@ class InMemoryExecutionAuditRepository:
         ]
         rows.sort(key=lambda a: a.created_at)
         return rows
+
+    async def list_recent(self, *, limit: int = 500) -> list[ExecutionAudit]:
+        rows = list(self.items.values())
+        rows.sort(key=lambda a: a.created_at, reverse=True)
+        return rows[: max(1, min(limit, 2000))]
 
 
 class InMemoryExecutionAuditUnitOfWork:

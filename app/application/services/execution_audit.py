@@ -132,9 +132,9 @@ class ExecutionAuditService:
             related_ids=sanitize_payload_dict(related_ids),
         )
         async with self.uow_factory() as uow:
-            await uow.audits.add(audit)
+            stored = await uow.audits.add(audit)
             await uow.commit()
-        return audit
+        return stored
 
     async def list_for_user(
         self, user_id: UUID, *, limit: int = 50

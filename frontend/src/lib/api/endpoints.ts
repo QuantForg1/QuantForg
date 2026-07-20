@@ -417,6 +417,7 @@ export const opsApi = {
   metrics: () => apiFetch<Record<string, unknown>>("/ops/metrics"),
   alerts: () => apiFetch<Record<string, unknown>>("/ops/alerts"),
   audit: () => apiFetch<Record<string, unknown>>("/ops/audit"),
+  rc1Telemetry: () => apiFetch<Record<string, unknown>>("/ops/rc1-telemetry"),
 };
 
 /** Institutional Operations Control Plane (Phase F) */
