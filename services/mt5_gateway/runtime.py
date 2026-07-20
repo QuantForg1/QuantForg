@@ -12,7 +12,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, TypeVar
 
 from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settings
@@ -889,8 +889,12 @@ class MT5GatewayRuntime:
 
     def history_orders(self, *, days: int = 30) -> dict[str, Any]:
         self._require_connected()
-        date_to = datetime.now(UTC)
-        date_from = datetime.fromtimestamp(date_to.timestamp() - days * 86400, tz=UTC)
+        # MetaTrader5 history_* APIs are sensitive to tz-aware datetimes and to
+        # broker server clocks that stamp deals ahead of UTC. Use naive UTC and
+        # pad date_to forward so just-executed fills are included.
+        now = datetime.now(UTC).replace(tzinfo=None)
+        date_to = now + timedelta(days=1)
+        date_from = now - timedelta(days=days)
         rows = self.bridge.history_orders_get(date_from, date_to) or []
         items = [
             {
@@ -904,8 +908,9 @@ class MT5GatewayRuntime:
 
     def history_deals(self, *, days: int = 30) -> dict[str, Any]:
         self._require_connected()
-        date_to = datetime.now(UTC)
-        date_from = datetime.fromtimestamp(date_to.timestamp() - days * 86400, tz=UTC)
+        now = datetime.now(UTC).replace(tzinfo=None)
+        date_to = now + timedelta(days=1)
+        date_from = now - timedelta(days=days)
         rows = self.bridge.history_deals_get(date_from, date_to) or []
         items = [
             {

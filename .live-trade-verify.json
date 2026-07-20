@@ -1,0 +1,17 @@
+﻿{
+    "position_ticket":  514127874,
+    "positions_after_close":  0,
+    "fill_price":  "4010.267",
+    "exec_mode":  "market",
+    "close_retcode":  10009,
+    "send_retcode":  10009,
+    "deal_ticket":  496594616,
+    "order_ticket":  514127874,
+    "still_open":  0,
+    "check_retcode":  0,
+    "close_price":  "4009.403",
+    "check_ok":  true,
+    "close_ok":  true,
+    "send_ok":  true,
+    "filling":  "fok"
+}
