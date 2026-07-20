@@ -45,7 +45,13 @@ def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
 
 @router.get("/health")
 async def health(request: Request) -> dict[str, Any]:
-    """Liveness/readiness — open without token (auth intentionally bypassed)."""
+    """Liveness/readiness — open without token (auth intentionally bypassed).
+
+    Never blocks the event loop on MetaTrader5. MT5 probes run in a worker
+    thread with a hard timeout; degraded MT5 still returns HTTP 200 quickly.
+    """
+    import asyncio
+
     from services.mt5_gateway.settings import token_load_meta
     from services.mt5_gateway.token_util import mask_gateway_token, normalize_gateway_token
 
@@ -76,8 +82,44 @@ async def health(request: Request) -> dict[str, Any]:
             "After that POST /session/attach or /session/connect."
         )
     if runtime is not None:
-        payload["mt5"] = runtime.health()
+        # Hard ceiling so /health never exceeds ~500ms even if probe settings drift.
+        ceiling = min(0.45, float(settings.mt5_health_probe_timeout_seconds) + 0.1)
+        try:
+            mt5_payload = await asyncio.wait_for(
+                asyncio.to_thread(runtime.health),
+                timeout=ceiling,
+            )
+        except TimeoutError:
+            mt5_payload = {
+                "connected": False,
+                "session_mode": getattr(
+                    getattr(runtime, "diagnostics", None), "session_mode", "none"
+                ),
+                "latency_ms": None,
+                "terminal_build": None,
+                "build_date": None,
+                "server": getattr(
+                    getattr(runtime, "diagnostics", None), "server", None
+                )
+                or None,
+                "login_status": "timeout",
+                "last_heartbeat_at": getattr(
+                    getattr(runtime, "diagnostics", None),
+                    "last_heartbeat_at",
+                    None,
+                ),
+                "version": "",
+                "bridge_available": bool(
+                    getattr(getattr(runtime, "bridge", None), "available", False)
+                ),
+                "degraded": True,
+                "probe": "async_ceiling",
+            }
+        payload["mt5"] = mt5_payload
         payload["bridge_available"] = runtime.bridge.available
+        # Top-level status stays "ok" while the gateway process is serving —
+        # MT5 degradation lives under payload["mt5"] so live probes still see
+        # a reachable gateway (HTTP 200 + status=ok).
     return payload
 
 

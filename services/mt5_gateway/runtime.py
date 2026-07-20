@@ -10,13 +10,60 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
 from services.mt5_gateway.settings import MT5GatewaySettings, get_gateway_settings
 
 logger = logging.getLogger("quantforg.mt5_gateway")
+
+T = TypeVar("T")
+
+# Heartbeat considered fresh enough to report MT5 connected after a probe timeout.
+_HEARTBEAT_FRESH_SECONDS = 30.0
+
+
+class MT5CallTimeout(TimeoutError):
+    """MetaTrader5 API call exceeded its bounded timeout."""
+
+
+def call_mt5_bounded(
+    fn: Callable[[], T],
+    *,
+    timeout_seconds: float,
+    label: str = "mt5_call",
+) -> T:
+    """Run an MT5 API callable with a hard wall-clock timeout.
+
+    MetaTrader5 has no native cancel. We join a daemon worker; if it exceeds
+    ``timeout_seconds`` we raise :class:`MT5CallTimeout` and leave the worker
+    to finish in the background (preferred over hanging the HTTP server).
+    """
+    box: list[T] = []
+    err: list[BaseException] = []
+
+    def _target() -> None:
+        try:
+            box.append(fn())
+        except BaseException as exc:  # noqa: BLE001 — boundary to caller thread
+            err.append(exc)
+
+    worker = threading.Thread(
+        target=_target, name=f"mt5-bounded-{label}", daemon=True
+    )
+    worker.start()
+    worker.join(timeout=max(0.05, float(timeout_seconds)))
+    if worker.is_alive():
+        raise MT5CallTimeout(
+            f"{label} exceeded {timeout_seconds:.3f}s (MT5 API unresponsive)"
+        )
+    if err:
+        raise err[0]
+    if not box:
+        raise RuntimeError(f"{label} returned no result")
+    return box[0]
 
 _TIMEFRAME_MAP: dict[str, int] = {
     "M1": 1,
@@ -433,6 +480,12 @@ class MT5GatewayRuntime:
             }
 
     def health(self) -> dict[str, Any]:
+        """Fast health snapshot — never blocks indefinitely on MetaTrader5.
+
+        Live ``account_info`` is bounded by ``mt5_health_probe_timeout_seconds``.
+        On timeout, returns degraded status from the last successful heartbeat
+        instead of hanging the HTTP worker.
+        """
         connected = False
         latency_ms: float | None = None
         terminal_build: int | None = None
@@ -440,6 +493,8 @@ class MT5GatewayRuntime:
         server = self.diagnostics.server
         login_status = "disconnected"
         version = ""
+        degraded = False
+        probe = "skipped"
         if not (self.bridge.available and self.diagnostics.connected):
             return {
                 "connected": False,
@@ -452,21 +507,60 @@ class MT5GatewayRuntime:
                 "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
                 "version": version,
                 "bridge_available": self.bridge.available,
+                "degraded": False,
+                "probe": probe,
             }
 
+        timeout = float(self.settings.mt5_health_probe_timeout_seconds)
         try:
             t0 = time.perf_counter()
-            info = self.bridge.account_info()
+            info = call_mt5_bounded(
+                self.bridge.account_info,
+                timeout_seconds=timeout,
+                label="health.account_info",
+            )
             latency_ms = round((time.perf_counter() - t0) * 1000.0, 3)
             connected = info is not None
             login_status = "connected" if connected else "error"
+            probe = "live"
             if info is not None:
                 server = str(getattr(info, "server", server) or server)
+        except MT5CallTimeout as exc:
+            logger.warning(
+                "mt5_gateway_health_probe_timeout: %s",
+                exc,
+            )
+            self._record_failure(str(exc))
+            degraded = True
+            probe = "timeout"
+            # Prefer last successful heartbeat over inventing a disconnect.
+            if self._heartbeat_is_fresh():
+                connected = True
+                login_status = "degraded"
+                latency_ms = self.diagnostics.last_heartbeat_ms
+            else:
+                connected = False
+                login_status = "timeout"
+            return {
+                "connected": connected,
+                "session_mode": self.diagnostics.session_mode,
+                "latency_ms": latency_ms,
+                "terminal_build": None,
+                "build_date": None,
+                "server": server or None,
+                "login_status": login_status,
+                "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
+                "version": version,
+                "bridge_available": self.bridge.available,
+                "degraded": degraded,
+                "probe": probe,
+            }
         except Exception as exc:
             logger.exception("mt5_gateway_health_account_failed")
             self._record_failure(f"{type(exc).__name__}: {exc}")
             login_status = "error"
             connected = False
+            probe = "error"
             return {
                 "connected": False,
                 "session_mode": self.diagnostics.session_mode,
@@ -478,19 +572,34 @@ class MT5GatewayRuntime:
                 "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
                 "version": version,
                 "bridge_available": self.bridge.available,
+                "degraded": True,
+                "probe": probe,
             }
 
         # Metadata must never flip a healthy session to disconnected.
+        # Also never hang health on secondary probes.
+        meta_timeout = min(timeout, 0.2)
         try:
-            term = self.bridge.terminal_info()
+            term = call_mt5_bounded(
+                self.bridge.terminal_info,
+                timeout_seconds=meta_timeout,
+                label="health.terminal_info",
+            )
             if term is not None:
                 terminal_build = _safe_int(getattr(term, "build", 0), 0)
         except Exception as exc:
-            logger.exception("mt5_gateway_health_terminal_failed")
+            logger.info(
+                "mt5_gateway_health_terminal_skipped: %s",
+                f"{type(exc).__name__}: {exc}",
+            )
             self._record_failure(f"terminal_info: {type(exc).__name__}: {exc}")
 
         try:
-            major, build, release = self.bridge.version()
+            major, build, release = call_mt5_bounded(
+                self.bridge.version,
+                timeout_seconds=meta_timeout,
+                label="health.version",
+            )
             build_date = release
             if terminal_build is None or terminal_build == 0:
                 terminal_build = build or None
@@ -499,7 +608,10 @@ class MT5GatewayRuntime:
             else:
                 version = f"{major}.{build}.{release}".rstrip(".")
         except Exception as exc:
-            logger.exception("mt5_gateway_health_version_failed")
+            logger.info(
+                "mt5_gateway_health_version_skipped: %s",
+                f"{type(exc).__name__}: {exc}",
+            )
             self._record_failure(f"version: {type(exc).__name__}: {exc}")
 
         return {
@@ -513,27 +625,47 @@ class MT5GatewayRuntime:
             "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
             "version": version,
             "bridge_available": self.bridge.available,
+            "degraded": degraded,
+            "probe": probe,
         }
 
+    def _heartbeat_is_fresh(self) -> bool:
+        raw = self.diagnostics.last_heartbeat_at
+        if not raw:
+            return False
+        try:
+            when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        age = (datetime.now(UTC) - when.astimezone(UTC)).total_seconds()
+        return 0.0 <= age <= _HEARTBEAT_FRESH_SECONDS
+
     def heartbeat(self) -> dict[str, Any]:
+        """Ping MT5 with a bounded timeout — never hold the session lock during the API call."""
+        if not self.diagnostics.connected:
+            raise RuntimeError("MT5 not connected")
+        timeout = float(self.settings.mt5_api_call_timeout_seconds)
+        t0 = time.perf_counter()
+        info = call_mt5_bounded(
+            self.bridge.account_info,
+            timeout_seconds=timeout,
+            label="heartbeat.account_info",
+        )
+        ms = round((time.perf_counter() - t0) * 1000.0, 3)
+        if info is None:
+            self._record_failure("heartbeat: account_info returned None")
+            raise RuntimeError("heartbeat failed")
+        now = datetime.now(UTC).isoformat()
         with self._lock:
-            if not self.diagnostics.connected:
-                raise RuntimeError("MT5 not connected")
-            t0 = time.perf_counter()
-            info = self.bridge.account_info()
-            ms = round((time.perf_counter() - t0) * 1000.0, 3)
-            if info is None:
-                self._record_failure("heartbeat: account_info returned None")
-                raise RuntimeError("heartbeat failed")
-            now = datetime.now(UTC).isoformat()
             self.diagnostics.last_heartbeat_at = now
             self.diagnostics.last_heartbeat_ms = ms
-            return {
-                "ok": True,
-                "ping_ms": ms,
-                "at": now,
-                "session_mode": self.diagnostics.session_mode,
-            }
+            mode = self.diagnostics.session_mode
+        return {
+            "ok": True,
+            "ping_ms": ms,
+            "at": now,
+            "session_mode": mode,
+        }
 
     def _try_reconnect(self) -> bool:
         if not self.settings.mt5_reconnect_enabled:
@@ -591,14 +723,17 @@ class MT5GatewayRuntime:
         interval = self.settings.mt5_heartbeat_interval_seconds
         while not self._stop.wait(interval):
             with self._lock:
-                if not self.diagnostics.connected or self._creds is None:
-                    continue
-                try:
-                    self.heartbeat()
-                except Exception:
-                    backoff = self.settings.mt5_reconnect_backoff_seconds
+                should_beat = self.diagnostics.connected and self._creds is not None
+            if not should_beat:
+                continue
+            try:
+                # Do not hold _lock across MT5 API — hangs would freeze connect/attach.
+                self.heartbeat()
+            except Exception:
+                backoff = self.settings.mt5_reconnect_backoff_seconds
+                with self._lock:
                     self._try_reconnect()
-                    time.sleep(backoff)
+                time.sleep(backoff)
 
     def _ensure_symbol(self, symbol: str) -> None:
         if not self.bridge.symbol_select(symbol, True):

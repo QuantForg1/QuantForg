@@ -188,6 +188,10 @@ markers = [
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
+    # Starlette 0.52+ emits StarletteDeprecationWarning (subclass of Warning, not
+    # DeprecationWarning) when TestClient is imported with httpx — ignore so the
+    # suite can load under current FastAPI/Starlette pins.
+    "ignore:Using `httpx` with `starlette.testclient`:starlette.exceptions.StarletteDeprecationWarning",
 ]
 
 [tool.coverage.run]

@@ -179,6 +179,32 @@ class MT5GatewaySettings(BaseSettings):
         description="Optional path to terminal64.exe on the Windows host",
     )
     mt5_heartbeat_interval_seconds: float = Field(default=5.0, gt=0)
+    mt5_health_probe_timeout_seconds: float = Field(
+        default=0.35,
+        gt=0,
+        le=2.0,
+        description=(
+            "Max seconds /health may wait on MetaTrader5 account_info. "
+            "Must stay well under 500ms end-to-end. On timeout, health returns "
+            "degraded from last heartbeat instead of hanging forever."
+        ),
+        validation_alias=AliasChoices(
+            "MT5_HEALTH_PROBE_TIMEOUT_SECONDS",
+            "mt5_health_probe_timeout_seconds",
+        ),
+    )
+    mt5_api_call_timeout_seconds: float = Field(
+        default=2.0,
+        gt=0,
+        le=30.0,
+        description=(
+            "Bound MetaTrader5 API calls used by heartbeat (never block forever)."
+        ),
+        validation_alias=AliasChoices(
+            "MT5_API_CALL_TIMEOUT_SECONDS",
+            "mt5_api_call_timeout_seconds",
+        ),
+    )
     mt5_reconnect_enabled: bool = Field(default=True)
     mt5_reconnect_max_attempts: int = Field(default=5, ge=0)
     mt5_reconnect_backoff_seconds: float = Field(default=2.0, gt=0)

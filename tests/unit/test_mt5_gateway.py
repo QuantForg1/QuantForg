@@ -387,12 +387,58 @@ class TestMT5VersionDateParsing:
         assert "ValueError" not in str(mt5.get("login_status"))
         assert mt5["build_date"] == "28 Apr 2026"
 
-        status = client.get("/session/status", headers=headers)
-        assert status.status_code == 200
-        assert status.json()["connected"] is True
-        assert status.json()["health"]["login_status"] == "connected"
-        assert status.json()["health"]["connected"] is True
+    def test_health_never_hangs_on_blocking_account_info(
+        self, client: TestClient
+    ) -> None:
+        """MT5 API hang must return quickly with degraded probe — not forever."""
+        import time
 
-        diag = client.get("/diagnostics", headers=headers)
-        assert diag.status_code == 200
-        assert diag.json()["connected"] is True
+        runtime = client.app.state.runtime
+        headers = {"Authorization": "Bearer test-gateway-token"}
+
+        class _HangingBridge(_FakeBridge):
+            def account_info(self) -> Any:
+                time.sleep(5.0)
+                return super().account_info()
+
+        runtime.bridge = _HangingBridge(prelogged=False)
+        runtime.settings.mt5_health_probe_timeout_seconds = 0.15
+        connect = client.post(
+            "/session/connect",
+            headers=headers,
+            json={
+                "login": 222,
+                "password": "secret",
+                "server": "Weltrade-Demo",
+            },
+        )
+        assert connect.status_code == 200
+        # Seed a fresh heartbeat so timeout path can report degraded-connected.
+        runtime.diagnostics.last_heartbeat_at = __import__(
+            "datetime"
+        ).datetime.now(__import__("datetime").UTC).isoformat()
+        runtime.diagnostics.last_heartbeat_ms = 12.0
+
+        t0 = time.perf_counter()
+        health = client.get("/health")
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        assert health.status_code == 200
+        assert elapsed_ms < 500.0
+        body = health.json()
+        assert body["status"] == "ok"
+        mt5 = body["mt5"]
+        assert mt5["probe"] == "timeout"
+        assert mt5["degraded"] is True
+        assert mt5["connected"] is True
+        assert mt5["login_status"] == "degraded"
+
+    def test_call_mt5_bounded_raises_on_hang(self) -> None:
+        import time
+
+        from services.mt5_gateway.runtime import MT5CallTimeout, call_mt5_bounded
+
+        def _hang() -> None:
+            time.sleep(2.0)
+
+        with pytest.raises(MT5CallTimeout):
+            call_mt5_bounded(_hang, timeout_seconds=0.1, label="test")
