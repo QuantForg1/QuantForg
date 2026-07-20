@@ -257,3 +257,8 @@ frontend/test-results/
 frontend/tsconfig.tsbuildinfo
 frontend/.env*
 !frontend/.env.example
+
+.live-trade-verify.json
+.gateway-stdout.log
+.gateway-stderr.log
+
