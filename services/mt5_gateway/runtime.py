@@ -50,9 +50,7 @@ def call_mt5_bounded(
         except BaseException as exc:  # noqa: BLE001 — boundary to caller thread
             err.append(exc)
 
-    worker = threading.Thread(
-        target=_target, name=f"mt5-bounded-{label}", daemon=True
-    )
+    worker = threading.Thread(target=_target, name=f"mt5-bounded-{label}", daemon=True)
     worker.start()
     worker.join(timeout=max(0.05, float(timeout_seconds)))
     if worker.is_alive():
@@ -64,6 +62,7 @@ def call_mt5_bounded(
     if not box:
         raise RuntimeError(f"{label} returned no result")
     return box[0]
+
 
 _TIMEFRAME_MAP: dict[str, int] = {
     "M1": 1,
@@ -79,9 +78,7 @@ _TIMEFRAME_MAP: dict[str, int] = {
 
 SessionMode = Literal["none", "connected", "attached"]
 
-_DATE_TOKEN_RE = re.compile(
-    r"^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$|^\d{4}-\d{2}-\d{2}"
-)
+_DATE_TOKEN_RE = re.compile(r"^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$|^\d{4}-\d{2}-\d{2}")
 
 
 def _looks_like_date(value: Any) -> bool:
@@ -261,9 +258,7 @@ class LiveMT5Bridge:
     def copy_rates_from_pos(
         self, symbol: str, timeframe: int, start_pos: int, count: int
     ) -> Any:
-        return self.require().copy_rates_from_pos(
-            symbol, timeframe, start_pos, count
-        )
+        return self.require().copy_rates_from_pos(symbol, timeframe, start_pos, count)
 
     def positions_get(self) -> Any:
         return self.require().positions_get()
@@ -684,15 +679,32 @@ class MT5GatewayRuntime:
             "attempt": self.diagnostics.reconnect_attempts,
             "mode": creds.mode,
         }
+        timeout = float(self.settings.mt5_api_call_timeout_seconds)
         try:
             path = creds.path or self.settings.mt5_terminal_path
-            if not self.bridge.initialize(path):
+            initialized = call_mt5_bounded(
+                lambda: self.bridge.initialize(path),
+                timeout_seconds=timeout,
+                label="reconnect.initialize",
+            )
+            if not initialized:
                 raise RuntimeError(f"initialize failed: {self.bridge.last_error()}")
             if creds.password:
-                if not self.bridge.login(creds.login, creds.password, creds.server):
+                logged_in = call_mt5_bounded(
+                    lambda: self.bridge.login(
+                        creds.login, creds.password, creds.server
+                    ),
+                    timeout_seconds=timeout,
+                    label="reconnect.login",
+                )
+                if not logged_in:
                     raise RuntimeError(f"login failed: {self.bridge.last_error()}")
             else:
-                info = self.bridge.account_info()
+                info = call_mt5_bounded(
+                    self.bridge.account_info,
+                    timeout_seconds=timeout,
+                    label="reconnect.account_info",
+                )
                 if info is None:
                     raise RuntimeError(
                         "attached session lost — terminal has no account; "
@@ -715,9 +727,7 @@ class MT5GatewayRuntime:
             self.diagnostics.connected = False
             return False
         finally:
-            self.diagnostics.reconnect_events = (
-                self.diagnostics.reconnect_events[-20:]
-            )
+            self.diagnostics.reconnect_events = self.diagnostics.reconnect_events[-20:]
 
     def _heartbeat_loop(self) -> None:
         interval = self.settings.mt5_heartbeat_interval_seconds
@@ -880,9 +890,7 @@ class MT5GatewayRuntime:
     def history_orders(self, *, days: int = 30) -> dict[str, Any]:
         self._require_connected()
         date_to = datetime.now(UTC)
-        date_from = datetime.fromtimestamp(
-            date_to.timestamp() - days * 86400, tz=UTC
-        )
+        date_from = datetime.fromtimestamp(date_to.timestamp() - days * 86400, tz=UTC)
         rows = self.bridge.history_orders_get(date_from, date_to) or []
         items = [
             {
@@ -897,9 +905,7 @@ class MT5GatewayRuntime:
     def history_deals(self, *, days: int = 30) -> dict[str, Any]:
         self._require_connected()
         date_to = datetime.now(UTC)
-        date_from = datetime.fromtimestamp(
-            date_to.timestamp() - days * 86400, tz=UTC
-        )
+        date_from = datetime.fromtimestamp(date_to.timestamp() - days * 86400, tz=UTC)
         rows = self.bridge.history_deals_get(date_from, date_to) or []
         items = [
             {
@@ -1048,7 +1054,10 @@ class MT5GatewayRuntime:
             raise RuntimeError("symbol is required")
         oms_kind = str(body.get("oms_kind") or "").strip().lower()
         action = str(body.get("action") or "buy").strip().lower()
-        is_sltp = oms_kind in {"sltp", "modify_sltp"} or action in {"sltp", "modify_sltp"}
+        is_sltp = oms_kind in {"sltp", "modify_sltp"} or action in {
+            "sltp",
+            "modify_sltp",
+        }
         volume = float(body.get("volume") or 0)
         if not is_sltp and volume <= 0:
             raise RuntimeError("volume must be > 0")
@@ -1094,7 +1103,10 @@ class MT5GatewayRuntime:
         return payload
 
     def order_cancel(self, ticket: int) -> dict[str, Any]:
-        from services.mt5_gateway.trade import TRADE_ACTION_REMOVE, serialize_send_result
+        from services.mt5_gateway.trade import (
+            TRADE_ACTION_REMOVE,
+            serialize_send_result,
+        )
 
         self._require_connected()
         if ticket <= 0:

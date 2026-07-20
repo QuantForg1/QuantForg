@@ -218,7 +218,80 @@ class TestLiveProbeGatewayHealthShape:
         }
         assert mt5_connected_from_gateway_health(payload) is False
 
-    def test_collector_uses_gateway_health_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_connected_false_wins_over_stale_session_mode(self) -> None:
+        from app.application.services.institutional_live_probes import (
+            mt5_connected_from_gateway_health,
+        )
+
+        payload = {
+            "status": "ok",
+            "mt5": {"connected": False, "session_mode": "attached"},
+        }
+        assert mt5_connected_from_gateway_health(payload) is False
+
+    def test_localhost_gateway_is_not_cloudflare(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.application.services import institutional_live_probes as probes_mod
+
+        class _Settings:
+            mt5_gateway_base_url = "http://127.0.0.1:8765"
+            railway_public_domain = ""
+            supabase_configured = False
+            database_url = ""
+
+        monkeypatch.setattr(
+            probes_mod,
+            "_http_get_json",
+            lambda *_args, **_kwargs: (
+                True,
+                5.0,
+                200,
+                {
+                    "status": "ok",
+                    "mt5": {"connected": True, "session_mode": "attached"},
+                },
+                False,
+            ),
+        )
+        collector = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
+        result = collector.collect()
+        assert result.gateway_available is True
+        assert result.mt5_connected is True
+        assert result.cloudflare_tunnel_up is False
+
+    def test_custom_hostname_via_cf_headers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.application.services import institutional_live_probes as probes_mod
+
+        class _Settings:
+            mt5_gateway_base_url = "https://gateway.quantforg.com"
+            railway_public_domain = ""
+            supabase_configured = False
+            database_url = ""
+
+        monkeypatch.setattr(
+            probes_mod,
+            "_http_get_json",
+            lambda *_args, **_kwargs: (
+                True,
+                40.0,
+                200,
+                {
+                    "status": "ok",
+                    "mt5": {"connected": True, "session_mode": "attached"},
+                },
+                True,
+            ),
+        )
+        collector = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
+        result = collector.collect()
+        assert result.cloudflare_tunnel_up is True
+
+    def test_collector_uses_gateway_health_payload(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from app.application.services import institutional_live_probes as probes_mod
 
         class _Settings:
@@ -243,7 +316,7 @@ class TestLiveProbeGatewayHealthShape:
         monkeypatch.setattr(
             probes_mod,
             "_http_get_json",
-            lambda *a, **k: (False, 8000.0, None, None),
+            lambda *_args, **_kwargs: (False, 8000.0, None, None, False),
         )
         collector = LiveProbeCollector(
             settings=_Settings(),  # type: ignore[arg-type]
@@ -268,7 +341,7 @@ class TestLiveProbeGatewayHealthShape:
         monkeypatch.setattr(
             probes_mod,
             "_http_get_json",
-            lambda *a, **k: (
+            lambda *_args, **_kwargs: (
                 True,
                 40.0,
                 200,
@@ -276,6 +349,7 @@ class TestLiveProbeGatewayHealthShape:
                     "status": "ok",
                     "mt5": {"connected": True, "session_mode": "attached"},
                 },
+                True,
             ),
         )
         collector = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
