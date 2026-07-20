@@ -23,6 +23,7 @@ import { asList, asRecord } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
 import {
+  attachStopsFromPositions,
   computeTradeAnalytics,
   formatDuration,
   pairDealsIntoTrades,
@@ -142,11 +143,34 @@ export function OrdersHistoryDesk() {
     refetchInterval: session.connected ? 15_000 : false,
   });
 
+  const positionsQ = useQuery({
+    queryKey: ["orders-history-positions", session.connected],
+    queryFn: () => portfolioApi.positions(),
+    enabled: session.connected,
+    refetchInterval: session.connected ? 15_000 : false,
+  });
+
   const trades = useMemo(() => {
     const deals = asList(asRecord(historyQ.data).deals)
       .map((row) => parseLiveDeal(asRecord(row)))
       .filter((d): d is NonNullable<typeof d> => d != null);
     let rows = pairDealsIntoTrades(deals);
+    const posSource = Array.isArray(positionsQ.data)
+      ? positionsQ.data
+      : asList(asRecord(positionsQ.data).items ?? asRecord(positionsQ.data).positions);
+    const posRows = posSource
+      .map((row) => {
+        const r = asRecord(row);
+        const ticket = Number(r.ticket ?? r.position ?? 0);
+        if (!Number.isFinite(ticket) || ticket <= 0) return null;
+        return {
+          ticket,
+          stop_loss: Number(r.stop_loss ?? r.sl ?? 0),
+          take_profit: Number(r.take_profit ?? r.tp ?? 0),
+        };
+      })
+      .filter((p): p is NonNullable<typeof p> => p != null);
+    rows = attachStopsFromPositions(rows, posRows);
     if (symbol.trim()) {
       const q = symbol.trim().toUpperCase();
       rows = rows.filter((t) => t.symbol.includes(q));
@@ -165,7 +189,7 @@ export function OrdersHistoryDesk() {
       );
     }
     return rows;
-  }, [historyQ.data, symbol, side, status, search]);
+  }, [historyQ.data, positionsQ.data, symbol, side, status, search]);
 
   const analytics = useMemo(() => computeTradeAnalytics(trades), [trades]);
   const pageCount = Math.max(1, Math.ceil(trades.length / PAGE_SIZE));
@@ -240,11 +264,12 @@ export function OrdersHistoryDesk() {
           <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
             Journal · Live MT5
           </p>
-          <h1 className="font-[family-name:var(--font-display)] text-xl text-[var(--fg)]">
+          <h1 className="font-[family-name:var(--font-display)] text-xl tracking-tight text-[var(--fg)]">
             Orders History
           </h1>
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">
-            Real broker deals only — gateway synchronized · no mock fills
+          <p className="mt-1 max-w-xl text-xs text-[var(--fg-muted)]">
+            Institutional ledger of live MetaTrader deals — filters, analytics, and exports use
+            gateway history only. Empty cells mean the broker did not supply that field.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -485,8 +510,12 @@ export function OrdersHistoryDesk() {
                   <td className="px-2 py-2 font-mono">
                     {t.exit == null ? "—" : formatNumber(t.exit, 3)}
                   </td>
-                  <td className="px-2 py-2 font-mono text-[var(--fg-subtle)]">—</td>
-                  <td className="px-2 py-2 font-mono text-[var(--fg-subtle)]">—</td>
+                  <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
+                    {t.sl == null ? "—" : formatNumber(t.sl, 3)}
+                  </td>
+                  <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
+                    {t.tp == null ? "—" : formatNumber(t.tp, 3)}
+                  </td>
                   <td className="px-2 py-2 font-mono">{formatNumber(t.commission, 2)}</td>
                   <td className="px-2 py-2 font-mono">{formatNumber(t.swap, 2)}</td>
                   <td

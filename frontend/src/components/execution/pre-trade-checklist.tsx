@@ -5,6 +5,11 @@ import { CheckCircle2, Circle, ShieldAlert } from "lucide-react";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn } from "@/lib/utils";
 import { num } from "@/lib/desk";
+import {
+  formatRiskRejection,
+  parseRiskRules,
+  RiskRulesPanel,
+} from "@/components/execution/risk-rules-panel";
 
 export type PreTradeInputs = {
   symbol: string;
@@ -15,6 +20,7 @@ export type PreTradeInputs = {
   takeProfit?: string;
   validationValid?: boolean | null;
   riskDecision?: string | null;
+  riskAssessment?: Record<string, unknown> | null;
   marginRequired?: string | null;
   maxSpread?: number;
 };
@@ -64,6 +70,17 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
   const vol = num(inputs.volume, 0);
   const free = num(session.freeMargin, NaN);
   const marginNeeded = num(inputs.marginRequired, NaN);
+  const riskDetail = useMemo(() => {
+    if (!inputs.riskDecision) return "pending check";
+    if (inputs.riskDecision === "REJECT" && inputs.riskAssessment) {
+      const failed = parseRiskRules(inputs.riskAssessment).filter((r) => r.status === "fail");
+      if (failed[0]) {
+        return `REJECT · ${failed[0].name} ${failed[0].current} > ${failed[0].threshold}`;
+      }
+      return formatRiskRejection(inputs.riskAssessment);
+    }
+    return String(inputs.riskDecision);
+  }, [inputs.riskDecision, inputs.riskAssessment]);
 
   const checks = useMemo(() => {
     const list = [
@@ -113,7 +130,7 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
       {
         ok: inputs.riskDecision == null || inputs.riskDecision !== "REJECT",
         label: "Risk Allowed",
-        detail: inputs.riskDecision ? String(inputs.riskDecision) : "pending check",
+        detail: riskDetail,
       },
       {
         ok: inputs.validationValid !== false,
@@ -150,6 +167,7 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
     inputs.takeProfit,
     inputs.validationValid,
     inputs.riskDecision,
+    riskDetail,
     spread,
     maxSpread,
     vol,
@@ -161,31 +179,35 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
   const failed = checks.filter((c) => !c.ok).map((c) => c.label);
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/70 px-3 py-2.5",
-        className,
-      )}
-      aria-live="polite"
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          Pre-trade checklist
-        </p>
+    <div className={cn("space-y-2", className)}>
+      <div
+        className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/70 px-3 py-2.5"
+        aria-live="polite"
+      >
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Pre-trade checklist
+          </p>
+          {blocked ? (
+            <span className="inline-flex items-center gap-1 text-[10px] text-[var(--danger)]">
+              <ShieldAlert className="h-3 w-3" /> Blocked
+            </span>
+          ) : (
+            <span className="text-[10px] text-[var(--success)]">Ready</span>
+          )}
+        </div>
+        <ul className="space-y-1.5">{checks.map((c) => <Row key={c.label} {...c} />)}</ul>
         {blocked ? (
-          <span className="inline-flex items-center gap-1 text-[10px] text-[var(--danger)]">
-            <ShieldAlert className="h-3 w-3" /> Blocked
-          </span>
-        ) : (
-          <span className="text-[10px] text-[var(--success)]">Ready</span>
-        )}
+          <p className="mt-2 text-[10px] text-[var(--danger)]">
+            Execution blocked:{" "}
+            {inputs.riskDecision === "REJECT" && inputs.riskAssessment
+              ? formatRiskRejection(inputs.riskAssessment)
+              : failed.join(", ")}
+            .
+          </p>
+        ) : null}
       </div>
-      <ul className="space-y-1.5">{checks.map((c) => <Row key={c.label} {...c} />)}</ul>
-      {blocked ? (
-        <p className="mt-2 text-[10px] text-[var(--danger)]">
-          Execution blocked: {failed.join(", ")}.
-        </p>
-      ) : null}
+      <RiskRulesPanel risk={inputs.riskAssessment ?? null} />
     </div>
   );
 });

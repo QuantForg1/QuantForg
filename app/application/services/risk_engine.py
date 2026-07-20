@@ -13,6 +13,8 @@ from app.domain.entities.risk_engine import (
     PositionSizeResult,
     RiskAssessment,
     RiskEngineConfig,
+    RiskRuleResult,
+    contract_size_for_symbol,
 )
 from app.domain.enums.risk import (
     PositionSizingMethod,
@@ -79,6 +81,14 @@ class RiskEngine:
         self._events.clear()
         return events
 
+    def _contract_size(self, symbol: str) -> Decimal:
+        return contract_size_for_symbol(symbol, default=self.config.contract_size)
+
+    @staticmethod
+    def _account_leverage(account: AccountSnapshot, *, fallback: Decimal) -> Decimal:
+        lev = Decimal(int(account.leverage)) if account.leverage else Decimal("0")
+        return lev if lev > 0 else fallback
+
     # -- 1. Position sizing --------------------------------------------------
 
     def size_position(
@@ -90,18 +100,20 @@ class RiskEngine:
         stop_distance: Decimal | None,
         atr: Decimal | None,
         entry_price: Decimal,
+        contract_size: Decimal | None = None,
     ) -> PositionSizeResult:
         cfg = self.config
+        cs = contract_size if contract_size is not None else cfg.contract_size
         stop = stop_distance or Decimal("0")
         if method is PositionSizingMethod.FIXED_LOT:
             lots = requested_lots if requested_lots is not None else cfg.fixed_lot
-            dollar = lots * stop * cfg.contract_size
+            dollar = lots * stop * cs
         elif method is PositionSizingMethod.FIXED_DOLLAR_RISK:
             risk_budget = cfg.fixed_dollar_risk
             if stop <= 0:
                 lots = cfg.min_lot
             else:
-                lots = (risk_budget / (stop * cfg.contract_size)).quantize(
+                lots = (risk_budget / (stop * cs)).quantize(
                     cfg.lot_step, rounding=ROUND_DOWN
                 )
             dollar = risk_budget
@@ -111,7 +123,7 @@ class RiskEngine:
                 atr_val = entry_price * Decimal("0.001")
             risk_budget = equity * (cfg.max_risk_per_trade_pct / Decimal("100"))
             distance = atr_val * cfg.atr_multiplier
-            lots = (risk_budget / (distance * cfg.contract_size)).quantize(
+            lots = (risk_budget / (distance * cs)).quantize(
                 cfg.lot_step, rounding=ROUND_DOWN
             )
             stop = distance
@@ -120,7 +132,7 @@ class RiskEngine:
             risk_budget = equity * (cfg.max_risk_per_trade_pct / Decimal("100"))
             if stop <= 0:
                 stop = entry_price * Decimal("0.001")
-            lots = (risk_budget / (stop * cfg.contract_size)).quantize(
+            lots = (risk_budget / (stop * cs)).quantize(
                 cfg.lot_step, rounding=ROUND_DOWN
             )
             dollar = risk_budget
@@ -153,23 +165,24 @@ class RiskEngine:
         proposed_side: str,
         proposed_lots: Decimal,
         entry_price: Decimal,
+        leverage: Decimal | None = None,
     ) -> ExposureBreakdown:
         by_symbol: dict[str, Decimal] = {}
         by_class: dict[str, Decimal] = {}
         long_exp = Decimal("0")
         short_exp = Decimal("0")
+        lev = leverage if leverage and leverage > 0 else self.config.exposure_leverage
 
-        def _margin_exposure(volume: Decimal, price: Decimal) -> Decimal:
-            # Estimate used margin at configured leverage (not full notional).
+        def _margin_exposure(
+            volume: Decimal, price: Decimal, *, symbol: str
+        ) -> Decimal:
+            # Estimate used margin at account leverage (not full notional).
             return (
-                volume
-                * price
-                * self.config.contract_size
-                / self.config.exposure_leverage
+                volume * price * self._contract_size(symbol) / lev
             ).quantize(Decimal("0.01"))
 
         for pos in positions:
-            notion = _margin_exposure(pos.volume, pos.open_price)
+            notion = _margin_exposure(pos.volume, pos.open_price, symbol=pos.symbol)
             by_symbol[pos.symbol] = by_symbol.get(pos.symbol, Decimal("0")) + notion
             cls = _ASSET_CLASS.get(pos.symbol, "other")
             by_class[cls] = by_class.get(cls, Decimal("0")) + notion
@@ -178,8 +191,8 @@ class RiskEngine:
             else:
                 short_exp += notion
 
-        proposed = _margin_exposure(proposed_lots, entry_price)
         sym = proposed_symbol.strip().upper()
+        proposed = _margin_exposure(proposed_lots, entry_price, symbol=sym)
         by_symbol[sym] = by_symbol.get(sym, Decimal("0")) + proposed
         cls = _ASSET_CLASS.get(sym, "other")
         by_class[cls] = by_class.get(cls, Decimal("0")) + proposed
@@ -189,7 +202,6 @@ class RiskEngine:
             short_exp += proposed
 
         total = long_exp + short_exp
-        # Normalize to % of equity when equity > 0 for storage convenience
         _ = equity
         return ExposureBreakdown(
             by_symbol=by_symbol,
@@ -201,17 +213,23 @@ class RiskEngine:
 
     def exposure_limits_ok(
         self, exposure: ExposureBreakdown, *, equity: Decimal, symbol: str
-    ) -> tuple[bool, list[str], list[str]]:
+    ) -> tuple[bool, list[str], list[str], dict[str, Decimal]]:
         reasons: list[str] = []
         warnings: list[str] = []
+        metrics: dict[str, Decimal] = {
+            "symbol_pct": Decimal("0"),
+            "class_pct": Decimal("0"),
+            "total_pct": Decimal("0"),
+        }
         if equity <= 0:
-            return False, ["equity must be positive for exposure checks"], warnings
+            return False, ["equity must be positive for exposure checks"], warnings, metrics
 
         def _pct(notional: Decimal) -> Decimal:
             return (notional / equity * Decimal("100")).quantize(Decimal("0.01"))
 
         sym = symbol.strip().upper()
         sym_pct = _pct(exposure.by_symbol.get(sym, Decimal("0")))
+        metrics["symbol_pct"] = sym_pct
         if sym_pct > self.config.max_symbol_exposure_pct:
             reasons.append(
                 f"symbol exposure {sym_pct}% exceeds "
@@ -222,6 +240,7 @@ class RiskEngine:
 
         cls = _ASSET_CLASS.get(sym, "other")
         class_pct = _pct(exposure.by_asset_class.get(cls, Decimal("0")))
+        metrics["class_pct"] = class_pct
         if class_pct > self.config.max_asset_class_exposure_pct:
             reasons.append(
                 f"asset class exposure {class_pct}% exceeds "
@@ -229,13 +248,285 @@ class RiskEngine:
             )
 
         total_pct = _pct(exposure.total)
+        metrics["total_pct"] = total_pct
         if total_pct > self.config.max_total_exposure_pct:
             reasons.append(
                 f"total exposure {total_pct}% exceeds "
                 f"{self.config.max_total_exposure_pct}%"
             )
 
-        return len(reasons) == 0, reasons, warnings
+        return len(reasons) == 0, reasons, warnings, metrics
+
+    def _rule(
+        self,
+        *,
+        rule_id: str,
+        name: str,
+        status: str,
+        current: str,
+        threshold: str,
+        reason: str = "",
+    ) -> RiskRuleResult:
+        return RiskRuleResult(
+            id=rule_id,
+            name=name,
+            status=status,
+            current=current,
+            threshold=threshold,
+            reason=reason,
+        )
+
+    def _build_rules(
+        self,
+        *,
+        check: RiskCheckInput,
+        size: PositionSizeResult,
+        drawdown: DrawdownState,
+        exp_metrics: dict[str, Decimal],
+        corr_pct: Decimal,
+        open_count: int,
+        contract_size: Decimal,
+        leverage: Decimal,
+        checks: dict[str, bool],
+    ) -> list[RiskRuleResult]:
+        cfg = self.config
+        rules: list[RiskRuleResult] = []
+
+        def pass_fail(ok: bool) -> str:
+            return "pass" if ok else "fail"
+
+        daily_ok = drawdown.daily_loss_pct <= cfg.max_daily_loss_pct
+        rules.append(
+            self._rule(
+                rule_id="daily_loss",
+                name="Daily Loss Limit",
+                status=pass_fail(daily_ok),
+                current=f"{drawdown.daily_loss_pct}%",
+                threshold=f"{cfg.max_daily_loss_pct}%",
+                reason=""
+                if daily_ok
+                else f"daily loss {drawdown.daily_loss_pct}% exceeds {cfg.max_daily_loss_pct}%",
+            )
+        )
+        weekly_ok = drawdown.weekly_loss_pct <= cfg.max_weekly_loss_pct
+        rules.append(
+            self._rule(
+                rule_id="weekly_loss",
+                name="Weekly Loss Limit",
+                status=pass_fail(weekly_ok),
+                current=f"{drawdown.weekly_loss_pct}%",
+                threshold=f"{cfg.max_weekly_loss_pct}%",
+                reason=""
+                if weekly_ok
+                else f"weekly loss {drawdown.weekly_loss_pct}% exceeds {cfg.max_weekly_loss_pct}%",
+            )
+        )
+        monthly_ok = drawdown.monthly_loss_pct <= cfg.max_monthly_loss_pct
+        rules.append(
+            self._rule(
+                rule_id="monthly_loss",
+                name="Monthly Loss Limit",
+                status=pass_fail(monthly_ok),
+                current=f"{drawdown.monthly_loss_pct}%",
+                threshold=f"{cfg.max_monthly_loss_pct}%",
+            )
+        )
+        dd_ok = drawdown.current_drawdown_pct < cfg.max_drawdown_pct
+        rules.append(
+            self._rule(
+                rule_id="max_drawdown",
+                name="Max Drawdown",
+                status=pass_fail(dd_ok),
+                current=f"{drawdown.current_drawdown_pct}%",
+                threshold=f"{cfg.max_drawdown_pct}%",
+            )
+        )
+
+        risk_pct = (
+            (size.dollar_risk / drawdown.equity * Decimal("100")).quantize(
+                Decimal("0.01")
+            )
+            if drawdown.equity > 0
+            else Decimal("0")
+        )
+        risk_ok = risk_pct <= cfg.max_risk_per_trade_pct or size.dollar_risk <= 0
+        rules.append(
+            self._rule(
+                rule_id="max_risk",
+                name="Max Risk Per Trade",
+                status=pass_fail(risk_ok),
+                current=f"{risk_pct}%",
+                threshold=f"{cfg.max_risk_per_trade_pct}%",
+                reason=f"dollar risk {size.dollar_risk}",
+            )
+        )
+
+        sym_pct = exp_metrics.get("symbol_pct", Decimal("0"))
+        rules.append(
+            self._rule(
+                rule_id="symbol_exposure",
+                name="Symbol Exposure",
+                status=pass_fail(sym_pct <= cfg.max_symbol_exposure_pct),
+                current=f"{sym_pct}%",
+                threshold=f"{cfg.max_symbol_exposure_pct}%",
+            )
+        )
+        class_pct = exp_metrics.get("class_pct", Decimal("0"))
+        rules.append(
+            self._rule(
+                rule_id="asset_class_exposure",
+                name="Asset Class Exposure",
+                status=pass_fail(class_pct <= cfg.max_asset_class_exposure_pct),
+                current=f"{class_pct}%",
+                threshold=f"{cfg.max_asset_class_exposure_pct}%",
+            )
+        )
+        total_pct = exp_metrics.get("total_pct", Decimal("0"))
+        rules.append(
+            self._rule(
+                rule_id="total_exposure",
+                name="Total Exposure / Margin",
+                status=pass_fail(total_pct <= cfg.max_total_exposure_pct),
+                current=f"{total_pct}%",
+                threshold=f"{cfg.max_total_exposure_pct}%",
+                reason=f"contract_size={contract_size} leverage={leverage}",
+            )
+        )
+        rules.append(
+            self._rule(
+                rule_id="correlation",
+                name="Correlation / Metals Group",
+                status=pass_fail(corr_pct <= cfg.max_correlated_exposure_pct)
+                if corr_pct > 0 or check.symbol.upper() in {"XAUUSD", "XAGUSD"}
+                else "n/a",
+                current=f"{corr_pct}%",
+                threshold=f"{cfg.max_correlated_exposure_pct}%",
+            )
+        )
+        rules.append(
+            self._rule(
+                rule_id="open_positions",
+                name="Open Positions",
+                status=pass_fail(checks.get("open_positions", True)),
+                current=str(open_count),
+                threshold=f"< {cfg.max_open_positions}",
+            )
+        )
+
+        # Institutional / optional inputs
+        if check.spread is None:
+            rules.append(
+                self._rule(
+                    rule_id="spread",
+                    name="Spread Rule",
+                    status="n/a",
+                    current="not provided",
+                    threshold=str(cfg.max_spread),
+                    reason="spread not supplied on this risk check",
+                )
+            )
+        else:
+            spread_ok = (not cfg.enforce_spread) or check.spread <= cfg.max_spread
+            rules.append(
+                self._rule(
+                    rule_id="spread",
+                    name="Spread Rule",
+                    status=pass_fail(spread_ok),
+                    current=str(check.spread),
+                    threshold=str(cfg.max_spread),
+                )
+            )
+
+        if check.atr is None:
+            rules.append(
+                self._rule(
+                    rule_id="atr",
+                    name="ATR Rule",
+                    status="n/a",
+                    current="not provided",
+                    threshold=f"max {cfg.max_atr_pct_of_price}% of price",
+                )
+            )
+        else:
+            atr_ok = True
+            atr_detail = str(check.atr)
+            if cfg.enforce_atr and check.entry_price > 0 and cfg.max_atr_pct_of_price > 0:
+                atr_pct = (check.atr / check.entry_price) * Decimal("100")
+                atr_detail = f"{atr_pct.quantize(Decimal('0.01'))}%"
+                atr_ok = atr_pct <= cfg.max_atr_pct_of_price
+            rules.append(
+                self._rule(
+                    rule_id="atr",
+                    name="ATR Rule",
+                    status=pass_fail(atr_ok),
+                    current=atr_detail,
+                    threshold=f"{cfg.max_atr_pct_of_price}%",
+                )
+            )
+
+        if check.session_allowed is None:
+            rules.append(
+                self._rule(
+                    rule_id="session",
+                    name="Session Rule",
+                    status="n/a",
+                    current="not evaluated",
+                    threshold="London/NY when enforced",
+                )
+            )
+        else:
+            rules.append(
+                self._rule(
+                    rule_id="session",
+                    name="Session Rule",
+                    status=pass_fail(check.session_allowed),
+                    current=check.session_name or str(check.session_allowed),
+                    threshold="allowed session",
+                )
+            )
+
+        streak_ok = check.consecutive_losses < cfg.max_consecutive_losses
+        rules.append(
+            self._rule(
+                rule_id="loss_streak",
+                name="Consecutive Losses",
+                status=pass_fail(streak_ok),
+                current=str(check.consecutive_losses),
+                threshold=f"< {cfg.max_consecutive_losses}",
+            )
+        )
+        rules.append(
+            self._rule(
+                rule_id="cooldown",
+                name="Cooldown",
+                status=pass_fail(not check.cooldown_active),
+                current="active" if check.cooldown_active else "clear",
+                threshold=f"{cfg.cooldown_minutes_after_loss_streak}m after streak",
+            )
+        )
+
+        # ITE-only gates — not evaluated on /risk/check (transparent N/A)
+        rules.append(
+            self._rule(
+                rule_id="news",
+                name="News Rule",
+                status="n/a",
+                current="not evaluated",
+                threshold="±30m when news_protection_enabled",
+                reason="ITE gate — not part of HTTP /risk/check",
+            )
+        )
+        rules.append(
+            self._rule(
+                rule_id="confluence",
+                name="Confluence Score",
+                status="n/a",
+                current="not evaluated",
+                threshold="80/100 (ITE)",
+                reason="ITE gate — not part of HTTP /risk/check",
+            )
+        )
+        return rules
 
     # -- 3. Drawdown protection ----------------------------------------------
 
@@ -323,7 +614,8 @@ class RiskEngine:
         proposed_lots: Decimal,
         entry_price: Decimal,
         equity: Decimal,
-    ) -> tuple[bool, list[str], list[str]]:
+        leverage: Decimal | None = None,
+    ) -> tuple[bool, list[str], list[str], Decimal]:
         reasons: list[str] = []
         warnings: list[str] = []
         sym = symbol.strip().upper()
@@ -332,8 +624,9 @@ class RiskEngine:
             None,
         )
         if group is None or equity <= 0:
-            return True, reasons, warnings
+            return True, reasons, warnings, Decimal("0")
 
+        lev = leverage if leverage and leverage > 0 else self.config.exposure_leverage
         members = _CORRELATION_GROUPS[group]
         correlated_notional = Decimal("0")
         for pos in positions:
@@ -341,14 +634,11 @@ class RiskEngine:
                 correlated_notional += (
                     pos.volume
                     * pos.open_price
-                    * self.config.contract_size
-                    / self.config.exposure_leverage
+                    * self._contract_size(pos.symbol)
+                    / lev
                 )
         correlated_notional += (
-            proposed_lots
-            * entry_price
-            * self.config.contract_size
-            / self.config.exposure_leverage
+            proposed_lots * entry_price * self._contract_size(sym) / lev
         )
         pct = (correlated_notional / equity * Decimal("100")).quantize(Decimal("0.01"))
         if pct > self.config.max_correlated_exposure_pct:
@@ -358,7 +648,7 @@ class RiskEngine:
             )
         elif pct > self.config.max_correlated_exposure_pct * Decimal("0.8"):
             warnings.append(f"correlated exposure in {group} approaching limit")
-        return len(reasons) == 0, reasons, warnings
+        return len(reasons) == 0, reasons, warnings, pct
 
     # -- 5. Risk score -------------------------------------------------------
 
@@ -462,6 +752,10 @@ class RiskEngine:
         reasons: list[str] = []
         warnings: list[str] = []
         checks: dict[str, bool] = {}
+        contract_size = self._contract_size(check.symbol)
+        leverage = self._account_leverage(
+            account, fallback=self.config.exposure_leverage
+        )
 
         size = self.size_position(
             equity=account.equity,
@@ -470,6 +764,7 @@ class RiskEngine:
             stop_distance=check.stop_loss_distance,
             atr=check.atr,
             entry_price=check.entry_price,
+            contract_size=contract_size,
         )
         checks["position_sizing"] = size.approved_lots >= self.config.min_lot
 
@@ -487,8 +782,9 @@ class RiskEngine:
             proposed_side=check.side,
             proposed_lots=size.approved_lots,
             entry_price=check.entry_price,
+            leverage=leverage,
         )
-        exp_ok, exp_reasons, exp_warn = self.exposure_limits_ok(
+        exp_ok, exp_reasons, exp_warn, exp_metrics = self.exposure_limits_ok(
             exposure, equity=account.equity, symbol=check.symbol
         )
         checks["exposure"] = exp_ok
@@ -507,12 +803,13 @@ class RiskEngine:
         reasons.extend(dd_reasons)
         warnings.extend(dd_warn)
 
-        corr_ok, corr_reasons, corr_warn = self.correlation_risk_ok(
+        corr_ok, corr_reasons, corr_warn, corr_pct = self.correlation_risk_ok(
             positions,
             symbol=check.symbol,
             proposed_lots=size.approved_lots,
             entry_price=check.entry_price,
             equity=account.equity,
+            leverage=leverage,
         )
         checks["correlation"] = corr_ok
         reasons.extend(corr_reasons)
@@ -572,6 +869,19 @@ class RiskEngine:
             )
             approved = size.approved_lots
 
+        rule_rows = self._build_rules(
+            check=check,
+            size=size,
+            drawdown=drawdown,
+            exp_metrics=exp_metrics,
+            corr_pct=corr_pct,
+            open_count=open_count,
+            contract_size=contract_size,
+            leverage=leverage,
+            checks=checks,
+        )
+        rules_payload = [r.to_dict() for r in rule_rows]
+
         assessment = RiskAssessment.record(
             user_id=check.user_id,
             request_id=check.request_id,
@@ -588,6 +898,7 @@ class RiskEngine:
             exposure=exposure.to_dict(),
             drawdown=drawdown.to_dict(),
             checks=checks,
+            rules=rules_payload,
             request_snapshot={
                 "symbol": check.symbol,
                 "side": check.side,
@@ -605,6 +916,9 @@ class RiskEngine:
                 "spread": str(check.spread) if check.spread is not None else None,
                 "session_allowed": check.session_allowed,
                 "session_name": check.session_name,
+                "contract_size": str(contract_size),
+                "leverage": str(leverage),
+                "rules": rules_payload,
             },
         )
 

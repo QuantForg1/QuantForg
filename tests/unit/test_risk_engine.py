@@ -191,6 +191,58 @@ class TestRiskEngineEvaluate:
             or result.checks.get("exposure") is False
         )
 
+    def test_xauusd_min_lot_uses_metal_contract_size(self) -> None:
+        """FX 100k contract must not reject gold 0.01 on a live micro account."""
+        engine = RiskEngine()
+        result = engine.evaluate(
+            RiskCheckInput(
+                user_id=uuid4(),
+                request_id="risk-xau-1",
+                symbol="XAUUSD",
+                side="buy",
+                requested_lots=Decimal("0.01"),
+                sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
+                entry_price=Decimal("4014.137"),
+            ),
+            account=AccountSnapshot(
+                login=1,
+                balance=Decimal("100.14"),
+                equity=Decimal("100.14"),
+                margin=Decimal("0"),
+                free_margin=Decimal("100.14"),
+                margin_level=Decimal("0"),
+                profit=Decimal("0"),
+                leverage=1000,
+            ),
+            positions=[],
+        )
+        assert result.decision is RiskDecision.ALLOW
+        assert result.checks.get("exposure") is True
+        assert any(r.get("id") == "symbol_exposure" for r in result.rules)
+        failed = [r for r in result.rules if r.get("status") == "fail"]
+        assert failed == []
+
+    def test_rules_list_on_reject(self) -> None:
+        engine = RiskEngine(config=RiskEngineConfig(max_daily_loss_pct=Decimal("2")))
+        result = engine.evaluate(
+            RiskCheckInput(
+                user_id=uuid4(),
+                request_id="risk-rules-1",
+                symbol="EURUSD",
+                side="buy",
+                requested_lots=Decimal("0.10"),
+                stop_loss_distance=Decimal("0.0020"),
+                entry_price=Decimal("1.08500"),
+            ),
+            account=_account(),
+            positions=[],
+            daily_pnl=Decimal("-500"),
+        )
+        assert result.decision is RiskDecision.REJECT
+        daily = next(r for r in result.rules if r.get("id") == "daily_loss")
+        assert daily["status"] == "fail"
+        assert "5" in str(daily["current"]) or "5.00" in str(daily["current"])
+
 
 @pytest.mark.unit
 class TestCheckRiskUseCase:

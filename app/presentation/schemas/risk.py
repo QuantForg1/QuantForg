@@ -46,4 +46,8 @@ class RiskCheckResponse(BaseModel):
     exposure: dict[str, object] = Field(default_factory=dict)
     drawdown: dict[str, object] = Field(default_factory=dict)
     checks: dict[str, bool] = Field(default_factory=dict)
+    rules: list[dict[str, object]] = Field(
+        default_factory=list,
+        description="Per-rule PASS/FAIL with current vs threshold",
+    )
     assessed_at: datetime

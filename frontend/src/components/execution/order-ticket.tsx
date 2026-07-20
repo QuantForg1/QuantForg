@@ -18,6 +18,7 @@ import {
   PreTradeChecklist,
   preTradeAllowsExecution,
 } from "@/components/execution/pre-trade-checklist";
+import { formatRiskRejection } from "@/components/execution/risk-rules-panel";
 import { executionApi, mt5Api, riskApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, num, str } from "@/lib/desk";
@@ -166,7 +167,8 @@ export const ExecutionOrderTicket = forwardRef<
         requested_lots: payload.volume,
         entry_price: payload.price || String(mid || 1),
         stop_loss_distance: stopLoss || undefined,
-        equity: Number.isFinite(equity) ? String(equity) : undefined,
+        // Live equity/leverage/positions load on the API when broker is attached.
+        equity: connected ? undefined : Number.isFinite(equity) ? String(equity) : undefined,
       });
       setLastRisk(asRecord(risk));
       const check = await executionApi.check(payload);
@@ -179,7 +181,7 @@ export const ExecutionOrderTicket = forwardRef<
       }
       if (str(asRecord(risk).decision).toUpperCase() === "REJECT") {
         toast.error("Risk engine blocked this order", {
-          description: asListish(asRecord(risk).warnings).join(" · ") || "REJECT",
+          description: formatRiskRejection(asRecord(risk)),
         });
       }
     } catch (e) {
@@ -239,19 +241,22 @@ export const ExecutionOrderTicket = forwardRef<
         requested_lots: payload.volume,
         entry_price: payload.price || String(mid || 1),
         stop_loss_distance: stopLoss || undefined,
-        equity: Number.isFinite(equity) ? String(equity) : session.equity,
+        equity: connected ? undefined : session.equity || undefined,
       });
       setLastRisk(asRecord(risk));
       const riskDecision = str(asRecord(risk).decision).toUpperCase();
       if (riskDecision === "REJECT") {
+        const detail = formatRiskRejection(asRecord(risk));
         const err = humanExecutionError(
           {
             message: "Risk engine blocked execution",
-            rejection_reasons: asListish(asRecord(risk).warnings),
+            rejection_reasons: asListish(asRecord(risk).reasons).length
+              ? asListish(asRecord(risk).reasons)
+              : [detail],
           },
           "Risk engine blocked execution",
         );
-        toast.error(err.title, { description: err.description });
+        toast.error(err.title, { description: detail || err.description });
         return;
       }
       const gateOk = preTradeAllowsExecution(
@@ -264,6 +269,7 @@ export const ExecutionOrderTicket = forwardRef<
           takeProfit: takeProfit || undefined,
           validationValid: true,
           riskDecision,
+          riskAssessment: asRecord(risk),
           marginRequired: str(asRecord(calc).expected_margin, ""),
         },
         session,
@@ -406,6 +412,7 @@ export const ExecutionOrderTicket = forwardRef<
             validationValid:
               validation == null ? null : Boolean(validation.valid),
             riskDecision: lastRisk ? str(lastRisk.decision).toUpperCase() : null,
+            riskAssessment: lastRisk,
             marginRequired: str(asRecord(calc).expected_margin, ""),
           }}
         />

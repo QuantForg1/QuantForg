@@ -125,6 +125,29 @@ class CheckRiskUseCase:
         equity_override: str | None,
         balance_override: str | None,
     ) -> tuple[AccountSnapshot, list[MT5Position]]:
+        """Prefer live MT5 portfolio. Equity override must not wipe leverage/positions."""
+        live = await self._try_live_portfolio(user_id)
+        if live is not None:
+            account, positions = live
+            if equity_override is not None:
+                equity = Decimal(equity_override)
+                balance = (
+                    Decimal(balance_override)
+                    if balance_override is not None
+                    else account.balance
+                )
+                account = AccountSnapshot(
+                    login=account.login,
+                    balance=balance,
+                    equity=equity,
+                    margin=account.margin,
+                    free_margin=account.free_margin,
+                    margin_level=account.margin_level,
+                    profit=account.profit,
+                    leverage=account.leverage,
+                )
+            return account, positions
+
         if equity_override is not None:
             equity = Decimal(equity_override)
             balance = (
@@ -142,6 +165,22 @@ class CheckRiskUseCase:
             )
             return account, []
 
+        # Safe defaults when no live portfolio context (still evaluates)
+        account = AccountSnapshot(
+            login=1,
+            balance=Decimal("10000"),
+            equity=Decimal("10000"),
+            margin=Decimal("0"),
+            free_margin=Decimal("10000"),
+            margin_level=Decimal("0"),
+            profit=Decimal("0"),
+            leverage=100,
+        )
+        return account, []
+
+    async def _try_live_portfolio(
+        self, user_id: UUID
+    ) -> tuple[AccountSnapshot, list[MT5Position]] | None:
         connected = False
         session_ref = ""
         async with self.mt5_uow_factory() as uow:
@@ -164,17 +203,5 @@ class CheckRiskUseCase:
                 positions = self.portfolio_sync.list_positions()
                 return account, positions
             except (OSError, RuntimeError, ValueError):
-                pass
-
-        # Safe defaults when no live portfolio context (still evaluates)
-        account = AccountSnapshot(
-            login=1,
-            balance=Decimal("10000"),
-            equity=Decimal("10000"),
-            margin=Decimal("0"),
-            free_margin=Decimal("10000"),
-            margin_level=Decimal("0"),
-            profit=Decimal("0"),
-            leverage=100,
-        )
-        return account, []
+                return None
+        return None

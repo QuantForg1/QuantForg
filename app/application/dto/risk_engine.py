@@ -48,10 +48,17 @@ class RiskCheckDTO:
     exposure: dict[str, object]
     drawdown: dict[str, object]
     checks: dict[str, bool]
+    rules: list[dict[str, object]]
     assessed_at: datetime
 
     @classmethod
     def from_entity(cls, entity: RiskAssessment) -> RiskCheckDTO:
+        rules = list(entity.rules)
+        if not rules:
+            snap = entity.request_snapshot or {}
+            raw = snap.get("rules")
+            if isinstance(raw, list):
+                rules = [dict(r) for r in raw if isinstance(r, dict)]
         return cls(
             id=entity.id,
             request_id=entity.request_id,
@@ -68,5 +75,6 @@ class RiskCheckDTO:
             exposure=dict(entity.exposure),
             drawdown=dict(entity.drawdown),
             checks=dict(entity.checks),
+            rules=rules,
             assessed_at=entity.assessed_at,
         )

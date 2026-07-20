@@ -62,5 +62,6 @@ async def risk_check(
         exposure=dict(dto.exposure),
         drawdown=dict(dto.drawdown),
         checks=dict(dto.checks),
+        rules=list(dto.rules),
         assessed_at=dto.assessed_at,
     )

@@ -278,6 +278,21 @@ export function computeTradeAnalytics(trades: LiveTrade[]): TradeAnalytics {
   };
 }
 
+export function attachStopsFromPositions(
+  trades: LiveTrade[],
+  positions: { ticket: number; stop_loss?: number; take_profit?: number }[],
+): LiveTrade[] {
+  if (!positions.length) return trades;
+  const byTicket = new Map(positions.map((p) => [p.ticket, p]));
+  return trades.map((t) => {
+    const pos = byTicket.get(t.ticket);
+    if (!pos) return t;
+    const sl = pos.stop_loss != null && pos.stop_loss > 0 ? pos.stop_loss : t.sl;
+    const tp = pos.take_profit != null && pos.take_profit > 0 ? pos.take_profit : t.tp;
+    return { ...t, sl, tp };
+  });
+}
+
 export function formatDuration(ms: number | null): string {
   if (ms == null || !Number.isFinite(ms)) return "—";
   const s = Math.floor(ms / 1000);

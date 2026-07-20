@@ -27,6 +27,11 @@ def _checks_from_row(value: object) -> dict[str, bool]:
 
 def _assessment_from_row(row: Any) -> RiskAssessment:
     created = parse_datetime(row["created_at"])
+    snapshot = json_dict(row["request_snapshot"])
+    rules_raw = snapshot.get("rules")
+    rules: list[dict[str, object]] = []
+    if isinstance(rules_raw, list):
+        rules = [dict(r) for r in rules_raw if isinstance(r, dict)]
     return RiskAssessment(
         id=parse_uuid(row["id"]),
         user_id=parse_uuid(row["user_id"]),
@@ -44,7 +49,8 @@ def _assessment_from_row(row: Any) -> RiskAssessment:
         exposure=json_dict(row["exposure"]),
         drawdown=json_dict(row["drawdown"]),
         checks=_checks_from_row(row["checks"]),
-        request_snapshot=json_dict(row["request_snapshot"]),
+        rules=rules,
+        request_snapshot=snapshot,
         assessed_at=parse_datetime(row["assessed_at"]),
         created_at=created,
         updated_at=created,

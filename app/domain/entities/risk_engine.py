@@ -38,8 +38,9 @@ class RiskEngineConfig:
     fixed_lot: Decimal = Decimal("0.10")
     fixed_dollar_risk: Decimal = Decimal("100")
     atr_multiplier: Decimal = Decimal("1.5")
-    contract_size: Decimal = Decimal("100000")  # FX default; ITE maps XAU to 100
-    exposure_leverage: Decimal = Decimal("100")  # margin ≈ notional / leverage
+    # FX default. Metals/crypto must use symbol-aware size via contract_size_for_symbol().
+    contract_size: Decimal = Decimal("100000")
+    exposure_leverage: Decimal = Decimal("100")  # fallback when account.leverage unset
     # --- Institutional extensions (Phase B) ---
     max_consecutive_losses: int = 3
     cooldown_minutes_after_loss_streak: int = 60
@@ -58,6 +59,40 @@ class RiskEngineConfig:
         require(self.exposure_leverage > 0, "exposure_leverage must be > 0")
         require(self.max_consecutive_losses >= 0, "max_consecutive_losses >= 0")
         require(self.max_open_positions >= 1, "max_open_positions >= 1")
+
+
+def contract_size_for_symbol(symbol: str, *, default: Decimal = Decimal("100000")) -> Decimal:
+    """Broker contract size by instrument class — never apply FX 100k to gold."""
+    u = symbol.strip().upper()
+    if u.startswith("XAU") or "GOLD" in u:
+        return Decimal("100")
+    if u.startswith("XAG") or "SILVER" in u:
+        return Decimal("5000")
+    if "BTC" in u or "ETH" in u:
+        return Decimal("1")
+    return default
+
+
+@dataclass(frozen=True, slots=True)
+class RiskRuleResult:
+    """One evaluated risk rule for transparent PASS/FAIL UI."""
+
+    id: str
+    name: str
+    status: str  # pass | fail | n/a
+    current: str
+    threshold: str
+    reason: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "status": self.status,
+            "current": self.current,
+            "threshold": self.threshold,
+            "reason": self.reason,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +180,7 @@ class RiskAssessment(Entity):
     exposure: dict[str, object] = field(default_factory=dict)
     drawdown: dict[str, object] = field(default_factory=dict)
     checks: dict[str, bool] = field(default_factory=dict)
+    rules: list[dict[str, object]] = field(default_factory=list)
     request_snapshot: dict[str, object] = field(default_factory=dict)
     assessed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -156,6 +192,7 @@ class RiskAssessment(Entity):
         require(0 <= self.risk_score <= 100, "risk_score must be 0-100")
         self.warnings = [w.strip()[:500] for w in self.warnings if w.strip()][:50]
         self.reasons = [r.strip()[:500] for r in self.reasons if r.strip()][:50]
+        self.rules = [dict(r) for r in self.rules][:40]
 
     @classmethod
     def record(
@@ -176,6 +213,7 @@ class RiskAssessment(Entity):
         exposure: dict[str, object] | None = None,
         drawdown: dict[str, object] | None = None,
         checks: dict[str, bool] | None = None,
+        rules: list[dict[str, object]] | None = None,
         request_snapshot: dict[str, object] | None = None,
         entity_id: UUID | None = None,
     ) -> Self:
@@ -195,6 +233,7 @@ class RiskAssessment(Entity):
             "exposure": dict(exposure or {}),
             "drawdown": dict(drawdown or {}),
             "checks": dict(checks or {}),
+            "rules": list(rules or []),
             "request_snapshot": dict(request_snapshot or {}),
         }
         if entity_id is not None:
@@ -220,6 +259,7 @@ class RiskAssessment(Entity):
                 "exposure": dict(self.exposure),
                 "drawdown": dict(self.drawdown),
                 "checks": dict(self.checks),
+                "rules": list(self.rules),
                 "request_snapshot": dict(self.request_snapshot),
                 "assessed_at": self.assessed_at.isoformat(),
             }
