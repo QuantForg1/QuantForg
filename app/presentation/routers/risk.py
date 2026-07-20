@@ -34,6 +34,7 @@ async def risk_check(
             requested_lots=body.requested_lots,
             stop_loss_distance=body.stop_loss_distance,
             atr=body.atr,
+            spread=body.spread,
             sizing_method=body.sizing_method,
             entry_price=body.entry_price,
             peak_equity=body.peak_equity,

@@ -223,12 +223,42 @@ export type TradeAnalytics = {
   averageRr: number | null;
   maxDrawdown: number | null;
   equityCurve: { t: number; equity: number }[];
+  balanceCurve: { t: number; balance: number }[];
   dailyPl: { day: string; pl: number }[];
   monthlyReturns: { month: string; pl: number }[];
   closedCount: number;
+  sharpe: number | null;
+  sortino: number | null;
+  recoveryFactor: number | null;
+  largestWin: number | null;
+  largestLoss: number | null;
+  avgHoldMs: number | null;
+  bySymbol: { label: string; value: number }[];
+  bySession: { label: string; value: number }[];
+  byHour: { label: string; value: number }[];
+  byWeekday: { label: string; value: number }[];
+  holdBuckets: { label: string; value: number }[];
+  profitDistribution: { label: string; value: number }[];
+  todayPl: number;
+  weekPl: number;
+  monthPl: number;
 };
 
-export function computeTradeAnalytics(trades: LiveTrade[]): TradeAnalytics {
+function sessionOf(d: Date): string {
+  const h = d.getUTCHours();
+  if (h >= 7 && h < 12) return "London";
+  if (h >= 12 && h < 17) return "Overlap";
+  if (h >= 12 && h < 21) return "New York";
+  if (h >= 0 && h < 7) return "Asia";
+  return "Off";
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function computeTradeAnalytics(
+  trades: LiveTrade[],
+  { startingEquity = 0 }: { startingEquity?: number } = {},
+): TradeAnalytics {
   const closed = trades.filter((t) => t.status === "closed");
   const wins = closed.filter((t) => t.netPl > 0);
   const losses = closed.filter((t) => t.netPl < 0);
@@ -237,7 +267,6 @@ export function computeTradeAnalytics(trades: LiveTrade[]): TradeAnalytics {
   const winRate = closed.length ? wins.length / closed.length : null;
   const profitFactor =
     grossLoss > 0 ? grossWin / grossLoss : wins.length ? null : null;
-  // Average R:R from absolute win/loss magnitudes when both exist
   const avgWin = wins.length ? grossWin / wins.length : 0;
   const avgLoss = losses.length ? grossLoss / losses.length : 0;
   const averageRr = avgLoss > 0 ? avgWin / avgLoss : null;
@@ -245,22 +274,115 @@ export function computeTradeAnalytics(trades: LiveTrade[]): TradeAnalytics {
   const chronological = [...closed].sort(
     (a, b) => a.time.getTime() - b.time.getTime(),
   );
-  let equity = 0;
-  let peak = 0;
+  let equity = startingEquity;
+  let peak = startingEquity;
   let maxDd = 0;
   const equityCurve: { t: number; equity: number }[] = [];
+  const balanceCurve: { t: number; balance: number }[] = [];
   const dailyMap = new Map<string, number>();
   const monthlyMap = new Map<string, number>();
+  const returns: number[] = [];
+  const downside: number[] = [];
+  let prevEquity = startingEquity;
+
   for (const t of chronological) {
     equity += t.netPl;
+    const ret = prevEquity !== 0 ? t.netPl / Math.abs(prevEquity) : 0;
+    returns.push(ret);
+    if (ret < 0) downside.push(ret);
+    prevEquity = equity;
     peak = Math.max(peak, equity);
     maxDd = Math.max(maxDd, peak - equity);
     equityCurve.push({ t: t.time.getTime(), equity });
+    balanceCurve.push({ t: t.time.getTime(), balance: equity });
     const day = t.time.toISOString().slice(0, 10);
     dailyMap.set(day, (dailyMap.get(day) ?? 0) + t.netPl);
     const month = t.time.toISOString().slice(0, 7);
     monthlyMap.set(month, (monthlyMap.get(month) ?? 0) + t.netPl);
   }
+
+  const mean =
+    returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
+  const variance =
+    returns.length > 1
+      ? returns.reduce((s, r) => s + (r - mean) ** 2, 0) / (returns.length - 1)
+      : 0;
+  const std = Math.sqrt(variance);
+  const sharpe = std > 0 ? mean / std : null;
+  const downMean =
+    downside.length > 0 ? downside.reduce((a, b) => a + b, 0) / downside.length : 0;
+  const downVar =
+    downside.length > 1
+      ? downside.reduce((s, r) => s + (r - downMean) ** 2, 0) / (downside.length - 1)
+      : 0;
+  const downStd = Math.sqrt(downVar);
+  const sortino = downStd > 0 ? mean / downStd : null;
+  const netProfit = chronological.reduce((s, t) => s + t.netPl, 0);
+  const recoveryFactor = maxDd > 0 ? netProfit / maxDd : null;
+
+  const largestWin = wins.length ? Math.max(...wins.map((t) => t.netPl)) : null;
+  const largestLoss = losses.length ? Math.min(...losses.map((t) => t.netPl)) : null;
+  const holds = closed
+    .map((t) => t.durationMs)
+    .filter((ms): ms is number => ms != null && Number.isFinite(ms));
+  const avgHoldMs = holds.length
+    ? holds.reduce((a, b) => a + b, 0) / holds.length
+    : null;
+
+  const bySymbolMap = new Map<string, number>();
+  const bySessionMap = new Map<string, number>();
+  const byHourMap = new Map<string, number>();
+  const byWeekdayMap = new Map<string, number>();
+  for (const t of closed) {
+    bySymbolMap.set(t.symbol, (bySymbolMap.get(t.symbol) ?? 0) + t.netPl);
+    const sess = sessionOf(t.time);
+    bySessionMap.set(sess, (bySessionMap.get(sess) ?? 0) + t.netPl);
+    const hour = `${String(t.time.getUTCHours()).padStart(2, "0")}:00`;
+    byHourMap.set(hour, (byHourMap.get(hour) ?? 0) + t.netPl);
+    const wd = WEEKDAYS[t.time.getUTCDay()] ?? "—";
+    byWeekdayMap.set(wd, (byWeekdayMap.get(wd) ?? 0) + t.netPl);
+  }
+
+  const holdBuckets = [
+    { label: "<15m", value: 0 },
+    { label: "15m–1h", value: 0 },
+    { label: "1–4h", value: 0 },
+    { label: "4h+", value: 0 },
+  ];
+  for (const ms of holds) {
+    const m = ms / 60000;
+    if (m < 15) holdBuckets[0]!.value += 1;
+    else if (m < 60) holdBuckets[1]!.value += 1;
+    else if (m < 240) holdBuckets[2]!.value += 1;
+    else holdBuckets[3]!.value += 1;
+  }
+
+  const profitDistribution = [
+    { label: "Wins", value: wins.length },
+    { label: "Losses", value: losses.length },
+    { label: "Flat", value: closed.filter((t) => t.netPl === 0).length },
+  ];
+
+  const now = new Date();
+  const startToday = new Date(now);
+  startToday.setHours(0, 0, 0, 0);
+  const startWeek = new Date(now);
+  startWeek.setDate(startWeek.getDate() - 7);
+  const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayPl = closed
+    .filter((t) => t.time >= startToday)
+    .reduce((s, t) => s + t.netPl, 0);
+  const weekPl = closed
+    .filter((t) => t.time >= startWeek)
+    .reduce((s, t) => s + t.netPl, 0);
+  const monthPl = closed
+    .filter((t) => t.time >= startMonth)
+    .reduce((s, t) => s + t.netPl, 0);
+
+  const toRows = (m: Map<string, number>) =>
+    [...m.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([label, value]) => ({ label, value }));
 
   return {
     winRate,
@@ -268,14 +390,42 @@ export function computeTradeAnalytics(trades: LiveTrade[]): TradeAnalytics {
     averageRr,
     maxDrawdown: chronological.length ? maxDd : null,
     equityCurve,
-    dailyPl: [...dailyMap.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([day, pl]) => ({ day, pl })),
-    monthlyReturns: [...monthlyMap.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, pl]) => ({ month, pl })),
+    balanceCurve,
+    dailyPl: toRows(dailyMap).map((r) => ({ day: r.label, pl: r.value })),
+    monthlyReturns: toRows(monthlyMap).map((r) => ({ month: r.label, pl: r.value })),
     closedCount: closed.length,
+    sharpe,
+    sortino,
+    recoveryFactor,
+    largestWin,
+    largestLoss,
+    avgHoldMs,
+    bySymbol: toRows(bySymbolMap),
+    bySession: toRows(bySessionMap),
+    byHour: toRows(byHourMap),
+    byWeekday: WEEKDAYS.map((d) => ({
+      label: d,
+      value: byWeekdayMap.get(d) ?? 0,
+    })),
+    holdBuckets,
+    profitDistribution,
+    todayPl,
+    weekPl,
+    monthPl,
   };
+}
+
+export function inferTradeSession(time: Date): string {
+  return sessionOf(time);
+}
+
+export function computeTradeRr(t: LiveTrade): number | null {
+  if (t.sl == null || t.sl <= 0) return null;
+  const risk = Math.abs(t.entry - t.sl);
+  if (risk <= 0) return null;
+  if (t.exit == null) return null;
+  const reward = Math.abs(t.exit - t.entry);
+  return reward / risk;
 }
 
 export function attachStopsFromPositions(

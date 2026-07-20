@@ -15,6 +15,7 @@ class RiskCheckRequest(BaseModel):
     requested_lots: str | None = None
     stop_loss_distance: str | None = None
     atr: str | None = None
+    spread: str | None = None
     sizing_method: str = Field(
         default="percentage_risk",
         description="fixed_lot | fixed_dollar_risk | percentage_risk | atr_based",

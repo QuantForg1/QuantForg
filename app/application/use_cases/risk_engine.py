@@ -47,6 +47,7 @@ class CheckRiskUseCase:
                 else None
             )
             atr = Decimal(command.atr) if command.atr else None
+            spread = Decimal(command.spread) if command.spread else None
             entry = Decimal(command.entry_price)
             peak = Decimal(command.peak_equity) if command.peak_equity else None
             daily = Decimal(command.daily_pnl)
@@ -74,6 +75,7 @@ class CheckRiskUseCase:
             atr=atr,
             sizing_method=method,
             entry_price=entry,
+            spread=spread,
         )
         assessment = self.risk_engine.evaluate(
             check,

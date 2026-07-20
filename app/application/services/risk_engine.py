@@ -266,6 +266,7 @@ class RiskEngine:
         current: str,
         threshold: str,
         reason: str = "",
+        suggested_action: str = "",
     ) -> RiskRuleResult:
         return RiskRuleResult(
             id=rule_id,
@@ -274,12 +275,24 @@ class RiskEngine:
             current=current,
             threshold=threshold,
             reason=reason,
+            suggested_action=suggested_action,
         )
+
+    @staticmethod
+    def _limit_status(current: Decimal, limit: Decimal, *, warn_ratio: Decimal = Decimal("0.8")) -> str:
+        if limit <= 0:
+            return "n/a"
+        if current > limit:
+            return "fail"
+        if current >= limit * warn_ratio:
+            return "warn"
+        return "pass"
 
     def _build_rules(
         self,
         *,
         check: RiskCheckInput,
+        account: AccountSnapshot,
         size: PositionSizeResult,
         drawdown: DrawdownState,
         exp_metrics: dict[str, Decimal],
@@ -288,57 +301,99 @@ class RiskEngine:
         contract_size: Decimal,
         leverage: Decimal,
         checks: dict[str, bool],
+        proposed_margin: Decimal,
     ) -> list[RiskRuleResult]:
         cfg = self.config
         rules: list[RiskRuleResult] = []
 
-        def pass_fail(ok: bool) -> str:
-            return "pass" if ok else "fail"
+        def action_for(status: str, reduce: str, stop: str) -> str:
+            if status == "fail":
+                return stop
+            if status == "warn":
+                return reduce
+            if status == "n/a":
+                return "Not available — supply live input or enable gate"
+            return "No action required"
 
-        daily_ok = drawdown.daily_loss_pct <= cfg.max_daily_loss_pct
+        # --- Loss / drawdown ---
+        daily_st = self._limit_status(
+            drawdown.daily_loss_pct, cfg.max_daily_loss_pct
+        )
         rules.append(
             self._rule(
                 rule_id="daily_loss",
-                name="Daily Loss Limit",
-                status=pass_fail(daily_ok),
+                name="Daily Loss",
+                status=daily_st,
                 current=f"{drawdown.daily_loss_pct}%",
                 threshold=f"{cfg.max_daily_loss_pct}%",
-                reason=""
-                if daily_ok
-                else f"daily loss {drawdown.daily_loss_pct}% exceeds {cfg.max_daily_loss_pct}%",
+                reason=(
+                    f"daily loss {drawdown.daily_loss_pct}% vs max {cfg.max_daily_loss_pct}%"
+                ),
+                suggested_action=action_for(
+                    daily_st,
+                    "Reduce size or pause new risk for the session",
+                    "Halt new entries until daily loss recovers",
+                ),
             )
         )
-        weekly_ok = drawdown.weekly_loss_pct <= cfg.max_weekly_loss_pct
+        weekly_st = self._limit_status(
+            drawdown.weekly_loss_pct, cfg.max_weekly_loss_pct
+        )
         rules.append(
             self._rule(
                 rule_id="weekly_loss",
-                name="Weekly Loss Limit",
-                status=pass_fail(weekly_ok),
+                name="Weekly Loss",
+                status=weekly_st,
                 current=f"{drawdown.weekly_loss_pct}%",
                 threshold=f"{cfg.max_weekly_loss_pct}%",
-                reason=""
-                if weekly_ok
-                else f"weekly loss {drawdown.weekly_loss_pct}% exceeds {cfg.max_weekly_loss_pct}%",
+                reason=(
+                    f"weekly loss {drawdown.weekly_loss_pct}% vs max {cfg.max_weekly_loss_pct}%"
+                ),
+                suggested_action=action_for(
+                    weekly_st,
+                    "Cut risk until weekly P/L improves",
+                    "Block new risk — weekly loss limit breached",
+                ),
             )
         )
-        monthly_ok = drawdown.monthly_loss_pct <= cfg.max_monthly_loss_pct
+        monthly_st = self._limit_status(
+            drawdown.monthly_loss_pct, cfg.max_monthly_loss_pct
+        )
         rules.append(
             self._rule(
                 rule_id="monthly_loss",
-                name="Monthly Loss Limit",
-                status=pass_fail(monthly_ok),
+                name="Monthly Loss",
+                status=monthly_st,
                 current=f"{drawdown.monthly_loss_pct}%",
                 threshold=f"{cfg.max_monthly_loss_pct}%",
+                reason=(
+                    f"monthly loss {drawdown.monthly_loss_pct}% vs max {cfg.max_monthly_loss_pct}%"
+                ),
+                suggested_action=action_for(
+                    monthly_st,
+                    "Lower frequency and size",
+                    "Stop trading for the month — monthly loss breached",
+                ),
             )
         )
-        dd_ok = drawdown.current_drawdown_pct < cfg.max_drawdown_pct
+        dd_st = self._limit_status(
+            drawdown.current_drawdown_pct, cfg.max_drawdown_pct
+        )
         rules.append(
             self._rule(
                 rule_id="max_drawdown",
                 name="Max Drawdown",
-                status=pass_fail(dd_ok),
+                status=dd_st,
                 current=f"{drawdown.current_drawdown_pct}%",
                 threshold=f"{cfg.max_drawdown_pct}%",
+                reason=(
+                    f"drawdown {drawdown.current_drawdown_pct}% from peak {drawdown.peak_equity}"
+                ),
+                suggested_action=action_for(
+                    dd_st,
+                    "De-risk open book; avoid adding exposure",
+                    "Equity protection — reject new risk",
+                ),
             )
         )
 
@@ -349,91 +404,235 @@ class RiskEngine:
             if drawdown.equity > 0
             else Decimal("0")
         )
-        risk_ok = risk_pct <= cfg.max_risk_per_trade_pct or size.dollar_risk <= 0
+        risk_st = self._limit_status(risk_pct, cfg.max_risk_per_trade_pct)
         rules.append(
             self._rule(
                 rule_id="max_risk",
                 name="Max Risk Per Trade",
-                status=pass_fail(risk_ok),
+                status=risk_st,
                 current=f"{risk_pct}%",
                 threshold=f"{cfg.max_risk_per_trade_pct}%",
-                reason=f"dollar risk {size.dollar_risk}",
+                reason=f"dollar risk {size.dollar_risk} on equity {drawdown.equity}",
+                suggested_action=action_for(
+                    risk_st,
+                    "Tighten stop or reduce lots",
+                    "Reject — risk per trade exceeds policy",
+                ),
             )
         )
 
+        # --- Margin (live account) ---
+        free = account.free_margin
+        used = account.margin
+        equity = account.equity if account.equity > 0 else drawdown.equity
+        margin_level = account.margin_level
+        margin_req_pct = (
+            (proposed_margin / equity * Decimal("100")).quantize(Decimal("0.01"))
+            if equity > 0
+            else Decimal("0")
+        )
+        margin_ok = proposed_margin <= free if free >= 0 else True
+        margin_st = "pass" if margin_ok else "fail"
+        if margin_ok and free > 0 and proposed_margin >= free * Decimal("0.8"):
+            margin_st = "warn"
+        rules.append(
+            self._rule(
+                rule_id="margin_requirement",
+                name="Margin Requirement",
+                status=margin_st,
+                current=f"{proposed_margin} ({margin_req_pct}% equity)",
+                threshold=f"≤ free margin {free}",
+                reason=f"proposed margin {proposed_margin}; free {free}; used {used}",
+                suggested_action=action_for(
+                    margin_st,
+                    "Reduce volume to preserve free margin",
+                    "Reject — insufficient free margin for this order",
+                ),
+            )
+        )
+        free_st = "pass" if free > 0 else ("fail" if equity > 0 else "n/a")
+        if free_st == "pass" and equity > 0 and free < equity * Decimal("0.2"):
+            free_st = "warn"
+        rules.append(
+            self._rule(
+                rule_id="free_margin",
+                name="Free Margin",
+                status=free_st,
+                current=str(free),
+                threshold="> 0 (warn < 20% equity)",
+                reason=f"free margin {free} / equity {equity}",
+                suggested_action=action_for(
+                    free_st,
+                    "Close or reduce positions to free margin",
+                    "No free margin — cannot add risk",
+                ),
+            )
+        )
+        if margin_level > 0:
+            ml_st = "fail" if margin_level < 100 else (
+                "warn" if margin_level < 200 else "pass"
+            )
+            rules.append(
+                self._rule(
+                    rule_id="margin_level",
+                    name="Margin Level",
+                    status=ml_st,
+                    current=f"{margin_level}%",
+                    threshold="≥ 200% preferred · ≥ 100% required",
+                    reason=f"broker margin level {margin_level}%",
+                    suggested_action=action_for(
+                        ml_st,
+                        "Reduce exposure before margin call zone",
+                        "Margin level critical — reject new entries",
+                    ),
+                )
+            )
+        else:
+            rules.append(
+                self._rule(
+                    rule_id="margin_level",
+                    name="Margin Level",
+                    status="n/a",
+                    current="Not available",
+                    threshold="≥ 200% preferred",
+                    reason="No open margin / broker did not report margin level",
+                    suggested_action="Not available",
+                )
+            )
+
+        # --- Exposure ---
         sym_pct = exp_metrics.get("symbol_pct", Decimal("0"))
+        sym_st = self._limit_status(sym_pct, cfg.max_symbol_exposure_pct)
         rules.append(
             self._rule(
                 rule_id="symbol_exposure",
                 name="Symbol Exposure",
-                status=pass_fail(sym_pct <= cfg.max_symbol_exposure_pct),
+                status=sym_st,
                 current=f"{sym_pct}%",
                 threshold=f"{cfg.max_symbol_exposure_pct}%",
+                reason=f"{check.symbol} margin exposure vs equity",
+                suggested_action=action_for(
+                    sym_st,
+                    "Reduce size on this symbol",
+                    "Reject — symbol exposure limit breached",
+                ),
             )
         )
         class_pct = exp_metrics.get("class_pct", Decimal("0"))
+        class_st = self._limit_status(class_pct, cfg.max_asset_class_exposure_pct)
         rules.append(
             self._rule(
                 rule_id="asset_class_exposure",
-                name="Asset Class Exposure",
-                status=pass_fail(class_pct <= cfg.max_asset_class_exposure_pct),
+                name="Asset Exposure",
+                status=class_st,
                 current=f"{class_pct}%",
                 threshold=f"{cfg.max_asset_class_exposure_pct}%",
+                reason="Asset-class margin exposure vs equity",
+                suggested_action=action_for(
+                    class_st,
+                    "Diversify or reduce class exposure",
+                    "Reject — asset-class exposure limit breached",
+                ),
             )
         )
-        total_pct = exp_metrics.get("total_pct", Decimal("0"))
-        rules.append(
-            self._rule(
-                rule_id="total_exposure",
-                name="Total Exposure / Margin",
-                status=pass_fail(total_pct <= cfg.max_total_exposure_pct),
-                current=f"{total_pct}%",
-                threshold=f"{cfg.max_total_exposure_pct}%",
-                reason=f"contract_size={contract_size} leverage={leverage}",
-            )
-        )
+        corr_active = corr_pct > 0 or check.symbol.upper() in {
+            "XAUUSD",
+            "XAGUSD",
+            "EURUSD",
+            "GBPUSD",
+        }
+        if corr_active:
+            corr_st = self._limit_status(corr_pct, cfg.max_correlated_exposure_pct)
+        else:
+            corr_st = "n/a"
         rules.append(
             self._rule(
                 rule_id="correlation",
-                name="Correlation / Metals Group",
-                status=pass_fail(corr_pct <= cfg.max_correlated_exposure_pct)
-                if corr_pct > 0 or check.symbol.upper() in {"XAUUSD", "XAGUSD"}
-                else "n/a",
-                current=f"{corr_pct}%",
+                name="Correlation Exposure",
+                status=corr_st,
+                current=f"{corr_pct}%" if corr_st != "n/a" else "Not available",
                 threshold=f"{cfg.max_correlated_exposure_pct}%",
+                reason="Correlated group margin vs equity",
+                suggested_action=action_for(
+                    corr_st,
+                    "Avoid stacking correlated symbols",
+                    "Reject — correlated exposure limit breached",
+                ),
             )
         )
+        total_pct = exp_metrics.get("total_pct", Decimal("0"))
+        total_st = self._limit_status(total_pct, cfg.max_total_exposure_pct)
+        rules.append(
+            self._rule(
+                rule_id="total_exposure",
+                name="Total Exposure",
+                status=total_st,
+                current=f"{total_pct}%",
+                threshold=f"{cfg.max_total_exposure_pct}%",
+                reason=f"contract_size={contract_size} leverage={leverage}",
+                suggested_action=action_for(
+                    total_st,
+                    "Reduce overall book size",
+                    "Reject — total exposure limit breached",
+                ),
+            )
+        )
+        open_st = "pass" if checks.get("open_positions", True) else "fail"
+        if open_st == "pass" and open_count >= max(1, cfg.max_open_positions - 1):
+            open_st = "warn"
         rules.append(
             self._rule(
                 rule_id="open_positions",
                 name="Open Positions",
-                status=pass_fail(checks.get("open_positions", True)),
+                status=open_st,
                 current=str(open_count),
                 threshold=f"< {cfg.max_open_positions}",
+                reason=f"{open_count} open vs max {cfg.max_open_positions}",
+                suggested_action=action_for(
+                    open_st,
+                    "Close a position before adding risk",
+                    "Reject — max open positions reached",
+                ),
             )
         )
 
-        # Institutional / optional inputs
+        # --- Market microstructure ---
         if check.spread is None:
             rules.append(
                 self._rule(
                     rule_id="spread",
-                    name="Spread Rule",
+                    name="Spread",
                     status="n/a",
-                    current="not provided",
+                    current="Not available",
                     threshold=str(cfg.max_spread),
-                    reason="spread not supplied on this risk check",
+                    reason="Spread not supplied on this risk check",
+                    suggested_action="Not available",
                 )
             )
         else:
-            spread_ok = (not cfg.enforce_spread) or check.spread <= cfg.max_spread
+            spread_st = (
+                "fail"
+                if cfg.enforce_spread and check.spread > cfg.max_spread
+                else (
+                    "warn"
+                    if cfg.enforce_spread
+                    and check.spread > cfg.max_spread * Decimal("0.8")
+                    else "pass"
+                )
+            )
             rules.append(
                 self._rule(
                     rule_id="spread",
-                    name="Spread Rule",
-                    status=pass_fail(spread_ok),
+                    name="Spread",
+                    status=spread_st,
                     current=str(check.spread),
                     threshold=str(cfg.max_spread),
+                    reason=f"live spread {check.spread}",
+                    suggested_action=action_for(
+                        spread_st,
+                        "Wait for tighter spread",
+                        "Reject — spread exceeds max",
+                    ),
                 )
             )
 
@@ -441,26 +640,34 @@ class RiskEngine:
             rules.append(
                 self._rule(
                     rule_id="atr",
-                    name="ATR Rule",
+                    name="ATR",
                     status="n/a",
-                    current="not provided",
+                    current="Not available",
                     threshold=f"max {cfg.max_atr_pct_of_price}% of price",
+                    reason="ATR not supplied on this risk check",
+                    suggested_action="Not available",
                 )
             )
         else:
-            atr_ok = True
+            atr_st = "pass"
             atr_detail = str(check.atr)
             if cfg.enforce_atr and check.entry_price > 0 and cfg.max_atr_pct_of_price > 0:
                 atr_pct = (check.atr / check.entry_price) * Decimal("100")
                 atr_detail = f"{atr_pct.quantize(Decimal('0.01'))}%"
-                atr_ok = atr_pct <= cfg.max_atr_pct_of_price
+                atr_st = self._limit_status(atr_pct, cfg.max_atr_pct_of_price)
             rules.append(
                 self._rule(
                     rule_id="atr",
-                    name="ATR Rule",
-                    status=pass_fail(atr_ok),
+                    name="ATR",
+                    status=atr_st,
                     current=atr_detail,
                     threshold=f"{cfg.max_atr_pct_of_price}%",
+                    reason="ATR as % of entry price",
+                    suggested_action=action_for(
+                        atr_st,
+                        "Widen stops or cut size in high ATR",
+                        "Reject — volatility outside policy",
+                    ),
                 )
             )
 
@@ -468,52 +675,83 @@ class RiskEngine:
             rules.append(
                 self._rule(
                     rule_id="session",
-                    name="Session Rule",
+                    name="Session",
                     status="n/a",
-                    current="not evaluated",
-                    threshold="London/NY when enforced",
+                    current="Not available",
+                    threshold="Allowed session when enforced",
+                    reason="Session gate not evaluated on this check",
+                    suggested_action="Not available",
                 )
             )
         else:
+            sess_st = "pass" if check.session_allowed else "fail"
             rules.append(
                 self._rule(
                     rule_id="session",
-                    name="Session Rule",
-                    status=pass_fail(check.session_allowed),
+                    name="Session",
+                    status=sess_st,
                     current=check.session_name or str(check.session_allowed),
                     threshold="allowed session",
+                    reason="Session restriction gate",
+                    suggested_action=action_for(
+                        sess_st,
+                        "Wait for London/NY window",
+                        "Reject — session restricted",
+                    ),
                 )
             )
 
-        streak_ok = check.consecutive_losses < cfg.max_consecutive_losses
+        streak_st = (
+            "fail"
+            if check.consecutive_losses >= cfg.max_consecutive_losses > 0
+            else (
+                "warn"
+                if check.consecutive_losses >= max(1, cfg.max_consecutive_losses - 1)
+                else "pass"
+            )
+        )
         rules.append(
             self._rule(
                 rule_id="loss_streak",
                 name="Consecutive Losses",
-                status=pass_fail(streak_ok),
+                status=streak_st,
                 current=str(check.consecutive_losses),
                 threshold=f"< {cfg.max_consecutive_losses}",
+                reason="Loss streak gate",
+                suggested_action=action_for(
+                    streak_st,
+                    "Reduce size after consecutive losses",
+                    "Reject — loss streak at policy max",
+                ),
             )
         )
+        cool_st = "fail" if check.cooldown_active else "pass"
         rules.append(
             self._rule(
                 rule_id="cooldown",
                 name="Cooldown",
-                status=pass_fail(not check.cooldown_active),
+                status=cool_st,
                 current="active" if check.cooldown_active else "clear",
                 threshold=f"{cfg.cooldown_minutes_after_loss_streak}m after streak",
+                reason="Post-streak cooldown",
+                suggested_action=action_for(
+                    cool_st,
+                    "Wait out cooldown",
+                    "Reject — cooldown active",
+                ),
             )
         )
 
-        # ITE-only gates — not evaluated on /risk/check (transparent N/A)
+        # ITE / AI — honest N/A on this HTTP path (never invent)
         rules.append(
             self._rule(
                 rule_id="news",
-                name="News Rule",
+                name="News",
                 status="n/a",
-                current="not evaluated",
+                current="Not available",
                 threshold="±30m when news_protection_enabled",
-                reason="ITE gate — not part of HTTP /risk/check",
+                reason="ITE news gate is not part of HTTP /risk/check",
+                suggested_action="Not available",
             )
         )
         rules.append(
@@ -521,9 +759,21 @@ class RiskEngine:
                 rule_id="confluence",
                 name="Confluence Score",
                 status="n/a",
-                current="not evaluated",
+                current="Not available",
                 threshold="80/100 (ITE)",
-                reason="ITE gate — not part of HTTP /risk/check",
+                reason="ITE confluence has no public HTTP surface yet",
+                suggested_action="Not available",
+            )
+        )
+        rules.append(
+            self._rule(
+                rule_id="ai_confidence",
+                name="AI Confidence",
+                status="n/a",
+                current="Not available",
+                threshold="See AI Decision Card (live strategy)",
+                reason="AI confidence is sourced from strategy/quant-ai APIs, not risk engine",
+                suggested_action="Not available",
             )
         )
         return rules
@@ -869,8 +1119,15 @@ class RiskEngine:
             )
             approved = size.approved_lots
 
+        proposed_margin = (
+            size.approved_lots
+            * check.entry_price
+            * contract_size
+            / leverage
+        ).quantize(Decimal("0.01"))
         rule_rows = self._build_rules(
             check=check,
+            account=account,
             size=size,
             drawdown=drawdown,
             exp_metrics=exp_metrics,
@@ -879,6 +1136,7 @@ class RiskEngine:
             contract_size=contract_size,
             leverage=leverage,
             checks=checks,
+            proposed_margin=proposed_margin,
         )
         rules_payload = [r.to_dict() for r in rule_rows]
 

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SessionBar } from "@/components/broker/session-bar";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { PortfolioHealth, exposureFromPositions } from "@/components/book/portfolio-health";
+import { PortfolioOverview } from "@/components/book/portfolio-overview";
 import { RiskDna } from "@/components/book/risk-dna";
 import { ExposureMap } from "@/components/book/exposure-map";
 import { EquityTimeline } from "@/components/book/equity-timeline";
@@ -272,7 +273,14 @@ export function BookShell() {
             />
           </div>
         ) : (
-          <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+          <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+            <div className="min-h-0 max-h-[40%] overflow-y-auto">
+              <PortfolioOverview
+                account={account}
+                positions={positions}
+                deals={deals}
+              />
+            </div>
             <PortfolioHealth
               focused={focus === "health"}
               metrics={{

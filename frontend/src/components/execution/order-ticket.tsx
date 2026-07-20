@@ -18,6 +18,7 @@ import {
   PreTradeChecklist,
   preTradeAllowsExecution,
 } from "@/components/execution/pre-trade-checklist";
+import { AiDecisionCard } from "@/components/execution/ai-decision-card";
 import { formatRiskRejection } from "@/components/execution/risk-rules-panel";
 import { executionApi, mt5Api, riskApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
@@ -160,6 +161,10 @@ export const ExecutionOrderTicket = forwardRef<
         toast.error(err.title, { description: err.description });
         return;
       }
+      const liveSpread =
+        Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
+          ? String(ask - bid)
+          : undefined;
       const risk = await riskApi.check({
         request_id: payload.request_id,
         symbol: payload.symbol,
@@ -167,6 +172,7 @@ export const ExecutionOrderTicket = forwardRef<
         requested_lots: payload.volume,
         entry_price: payload.price || String(mid || 1),
         stop_loss_distance: stopLoss || undefined,
+        spread: liveSpread,
         // Live equity/leverage/positions load on the API when broker is attached.
         equity: connected ? undefined : Number.isFinite(equity) ? String(equity) : undefined,
       });
@@ -234,6 +240,10 @@ export const ExecutionOrderTicket = forwardRef<
         toast.error(err.title, { description: err.description });
         return;
       }
+      const liveSpread =
+        Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
+          ? String(ask - bid)
+          : undefined;
       const risk = await riskApi.check({
         request_id: payload.request_id,
         symbol: payload.symbol,
@@ -241,6 +251,7 @@ export const ExecutionOrderTicket = forwardRef<
         requested_lots: payload.volume,
         entry_price: payload.price || String(mid || 1),
         stop_loss_distance: stopLoss || undefined,
+        spread: liveSpread,
         equity: connected ? undefined : session.equity || undefined,
       });
       setLastRisk(asRecord(risk));
@@ -400,6 +411,15 @@ export const ExecutionOrderTicket = forwardRef<
             SELL
           </Button>
         </div>
+
+        <AiDecisionCard
+          symbol={symbol}
+          side={side}
+          volume={volume}
+          entryPrice={mid}
+          stopLoss={stopLoss || undefined}
+          takeProfit={takeProfit || undefined}
+        />
 
         <PreTradeChecklist
           inputs={{

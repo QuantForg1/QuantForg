@@ -242,6 +242,7 @@ class TestRiskEngineEvaluate:
         daily = next(r for r in result.rules if r.get("id") == "daily_loss")
         assert daily["status"] == "fail"
         assert "5" in str(daily["current"]) or "5.00" in str(daily["current"])
+        assert daily.get("suggested_action")
 
 
 @pytest.mark.unit

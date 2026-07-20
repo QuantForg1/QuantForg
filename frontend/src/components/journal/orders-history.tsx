@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Copy,
@@ -18,14 +18,17 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { LazyBarChart, LazyEquityChart } from "@/components/charts/lazy";
 import { portfolioApi } from "@/lib/api/endpoints";
-import { asList, asRecord } from "@/lib/desk";
+import { asList, asRecord, num } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
 import {
   attachStopsFromPositions,
   computeTradeAnalytics,
+  computeTradeRr,
   formatDuration,
+  inferTradeSession,
   pairDealsIntoTrades,
   parseLiveDeal,
   rangeToIso,
@@ -35,79 +38,9 @@ import {
 } from "@/lib/orders/history";
 
 const PAGE_SIZE = 25;
-
-function Sparkline({
-  points,
-  className,
-}: {
-  points: { t: number; equity: number }[];
-  className?: string;
-}) {
-  if (points.length < 2) {
-    return (
-      <div className={cn("flex h-28 items-center justify-center text-xs text-[var(--fg-subtle)]", className)}>
-        No closed trades in range
-      </div>
-    );
-  }
-  const ys = points.map((p) => p.equity);
-  const min = Math.min(...ys);
-  const max = Math.max(...ys);
-  const span = max - min || 1;
-  const w = 320;
-  const h = 96;
-  const d = points
-    .map((p, i) => {
-      const x = (i / (points.length - 1)) * w;
-      const y = h - ((p.equity - min) / span) * (h - 8) - 4;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className={cn("h-28 w-full", className)} aria-hidden>
-      <path d={d} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function BarList({
-  rows,
-  empty,
-}: {
-  rows: { label: string; value: number }[];
-  empty: string;
-}) {
-  if (!rows.length) {
-    return <p className="py-6 text-center text-xs text-[var(--fg-subtle)]">{empty}</p>;
-  }
-  const max = Math.max(...rows.map((r) => Math.abs(r.value)), 1e-9);
-  return (
-    <ul className="space-y-2">
-      {rows.slice(-12).map((r) => (
-        <li key={r.label} className="grid grid-cols-[4.5rem_1fr_3.5rem] items-center gap-2 text-[11px]">
-          <span className="font-mono text-[var(--fg-muted)]">{r.label}</span>
-          <div className="h-1.5 overflow-hidden rounded bg-[var(--bg-elevated)]">
-            <div
-              className={cn(
-                "h-full rounded",
-                r.value >= 0 ? "bg-[var(--success)]" : "bg-[var(--danger)]",
-              )}
-              style={{ width: `${Math.min(100, (Math.abs(r.value) / max) * 100)}%` }}
-            />
-          </div>
-          <span
-            className={cn(
-              "text-right font-mono",
-              r.value >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-            )}
-          >
-            {formatNumber(r.value, 2)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+const NA = "Not available";
+/** Gold contract size used for risk % when SL + equity are known. */
+const GOLD_CONTRACT = 100;
 
 function downloadBlob(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -117,6 +50,121 @@ function downloadBlob(filename: string, content: string, type: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function sessionMoney(raw: string): number | null {
+  const n = num(raw.replace(/[^0-9.\-]/g, ""), NaN);
+  return Number.isFinite(n) ? n : null;
+}
+
+function fmtMoney(v: number | null | undefined, digits = 2): string {
+  if (v == null || !Number.isFinite(v)) return NA;
+  return formatNumber(v, digits);
+}
+
+function fmtPct(v: number | null | undefined, digits = 1): string {
+  if (v == null || !Number.isFinite(v)) return NA;
+  return `${(v * 100).toFixed(digits)}%`;
+}
+
+function fmtRatio(v: number | null | undefined, digits = 2): string {
+  if (v == null || !Number.isFinite(v)) return NA;
+  return formatNumber(v, digits);
+}
+
+/** Risk % from SL distance × volume × gold contract / equity. */
+function computeRiskPct(
+  t: LiveTrade,
+  equity: number | null,
+): number | null {
+  if (equity == null || equity <= 0) return null;
+  if (t.sl == null || t.sl <= 0) return null;
+  const dist = Math.abs(t.entry - t.sl);
+  if (dist <= 0 || t.volume <= 0) return null;
+  return (t.volume * dist * GOLD_CONTRACT) / equity * 100;
+}
+
+function plTone(v: number): string {
+  if (v > 0) return "text-[var(--success)]";
+  if (v < 0) return "text-[var(--danger)]";
+  return "text-[var(--fg)]";
+}
+
+function KpiCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg-panel)] px-2.5 py-2 transition-colors duration-[var(--duration-os)]">
+      <p className="truncate text-[9px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "mt-0.5 truncate font-mono text-sm tabular-nums text-[var(--fg)]",
+          tone,
+          value === NA && "text-[var(--fg-subtle)]",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ChartPanel({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-panel)] p-3">
+      <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[7.5rem_1fr] gap-2 border-b border-[var(--border)]/60 py-1.5 text-xs last:border-0">
+      <dt className="text-[var(--fg-subtle)]">{label}</dt>
+      <dd
+        className={cn(
+          "font-mono text-[var(--fg)]",
+          value === NA && "font-sans text-[var(--fg-subtle)]",
+        )}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <h3 className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
 }
 
 export function OrdersHistoryDesk() {
@@ -130,6 +178,9 @@ export function OrdersHistoryDesk() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<LiveTrade | null>(null);
+
+  const equityNum = sessionMoney(session.equity);
+  const balanceNum = sessionMoney(session.balance);
 
   const iso = useMemo(
     () => rangeToIso(range, customFrom, customTo),
@@ -155,22 +206,25 @@ export function OrdersHistoryDesk() {
       .map((row) => parseLiveDeal(asRecord(row)))
       .filter((d): d is NonNullable<typeof d> => d != null);
     let rows = pairDealsIntoTrades(deals);
-    const posSource = Array.isArray(positionsQ.data)
+
+    // portfolioApi.positions() returns unknown[] (array), not {items}.
+    const posSource: unknown[] = Array.isArray(positionsQ.data)
       ? positionsQ.data
-      : asList(asRecord(positionsQ.data).items ?? asRecord(positionsQ.data).positions);
+      : [];
     const posRows = posSource
       .map((row) => {
         const r = asRecord(row);
-        const ticket = Number(r.ticket ?? r.position ?? 0);
+        const ticket = num(r.ticket ?? r.position, 0);
         if (!Number.isFinite(ticket) || ticket <= 0) return null;
         return {
           ticket,
-          stop_loss: Number(r.stop_loss ?? r.sl ?? 0),
-          take_profit: Number(r.take_profit ?? r.tp ?? 0),
+          stop_loss: num(r.stop_loss ?? r.sl, 0),
+          take_profit: num(r.take_profit ?? r.tp, 0),
         };
       })
       .filter((p): p is NonNullable<typeof p> => p != null);
     rows = attachStopsFromPositions(rows, posRows);
+
     if (symbol.trim()) {
       const q = symbol.trim().toUpperCase();
       rows = rows.filter((t) => t.symbol.includes(q));
@@ -191,9 +245,34 @@ export function OrdersHistoryDesk() {
     return rows;
   }, [historyQ.data, positionsQ.data, symbol, side, status, search]);
 
-  const analytics = useMemo(() => computeTradeAnalytics(trades), [trades]);
+  const analytics = useMemo(
+    () => computeTradeAnalytics(trades, { startingEquity: equityNum ?? 0 }),
+    [trades, equityNum],
+  );
+
   const pageCount = Math.max(1, Math.ceil(trades.length / PAGE_SIZE));
   const pageRows = trades.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+  const equityChartData = useMemo(
+    () =>
+      analytics.equityCurve.map((p) => ({
+        t: new Date(p.t).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
+        equity: p.equity,
+      })),
+    [analytics.equityCurve],
+  );
+
+  const hasCharts =
+    analytics.equityCurve.length > 0 ||
+    analytics.dailyPl.length > 0 ||
+    analytics.monthlyReturns.length > 0 ||
+    analytics.bySymbol.length > 0 ||
+    analytics.bySession.length > 0 ||
+    analytics.holdBuckets.some((b) => b.value > 0) ||
+    analytics.profitDistribution.some((b) => b.value > 0);
 
   const exportCsv = () => {
     if (!trades.length) {
@@ -205,7 +284,6 @@ export function OrdersHistoryDesk() {
   };
 
   const exportExcel = () => {
-    // Spreadsheet-compatible TSV (Excel opens natively) — values from live deals only.
     if (!trades.length) {
       toast.message("No trades to export");
       return;
@@ -257,9 +335,16 @@ export function OrdersHistoryDesk() {
     );
   }
 
+  const selectedRr = selected ? computeTradeRr(selected) : null;
+  const selectedRisk = selected ? computeRiskPct(selected, equityNum) : null;
+  const selectedMargin =
+    selected && equityNum != null && selectedRisk != null
+      ? (selectedRisk / 100) * equityNum
+      : null;
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 md:p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-4 md:p-5">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
             Journal · Live MT5
@@ -268,8 +353,8 @@ export function OrdersHistoryDesk() {
             Orders History
           </h1>
           <p className="mt-1 max-w-xl text-xs text-[var(--fg-muted)]">
-            Institutional ledger of live MetaTrader deals — filters, analytics, and exports use
-            gateway history only. Empty cells mean the broker did not supply that field.
+            Institutional ledger from live MetaTrader deals. Missing broker fields show as
+            Not available — never invented.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -280,7 +365,9 @@ export function OrdersHistoryDesk() {
             onClick={() => void historyQ.refetch()}
             disabled={historyQ.isFetching}
           >
-            <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", historyQ.isFetching && "animate-spin")} />
+            <RefreshCw
+              className={cn("mr-1.5 h-3.5 w-3.5", historyQ.isFetching && "animate-spin")}
+            />
             Refresh
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={exportCsv}>
@@ -298,68 +385,126 @@ export function OrdersHistoryDesk() {
         </div>
       </header>
 
-      <div className="grid shrink-0 gap-3 lg:grid-cols-4">
-        {(
-          [
-            ["Win rate", analytics.winRate == null ? "—" : `${(analytics.winRate * 100).toFixed(1)}%`],
-            [
-              "Profit factor",
-              analytics.profitFactor == null ? "—" : formatNumber(analytics.profitFactor, 2),
-            ],
-            [
-              "Avg R:R",
-              analytics.averageRr == null ? "—" : formatNumber(analytics.averageRr, 2),
-            ],
-            [
-              "Max drawdown",
-              analytics.maxDrawdown == null ? "—" : formatNumber(analytics.maxDrawdown, 2),
-            ],
-          ] as const
-        ).map(([label, value]) => (
-          <div
-            key={label}
-            className="rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] px-3 py-2"
-          >
-            <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
-            <p className="mt-1 font-mono text-lg text-[var(--fg)]">{value}</p>
-          </div>
-        ))}
+      {/* KPI strip */}
+      <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-8">
+        <KpiCell
+          label="Balance"
+          value={balanceNum == null ? NA : formatNumber(balanceNum, 2)}
+        />
+        <KpiCell
+          label="Equity"
+          value={equityNum == null ? NA : formatNumber(equityNum, 2)}
+        />
+        <KpiCell
+          label="Today's P/L"
+          value={fmtMoney(analytics.todayPl)}
+          tone={plTone(analytics.todayPl)}
+        />
+        <KpiCell
+          label="Weekly P/L"
+          value={fmtMoney(analytics.weekPl)}
+          tone={plTone(analytics.weekPl)}
+        />
+        <KpiCell
+          label="Monthly P/L"
+          value={fmtMoney(analytics.monthPl)}
+          tone={plTone(analytics.monthPl)}
+        />
+        <KpiCell label="Win Rate" value={fmtPct(analytics.winRate)} />
+        <KpiCell label="Profit Factor" value={fmtRatio(analytics.profitFactor)} />
+        <KpiCell label="Sharpe" value={fmtRatio(analytics.sharpe)} />
+        <KpiCell label="Sortino" value={fmtRatio(analytics.sortino)} />
+        <KpiCell label="Recovery Factor" value={fmtRatio(analytics.recoveryFactor)} />
+        <KpiCell label="Max Drawdown" value={fmtMoney(analytics.maxDrawdown)} />
+        <KpiCell label="Average RR" value={fmtRatio(analytics.averageRr)} />
+        <KpiCell
+          label="Largest Win"
+          value={fmtMoney(analytics.largestWin)}
+          tone={analytics.largestWin != null ? "text-[var(--success)]" : undefined}
+        />
+        <KpiCell
+          label="Largest Loss"
+          value={fmtMoney(analytics.largestLoss)}
+          tone={analytics.largestLoss != null ? "text-[var(--danger)]" : undefined}
+        />
       </div>
 
-      <div className="grid min-h-0 shrink-0 gap-3 lg:grid-cols-3">
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-3">
-          <p className="mb-2 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Equity curve
-          </p>
-          <Sparkline points={analytics.equityCurve} />
+      {/* Charts — only when live analytics exist */}
+      {hasCharts ? (
+        <div className="grid shrink-0 gap-2 overflow-y-auto lg:grid-cols-2 xl:grid-cols-4">
+          {analytics.equityCurve.length > 0 ? (
+            <ChartPanel title="Equity curve">
+              <div className="h-40 [&_[role=img]]:!h-40">
+                <LazyEquityChart
+                  data={equityChartData}
+                  emptyLabel="No equity path in range"
+                />
+              </div>
+            </ChartPanel>
+          ) : null}
+          {analytics.dailyPl.length > 0 ? (
+            <ChartPanel title="Daily P/L">
+              <div className="h-40 [&_[role=img]]:!h-40">
+                <LazyBarChart
+                  data={analytics.dailyPl.map((d) => ({
+                    label: d.day.slice(5),
+                    value: d.pl,
+                  }))}
+                />
+              </div>
+            </ChartPanel>
+          ) : null}
+          {analytics.monthlyReturns.length > 0 ? (
+            <ChartPanel title="Monthly P/L">
+              <div className="h-40 [&_[role=img]]:!h-40">
+                <LazyBarChart
+                  data={analytics.monthlyReturns.map((d) => ({
+                    label: d.month,
+                    value: d.pl,
+                  }))}
+                />
+              </div>
+            </ChartPanel>
+          ) : null}
+          {analytics.bySymbol.length > 0 ? (
+            <ChartPanel title="By Symbol">
+              <div className="h-40 [&_[role=img]]:!h-40">
+                <LazyBarChart data={analytics.bySymbol} />
+              </div>
+            </ChartPanel>
+          ) : null}
+          {analytics.bySession.length > 0 ? (
+            <ChartPanel title="By Session">
+              <div className="h-40 [&_[role=img]]:!h-40">
+                <LazyBarChart data={analytics.bySession} />
+              </div>
+            </ChartPanel>
+          ) : null}
+          {analytics.holdBuckets.some((b) => b.value > 0) ? (
+            <ChartPanel title="Hold time">
+              <div className="h-40 [&_[role=img]]:!h-40">
+                <LazyBarChart data={analytics.holdBuckets} />
+              </div>
+            </ChartPanel>
+          ) : null}
+          {analytics.profitDistribution.some((b) => b.value > 0) ? (
+            <ChartPanel title="Win / Loss distribution">
+              <div className="h-40 [&_[role=img]]:!h-40">
+                <LazyBarChart data={analytics.profitDistribution} />
+              </div>
+            </ChartPanel>
+          ) : null}
         </div>
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-3">
-          <p className="mb-2 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Daily P/L
-          </p>
-          <BarList
-            rows={analytics.dailyPl.map((d) => ({ label: d.day.slice(5), value: d.pl }))}
-            empty="No daily P/L in range"
-          />
-        </div>
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-3">
-          <p className="mb-2 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Monthly returns
-          </p>
-          <BarList
-            rows={analytics.monthlyReturns.map((d) => ({ label: d.month, value: d.pl }))}
-            empty="No monthly returns in range"
-          />
-        </div>
-      </div>
+      ) : null}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-3">
+      {/* Filters */}
+      <div className="flex shrink-0 flex-wrap items-end gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-panel)] p-2.5">
         <div className="flex flex-wrap gap-1">
           {(
             [
               ["today", "Today"],
-              ["week", "This week"],
-              ["month", "This month"],
+              ["week", "Week"],
+              ["month", "Month"],
               ["custom", "Custom"],
             ] as const
           ).map(([id, label]) => (
@@ -368,6 +513,7 @@ export function OrdersHistoryDesk() {
               type="button"
               size="sm"
               variant={range === id ? "default" : "outline"}
+              className="transition-[background-color,border-color,color] duration-[var(--duration-os)]"
               onClick={() => {
                 setRange(id);
                 setPage(0);
@@ -382,13 +528,19 @@ export function OrdersHistoryDesk() {
             <Input
               type="date"
               value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
+              onChange={(e) => {
+                setCustomFrom(e.target.value);
+                setPage(0);
+              }}
               className="h-8 w-[9.5rem]"
             />
             <Input
               type="date"
               value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
+              onChange={(e) => {
+                setCustomTo(e.target.value);
+                setPage(0);
+              }}
               className="h-8 w-[9.5rem]"
             />
           </>
@@ -403,24 +555,26 @@ export function OrdersHistoryDesk() {
           className="h-8 w-28"
         />
         <select
-          className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-xs"
+          className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-xs text-[var(--fg)]"
           value={side}
           onChange={(e) => {
             setSide(e.target.value as typeof side);
             setPage(0);
           }}
+          aria-label="Side filter"
         >
           <option value="all">Side: all</option>
           <option value="buy">Buy</option>
           <option value="sell">Sell</option>
         </select>
         <select
-          className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-xs"
+          className="h-8 rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-xs text-[var(--fg)]"
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as typeof status);
             setPage(0);
           }}
+          aria-label="Status filter"
         >
           <option value="all">Status: all</option>
           <option value="closed">Closed</option>
@@ -429,7 +583,7 @@ export function OrdersHistoryDesk() {
         <div className="relative min-w-[12rem] flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--fg-subtle)]" />
           <Input
-            placeholder="Search ticket, comment, strategy…"
+            placeholder="Search ticket, deal, comment, strategy…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -440,7 +594,8 @@ export function OrdersHistoryDesk() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--bg-panel)]">
+      {/* Table */}
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border border-[var(--border)] bg-[var(--bg-panel)]">
         {historyQ.isLoading ? (
           <div className="p-4">
             <DeskSkeleton rows={8} />
@@ -461,13 +616,14 @@ export function OrdersHistoryDesk() {
             />
           </div>
         ) : (
-          <table className="w-full min-w-[1200px] border-collapse text-left text-[11px]">
+          <table className="w-full min-w-[1480px] border-collapse text-left text-[11px]">
             <thead className="sticky top-0 z-10 bg-[var(--bg-elevated)] text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
               <tr>
                 {[
-                  "Time",
+                  "Ticket",
+                  "Deal",
                   "Symbol",
-                  "Side",
+                  "Buy/Sell",
                   "Volume",
                   "Entry",
                   "Exit",
@@ -475,13 +631,14 @@ export function OrdersHistoryDesk() {
                   "TP",
                   "Commission",
                   "Swap",
-                  "P/L",
-                  "Net P/L",
+                  "Gross",
+                  "Net",
                   "Duration",
-                  "Ticket",
-                  "Deal",
+                  "Session",
                   "Strategy",
-                  "Comment",
+                  "Risk %",
+                  "RR",
+                  "Status",
                   "",
                 ].map((h) => (
                   <th key={h || "actions"} className="whitespace-nowrap px-2 py-2 font-medium">
@@ -491,85 +648,89 @@ export function OrdersHistoryDesk() {
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((t) => (
-                <tr
-                  key={t.id}
-                  className="border-t border-[var(--border)]/70 hover:bg-[var(--bg-elevated)]/60"
-                >
-                  <td className="whitespace-nowrap px-2 py-2 font-mono text-[var(--fg-muted)]">
-                    {t.time.toLocaleString()}
-                  </td>
-                  <td className="px-2 py-2 font-medium">{t.symbol}</td>
-                  <td className="px-2 py-2">
-                    <Badge tone={t.side === "buy" ? "success" : "danger"}>
-                      {t.side.toUpperCase()}
-                    </Badge>
-                  </td>
-                  <td className="px-2 py-2 font-mono">{formatNumber(t.volume, 2)}</td>
-                  <td className="px-2 py-2 font-mono">{formatNumber(t.entry, 3)}</td>
-                  <td className="px-2 py-2 font-mono">
-                    {t.exit == null ? "—" : formatNumber(t.exit, 3)}
-                  </td>
-                  <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
-                    {t.sl == null ? "—" : formatNumber(t.sl, 3)}
-                  </td>
-                  <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
-                    {t.tp == null ? "—" : formatNumber(t.tp, 3)}
-                  </td>
-                  <td className="px-2 py-2 font-mono">{formatNumber(t.commission, 2)}</td>
-                  <td className="px-2 py-2 font-mono">{formatNumber(t.swap, 2)}</td>
-                  <td
-                    className={cn(
-                      "px-2 py-2 font-mono",
-                      t.profit >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-                    )}
+              {pageRows.map((t) => {
+                const rr = computeTradeRr(t);
+                const risk = computeRiskPct(t, equityNum);
+                return (
+                  <tr
+                    key={t.id}
+                    className="border-t border-[var(--border)]/70 transition-colors duration-[var(--duration-os)] hover:bg-[var(--bg-elevated)]/60"
                   >
-                    {formatNumber(t.profit, 2)}
-                  </td>
-                  <td
-                    className={cn(
-                      "px-2 py-2 font-mono font-medium",
-                      t.netPl >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
-                    )}
-                  >
-                    {formatNumber(t.netPl, 2)}
-                  </td>
-                  <td className="px-2 py-2 font-mono">{formatDuration(t.durationMs)}</td>
-                  <td className="px-2 py-2 font-mono">{t.ticket}</td>
-                  <td className="px-2 py-2 font-mono">{t.deal}</td>
-                  <td className="max-w-[7rem] truncate px-2 py-2 text-[var(--fg-muted)]">
-                    {t.strategy || "—"}
-                  </td>
-                  <td className="max-w-[10rem] truncate px-2 py-2 text-[var(--fg-muted)]">
-                    {t.comment || "—"}
-                  </td>
-                  <td className="px-2 py-2">
-                    <div className="flex gap-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(String(t.ticket));
-                          toast.success("Ticket copied");
-                        }}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-7"
-                        onClick={() => setSelected(t)}
-                      >
-                        Details
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    <td className="whitespace-nowrap px-2 py-2 font-mono">{t.ticket}</td>
+                    <td className="whitespace-nowrap px-2 py-2 font-mono">{t.deal}</td>
+                    <td className="px-2 py-2 font-medium">{t.symbol}</td>
+                    <td className="px-2 py-2">
+                      <Badge tone={t.side === "buy" ? "success" : "danger"}>
+                        {t.side.toUpperCase()}
+                      </Badge>
+                    </td>
+                    <td className="px-2 py-2 font-mono">{formatNumber(t.volume, 2)}</td>
+                    <td className="px-2 py-2 font-mono">{formatNumber(t.entry, 3)}</td>
+                    <td className="px-2 py-2 font-mono">
+                      {t.exit == null ? NA : formatNumber(t.exit, 3)}
+                    </td>
+                    <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
+                      {t.sl == null ? NA : formatNumber(t.sl, 3)}
+                    </td>
+                    <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
+                      {t.tp == null ? NA : formatNumber(t.tp, 3)}
+                    </td>
+                    <td className="px-2 py-2 font-mono">{formatNumber(t.commission, 2)}</td>
+                    <td className="px-2 py-2 font-mono">{formatNumber(t.swap, 2)}</td>
+                    <td className={cn("px-2 py-2 font-mono", plTone(t.profit))}>
+                      {formatNumber(t.profit, 2)}
+                    </td>
+                    <td className={cn("px-2 py-2 font-mono font-medium", plTone(t.netPl))}>
+                      {formatNumber(t.netPl, 2)}
+                    </td>
+                    <td className="px-2 py-2 font-mono">
+                      {t.durationMs == null ? NA : formatDuration(t.durationMs)}
+                    </td>
+                    <td className="px-2 py-2 text-[var(--fg-muted)]">
+                      {inferTradeSession(t.time)}
+                    </td>
+                    <td className="max-w-[7rem] truncate px-2 py-2 text-[var(--fg-muted)]">
+                      {t.strategy || NA}
+                    </td>
+                    <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
+                      {risk == null ? NA : `${formatNumber(risk, 2)}%`}
+                    </td>
+                    <td className="px-2 py-2 font-mono text-[var(--fg-muted)]">
+                      {rr == null ? NA : formatNumber(rr, 2)}
+                    </td>
+                    <td className="px-2 py-2">
+                      <Badge tone={t.status === "closed" ? "neutral" : "accent"}>
+                        {t.status}
+                      </Badge>
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(String(t.ticket));
+                            toast.success("Ticket copied");
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7"
+                          onClick={() => setSelected(t)}
+                        >
+                          Details
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -601,59 +762,151 @@ export function OrdersHistoryDesk() {
         </div>
       </div>
 
+      {/* Trade details drawer */}
       <Dialog open={selected != null} onOpenChange={(o) => !o && setSelected(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogTitle>Trade details · ticket {selected?.ticket}</DialogTitle>
-          {selected ? (
-            <div className="space-y-4 text-sm">
-              <dl className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <dt className="text-[var(--fg-subtle)]">Symbol</dt>
-                  <dd className="font-medium">{selected.symbol}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--fg-subtle)]">Side</dt>
-                  <dd className="font-medium uppercase">{selected.side}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--fg-subtle)]">Entry deal</dt>
-                  <dd className="font-mono">{selected.entryDeal}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--fg-subtle)]">Exit deal</dt>
-                  <dd className="font-mono">{selected.exitDeal ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--fg-subtle)]">Net P/L</dt>
-                  <dd className="font-mono">{formatNumber(selected.netPl, 2)}</dd>
-                </div>
-                <div>
-                  <dt className="text-[var(--fg-subtle)]">Status</dt>
-                  <dd>{selected.status}</dd>
-                </div>
-              </dl>
-              <div>
-                <p className="mb-2 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                  Broker execution timeline
-                </p>
-                <ol className="space-y-2 border-l border-[var(--border)] pl-3">
-                  {selected.timeline.map((ev) => (
-                    <li key={`${ev.label}-${ev.at.toISOString()}`}>
-                      <p className="text-xs font-medium text-[var(--fg)]">{ev.label}</p>
-                      <p className="font-mono text-[10px] text-[var(--fg-subtle)]">
-                        {ev.at.toLocaleString()}
-                      </p>
-                      <p className="text-[11px] text-[var(--fg-muted)]">{ev.detail}</p>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-              <p className="text-[11px] text-[var(--fg-subtle)]">
-                SL/TP columns stay empty when the broker deal stream does not include stop
-                levels — QuantForg never invents them.
+        <DialogContent
+          className={cn(
+            "fixed inset-y-0 right-0 left-auto top-0 h-full max-h-none w-full max-w-md translate-x-0 translate-y-0 rounded-none border-l border-[var(--border)] p-0 shadow-[var(--shadow-card)]",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+          )}
+        >
+          <div className="flex h-full flex-col">
+            <div className="shrink-0 border-b border-[var(--border)] px-5 py-4 pr-12">
+              <DialogTitle>
+                Trade · ticket {selected?.ticket ?? "—"}
+              </DialogTitle>
+              <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                {selected
+                  ? `${selected.symbol} · ${selected.side.toUpperCase()} · ${inferTradeSession(selected.time)}`
+                  : ""}
               </p>
             </div>
-          ) : null}
+            {selected ? (
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+                <Section title="Trade facts">
+                  <dl>
+                    <DetailRow label="Ticket" value={String(selected.ticket)} />
+                    <DetailRow label="Deal" value={String(selected.deal)} />
+                    <DetailRow label="Entry deal" value={String(selected.entryDeal)} />
+                    <DetailRow
+                      label="Exit deal"
+                      value={selected.exitDeal == null ? NA : String(selected.exitDeal)}
+                    />
+                    <DetailRow label="Symbol" value={selected.symbol} />
+                    <DetailRow label="Side" value={selected.side.toUpperCase()} />
+                    <DetailRow label="Volume" value={formatNumber(selected.volume, 2)} />
+                    <DetailRow label="Entry" value={formatNumber(selected.entry, 3)} />
+                    <DetailRow
+                      label="Exit"
+                      value={selected.exit == null ? NA : formatNumber(selected.exit, 3)}
+                    />
+                    <DetailRow
+                      label="SL"
+                      value={selected.sl == null ? NA : formatNumber(selected.sl, 3)}
+                    />
+                    <DetailRow
+                      label="TP"
+                      value={selected.tp == null ? NA : formatNumber(selected.tp, 3)}
+                    />
+                    <DetailRow
+                      label="Commission"
+                      value={formatNumber(selected.commission, 2)}
+                    />
+                    <DetailRow label="Swap" value={formatNumber(selected.swap, 2)} />
+                    <DetailRow label="Gross" value={formatNumber(selected.profit, 2)} />
+                    <DetailRow label="Net" value={formatNumber(selected.netPl, 2)} />
+                    <DetailRow
+                      label="Duration"
+                      value={
+                        selected.durationMs == null
+                          ? NA
+                          : formatDuration(selected.durationMs)
+                      }
+                    />
+                    <DetailRow
+                      label="Session"
+                      value={inferTradeSession(selected.time)}
+                    />
+                    <DetailRow
+                      label="Strategy"
+                      value={selected.strategy || NA}
+                    />
+                    <DetailRow
+                      label="Comment"
+                      value={selected.comment || NA}
+                    />
+                    <DetailRow label="Status" value={selected.status} />
+                    <DetailRow
+                      label="Time"
+                      value={selected.time.toLocaleString()}
+                    />
+                  </dl>
+                </Section>
+
+                <Section title="Risk & reward">
+                  <dl>
+                    <DetailRow
+                      label="Margin used"
+                      value={
+                        selectedMargin == null ? NA : formatNumber(selectedMargin, 2)
+                      }
+                    />
+                    <DetailRow
+                      label="Risk %"
+                      value={
+                        selectedRisk == null
+                          ? NA
+                          : `${formatNumber(selectedRisk, 2)}%`
+                      }
+                    />
+                    <DetailRow
+                      label="RR"
+                      value={selectedRr == null ? NA : formatNumber(selectedRr, 2)}
+                    />
+                  </dl>
+                </Section>
+
+                <Section title="Broker & validation">
+                  <dl>
+                    <DetailRow label="Broker request" value={NA} />
+                    <DetailRow label="Broker response" value={NA} />
+                    <DetailRow label="Validation" value={NA} />
+                    <DetailRow label="Order check" value={NA} />
+                    <DetailRow label="Order send" value={NA} />
+                    <DetailRow label="Latency" value={NA} />
+                    <DetailRow label="Slippage" value={NA} />
+                  </dl>
+                </Section>
+
+                <Section title="Context">
+                  <dl>
+                    <DetailRow label="Chart snapshot" value={NA} />
+                    <DetailRow label="AI explanation" value={NA} />
+                    <DetailRow label="Entry reason" value={NA} />
+                    <DetailRow label="Exit reason" value={NA} />
+                  </dl>
+                </Section>
+
+                <Section title="Execution timeline">
+                  {selected.timeline.length === 0 ? (
+                    <p className="text-xs text-[var(--fg-subtle)]">{NA}</p>
+                  ) : (
+                    <ol className="space-y-3 border-l border-[var(--border)] pl-3">
+                      {selected.timeline.map((ev) => (
+                        <li key={`${ev.label}-${ev.at.toISOString()}`}>
+                          <p className="text-xs font-medium text-[var(--fg)]">{ev.label}</p>
+                          <p className="font-mono text-[10px] text-[var(--fg-subtle)]">
+                            {ev.at.toLocaleString()}
+                          </p>
+                          <p className="text-[11px] text-[var(--fg-muted)]">{ev.detail}</p>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </Section>
+              </div>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

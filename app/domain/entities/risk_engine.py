@@ -75,14 +75,15 @@ def contract_size_for_symbol(symbol: str, *, default: Decimal = Decimal("100000"
 
 @dataclass(frozen=True, slots=True)
 class RiskRuleResult:
-    """One evaluated risk rule for transparent PASS/FAIL UI."""
+    """One evaluated risk rule for transparent PASS/WARN/FAIL UI."""
 
     id: str
     name: str
-    status: str  # pass | fail | n/a
+    status: str  # pass | warn | fail | n/a
     current: str
     threshold: str
     reason: str = ""
+    suggested_action: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -92,6 +93,7 @@ class RiskRuleResult:
             "current": self.current,
             "threshold": self.threshold,
             "reason": self.reason,
+            "suggested_action": self.suggested_action,
         }
 
 

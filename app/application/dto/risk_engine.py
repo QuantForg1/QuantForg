@@ -18,6 +18,7 @@ class RiskCheckCommand:
     requested_lots: str | None = None
     stop_loss_distance: str | None = None
     atr: str | None = None
+    spread: str | None = None
     sizing_method: str = "percentage_risk"
     entry_price: str = "1.0"
     peak_equity: str | None = None
