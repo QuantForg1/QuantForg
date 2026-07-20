@@ -148,28 +148,42 @@ def shadow_readiness(_user: OperatorUser) -> dict[str, Any]:
 
     checks: dict[str, bool] = {}
     health = None
+    gateway_url_configured = bool((settings.mt5_gateway_base_url or "").strip())
     if runtime is not None:
+        # One live collect via tick_health — do not re-probe for readiness flags.
         health = runtime.tick_health()
-        probes = runtime.probes.collect()
-        checks = {
-            "gateway": probes.gateway_available,
-            "mt5": probes.mt5_connected,
-            "railway": probes.railway_api_up,
-            "supabase": probes.supabase_up,
-            "cloudflare": probes.cloudflare_tunnel_up,
-        }
-        if not (settings.mt5_gateway_base_url or "").strip():
+        raw_checks = health.get("live_probes") if isinstance(health, dict) else None
+        if isinstance(raw_checks, dict):
+            checks = {
+                "gateway": bool(raw_checks.get("gateway")),
+                "mt5": bool(raw_checks.get("mt5")),
+                "railway": bool(raw_checks.get("railway")),
+                "supabase": bool(raw_checks.get("supabase")),
+                "cloudflare": bool(raw_checks.get("cloudflare")),
+            }
+        else:
+            probes = runtime.probes.collect()
+            checks = {
+                "gateway": probes.gateway_available,
+                "mt5": probes.mt5_connected,
+                "railway": probes.railway_api_up,
+                "supabase": probes.supabase_up,
+                "cloudflare": probes.cloudflare_tunnel_up,
+            }
+        if not gateway_url_configured:
             blockers.append("MT5_GATEWAY_BASE_URL not configured")
         else:
-            if not probes.gateway_available:
+            if not checks.get("gateway"):
                 blockers.append("Gateway not reachable")
-            if not probes.cloudflare_tunnel_up:
+            if not checks.get("cloudflare"):
                 blockers.append("Cloudflare tunnel not reachable")
-            if not probes.mt5_connected:
+            if not checks.get("mt5"):
                 blockers.append("MT5 not connected via gateway")
-        if (settings.railway_public_domain or "").strip() and not probes.railway_api_up:
+        if (settings.railway_public_domain or "").strip() and not checks.get("railway"):
             blockers.append("Railway API not reachable")
-        if getattr(settings, "supabase_configured", False) and not probes.supabase_up:
+        if getattr(settings, "supabase_configured", False) and not checks.get(
+            "supabase"
+        ):
             blockers.append("Supabase not reachable")
 
     result = "READY FOR SHADOW" if not blockers else "NOT READY"
@@ -180,6 +194,7 @@ def shadow_readiness(_user: OperatorUser) -> dict[str, Any]:
         "mode": runtime.plane.mode.value if runtime else None,
         "kill_switch": runtime.plane.kill_switch_armed if runtime else None,
         "live_probes": checks,
+        "gateway_url_configured": gateway_url_configured,
         "health": health,
         "orchestrator": runtime.status() if runtime else None,
         "autotrading": "OFF (terminal-side — confirm manually)",

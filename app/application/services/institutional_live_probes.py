@@ -9,28 +9,76 @@ from urllib.parse import urlparse
 
 from app.domain.institutional_trading.reliability.health import ProbeInputs
 from app.infrastructure.brokers.mt5.client import MockMT5Client
+from app.infrastructure.brokers.mt5.gateway_client import is_cloudflare_tunnel_url
 from core.config.settings import Settings
 from core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Cloudflare Quick Tunnels often exceed a 3s cold-start; keep probes honest.
+_GATEWAY_PROBE_TIMEOUT_S = 8.0
 
-def _http_get(url: str, *, timeout: float = 3.0) -> tuple[bool, float, int | None]:
-    """Lightweight GET — returns (ok, latency_ms, status_code)."""
+
+def _http_get_json(
+    url: str, *, timeout: float = _GATEWAY_PROBE_TIMEOUT_S
+) -> tuple[bool, float, int | None, dict[str, Any] | None]:
+    """Lightweight GET — returns (ok, latency_ms, status_code, json_or_none)."""
     try:
         import httpx
     except ImportError:  # pragma: no cover
-        return False, 0.0, None
+        return False, 0.0, None, None
     t0 = time.perf_counter()
     try:
         with httpx.Client(timeout=timeout, follow_redirects=True) as client:
             resp = client.get(url)
             latency = (time.perf_counter() - t0) * 1000.0
-            return 200 <= resp.status_code < 500, latency, resp.status_code
+            ok = 200 <= resp.status_code < 500
+            body: dict[str, Any] | None = None
+            try:
+                raw = resp.json()
+                if isinstance(raw, dict):
+                    body = raw
+            except Exception:  # noqa: BLE001 — non-JSON health is still a reachability signal
+                body = None
+            return ok, latency, resp.status_code, body
     except Exception as exc:  # noqa: BLE001 — probe boundary
         latency = (time.perf_counter() - t0) * 1000.0
         logger.info("live_probe_http_failed", url=url, error=str(exc))
-        return False, latency, None
+        return False, latency, None, None
+
+
+def mt5_connected_from_gateway_health(payload: dict[str, Any]) -> bool:
+    """True when gateway ``/health`` shows an active MT5 session.
+
+    Matches the real gateway shape::
+
+        {"status": "ok", "mt5": {"connected": true, "session_mode": "attached", ...}}
+
+    Also accepts flattened keys used by older probes / Weltrade helpers.
+    """
+    if bool(
+        payload.get("mt5_connected")
+        or payload.get("mt5_attached")
+        or payload.get("terminal_connected")
+        or payload.get("connected")
+    ):
+        return True
+    nested = payload.get("mt5")
+    if isinstance(nested, dict):
+        if bool(nested.get("connected") or nested.get("mt5_connected")):
+            return True
+        mode = str(nested.get("session_mode") or "").strip().lower()
+        if mode in {"attached", "connected"}:
+            return True
+    mode = str(payload.get("session_mode") or "").strip().lower()
+    return mode in {"attached", "connected"}
+
+
+def gateway_available_from_health(payload: dict[str, Any] | None, *, http_ok: bool) -> bool:
+    """Gateway process reachable — ``status=ok`` or successful HTTP probe."""
+    if isinstance(payload, dict) and str(payload.get("status") or "").lower() == "ok":
+        return True
+    return http_ok
 
 
 @dataclass
@@ -47,13 +95,17 @@ class LiveProbeCollector:
         gateway_lat = 0.0
         tunnel_ok = False
         mt5_ok = False
+        health_payload: dict[str, Any] | None = None
 
         if gateway_url:
-            ok, lat, _code = _http_get(f"{gateway_url}/health", timeout=3.0)
+            ok, lat, _code, body = _http_get_json(
+                f"{gateway_url}/health", timeout=_GATEWAY_PROBE_TIMEOUT_S
+            )
             gateway_lat = lat
-            gateway_ok = ok
-            host = (urlparse(gateway_url).hostname or "").lower()
-            tunnel_ok = bool(ok and host)
+            if body is not None:
+                health_payload = body
+            gateway_ok = gateway_available_from_health(body, http_ok=ok)
+
             client = (
                 getattr(self.mt5_adapter, "client", None) if self.mt5_adapter else None
             )
@@ -66,16 +118,30 @@ class LiveProbeCollector:
                         gateway_lat, (time.perf_counter() - t0) * 1000.0
                     )
                     if isinstance(payload, dict):
-                        gateway_ok = payload.get("status") == "ok" or gateway_ok
-                        mt5_ok = bool(
-                            payload.get("mt5_connected")
-                            or payload.get("mt5_attached")
-                            or payload.get("terminal_connected")
+                        health_payload = payload
+                        gateway_ok = gateway_available_from_health(
+                            payload, http_ok=gateway_ok
                         )
                 except Exception as exc:  # noqa: BLE001
                     logger.info("live_probe_gateway_health_failed", error=str(exc))
-            if not mt5_ok and self.mt5_adapter is not None:
-                mt5_ok = gateway_ok and not isinstance(client, MockMT5Client)
+
+            if health_payload is not None:
+                mt5_ok = mt5_connected_from_gateway_health(health_payload)
+
+            # If the gateway process is up via GatewayMT5Client but /health omitted
+            # MT5 fields, treat a non-mock client as attached only when gateway_ok.
+            if not mt5_ok and self.mt5_adapter is not None and gateway_ok:
+                if client is not None and not isinstance(client, MockMT5Client):
+                    # Prefer explicit health — do not invent MT5 up without evidence
+                    # when health payload is present but says disconnected.
+                    if health_payload is None:
+                        mt5_ok = True
+
+            # Cloudflare tunnel: reachable gateway URL on a CF host, or any
+            # successful reach when the configured URL is a tunnel hostname.
+            host = (urlparse(gateway_url).hostname or "").lower()
+            if gateway_ok and host:
+                tunnel_ok = is_cloudflare_tunnel_url(gateway_url) or bool(host)
         else:
             gateway_ok = False
             tunnel_ok = False
@@ -86,8 +152,8 @@ class LiveProbeCollector:
         domain = (self.settings.railway_public_domain or "").strip()
         if domain:
             base = domain if domain.startswith("http") else f"https://{domain}"
-            railway_ok, railway_lat, _ = _http_get(
-                f"{base.rstrip('/')}/health", timeout=3.0
+            railway_ok, railway_lat, _, _ = _http_get_json(
+                f"{base.rstrip('/')}/health", timeout=5.0
             )
 
         supabase_ok = False

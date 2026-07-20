@@ -184,3 +184,102 @@ class TestShadowOrchestrator:
         assert cycle.trace_id
         assert len(inner.calls) == 0
         assert cycle.decision_action is not None
+
+
+@pytest.mark.unit
+class TestLiveProbeGatewayHealthShape:
+    """Readiness must parse real gateway /health, not invented flat keys."""
+
+    def test_nested_mt5_connected(self) -> None:
+        from app.application.services.institutional_live_probes import (
+            mt5_connected_from_gateway_health,
+        )
+
+        payload = {
+            "status": "ok",
+            "service": "mt5-gateway",
+            "mt5": {
+                "connected": True,
+                "session_mode": "attached",
+                "latency_ms": 12.0,
+            },
+            "bridge_available": True,
+        }
+        assert mt5_connected_from_gateway_health(payload) is True
+
+    def test_nested_mt5_disconnected(self) -> None:
+        from app.application.services.institutional_live_probes import (
+            mt5_connected_from_gateway_health,
+        )
+
+        payload = {
+            "status": "ok",
+            "mt5": {"connected": False, "session_mode": "none"},
+        }
+        assert mt5_connected_from_gateway_health(payload) is False
+
+    def test_collector_uses_gateway_health_payload(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.application.services import institutional_live_probes as probes_mod
+
+        class _Settings:
+            mt5_gateway_base_url = "https://abc.trycloudflare.com"
+            railway_public_domain = ""
+            supabase_configured = False
+            database_url = ""
+
+        class _GatewayClient:
+            def gateway_health(self) -> dict:
+                return {
+                    "status": "ok",
+                    "mt5": {"connected": True, "session_mode": "attached"},
+                    "bridge_available": True,
+                }
+
+        class _Adapter:
+            client = _GatewayClient()
+
+        # Simulate Railway HTTP get failing (short timeout) while authenticated
+        # gateway client still succeeds — probes must still pass.
+        monkeypatch.setattr(
+            probes_mod,
+            "_http_get_json",
+            lambda *a, **k: (False, 8000.0, None, None),
+        )
+        collector = LiveProbeCollector(
+            settings=_Settings(),  # type: ignore[arg-type]
+            mt5_adapter=_Adapter(),
+        )
+        result = collector.collect()
+        assert result.gateway_available is True
+        assert result.mt5_connected is True
+        assert result.cloudflare_tunnel_up is True
+
+    def test_collector_parses_public_health_json_without_client(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.application.services import institutional_live_probes as probes_mod
+
+        class _Settings:
+            mt5_gateway_base_url = "https://abc.trycloudflare.com"
+            railway_public_domain = ""
+            supabase_configured = False
+            database_url = ""
+
+        monkeypatch.setattr(
+            probes_mod,
+            "_http_get_json",
+            lambda *a, **k: (
+                True,
+                40.0,
+                200,
+                {
+                    "status": "ok",
+                    "mt5": {"connected": True, "session_mode": "attached"},
+                },
+            ),
+        )
+        collector = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
+        result = collector.collect()
+        assert result.gateway_available is True
+        assert result.mt5_connected is True
+        assert result.cloudflare_tunnel_up is True

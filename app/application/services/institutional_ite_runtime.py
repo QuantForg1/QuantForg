@@ -116,7 +116,7 @@ class InstitutionalIteRuntime:
             ComponentName.CLOUDFLARE_TUNNEL,
         ):
             self.reliability.heartbeats.publish(comp, now=now)
-        return self.reliability.tick(
+        result = self.reliability.tick(
             probes,
             now=now,
             required_heartbeats=(
@@ -125,6 +125,15 @@ class InstitutionalIteRuntime:
                 ComponentName.OMS,
             ),
         )
+        # Expose the exact ProbeInputs used for this tick (avoid a second collect).
+        result["live_probes"] = {
+            "gateway": probes.gateway_available,
+            "mt5": probes.mt5_connected,
+            "railway": probes.railway_api_up,
+            "supabase": probes.supabase_up,
+            "cloudflare": probes.cloudflare_tunnel_up,
+        }
+        return result
 
     def run_shadow_cycle(
         self,
