@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { LazyBarChart, LazyEquityChart } from "@/components/charts/lazy";
+import { TradeReplayPanel } from "@/components/journal/trade-replay";
 import { portfolioApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
@@ -41,6 +42,21 @@ const PAGE_SIZE = 25;
 const NA = "Not available";
 /** Gold contract size used for risk % when SL + equity are known. */
 const GOLD_CONTRACT = 100;
+const UUID_RE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+
+/** Prefer a UUID-looking request id from comment/strategy; else undefined. */
+function extractRequestId(comment: string, strategy: string): string | undefined {
+  for (const raw of [comment, strategy]) {
+    const t = raw.trim();
+    if (!t) continue;
+    const m = t.match(UUID_RE);
+    if (!m?.[0]) continue;
+    // Whole field is a UUID, or a UUID is embedded in the string.
+    if (m[0] === t || t.includes(m[0])) return m[0];
+  }
+  return undefined;
+}
 
 function downloadBlob(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -341,9 +357,12 @@ export function OrdersHistoryDesk() {
     selected && equityNum != null && selectedRisk != null
       ? (selectedRisk / 100) * equityNum
       : null;
+  const selectedRequestId = selected
+    ? extractRequestId(selected.comment, selected.strategy)
+    : undefined;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-4 md:p-5">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3 sm:p-4 md:p-6">
       <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
@@ -595,7 +614,7 @@ export function OrdersHistoryDesk() {
       </div>
 
       {/* Table */}
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border border-[var(--border)] bg-[var(--bg-panel)]">
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--bg-panel)]">
         {historyQ.isLoading ? (
           <div className="p-4">
             <DeskSkeleton rows={8} />
@@ -903,6 +922,13 @@ export function OrdersHistoryDesk() {
                       ))}
                     </ol>
                   )}
+                </Section>
+
+                <Section title="Trade replay">
+                  <TradeReplayPanel
+                    requestId={selectedRequestId}
+                    ticket={selectedRequestId ? undefined : selected.ticket}
+                  />
                 </Section>
               </div>
             ) : null}

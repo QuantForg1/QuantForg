@@ -9,12 +9,14 @@ from uuid import UUID
 
 from app.application.dto.audit import RecordAuditEventCommand
 from app.application.dto.execution import ExecutionCheckCommand, ExecutionCheckDTO
+from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.execution_safety import ExecutionSafetyService
 from app.application.services.mt5_session_guard import live_connection_meta
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.execution_safety import ExecutionDecisionRecord
 from app.domain.entities.mt5_order import OrderIntent
 from app.domain.enums.audit import AuditAction, AuditOutcome
+from app.domain.enums.execution import ExecutionAuditStage
 from app.domain.enums.order import OrderSide, OrderType
 from app.domain.exceptions.base import NotFoundError, ValidationError
 from app.domain.execution_engine.reasons import humanize_reasons
@@ -25,6 +27,9 @@ from app.domain.value_objects.mt5_order import (
     StopLoss,
     TakeProfit,
 )
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _parse_intent(command: ExecutionCheckCommand) -> OrderIntent:
@@ -70,6 +75,7 @@ class CheckExecutionSafetyUseCase:
     execution_uow_factory: Any
     safety_service: ExecutionSafetyService
     audit: RecordAuditEventUseCase
+    execution_audit: ExecutionAuditService | None = None
 
     async def execute(self, command: ExecutionCheckCommand) -> ExecutionCheckDTO:
         request_id = command.request_id.strip()
@@ -132,6 +138,34 @@ class CheckExecutionSafetyUseCase:
             async with self.execution_uow_factory() as uow:
                 await uow.decisions.add(record)
                 await uow.commit()
+
+            if self.execution_audit is not None:
+                try:
+                    await self.execution_audit.record(
+                        user_id=command.user_id,
+                        request_id=request_id,
+                        stage=ExecutionAuditStage.SAFETY,
+                        symbol=record.symbol,
+                        side=record.side,
+                        volume=str(record.volume),
+                        outcome=record.decision.value,
+                        retcode=0,
+                        payload_in=dict(record.request_snapshot),
+                        payload_out={
+                            "decision": record.decision.value,
+                            "rejection_reasons": list(record.rejection_reasons),
+                            "warnings": list(record.warnings),
+                            "checks": dict(record.checks),
+                            "calculated_risk": dict(record.calculated_risk),
+                        },
+                        related_ids={"decision_id": str(record.id)},
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "execution_audit_failed",
+                        stage="safety",
+                        error=str(exc),
+                    )
 
         # Drain events (in-process buffer; no bus required this layer)
         _ = self.safety_service.drain_events()

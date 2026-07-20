@@ -11,6 +11,9 @@ from app.infrastructure.persistence.memory_broker import MemoryBrokerUnitOfWorkF
 from app.infrastructure.persistence.memory_execution import (
     MemoryExecutionUnitOfWorkFactory,
 )
+from app.infrastructure.persistence.memory_execution_audit import (
+    MemoryExecutionAuditUnitOfWorkFactory,
+)
 from app.infrastructure.persistence.memory_mt5 import MemoryMT5UnitOfWorkFactory
 from app.infrastructure.persistence.memory_ops import MemoryOpsUnitOfWorkFactory
 from app.infrastructure.persistence.memory_paper import MemoryPaperUnitOfWorkFactory
@@ -35,6 +38,9 @@ from app.infrastructure.persistence.postgres_broker import (
 )
 from app.infrastructure.persistence.postgres_execution import (
     PostgresExecutionUnitOfWorkFactory,
+)
+from app.infrastructure.persistence.postgres_execution_audit import (
+    PostgresExecutionAuditUnitOfWorkFactory,
 )
 from app.infrastructure.persistence.postgres_mt5 import PostgresMT5UnitOfWorkFactory
 from app.infrastructure.persistence.postgres_ops import PostgresOpsUnitOfWorkFactory
@@ -77,6 +83,7 @@ def build_persistence_factories(
             "broker_uow_factory": MemoryBrokerUnitOfWorkFactory(),
             "mt5_uow_factory": MemoryMT5UnitOfWorkFactory(),
             "execution_uow_factory": MemoryExecutionUnitOfWorkFactory(),
+            "execution_audit_uow_factory": MemoryExecutionAuditUnitOfWorkFactory(),
             "portfolio_uow_factory": MemoryPortfolioUnitOfWorkFactory(),
             "risk_uow_factory": MemoryRiskUnitOfWorkFactory(),
             "strategy_uow_factory": MemoryStrategyUnitOfWorkFactory(),
@@ -92,6 +99,9 @@ def build_persistence_factories(
             "broker_uow_factory": PostgresBrokerUnitOfWorkFactory(database),
             "mt5_uow_factory": PostgresMT5UnitOfWorkFactory(database),
             "execution_uow_factory": PostgresExecutionUnitOfWorkFactory(database),
+            "execution_audit_uow_factory": PostgresExecutionAuditUnitOfWorkFactory(
+                database
+            ),
             "portfolio_uow_factory": PostgresPortfolioUnitOfWorkFactory(database),
             "risk_uow_factory": PostgresRiskUnitOfWorkFactory(database),
             "strategy_uow_factory": PostgresStrategyUnitOfWorkFactory(database),

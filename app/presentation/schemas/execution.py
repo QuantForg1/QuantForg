@@ -142,3 +142,48 @@ class ExecutionAnalyticsResponse(BaseModel):
     sample_sizes: dict[str, object] = Field(default_factory=dict)
     data_source: str = ""
     journal_count: int = 0
+
+
+class ExecutionAuditItem(BaseModel):
+    id: UUID
+    user_id: UUID
+    request_id: str
+    stage: str
+    symbol: str = ""
+    side: str = ""
+    volume: str = ""
+    outcome: str = ""
+    retcode: int = 0
+    order_ticket: int | None = None
+    deal_ticket: int | None = None
+    latency_ms: float | None = None
+    gateway_latency_ms: float | None = None
+    railway_processing_ms: float | None = None
+    cloudflare_latency_ms: float | None = None
+    spread: str | None = None
+    slippage: str | None = None
+    commission: str | None = None
+    swap: str | None = None
+    margin_used: str | None = None
+    free_margin: str | None = None
+    balance: str | None = None
+    equity: str | None = None
+    leverage: str | None = None
+    broker_server_time: str | None = None
+    market_session: str | None = None
+    execution_route: str = "mt5_gateway"
+    payload_in: dict[str, object] = Field(default_factory=dict)
+    payload_out: dict[str, object] = Field(default_factory=dict)
+    related_ids: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class ExecutionAuditListResponse(BaseModel):
+    items: list[ExecutionAuditItem] = Field(default_factory=list)
+    count: int = 0
+
+
+class ExecutionAuditTimelineResponse(BaseModel):
+    request_id: str
+    items: list[ExecutionAuditItem] = Field(default_factory=list)
+    count: int = 0

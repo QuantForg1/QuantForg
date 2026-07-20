@@ -16,6 +16,7 @@ from app.application.dto.execution import (
     ExecutionSubmitCommand,
     ExecutionSubmitDTO,
 )
+from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.institutional_execution_engine import (
     InstitutionalExecutionEngine,
     parse_order_intent,
@@ -27,9 +28,12 @@ from app.application.services.mt5_session_guard import (
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.execution_gateway import ExecutionAttempt, ExecutionResult
 from app.domain.enums.audit import AuditAction, AuditOutcome
-from app.domain.enums.execution import ExecutionOutcome
+from app.domain.enums.execution import ExecutionAuditStage, ExecutionOutcome
 from app.domain.exceptions.auth import AuthorizationError
 from app.domain.exceptions.base import ValidationError
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +44,7 @@ class SubmitExecutionUseCase:
     execution_uow_factory: Any
     engine: InstitutionalExecutionEngine
     audit: RecordAuditEventUseCase
+    execution_audit: ExecutionAuditService | None = None
 
     async def execute(self, command: ExecutionSubmitCommand) -> ExecutionSubmitDTO:
         request_id = command.request_id.strip()
@@ -97,6 +102,28 @@ class SubmitExecutionUseCase:
                 idempotent_replay=True,
                 entity_id=existing.id,
             )
+            if self.execution_audit is not None:
+                try:
+                    await self.execution_audit.record(
+                        user_id=command.user_id,
+                        request_id=request_id,
+                        stage=ExecutionAuditStage.REPLAY,
+                        symbol=existing.symbol,
+                        side=existing.side,
+                        volume=str(existing.volume),
+                        outcome=existing.outcome.value,
+                        retcode=existing.retcode,
+                        order_ticket=existing.order_ticket,
+                        deal_ticket=existing.deal_ticket,
+                        payload_out=existing.result_snapshot,
+                        related_ids={"attempt_id": str(existing.id)},
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "execution_audit_failed",
+                        stage="replay",
+                        error=str(exc),
+                    )
             if existing.outcome is ExecutionOutcome.DISABLED:
                 raise AuthorizationError(
                     existing.message,
@@ -173,6 +200,46 @@ class SubmitExecutionUseCase:
         async with self.execution_uow_factory() as uow:
             await uow.attempts.add(attempt)
             await uow.commit()
+
+        if self.execution_audit is not None:
+            try:
+                stage_latencies = {
+                    s.stage: round(s.elapsed_ms, 3) for s in pipeline.stages
+                }
+                gateway_ms = None
+                for key, val in stage_latencies.items():
+                    lowered = key.strip().lower()
+                    if "broker" in lowered or lowered in {"submit", "submission"}:
+                        gateway_ms = val
+                        break
+                await self.execution_audit.record(
+                    user_id=command.user_id,
+                    request_id=request_id,
+                    stage=ExecutionAuditStage.SUBMIT,
+                    symbol=intent.symbol,
+                    side=intent.side.value,
+                    volume=str(intent.volume.value),
+                    outcome=exec_result.outcome.value,
+                    retcode=exec_result.retcode,
+                    order_ticket=exec_result.order_ticket,
+                    deal_ticket=exec_result.deal_ticket,
+                    latency_ms=pipeline.latency_ms,
+                    gateway_latency_ms=(
+                        float(gateway_ms) if gateway_ms is not None else None
+                    ),
+                    railway_processing_ms=None,
+                    cloudflare_latency_ms=None,
+                    slippage=str(command.slippage),
+                    payload_in=dict(attempt.request_snapshot),
+                    payload_out=exec_result.to_dict(),
+                    related_ids={"attempt_id": str(attempt.id)},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "execution_audit_failed",
+                    stage="submit",
+                    error=str(exc),
+                )
 
         await self.audit.execute(
             RecordAuditEventCommand(

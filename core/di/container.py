@@ -54,6 +54,7 @@ class Container:
     mt5_market_data: Any = field(default=None, init=False)
     mt5_order_validation: Any = field(default=None, init=False)
     execution_uow_factory: Any = field(default=None, init=False)
+    execution_audit_uow_factory: Any = field(default=None, init=False)
     execution_safety: Any = field(default=None, init=False)
     execution_gateway: Any = field(default=None, init=False)
     portfolio_uow_factory: Any = field(default=None, init=False)
@@ -128,6 +129,9 @@ class Container:
         self.broker_uow_factory = persistence.get("broker_uow_factory")
         self.mt5_uow_factory = persistence.get("mt5_uow_factory")
         self.execution_uow_factory = persistence.get("execution_uow_factory")
+        self.execution_audit_uow_factory = persistence.get(
+            "execution_audit_uow_factory"
+        )
         self.portfolio_uow_factory = persistence.get("portfolio_uow_factory")
         self.risk_uow_factory = persistence.get("risk_uow_factory")
         self.strategy_uow_factory = persistence.get("strategy_uow_factory")
@@ -335,6 +339,7 @@ class Container:
         self.mt5_market_data = None
         self.mt5_order_validation = None
         self.execution_uow_factory = None
+        self.execution_audit_uow_factory = None
         self.execution_safety = None
         self.execution_gateway = None
         self.portfolio_uow_factory = None

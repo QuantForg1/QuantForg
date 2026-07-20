@@ -25,6 +25,7 @@ from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.execution import (
     CancelExecutionDep,
     CheckExecutionDep,
+    ExecutionAuditDep,
     JournalDep,
     ManageExecutionDep,
     SubmitExecutionDep,
@@ -32,6 +33,9 @@ from app.presentation.dependencies.execution import (
 )
 from app.presentation.schemas.execution import (
     ExecutionAnalyticsResponse,
+    ExecutionAuditItem,
+    ExecutionAuditListResponse,
+    ExecutionAuditTimelineResponse,
     ExecutionCancelRequest,
     ExecutionCancelResponse,
     ExecutionCheckRequest,
@@ -44,6 +48,73 @@ from app.presentation.schemas.execution import (
 )
 
 router = APIRouter(prefix="/execution", tags=["execution"])
+
+
+def _audit_item(audit: Any) -> ExecutionAuditItem:
+    return ExecutionAuditItem(
+        id=audit.id,
+        user_id=audit.user_id,
+        request_id=audit.request_id,
+        stage=audit.stage.value if hasattr(audit.stage, "value") else str(audit.stage),
+        symbol=audit.symbol,
+        side=audit.side,
+        volume=audit.volume,
+        outcome=audit.outcome,
+        retcode=audit.retcode,
+        order_ticket=audit.order_ticket,
+        deal_ticket=audit.deal_ticket,
+        latency_ms=audit.latency_ms,
+        gateway_latency_ms=audit.gateway_latency_ms,
+        railway_processing_ms=audit.railway_processing_ms,
+        cloudflare_latency_ms=audit.cloudflare_latency_ms,
+        spread=audit.spread,
+        slippage=audit.slippage,
+        commission=audit.commission,
+        swap=audit.swap,
+        margin_used=audit.margin_used,
+        free_margin=audit.free_margin,
+        balance=audit.balance,
+        equity=audit.equity,
+        leverage=audit.leverage,
+        broker_server_time=audit.broker_server_time,
+        market_session=audit.market_session,
+        execution_route=audit.execution_route,
+        payload_in=dict(audit.payload_in),
+        payload_out=dict(audit.payload_out),
+        related_ids=dict(audit.related_ids),
+        created_at=audit.created_at,
+    )
+
+
+@router.get("/audits", response_model=ExecutionAuditListResponse)
+async def list_execution_audits(
+    user: CurrentUser,
+    audit_svc: ExecutionAuditDep,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> ExecutionAuditListResponse:
+    """List recent immutable execution-stage audits for the current user."""
+    rows = await audit_svc.list_for_user(user.id, limit=limit)
+    items = [_audit_item(a) for a in rows]
+    return ExecutionAuditListResponse(items=items, count=len(items))
+
+
+@router.get(
+    "/audits/by-request/{request_id}",
+    response_model=ExecutionAuditTimelineResponse,
+)
+async def execution_audit_timeline(
+    request_id: str,
+    user: CurrentUser,
+    audit_svc: ExecutionAuditDep,
+) -> ExecutionAuditTimelineResponse:
+    """Return the stage timeline for one request_id (oldest first)."""
+    rows = await audit_svc.get_timeline(user.id, request_id)
+    items = [_audit_item(a) for a in rows]
+    return ExecutionAuditTimelineResponse(
+        request_id=request_id.strip(),
+        items=items,
+        count=len(items),
+    )
 
 
 @router.post("/check", response_model=ExecutionCheckResponse)

@@ -25,3 +25,15 @@ class ExecutionOutcome(StrEnum):
     RETRY = "retry"
     CANCELLED = "cancelled"
     PREPARED = "prepared"
+
+
+class ExecutionAuditStage(StrEnum):
+    """Immutable execution-pipeline stage recorded by the Audit Engine."""
+
+    VALIDATION = "validation"
+    RISK = "risk"
+    SAFETY = "safety"
+    SUBMIT = "submit"
+    MANAGE = "manage"
+    CANCEL = "cancel"
+    REPLAY = "replay"

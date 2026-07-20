@@ -12,11 +12,13 @@ from app.application.dto.mt5 import (
     MT5OrderValidateCommand,
     MT5OrderValidationDTO,
 )
+from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.mt5_order_validation import MT5OrderValidationService
 from app.application.services.mt5_session_guard import require_live_mt5_connection
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.mt5_order import OrderIntent, TradeValidation
 from app.domain.enums.audit import AuditAction, AuditOutcome
+from app.domain.enums.execution import ExecutionAuditStage
 from app.domain.enums.order import OrderSide, OrderType
 from app.domain.exceptions.base import ValidationError
 from app.domain.execution_engine.reasons import humanize_reason
@@ -28,6 +30,9 @@ from app.domain.value_objects.mt5_order import (
     StopLoss,
     TakeProfit,
 )
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _parse_intent(command: MT5OrderValidateCommand) -> OrderIntent:
@@ -66,6 +71,7 @@ class ValidateMT5OrderUseCase:
     uow_factory: Any
     validation_service: MT5OrderValidationService
     audit: RecordAuditEventUseCase
+    execution_audit: ExecutionAuditService | None = None
 
     async def execute(self, command: MT5OrderValidateCommand) -> MT5OrderValidationDTO:
         await require_live_mt5_connection(
@@ -98,6 +104,36 @@ class ValidateMT5OrderUseCase:
         async with self.uow_factory() as uow:
             await uow.validations.add(stored)
             await uow.commit()
+
+        if self.execution_audit is not None:
+            try:
+                await self.execution_audit.record(
+                    user_id=command.user_id,
+                    request_id=f"val_{stored.id.hex}",
+                    stage=ExecutionAuditStage.VALIDATION,
+                    symbol=stored.symbol,
+                    side=stored.side,
+                    volume=str(stored.volume),
+                    outcome="valid" if stored.valid else "invalid",
+                    retcode=stored.retcode,
+                    margin_used=str(stored.expected_margin),
+                    payload_in=dict(stored.request_snapshot),
+                    payload_out={
+                        "valid": stored.valid,
+                        "retcode": stored.retcode,
+                        "messages": list(stored.messages),
+                        "checks": dict(stored.checks),
+                        "expected_margin": str(stored.expected_margin),
+                        "estimated_profit": str(stored.estimated_profit),
+                    },
+                    related_ids={"validation_id": str(stored.id)},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "execution_audit_failed",
+                    stage="validation",
+                    error=str(exc),
+                )
 
         await self.audit.execute(
             RecordAuditEventCommand(

@@ -25,6 +25,7 @@ from app.application.use_cases.mt5_order import (
 )
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
+from app.presentation.dependencies.execution import get_execution_audit_service
 from core.di.container import get_container
 
 
@@ -91,6 +92,7 @@ def get_mt5_service() -> MT5Service:
             uow_factory=uow_factory,
             validation_service=order_validation,
             audit=audit,
+            execution_audit=get_execution_audit_service(),
         ),
         calculate_order=CalculateMT5OrderUseCase(
             uow_factory=uow_factory,

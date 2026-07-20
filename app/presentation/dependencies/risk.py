@@ -11,6 +11,7 @@ from app.application.services.risk_engine import RiskEngine
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.application.use_cases.risk_engine import CheckRiskUseCase
 from app.domain.entities.risk_engine import RiskEngineConfig
+from app.presentation.dependencies.execution import get_execution_audit_service
 from core.di.container import get_container
 
 
@@ -52,6 +53,7 @@ def get_check_risk() -> CheckRiskUseCase:
         risk_engine=get_risk_engine(),
         portfolio_sync=get_portfolio_sync(),
         audit=RecordAuditEventUseCase(uow_factory=broker_uow),
+        execution_audit=get_execution_audit_service(),
     )
 
 

@@ -9,13 +9,18 @@ from uuid import UUID
 
 from app.application.dto.audit import RecordAuditEventCommand
 from app.application.dto.risk_engine import RiskCheckCommand, RiskCheckDTO
+from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.services.risk_engine import RiskCheckInput, RiskEngine
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.mt5_portfolio import AccountSnapshot, MT5Position
 from app.domain.enums.audit import AuditAction, AuditOutcome
+from app.domain.enums.execution import ExecutionAuditStage
 from app.domain.enums.risk import PositionSizingMethod
 from app.domain.exceptions.base import ValidationError
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +30,7 @@ class CheckRiskUseCase:
     risk_engine: RiskEngine
     portfolio_sync: PortfolioSyncService | None
     audit: RecordAuditEventUseCase
+    execution_audit: ExecutionAuditService | None = None
 
     async def execute(self, command: RiskCheckCommand) -> RiskCheckDTO:
         request_id = command.request_id.strip()
@@ -91,6 +97,40 @@ class CheckRiskUseCase:
         async with self.risk_uow_factory() as uow:
             await uow.assessments.add(assessment)
             await uow.commit()
+
+        if self.execution_audit is not None:
+            try:
+                await self.execution_audit.record(
+                    user_id=command.user_id,
+                    request_id=request_id,
+                    stage=ExecutionAuditStage.RISK,
+                    symbol=assessment.symbol,
+                    side=assessment.side,
+                    volume=str(assessment.approved_lots),
+                    outcome=assessment.decision.value,
+                    retcode=0,
+                    balance=str(account.balance),
+                    equity=str(account.equity),
+                    free_margin=str(account.free_margin),
+                    margin_used=str(account.margin),
+                    leverage=str(account.leverage),
+                    spread=str(spread) if spread is not None else None,
+                    payload_in={
+                        "requested_lots": (
+                            str(requested) if requested is not None else None
+                        ),
+                        "sizing_method": method.value,
+                        "entry_price": str(entry),
+                    },
+                    payload_out=assessment.to_dict(),
+                    related_ids={"risk_assessment_id": str(assessment.id)},
+                )
+            except Exception as exc:
+                logger.warning(
+                    "execution_audit_failed",
+                    stage="risk",
+                    error=str(exc),
+                )
 
         outcome = (
             AuditOutcome.SUCCESS

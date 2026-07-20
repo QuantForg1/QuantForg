@@ -9,6 +9,7 @@ from fastapi import Depends
 
 from app.application.services.execution_gateway import ExecutionGateway
 from app.application.services.execution_intelligence import ExecutionIntelligenceService
+from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.execution_safety import ExecutionSafetyService
 from app.application.services.institutional_execution_engine import (
     InstitutionalExecutionEngine,
@@ -24,6 +25,9 @@ from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.domain.entities.execution_safety import ExecutionPolicy
 from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
+from app.infrastructure.persistence.memory_execution_audit import (
+    MemoryExecutionAuditUnitOfWorkFactory,
+)
 from app.presentation.dependencies.execution_intelligence import (
     get_execution_intelligence,
 )
@@ -52,6 +56,17 @@ def get_execution_uow_factory() -> Any:
         msg = "Execution Unit of Work factory is not available"
         raise RuntimeError(msg)
     return factory
+
+
+def get_execution_audit_uow_factory() -> Any:
+    factory = getattr(get_container(), "execution_audit_uow_factory", None)
+    if factory is None:
+        return MemoryExecutionAuditUnitOfWorkFactory()
+    return factory
+
+
+def get_execution_audit_service() -> ExecutionAuditService:
+    return ExecutionAuditService(uow_factory=get_execution_audit_uow_factory())
 
 
 def get_execution_safety_service() -> ExecutionSafetyService:
@@ -110,6 +125,7 @@ def get_check_execution_safety() -> CheckExecutionSafetyUseCase:
         execution_uow_factory=get_execution_uow_factory(),
         safety_service=get_execution_safety_service(),
         audit=RecordAuditEventUseCase(uow_factory=broker_uow),
+        execution_audit=get_execution_audit_service(),
     )
 
 
@@ -123,6 +139,7 @@ def get_submit_execution() -> SubmitExecutionUseCase:
         execution_uow_factory=get_execution_uow_factory(),
         engine=get_institutional_execution_engine(),
         audit=RecordAuditEventUseCase(uow_factory=broker_uow),
+        execution_audit=get_execution_audit_service(),
     )
 
 
@@ -160,3 +177,6 @@ EngineDep = Annotated[
     InstitutionalExecutionEngine, Depends(get_institutional_execution_engine)
 ]
 JournalDep = Annotated[ExecutionJournalStore, Depends(get_execution_journal)]
+ExecutionAuditDep = Annotated[
+    ExecutionAuditService, Depends(get_execution_audit_service)
+]

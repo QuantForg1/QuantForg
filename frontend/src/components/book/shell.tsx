@@ -10,6 +10,7 @@ import { SessionBar } from "@/components/broker/session-bar";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { PortfolioHealth, exposureFromPositions } from "@/components/book/portfolio-health";
 import { PortfolioOverview } from "@/components/book/portfolio-overview";
+import { PortfolioIntelligenceLab } from "@/components/book/portfolio-intelligence-lab";
 import { RiskDna } from "@/components/book/risk-dna";
 import { ExposureMap } from "@/components/book/exposure-map";
 import { EquityTimeline } from "@/components/book/equity-timeline";
@@ -274,12 +275,13 @@ export function BookShell() {
           </div>
         ) : (
           <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-            <div className="min-h-0 max-h-[40%] overflow-y-auto">
+            <div className="min-h-0 max-h-[40%] space-y-2 overflow-y-auto overflow-x-auto">
               <PortfolioOverview
                 account={account}
                 positions={positions}
                 deals={deals}
               />
+              <PortfolioIntelligenceLab />
             </div>
             <PortfolioHealth
               focused={focus === "health"}
