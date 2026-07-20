@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS public.execution_audits (
   user_id                 uuid NOT NULL REFERENCES public.users (id) ON DELETE CASCADE,
   request_id              text NOT NULL,
   stage                   text NOT NULL CHECK (
-    stage IN ('validation', 'risk', 'safety', 'submit', 'manage', 'cancel', 'replay')
+    stage IN (
+      'validation', 'risk', 'safety', 'submit', 'manage', 'cancel', 'history', 'replay'
+    )
   ),
   symbol                  text NOT NULL DEFAULT '',
   side                    text NOT NULL DEFAULT '',

@@ -18,10 +18,9 @@
 
 | Item | Notes |
 | --- | --- |
-| ITE tables RLS enabled without policies | INFO advisors — deny-all until policies added |
 | Authenticated EXECUTE WARN on RLS helpers | Expected for policy evaluation |
-| Leaked password protection | Enable in Supabase Auth dashboard |
-| CSRF | API is Bearer JWT; classic CSRF not applicable to same pattern |
+| Leaked password protection | **FAIL** — enable in Supabase Auth dashboard (Pro+) |
+| Custom host api.quantforg.com | Unreachable in RC2 probe; Railway health OK |
 
 ## Secrets rule
 

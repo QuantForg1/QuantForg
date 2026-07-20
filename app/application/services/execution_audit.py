@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.domain.entities.execution_audit import ExecutionAudit
@@ -132,7 +132,7 @@ class ExecutionAuditService:
             related_ids=sanitize_payload_dict(related_ids),
         )
         async with self.uow_factory() as uow:
-            stored = await uow.audits.add(audit)
+            stored = cast("ExecutionAudit", await uow.audits.add(audit))
             await uow.commit()
         return stored
 
@@ -140,10 +140,16 @@ class ExecutionAuditService:
         self, user_id: UUID, *, limit: int = 50
     ) -> list[ExecutionAudit]:
         async with self.uow_factory() as uow:
-            return await uow.audits.list_for_user(user_id, limit=limit)
+            return cast(
+                "list[ExecutionAudit]",
+                await uow.audits.list_for_user(user_id, limit=limit),
+            )
 
     async def get_timeline(
         self, user_id: UUID, request_id: str
     ) -> list[ExecutionAudit]:
         async with self.uow_factory() as uow:
-            return await uow.audits.list_by_request_id(user_id, request_id)
+            return cast(
+                "list[ExecutionAudit]",
+                await uow.audits.list_by_request_id(user_id, request_id),
+            )

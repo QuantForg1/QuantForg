@@ -172,3 +172,56 @@ class TestExecutionAuditService:
         )
         listed = await svc.list_for_user(user_id, limit=50)
         assert len(listed) == 2
+
+    async def test_manage_cancel_history_stages(self) -> None:
+        factory = MemoryExecutionAuditUnitOfWorkFactory()
+        svc = ExecutionAuditService(uow_factory=factory)
+        user_id = uuid4()
+        manage_id = "manage-req-1"
+        cancel_id = "cancel-req-1"
+
+        await svc.record(
+            user_id=user_id,
+            request_id=manage_id,
+            stage=ExecutionAuditStage.MANAGE,
+            symbol="EURUSD",
+            outcome="success",
+            order_ticket=1001,
+            deal_ticket=2001,
+        )
+        await svc.record(
+            user_id=user_id,
+            request_id=manage_id,
+            stage=ExecutionAuditStage.HISTORY,
+            symbol="EURUSD",
+            outcome="recorded",
+            order_ticket=1001,
+            deal_ticket=2001,
+        )
+        await svc.record(
+            user_id=user_id,
+            request_id=cancel_id,
+            stage=ExecutionAuditStage.CANCEL,
+            symbol="EURUSD",
+            outcome="success",
+            order_ticket=1002,
+        )
+        await svc.record(
+            user_id=user_id,
+            request_id=cancel_id,
+            stage=ExecutionAuditStage.HISTORY,
+            symbol="EURUSD",
+            outcome="recorded",
+            order_ticket=1002,
+        )
+
+        manage_chain = await svc.get_timeline(user_id, manage_id)
+        assert [a.stage for a in manage_chain] == [
+            ExecutionAuditStage.MANAGE,
+            ExecutionAuditStage.HISTORY,
+        ]
+        cancel_chain = await svc.get_timeline(user_id, cancel_id)
+        assert [a.stage for a in cancel_chain] == [
+            ExecutionAuditStage.CANCEL,
+            ExecutionAuditStage.HISTORY,
+        ]

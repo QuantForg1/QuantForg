@@ -71,11 +71,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Topbar onOpenCommand={() => setCmdOpen(true)} />
           <main
             id="main-content"
+            data-desk={
+              pathname.startsWith("/terminal") ||
+              pathname.startsWith("/workspace") ||
+              pathname.startsWith("/execution")
+                ? "terminal"
+                : pathname.startsWith("/book")
+                  ? "book"
+                  : pathname.startsWith("/research")
+                    ? "research"
+                    : pathname.startsWith("/counsel")
+                      ? "counsel"
+                      : pathname.startsWith("/journal")
+                        ? "journal"
+                        : pathname.startsWith("/broker")
+                          ? "broker"
+                          : pathname.startsWith("/inbox")
+                            ? "inbox"
+                            : pathname.startsWith("/settings")
+                              ? "settings"
+                              : "app"
+            }
             className={cn(
               "flex-1",
               isFullBleed
                 ? "overflow-hidden p-0"
-                : "overflow-y-auto p-4 sm:p-6 lg:p-8",
+                : "overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8",
             )}
             tabIndex={-1}
           >

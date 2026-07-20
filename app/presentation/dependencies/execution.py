@@ -7,9 +7,9 @@ from typing import Annotated, Any
 
 from fastapi import Depends
 
+from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.execution_gateway import ExecutionGateway
 from app.application.services.execution_intelligence import ExecutionIntelligenceService
-from app.application.services.execution_audit import ExecutionAuditService
 from app.application.services.execution_safety import ExecutionSafetyService
 from app.application.services.institutional_execution_engine import (
     InstitutionalExecutionEngine,
@@ -153,6 +153,7 @@ def get_cancel_execution() -> CancelExecutionUseCase:
         execution_uow_factory=get_execution_uow_factory(),
         engine=get_institutional_execution_engine(),
         audit=RecordAuditEventUseCase(uow_factory=broker_uow),
+        execution_audit=get_execution_audit_service(),
     )
 
 

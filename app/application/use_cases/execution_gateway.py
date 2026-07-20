@@ -212,10 +212,20 @@ class SubmitExecutionUseCase:
                     if "broker" in lowered or lowered in {"submit", "submission"}:
                         gateway_ms = val
                         break
+                terminal_raw = (command.audit_stage or "submit").strip().lower()
+                try:
+                    terminal_stage = ExecutionAuditStage(terminal_raw)
+                except ValueError:
+                    terminal_stage = ExecutionAuditStage.SUBMIT
+                if terminal_stage not in {
+                    ExecutionAuditStage.SUBMIT,
+                    ExecutionAuditStage.MANAGE,
+                }:
+                    terminal_stage = ExecutionAuditStage.SUBMIT
                 await self.execution_audit.record(
                     user_id=command.user_id,
                     request_id=request_id,
-                    stage=ExecutionAuditStage.SUBMIT,
+                    stage=terminal_stage,
                     symbol=intent.symbol,
                     side=intent.side.value,
                     volume=str(intent.volume.value),
@@ -234,6 +244,27 @@ class SubmitExecutionUseCase:
                     payload_out=exec_result.to_dict(),
                     related_ids={"attempt_id": str(attempt.id)},
                 )
+                if exec_result.outcome is ExecutionOutcome.SUCCESS and (
+                    exec_result.deal_ticket is not None
+                    or exec_result.order_ticket is not None
+                ):
+                    await self.execution_audit.record(
+                        user_id=command.user_id,
+                        request_id=request_id,
+                        stage=ExecutionAuditStage.HISTORY,
+                        symbol=intent.symbol,
+                        side=intent.side.value,
+                        volume=str(intent.volume.value),
+                        outcome="recorded",
+                        retcode=exec_result.retcode,
+                        order_ticket=exec_result.order_ticket,
+                        deal_ticket=exec_result.deal_ticket,
+                        payload_out=exec_result.to_dict(),
+                        related_ids={
+                            "attempt_id": str(attempt.id),
+                            "source_stage": terminal_stage.value,
+                        },
+                    )
             except Exception as exc:
                 logger.warning(
                     "execution_audit_failed",
@@ -309,6 +340,7 @@ class CancelExecutionUseCase:
     execution_uow_factory: Any
     engine: InstitutionalExecutionEngine
     audit: RecordAuditEventUseCase
+    execution_audit: ExecutionAuditService | None = None
 
     async def execute(self, command: ExecutionCancelCommand) -> ExecutionCancelDTO:
         request_id = (
@@ -350,6 +382,52 @@ class CancelExecutionUseCase:
             async with self.execution_uow_factory() as uow:
                 await uow.attempts.add(attempt)
                 await uow.commit()
+
+            if self.execution_audit is not None:
+                try:
+                    await self.execution_audit.record(
+                        user_id=command.user_id,
+                        request_id=request_id,
+                        stage=ExecutionAuditStage.CANCEL,
+                        symbol=command.symbol or f"ticket:{command.ticket}",
+                        side="cancel",
+                        volume="0",
+                        outcome=exec_result.outcome.value,
+                        retcode=exec_result.retcode,
+                        order_ticket=exec_result.order_ticket or command.ticket,
+                        deal_ticket=exec_result.deal_ticket,
+                        latency_ms=pipeline.latency_ms,
+                        payload_in=dict(attempt.request_snapshot),
+                        payload_out=exec_result.to_dict(),
+                        related_ids={
+                            "attempt_id": str(attempt.id),
+                            "ticket": command.ticket,
+                        },
+                    )
+                    if exec_result.outcome is ExecutionOutcome.SUCCESS:
+                        await self.execution_audit.record(
+                            user_id=command.user_id,
+                            request_id=request_id,
+                            stage=ExecutionAuditStage.HISTORY,
+                            symbol=command.symbol or f"ticket:{command.ticket}",
+                            side="cancel",
+                            volume="0",
+                            outcome="recorded",
+                            retcode=exec_result.retcode,
+                            order_ticket=exec_result.order_ticket or command.ticket,
+                            deal_ticket=exec_result.deal_ticket,
+                            payload_out=exec_result.to_dict(),
+                            related_ids={
+                                "attempt_id": str(attempt.id),
+                                "source_stage": "cancel",
+                            },
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "execution_audit_failed",
+                        stage="cancel",
+                        error=str(exc),
+                    )
 
             await self.audit.execute(
                 RecordAuditEventCommand(
@@ -524,6 +602,7 @@ class ManageExecutionUseCase:
                 oms_kind=oms_kind,
                 ip_address=command.ip_address,
                 user_agent=command.user_agent,
+                audit_stage="manage",
             )
         )
         return ExecutionPipelineDTO(

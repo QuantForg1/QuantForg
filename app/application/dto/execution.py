@@ -82,6 +82,8 @@ class ExecutionSubmitCommand:
     oms_kind: str = ""
     ip_address: str = ""
     user_agent: str = ""
+    # Terminal audit stage for broker attempt (submit vs manage). Does not change OMS.
+    audit_stage: str = "submit"
 
 
 @dataclass(frozen=True, slots=True)

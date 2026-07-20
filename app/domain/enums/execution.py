@@ -36,4 +36,5 @@ class ExecutionAuditStage(StrEnum):
     SUBMIT = "submit"
     MANAGE = "manage"
     CANCEL = "cancel"
+    HISTORY = "history"
     REPLAY = "replay"

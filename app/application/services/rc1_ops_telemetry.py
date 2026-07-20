@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
+from app.domain.entities.execution_audit import ExecutionAudit
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -130,8 +131,8 @@ class Rc1OpsTelemetryService:
                 "daily_pnl": "Not available from execution_audits — use Journal deals",
                 "source": "execution_audits + live infrastructure probes",
                 "stage_coverage": (
-                    "Recorded: validation, risk, safety, submit, replay. "
-                    "manage/cancel reserved; close/history via Journal deals."
+                    "Recorded: validation, risk, safety, submit|manage, "
+                    "cancel, history, replay."
                 ),
             },
         }
@@ -179,8 +180,7 @@ class Rc1OpsTelemetryService:
                     "severity": "warning",
                     "code": "execution_success_low",
                     "message": (
-                        f"Execution success {success_pct}% "
-                        f"(reject {reject_pct}%)"
+                        f"Execution success {success_pct}% " f"(reject {reject_pct}%)"
                     ),
                 }
             )
@@ -210,12 +210,15 @@ class Rc1OpsTelemetryService:
             )
         return alerts
 
-    async def _load_audits(self, *, limit: int) -> list[Any]:
+    async def _load_audits(self, *, limit: int) -> list[ExecutionAudit]:
         if self.execution_audit_uow_factory is None:
             return []
         try:
             async with self.execution_audit_uow_factory() as uow:
-                return await uow.audits.list_recent(limit=limit)
+                return cast(
+                    "list[ExecutionAudit]",
+                    await uow.audits.list_recent(limit=limit),
+                )
         except Exception as exc:
             logger.warning("rc1_telemetry_audits_failed", error=str(exc))
             return []
