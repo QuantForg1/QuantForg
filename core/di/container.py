@@ -292,8 +292,7 @@ class Container:
             )
 
             interval = float(
-                getattr(self.settings, "shadow_orchestrator_interval_seconds", 60)
-                or 60
+                getattr(self.settings, "shadow_orchestrator_interval_seconds", 60) or 60
             )
             self.ite_runtime = build_ite_runtime(
                 settings=self.settings,
@@ -365,8 +364,8 @@ class Container:
                 )
 
                 set_ite_runtime(None)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("ite_runtime_clear_failed", error=str(exc))
         if self.supabase is not None:
             self.supabase.disconnect()
             self.supabase = None

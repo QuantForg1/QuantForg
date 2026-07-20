@@ -196,9 +196,9 @@ class MT5OrderValidationService:
             filling = "ioc"
         elif constraints.filling_mode & 1:
             filling = "fok"
-        elif constraints.filling_mode & 4:
-            filling = "return"
-        elif (constraints.execution_mode or "").lower() in {"market", "exchange"}:
+        elif constraints.filling_mode & 4 or (
+            constraints.execution_mode or ""
+        ).lower() in {"market", "exchange"}:
             filling = "return"
         else:
             filling = "fok"

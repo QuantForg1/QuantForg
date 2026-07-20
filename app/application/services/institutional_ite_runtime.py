@@ -286,7 +286,7 @@ class InstitutionalIteRuntime:
         while not self._stop.is_set():
             try:
                 self.run_shadow_cycle()
-            except Exception as exc:  # noqa: BLE001 — keep loop alive
+            except Exception as exc:
                 logger.exception("shadow_orchestrator_cycle_failed", error=str(exc))
             # Interruptible sleep
             for _ in range(int(max(1, self.interval_seconds))):
@@ -341,9 +341,7 @@ def build_ite_runtime(
     guarded_manage = GuardedOmsManagePort(inner=raw_manage, plane=plane)
 
     config = ExecutionBridgeConfig(mode=ExecutionMode.SHADOW)
-    execution = InstitutionalExecutionIntegration.create(
-        guarded_submit, config=config
-    )
+    execution = InstitutionalExecutionIntegration.create(guarded_submit, config=config)
     execution.bridge.bind_ops(plane, reliability=reliability)
 
     pme = InstitutionalPositionManagement.create(guarded_manage, ops_plane=plane)

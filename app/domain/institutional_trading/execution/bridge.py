@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from threading import Lock
+from typing import TYPE_CHECKING
 
 from app.application.services.institutional_execution_engine import parse_order_intent
 from app.domain.entities.mt5_order import OrderIntent
@@ -38,7 +39,6 @@ from app.domain.institutional_trading.execution.models import (
 )
 from app.domain.institutional_trading.execution.oms_port import OmsSubmitPort
 from app.domain.institutional_trading.operations.models import OpsExecutionMode
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.domain.institutional_trading.operations.control_plane import (
@@ -559,11 +559,12 @@ class ExecutionBridge:
     def _complete_shadow_trace(self, tid: str | None, t0: float) -> None:
         if tid is None or self.reliability is None:
             return
+        from datetime import UTC, datetime
+
         from app.domain.institutional_trading.reliability.models import (
             TimelineEvent,
             TraceStage,
         )
-        from datetime import UTC, datetime
 
         latency = (time.perf_counter() - t0) * 1000.0
         for stage, detail, ok in (

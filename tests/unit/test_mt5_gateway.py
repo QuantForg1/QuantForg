@@ -429,7 +429,9 @@ class TestMT5Gateway:
         runtime = client.app.state.runtime
         runtime.bridge = _FakeBridge(prelogged=True)
         runtime.diagnostics.connected = True
-        assert client.post("/session/attach", headers=headers, json={}).status_code == 200
+        assert (
+            client.post("/session/attach", headers=headers, json={}).status_code == 200
+        )
 
         res = client.post(
             "/trade/order_send",
@@ -557,9 +559,9 @@ class TestFillingModeSelection:
         )
         assert connect.status_code == 200
         # Seed a fresh heartbeat so timeout path can report degraded-connected.
-        runtime.diagnostics.last_heartbeat_at = __import__(
-            "datetime"
-        ).datetime.now(__import__("datetime").UTC).isoformat()
+        runtime.diagnostics.last_heartbeat_at = (
+            __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat()
+        )
         runtime.diagnostics.last_heartbeat_ms = 12.0
 
         t0 = time.perf_counter()
