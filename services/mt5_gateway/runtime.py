@@ -931,6 +931,7 @@ class MT5GatewayRuntime:
         """Validate a trade request via MetaTrader5.order_check (no fill)."""
         from services.mt5_gateway.trade import (
             build_mt5_trade_request,
+            order_check_with_filling_fallback,
             serialize_check_result,
         )
 
@@ -955,15 +956,12 @@ class MT5GatewayRuntime:
             order_ticket=int(body.get("order_ticket") or body.get("order") or 0),
             oms_kind=str(body.get("oms_kind") or ""),
         )
-        if request.get("action") != 6 and float(request.get("price") or 0) <= 0:
-            tick = self.bridge.symbol_info_tick(symbol)
-            if tick is None:
-                raise RuntimeError(f"no quote for {symbol}")
-            order_type = int(request.get("type") or 0)
-            request["price"] = float(tick.ask if order_type % 2 == 0 else tick.bid)
-        result = self.bridge.order_check(request)
+        info = self.bridge.symbol_info(symbol)
+        result, request = order_check_with_filling_fallback(mt5, request, info=info)
+        filling_attempts = request.pop("_filling_attempts", [])
         payload = serialize_check_result(result, request)
         payload["component"] = "mt5_order_check"
+        payload["filling_attempts"] = filling_attempts
         try:
             payload["symbol_specs"] = self.symbol_specs(symbol)
         except RuntimeError:
@@ -1044,7 +1042,10 @@ class MT5GatewayRuntime:
         """Live MetaTrader5.order_send — returns real broker retcode / ticket."""
         from services.mt5_gateway.trade import (
             TRADE_ACTION_SLTP,
+            apply_filling_mode,
             build_mt5_trade_request,
+            filling_name,
+            order_check_with_filling_fallback,
             serialize_send_result,
         )
 
@@ -1078,15 +1079,44 @@ class MT5GatewayRuntime:
             order_ticket=int(body.get("order_ticket") or body.get("order") or 0),
             oms_kind=oms_kind,
         )
-        if (
-            int(request.get("action") or 0) != TRADE_ACTION_SLTP
-            and float(request.get("price") or 0) <= 0
-        ):
-            tick = self.bridge.symbol_info_tick(symbol)
-            if tick is None:
-                raise RuntimeError(f"no quote for {symbol}")
-            order_type = int(request.get("type") or 0)
-            request["price"] = float(tick.ask if order_type % 2 == 0 else tick.bid)
+        # Re-validate with filling fallback so order_send uses a broker-accepted mode.
+        if int(request.get("action") or 0) != TRADE_ACTION_SLTP:
+            info = self.bridge.symbol_info(symbol)
+            check_result, request = order_check_with_filling_fallback(
+                mt5, request, info=info
+            )
+            filling_attempts = request.pop("_filling_attempts", [])
+            check_retcode = (
+                10013
+                if check_result is None
+                else int(getattr(check_result, "retcode", 10013) or 10013)
+            )
+            if check_result is None or check_retcode not in {0, 10009}:
+                payload = serialize_send_result(None, request)
+                payload["component"] = "mt5_order_send"
+                payload["ok"] = False
+                payload["retcode"] = check_retcode
+                payload["comment"] = (
+                    f"order_check blocked send: "
+                    f"{getattr(check_result, 'comment', '') or 'failed'} "
+                    f"(retcode {check_retcode})"
+                )
+                payload["filling_attempts"] = filling_attempts
+                payload["order_check_retcode"] = check_retcode
+                try:
+                    payload["symbol_specs"] = self.symbol_specs(symbol)
+                except RuntimeError:
+                    payload["symbol_specs"] = {}
+                return payload
+            request = apply_filling_mode(
+                request, int(request.get("type_filling") or 0)
+            )
+            logger.info(
+                "mt5_order_send_after_check symbol=%s filling=%s",
+                symbol,
+                filling_name(int(request.get("type_filling") or -1)),
+            )
+
         result = self.bridge.order_send(request)
         payload = serialize_send_result(result, request)
         payload["component"] = "mt5_order_send"

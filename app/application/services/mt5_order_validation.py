@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from app.domain.entities.mt5_order import (
@@ -37,7 +37,7 @@ def _align_volume(volume: Decimal, step: Decimal) -> Decimal:
     return (steps * step).normalize()
 
 
-def _filling_label(mode: int) -> str:
+def _filling_label(mode: int, *, execution_mode: str = "") -> str:
     parts: list[str] = []
     if mode & 1:
         parts.append("FOK")
@@ -45,7 +45,12 @@ def _filling_label(mode: int) -> str:
         parts.append("IOC")
     if mode & 4:
         parts.append("RETURN")
-    return "+".join(parts) if parts else "IOC (default)"
+    if parts:
+        return "+".join(parts)
+    # No SYMBOL_FILLING_* bits — Market/Exchange typically require RETURN.
+    if (execution_mode or "").lower() in {"market", "exchange"}:
+        return "RETURN (exec default)"
+    return "FOK/IOC/RETURN (probe)"
 
 
 @dataclass
@@ -173,20 +178,30 @@ class MT5OrderValidationService:
             )
 
         tick = self.adapter.latest_tick(intent.symbol)
+        constraints = self.constraints_for(intent.symbol)
+        digits = max(0, int(constraints.digits))
         if intent.order_type is OrderType.MARKET:
-            price = tick.ask if intent.side is OrderSide.BUY else tick.bid
+            # BUY uses ASK, SELL uses BID — never mid / stale client price.
+            raw = tick.ask if intent.side is OrderSide.BUY else tick.bid
+            quant = Decimal(1).scaleb(-digits)
+            price = Decimal(str(raw)).quantize(quant, rounding=ROUND_HALF_UP)
         else:
-            price = intent.price if intent.price is not None else tick.mid
+            raw_price = intent.price if intent.price is not None else tick.mid
+            quant = Decimal(1).scaleb(-digits)
+            price = Decimal(str(raw_price)).quantize(quant, rounding=ROUND_HALF_UP)
 
         action = self._action_for(intent)
-        constraints = self.constraints_for(intent.symbol)
-        filling = "ioc"
+        # Select filling from symbol_info.filling_mode — never hardcode IOC.
         if constraints.filling_mode & 2:
             filling = "ioc"
         elif constraints.filling_mode & 1:
             filling = "fok"
         elif constraints.filling_mode & 4:
             filling = "return"
+        elif (constraints.execution_mode or "").lower() in {"market", "exchange"}:
+            filling = "return"
+        else:
+            filling = "fok"
 
         return TradeRequest(
             symbol=intent.symbol,
@@ -447,7 +462,9 @@ class MT5OrderValidationService:
         snapshot = request.to_dict()
         snapshot["constraints"] = constraints.to_dict()
         snapshot["rejection_component"] = rejection_component
-        snapshot["filling_modes"] = _filling_label(constraints.filling_mode)
+        snapshot["filling_modes"] = _filling_label(
+            constraints.filling_mode, execution_mode=constraints.execution_mode
+        )
         snapshot["normalized_volume"] = str(intent.volume.value)
         snapshot["order_check_retcode"] = check_res.retcode
         snapshot["order_check_comment"] = check_res.comment

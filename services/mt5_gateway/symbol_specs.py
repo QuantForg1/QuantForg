@@ -61,6 +61,7 @@ def serialize_symbol_specs(info: Any, *, tick: Any | None = None) -> dict[str, A
         "filling_fok": bool(filling_raw & 1),
         "filling_ioc": bool(filling_raw & 2),
         "filling_return": bool(filling_raw & 4),
+        "order_mode": int(getattr(info, "order_mode", 0) or 0),
         "trade_mode": _TRADE_MODE.get(trade_mode_raw, f"unknown:{trade_mode_raw}"),
         "trade_mode_raw": trade_mode_raw,
         "execution_mode": _EXEC_MODE.get(exec_mode_raw, f"unknown:{exec_mode_raw}"),

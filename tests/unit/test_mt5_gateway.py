@@ -47,6 +47,10 @@ class _FakeBridge(LiveMT5Bridge):
     def last_error(self) -> Any:
         return (1, "fake")
 
+    def require(self) -> Any:
+        """Tests treat the fake bridge itself as the MetaTrader5 module surface."""
+        return self
+
     def symbol_select(self, symbol: str, enable: bool = True) -> bool:
         _ = enable
         self.selected.append(symbol)
@@ -99,6 +103,7 @@ class _FakeBridge(LiveMT5Bridge):
             trade_mode=4,
             trade_exemode=2,
             trade_calc_mode=0,
+            order_mode=127,
             visible=True,
             select=True,
             currency_base="EUR",
@@ -148,6 +153,70 @@ class _FakeBridge(LiveMT5Bridge):
     def history_deals_get(self, date_from: Any, date_to: Any) -> Any:
         _ = date_from, date_to
         return [SimpleNamespace(ticket=9, symbol="EURUSD", profit=2.5, volume=0.1)]
+
+    def order_check(self, request: dict[str, Any]) -> Any:
+        filling = int(request.get("type_filling", -1))
+        # Simulate brokers that reject IOC (1) with 10013 but accept FOK (0).
+        if filling == 1:
+            return SimpleNamespace(
+                retcode=10013,
+                comment="Invalid request",
+                balance=1000.0,
+                equity=1005.0,
+                margin=10.0,
+                margin_free=990.0,
+                profit=0.0,
+            )
+        return SimpleNamespace(
+            retcode=10009,
+            comment="Done",
+            balance=1000.0,
+            equity=1005.0,
+            margin=10.0,
+            margin_free=990.0,
+            profit=0.0,
+        )
+
+    def order_send(self, request: dict[str, Any]) -> Any:
+        check = self.order_check(request)
+        if int(getattr(check, "retcode", 10013)) not in {0, 10009}:
+            return SimpleNamespace(
+                retcode=int(check.retcode),
+                comment=str(check.comment),
+                order=0,
+                deal=0,
+                volume=0.0,
+                price=0.0,
+                bid=0.0,
+                ask=0.0,
+            )
+        return SimpleNamespace(
+            retcode=10009,
+            comment="Request executed",
+            order=424242,
+            deal=525252,
+            volume=float(request.get("volume") or 0),
+            price=float(request.get("price") or 0),
+            bid=1.1,
+            ask=1.2,
+        )
+
+    def order_calc_margin(
+        self, order_type: int, symbol: str, volume: float, price: float
+    ) -> Any:
+        _ = order_type, symbol, volume, price
+        return 10.0
+
+    def order_calc_profit(
+        self,
+        order_type: int,
+        symbol: str,
+        volume: float,
+        price_open: float,
+        price_close: float,
+    ) -> Any:
+        _ = order_type, symbol, volume, price_open, price_close
+        return 1.5
 
 
 @pytest.fixture
@@ -331,9 +400,74 @@ class TestMT5Gateway:
         res = client.get("/session/status", headers=headers)
         assert res.status_code == 200
 
+    def test_order_check_retries_filling_on_10013(self, client: TestClient) -> None:
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        runtime = client.app.state.runtime
+        runtime.bridge = _FakeBridge(prelogged=True)
+        runtime.diagnostics.connected = True
+        connect = client.post("/session/attach", headers=headers, json={})
+        assert connect.status_code == 200
+
+        res = client.post(
+            "/trade/order_check",
+            headers=headers,
+            json={"symbol": "EURUSD", "action": "buy", "volume": 0.01, "price": 0},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["ok"] is True
+        assert body["retcode"] == 10009
+        # Primary pick is IOC (filling_mode=2); fake rejects IOC then accepts FOK.
+        assert body["request"]["type_filling"] == 0
+        assert body["request"]["price"] == 1.2  # ASK for buy
+        assert any(a["retcode"] == 10013 for a in body.get("filling_attempts", []))
+
+    def test_order_send_live_after_check(self, client: TestClient) -> None:
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        runtime = client.app.state.runtime
+        runtime.bridge = _FakeBridge(prelogged=True)
+        runtime.diagnostics.connected = True
+        assert client.post("/session/attach", headers=headers, json={}).status_code == 200
+
+        res = client.post(
+            "/trade/order_send",
+            headers=headers,
+            json={"symbol": "EURUSD", "action": "buy", "volume": 0.01},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["ok"] is True
+        assert body["retcode"] == 10009
+        assert body["order_ticket"] == 424242
+        assert body["deal_ticket"] == 525252
+        assert float(body["price"]) == 1.2
+
 
 @pytest.mark.unit
-class TestMT5VersionDateParsing:
+class TestFillingModeSelection:
+    def test_market_exec_defaults_to_return_when_no_flags(self) -> None:
+        from services.mt5_gateway.trade import (
+            ORDER_FILLING_RETURN,
+            candidate_filling_modes,
+        )
+
+        info = SimpleNamespace(filling_mode=0, trade_exemode=2)
+        assert candidate_filling_modes(info)[0] == ORDER_FILLING_RETURN
+
+    def test_ioc_bit_preferred_when_advertised(self) -> None:
+        from services.mt5_gateway.trade import (
+            ORDER_FILLING_IOC,
+            candidate_filling_modes,
+        )
+
+        info = SimpleNamespace(filling_mode=2, trade_exemode=2)
+        assert candidate_filling_modes(info)[0] == ORDER_FILLING_IOC
+
+    def test_normalize_price_digits(self) -> None:
+        from services.mt5_gateway.trade import normalize_price
+
+        assert normalize_price(2650.123456, 2) == 2650.12
+
     """Regression: MetaTrader5.version()[2] is often a human date string."""
 
     @pytest.mark.parametrize(
