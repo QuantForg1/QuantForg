@@ -75,12 +75,12 @@ def assess_decision_risk(
         elif side == "sell" or side == "Bearish":
             suggested_sl = round(price + sl_dist, 5)
             suggested_tp = round(price - tp_dist, 5)
-        # Crude lot sizing: risk_amount / (sl_dist * contract≈100k) — FX majors
-        risk_per_lot = sl_dist * 100_000
+        # Crude lot sizing for XAUUSD: risk_amount / (sl_dist * contract_size=100)
+        risk_per_lot = sl_dist * 100
         if risk_per_lot > 0:
             lot_size = round(max(0.01, min(1.0, max_risk_amount / risk_per_lot)), 2)
             margin_est = round(
-                price * lot_size * 100_000 / max(_f(account.get("leverage"), 100), 1), 2
+                price * lot_size * 100 / max(_f(account.get("leverage"), 1000), 1), 2
             )
 
     if free_margin >= 0 and equity > 0 and free_margin / equity < 0.15:

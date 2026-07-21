@@ -32,7 +32,6 @@ import { mt5Api } from "@/lib/api/endpoints";
 import { asRecord, num } from "@/lib/desk";
 import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
-import { pushRecentSymbol } from "@/lib/workspace/nav-memory";
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -98,11 +97,13 @@ export function TerminalShell() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(TERMINAL_SYMBOL_KEY, symbol);
+      localStorage.setItem(TERMINAL_SYMBOL_KEY, TRADING_SYMBOL);
     } catch {
       /* ignore */
     }
-    pushRecentSymbol(symbol);
+    if (symbol !== TRADING_SYMBOL) {
+      setSymbol(TRADING_SYMBOL);
+    }
   }, [symbol, hydrated]);
 
   useEffect(() => {

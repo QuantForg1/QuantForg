@@ -1,16 +1,13 @@
 /**
- * Gold-only trading mode.
+ * XAUUSD-only trading mode.
  *
- * QuantForg is constrained to XAUUSD unless multi-symbol is explicitly enabled
- * via NEXT_PUBLIC_MULTI_SYMBOL=true (future). Architecture stays multi-symbol-ready;
- * this module is the single switch.
+ * QuantForg is a single-instrument gold desk. Multi-asset mode is removed.
  */
 
 export const GOLD_SYMBOL = "XAUUSD";
 
-/** Future escape hatch — leave false for Gold-only terminal. */
-export const MULTI_SYMBOL_ENABLED =
-  process.env.NEXT_PUBLIC_MULTI_SYMBOL === "true";
+/** Always false — platform mandate. */
+export const MULTI_SYMBOL_ENABLED = false;
 
 /** Active default / forced trading symbol. */
 export const TRADING_SYMBOL = GOLD_SYMBOL;
@@ -29,16 +26,13 @@ export function isGoldSymbol(code: string): boolean {
 }
 
 export function isAllowedTradingSymbol(code: string): boolean {
-  if (MULTI_SYMBOL_ENABLED) return Boolean(code.trim());
   return isGoldSymbol(code);
 }
 
-/** Resolve any input to the symbol the terminal may trade. */
+/** Resolve any input to XAUUSD. */
+/** Resolve any input to XAUUSD. */
 export function resolveTradingSymbol(code?: string | null): string {
-  if (MULTI_SYMBOL_ENABLED) {
-    const s = (code || "").trim().toUpperCase();
-    return s || GOLD_SYMBOL;
-  }
+  void code;
   return GOLD_SYMBOL;
 }
 
@@ -47,7 +41,6 @@ export function resolveTradingSymbol(code?: string | null): string {
  * Non-gold queries return null → callers should show an empty result set.
  */
 export function goldOnlySearchQuery(q?: string): string | null {
-  if (MULTI_SYMBOL_ENABLED) return (q || "").trim();
   const raw = (q || "").trim().toUpperCase();
   if (!raw) return GOLD_SYMBOL;
   if (
@@ -64,10 +57,24 @@ export function goldOnlySearchQuery(q?: string): string | null {
 export function filterTradingSymbolRecords<T extends Record<string, unknown>>(
   items: T[],
 ): T[] {
-  if (MULTI_SYMBOL_ENABLED) return items;
   return items.filter((item) =>
     isGoldSymbol(String(item.code ?? item.symbol ?? "")),
   );
 }
 
 export const DEFAULT_WATCHLIST_SYMBOLS = [GOLD_SYMBOL] as const;
+
+/** MT5 XAUUSD contract specs used by client-side sizing / display. */
+export const XAUUSD_SPECS = {
+  symbol: GOLD_SYMBOL,
+  digits: 2,
+  point: 0.01,
+  tickSize: 0.01,
+  tickValue: 1,
+  contractSize: 100,
+  volumeMin: 0.01,
+  volumeMax: 10,
+  volumeStep: 0.01,
+  maxSpread: 2,
+  maxLeverage: 1000,
+} as const;

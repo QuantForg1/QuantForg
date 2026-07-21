@@ -24,13 +24,9 @@ export type PreTradeInputs = {
   maxSpread?: number;
 };
 
-/** Symbol-aware spread ceiling (price units). Gold needs a wider band than FX. */
-export function defaultMaxSpread(symbol: string): number {
-  const u = symbol.trim().toUpperCase();
-  if (u.includes("XAU") || u.includes("GOLD")) return 5;
-  if (u.includes("XAG") || u.includes("SILVER")) return 0.5;
-  if (u.includes("BTC") || u.includes("ETH")) return 50;
-  return 0.05;
+/** XAUUSD desk spread ceiling (absolute price units). */
+export function defaultMaxSpread(): number {
+  return 2;
 }
 
 function Row({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
@@ -67,7 +63,7 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
     inputs.ask != null
       ? inputs.ask - inputs.bid
       : NaN;
-  const maxSpread = inputs.maxSpread ?? defaultMaxSpread(inputs.symbol);
+  const maxSpread = inputs.maxSpread ?? defaultMaxSpread();
   const vol = num(inputs.volume, 0);
   const free = num(session.freeMargin, NaN);
   const marginNeeded = num(inputs.marginRequired, NaN);
@@ -238,7 +234,7 @@ export function preTradeAllowsExecution(inputs: PreTradeInputs, session: {
     inputs.ask != null
       ? inputs.ask - inputs.bid
       : NaN;
-  const maxSpread = inputs.maxSpread ?? defaultMaxSpread(inputs.symbol);
+  const maxSpread = inputs.maxSpread ?? defaultMaxSpread();
   const vol = num(inputs.volume, 0);
   const free = num(session.freeMargin, NaN);
   const marginNeeded = num(inputs.marginRequired, NaN);

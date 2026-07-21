@@ -44,6 +44,13 @@ class AutoTradePolicy:
     max_spread: Decimal = Decimal("2.00")
     news_filter_enabled: bool = False
 
+    def __post_init__(self) -> None:
+        from app.domain.trading.gold_only import GOLD_SYMBOL
+        from app.domain.trading.xauusd_specs import coerce_max_spread
+
+        object.__setattr__(self, "max_spread", coerce_max_spread(self.max_spread))
+        object.__setattr__(self, "allowed_symbols", (GOLD_SYMBOL,))
+
     def to_dict(self) -> dict[str, Any]:
         state = normalize_run_state(self.run_state, enabled=self.enabled)
         return {

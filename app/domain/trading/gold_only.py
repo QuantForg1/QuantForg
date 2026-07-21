@@ -1,22 +1,17 @@
-"""Gold-only trading mode — XAUUSD unless multi-symbol is enabled."""
+"""XAUUSD-only trading mode — QuantForg is a single-instrument gold desk."""
 
 from __future__ import annotations
-
-from core.config.settings import get_settings
 
 GOLD_SYMBOL = "XAUUSD"
 
 
 def gold_only_enabled() -> bool:
-    return bool(getattr(get_settings(), "gold_only_mode", True)) and not bool(
-        getattr(get_settings(), "multi_symbol_enabled", False)
-    )
+    """Platform mandate: always XAUUSD-only (multi-asset mode removed)."""
+    return True
 
 
 def default_trading_symbol() -> str:
-    settings = get_settings()
-    raw = str(getattr(settings, "default_trading_symbol", GOLD_SYMBOL) or GOLD_SYMBOL)
-    return raw.strip().upper() or GOLD_SYMBOL
+    return GOLD_SYMBOL
 
 
 def is_gold_symbol(code: str) -> bool:
@@ -29,13 +24,18 @@ def is_gold_symbol(code: str) -> bool:
 
 
 def resolve_trading_symbol(code: str | None = None) -> str:
-    if not gold_only_enabled():
-        s = (code or "").strip().upper()
-        return s or default_trading_symbol()
-    return default_trading_symbol()
+    """Always resolve to XAUUSD regardless of caller input."""
+    _ = code
+    return GOLD_SYMBOL
 
 
 def filter_gold_symbols(codes: list[str]) -> list[str]:
-    if not gold_only_enabled():
-        return codes
     return [c for c in codes if is_gold_symbol(c)]
+
+
+def require_xauusd(symbol: str) -> str:
+    """Normalize and reject non-gold symbols."""
+    if not is_gold_symbol(symbol):
+        msg = f"QuantForg trades XAUUSD only — rejected symbol {symbol!r}"
+        raise ValueError(msg)
+    return GOLD_SYMBOL

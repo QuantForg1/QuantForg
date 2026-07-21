@@ -78,6 +78,10 @@ class OperationsControlPlane:
     _initialized: bool = field(default=False, repr=False)
 
     def __post_init__(self) -> None:
+        from app.domain.trading.xauusd_specs import coerce_max_spread
+
+        self.max_spread = coerce_max_spread(self.max_spread)
+        self.allowed_symbols = (GOLD_SYMBOL,)
         if not self._initialized:
             self.git_commit = self.git_commit or _detect_git_commit()
             # Seed initial config version (append-only baseline)
@@ -440,11 +444,22 @@ class OperationsControlPlane:
                 )
                 if not cleaned_sym:
                     raise ValueError("allowed_symbols must not be empty")
-                self.allowed_symbols = cleaned_sym
+                # Platform mandate: XAUUSD only — ignore multi-asset operator input.
+                self.allowed_symbols = (GOLD_SYMBOL,)
             if max_spread is not None:
+                from app.domain.trading.xauusd_specs import (
+                    MAX_SPREAD,
+                    coerce_max_spread,
+                    is_fx_scale_spread_ceiling,
+                )
+
                 if max_spread <= 0:
                     raise ValueError("max_spread must be > 0")
-                self.max_spread = max_spread
+                if is_fx_scale_spread_ceiling(max_spread):
+                    # FX pip ceilings (e.g. 0.00050) are invalid for XAUUSD.
+                    self.max_spread = MAX_SPREAD
+                else:
+                    self.max_spread = coerce_max_spread(max_spread)
             if news_filter_enabled is not None:
                 self.news_filter_enabled = news_filter_enabled
             state = normalize_run_state(

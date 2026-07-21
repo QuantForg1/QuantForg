@@ -71,17 +71,19 @@ async def _connect(
 class TestExecutionPolicy:
     def test_policy_validation_fields(self) -> None:
         policy = ExecutionPolicy(
-            max_spread=Decimal("0.00030"),
+            max_spread=Decimal("0.00030"),  # FX-scale — coerced to XAUUSD 2.00
             max_slippage=10,
             trading_hours_start=time(8, 0),
             trading_hours_end=time(17, 0),
-            symbol_whitelist=frozenset({"EURUSD"}),
+            symbol_whitelist=frozenset({"XAUUSD", "EURUSD"}),
             account_whitelist=frozenset({4001}),
             max_leverage=Decimal("200"),
             max_lot=Decimal("1"),
             min_lot=Decimal("0.01"),
         )
-        assert policy.allows_symbol("eurusd")
+        assert policy.max_spread == Decimal("2.00")
+        assert policy.allows_symbol("xauusd")
+        assert not policy.allows_symbol("EURUSD")
         assert not policy.allows_symbol("AUDUSD")
         assert policy.allows_account(4001)
         assert not policy.allows_account(9999)
@@ -102,7 +104,7 @@ class TestExecutionSafetyService:
         validation = MT5OrderValidationService(adapter=adapter)
         safety = ExecutionSafetyService(adapter=adapter, order_validation=validation)
         intent = OrderIntent(
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side=OrderSide.BUY,
             order_type=OrderType.MARKET,
             volume=LotSize.of("0.10"),
@@ -131,7 +133,7 @@ class TestExecutionSafetyService:
         safety = ExecutionSafetyService(
             adapter=adapter,
             order_validation=validation,
-            policy=ExecutionPolicy(symbol_whitelist=frozenset({"EURUSD"})),
+            policy=ExecutionPolicy(),  # XAUUSD-only whitelist
         )
         intent = OrderIntent(
             symbol="GBPUSD",
@@ -161,7 +163,7 @@ class TestExecutionSafetyService:
         validation = MT5OrderValidationService(adapter=adapter)
         safety = ExecutionSafetyService(adapter=adapter, order_validation=validation)
         intent = OrderIntent(
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side=OrderSide.BUY,
             order_type=OrderType.MARKET,
             volume=LotSize.of("0.015"),
@@ -191,7 +193,7 @@ class TestExecutionSafetyService:
         )
         user_id = uuid4()
         intent = OrderIntent(
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side=OrderSide.BUY,
             order_type=OrderType.MARKET,
             volume=LotSize.of("0.01"),
@@ -238,7 +240,7 @@ class TestExecutionSafetyService:
         adapter = MT5Adapter(client=client, execution_enabled=False)
         validation = MT5OrderValidationService(adapter=adapter)
         intent = OrderIntent(
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side=OrderSide.BUY,
             order_type=OrderType.MARKET,
             volume=LotSize.of("0.01"),
@@ -264,7 +266,7 @@ class TestExecutionSafetyUseCase:
         cmd = ExecutionCheckCommand(
             user_id=user_id,
             request_id="idem-100",
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side="buy",
             order_type="market",
             volume="0.10",
@@ -293,7 +295,7 @@ class TestExecutionSafetyUseCase:
         )
         base = {
             "user_id": user_id,
-            "symbol": "EURUSD",
+            "symbol": "XAUUSD",
             "side": "buy",
             "order_type": "market",
             "volume": "0.01",

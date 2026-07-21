@@ -154,38 +154,16 @@ export function CommandPalette({
               </Command.Group>
             ) : null}
 
-            {memory.symbols.length > 0 ? (
-              <Command.Group heading="Recent symbols" className="qf-cmd-group">
-                {memory.symbols.map((sym) => (
-                  <Command.Item
-                    key={`sym-${sym}`}
-                    value={`symbol ${sym}`}
-                    onSelect={() => {
-                      memory.recordSymbol(sym);
-                      go(`/terminal?symbol=${encodeURIComponent(sym)}`, "Terminal");
-                    }}
-                    className="qf-cmd-item"
-                  >
-                    <span className="tabular text-[var(--accent)]">{sym}</span>
-                    <span className="text-[var(--fg-subtle)]">Open in Terminal</span>
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            ) : (
-              <Command.Group heading="Quick switch" className="qf-cmd-group">
-                <Command.Item
-                  value={`symbol ${TRADING_SYMBOL}`}
-                  onSelect={() => {
-                    memory.recordSymbol(TRADING_SYMBOL);
-                    go(`/terminal?symbol=${encodeURIComponent(TRADING_SYMBOL)}`, "Terminal");
-                  }}
-                  className="qf-cmd-item"
-                >
-                  <span className="tabular text-[var(--accent)]">{TRADING_SYMBOL}</span>
-                  <span className="text-[var(--fg-subtle)]">Open in Terminal</span>
-                </Command.Item>
-              </Command.Group>
-            )}
+            <Command.Group heading="Instrument" className="qf-cmd-group">
+              <Command.Item
+                value={`symbol ${TRADING_SYMBOL} gold xauusd`}
+                onSelect={() => go("/terminal", "Terminal")}
+                className="qf-cmd-item"
+              >
+                <span className="tabular text-[var(--accent)]">{TRADING_SYMBOL}</span>
+                <span className="text-[var(--fg-subtle)]">XAUUSD only</span>
+              </Command.Item>
+            </Command.Group>
 
             <Command.Group heading="Pages" className="qf-cmd-group">
               {allPages.map((item) => {

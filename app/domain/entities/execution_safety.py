@@ -11,23 +11,29 @@ from uuid import UUID
 from app.domain.entities._guards import require
 from app.domain.entities.base import Entity
 from app.domain.enums.execution import ExecutionDecision
+from app.domain.trading.xauusd_specs import (
+    MAX_LEVERAGE,
+    MAX_SPREAD,
+    SYMBOL_WHITELIST,
+    VOLUME_MAX,
+    VOLUME_MIN,
+    coerce_max_spread,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class ExecutionPolicy:
     """Production policy constraints applied before any execution decision."""
 
-    max_spread: Decimal = Decimal("2.00")  # absolute price units (XAU-aware default)
+    max_spread: Decimal = MAX_SPREAD  # absolute XAUUSD price units (never FX pips)
     max_slippage: int = 20  # points
     trading_hours_start: time = time(0, 0)
     trading_hours_end: time = time(23, 59, 59)
-    symbol_whitelist: frozenset[str] = frozenset(
-        {"EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "BTCUSD"}
-    )
+    symbol_whitelist: frozenset[str] = SYMBOL_WHITELIST
     account_whitelist: frozenset[int] = frozenset()  # empty = all accounts allowed
-    max_leverage: Decimal = Decimal("500")
-    max_lot: Decimal = Decimal("10")
-    min_lot: Decimal = Decimal("0.01")
+    max_leverage: Decimal = MAX_LEVERAGE  # match Weltrade XAU desk (1:1000)
+    max_lot: Decimal = VOLUME_MAX
+    min_lot: Decimal = VOLUME_MIN
     duplicate_window_seconds: int = 5
     rapid_submit_limit: int = 3  # max identical fingerprints in window → RETRY/REJECT
 
@@ -42,10 +48,16 @@ class ExecutionPolicy:
             "duplicate_window_seconds must be > 0",
         )
         require(self.rapid_submit_limit > 0, "rapid_submit_limit must be > 0")
+        # Coerce FX-inherited ceilings (e.g. 0.00050) to XAUUSD absolute units.
+        object.__setattr__(self, "max_spread", coerce_max_spread(self.max_spread))
+        cleaned = frozenset(
+            s.strip().upper() for s in self.symbol_whitelist if s.strip()
+        )
+        # Platform is XAUUSD-only — never widen beyond gold.
         object.__setattr__(
             self,
             "symbol_whitelist",
-            frozenset(s.strip().upper() for s in self.symbol_whitelist if s.strip()),
+            cleaned & SYMBOL_WHITELIST if cleaned else SYMBOL_WHITELIST,
         )
 
     def allows_symbol(self, symbol: str) -> bool:

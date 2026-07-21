@@ -63,7 +63,6 @@ export function AutoTradeControls() {
   const [riskPct, setRiskPct] = useState("1.0");
   const [dailyLoss, setDailyLoss] = useState("3.0");
   const [maxSpread, setMaxSpread] = useState("2.00");
-  const [symbols, setSymbols] = useState("XAUUSD");
   const [sessions, setSessions] = useState<string[]>([
     "london",
     "new_york",
@@ -92,7 +91,6 @@ export function AutoTradeControls() {
     setRiskPct(str(policy.risk_per_trade_pct, "1.0"));
     setDailyLoss(str(policy.max_daily_loss_pct, "3.0"));
     setMaxSpread(str(policy.max_spread, "2.00"));
-    setSymbols(asList(policy.allowed_symbols).map(String).join(", ") || "XAUUSD");
     setSessions(
       asList(policy.allowed_sessions).map(String).length
         ? asList(policy.allowed_sessions).map(String)
@@ -118,10 +116,7 @@ export function AutoTradeControls() {
         risk_per_trade_pct: riskPct,
         max_daily_loss_pct: dailyLoss,
         max_spread: maxSpread,
-        allowed_symbols: symbols
-          .split(",")
-          .map((s) => s.trim().toUpperCase())
-          .filter(Boolean),
+        allowed_symbols: ["XAUUSD"],
         allowed_sessions: sessions,
         news_filter_enabled: newsFilter,
       }),
@@ -255,8 +250,10 @@ export function AutoTradeControls() {
             Allowed symbols
             <input
               className="mt-1 w-full rounded border bg-background px-2 py-1 text-sm"
-              value={symbols}
-              onChange={(e) => setSymbols(e.target.value)}
+              value="XAUUSD"
+              readOnly
+              disabled
+              title="QuantForg trades XAUUSD only"
             />
           </label>
           <label className="flex items-center gap-2 text-sm sm:col-span-2">

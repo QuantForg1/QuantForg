@@ -38,9 +38,9 @@ class RiskEngineConfig:
     fixed_lot: Decimal = Decimal("0.10")
     fixed_dollar_risk: Decimal = Decimal("100")
     atr_multiplier: Decimal = Decimal("1.5")
-    # FX default. Metals/crypto: symbol-aware size via contract_size_for_symbol().
-    contract_size: Decimal = Decimal("100000")
-    exposure_leverage: Decimal = Decimal("100")  # fallback when account.leverage unset
+    # XAUUSD MT5 contract (100 oz). Never use FX 100000 defaults on this desk.
+    contract_size: Decimal = Decimal("100")
+    exposure_leverage: Decimal = Decimal("1000")  # Weltrade gold fallback
     # --- Institutional extensions (Phase B) ---
     max_consecutive_losses: int = 3
     cooldown_minutes_after_loss_streak: int = 60
@@ -62,17 +62,17 @@ class RiskEngineConfig:
 
 
 def contract_size_for_symbol(
-    symbol: str, *, default: Decimal = Decimal("100000")
+    symbol: str, *, default: Decimal = Decimal("100")
 ) -> Decimal:
-    """Broker contract size by instrument class — never apply FX 100k to gold."""
+    """Broker contract size — QuantForg is XAUUSD-only (MT5 contract_size=100)."""
+    from app.domain.trading.xauusd_specs import CONTRACT_SIZE
+
     u = symbol.strip().upper()
-    if u.startswith("XAU") or "GOLD" in u:
-        return Decimal("100")
-    if u.startswith("XAG") or "SILVER" in u:
-        return Decimal("5000")
-    if "BTC" in u or "ETH" in u:
-        return Decimal("1")
-    return default
+    if u.startswith("XAU") or "GOLD" in u or not u:
+        return CONTRACT_SIZE
+    # Non-gold symbols are not tradable; still return gold size to avoid FX inflation.
+    _ = default
+    return CONTRACT_SIZE
 
 
 @dataclass(frozen=True, slots=True)

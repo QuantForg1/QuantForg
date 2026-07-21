@@ -529,6 +529,10 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "reload", False)
             if self.debug:
                 object.__setattr__(self, "debug", False)
+            # XAUUSD-only platform — never enable multi-asset trading in production.
+            object.__setattr__(self, "gold_only_mode", True)
+            object.__setattr__(self, "multi_symbol_enabled", False)
+            object.__setattr__(self, "default_trading_symbol", "XAUUSD")
             # Live trading requires an explicit flag AND a configured gateway.
             # Do not silently invent fills via MockMT5Client in production.
             has_gateway = bool((self.mt5_gateway_base_url or "").strip())

@@ -110,9 +110,12 @@ def parse_order_intent(
     order_ticket: int = 0,
     oms_kind: str = "",
 ) -> OrderIntent:
+    from app.domain.trading.gold_only import require_xauusd
+
     try:
+        symbol_u = require_xauusd(symbol)
         return OrderIntent(
-            symbol=symbol,
+            symbol=symbol_u,
             side=OrderSide(side.strip().lower()),
             order_type=OrderType(order_type.strip().lower()),
             volume=LotSize.of(volume),
