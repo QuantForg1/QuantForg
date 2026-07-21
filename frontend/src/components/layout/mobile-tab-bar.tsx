@@ -6,8 +6,7 @@ import { cn } from "@/lib/utils";
 import { mobileTabNav } from "@/components/layout/nav-config";
 
 /**
- * Mobile one-hand bottom navigation — Trading OS primary surfaces.
- * Desktop uses the left rail; this bar is lg:hidden only.
+ * Thumb-first mobile bottom navigation — one-hand primary surfaces.
  */
 export function MobileTabBar() {
   const pathname = usePathname();
@@ -29,13 +28,19 @@ export function MobileTabBar() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex h-full min-h-[44px] flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors duration-[160ms]",
+                  "qf-touch-target flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
                   active
                     ? "text-[var(--accent)]"
                     : "text-[var(--fg-muted)] active:text-[var(--fg)]",
                 )}
               >
-                <Icon className="h-5 w-5 shrink-0" aria-hidden />
+                <Icon
+                  className={cn(
+                    "h-5 w-5 shrink-0 transition-transform duration-[var(--duration-os)] ease-[var(--ease-os)]",
+                    active && "scale-105",
+                  )}
+                  aria-hidden
+                />
                 <span className="truncate">{item.label}</span>
               </Link>
             </li>

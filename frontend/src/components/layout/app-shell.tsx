@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { OfflineBanner } from "@/components/system/offline-banner";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { cn } from "@/lib/utils";
+import { labelForHref, pushRecentPage } from "@/lib/workspace/nav-memory";
 
 /** Full-bleed zero-scroll operating surfaces. */
 const OS_FULLBLEED_PATHS = [
@@ -70,10 +71,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
   const isTerminal = deskId(pathname) === "terminal";
+  const compactChrome = isTerminal || isFullBleed;
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");
   }, [loading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!pathname || pathname.startsWith("/login")) return;
+    pushRecentPage({ href: pathname, label: labelForHref(pathname) });
+  }, [pathname]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -122,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar onOpenCommand={() => setCmdOpen(true)} />
+          <Topbar onOpenCommand={() => setCmdOpen(true)} compact={compactChrome} />
           <main
             id="main-content"
             data-desk={deskId(pathname)}
@@ -131,19 +138,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               isFullBleed
                 ? "overflow-hidden p-0"
                 : "overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8",
-              // Reserve space for mobile tab bar
               "pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0",
-              isTerminal && "lg:pb-0",
             )}
             tabIndex={-1}
           >
             <ErrorBoundary>
               <div
                 className={cn(
-                  "qf-fade-in",
                   isFullBleed
-                    ? "h-[calc(100dvh-4rem-4.25rem)] w-full max-w-none lg:h-[calc(100dvh-4rem)]"
-                    : "mx-auto w-full max-w-[1600px]",
+                    ? "h-[calc(100dvh-3.25rem-4.25rem)] w-full max-w-none lg:h-[calc(100dvh-3.25rem)]"
+                    : "mx-auto w-full max-w-[1600px] qf-fade-in",
                 )}
               >
                 {children}

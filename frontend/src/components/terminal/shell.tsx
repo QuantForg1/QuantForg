@@ -32,6 +32,7 @@ import { mt5Api } from "@/lib/api/endpoints";
 import { asRecord, num } from "@/lib/desk";
 import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
+import { pushRecentSymbol } from "@/lib/workspace/nav-memory";
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -101,6 +102,7 @@ export function TerminalShell() {
     } catch {
       /* ignore */
     }
+    pushRecentSymbol(symbol);
   }, [symbol, hydrated]);
 
   useEffect(() => {
@@ -266,8 +268,8 @@ export function TerminalShell() {
       aria-label="QuantForg Terminal"
     >
       <header className="shrink-0">
-        <div className="flex h-8 items-center justify-between gap-2 border-b border-[var(--border)] px-2">
-          <h1 className="shrink-0 text-xs font-semibold tracking-tight text-[var(--fg)]">
+        <div className="flex h-7 items-center justify-between gap-2 border-b border-[var(--border)]/70 px-2">
+          <h1 className="shrink-0 text-[11px] font-semibold tracking-tight text-[var(--fg)]">
             Terminal
           </h1>
           <div className="flex items-center gap-0.5">
@@ -401,26 +403,26 @@ export function TerminalShell() {
       {isMobile && !layout.chartFullscreen ? (
         <>
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-[4.5rem] z-20 flex justify-center gap-3 px-4"
+            className="pointer-events-none absolute inset-x-0 bottom-[4.75rem] z-20 flex justify-center gap-3 px-4"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <Button
-              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-lg"
+              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-[var(--shadow-elevated)]"
               disabled={!connected}
               onClick={() => {
                 patchLayout({ mobileTicketOpen: true });
-                window.setTimeout(() => ticketRef.current?.buy(), 80);
+                window.setTimeout(() => ticketRef.current?.buy(), 60);
               }}
             >
               BUY
             </Button>
             <Button
               variant="danger"
-              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-lg"
+              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-[var(--shadow-elevated)]"
               disabled={!connected}
               onClick={() => {
                 patchLayout({ mobileTicketOpen: true });
-                window.setTimeout(() => ticketRef.current?.sell(), 80);
+                window.setTimeout(() => ticketRef.current?.sell(), 60);
               }}
             >
               SELL
@@ -429,7 +431,7 @@ export function TerminalShell() {
 
           <div
             className={cn(
-              "absolute inset-x-0 bottom-0 z-30 transition-transform duration-[160ms] ease-out",
+              "absolute inset-x-0 bottom-0 z-30 transition-transform duration-[var(--duration-os)] ease-[var(--ease-os)]",
               layout.mobileTicketOpen
                 ? "translate-y-0"
                 : "pointer-events-none translate-y-full",

@@ -197,7 +197,7 @@ export function BookShell() {
               Portfolio
             </h1>
             <span className="qf-caption hidden sm:inline">
-              Portfolio operating system
+              Capital · exposure · risk
             </span>
             {realtime.transport ? (
               <span className="qf-caption tabular text-[var(--fg-subtle)]">
@@ -250,10 +250,10 @@ export function BookShell() {
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-hidden p-2 sm:p-3">
+      <div className="min-h-0 flex-1 overflow-hidden p-1.5 sm:p-2">
         {!session.connected ? (
           <BookEmpty
-            className="h-full rounded-md border border-[var(--border)] bg-[var(--surface)]"
+            className="h-full rounded-md border border-[var(--border)]/80 bg-[var(--surface)]"
             title="No live book"
             description="Attach MT5 in Broker to load equity, risk, and positions. Portfolio never invents balances."
             action={

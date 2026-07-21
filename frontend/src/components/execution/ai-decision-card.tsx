@@ -34,8 +34,8 @@ function parseRiskEnginePct(risk: Record<string, unknown> | null): number | null
 }
 
 /**
- * Pre-trade AI Decision Card — live metrics only.
- * Unavailable fields are hidden (never repeated "Not available").
+ * Pre-trade AI Decision — confidence, risk, structure only.
+ * Unavailable fields stay hidden. Compact mode shows decision metrics without reason spam.
  */
 export const AiDecisionCard = memo(function AiDecisionCard({
   symbol,
@@ -45,7 +45,8 @@ export const AiDecisionCard = memo(function AiDecisionCard({
   stopLoss,
   takeProfit,
   className,
-}: Props) {
+  compact = false,
+}: Props & { compact?: boolean }) {
   const session = useTradingSession();
   const enabled = session.connected && Boolean(symbol.trim());
   const entry = Number.isFinite(entryPrice) ? Number(entryPrice) : NaN;
@@ -63,7 +64,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
     queryKey: ["ai-decision-strategy", symbol, side, session.connected],
     queryFn: () => strategyApi.evaluate({ symbol, side, volume }),
     enabled,
-    staleTime: 45_000,
+    staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
@@ -72,7 +73,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
     queryKey: ["ai-decision-quant", symbol, session.connected],
     queryFn: () => quantAiApi.symbol(symbol),
     enabled,
-    staleTime: 45_000,
+    staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
@@ -213,16 +214,17 @@ export const AiDecisionCard = memo(function AiDecisionCard({
   return (
     <div
       className={cn(
-        "rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2",
+        "rounded-md border border-[var(--border)]/80 bg-[var(--surface-2)]/80 px-2.5 py-2",
         className,
       )}
+      aria-label="AI decision"
     >
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-            AI Decision
+            Decision
           </p>
-          <p className="mt-0.5 font-[family-name:var(--font-display)] text-base tracking-tight text-[var(--fg)]">
+          <p className="mt-0.5 text-sm font-semibold tracking-tight text-[var(--fg)]">
             {card.displaySide}
           </p>
         </div>
@@ -233,7 +235,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
             </p>
             <p
               className={cn(
-                "font-mono text-lg tabular-nums",
+                "tabular text-base font-medium",
                 card.confidencePct >= 70
                   ? "text-[var(--success)]"
                   : card.confidencePct >= 50
@@ -243,9 +245,6 @@ export const AiDecisionCard = memo(function AiDecisionCard({
             >
               {formatNumber(card.confidencePct, 0)}%
             </p>
-            {card.confidenceSource ? (
-              <p className="text-[9px] text-[var(--fg-subtle)]">{card.confidenceSource}</p>
-            ) : null}
           </div>
         ) : null}
       </div>
@@ -260,31 +259,26 @@ export const AiDecisionCard = memo(function AiDecisionCard({
           {metricTiles.map((t) => (
             <div
               key={t.label}
-              className="rounded border border-[var(--border)]/80 bg-[var(--bg)]/40 px-2 py-1.5"
+              className="rounded border border-[var(--border)]/60 bg-[var(--bg)]/30 px-2 py-1.5"
             >
               <p className="text-[9px] uppercase tracking-wide text-[var(--fg-subtle)]">
                 {t.label}
               </p>
-              <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fg)]">
-                {t.value}
-              </p>
-              {t.hint ? (
-                <p className="mt-0.5 truncate text-[9px] text-[var(--fg-subtle)]">{t.hint}</p>
-              ) : null}
+              <p className="mt-0.5 tabular text-[11px] text-[var(--fg)]">{t.value}</p>
             </div>
           ))}
         </div>
       ) : null}
 
-      {card.loading ? (
-        <p className="mt-2 text-[10px] text-[var(--fg-muted)]">Loading strategy…</p>
-      ) : card.reasons.length > 0 ? (
+      {!compact && card.loading ? (
+        <p className="mt-2 text-[10px] text-[var(--fg-muted)]">Loading…</p>
+      ) : !compact && card.reasons.length > 0 ? (
         <>
           <p className="mb-1 mt-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-            Reasons
+            Reasoning
           </p>
-          <ul className="max-h-24 space-y-1 overflow-y-auto">
-            {card.reasons.slice(0, 8).map((r) => (
+          <ul className="max-h-16 space-y-1 overflow-y-auto">
+            {card.reasons.slice(0, 3).map((r) => (
               <li key={r.label} className="flex items-start gap-1.5 text-[11px]">
                 {r.ok ? (
                   <Check className="mt-0.5 h-3 w-3 shrink-0 text-[var(--success)]" />

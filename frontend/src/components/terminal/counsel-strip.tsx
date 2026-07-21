@@ -16,9 +16,8 @@ type CounselItem = {
 };
 
 /**
- * Always-on institutional decision layer — not a chatbot.
- * Grounded in live session + quotes; optional intelligence context when available.
- * Never invents prices or trades.
+ * Quiet counsel strip — status only when collapsed; expand for details.
+ * Never invents prices or trades. Collapsed by default so chart stays primary.
  */
 export const TerminalCounselStrip = memo(function TerminalCounselStrip({
   symbol,
@@ -50,80 +49,55 @@ export const TerminalCounselStrip = memo(function TerminalCounselStrip({
     queryFn: () => intelligenceApi.marketContext("FX", symbol),
     retry: false,
     enabled: Boolean(symbol) && !collapsed,
-    staleTime: 60_000,
+    staleTime: 120_000,
   });
 
   const items = useMemo((): CounselItem[] => {
     const next: CounselItem[] = [
       {
         id: "session",
-        label: session.connected ? "Session attached" : "Attach broker session",
+        label: session.connected ? "Session attached" : "Attach broker",
         tone: session.connected ? "ok" : "block",
       },
       {
         id: "quote",
         label: hasQuote
-          ? `Quote live · spr ${spread.toFixed(5)}`
+          ? `Live · spr ${spread.toFixed(5)}`
           : session.connected
             ? "Awaiting quote"
             : "No quote",
         tone: hasQuote ? "ok" : session.connected ? "warn" : "neutral",
       },
-      {
-        id: "margin",
-        label:
-          session.connected && Number.isFinite(free)
-            ? free > 0
-              ? "Free margin available"
-              : "Free margin exhausted"
-            : "Margin unknown",
-        tone:
-          !session.connected || !Number.isFinite(free)
-            ? "neutral"
-            : free > 0
-              ? "ok"
-              : "block",
-      },
-      {
-        id: "level",
-        label:
-          session.connected && Number.isFinite(marginLevel) && marginLevel > 0
-            ? marginLevel < 100
-              ? `Margin level ${marginLevel.toFixed(0)}% — elevated risk`
-              : `Margin level ${marginLevel.toFixed(0)}%`
-            : "Margin level —",
-        tone:
-          session.connected && Number.isFinite(marginLevel) && marginLevel > 0 && marginLevel < 100
-            ? "warn"
-            : "neutral",
-      },
     ];
+
+    if (session.connected && Number.isFinite(free)) {
+      next.push({
+        id: "margin",
+        label: free > 0 ? "Margin ok" : "Margin exhausted",
+        tone: free > 0 ? "ok" : "block",
+      });
+    }
+
+    if (session.connected && Number.isFinite(marginLevel) && marginLevel > 0 && marginLevel < 100) {
+      next.push({
+        id: "level",
+        label: `Margin ${marginLevel.toFixed(0)}%`,
+        tone: "warn",
+      });
+    }
 
     if (contextQ.isSuccess) {
       const ctx = asRecord(contextQ.data);
       const risks = asList(ctx.risk_factors ?? ctx.risks ?? ctx.warnings).map((v) =>
         str(v),
       );
-      const narrative = str(ctx.summary ?? ctx.narrative ?? ctx.headline);
       if (risks[0]) {
         next.push({
           id: "intel-risk",
-          label: risks[0].slice(0, 120),
+          label: risks[0].slice(0, 80),
           tone: "warn",
         });
-      } else if (narrative) {
-        next.push({
-          id: "intel",
-          label: narrative.slice(0, 120),
-          tone: "neutral",
-        });
       }
-    } else if (contextQ.isError) {
-      next.push({
-        id: "intel-empty",
-        label: "Counsel context unavailable",
-        tone: "neutral",
-      });
     }
 
     return next;
@@ -134,7 +108,6 @@ export const TerminalCounselStrip = memo(function TerminalCounselStrip({
     free,
     marginLevel,
     contextQ.isSuccess,
-    contextQ.isError,
     contextQ.data,
   ]);
 
@@ -145,14 +118,19 @@ export const TerminalCounselStrip = memo(function TerminalCounselStrip({
     return (
       <div
         className={cn(
-          "flex h-8 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-3",
+          "flex h-7 shrink-0 items-center justify-between border-b border-[var(--border)]/70 bg-[var(--bg)] px-3",
           className,
         )}
       >
-        <div className="flex items-center gap-2">
-          <Scale className="h-3.5 w-3.5 text-[var(--fg-subtle)]" aria-hidden />
+        <button
+          type="button"
+          className="flex items-center gap-2 text-left"
+          onClick={onToggle}
+          aria-expanded={false}
+        >
+          <Scale className="h-3 w-3 text-[var(--fg-subtle)]" aria-hidden />
           <span className="qf-caption">
-            Counsel{" "}
+            AI{" "}
             <span
               className={cn(
                 "tabular",
@@ -161,12 +139,12 @@ export const TerminalCounselStrip = memo(function TerminalCounselStrip({
                 !blocked && !warned && "text-[var(--success)]",
               )}
             >
-              {blocked ? "blocked" : warned ? "caution" : "clear"}
+              {blocked ? "block" : warned ? "caution" : "clear"}
             </span>
           </span>
-        </div>
-        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={onToggle}>
-          Expand
+        </button>
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" data-compact onClick={onToggle}>
+          Show
         </Button>
       </div>
     );
@@ -175,15 +153,17 @@ export const TerminalCounselStrip = memo(function TerminalCounselStrip({
   return (
     <section
       className={cn(
-        "shrink-0 border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2",
+        "shrink-0 border-b border-[var(--border)]/70 bg-[var(--bg)] px-3 py-1.5",
         className,
       )}
-      aria-label="AI Counsel"
+      aria-label="AI counsel"
     >
-      <header className="mb-1.5 flex items-center justify-between gap-2">
+      <header className="mb-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Scale className="h-3.5 w-3.5 text-[var(--accent)]" aria-hidden />
-          <h2 className="qf-label text-[var(--fg)]">Counsel</h2>
+          <Scale className="h-3 w-3 text-[var(--fg-subtle)]" aria-hidden />
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-muted)]">
+            Counsel
+          </h2>
           <span
             className={cn(
               "qf-caption tabular",
@@ -195,11 +175,11 @@ export const TerminalCounselStrip = memo(function TerminalCounselStrip({
             {blocked ? "Intervention" : warned ? "Caution" : "Ready"}
           </span>
         </div>
-        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={onToggle}>
-          Collapse
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" data-compact onClick={onToggle}>
+          Hide
         </Button>
       </header>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1">
+      <ul className="flex flex-wrap gap-x-3 gap-y-0.5">
         {items.map((item) => (
           <li
             key={item.id}

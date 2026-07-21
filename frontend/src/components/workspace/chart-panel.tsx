@@ -17,15 +17,12 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Maximize2,
   Minimize2,
-  Pencil,
-  Crosshair as CrosshairIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
-import { formatNumber } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { Cable } from "lucide-react";
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const;
@@ -184,11 +181,11 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       const data = candlesCache.current;
       if (chartType === "candles") {
         const s = chart.addSeries(CandlestickSeries, {
-          upColor: "#22c55e",
-          downColor: "#ef4444",
+          upColor: "#2f9e7a",
+          downColor: "#d45d5d",
           borderVisible: false,
-          wickUpColor: "#22c55e",
-          wickDownColor: "#ef4444",
+          wickUpColor: "#2f9e7a",
+          wickDownColor: "#d45d5d",
         });
         s.setData(
           data.map((c) => ({
@@ -202,16 +199,16 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         mainRef.current = s;
       } else if (chartType === "line") {
         const s = chart.addSeries(LineSeries, {
-          color: "#38bdf8",
+          color: "#6b8cff",
           lineWidth: 2,
         });
         s.setData(data.map((c) => ({ time: c.time, value: c.close })));
         mainRef.current = s;
       } else {
         const s = chart.addSeries(AreaSeries, {
-          lineColor: "#38bdf8",
-          topColor: "rgba(56, 189, 248, 0.35)",
-          bottomColor: "rgba(56, 189, 248, 0.02)",
+          lineColor: "#6b8cff",
+          topColor: "rgba(107, 140, 255, 0.22)",
+          bottomColor: "rgba(107, 140, 255, 0.02)",
           lineWidth: 2,
         });
         s.setData(data.map((c) => ({ time: c.time, value: c.close })));
@@ -224,14 +221,14 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           priceScaleId: "volume",
         });
         chart.priceScale("volume").applyOptions({
-          scaleMargins: { top: 0.8, bottom: 0 },
+          scaleMargins: { top: 0.82, bottom: 0 },
         });
         v.setData(
           data.map((c) => ({
             time: c.time,
             value: c.volume,
             color:
-              c.close >= c.open ? "rgba(34,197,94,0.45)" : "rgba(239,68,68,0.45)",
+              c.close >= c.open ? "rgba(47,158,122,0.4)" : "rgba(212,93,93,0.4)",
           })),
         );
         volumeRef.current = v;
@@ -265,44 +262,57 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
       aria-label={`${symbol} chart workspace`}
     >
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--border)] px-2 py-1">
-        <p className="text-sm font-semibold tracking-tight text-[var(--fg)]">{symbol}</p>
-        <Badge tone={connected ? "success" : "warning"}>{connected ? "Live" : "Offline"}</Badge>
+      <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[var(--border)]/70 px-2">
+        <p className="text-xs font-semibold tracking-tight text-[var(--fg)]">{symbol}</p>
+        <span
+          className={cn(
+            "qf-status-dot",
+          )}
+          data-state={connected ? "ok" : "warn"}
+          aria-label={connected ? "Live" : "Offline"}
+        />
         {ohlc ? (
-          <p className="font-mono text-[11px] text-[var(--fg-muted)]" aria-live="polite">
-            O {formatNumber(ohlc.open, 5)} · H {formatNumber(ohlc.high, 5)} · L{" "}
-            {formatNumber(ohlc.low, 5)} · C {formatNumber(ohlc.close, 5)}
+          <p className="hidden tabular text-[10px] text-[var(--fg-muted)] md:inline" aria-live="polite">
+            O {formatNumber(ohlc.open, 2)} · H {formatNumber(ohlc.high, 2)} · L{" "}
+            {formatNumber(ohlc.low, 2)} · C {formatNumber(ohlc.close, 2)}
           </p>
-        ) : null}
-        <div className="ml-auto flex flex-wrap items-center gap-1">
+        ) : (
+          <span className="inline-block h-3 w-40" aria-hidden />
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-0.5">
           <div className="flex gap-0.5" role="group" aria-label="Timeframe">
             {TIMEFRAMES.map((tf) => (
               <Button
                 key={tf}
                 size="sm"
-                variant={timeframe === tf ? "default" : "ghost"}
-                className="h-7 px-2 text-[11px]"
+                variant={timeframe === tf ? "secondary" : "ghost"}
+                className="h-6 min-w-[1.75rem] px-1.5 text-[10px]"
+                data-compact
                 onClick={() => onTimeframeChange(tf)}
                 disabled={!connected}
+                aria-pressed={timeframe === tf}
               >
                 {tf}
               </Button>
             ))}
           </div>
-          <div className="flex gap-0.5" role="group" aria-label="Chart type">
+          <div className="hidden gap-0.5 sm:flex" role="group" aria-label="Chart type">
             {(
               [
-                ["candles", "Candles"],
-                ["line", "Line"],
-                ["area", "Area"],
+                ["candles", "C"],
+                ["line", "L"],
+                ["area", "A"],
               ] as const
             ).map(([id, label]) => (
               <Button
                 key={id}
                 size="sm"
-                variant={chartType === id ? "default" : "ghost"}
-                className="h-7 px-2 text-[11px]"
+                variant={chartType === id ? "secondary" : "ghost"}
+                className="h-6 w-6 px-0 text-[10px]"
+                data-compact
                 onClick={() => onChartTypeChange(id)}
+                aria-label={id}
+                aria-pressed={chartType === id}
               >
                 {label}
               </Button>
@@ -310,35 +320,24 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           </div>
           <Button
             size="sm"
-            variant={showVolume ? "default" : "ghost"}
-            className="h-7 px-2 text-[11px]"
+            variant={showVolume ? "secondary" : "ghost"}
+            className="h-6 px-1.5 text-[10px]"
+            data-compact
             onClick={() => onShowVolumeChange(!showVolume)}
             aria-pressed={showVolume}
           >
-            Volume
+            Vol
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-[11px]"
-            disabled
-            title="Drawing tools are not supported yet"
-            aria-disabled
-          >
-            <Pencil className="h-3.5 w-3.5" /> Draw
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2"
+            className="h-6 w-6 px-0"
+            data-compact
             onClick={() => onFullscreenChange(!fullscreen)}
             aria-label={fullscreen ? "Exit fullscreen chart" : "Fullscreen chart"}
           >
             {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </Button>
-          <span className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-subtle)]">
-            <CrosshairIcon className="h-3 w-3" aria-hidden /> Crosshair
-          </span>
         </div>
       </div>
 

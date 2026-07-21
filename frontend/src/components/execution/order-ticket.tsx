@@ -90,6 +90,7 @@ export const ExecutionOrderTicket = forwardRef<
   const [execMetrics, setExecMetrics] = useState<ExecutionTimingMetrics>(
     EMPTY_EXECUTION_METRICS,
   );
+  const [execFlash, setExecFlash] = useState(false);
   const session = useTradingSession();
   const qc = useQueryClient();
 
@@ -420,6 +421,8 @@ export const ExecutionOrderTicket = forwardRef<
         });
         setExecMetrics(metrics);
         saveLastExecutionMetrics(metrics);
+        setExecFlash(true);
+        window.setTimeout(() => setExecFlash(false), 450);
       }
       const { recordAudit } = await import("@/lib/observability/audit");
       if (outcome === "disabled") {
@@ -496,8 +499,28 @@ export const ExecutionOrderTicket = forwardRef<
   const commission = str(snapshot.commission ?? snapshot.estimated_commission, "—");
   const swap = str(snapshot.swap ?? snapshot.estimated_swap, "—");
 
+  const entryPx = Number.isFinite(entryForSize) ? entryForSize : NaN;
+  const slPx = num(stopLoss, NaN);
+  const tpPx = num(takeProfit, NaN);
+  const riskReward =
+    Number.isFinite(entryPx) &&
+    Number.isFinite(slPx) &&
+    Number.isFinite(tpPx) &&
+    Math.abs(entryPx - slPx) > 0
+      ? Math.abs(tpPx - entryPx) / Math.abs(entryPx - slPx)
+      : null;
+  const riskBudgetPct = Math.min(100, Math.max(4, num(riskPct, 1) * 12));
+  const rewardBudgetPct =
+    riskReward != null ? Math.min(100, Math.max(4, riskBudgetPct * Math.min(riskReward, 4))) : riskBudgetPct;
+
   return (
-    <div className={cn(dense ? "border-0" : "rounded-lg border border-[var(--border)]")}>
+    <div
+      className={cn(
+        dense ? "border-0" : "rounded-lg border border-[var(--border)]",
+        execFlash && "qf-exec-flash",
+      )}
+      aria-busy={busy}
+    >
       {!dense ? (
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
           <h2 className="text-sm font-semibold tracking-tight">Order Ticket</h2>
@@ -515,9 +538,9 @@ export const ExecutionOrderTicket = forwardRef<
             onClick={() => void oneClick("buy")}
             aria-label="Buy market"
             className={cn(
-              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[160ms]",
-              "border-[var(--success)]/40 bg-[var(--success)]/10 text-[var(--success)]",
-              "hover:bg-[var(--success)]/20 disabled:opacity-40",
+              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+              "border-[var(--buy)]/40 bg-[var(--buy)]/10 text-[var(--buy)]",
+              "hover:bg-[var(--buy)]/20 disabled:opacity-40",
               dense ? "min-h-[3.25rem]" : "min-h-14",
             )}
           >
@@ -532,9 +555,9 @@ export const ExecutionOrderTicket = forwardRef<
             onClick={() => void oneClick("sell")}
             aria-label="Sell market"
             className={cn(
-              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[160ms]",
-              "border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)]",
-              "hover:bg-[var(--danger)]/20 disabled:opacity-40",
+              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+              "border-[var(--sell)]/40 bg-[var(--sell)]/10 text-[var(--sell)]",
+              "hover:bg-[var(--sell)]/20 disabled:opacity-40",
               dense ? "min-h-[3.25rem]" : "min-h-14",
             )}
           >
@@ -552,27 +575,46 @@ export const ExecutionOrderTicket = forwardRef<
           entryPrice={mid}
           stopLoss={stopLoss || undefined}
           takeProfit={takeProfit || undefined}
+          compact={dense}
         />
 
-        {/* Risk budget visual */}
-        <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] p-2.5">
+        {/* Live risk / reward preview */}
+        <div className="rounded-md border border-[var(--border)]/80 bg-[var(--surface-2)]/70 p-2.5">
           <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            <span>Risk budget</span>
+            <span>Risk</span>
             <span className="tabular text-[var(--fg)]">{positionSizeHint()}</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface)]">
+          <div className="h-1 overflow-hidden rounded-full bg-[var(--surface)]">
             <div
-              className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-[160ms]"
-              style={{
-                width: `${Math.min(100, Math.max(4, num(riskPct, 1) * 12))}%`,
-              }}
+              className="h-full rounded-full bg-[var(--danger)]/80 transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)]"
+              style={{ width: `${riskBudgetPct}%` }}
+            />
+          </div>
+          <div className="mb-1.5 mt-2 flex items-center justify-between text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+            <span>Reward</span>
+            <span className="tabular text-[var(--fg)]">
+              {riskReward != null ? `1 : ${formatNumber(riskReward, 2)}` : "Set SL / TP"}
+            </span>
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-[var(--surface)]">
+            <div
+              className="h-full rounded-full bg-[var(--success)]/80 transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)]"
+              style={{ width: `${rewardBudgetPct}%` }}
             />
           </div>
           <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
             <Est label="Spread" value={Number.isFinite(spread) ? formatNumber(spread, 5) : "—"} />
-            <Est label="Margin" value={margin === "—" ? "—": formatMaybeMoney(margin)} />
-            <Est label="Lots" value={volume} />
+            <Est label="Margin" value={margin === "—" ? "—" : formatMaybeMoney(margin)} />
+            <Est
+              label="Safety"
+              value={lastCheck ? str(lastCheck.decision) : "—"}
+            />
           </div>
+          {execMetrics.source === "live" && execMetrics.totalMs != null ? (
+            <p className="mt-2 text-[10px] text-[var(--fg-subtle)]" aria-live="polite">
+              Last fill · {formatNumber(execMetrics.totalMs, 0)} ms
+            </p>
+          ) : null}
         </div>
 
         <PreTradeChecklist

@@ -34,7 +34,7 @@ export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   timeframe: "H1",
   showVolume: true,
   bottomTab: "positions",
-  counselCollapsed: false,
+  counselCollapsed: true,
   mobileTicketOpen: false,
 };
 
@@ -51,7 +51,7 @@ export const PRESET_TERMINAL: Record<
     rightCollapsed: false,
     bottomCollapsed: false,
     chartFullscreen: false,
-    counselCollapsed: false,
+    counselCollapsed: true,
   },
   "chart-focus": {
     preset: "chart-focus",
@@ -91,7 +91,7 @@ export function loadTerminalLayout(): TerminalLayoutState {
       bottomTab: normalizeTab(parsed.bottomTab),
       counselCollapsed:
         parsed.counselCollapsed === undefined
-          ? false
+          ? true
           : Boolean(parsed.counselCollapsed),
       rightWidth: Math.min(
         380,
@@ -110,7 +110,8 @@ export function loadTerminalLayout(): TerminalLayoutState {
 
 export function saveTerminalLayout(state: TerminalLayoutState) {
   try {
-    const { mobileTicketOpen: _, ...persist } = state;
+    const { mobileTicketOpen, ...persist } = state;
+    void mobileTicketOpen;
     localStorage.setItem(TERMINAL_LAYOUT_KEY, JSON.stringify(persist));
   } catch {
     /* ignore quota */

@@ -3,13 +3,59 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, Pin, Star, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appNav } from "@/components/layout/nav-config";
 import { Button } from "@/components/ui/button";
+import { useNavMemory } from "@/hooks/use-nav-memory";
+import { labelForHref } from "@/lib/workspace/nav-memory";
+
+function MemoryLinks({
+  title,
+  items,
+  onNavigate,
+}: {
+  title: string;
+  items: { href: string; label: string }[];
+  onNavigate?: () => void;
+}) {
+  const pathname = usePathname();
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-3">
+      <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+        {title}
+      </p>
+      <ul className="space-y-0.5">
+        {items.map((item) => {
+          const active =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <li key={`${title}-${item.href}`}>
+              <Link
+                href={item.href}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+                  active
+                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
+                )}
+              >
+                <span className="truncate">{item.label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function NavBody({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const memory = useNavMemory();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     for (const g of appNav) initial[g.title] = true;
@@ -17,7 +63,6 @@ function NavBody({ onNavigate }: { onNavigate?: () => void }) {
   });
 
   useEffect(() => {
-    // Keep the group containing the active route expanded.
     for (const g of appNav) {
       if (g.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
         setOpenGroups((prev) => ({ ...prev, [g.title]: true }));
@@ -25,15 +70,61 @@ function NavBody({ onNavigate }: { onNavigate?: () => void }) {
     }
   }, [pathname]);
 
+  const pinCurrent = () => {
+    memory.togglePinned({ href: pathname, label: labelForHref(pathname) });
+  };
+  const favCurrent = () => {
+    memory.toggleFavorite({ href: pathname, label: labelForHref(pathname) });
+  };
+
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
+      <div className="mb-3 flex items-center gap-1 px-1">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 flex-1 gap-1 px-2 text-[11px]"
+          onClick={pinCurrent}
+          aria-pressed={memory.isPinned(pathname)}
+          title="Pin current page"
+        >
+          <Pin className="h-3 w-3" aria-hidden />
+          {memory.isPinned(pathname) ? "Unpin" : "Pin"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 flex-1 gap-1 px-2 text-[11px]"
+          onClick={favCurrent}
+          aria-pressed={memory.isFavorite(pathname)}
+          title="Favorite current page"
+        >
+          <Star className="h-3 w-3" aria-hidden />
+          {memory.isFavorite(pathname) ? "Unstar" : "Star"}
+        </Button>
+      </div>
+
+      <MemoryLinks title="Pinned" items={memory.pinned} onNavigate={onNavigate} />
+      <MemoryLinks
+        title="Favorites"
+        items={memory.favorites.slice(0, 6)}
+        onNavigate={onNavigate}
+      />
+      <MemoryLinks
+        title="Recent"
+        items={memory.recent.slice(0, 5)}
+        onNavigate={onNavigate}
+      />
+
       {appNav.map((group) => {
         const expanded = openGroups[group.title] !== false;
         return (
           <div key={group.title} className="mb-2">
             <button
               type="button"
-              className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+              className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
               aria-expanded={expanded}
               onClick={() =>
                 setOpenGroups((prev) => ({
@@ -45,7 +136,7 @@ function NavBody({ onNavigate }: { onNavigate?: () => void }) {
               {group.title}
               <ChevronDown
                 className={cn(
-                  "h-3.5 w-3.5 transition-transform duration-[160ms]",
+                  "h-3.5 w-3.5 transition-transform duration-[var(--duration-os)] ease-[var(--ease-os)]",
                   expanded ? "rotate-0" : "-rotate-90",
                 )}
                 aria-hidden
@@ -66,7 +157,7 @@ function NavBody({ onNavigate }: { onNavigate?: () => void }) {
                         aria-current={active ? "page" : undefined}
                         title={item.hint}
                         className={cn(
-                          "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors duration-[160ms]",
+                          "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
                           active
                             ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                             : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
@@ -89,7 +180,7 @@ function NavBody({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <div className="flex h-14 items-center gap-2.5 border-b border-[var(--border)] px-4">
+    <div className="flex h-12 items-center gap-2.5 border-b border-[var(--border)] px-4">
       <div
         className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--accent-fg)]"
         aria-hidden
@@ -166,7 +257,7 @@ export function MobileNav() {
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl"
+            className="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
           >
             <div className="flex items-center justify-between border-b border-[var(--border)] pr-2">
               <div id={titleId}>
