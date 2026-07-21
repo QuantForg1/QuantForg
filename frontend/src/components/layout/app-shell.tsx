@@ -5,14 +5,61 @@ import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { useAuth } from "@/providers/auth-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OfflineBanner } from "@/components/system/offline-banner";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { cn } from "@/lib/utils";
 
-const TERMINAL_PATHS = ["/terminal", "/workspace", "/execution"];
-const OS_FULLBLEED_PATHS = [...TERMINAL_PATHS, "/book", "/research", "/counsel"];
+/** Full-bleed zero-scroll operating surfaces. */
+const OS_FULLBLEED_PATHS = [
+  "/terminal",
+  "/workspace",
+  "/execution",
+  "/portfolio",
+  "/research",
+  "/ai-signals",
+];
+
+function deskId(pathname: string): string {
+  if (
+    pathname.startsWith("/terminal") ||
+    pathname.startsWith("/workspace") ||
+    pathname.startsWith("/execution")
+  ) {
+    return "terminal";
+  }
+  if (
+    pathname.startsWith("/portfolio") ||
+    pathname.startsWith("/performance") ||
+    pathname.startsWith("/exposure") ||
+    pathname.startsWith("/allocation") ||
+    pathname.startsWith("/book")
+  ) {
+    return "portfolio";
+  }
+  if (pathname.startsWith("/research") || pathname.startsWith("/screeners")) {
+    return "research";
+  }
+  if (pathname.startsWith("/ai-signals") || pathname.startsWith("/counsel")) {
+    return "counsel";
+  }
+  if (pathname.startsWith("/journal") || pathname.startsWith("/trade-replay")) {
+    return "journal";
+  }
+  if (pathname.startsWith("/broker") || pathname.startsWith("/gateway")) {
+    return "broker";
+  }
+  if (pathname.startsWith("/monitoring") || pathname.startsWith("/ops")) {
+    return "operations";
+  }
+  if (pathname.startsWith("/notifications") || pathname.startsWith("/alerts")) {
+    return "inbox";
+  }
+  if (pathname.startsWith("/settings")) return "settings";
+  return "app";
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated } = useAuth();
@@ -22,6 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isFullBleed = OS_FULLBLEED_PATHS.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
+  const isTerminal = deskId(pathname) === "terminal";
 
   useEffect(() => {
     if (!loading && !isAuthenticated) router.replace("/login");
@@ -35,13 +83,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         router.push("/terminal");
       } else if (e.key === "2") {
         e.preventDefault();
-        router.push("/book");
+        router.push("/portfolio");
       } else if (e.key === "3") {
         e.preventDefault();
         router.push("/research");
       } else if (e.key === "4") {
         e.preventDefault();
-        router.push("/counsel");
+        router.push("/journal");
+      } else if (e.key === "5") {
+        e.preventDefault();
+        router.push("/broker");
+      } else if (e.key === "6") {
+        e.preventDefault();
+        router.push("/monitoring");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -71,32 +125,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Topbar onOpenCommand={() => setCmdOpen(true)} />
           <main
             id="main-content"
-            data-desk={
-              pathname.startsWith("/terminal") ||
-              pathname.startsWith("/workspace") ||
-              pathname.startsWith("/execution")
-                ? "terminal"
-                : pathname.startsWith("/book")
-                  ? "book"
-                  : pathname.startsWith("/research")
-                    ? "research"
-                    : pathname.startsWith("/counsel")
-                      ? "counsel"
-                      : pathname.startsWith("/journal")
-                        ? "journal"
-                        : pathname.startsWith("/broker")
-                          ? "broker"
-                          : pathname.startsWith("/inbox")
-                            ? "inbox"
-                            : pathname.startsWith("/settings")
-                              ? "settings"
-                              : "app"
-            }
+            data-desk={deskId(pathname)}
             className={cn(
               "flex-1",
               isFullBleed
                 ? "overflow-hidden p-0"
                 : "overflow-x-clip overflow-y-auto p-4 sm:p-6 lg:p-8",
+              // Reserve space for mobile tab bar
+              "pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0",
+              isTerminal && "lg:pb-0",
             )}
             tabIndex={-1}
           >
@@ -105,7 +142,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "qf-fade-in",
                   isFullBleed
-                    ? "h-[calc(100dvh-4rem)] w-full max-w-none"
+                    ? "h-[calc(100dvh-4rem-4.25rem)] w-full max-w-none lg:h-[calc(100dvh-4rem)]"
                     : "mx-auto w-full max-w-[1600px]",
                 )}
               >
@@ -115,6 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
+      <MobileTabBar />
       <CommandPalette open={cmdOpen} onOpenChange={setCmdOpen} />
     </div>
   );

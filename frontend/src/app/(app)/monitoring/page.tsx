@@ -67,14 +67,17 @@ export default function MonitoringPage() {
     <div>
       <PageHeader
         title="Monitoring"
-        description="Gateway health, execution latency, and reliability. Full control plane remains on Ops."
+        description="Operations dashboard — health, latency, gateway, recovery, and incidents. No trading controls."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
+              <Link href="/gateway">Gateway</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
               <Link href="/ops">Ops</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/incidents">Incidents</Link>
             </Button>
           </div>
         }

@@ -226,6 +226,8 @@ __marimo__/
 venv/
 *.log
 logs/
+!frontend/src/app/(app)/logs/
+!frontend/src/app/(app)/logs/**
 data/
 tmp/
 .DS_Store

@@ -3,48 +3,86 @@
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appNav } from "@/components/layout/nav-config";
 import { Button } from "@/components/ui/button";
 
 function NavBody({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const g of appNav) initial[g.title] = true;
+    return initial;
+  });
+
+  useEffect(() => {
+    // Keep the group containing the active route expanded.
+    for (const g of appNav) {
+      if (g.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
+        setOpenGroups((prev) => ({ ...prev, [g.title]: true }));
+      }
+    }
+  }, [pathname]);
 
   return (
-    <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Primary">
-      {appNav.map((group) => (
-        <div key={group.title} className="mb-5">
-          <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)]">
-            {group.title}
-          </p>
-          <ul className="space-y-0.5">
-            {group.items.map((item) => {
-              const active =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
-              const Icon = item.icon;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={onNavigate}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
-                      active
-                        ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+    <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
+      {appNav.map((group) => {
+        const expanded = openGroups[group.title] !== false;
+        return (
+          <div key={group.title} className="mb-2">
+            <button
+              type="button"
+              className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+              aria-expanded={expanded}
+              onClick={() =>
+                setOpenGroups((prev) => ({
+                  ...prev,
+                  [group.title]: !expanded,
+                }))
+              }
+            >
+              {group.title}
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-[160ms]",
+                  expanded ? "rotate-0" : "-rotate-90",
+                )}
+                aria-hidden
+              />
+            </button>
+            {expanded ? (
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active =
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={onNavigate}
+                        aria-current={active ? "page" : undefined}
+                        title={item.hint}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors duration-[160ms]",
+                          active
+                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                            : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+        );
+      })}
     </nav>
   );
 }
@@ -70,7 +108,7 @@ function Brand() {
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] lg:flex lg:flex-col">
+    <aside className="hidden w-56 shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] lg:flex lg:flex-col">
       <Brand />
       <NavBody />
     </aside>
@@ -116,7 +154,7 @@ export function MobileNav() {
         {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
       </Button>
       {open ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             className="absolute inset-0 bg-black/50"

@@ -117,7 +117,7 @@ export default function AnalyticsPage() {
     <div>
       <PageHeader
         title="Analytics"
-        description="Returns, volatility, distribution, and symbol exposure from live and paper fills. Terminal no longer embeds analytics — use this desk or Journal analytics."
+        description="Performance analytics only — win rate, expectancy, profit factor, volatility, and symbol distribution from live and paper fills."
         actions={
           <Button asChild size="sm" variant="secondary">
             <Link href="/journal/analytics">Journal analytics</Link>

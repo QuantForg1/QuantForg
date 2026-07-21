@@ -51,12 +51,12 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "C", action: "Toggle Portfolio Counsel" },
   { keys: "R", action: "Refresh book data" },
   { keys: "?", action: "This help" },
-  { keys: "⌘2", action: "Book (OS desk)" },
+  { keys: "⌘2", action: "Portfolio (OS desk)" },
 ];
 
 /**
- * Book OS — institutional portfolio operating system.
- * Zero page scroll; panels scroll internally. Terminal architecture untouched.
+ * Portfolio OS — institutional equity, exposure, and risk operating surface.
+ * Zero page scroll; panels scroll internally. Terminal remains sole execution.
  */
 export function BookShell() {
   const session = useTradingSession();
@@ -188,13 +188,13 @@ export function BookShell() {
     <div
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg)]"
       role="application"
-      aria-label="QuantForg Book"
+      aria-label="QuantForg Portfolio"
     >
       <header className="shrink-0">
         <div className="flex h-9 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
           <div className="flex items-center gap-3">
             <h1 className="text-xs font-semibold tracking-tight text-[var(--fg)]">
-              Book
+              Portfolio
             </h1>
             <span className="qf-caption hidden sm:inline">
               Portfolio operating system
@@ -255,7 +255,7 @@ export function BookShell() {
           <BookEmpty
             className="h-full rounded-md border border-[var(--border)] bg-[var(--surface)]"
             title="No live book"
-            description="Attach MT5 in Broker to load equity, risk, and positions. Book never invents balances."
+            description="Attach MT5 in Broker to load equity, risk, and positions. Portfolio never invents balances."
             action={
               <Button size="sm" variant="secondary" asChild>
                 <Link href="/broker">Open Broker</Link>
@@ -328,7 +328,7 @@ export function BookShell() {
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="max-w-md">
-          <DialogTitle>Book shortcuts</DialogTitle>
+          <DialogTitle>Portfolio shortcuts</DialogTitle>
           <ul className="mt-3 space-y-2">
             {SHORTCUTS.map((row) => (
               <li

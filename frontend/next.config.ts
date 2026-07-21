@@ -41,48 +41,51 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // Flagship aliases
+      // Terminal aliases
       { source: "/workspace", destination: "/terminal", permanent: false },
       { source: "/execution", destination: "/terminal", permanent: false },
-      // Book desk
-      { source: "/dashboard", destination: "/book", permanent: false },
-      { source: "/portfolio", destination: "/book", permanent: false },
-      { source: "/performance", destination: "/book", permanent: false },
-      { source: "/analytics", destination: "/book", permanent: false },
-      { source: "/wallet", destination: "/book", permanent: false },
-      { source: "/risk", destination: "/book", permanent: false },
-      { source: "/risk-lab", destination: "/book", permanent: false },
-      // Research desk
+      { source: "/paper", destination: "/terminal", permanent: false },
+      { source: "/get-started", destination: "/terminal", permanent: false },
+      { source: "/execution-intel", destination: "/executions", permanent: false },
+      { source: "/history", destination: "/executions", permanent: false },
+
+      // Portfolio OS (Book → Portfolio)
+      { source: "/book", destination: "/portfolio", permanent: false },
+      { source: "/dashboard", destination: "/portfolio", permanent: false },
+      { source: "/wallet", destination: "/portfolio", permanent: false },
+      { source: "/risk", destination: "/risk-center", permanent: false },
+      { source: "/risk-lab", destination: "/allocation", permanent: false },
+
+      // Research cluster (lab tools stay under Research)
       { source: "/quant-studio", destination: "/research", permanent: false },
       { source: "/research-lab", destination: "/research", permanent: false },
       { source: "/backtesting", destination: "/research", permanent: false },
       { source: "/walkforward", destination: "/research", permanent: false },
       { source: "/strategy", destination: "/research", permanent: false },
-      // Counsel layer
-      { source: "/quant-ai", destination: "/counsel", permanent: false },
-      { source: "/decision-engine", destination: "/counsel", permanent: false },
-      { source: "/intelligence", destination: "/counsel", permanent: false },
-      { source: "/ai", destination: "/counsel", permanent: false },
-      // Journal
+
+      // Counsel / AI
+      { source: "/quant-ai", destination: "/ai-signals", permanent: false },
+      { source: "/decision-engine", destination: "/ai-signals", permanent: false },
+      { source: "/intelligence", destination: "/ai-signals", permanent: false },
+      { source: "/ai", destination: "/ai-signals", permanent: false },
+      { source: "/counsel", destination: "/ai-signals", permanent: false },
+
+      // Journal / History
       { source: "/ecosystem", destination: "/journal", permanent: false },
+
       // Broker cluster
       { source: "/mt5", destination: "/broker", permanent: false },
       { source: "/brokers", destination: "/broker", permanent: false },
-      { source: "/broker-connectivity", destination: "/broker", permanent: false },
+      { source: "/broker-connectivity", destination: "/gateway", permanent: false },
       { source: "/broker-compatibility", destination: "/broker", permanent: false },
       { source: "/broker-certification", destination: "/broker", permanent: false },
-      // Trading fragments → terminal
-      { source: "/orders", destination: "/terminal", permanent: false },
-      { source: "/positions", destination: "/terminal", permanent: false },
-      { source: "/history", destination: "/terminal", permanent: false },
-      { source: "/execution-intel", destination: "/terminal", permanent: false },
-      { source: "/paper", destination: "/terminal", permanent: false },
-      // Marketing / onboarding out of chrome
-      { source: "/get-started", destination: "/terminal", permanent: false },
+
+      // Inbox aliases
       { source: "/whats-new", destination: "/notifications", permanent: false },
-      // Ops → settings (admin tooling not in trader rail)
-      { source: "/ops", destination: "/settings", permanent: false },
-      { source: "/cloud-ops", destination: "/settings", permanent: false },
+      { source: "/inbox", destination: "/notifications", permanent: false },
+
+      // System
+      { source: "/cloud-ops", destination: "/gateway", permanent: false },
       { source: "/profile", destination: "/settings", permanent: false },
       { source: "/organizations", destination: "/settings", permanent: false },
     ];

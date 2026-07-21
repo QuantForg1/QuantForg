@@ -1,19 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  PanelLeftClose,
-  PanelLeftOpen,
+  Keyboard,
   PanelRightClose,
   PanelRightOpen,
-  Keyboard,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { WorkspaceLeftRail } from "@/components/workspace/left-rail";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
 import { SplitHandle, useResizeSplit } from "@/components/workspace/splitters";
 import { TerminalSessionBar } from "@/components/terminal/session-bar";
@@ -22,12 +19,10 @@ import { TerminalRightRail } from "@/components/terminal/right-rail";
 import { TerminalBlotter } from "@/components/terminal/blotter";
 import {
   DEFAULT_TERMINAL_LAYOUT,
-  PRESET_TERMINAL,
   TERMINAL_SYMBOL_KEY,
   loadTerminalLayout,
   saveTerminalLayout,
   type TerminalLayoutState,
-  type TerminalPresetId,
   type TerminalBlotterTab,
 } from "@/components/terminal/layout-store";
 import type { OrderTicketHandle } from "@/components/execution/order-ticket";
@@ -36,6 +31,7 @@ import { useTradingSession } from "@/providers/trading-session-provider";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asRecord, num } from "@/lib/desk";
 import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
+import { cn } from "@/lib/utils";
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -48,29 +44,22 @@ function isTypingTarget(el: EventTarget | null) {
   );
 }
 
-const DESK_LINKS = [
-  { href: "/analytics", label: "Analytics" },
-  { href: "/risk-center", label: "Risk" },
-  { href: "/auto-trading", label: "Auto" },
-  { href: "/monitoring", label: "Monitor" },
-] as const;
-
 const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "B / S", action: "Buy / Sell (confirm)" },
-  { keys: "1–2", action: "Blotter tabs" },
-  { keys: "[ / ]", action: "Toggle left / right rail" },
+  { keys: "1–3", action: "Blotter tabs" },
+  { keys: "]", action: "Toggle order ticket" },
   { keys: "\\", action: "Toggle blotter" },
-  { keys: "C", action: "Toggle AI decision strip" },
+  { keys: "C", action: "Toggle AI decision" },
   { keys: "F", action: "Chart fullscreen" },
-  { keys: "Esc", action: "Cancel / exit fullscreen" },
+  { keys: "Esc", action: "Cancel / close sheets" },
   { keys: "?", action: "This help" },
-  { keys: "⌘1–4", action: "OS desks (Terminal → Counsel)" },
+  { keys: "⌘1–6", action: "Workspace jump" },
 ];
 
 /**
- * QuantForg Terminal OS — flagship zero-scroll trading surface.
- * Chart · Ticket · AI Decision · Positions · Quick Risk only.
- * Preserves MT5 execution, lightweight-charts, live book, websockets.
+ * QuantForg Terminal V3 — flagship trading surface.
+ * Chart · Order Ticket · AI Decision · Positions / Orders / Executions.
+ * No monitoring, analytics, gateway, or duplicated stats.
  */
 export function TerminalShell() {
   const searchParams = useSearchParams();
@@ -78,6 +67,7 @@ export function TerminalShell() {
   const [symbol, setSymbol] = useState(TRADING_SYMBOL);
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const ticketRef = useRef<OrderTicketHandle | null>(null);
   const layoutRef = useRef(layout);
 
@@ -96,7 +86,6 @@ export function TerminalShell() {
       /* ignore */
     }
     setHydrated(true);
-    // Intentionally once on mount — URL symbol is an initial hint.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once
   }, []);
 
@@ -117,10 +106,10 @@ export function TerminalShell() {
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
     const apply = () => {
+      setIsMobile(mq.matches);
       if (mq.matches) {
         setLayout((prev) => ({
           ...prev,
-          leftCollapsed: true,
           rightCollapsed: true,
         }));
       }
@@ -134,7 +123,6 @@ export function TerminalShell() {
   const session = useTradingSession();
   const connected = session.connected;
 
-  // Tick via realtime channel only — avoid duplicate shell poller.
   const tickQ = useQuery({
     queryKey: ["mt5-tick", symbol],
     queryFn: () => mt5Api.tick(symbol),
@@ -168,30 +156,19 @@ export function TerminalShell() {
     setLayout((prev) => ({ ...prev, ...partial }));
   }, []);
 
-  const applyPreset = useCallback((preset: TerminalPresetId) => {
-    setLayout((prev) => ({ ...prev, ...PRESET_TERMINAL[preset] }));
-  }, []);
-
-  const onLeftDelta = useCallback((d: number) => {
-    setLayout((prev) => ({
-      ...prev,
-      leftWidth: Math.min(280, Math.max(152, prev.leftWidth + d)),
-    }));
-  }, []);
   const onRightDelta = useCallback((d: number) => {
     setLayout((prev) => ({
       ...prev,
-      rightWidth: Math.min(340, Math.max(260, prev.rightWidth - d)),
+      rightWidth: Math.min(380, Math.max(280, prev.rightWidth - d)),
     }));
   }, []);
   const onBottomDelta = useCallback((d: number) => {
     setLayout((prev) => ({
       ...prev,
-      bottomHeight: Math.min(200, Math.max(112, prev.bottomHeight - d)),
+      bottomHeight: Math.min(280, Math.max(120, prev.bottomHeight - d)),
     }));
   }, []);
 
-  const leftSplit = useResizeSplit(onLeftDelta);
   const rightSplit = useResizeSplit(onRightDelta);
   const bottomSplit = useResizeSplit(onBottomDelta);
 
@@ -208,6 +185,7 @@ export function TerminalShell() {
       if (e.key === "Escape") {
         ticketRef.current?.cancelDialog();
         if (current.chartFullscreen) patchLayout({ chartFullscreen: false });
+        if (current.mobileTicketOpen) patchLayout({ mobileTicketOpen: false });
         setHelpOpen(false);
         return;
       }
@@ -235,14 +213,18 @@ export function TerminalShell() {
         setBlotterTab("orders");
         return;
       }
-      if (e.key === "[") {
+      if (k === "3") {
         e.preventDefault();
-        patchLayout({ leftCollapsed: !current.leftCollapsed });
+        setBlotterTab("executions");
         return;
       }
       if (e.key === "]") {
         e.preventDefault();
-        patchLayout({ rightCollapsed: !current.rightCollapsed });
+        if (isMobile) {
+          patchLayout({ mobileTicketOpen: !current.mobileTicketOpen });
+        } else {
+          patchLayout({ rightCollapsed: !current.rightCollapsed });
+        }
         return;
       }
       if (e.key === "\\") {
@@ -267,10 +249,10 @@ export function TerminalShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [patchLayout, setBlotterTab]);
+  }, [patchLayout, setBlotterTab, isMobile]);
 
-  const showLeft = !layout.leftCollapsed && !layout.chartFullscreen;
-  const showRight = !layout.rightCollapsed && !layout.chartFullscreen;
+  const showRight =
+    !isMobile && !layout.rightCollapsed && !layout.chartFullscreen;
   const showBottom = !layout.bottomCollapsed && !layout.chartFullscreen;
   const showCounsel = !layout.chartFullscreen;
 
@@ -279,65 +261,44 @@ export function TerminalShell() {
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg)]"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg)]"
       role="application"
       aria-label="QuantForg Terminal"
     >
       <header className="shrink-0">
         <div className="flex h-8 items-center justify-between gap-2 border-b border-[var(--border)] px-2">
-          <div className="flex min-w-0 items-center gap-3">
-            <h1 className="shrink-0 text-xs font-semibold tracking-tight text-[var(--fg)]">
-              Terminal
-            </h1>
-            <nav
-              className="hidden items-center gap-2 sm:flex"
-              aria-label="Secondary desks"
-            >
-              {DESK_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)] transition-colors hover:text-[var(--fg)]"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
+          <h1 className="shrink-0 text-xs font-semibold tracking-tight text-[var(--fg)]">
+            Terminal
+          </h1>
           <div className="flex items-center gap-0.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label={layout.leftCollapsed ? "Expand watchlist" : "Collapse watchlist"}
-              onClick={() => patchLayout({ leftCollapsed: !layout.leftCollapsed })}
-            >
-              {layout.leftCollapsed ? (
-                <PanelLeftOpen className="h-4 w-4" />
-              ) : (
-                <PanelLeftClose className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label={layout.rightCollapsed ? "Expand ticket" : "Collapse ticket"}
-              onClick={() => patchLayout({ rightCollapsed: !layout.rightCollapsed })}
-            >
-              {layout.rightCollapsed ? (
-                <PanelRightOpen className="h-4 w-4" />
-              ) : (
-                <PanelRightClose className="h-4 w-4" />
-              )}
-            </Button>
+            {!isMobile ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label={
+                  layout.rightCollapsed ? "Expand ticket" : "Collapse ticket"
+                }
+                onClick={() =>
+                  patchLayout({ rightCollapsed: !layout.rightCollapsed })
+                }
+              >
+                {layout.rightCollapsed ? (
+                  <PanelRightOpen className="h-4 w-4" />
+                ) : (
+                  <PanelRightClose className="h-4 w-4" />
+                )}
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-[11px]"
-              onClick={() => patchLayout({ bottomCollapsed: !layout.bottomCollapsed })}
+              onClick={() =>
+                patchLayout({ bottomCollapsed: !layout.bottomCollapsed })
+              }
             >
-              {layout.bottomCollapsed ? "Positions" : "Hide"}
+              {layout.bottomCollapsed ? "Blotter" : "Hide"}
             </Button>
             <Button
               size="sm"
@@ -370,27 +331,6 @@ export function TerminalShell() {
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {showLeft ? (
-          <>
-            <div style={{ width: layout.leftWidth }} className="min-h-0 shrink-0 overflow-hidden">
-              <WorkspaceLeftRail
-                connected={connected}
-                selected={symbol}
-                onSelect={setSymbol}
-                preset={layout.preset}
-                onPresetChange={applyPreset}
-                hideStatusChrome
-              />
-            </div>
-            <SplitHandle
-              orientation="vertical"
-              label="Resize watchlist"
-              onStartDrag={leftSplit.start("x")}
-              onStep={onLeftDelta}
-            />
-          </>
-        ) : null}
-
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="min-h-0 flex-1 overflow-hidden">
             <WorkspaceChart
@@ -439,7 +379,10 @@ export function TerminalShell() {
               onStartDrag={rightSplit.start("x")}
               onStep={(d) => onRightDelta(-d)}
             />
-            <div style={{ width: layout.rightWidth }} className="min-h-0 shrink-0 overflow-hidden">
+            <div
+              style={{ width: layout.rightWidth }}
+              className="min-h-0 shrink-0 overflow-hidden"
+            >
               <TerminalRightRail
                 symbol={symbol}
                 onSymbolChange={setSymbol}
@@ -453,6 +396,87 @@ export function TerminalShell() {
           </>
         ) : null}
       </div>
+
+      {/* Mobile: floating Buy/Sell + ticket sheet */}
+      {isMobile && !layout.chartFullscreen ? (
+        <>
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-[4.5rem] z-20 flex justify-center gap-3 px-4"
+            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          >
+            <Button
+              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-lg"
+              disabled={!connected}
+              onClick={() => {
+                patchLayout({ mobileTicketOpen: true });
+                window.setTimeout(() => ticketRef.current?.buy(), 80);
+              }}
+            >
+              BUY
+            </Button>
+            <Button
+              variant="danger"
+              className="pointer-events-auto h-12 min-w-[7.5rem] flex-1 max-w-[10rem] text-base font-semibold shadow-lg"
+              disabled={!connected}
+              onClick={() => {
+                patchLayout({ mobileTicketOpen: true });
+                window.setTimeout(() => ticketRef.current?.sell(), 80);
+              }}
+            >
+              SELL
+            </Button>
+          </div>
+
+          <div
+            className={cn(
+              "absolute inset-x-0 bottom-0 z-30 transition-transform duration-[160ms] ease-out",
+              layout.mobileTicketOpen
+                ? "translate-y-0"
+                : "pointer-events-none translate-y-full",
+            )}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Order ticket"
+            aria-hidden={!layout.mobileTicketOpen}
+          >
+            <div
+              className="mx-auto max-h-[78dvh] overflow-hidden rounded-t-2xl border border-b-0 border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
+                <p className="text-sm font-semibold">Order Ticket</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 px-0"
+                  aria-label="Close ticket"
+                  onClick={() => patchLayout({ mobileTicketOpen: false })}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="max-h-[calc(78dvh-2.75rem)] overflow-y-auto">
+                <TerminalRightRail
+                  symbol={symbol}
+                  onSymbolChange={setSymbol}
+                  connected={connected}
+                  bid={bidOk}
+                  ask={askOk}
+                  tickTimeMs={tickTimeMs}
+                  ticketRef={ticketRef}
+                />
+              </div>
+            </div>
+          </div>
+          {layout.mobileTicketOpen ? (
+            <button
+              type="button"
+              className="absolute inset-0 z-[25] bg-black/40"
+              aria-label="Dismiss order ticket"
+              onClick={() => patchLayout({ mobileTicketOpen: false })}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="max-w-md">

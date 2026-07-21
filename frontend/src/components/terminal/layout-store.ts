@@ -1,16 +1,13 @@
-/** Terminal OS layout — chart-first trading surface (~75% chart). */
+/** Terminal OS layout V5 — chart · ticket · AI · blotter only. */
 
 export type TerminalPresetId = "default" | "chart-focus" | "tape-focus";
 
-/** Positions-first blotter — history/journal live on Journal desk. */
-export type TerminalBlotterTab = "positions" | "orders";
+export type TerminalBlotterTab = "positions" | "orders" | "executions";
 
 export type TerminalLayoutState = {
   preset: TerminalPresetId;
-  leftWidth: number;
   rightWidth: number;
   bottomHeight: number;
-  leftCollapsed: boolean;
   rightCollapsed: boolean;
   bottomCollapsed: boolean;
   chartFullscreen: boolean;
@@ -19,18 +16,17 @@ export type TerminalLayoutState = {
   showVolume: boolean;
   bottomTab: TerminalBlotterTab;
   counselCollapsed: boolean;
+  /** Mobile: bottom-sheet order ticket open */
+  mobileTicketOpen: boolean;
 };
 
-export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v4";
+export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v5";
 export const TERMINAL_SYMBOL_KEY = "qf.workspace.symbol";
 
-/** ~75% chart / ~25% blotter; narrow watchlist + ticket rails. */
 export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   preset: "default",
-  leftWidth: 168,
-  rightWidth: 288,
-  bottomHeight: 136,
-  leftCollapsed: false,
+  rightWidth: 320,
+  bottomHeight: 148,
   rightCollapsed: false,
   bottomCollapsed: false,
   chartFullscreen: false,
@@ -38,10 +34,11 @@ export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   timeframe: "H1",
   showVolume: true,
   bottomTab: "positions",
-  counselCollapsed: true,
+  counselCollapsed: false,
+  mobileTicketOpen: false,
 };
 
-const TRADER_TABS: TerminalBlotterTab[] = ["positions", "orders"];
+const TRADER_TABS: TerminalBlotterTab[] = ["positions", "orders", "executions"];
 
 export const PRESET_TERMINAL: Record<
   TerminalPresetId,
@@ -49,18 +46,15 @@ export const PRESET_TERMINAL: Record<
 > = {
   default: {
     preset: "default",
-    leftWidth: 168,
-    rightWidth: 288,
-    bottomHeight: 136,
-    leftCollapsed: false,
+    rightWidth: 320,
+    bottomHeight: 148,
     rightCollapsed: false,
     bottomCollapsed: false,
     chartFullscreen: false,
-    counselCollapsed: true,
+    counselCollapsed: false,
   },
   "chart-focus": {
     preset: "chart-focus",
-    leftCollapsed: true,
     rightCollapsed: true,
     bottomCollapsed: true,
     counselCollapsed: true,
@@ -68,10 +62,8 @@ export const PRESET_TERMINAL: Record<
   },
   "tape-focus": {
     preset: "tape-focus",
-    leftWidth: 168,
-    rightWidth: 288,
-    bottomHeight: 200,
-    leftCollapsed: false,
+    rightWidth: 300,
+    bottomHeight: 220,
     rightCollapsed: false,
     bottomCollapsed: false,
     counselCollapsed: true,
@@ -99,20 +91,17 @@ export function loadTerminalLayout(): TerminalLayoutState {
       bottomTab: normalizeTab(parsed.bottomTab),
       counselCollapsed:
         parsed.counselCollapsed === undefined
-          ? true
+          ? false
           : Boolean(parsed.counselCollapsed),
-      leftWidth: Math.min(
-        280,
-        Math.max(152, Number(parsed.leftWidth) || DEFAULT_TERMINAL_LAYOUT.leftWidth),
-      ),
       rightWidth: Math.min(
-        340,
-        Math.max(260, Number(parsed.rightWidth) || DEFAULT_TERMINAL_LAYOUT.rightWidth),
+        380,
+        Math.max(280, Number(parsed.rightWidth) || DEFAULT_TERMINAL_LAYOUT.rightWidth),
       ),
       bottomHeight: Math.min(
-        200,
-        Math.max(112, Number(parsed.bottomHeight) || DEFAULT_TERMINAL_LAYOUT.bottomHeight),
+        280,
+        Math.max(120, Number(parsed.bottomHeight) || DEFAULT_TERMINAL_LAYOUT.bottomHeight),
       ),
+      mobileTicketOpen: false,
     };
   } catch {
     return DEFAULT_TERMINAL_LAYOUT;
@@ -121,7 +110,8 @@ export function loadTerminalLayout(): TerminalLayoutState {
 
 export function saveTerminalLayout(state: TerminalLayoutState) {
   try {
-    localStorage.setItem(TERMINAL_LAYOUT_KEY, JSON.stringify(state));
+    const { mobileTicketOpen: _, ...persist } = state;
+    localStorage.setItem(TERMINAL_LAYOUT_KEY, JSON.stringify(persist));
   } catch {
     /* ignore quota */
   }

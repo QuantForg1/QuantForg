@@ -3,8 +3,8 @@
 import dynamic from "next/dynamic";
 import { DeskSkeleton } from "@/components/desk/primitives";
 
-const BookShell = dynamic(
-  () => import("@/components/book/shell").then((m) => m.BookShell),
+const CounselShell = dynamic(
+  () => import("@/components/counsel/shell").then((m) => m.CounselShell),
   {
     ssr: false,
     loading: () => (
@@ -15,11 +15,11 @@ const BookShell = dynamic(
   },
 );
 
-/** Portfolio OS — institutional equity, exposure, and risk operating surface. */
-export default function PortfolioPage() {
+/** AI Signals — Counsel decision operating system. */
+export default function AiSignalsPage() {
   return (
     <div className="h-full min-h-0 w-full">
-      <BookShell />
+      <CounselShell />
     </div>
   );
 }

@@ -8,7 +8,6 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,12 +31,10 @@ import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import {
   MULTI_SYMBOL_ENABLED,
-  TRADING_SYMBOL,
   resolveTradingSymbol,
 } from "@/lib/trading/gold-only";
 import { humanExecutionError } from "@/lib/execution/humanize";
 import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
-import Link from "next/link";
 import {
   contractSizeForSymbol,
   lotsFromRiskBudget,
@@ -500,37 +497,52 @@ export const ExecutionOrderTicket = forwardRef<
   const swap = str(snapshot.swap ?? snapshot.estimated_swap, "—");
 
   return (
-    <Card className={cn(dense && "border-0 shadow-none")}>
-      <CardHeader
-        className={cn(
-          "flex-row items-center justify-between gap-2",
-          dense && "px-3 py-2",
-        )}
-      >
-        <CardTitle className={cn(dense && "text-sm")}>Order Ticket</CardTitle>
-        <Badge tone={connected ? "success" : "warning"}>
-          {connected ? "Ready" : "Disabled"}
-        </Badge>
-      </CardHeader>
-      <CardContent className={cn("space-y-4", dense && "space-y-2.5 px-2.5 pb-2.5")}>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            className={cn("font-semibold", dense ? "h-10 text-sm" : "h-12 text-base")}
+    <div className={cn(dense ? "border-0" : "rounded-lg border border-[var(--border)]")}>
+      {!dense ? (
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+          <h2 className="text-sm font-semibold tracking-tight">Order Ticket</h2>
+          <Badge tone={connected ? "success" : "warning"}>
+            {connected ? "Ready" : "Disabled"}
+          </Badge>
+        </div>
+      ) : null}
+      <div className={cn("space-y-3", dense ? "space-y-2.5 px-3 py-2.5" : "space-y-4 p-4")}>
+        {/* Quote + side */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
             disabled={!connected || busy}
             onClick={() => void oneClick("buy")}
             aria-label="Buy market"
+            className={cn(
+              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[160ms]",
+              "border-[var(--success)]/40 bg-[var(--success)]/10 text-[var(--success)]",
+              "hover:bg-[var(--success)]/20 disabled:opacity-40",
+              dense ? "min-h-[3.25rem]" : "min-h-14",
+            )}
           >
-            BUY
-          </Button>
-          <Button
-            className={cn("font-semibold", dense ? "h-10 text-sm" : "h-12 text-base")}
-            variant="danger"
+            <span className="text-[10px] uppercase tracking-wider opacity-80">Buy</span>
+            <span className="tabular text-sm font-semibold">
+              {Number.isFinite(ask) && ask != null ? formatNumber(ask, 2) : "—"}
+            </span>
+          </button>
+          <button
+            type="button"
             disabled={!connected || busy}
             onClick={() => void oneClick("sell")}
             aria-label="Sell market"
+            className={cn(
+              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[160ms]",
+              "border-[var(--danger)]/40 bg-[var(--danger)]/10 text-[var(--danger)]",
+              "hover:bg-[var(--danger)]/20 disabled:opacity-40",
+              dense ? "min-h-[3.25rem]" : "min-h-14",
+            )}
           >
-            SELL
-          </Button>
+            <span className="text-[10px] uppercase tracking-wider opacity-80">Sell</span>
+            <span className="tabular text-sm font-semibold">
+              {Number.isFinite(bid) && bid != null ? formatNumber(bid, 2) : "—"}
+            </span>
+          </button>
         </div>
 
         <AiDecisionCard
@@ -542,32 +554,26 @@ export const ExecutionOrderTicket = forwardRef<
           takeProfit={takeProfit || undefined}
         />
 
-        {execMetrics.source === "live" ? (
-          <p className="text-[10px] text-[var(--fg-subtle)]">
-            Last fill · total{" "}
-            {execMetrics.totalMs != null
-              ? `${formatNumber(execMetrics.totalMs, 0)} ms`
-              : "—"}
-            {" · "}
-            <Link href="/monitoring" className="text-[var(--accent)] hover:underline">
-              Execution metrics
-            </Link>
-          </p>
-        ) : (
-          <p className="text-[10px] text-[var(--fg-subtle)]">
-            <Link href="/monitoring" className="text-[var(--accent)] hover:underline">
-              Monitoring
-            </Link>
-            {" · "}
-            <Link href="/analytics" className="text-[var(--accent)] hover:underline">
-              Analytics
-            </Link>
-            {" · "}
-            <Link href="/risk-center" className="text-[var(--accent)] hover:underline">
-              Risk Center
-            </Link>
-          </p>
-        )}
+        {/* Risk budget visual */}
+        <div className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+            <span>Risk budget</span>
+            <span className="tabular text-[var(--fg)]">{positionSizeHint()}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface)]">
+            <div
+              className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-[160ms]"
+              style={{
+                width: `${Math.min(100, Math.max(4, num(riskPct, 1) * 12))}%`,
+              }}
+            />
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+            <Est label="Spread" value={Number.isFinite(spread) ? formatNumber(spread, 5) : "—"} />
+            <Est label="Margin" value={margin === "—" ? "—": formatMaybeMoney(margin)} />
+            <Est label="Lots" value={volume} />
+          </div>
+        </div>
 
         <PreTradeChecklist
           inputs={{
@@ -586,35 +592,24 @@ export const ExecutionOrderTicket = forwardRef<
           compact
         />
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="exec-symbol">Symbol</Label>
-            <Input
-              id="exec-symbol"
-              value={MULTI_SYMBOL_ENABLED ? symbol : TRADING_SYMBOL}
-              readOnly={!MULTI_SYMBOL_ENABLED}
-              onChange={(e) => onSymbolChange(resolveTradingSymbol(e.target.value))}
-              disabled={!connected}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="exec-side">Side</Label>
-            <select
-              id="exec-side"
-              className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-              value={side}
-              onChange={(e) => setSide(e.target.value as "buy" | "sell")}
-              disabled={!connected}
-            >
-              <option value="buy">Buy</option>
-              <option value="sell">Sell</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="exec-type">Order type</Label>
+        <div className="grid gap-2 grid-cols-2">
+          {MULTI_SYMBOL_ENABLED ? (
+            <div className="space-y-1 col-span-2">
+              <Label htmlFor="exec-symbol" className="text-[11px]">Symbol</Label>
+              <Input
+                id="exec-symbol"
+                className="h-9"
+                value={symbol}
+                onChange={(e) => onSymbolChange(resolveTradingSymbol(e.target.value))}
+                disabled={!connected}
+              />
+            </div>
+          ) : null}
+          <div className="space-y-1">
+            <Label htmlFor="exec-type" className="text-[11px]">Type</Label>
             <select
               id="exec-type"
-              className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+              className="flex h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm"
               value={orderType}
               onChange={(e) => setOrderType(e.target.value as OrderType)}
               disabled={!connected}
@@ -626,72 +621,99 @@ export const ExecutionOrderTicket = forwardRef<
               ))}
             </select>
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Position sizing</Label>
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                type="button"
-                size="sm"
-                variant={sizingMode === "percentage_risk" ? "default" : "secondary"}
-                onClick={() => setSizingMode("percentage_risk")}
-                disabled={!connected}
-              >
-                Risk %
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={sizingMode === "fixed_lot" ? "default" : "secondary"}
-                onClick={() => setSizingMode("fixed_lot")}
-                disabled={!connected}
-              >
-                Fixed lot
-              </Button>
-            </div>
-            <p className="text-[10px] text-[var(--fg-subtle)]">
-              {sizingMode === "percentage_risk"
-                ? "Lots from equity × risk% ÷ (SL distance × contract size). Risk Engine is authoritative."
-                : "Operator-selected fixed lot. Risk Engine still gates the order."}
-            </p>
+          <div className="space-y-1">
+            <Label htmlFor="exec-side" className="text-[11px]">Side</Label>
+            <select
+              id="exec-side"
+              className="flex h-9 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm"
+              value={side}
+              onChange={(e) => setSide(e.target.value as "buy" | "sell")}
+              disabled={!connected}
+            >
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+            </select>
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="exec-volume">Volume</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {VOLUMES.map((v) => (
+
+          <div className="col-span-2 space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px]">Sizing</Label>
+              <div className="flex gap-1">
                 <Button
-                  key={v}
                   type="button"
                   size="sm"
-                  variant={volume === v && sizingMode === "fixed_lot" ? "default" : "secondary"}
-                  onClick={() => {
-                    setSizingMode("fixed_lot");
-                    setVolume(v);
-                  }}
+                  className="h-6 px-2 text-[10px]"
+                  variant={sizingMode === "percentage_risk" ? "default" : "secondary"}
+                  onClick={() => setSizingMode("percentage_risk")}
                   disabled={!connected}
                 >
-                  {v}
+                  Risk %
                 </Button>
-              ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  variant={sizingMode === "fixed_lot" ? "default" : "secondary"}
+                  onClick={() => setSizingMode("fixed_lot")}
+                  disabled={!connected}
+                >
+                  Fixed
+                </Button>
+              </div>
             </div>
-            <Input
-              id="exec-volume"
-              className="mt-2"
-              value={volume}
-              onChange={(e) => {
-                setSizingMode("fixed_lot");
-                setVolume(e.target.value);
-              }}
-              disabled={!connected || sizingMode === "percentage_risk"}
-              readOnly={sizingMode === "percentage_risk"}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                id="exec-risk"
+                className="h-9"
+                value={riskPct}
+                onChange={(e) => setRiskPct(e.target.value)}
+                disabled={!connected}
+                aria-label="Risk percent"
+                placeholder="Risk %"
+              />
+              <Input
+                id="exec-volume"
+                className="h-9"
+                value={volume}
+                onChange={(e) => {
+                  setSizingMode("fixed_lot");
+                  setVolume(e.target.value);
+                }}
+                disabled={!connected || sizingMode === "percentage_risk"}
+                readOnly={sizingMode === "percentage_risk"}
+                aria-label="Volume lots"
+              />
+            </div>
+            {sizingMode === "fixed_lot" ? (
+              <div className="flex flex-wrap gap-1">
+                {VOLUMES.map((v) => (
+                  <Button
+                    key={v}
+                    type="button"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    variant={volume === v ? "default" : "secondary"}
+                    onClick={() => {
+                      setSizingMode("fixed_lot");
+                      setVolume(v);
+                    }}
+                    disabled={!connected}
+                  >
+                    {v}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
           </div>
+
           {needsPrice ? (
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="exec-price">
-                {orderType === "stop_limit" ? "Trigger / limit price" : "Price"}
+            <div className="col-span-2 space-y-1">
+              <Label htmlFor="exec-price" className="text-[11px]">
+                {orderType === "stop_limit" ? "Trigger / limit" : "Price"}
               </Label>
               <Input
                 id="exec-price"
+                className="h-9"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder={Number.isFinite(mid) ? formatNumber(mid, 5) : "0.00000"}
@@ -699,118 +721,100 @@ export const ExecutionOrderTicket = forwardRef<
               />
             </div>
           ) : null}
-          <div className="space-y-1.5">
-            <Label htmlFor="exec-sl">Stop loss</Label>
+
+          <div className="space-y-1">
+            <Label htmlFor="exec-sl" className="text-[11px]">Stop loss</Label>
             <Input
               id="exec-sl"
+              className="h-9"
               value={stopLoss}
               onChange={(e) => setStopLoss(e.target.value)}
               disabled={!connected}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="exec-tp">Take profit</Label>
+          <div className="space-y-1">
+            <Label htmlFor="exec-tp" className="text-[11px]">Take profit</Label>
             <Input
               id="exec-tp"
+              className="h-9"
               value={takeProfit}
               onChange={(e) => setTakeProfit(e.target.value)}
               disabled={!connected}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="exec-trail">Trailing stop</Label>
-            <Input
-              id="exec-trail"
-              value={trailingStop}
-              onChange={(e) => setTrailingStop(e.target.value)}
-              placeholder="points"
-              disabled={!connected}
-            />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="exec-comment">Order comment</Label>
-            <Input
-              id="exec-comment"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Optional (MT5 ≤31 chars)"
-              disabled={!connected}
-              maxLength={24}
-            />
-          </div>
-          <label className="flex items-center gap-2 text-xs text-[var(--fg-muted)] sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={breakEven}
-              onChange={(e) => setBreakEven(e.target.checked)}
-              disabled={!connected}
-            />
-            Break even (tag order for SL→entry handling)
-          </label>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="exec-risk">Risk per trade (%)</Label>
-            <Input
-              id="exec-risk"
-              value={riskPct}
-              onChange={(e) => setRiskPct(e.target.value)}
-              disabled={!connected}
-            />
-            <p className="text-xs text-[var(--fg-subtle)]">
-              {sizingMode === "percentage_risk"
-                ? `Risk budget ≈ ${positionSizeHint()} · SL distance ${
-                    slDist != null ? formatNumber(slDist, 2) : "—"
-                  }`
-                : `Fixed lot ${volume} · risk budget reference ≈ ${positionSizeHint()}`}
-            </p>
-          </div>
+
+          {!dense ? (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="exec-trail" className="text-[11px]">Trailing</Label>
+                <Input
+                  id="exec-trail"
+                  className="h-9"
+                  value={trailingStop}
+                  onChange={(e) => setTrailingStop(e.target.value)}
+                  placeholder="points"
+                  disabled={!connected}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="exec-comment" className="text-[11px]">Comment</Label>
+                <Input
+                  id="exec-comment"
+                  className="h-9"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  disabled={!connected}
+                  maxLength={24}
+                />
+              </div>
+              <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--fg-muted)]">
+                <input
+                  type="checkbox"
+                  checked={breakEven}
+                  onChange={(e) => setBreakEven(e.target.checked)}
+                  disabled={!connected}
+                />
+                Break even tag
+              </label>
+            </>
+          ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs sm:grid-cols-4">
-          <Est label="Spread" value={Number.isFinite(spread) ? formatNumber(spread, 5) : "—"} />
-          <Est label="Margin required" value={margin === "—" ? "—" : formatMaybeMoney(margin)} />
-          <Est label="Est. commission" value={commission} />
-          <Est label="Est. swap" value={swap} />
-          <Est label="Position size" value={volume} />
-          <Est label="Est. profit" value={estProfit === "—" ? "—" : formatMaybeMoney(estProfit)} />
-          <Est
-            label="Validation"
-            value={
-              validation
-                ? validation.valid
-                  ? "Valid"
-                  : "Invalid"
-                : "—"
-            }
-          />
-          <Est
-            label="Safety"
-            value={lastCheck ? str(lastCheck.decision) : "—"}
-          />
-        </div>
+        {!dense ? (
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs sm:grid-cols-4">
+            <Est label="Est. commission" value={commission} />
+            <Est label="Est. swap" value={swap} />
+            <Est label="Est. profit" value={estProfit === "—" ? "—" : formatMaybeMoney(estProfit)} />
+            <Est
+              label="Validation"
+              value={
+                validation ? (validation.valid ? "Valid" : "Invalid") : "—"
+              }
+            />
+          </div>
+        ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button
             variant="secondary"
+            className="h-9"
             disabled={!connected || busy}
             onClick={() => void runSafety()}
           >
-            Validate & risk-check
+            Validate
           </Button>
           <Button
+            className="h-9"
             disabled={!connected || busy}
             onClick={() => {
               setConfirmMode("ticket");
               setConfirmOpen(true);
             }}
           >
-            Submit via gateway
+            Submit
           </Button>
         </div>
-        <p className="text-[11px] text-[var(--fg-subtle)]">
-          Live <code>order_send</code> remains gated by server <code>EXECUTION_ENABLED</code>. Stop
-          limit uses the backend <code>stop_limit</code> order type when validation accepts it.
-        </p>
-      </CardContent>
+      </div>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -822,15 +826,15 @@ export const ExecutionOrderTicket = forwardRef<
         busy={busy}
         onConfirm={submitLive}
       />
-    </Card>
+    </div>
   );
 });
 
 function Est({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[var(--fg-subtle)]">{label}</p>
-      <p className="tabular font-medium text-[var(--fg)]">{value}</p>
+      <p className="text-[10px] text-[var(--fg-subtle)]">{label}</p>
+      <p className="tabular text-[11px] font-medium text-[var(--fg)]">{value}</p>
     </div>
   );
 }

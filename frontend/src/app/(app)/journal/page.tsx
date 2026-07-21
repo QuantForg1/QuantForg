@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
  * Journal desk hub — session memory surfaces.
  * Primary live broker trade ledger lives at /journal/orders.
  * Institutional analytics live at /journal/analytics.
- * Trade replay opens inside order details.
+ * Trade replay lives at /trade-replay; desk analytics at /analytics.
  */
 export default function JournalPage() {
   return (
@@ -22,8 +22,7 @@ export default function JournalPage() {
         </h1>
         <p className="mt-2 text-sm text-[var(--fg-muted)]">
           Live broker history and desk analytics. Orders History and Institutional Analytics
-          read MetaTrader deals through the Execution Gateway — never mock fills. Trade replay
-          lives inside order details.
+          read MetaTrader deals through the Execution Gateway — never mock fills.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -53,14 +52,33 @@ export default function JournalPage() {
             Open analytics
           </Button>
         </Link>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] p-5 opacity-90 sm:col-span-2">
-          <PlayCircle className="mb-3 h-5 w-5 text-[var(--fg-subtle)]" />
-          <h2 className="text-sm font-medium text-[var(--fg)]">Trade replay</h2>
+        <Link
+          href="/trade-replay"
+          className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] p-5 transition-colors hover:border-[var(--accent)]"
+        >
+          <PlayCircle className="mb-3 h-5 w-5 text-[var(--accent)]" />
+          <h2 className="text-sm font-medium text-[var(--fg)]">Trade Replay</h2>
           <p className="mt-1 text-xs text-[var(--fg-muted)]">
-            Immutable execution audit stages open from Orders History → Details. Chart candle
-            replay stays Not available without stored bar paths.
+            Immutable execution audit stages from the Execution Audit Engine. Chart candle replay
+            stays Not available without stored bar paths.
           </p>
-        </div>
+          <Button type="button" size="sm" className="mt-4" variant="outline">
+            Open replay
+          </Button>
+        </Link>
+        <Link
+          href="/analytics"
+          className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] p-5 transition-colors hover:border-[var(--accent)]"
+        >
+          <LineChart className="mb-3 h-5 w-5 text-[var(--accent)]" />
+          <h2 className="text-sm font-medium text-[var(--fg)]">Performance Analytics</h2>
+          <p className="mt-1 text-xs text-[var(--fg-muted)]">
+            Win rate, expectancy, profit factor, and return distribution across live and paper fills.
+          </p>
+          <Button type="button" size="sm" className="mt-4" variant="outline">
+            Open desk analytics
+          </Button>
+        </Link>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-panel)] p-5 opacity-90 sm:col-span-2">
           <BookOpen className="mb-3 h-5 w-5 text-[var(--fg-subtle)]" />
           <h2 className="text-sm font-medium text-[var(--fg)]">Narrative journal</h2>
