@@ -40,7 +40,8 @@ export default function AutoTradingPage() {
     refetchInterval: 30_000,
   });
 
-  const rows = asList(auditQ.data?.items ?? auditQ.data)
+  const auditPayload = asRecord(auditQ.data);
+  const rows = asList(auditPayload.entries ?? auditPayload.items ?? auditQ.data)
     .map(asRecord)
     .slice(0, 30);
 
