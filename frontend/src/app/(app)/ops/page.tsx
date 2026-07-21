@@ -11,6 +11,7 @@ import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives
 import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
 import { PageMotion } from "@/components/desk/motion";
 import { IteControlCenter } from "@/components/ops/ite-control-center";
+import { AutoTradeControls } from "@/components/ops/auto-trade-controls";
 import { IteReliabilityPanel } from "@/components/ops/ite-reliability-panel";
 import { IteCertificationPanel } from "@/components/ops/ite-certification-panel";
 import { Rc1TelemetryPanel } from "@/components/ops/rc1-telemetry-panel";
@@ -150,9 +151,10 @@ export default function OpsPage() {
         description="Institutional control plane, system health, and admin monitoring."
       />
 
-      <div className="mb-6">
+      <div className="mb-6 space-y-4">
         <Rc1TelemetryPanel />
         <IteControlCenter />
+        <AutoTradeControls />
       </div>
 
       <div className="mb-6">

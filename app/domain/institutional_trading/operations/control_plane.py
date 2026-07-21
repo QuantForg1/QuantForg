@@ -10,6 +10,12 @@ from threading import RLock
 from typing import Any
 from uuid import UUID
 
+from app.domain.institutional_trading.auto_trading import (
+    AutoTradeLiveFacts,
+    AutoTradePolicy,
+    AutoTradeSafetyResult,
+    evaluate_auto_trade_safety,
+)
 from app.domain.institutional_trading.operations.alerts import AlertService
 from app.domain.institutional_trading.operations.audit import AuditLog
 from app.domain.institutional_trading.operations.config_store import ConfigVersionStore
@@ -28,6 +34,7 @@ from app.domain.institutional_trading.operations.models import (
     OpsPermission,
 )
 from app.domain.institutional_trading.operations.runbooks import RunbookCatalog
+from app.domain.trading.gold_only import GOLD_SYMBOL
 
 
 class PermissionDenied(PermissionError):
@@ -54,6 +61,15 @@ class OperationsControlPlane:
     max_daily_loss_pct: Decimal = Decimal("3.0")
     max_open_trades: int = 1
     daily_loss_exceeded: bool = False
+    auto_trading_enabled: bool = False
+    allowed_sessions: tuple[str, ...] = (
+        "london",
+        "new_york",
+        "london_ny_overlap",
+    )
+    allowed_symbols: tuple[str, ...] = (GOLD_SYMBOL,)
+    max_spread: Decimal = Decimal("2.00")
+    news_filter_enabled: bool = False
 
     _lock: RLock = field(default_factory=RLock, repr=False)
     _initialized: bool = field(default=False, repr=False)
@@ -316,6 +332,155 @@ class OperationsControlPlane:
             now=now,
         )
 
+    def auto_trade_policy(self) -> AutoTradePolicy:
+        with self._lock:
+            return AutoTradePolicy(
+                enabled=self.auto_trading_enabled,
+                max_open_positions=self.max_open_trades,
+                risk_per_trade_pct=self.risk_per_trade_pct,
+                max_daily_loss_pct=self.max_daily_loss_pct,
+                allowed_sessions=self.allowed_sessions,
+                allowed_symbols=self.allowed_symbols,
+                max_spread=self.max_spread,
+                news_filter_enabled=self.news_filter_enabled,
+            )
+
+    def update_auto_trade_controls(
+        self,
+        operator: OperatorIdentity,
+        *,
+        enabled: bool | None = None,
+        max_open_positions: int | None = None,
+        risk_per_trade_pct: Decimal | None = None,
+        max_daily_loss_pct: Decimal | None = None,
+        allowed_sessions: tuple[str, ...] | None = None,
+        allowed_symbols: tuple[str, ...] | None = None,
+        max_spread: Decimal | None = None,
+        news_filter_enabled: bool | None = None,
+        reason: str,
+        now: datetime | None = None,
+    ) -> AutoTradePolicy:
+        """Update auto-trade controls. Does not bypass risk / kill / mode gates."""
+        self.require(operator, OpsPermission.CHANGE_RISK_CONFIG)
+        with self._lock:
+            old = self.auto_trade_policy().to_dict()
+            if enabled is not None:
+                self.auto_trading_enabled = enabled
+            if max_open_positions is not None:
+                if max_open_positions < 1:
+                    raise ValueError("max_open_positions must be >= 1")
+                self.max_open_trades = max_open_positions
+            if risk_per_trade_pct is not None:
+                if risk_per_trade_pct <= 0 or risk_per_trade_pct > Decimal("5"):
+                    raise ValueError("risk_per_trade_pct must be in (0, 5]")
+                self.risk_per_trade_pct = risk_per_trade_pct
+            if max_daily_loss_pct is not None:
+                if max_daily_loss_pct <= 0 or max_daily_loss_pct > Decimal("20"):
+                    raise ValueError("max_daily_loss_pct must be in (0, 20]")
+                self.max_daily_loss_pct = max_daily_loss_pct
+            if allowed_sessions is not None:
+                cleaned = tuple(
+                    s.strip().lower() for s in allowed_sessions if s and s.strip()
+                )
+                if not cleaned:
+                    raise ValueError("allowed_sessions must not be empty")
+                self.allowed_sessions = cleaned
+            if allowed_symbols is not None:
+                cleaned_sym = tuple(
+                    s.strip().upper() for s in allowed_symbols if s and s.strip()
+                )
+                if not cleaned_sym:
+                    raise ValueError("allowed_symbols must not be empty")
+                self.allowed_symbols = cleaned_sym
+            if max_spread is not None:
+                if max_spread <= 0:
+                    raise ValueError("max_spread must be > 0")
+                self.max_spread = max_spread
+            if news_filter_enabled is not None:
+                self.news_filter_enabled = news_filter_enabled
+            policy = AutoTradePolicy(
+                enabled=self.auto_trading_enabled,
+                max_open_positions=self.max_open_trades,
+                risk_per_trade_pct=self.risk_per_trade_pct,
+                max_daily_loss_pct=self.max_daily_loss_pct,
+                allowed_sessions=self.allowed_sessions,
+                allowed_symbols=self.allowed_symbols,
+                max_spread=self.max_spread,
+                news_filter_enabled=self.news_filter_enabled,
+            )
+        self.audit.record(
+            operator=operator,
+            action="auto_trade_controls_change",
+            old_value=str(old),
+            new_value=str(policy.to_dict()),
+            reason=reason,
+            now=now,
+        )
+        return policy
+
+    def evaluate_auto_trading(
+        self, facts: AutoTradeLiveFacts
+    ) -> AutoTradeSafetyResult:
+        """Evaluate whether auto-submit is allowed. Fail-closed."""
+        with self._lock:
+            policy = AutoTradePolicy(
+                enabled=self.auto_trading_enabled,
+                max_open_positions=self.max_open_trades,
+                risk_per_trade_pct=self.risk_per_trade_pct,
+                max_daily_loss_pct=self.max_daily_loss_pct,
+                allowed_sessions=self.allowed_sessions,
+                allowed_symbols=self.allowed_symbols,
+                max_spread=self.max_spread,
+                news_filter_enabled=self.news_filter_enabled,
+            )
+            merged = AutoTradeLiveFacts(
+                gateway_connected=facts.gateway_connected,
+                broker_connected=facts.broker_connected,
+                market_data_live=facts.market_data_live,
+                risk_engine_pass=facts.risk_engine_pass,
+                risk_engine_reasons=facts.risk_engine_reasons,
+                account_trading_enabled=facts.account_trading_enabled,
+                mt5_autotrading_enabled=facts.mt5_autotrading_enabled,
+                symbol=facts.symbol,
+                symbol_tradable=facts.symbol_tradable,
+                margin_available=facts.margin_available,
+                no_broker_restrictions=facts.no_broker_restrictions,
+                open_positions=facts.open_positions,
+                session=facts.session,
+                spread=facts.spread,
+                news_blocked=facts.news_blocked,
+                news_reason=facts.news_reason,
+                daily_loss_exceeded=self.daily_loss_exceeded
+                or facts.daily_loss_exceeded,
+                emergency_stop=self.kill_switch_armed or facts.emergency_stop,
+                ops_mode=self.mode.value,
+                execution_enabled=facts.execution_enabled,
+            )
+        return evaluate_auto_trade_safety(policy, merged)
+
+    def emergency_stop(
+        self,
+        operator: OperatorIdentity,
+        *,
+        reason: str,
+        confirmed: bool = True,
+        now: datetime | None = None,
+    ) -> None:
+        """Arm kill switch and disable auto trading (Emergency STOP)."""
+        self.arm_kill_switch(operator, reason=reason, confirmed=confirmed, now=now)
+        with self._lock:
+            was = self.auto_trading_enabled
+            self.auto_trading_enabled = False
+        if was:
+            self.audit.record(
+                operator=operator,
+                action="auto_trading_emergency_off",
+                old_value="True",
+                new_value="False",
+                reason=reason,
+                now=now,
+            )
+
     # --- Health / alerts ---------------------------------------------------
 
     def update_health(
@@ -431,6 +596,24 @@ class OperationsControlPlane:
                 "active_config": active.to_dict() if active else None,
                 "oms_orders_allowed": self.oms_orders_allowed(),
                 "pme_modifications_allowed": self.pme_modifications_allowed(),
+                "auto_trading": {
+                    "enabled": self.auto_trading_enabled,
+                    "status": (
+                        "armed"
+                        if self.auto_trading_enabled and not self.kill_switch_armed
+                        else "off"
+                    ),
+                    "policy": {
+                        "enabled": self.auto_trading_enabled,
+                        "max_open_positions": self.max_open_trades,
+                        "risk_per_trade_pct": str(self.risk_per_trade_pct),
+                        "max_daily_loss_pct": str(self.max_daily_loss_pct),
+                        "allowed_sessions": list(self.allowed_sessions),
+                        "allowed_symbols": list(self.allowed_symbols),
+                        "max_spread": str(self.max_spread),
+                        "news_filter_enabled": self.news_filter_enabled,
+                    },
+                },
                 "risk": {
                     "risk_per_trade_pct": str(self.risk_per_trade_pct),
                     "max_daily_loss_pct": str(self.max_daily_loss_pct),

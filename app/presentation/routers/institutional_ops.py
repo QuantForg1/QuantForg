@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.application.dto.auth import AuthUserDTO
 from app.domain.enums.user import UserRole
+from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
 from app.domain.institutional_trading.operations.control_plane import (
     PermissionDenied,
     get_control_plane,
@@ -21,6 +22,7 @@ from app.domain.institutional_trading.operations.models import (
     OpsExecutionMode,
 )
 from app.presentation.dependencies.auth import require_roles
+from core.config.settings import get_settings
 
 router = APIRouter(prefix="/ite/ops", tags=["ite-operations"])
 
@@ -71,6 +73,37 @@ class RiskBody(ConfirmBody):
     risk_per_trade_pct: str
     max_daily_loss_pct: str
     max_open_trades: int
+
+
+class AutoTradeControlsBody(ConfirmBody):
+    enabled: bool | None = None
+    max_open_positions: int | None = None
+    risk_per_trade_pct: str | None = None
+    max_daily_loss_pct: str | None = None
+    allowed_sessions: list[str] | None = None
+    allowed_symbols: list[str] | None = None
+    max_spread: str | None = None
+    news_filter_enabled: bool | None = None
+
+
+class AutoTradeEvaluateBody(BaseModel):
+    gateway_connected: bool = False
+    broker_connected: bool = False
+    market_data_live: bool = False
+    risk_engine_pass: bool = False
+    risk_engine_reasons: list[str] = Field(default_factory=list)
+    account_trading_enabled: bool = False
+    mt5_autotrading_enabled: bool = False
+    symbol: str = "XAUUSD"
+    symbol_tradable: bool = False
+    margin_available: bool = False
+    no_broker_restrictions: bool = False
+    open_positions: int = 0
+    session: str = "off_hours"
+    spread: str | None = None
+    news_blocked: bool = False
+    news_reason: str = ""
+    daily_loss_exceeded: bool = False
 
 
 class HealthBody(BaseModel):
@@ -327,3 +360,143 @@ def execute_runbook(
         return plane.execute_runbook(op, runbook_id)
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.get("/auto-trading")
+def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
+    """Auto Trading status + controls. Fail-closed evaluation without live facts."""
+    plane = get_control_plane()
+    settings = get_settings()
+    health = plane.health.latest()
+    facts = AutoTradeLiveFacts(
+        gateway_connected=bool(health and health.gateway_available),
+        broker_connected=bool(health and health.mt5_connected),
+        market_data_live=False,
+        risk_engine_pass=False,
+        account_trading_enabled=False,
+        mt5_autotrading_enabled=False,
+        symbol_tradable=False,
+        margin_available=False,
+        no_broker_restrictions=False,
+        emergency_stop=plane.kill_switch_armed,
+        ops_mode=plane.mode.value,
+        execution_enabled=bool(getattr(settings, "execution_enabled", False)),
+    )
+    safety = plane.evaluate_auto_trading(facts)
+    return {
+        "status": safety.status,
+        "allowed": safety.allowed,
+        "failed_reasons": list(safety.failed_reasons),
+        "conditions": [c.to_dict() for c in safety.conditions],
+        "policy": plane.auto_trade_policy().to_dict(),
+        "emergency_stop": plane.kill_switch_armed,
+        "execution_enabled": bool(getattr(settings, "execution_enabled", False)),
+        "ops_mode": plane.mode.value,
+    }
+
+
+@router.post("/auto-trading")
+def update_auto_trading(
+    body: AutoTradeControlsBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="confirmation required")
+    plane = get_control_plane()
+    op = _operator(user, request, x_forwarded_for)
+    try:
+        policy = plane.update_auto_trade_controls(
+            op,
+            enabled=body.enabled,
+            max_open_positions=body.max_open_positions,
+            risk_per_trade_pct=(
+                Decimal(body.risk_per_trade_pct)
+                if body.risk_per_trade_pct is not None
+                else None
+            ),
+            max_daily_loss_pct=(
+                Decimal(body.max_daily_loss_pct)
+                if body.max_daily_loss_pct is not None
+                else None
+            ),
+            allowed_sessions=(
+                tuple(body.allowed_sessions)
+                if body.allowed_sessions is not None
+                else None
+            ),
+            allowed_symbols=(
+                tuple(body.allowed_symbols)
+                if body.allowed_symbols is not None
+                else None
+            ),
+            max_spread=(
+                Decimal(body.max_spread) if body.max_spread is not None else None
+            ),
+            news_filter_enabled=body.news_filter_enabled,
+            reason=body.reason,
+        )
+    except PermissionDenied as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"policy": policy.to_dict()}
+
+
+@router.post("/auto-trading/evaluate")
+def evaluate_auto_trading(
+    body: AutoTradeEvaluateBody,
+    _user: OperatorUser,
+) -> dict[str, Any]:
+    """Evaluate live safety conditions and return exact failure reasons."""
+    plane = get_control_plane()
+    settings = get_settings()
+    safety = plane.evaluate_auto_trading(
+        AutoTradeLiveFacts(
+            gateway_connected=body.gateway_connected,
+            broker_connected=body.broker_connected,
+            market_data_live=body.market_data_live,
+            risk_engine_pass=body.risk_engine_pass,
+            risk_engine_reasons=tuple(body.risk_engine_reasons),
+            account_trading_enabled=body.account_trading_enabled,
+            mt5_autotrading_enabled=body.mt5_autotrading_enabled,
+            symbol=body.symbol,
+            symbol_tradable=body.symbol_tradable,
+            margin_available=body.margin_available,
+            no_broker_restrictions=body.no_broker_restrictions,
+            open_positions=body.open_positions,
+            session=body.session,
+            spread=Decimal(body.spread) if body.spread is not None else None,
+            news_blocked=body.news_blocked,
+            news_reason=body.news_reason,
+            daily_loss_exceeded=body.daily_loss_exceeded,
+            emergency_stop=plane.kill_switch_armed,
+            ops_mode=plane.mode.value,
+            execution_enabled=bool(getattr(settings, "execution_enabled", False)),
+        )
+    )
+    return safety.to_dict()
+
+
+@router.post("/auto-trading/emergency-stop")
+def emergency_stop_auto_trading(
+    body: ConfirmBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    plane = get_control_plane()
+    op = _operator(user, request, x_forwarded_for)
+    try:
+        plane.emergency_stop(op, reason=body.reason, confirmed=body.confirmed)
+    except (PermissionDenied, ValueError) as exc:
+        raise HTTPException(
+            status_code=403 if isinstance(exc, PermissionDenied) else 400,
+            detail=str(exc),
+        ) from exc
+    return {
+        "emergency_stop": True,
+        "auto_trading_enabled": False,
+        "kill_switch": True,
+    }

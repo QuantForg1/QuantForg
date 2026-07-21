@@ -468,6 +468,28 @@ export const iteOpsApi = {
       method: "POST",
       body,
     }),
+  updateRisk: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/risk", {
+      method: "POST",
+      body,
+    }),
+  autoTrading: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/auto-trading"),
+  updateAutoTrading: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/auto-trading", {
+      method: "POST",
+      body,
+    }),
+  evaluateAutoTrading: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/auto-trading/evaluate", {
+      method: "POST",
+      body,
+    }),
+  emergencyStop: (reason: string, confirmed: boolean) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/auto-trading/emergency-stop", {
+      method: "POST",
+      body: { reason, confirmed },
+    }),
 };
 
 /** Phase G — Production Reliability & Observability */

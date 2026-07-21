@@ -43,6 +43,7 @@ class BridgeAbortReason(StrEnum):
     OMS_FAILURE = "oms_failure"
     GATEWAY_FAILURE = "gateway_failure"
     MT5_REJECTION = "mt5_rejection"
+    AUTO_TRADING_BLOCKED = "auto_trading_blocked"
     NONE = "none"
 
 
@@ -99,6 +100,14 @@ class ExecutionBridgeContext:
     login: int | None = None
     user_id: UUID = field(default_factory=uuid4)
     request_id: str | None = None
+    # Live auto-trade safety facts (optional — fail-closed when omitted in LIVE)
+    gateway_connected: bool | None = None
+    broker_connected: bool | None = None
+    market_data_live: bool | None = None
+    account_trading_enabled: bool | None = None
+    mt5_autotrading_enabled: bool | None = None
+    symbol_tradable: bool | None = None
+    no_broker_restrictions: bool | None = None
 
     @property
     def session_valid(self) -> bool:

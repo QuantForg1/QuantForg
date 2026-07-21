@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from app.application.services.institutional_execution_engine import parse_order_intent
 from app.domain.entities.mt5_order import OrderIntent
+from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.decision_models import (
     DecisionAction,
@@ -236,6 +237,22 @@ class ExecutionBridge:
                 t0=t0,
             )
 
+        # 7b. Auto-trading safety gate (LIVE/CANARY only — never bypass)
+        if mode is not ExecutionMode.SHADOW and self.ops_plane is not None:
+            safety = self.ops_plane.evaluate_auto_trading(
+                self._auto_trade_facts(context)
+            )
+            if not safety.allowed:
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.AUTO_TRADING_BLOCKED,
+                    comment="; ".join(safety.failed_reasons)
+                    or "Auto Trading safety gate blocked",
+                    t0=t0,
+                )
+
         # 8. Kill switch
         if self.kill_switch.enabled:
             return self._abort(
@@ -447,6 +464,46 @@ class ExecutionBridge:
             slippage=self.config.slippage,
             magic=self.config.magic,
             comment=comment,
+        )
+
+    def _auto_trade_facts(self, context: ExecutionBridgeContext) -> AutoTradeLiveFacts:
+        """Map bridge context → safety-gate facts (None → fail-closed False)."""
+        session = getattr(context.snapshot.session, "session", None)
+        session_val = str(getattr(session, "value", None) or session or "off_hours")
+        news = context.snapshot.news
+        free = context.account.free_margin
+        margin_ok = free is None or free > 0
+
+        def _flag(value: bool | None, *, fallback: bool = False) -> bool:
+            return fallback if value is None else value
+
+        return AutoTradeLiveFacts(
+            gateway_connected=_flag(context.gateway_connected),
+            broker_connected=_flag(
+                context.broker_connected, fallback=context.connected
+            ),
+            market_data_live=_flag(
+                context.market_data_live, fallback=context.market_open
+            ),
+            risk_engine_pass=context.risk_allowed,
+            risk_engine_reasons=context.risk_reasons,
+            account_trading_enabled=_flag(context.account_trading_enabled),
+            mt5_autotrading_enabled=_flag(context.mt5_autotrading_enabled),
+            symbol=context.snapshot.symbol,
+            symbol_tradable=_flag(context.symbol_tradable),
+            margin_available=margin_ok,
+            no_broker_restrictions=_flag(context.no_broker_restrictions),
+            open_positions=context.account.open_positions,
+            session=session_val,
+            spread=context.spread,
+            news_blocked=bool(news.blocked),
+            news_reason=str(news.reason or ""),
+            daily_loss_exceeded=False,
+            emergency_stop=False,
+            ops_mode=(
+                self.ops_plane.mode.value if self.ops_plane is not None else "SHADOW"
+            ),
+            execution_enabled=context.execution_enabled,
         )
 
     def _mark_executed(self, decision_hash: str) -> None:

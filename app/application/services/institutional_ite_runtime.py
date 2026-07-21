@@ -32,6 +32,7 @@ from app.application.services.institutional_ops_guards import (
 from app.application.services.institutional_position_management import (
     InstitutionalPositionManagement,
 )
+from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
 from app.domain.institutional_trading.decision_models import AccountRiskState
 from app.domain.institutional_trading.execution.models import (
     ExecutionBridgeContext,
@@ -53,6 +54,7 @@ from app.domain.institutional_trading.reliability.platform import (
     get_reliability_platform,
 )
 from app.domain.institutional_trading.reliability.tracing import new_trace_id
+from core.config.settings import get_settings
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -155,11 +157,163 @@ class InstitutionalIteRuntime:
                 self._last_cycle = result
             return result
 
+        return self._run_cycle(
+            snapshot=snapshot,
+            account=account,
+            health=health,
+            execution_enabled=False,
+            force_shadow=True,
+        )
+
+    def run_auto_cycle(
+        self,
+        *,
+        snapshot: Any | None = None,
+        account: AccountRiskState | None = None,
+        gateway_connected: bool = False,
+        broker_connected: bool = False,
+        market_data_live: bool = False,
+        account_trading_enabled: bool = False,
+        mt5_autotrading_enabled: bool = False,
+        symbol_tradable: bool = False,
+        no_broker_restrictions: bool = False,
+        risk_allowed: bool = False,
+        risk_reasons: tuple[str, ...] = (),
+    ) -> ShadowCycleResult:
+        """CANARY/LIVE auto-trade cycle — submits only when safety gate passes."""
+        health = self.tick_health()
+        if self.plane.mode is OpsExecutionMode.SHADOW:
+            return self.run_shadow_cycle(snapshot=snapshot, account=account)
+
+        live_probes: dict[str, Any] = {}
+        if isinstance(health, dict):
+            raw_probes = health.get("live_probes") or {}
+            if isinstance(raw_probes, dict):
+                live_probes = raw_probes
+        gw = bool(live_probes.get("gateway", gateway_connected))
+        mt5 = bool(live_probes.get("mt5", broker_connected))
+
+        settings = get_settings()
+        execution_on = bool(getattr(settings, "execution_enabled", False))
+
+        if snapshot is None or account is None:
+            safety = self.plane.evaluate_auto_trading(
+                AutoTradeLiveFacts(
+                    gateway_connected=gw,
+                    broker_connected=mt5,
+                    market_data_live=market_data_live,
+                    risk_engine_pass=risk_allowed,
+                    risk_engine_reasons=risk_reasons,
+                    account_trading_enabled=account_trading_enabled,
+                    mt5_autotrading_enabled=mt5_autotrading_enabled,
+                    symbol_tradable=symbol_tradable,
+                    margin_available=True,
+                    no_broker_restrictions=no_broker_restrictions,
+                    ops_mode=self.plane.mode.value,
+                    execution_enabled=execution_on,
+                )
+            )
+            result = ShadowCycleResult(
+                ok=True,
+                trace_id=None,
+                mode=self.plane.mode.value,
+                detail=(
+                    "no snapshot/account — "
+                    + (
+                        "Auto Trading Enabled"
+                        if safety.allowed
+                        else "; ".join(safety.failed_reasons) or "Disabled"
+                    )
+                ),
+                health=health.get("health") if isinstance(health, dict) else None,
+            )
+            with self._lock:
+                self._last_cycle = result
+                self._cycles += 1
+            return result
+
+        free = account.free_margin
+        margin_ok = free is None or free > 0
+        session = getattr(snapshot.session, "session", None)
+        session_val = str(getattr(session, "value", None) or session or "off_hours")
+        news = snapshot.news
+        safety = self.plane.evaluate_auto_trading(
+            AutoTradeLiveFacts(
+                gateway_connected=gw,
+                broker_connected=mt5,
+                market_data_live=market_data_live or bool(account.market_open),
+                risk_engine_pass=risk_allowed,
+                risk_engine_reasons=risk_reasons,
+                account_trading_enabled=account_trading_enabled,
+                mt5_autotrading_enabled=mt5_autotrading_enabled,
+                symbol=getattr(snapshot, "symbol", "XAUUSD"),
+                symbol_tradable=symbol_tradable,
+                margin_available=margin_ok,
+                no_broker_restrictions=no_broker_restrictions,
+                open_positions=account.open_positions,
+                session=session_val,
+                spread=getattr(snapshot, "spread", None),
+                news_blocked=bool(news.blocked),
+                news_reason=str(news.reason or ""),
+                daily_loss_exceeded=self.plane.daily_loss_exceeded,
+                emergency_stop=self.plane.kill_switch_armed,
+                ops_mode=self.plane.mode.value,
+                execution_enabled=execution_on,
+            )
+        )
+        if not safety.allowed:
+            result = ShadowCycleResult(
+                ok=True,
+                trace_id=None,
+                mode=self.plane.mode.value,
+                detail="; ".join(safety.failed_reasons) or "Auto Trading Disabled",
+                health=health.get("health") if isinstance(health, dict) else None,
+            )
+            with self._lock:
+                self._last_cycle = result
+                self._cycles += 1
+            return result
+
+        return self._run_cycle(
+            snapshot=snapshot,
+            account=account,
+            health=health,
+            execution_enabled=execution_on,
+            force_shadow=False,
+            gateway_connected=gw,
+            broker_connected=mt5,
+            market_data_live=market_data_live or bool(account.market_open),
+            account_trading_enabled=account_trading_enabled,
+            mt5_autotrading_enabled=mt5_autotrading_enabled,
+            symbol_tradable=symbol_tradable,
+            no_broker_restrictions=no_broker_restrictions,
+            risk_allowed=risk_allowed,
+            risk_reasons=risk_reasons,
+        )
+
+    def _run_cycle(
+        self,
+        *,
+        snapshot: Any | None,
+        account: AccountRiskState | None,
+        health: dict[str, Any],
+        execution_enabled: bool,
+        force_shadow: bool,
+        gateway_connected: bool = False,
+        broker_connected: bool = False,
+        market_data_live: bool = False,
+        account_trading_enabled: bool = False,
+        mt5_autotrading_enabled: bool = False,
+        symbol_tradable: bool = False,
+        no_broker_restrictions: bool = False,
+        risk_allowed: bool = True,
+        risk_reasons: tuple[str, ...] = (),
+    ) -> ShadowCycleResult:
         if snapshot is None or account is None:
             result = ShadowCycleResult(
                 ok=True,
                 trace_id=None,
-                mode=OpsExecutionMode.SHADOW.value,
+                mode=self.plane.mode.value,
                 detail="no snapshot/account — health tick only",
                 health=health.get("health") if isinstance(health, dict) else None,
             )
@@ -196,16 +350,26 @@ class InstitutionalIteRuntime:
             expected_input_hash=decision.input_hash,
             now=decision.as_of,
             user_id=self.user_id,
-            execution_enabled=False,  # hard shadow safety
-            risk_allowed=True,
-            risk_reasons=(),
-            connected=True,
+            execution_enabled=False if force_shadow else execution_enabled,
+            risk_allowed=risk_allowed,
+            risk_reasons=risk_reasons,
+            connected=broker_connected or force_shadow,
             login=None,
-            request_id=f"shadow_{tid[:12]}",
+            request_id=f"{'shadow' if force_shadow else 'auto'}_{tid[:12]}",
+            gateway_connected=True if force_shadow else gateway_connected,
+            broker_connected=True if force_shadow else broker_connected,
+            market_data_live=True if force_shadow else market_data_live,
+            account_trading_enabled=(
+                True if force_shadow else account_trading_enabled
+            ),
+            mt5_autotrading_enabled=(
+                True if force_shadow else mt5_autotrading_enabled
+            ),
+            symbol_tradable=True if force_shadow else symbol_tradable,
+            no_broker_restrictions=True if force_shadow else no_broker_restrictions,
         )
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
 
-        # PME: evaluate tracked positions with shared kill switch
         for ticket in list(self.position_management.engine._positions.keys()):
             pos = self.position_management.engine.get(ticket)
             if pos is None:
@@ -226,45 +390,72 @@ class InstitutionalIteRuntime:
         self.reliability.timeline.append(
             TimelineEvent(
                 timestamp=datetime.now(UTC),
-                category="shadow",
+                category="shadow" if force_shadow else "auto",
                 action="cycle",
                 detail=(
                     f"action={decision.action.value} "
-                    f"forwarded={bridge_result.forwarded_to_oms}"
+                    f"forwarded={bridge_result.forwarded_to_oms} "
+                    f"abort={bridge_result.abort_reason.value}"
                 ),
                 severity="INFO",
                 trace_id=tid,
             )
         )
 
+        if force_shadow:
+            result = ShadowCycleResult(
+                ok=not bridge_result.forwarded_to_oms,
+                trace_id=tid,
+                mode=OpsExecutionMode.SHADOW.value,
+                decision_action=decision.action.value,
+                forwarded_to_oms=bridge_result.forwarded_to_oms,
+                detail="shadow cycle complete",
+                health=health.get("health") if isinstance(health, dict) else None,
+            )
+            with self._lock:
+                self._last_cycle = result
+                self._cycles += 1
+            if bridge_result.forwarded_to_oms:
+                logger.error(
+                    "shadow_cycle_forwarded_to_oms",
+                    trace_id=tid,
+                    detail="BUG — shadow must never call OMS",
+                )
+            return result
+
         result = ShadowCycleResult(
-            ok=not bridge_result.forwarded_to_oms,
+            ok=True,
             trace_id=tid,
-            mode=OpsExecutionMode.SHADOW.value,
+            mode=self.plane.mode.value,
             decision_action=decision.action.value,
             forwarded_to_oms=bridge_result.forwarded_to_oms,
-            detail="shadow cycle complete",
+            detail=(
+                "auto cycle forwarded"
+                if bridge_result.forwarded_to_oms
+                else (
+                    bridge_result.journal_entry.comment
+                    or bridge_result.abort_reason.value
+                )
+            ),
             health=health.get("health") if isinstance(health, dict) else None,
         )
         with self._lock:
             self._last_cycle = result
             self._cycles += 1
-        if bridge_result.forwarded_to_oms:
-            logger.error(
-                "shadow_cycle_forwarded_to_oms",
-                trace_id=tid,
-                detail="BUG — shadow must never call OMS",
-            )
         return result
 
     def status(self) -> dict[str, Any]:
         with self._lock:
             last = self._last_cycle
             cycles = self._cycles
+        settings = get_settings()
         return {
             "mode": self.plane.mode.value,
             "kill_switch": self.plane.kill_switch_armed,
-            "execution_enabled_setting": False,
+            "auto_trading_enabled": self.plane.auto_trading_enabled,
+            "execution_enabled_setting": bool(
+                getattr(settings, "execution_enabled", False)
+            ),
             "bridge_mode": self.execution.bridge.effective_mode().value,
             "oms_orders_allowed": self.plane.oms_orders_allowed(),
             "cycles": cycles,
@@ -277,23 +468,25 @@ class InstitutionalIteRuntime:
         self._stop.set()
 
     async def run_forever(self) -> None:
-        """Background loop — health + optional shadow cycles."""
+        """Background loop — health + shadow or safe auto cycles."""
         logger.info(
-            "shadow_orchestrator_started",
+            "ite_orchestrator_started",
             interval_seconds=self.interval_seconds,
             mode=self.plane.mode.value,
         )
         while not self._stop.is_set():
             try:
-                self.run_shadow_cycle()
+                if self.plane.mode is OpsExecutionMode.SHADOW:
+                    self.run_shadow_cycle()
+                else:
+                    self.run_auto_cycle()
             except Exception as exc:
-                logger.exception("shadow_orchestrator_cycle_failed", error=str(exc))
-            # Interruptible sleep
+                logger.exception("ite_orchestrator_cycle_failed", error=str(exc))
             for _ in range(int(max(1, self.interval_seconds))):
                 if self._stop.is_set():
                     break
                 await asyncio.sleep(1)
-        logger.info("shadow_orchestrator_stopped")
+        logger.info("ite_orchestrator_stopped")
 
 
 def build_ite_runtime(
