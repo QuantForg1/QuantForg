@@ -490,6 +490,17 @@ export const iteOpsApi = {
       method: "POST",
       body: { reason, confirmed },
     }),
+  liveCertification: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/auto-trading/live-certification"),
+  liveCertificationAttempt: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/auto-trading/live-certification/attempt",
+      { method: "POST", body },
+    ),
+  liveCertificationReport: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/auto-trading/live-certification/report",
+    ),
 };
 
 /** Phase G — Production Reliability & Observability */

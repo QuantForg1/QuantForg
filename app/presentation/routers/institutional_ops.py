@@ -500,3 +500,160 @@ def emergency_stop_auto_trading(
         "auto_trading_enabled": False,
         "kill_switch": True,
     }
+
+
+@router.get("/auto-trading/live-certification")
+def live_certification_probe(_user: OperatorUser) -> dict[str, Any]:
+    """Step 1 probe — STOP with exact reasons when live conditions fail.
+
+    Never sends orders. Never fabricates broker fills.
+    """
+    from app.application.services.live_auto_trade_certification import (
+        get_live_cert_service,
+    )
+
+    svc = get_live_cert_service()
+    payload = svc.probe_local_environment()
+    last = svc.last_report()
+    payload["last_report"] = last.to_dict() if last is not None else None
+    return payload
+
+
+class LiveCertAttemptBody(BaseModel):
+    reason: str = Field(min_length=1)
+    confirmed: bool = False
+    # Live facts — caller must supply measured values; defaults fail-closed
+    gateway_connected: bool = False
+    broker_connected: bool = False
+    market_data_live: bool = False
+    risk_engine_pass: bool = False
+    risk_engine_reasons: list[str] = Field(default_factory=list)
+    account_trading_enabled: bool = False
+    mt5_autotrading_enabled: bool = False
+    symbol: str = "XAUUSD"
+    symbol_tradable: bool = False
+    margin_available: bool = False
+    no_broker_restrictions: bool = False
+    open_positions: int = 0
+    session: str = "off_hours"
+    spread: str | None = None
+    news_blocked: bool = False
+    news_reason: str = ""
+    daily_loss_exceeded: bool = False
+    mt5_logged_in: bool = False
+    exposure_pass: bool = False
+    drawdown_pass: bool = False
+    account_is_demo: bool = False
+    # Optional real trade evidence (omit unless broker returned real tickets)
+    trade: dict[str, Any] | None = None
+    stages_completed: dict[str, bool] = Field(default_factory=dict)
+
+
+@router.post("/auto-trading/live-certification/attempt")
+def live_certification_attempt(
+    body: LiveCertAttemptBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Attempt Demo certification. Refuses without real trade evidence.
+
+    Never auto-switches SHADOW→LIVE. On failure disables Auto Trading.
+    """
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="confirmation required")
+
+    from app.application.services.live_auto_trade_certification import (
+        get_live_cert_service,
+    )
+    from app.domain.institutional_trading.live_certification import LiveTradeEvidence
+
+    plane = get_control_plane()
+    op = _operator(user, request, x_forwarded_for)
+    settings = get_settings()
+    facts = AutoTradeLiveFacts(
+        gateway_connected=body.gateway_connected,
+        broker_connected=body.broker_connected,
+        market_data_live=body.market_data_live,
+        risk_engine_pass=body.risk_engine_pass,
+        risk_engine_reasons=tuple(body.risk_engine_reasons),
+        account_trading_enabled=body.account_trading_enabled,
+        mt5_autotrading_enabled=body.mt5_autotrading_enabled,
+        symbol=body.symbol,
+        symbol_tradable=body.symbol_tradable,
+        margin_available=body.margin_available,
+        no_broker_restrictions=body.no_broker_restrictions,
+        open_positions=body.open_positions,
+        session=body.session,
+        spread=Decimal(body.spread) if body.spread is not None else None,
+        news_blocked=body.news_blocked,
+        news_reason=body.news_reason,
+        daily_loss_exceeded=body.daily_loss_exceeded,
+        emergency_stop=plane.kill_switch_armed,
+        ops_mode=plane.mode.value,
+        execution_enabled=bool(getattr(settings, "execution_enabled", False)),
+    )
+
+    trade: LiveTradeEvidence | None = None
+    if body.trade is not None:
+        t = body.trade
+        try:
+            trade = LiveTradeEvidence(
+                broker=str(t.get("broker") or ""),
+                account_type=str(t.get("account_type") or ""),
+                symbol=str(t.get("symbol") or "XAUUSD"),
+                volume=Decimal(str(t.get("volume") or "0")),
+                ticket=int(t.get("ticket") or 0),
+                deal=int(t.get("deal") or 0),
+                entry=Decimal(str(t.get("entry") or "0")),
+                exit=(
+                    Decimal(str(t["exit"]))
+                    if t.get("exit") is not None
+                    else None
+                ),
+                profit_loss=(
+                    Decimal(str(t["profit_loss"]))
+                    if t.get("profit_loss") is not None
+                    else None
+                ),
+                execution_latency_ms=float(t.get("execution_latency_ms") or 0),
+                margin_used=(
+                    Decimal(str(t["margin_used"]))
+                    if t.get("margin_used") is not None
+                    else None
+                ),
+                risk_pct=Decimal(str(t.get("risk_pct") or "0")),
+                audit_id=str(t.get("audit_id") or ""),
+                position_closed=bool(t.get("position_closed")),
+                history_recorded=bool(t.get("history_recorded")),
+                analytics_recorded=bool(t.get("analytics_recorded")),
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400, detail=f"invalid trade evidence: {exc}"
+            ) from exc
+
+    report = get_live_cert_service().run_certification_attempt(
+        op,
+        facts=facts,
+        mt5_logged_in=body.mt5_logged_in,
+        exposure_pass=body.exposure_pass,
+        drawdown_pass=body.drawdown_pass,
+        account_is_demo=body.account_is_demo,
+        trade=trade,
+        stage_completed=body.stages_completed,
+        reason=body.reason,
+    )
+    return report.to_dict()
+
+
+@router.get("/auto-trading/live-certification/report")
+def live_certification_report(_user: OperatorUser) -> dict[str, Any]:
+    from app.application.services.live_auto_trade_certification import (
+        get_live_cert_service,
+    )
+
+    last = get_live_cert_service().last_report()
+    if last is None:
+        raise HTTPException(status_code=404, detail="no live certification report yet")
+    return last.to_dict()

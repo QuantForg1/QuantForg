@@ -12,6 +12,7 @@ import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status
 import { PageMotion } from "@/components/desk/motion";
 import { IteControlCenter } from "@/components/ops/ite-control-center";
 import { AutoTradeControls } from "@/components/ops/auto-trade-controls";
+import { LiveAutoTradeCertificationPanel } from "@/components/ops/live-auto-trade-certification";
 import { IteReliabilityPanel } from "@/components/ops/ite-reliability-panel";
 import { IteCertificationPanel } from "@/components/ops/ite-certification-panel";
 import { Rc1TelemetryPanel } from "@/components/ops/rc1-telemetry-panel";
@@ -155,6 +156,7 @@ export default function OpsPage() {
         <Rc1TelemetryPanel />
         <IteControlCenter />
         <AutoTradeControls />
+        <LiveAutoTradeCertificationPanel />
       </div>
 
       <div className="mb-6">
