@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { iteOpsApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
+import { cn } from "@/lib/utils";
 
 const SESSION_OPTIONS = [
   "london",
@@ -17,11 +18,47 @@ const SESSION_OPTIONS = [
   "sydney",
 ] as const;
 
+type RunState = "off" | "running" | "paused" | "stopped";
+
+const RUN_STATES: {
+  id: RunState;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    id: "off",
+    label: "OFF",
+    hint: "No automatic trades",
+  },
+  {
+    id: "running",
+    label: "RUNNING",
+    hint: "Evaluate signals and submit only when Risk Engine passes",
+  },
+  {
+    id: "paused",
+    label: "PAUSED",
+    hint: "Stop opening new trades; manage open positions per strategy",
+  },
+  {
+    id: "stopped",
+    label: "STOPPED",
+    hint: "Fully disable automation",
+  },
+];
+
+function toneForState(state: RunState): "success" | "warning" | "danger" | "neutral" {
+  if (state === "running") return "success";
+  if (state === "paused") return "warning";
+  if (state === "stopped") return "danger";
+  return "neutral";
+}
+
 export function AutoTradeControls() {
   const qc = useQueryClient();
   const [reason, setReason] = useState("operator auto-trade update");
   const [confirm, setConfirm] = useState(false);
-  const [enabled, setEnabled] = useState(false);
+  const [runState, setRunState] = useState<RunState>("off");
   const [maxOpen, setMaxOpen] = useState("1");
   const [riskPct, setRiskPct] = useState("1.0");
   const [dailyLoss, setDailyLoss] = useState("3.0");
@@ -45,7 +82,12 @@ export function AutoTradeControls() {
     if (!autoQ.data) return;
     const d = asRecord(autoQ.data);
     const policy = asRecord(d.policy);
-    setEnabled(Boolean(policy.enabled));
+    const rs = str(policy.run_state, "").toLowerCase() as RunState;
+    if (rs === "off" || rs === "running" || rs === "paused" || rs === "stopped") {
+      setRunState(rs);
+    } else {
+      setRunState(Boolean(policy.enabled) ? "running" : "off");
+    }
     setMaxOpen(str(policy.max_open_positions, "1"));
     setRiskPct(str(policy.risk_per_trade_pct, "1.0"));
     setDailyLoss(str(policy.max_daily_loss_pct, "3.0"));
@@ -70,7 +112,8 @@ export function AutoTradeControls() {
       iteOpsApi.updateAutoTrading({
         reason,
         confirmed: confirm,
-        enabled,
+        run_state: runState,
+        enabled: runState === "running" || runState === "paused",
         max_open_positions: Number(maxOpen) || 1,
         risk_per_trade_pct: riskPct,
         max_daily_loss_pct: dailyLoss,
@@ -87,7 +130,10 @@ export function AutoTradeControls() {
 
   const stopMut = useMutation({
     mutationFn: () => iteOpsApi.emergencyStop(reason || "emergency stop", confirm),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setRunState("stopped");
+      invalidate();
+    },
   });
 
   if (autoQ.isLoading) return <DeskSkeleton rows={3} />;
@@ -101,22 +147,54 @@ export function AutoTradeControls() {
   const status = str(d.status, "Disabled");
   const failed = asList(d.failed_reasons).map(String);
   const conditions = asList(d.conditions).map(asRecord);
+  const policy = asRecord(d.policy);
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          Auto Trade Controls
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+          Auto Trading Control
+          <Badge tone={toneForState(runState)}>{runState.toUpperCase()}</Badge>
           <Badge tone={status === "Enabled" ? "success" : "warning"}>
-            {status}
+            Gate {status}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {RUN_STATES.map((s) => {
+            const active = runState === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setRunState(s.id)}
+                className={cn(
+                  "rounded-md border px-3 py-2.5 text-left transition-colors",
+                  active
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                    : "border-[var(--border)] hover:border-[var(--border-strong)]",
+                )}
+                aria-pressed={active}
+              >
+                <p className="text-sm font-semibold tracking-tight">{s.label}</p>
+                <p className="mt-1 text-[11px] text-[var(--fg-muted)]">{s.hint}</p>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="text-xs text-[var(--fg-muted)]">
+          RUNNING opens new trades only when every Risk Engine and broker check
+          PASSes. PAUSED never opens new trades; PME may still manage open
+          positions. STOPPED fully disables automation. Risk Engine and broker
+          validation are never bypassed.
+        </p>
+
         {failed.length > 0 && (
           <div className="rounded border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm">
-            <div className="mb-1 text-xs text-muted-foreground">
-              Auto Trading Disabled — exact reasons
+            <div className="mb-1 text-xs text-[var(--fg-subtle)]">
+              New auto-submits blocked — exact reasons
             </div>
             <ul className="list-disc space-y-1 pl-5">
               {failed.map((r) => (
@@ -141,14 +219,6 @@ export function AutoTradeControls() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            Auto Trading ON/OFF
-          </label>
           <label className="text-xs">
             Max open positions
             <input
@@ -200,7 +270,7 @@ export function AutoTradeControls() {
         </div>
 
         <fieldset className="space-y-2">
-          <legend className="text-xs text-muted-foreground">
+          <legend className="text-xs text-[var(--fg-subtle)]">
             Allowed trading sessions
           </legend>
           <div className="flex flex-wrap gap-3">
@@ -245,7 +315,7 @@ export function AutoTradeControls() {
             disabled={!confirm || saveMut.isPending}
             onClick={() => saveMut.mutate()}
           >
-            Save controls
+            Apply state
           </Button>
           <Button
             size="sm"
@@ -258,13 +328,14 @@ export function AutoTradeControls() {
         </div>
 
         {(saveMut.isError || stopMut.isError) && (
-          <p className="text-sm text-destructive">
+          <p className="text-sm text-[var(--danger)]">
             Action failed — check confirmation and OWNER/ADMIN permissions.
           </p>
         )}
-        <p className="text-xs text-muted-foreground">
-          Risk Engine, margin, exposure, daily loss, and drawdown protection are never
-          bypassed. Auto Trading stays Disabled until every safety condition PASSes.
+        <p className="text-xs text-[var(--fg-subtle)]">
+          may_open_new_trades=
+          {String(Boolean(policy.may_open_new_trades))} · may_manage_positions=
+          {String(Boolean(policy.may_manage_positions))}
         </p>
       </CardContent>
     </Card>

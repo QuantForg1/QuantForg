@@ -5,7 +5,6 @@ import { AuthLayoutProviders } from "@/providers/auth-layout-providers";
 import { RealtimeProvider } from "@/providers/realtime-provider";
 import { TradingSessionProvider } from "@/providers/trading-session-provider";
 import { ObservabilityBootstrap } from "@/components/platform/observability-bootstrap";
-import { FeedbackWidget } from "@/components/platform/feedback-widget";
 import {
   BetaBanner,
   BetaInviteGate,
@@ -27,7 +26,6 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
               <FirstRunChecklist />
               <ProductTour />
               <AppShell>{children}</AppShell>
-              <FeedbackWidget />
             </div>
           </BetaInviteGate>
         </MaintenanceGate>

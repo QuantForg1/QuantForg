@@ -35,6 +35,14 @@ import {
 } from "@/lib/trading/gold-only";
 import { humanExecutionError } from "@/lib/execution/humanize";
 import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
+import { invalidatePostTrade } from "@/lib/execution/post-trade-invalidate";
+import { recordAudit } from "@/lib/observability/audit";
+import { captureError } from "@/lib/observability/error-monitor";
+import { isReadOnlyMode } from "@/lib/platform/beta";
+import {
+  formatSubmitFailure,
+  type ExecutionStageId,
+} from "@/lib/execution/submit-errors";
 import {
   contractSizeForSymbol,
   lotsFromRiskBudget,
@@ -91,6 +99,8 @@ export const ExecutionOrderTicket = forwardRef<
     EMPTY_EXECUTION_METRICS,
   );
   const [execFlash, setExecFlash] = useState(false);
+  const [execStage, setExecStage] = useState<ExecutionStageId>("idle");
+  const [rejectReason, setRejectReason] = useState<string | undefined>();
   const session = useTradingSession();
   const qc = useQueryClient();
 
@@ -271,6 +281,8 @@ export const ExecutionOrderTicket = forwardRef<
     setSide(nextSide);
     setOrderType("market");
     setConfirmMode("oneclick");
+    setExecStage("idle");
+    setRejectReason(undefined);
     if (!connected) {
       toast.error("Broker disconnected — trading disabled");
       return;
@@ -283,71 +295,91 @@ export const ExecutionOrderTicket = forwardRef<
     () => ({
       buy: () => oneClick("buy"),
       sell: () => oneClick("sell"),
-      cancelDialog: () => setConfirmOpen(false),
+      cancelDialog: () => {
+        setConfirmOpen(false);
+        setExecStage("idle");
+      },
     }),
-    // oneClick closes over latest connected/side state via setState
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [connected, symbol, volume],
   );
 
   const submitLive = async () => {
     setBusy(true);
+    setExecStage("validating");
+    setRejectReason(undefined);
     const t0 = performance.now();
     let signalMs: number | undefined;
     let riskMs: number | undefined;
     let orderCheckMs: number | undefined;
     try {
-      const { isReadOnlyMode } = await import("@/lib/platform/beta");
       if (isReadOnlyMode()) {
+        setExecStage("rejected");
+        setRejectReason("Read-only mode is enabled — live orders are blocked");
         toast.error("Read-only mode is enabled — live orders are blocked");
         return;
       }
-      const MAX_TICK_AGE_MS = 5_000;
-      if (
-        tickTimeMs == null ||
-        !Number.isFinite(tickTimeMs) ||
-        Date.now() - tickTimeMs > MAX_TICK_AGE_MS
-      ) {
+
+      // Refresh quote if stale before blocking — reduces false rejects.
+      let tickAgeOk =
+        tickTimeMs != null &&
+        Number.isFinite(tickTimeMs) &&
+        Date.now() - tickTimeMs <= 5_000;
+      if (!tickAgeOk && connected && symbol) {
+        try {
+          await mt5Api.tick(symbol);
+          tickAgeOk = true;
+        } catch {
+          /* fall through to stale check */
+        }
+      }
+      if (!tickAgeOk) {
+        setExecStage("rejected");
+        setRejectReason("Market price is stale — refresh quote before sending");
         toast.error("Market price is stale — refresh quote before sending");
         return;
       }
+
       let payload = {
         ...buildPayload(),
-        side: confirmMode === "oneclick" ? side : side,
+        side,
         order_type: confirmMode === "oneclick" ? "market" : orderType,
       };
+
       const tSignal = performance.now();
-      const v = await mt5Api.validateOrder(payload);
+      // Validate + risk in parallel to cut submit latency.
+      const [v, risk] = await Promise.all([
+        mt5Api.validateOrder(payload),
+        riskApi.check(riskCheckBody(payload)),
+      ]);
       signalMs = performance.now() - tSignal;
+      riskMs = signalMs;
       setValidation(asRecord(v));
+      setLastRisk(asRecord(risk));
+
       if (!v.valid) {
-        const err = humanExecutionError(asRecord(v), "Order did not pass validation.");
+        const err = humanExecutionError(
+          asRecord(v),
+          "Order did not pass broker validation.",
+        );
+        setExecStage("rejected");
+        setRejectReason([err.title, err.description].filter(Boolean).join(" — "));
         toast.error(err.title, { description: err.description });
         return;
       }
-      const liveSpread =
-        Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
-          ? String(ask - bid)
-          : undefined;
-      const tRisk = performance.now();
-      const risk = await riskApi.check(riskCheckBody(payload));
-      riskMs = performance.now() - tRisk;
-      setLastRisk(asRecord(risk));
+
+      setExecStage("risk");
       const riskDecision = str(asRecord(risk).decision).toUpperCase();
       if (riskDecision === "REJECT") {
         const detail = formatRiskRejection(asRecord(risk));
-        const err = humanExecutionError(
-          {
-            message: "Risk engine blocked execution",
-            rejection_reasons: asListish(asRecord(risk).reasons).length
-              ? asListish(asRecord(risk).reasons)
-              : [detail],
-          },
-          "Risk engine blocked execution",
-        );
-        toast.error(err.title, { description: detail || err.description });
+        setExecStage("rejected");
+        setRejectReason(detail || "Risk engine blocked execution");
+        toast.error("Risk engine blocked execution", {
+          description: detail,
+        });
         return;
       }
+
       const approvedLots = str(asRecord(risk).approved_lots);
       const sizedVolume =
         sizingMode === "percentage_risk" &&
@@ -360,6 +392,7 @@ export const ExecutionOrderTicket = forwardRef<
         setVolume(sizedVolume);
         payload = { ...payload, volume: sizedVolume };
       }
+
       const gateOk = preTradeAllowsExecution(
         {
           symbol: payload.symbol,
@@ -376,23 +409,38 @@ export const ExecutionOrderTicket = forwardRef<
         session,
       );
       if (!gateOk) {
-        toast.error("Pre-trade checklist failed — execution blocked");
+        const reason =
+          !session.gatewayOnline || !session.connected
+            ? "Gateway or broker session is offline"
+            : "Pre-trade checklist failed — check spread, margin, and risk";
+        setExecStage("rejected");
+        setRejectReason(reason);
+        toast.error(reason);
         return;
       }
+
+      setExecStage("sending");
+      const liveSpread =
+        Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
+          ? String(ask - bid)
+          : undefined;
       const tCheck = performance.now();
       const check = await executionApi.check(payload);
       orderCheckMs = performance.now() - tCheck;
       setLastCheck(asRecord(check));
       if (str(asRecord(check).decision) === "reject") {
-        const { recordAudit } = await import("@/lib/observability/audit");
+        const err = humanExecutionError(asRecord(check), "Execution rejected");
         recordAudit("order_submit", "failure", "Execution rejected by safety gate", {
           symbol: payload.symbol,
           side: payload.side,
         });
-        const err = humanExecutionError(asRecord(check), "Execution rejected");
+        setExecStage("rejected");
+        setRejectReason([err.title, err.description].filter(Boolean).join(" — "));
         toast.error(err.title, { description: err.description });
         return;
       }
+
+      setExecStage("broker");
       const tFill = performance.now();
       const result = await executionApi.submit({
         ...payload,
@@ -404,13 +452,15 @@ export const ExecutionOrderTicket = forwardRef<
       const brokerFillMs = performance.now() - tFill;
       const totalMs = performance.now() - t0;
       const outcome = str(asRecord(result).outcome);
+      const resultRec = asRecord(result);
+
       if (outcome === "success") {
-        const fillPrice = num(asRecord(result).price, NaN);
+        const fillPrice = num(resultRec.price, NaN);
         const measuredSlippage =
           Number.isFinite(fillPrice) && Number.isFinite(mid)
             ? String(Math.abs(fillPrice - mid))
             : undefined;
-        const metrics = metricsFromPipelineResult(asRecord(result), {
+        const metrics = metricsFromPipelineResult(resultRec, {
           signalMs,
           riskMs,
           orderCheckMs,
@@ -423,68 +473,67 @@ export const ExecutionOrderTicket = forwardRef<
         saveLastExecutionMetrics(metrics);
         setExecFlash(true);
         window.setTimeout(() => setExecFlash(false), 450);
-      }
-      const { recordAudit } = await import("@/lib/observability/audit");
-      if (outcome === "disabled") {
-        recordAudit("order_submit", "info", "Live send disabled by EXECUTION_ENABLED", {
-          symbol: payload.symbol,
-        });
-        toast.message("Live send disabled", {
-          description: str(
-            asRecord(result).message,
-            "Set EXECUTION_ENABLED=true on the API with MT5 gateway configured.",
-          ),
-        });
-      } else if (outcome === "success") {
+        setExecStage("completed");
         recordAudit("order_submit", "success", "Order submitted", {
           symbol: payload.symbol,
           side: payload.side,
-          ticket: str(asRecord(result).order_ticket),
+          ticket: str(resultRec.order_ticket),
         });
-        const ticket = str(asRecord(result).order_ticket, "—");
-        const fillPrice = str(asRecord(result).price, "");
+        const ticket = str(resultRec.order_ticket, "—");
+        const fill = str(resultRec.price, "");
         toast.success("Order filled", {
-          description: fillPrice
-            ? `Ticket ${ticket} · ${payload.side.toUpperCase()} ${payload.volume} @ ${fillPrice}`
+          description: fill
+            ? `Ticket ${ticket} · ${payload.side.toUpperCase()} ${payload.volume} @ ${fill}`
             : `Ticket ${ticket} · ${payload.side.toUpperCase()} ${payload.volume}`,
         });
-        await session.invalidateAll();
-        const { invalidatePostTrade } = await import("@/lib/execution/post-trade-invalidate");
-        await invalidatePostTrade(qc);
-      } else if (asRecord(result).retryable) {
-        recordAudit("order_submit", "failure", "Order submit retryable failure", {
-          symbol: payload.symbol,
-          outcome,
-        });
-        const err = humanExecutionError(asRecord(result), outcome);
-        toast.error(err.title, {
-          description: err.description || "Retryable — try again.",
-        });
-      } else {
-        recordAudit("order_submit", "failure", "Order submit failed", {
-          symbol: payload.symbol,
-          outcome,
-        });
-        const err = humanExecutionError(asRecord(result), "Order rejected by MT5");
-        toast.error(err.title, { description: err.description });
+        try {
+          await session.invalidateAll();
+          await invalidatePostTrade(qc);
+        } catch {
+          /* never mask a successful fill as submit failure */
+        }
+        window.setTimeout(() => setConfirmOpen(false), 600);
+        return;
       }
-      setConfirmOpen(false);
+
+      if (outcome === "disabled") {
+        const msg = str(
+          resultRec.message,
+          "Live send disabled — set EXECUTION_ENABLED=true with MT5 gateway configured.",
+        );
+        recordAudit("order_submit", "info", "Live send disabled by EXECUTION_ENABLED", {
+          symbol: payload.symbol,
+        });
+        setExecStage("rejected");
+        setRejectReason(msg);
+        toast.message("Live send disabled", { description: msg });
+        return;
+      }
+
+      const err = humanExecutionError(
+        resultRec,
+        resultRec.retryable
+          ? "Order submit failed — retryable"
+          : "Order rejected by MT5",
+      );
+      recordAudit("order_submit", "failure", "Order submit failed", {
+        symbol: payload.symbol,
+        outcome,
+      });
+      setExecStage("rejected");
+      setRejectReason([err.title, err.description].filter(Boolean).join(" — "));
+      toast.error(err.title, {
+        description: err.description || str(resultRec.message) || undefined,
+      });
     } catch (e) {
-      const { recordAudit } = await import("@/lib/observability/audit");
-      const { captureError } = await import("@/lib/observability/error-monitor");
       recordAudit("order_submit", "failure", "Order submit exception");
       captureError("execution", e, { path: "/execution/submit" });
-      if (e instanceof ApiError) {
-        const detail =
-          e.status === 403
-            ? "Execution may be disabled — set EXECUTION_ENABLED=true with a live MT5 gateway."
-            : e.code
-              ? `Code ${e.code}`
-              : undefined;
-        toast.error(e.message || "Submit failed", { description: detail });
-      } else {
-        toast.error("Submit failed");
-      }
+      const formatted = formatSubmitFailure(e);
+      setExecStage("rejected");
+      setRejectReason(
+        [formatted.title, formatted.description].filter(Boolean).join(" — "),
+      );
+      toast.error(formatted.title, { description: formatted.description });
     } finally {
       setBusy(false);
     }
@@ -850,6 +899,8 @@ export const ExecutionOrderTicket = forwardRef<
             disabled={!connected || busy}
             onClick={() => {
               setConfirmMode("ticket");
+              setExecStage("idle");
+              setRejectReason(undefined);
               setConfirmOpen(true);
             }}
           >
@@ -860,12 +911,20 @@ export const ExecutionOrderTicket = forwardRef<
 
       <ConfirmDialog
         open={confirmOpen}
-        onOpenChange={setConfirmOpen}
+        onOpenChange={(open) => {
+          setConfirmOpen(open);
+          if (!open) {
+            setExecStage("idle");
+            setRejectReason(undefined);
+          }
+        }}
         title={`${side.toUpperCase()} ${symbol}`}
         description={`Submit ${confirmMode === "oneclick" ? "market" : orderType} ${side} ${volume} lots via the Execution Gateway. Live fills only occur when EXECUTION_ENABLED is true.`}
         confirmLabel="Confirm submit"
         tone={side === "sell" ? "danger" : "default"}
         busy={busy}
+        stage={execStage}
+        rejectReason={rejectReason}
         onConfirm={submitLive}
       />
     </div>

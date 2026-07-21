@@ -14,7 +14,9 @@ from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
     AutoTradePolicy,
     AutoTradeSafetyResult,
+    AutoTradeRunState,
     evaluate_auto_trade_safety,
+    normalize_run_state,
 )
 from app.domain.institutional_trading.operations.alerts import AlertService
 from app.domain.institutional_trading.operations.audit import AuditLog
@@ -62,6 +64,7 @@ class OperationsControlPlane:
     max_open_trades: int = 1
     daily_loss_exceeded: bool = False
     auto_trading_enabled: bool = False
+    auto_trading_run_state: AutoTradeRunState = "off"
     allowed_sessions: tuple[str, ...] = (
         "london",
         "new_york",
@@ -369,8 +372,13 @@ class OperationsControlPlane:
 
     def auto_trade_policy(self) -> AutoTradePolicy:
         with self._lock:
+            state = normalize_run_state(
+                self.auto_trading_run_state,
+                enabled=self.auto_trading_enabled,
+            )
             return AutoTradePolicy(
                 enabled=self.auto_trading_enabled,
+                run_state=state,
                 max_open_positions=self.max_open_trades,
                 risk_per_trade_pct=self.risk_per_trade_pct,
                 max_daily_loss_pct=self.max_daily_loss_pct,
@@ -385,6 +393,7 @@ class OperationsControlPlane:
         operator: OperatorIdentity,
         *,
         enabled: bool | None = None,
+        run_state: str | None = None,
         max_open_positions: int | None = None,
         risk_per_trade_pct: Decimal | None = None,
         max_daily_loss_pct: Decimal | None = None,
@@ -399,8 +408,13 @@ class OperationsControlPlane:
         self.require(operator, OpsPermission.CHANGE_RISK_CONFIG)
         with self._lock:
             old = self.auto_trade_policy().to_dict()
-            if enabled is not None:
+            if run_state is not None:
+                state = normalize_run_state(run_state)
+                self.auto_trading_run_state = state
+                self.auto_trading_enabled = state in {"running", "paused"}
+            elif enabled is not None:
                 self.auto_trading_enabled = enabled
+                self.auto_trading_run_state = "running" if enabled else "off"
             if max_open_positions is not None:
                 if max_open_positions < 1:
                     raise ValueError("max_open_positions must be >= 1")
@@ -433,8 +447,14 @@ class OperationsControlPlane:
                 self.max_spread = max_spread
             if news_filter_enabled is not None:
                 self.news_filter_enabled = news_filter_enabled
+            state = normalize_run_state(
+                self.auto_trading_run_state,
+                enabled=self.auto_trading_enabled,
+            )
+            self.auto_trading_run_state = state
             policy = AutoTradePolicy(
                 enabled=self.auto_trading_enabled,
+                run_state=state,
                 max_open_positions=self.max_open_trades,
                 risk_per_trade_pct=self.risk_per_trade_pct,
                 max_daily_loss_pct=self.max_daily_loss_pct,
@@ -456,8 +476,13 @@ class OperationsControlPlane:
     def evaluate_auto_trading(self, facts: AutoTradeLiveFacts) -> AutoTradeSafetyResult:
         """Evaluate whether auto-submit is allowed. Fail-closed."""
         with self._lock:
+            state = normalize_run_state(
+                self.auto_trading_run_state,
+                enabled=self.auto_trading_enabled,
+            )
             policy = AutoTradePolicy(
                 enabled=self.auto_trading_enabled,
+                run_state=state,
                 max_open_positions=self.max_open_trades,
                 risk_per_trade_pct=self.risk_per_trade_pct,
                 max_daily_loss_pct=self.max_daily_loss_pct,
@@ -504,6 +529,7 @@ class OperationsControlPlane:
         with self._lock:
             was = self.auto_trading_enabled
             self.auto_trading_enabled = False
+            self.auto_trading_run_state = "stopped"
         if was:
             self.audit.record(
                 operator=operator,
@@ -556,6 +582,7 @@ class OperationsControlPlane:
             self.kill_switch_armed = True
             was_auto = self.auto_trading_enabled
             self.auto_trading_enabled = False
+            self.auto_trading_run_state = "stopped"
         self.flag_canary_failure(reason, now=now)
         self.alerts.raise_alert(
             kind=AlertKind.KILL_SWITCH,

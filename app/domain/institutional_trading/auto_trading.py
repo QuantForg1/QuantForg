@@ -4,7 +4,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
+
+AutoTradeRunState = Literal["off", "running", "paused", "stopped"]
+
+_VALID_RUN_STATES: frozenset[str] = frozenset({"off", "running", "paused", "stopped"})
+
+
+def normalize_run_state(value: str | None, *, enabled: bool | None = None) -> AutoTradeRunState:
+    """Normalize operator run state. Unknown values fail closed to off."""
+    raw = (value or "").strip().lower()
+    if raw in _VALID_RUN_STATES:
+        # Legacy callers set enabled=True without run_state (defaults to off).
+        if enabled is True and raw == "off":
+            return "running"
+        if enabled is False and raw in {"running", "paused"}:
+            return "off"
+        return raw  # type: ignore[return-value]
+    if enabled is True:
+        return "running"
+    return "off"
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,6 +31,7 @@ class AutoTradePolicy:
     """Operator-configurable auto-trade controls (persisted on ops plane)."""
 
     enabled: bool = False
+    run_state: AutoTradeRunState = "off"
     max_open_positions: int = 1
     risk_per_trade_pct: Decimal = Decimal("1.0")
     max_daily_loss_pct: Decimal = Decimal("3.0")
@@ -25,8 +45,10 @@ class AutoTradePolicy:
     news_filter_enabled: bool = False
 
     def to_dict(self) -> dict[str, Any]:
+        state = normalize_run_state(self.run_state, enabled=self.enabled)
         return {
             "enabled": self.enabled,
+            "run_state": state,
             "max_open_positions": self.max_open_positions,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
             "max_daily_loss_pct": str(self.max_daily_loss_pct),
@@ -34,6 +56,8 @@ class AutoTradePolicy:
             "allowed_symbols": list(self.allowed_symbols),
             "max_spread": str(self.max_spread),
             "news_filter_enabled": self.news_filter_enabled,
+            "may_open_new_trades": state == "running",
+            "may_manage_positions": state in {"running", "paused"},
         }
 
 
@@ -106,6 +130,7 @@ def evaluate_auto_trade_safety(
     """Fail-closed evaluation. Any failed condition → do not trade."""
 
     conditions: list[AutoTradeCondition] = []
+    run_state = normalize_run_state(policy.run_state, enabled=policy.enabled)
 
     def add(key: str, label: str, passed: bool, detail: str = "") -> None:
         conditions.append(
@@ -115,8 +140,30 @@ def evaluate_auto_trade_safety(
     add(
         "auto_trading_toggle",
         "Auto Trading ON",
-        policy.enabled,
-        "Operator Auto Trading toggle is OFF" if not policy.enabled else "",
+        run_state in {"running", "paused"},
+        "Operator Auto Trading is OFF" if run_state == "off" else (
+            "Auto Trading is STOPPED" if run_state == "stopped" else ""
+        ),
+    )
+    add(
+        "auto_trading_run_state",
+        "Auto Trading RUNNING",
+        run_state == "running",
+        (
+            "Auto Trading is PAUSED — no new trades; existing positions still managed"
+            if run_state == "paused"
+            else (
+                "Auto Trading is STOPPED — automation fully disabled"
+                if run_state == "stopped"
+                else (
+                    "Auto Trading is OFF — no automatic trades"
+                    if run_state == "off"
+                    else f"Auto Trading state is {run_state}"
+                )
+            )
+        )
+        if run_state != "running"
+        else "",
     )
     add(
         "emergency_stop",

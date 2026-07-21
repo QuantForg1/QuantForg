@@ -66,12 +66,22 @@ class TestAutoTradeSafetyGate:
         assert result.status == "Enabled"
         assert result.failed_reasons == ()
 
-    def test_disabled_when_toggle_off(self) -> None:
-        policy = AutoTradePolicy(enabled=False)
+    def test_paused_blocks_new_trades(self) -> None:
+        policy = AutoTradePolicy(enabled=True, run_state="paused")
         result = evaluate_auto_trade_safety(policy, _all_pass_facts())
         assert result.allowed is False
-        assert result.status == "Disabled"
-        assert any("toggle" in r.lower() or "OFF" in r for r in result.failed_reasons)
+        assert any("PAUSED" in r for r in result.failed_reasons)
+
+    def test_stopped_blocks_new_trades(self) -> None:
+        policy = AutoTradePolicy(enabled=False, run_state="stopped")
+        result = evaluate_auto_trade_safety(policy, _all_pass_facts())
+        assert result.allowed is False
+        assert any("STOPPED" in r or "OFF" in r for r in result.failed_reasons)
+
+    def test_running_allows_when_all_pass(self) -> None:
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(policy, _all_pass_facts())
+        assert result.allowed is True
 
     def test_risk_engine_failure_blocks(self) -> None:
         policy = AutoTradePolicy(enabled=True)

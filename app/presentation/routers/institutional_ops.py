@@ -77,6 +77,7 @@ class RiskBody(ConfirmBody):
 
 class AutoTradeControlsBody(ConfirmBody):
     enabled: bool | None = None
+    run_state: str | None = None
     max_open_positions: int | None = None
     risk_per_trade_pct: str | None = None
     max_daily_loss_pct: str | None = None
@@ -410,6 +411,7 @@ def update_auto_trading(
         policy = plane.update_auto_trade_controls(
             op,
             enabled=body.enabled,
+            run_state=body.run_state,
             max_open_positions=body.max_open_positions,
             risk_per_trade_pct=(
                 Decimal(body.risk_per_trade_pct)
