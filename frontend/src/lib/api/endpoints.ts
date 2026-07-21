@@ -503,6 +503,17 @@ export const iteOpsApi = {
     ),
 };
 
+/** Institutional Market Intelligence Engine V1 — evaluate only */
+export const marketIntelligenceApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/market-intelligence/status"),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/market-intelligence/evaluate", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Institutional AI Decision Engine V1 — dry-run evaluate, never order_send */
 export const institutionalDecisionApi = {
   status: () =>

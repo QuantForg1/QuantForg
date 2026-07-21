@@ -181,6 +181,12 @@ export const appNav: NavGroup[] = [
         hint: "Institutional decision engine V1",
       },
       {
+        href: "/market-intelligence",
+        label: "Market Intel",
+        icon: Radar,
+        hint: "Market Intelligence Engine V1",
+      },
+      {
         href: "/gateway",
         label: "Gateway",
         icon: Workflow,
