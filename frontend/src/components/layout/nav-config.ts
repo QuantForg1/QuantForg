@@ -175,6 +175,12 @@ export const appNav: NavGroup[] = [
         hint: "Robot V1 · capital preservation",
       },
       {
+        href: "/institutional-decision",
+        label: "AI Decision",
+        icon: Scale,
+        hint: "Institutional decision engine V1",
+      },
+      {
         href: "/gateway",
         label: "Gateway",
         icon: Workflow,

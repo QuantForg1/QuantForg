@@ -503,6 +503,17 @@ export const iteOpsApi = {
     ),
 };
 
+/** Institutional AI Decision Engine V1 — dry-run evaluate, never order_send */
+export const institutionalDecisionApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/institutional-decision/status"),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/institutional-decision/evaluate", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** QuantForg AI Trading Robot V1 — evaluate only, never order_send */
 export const aiRobotApi = {
   status: () => apiFetch<Record<string, unknown>>("/ai-robot/status"),

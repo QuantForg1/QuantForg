@@ -74,6 +74,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("gateway_manager", "app.presentation.routers.gateway_manager"),
     ("weltrade", "app.presentation.routers.weltrade"),
     ("ai_trading_robot", "app.presentation.routers.ai_trading_robot"),
+    (
+        "institutional_ai_decision",
+        "app.presentation.routers.institutional_ai_decision",
+    ),
 )
 
 
