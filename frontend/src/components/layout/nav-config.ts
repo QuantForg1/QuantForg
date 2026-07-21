@@ -5,6 +5,7 @@ import {
   Bell,
   BookOpen,
   Bot,
+  Brain,
   Briefcase,
   Building2,
   Calendar,
@@ -233,6 +234,12 @@ export const appNav: NavGroup[] = [
         label: "Multi-Agent AI",
         icon: Bot,
         hint: "Agents collaborate before approval",
+      },
+      {
+        href: "/trading-brain-v3",
+        label: "Trading Brain V3",
+        icon: Brain,
+        hint: "Capital preservation orchestration",
       },
       {
         href: "/gateway",

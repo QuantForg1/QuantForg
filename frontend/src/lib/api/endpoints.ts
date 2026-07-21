@@ -919,6 +919,27 @@ export const multiAgentAiApi = {
     }),
 };
 
+/** Institutional Trading Brain V3 — capital preservation; never order_send */
+export const tradingBrainV3Api = {
+  status: () => apiFetch<Record<string, unknown>>("/trading-brain-v3/status"),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/trading-brain-v3/evaluate", {
+      method: "POST",
+      body,
+    }),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/trading-brain-v3/history?limit=${limit}`,
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>("/trading-brain-v3/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/trading-brain-v3/policies", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),
