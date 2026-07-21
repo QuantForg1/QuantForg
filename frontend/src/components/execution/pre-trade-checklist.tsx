@@ -8,7 +8,6 @@ import { num } from "@/lib/desk";
 import {
   formatRiskRejection,
   parseRiskRules,
-  RiskRulesPanel,
 } from "@/components/execution/risk-rules-panel";
 
 export type PreTradeInputs = {
@@ -50,13 +49,15 @@ function Row({ ok, label, detail }: { ok: boolean; label: string; detail: string
   );
 }
 
-/** Live pre-trade gate — every check uses TradingSession + ticket quotes (no mock). */
+/** Live pre-trade gate — compact on Terminal; detailed rules live on Risk Center. */
 export const PreTradeChecklist = memo(function PreTradeChecklist({
   inputs,
   className,
+  compact = false,
 }: {
   inputs: PreTradeInputs;
   className?: string;
+  compact?: boolean;
 }) {
   const session = useTradingSession();
   const spread =
@@ -176,38 +177,51 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
   ]);
 
   const blocked = checks.some((c) => !c.ok);
-  const failed = checks.filter((c) => !c.ok).map((c) => c.label);
+  const failed = checks.filter((c) => !c.ok);
+  const visible = compact ? (blocked ? failed : []) : checks;
 
   return (
     <div className={cn("space-y-2", className)}>
       <div
-        className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/70 px-3 py-2.5"
+        className="rounded-md border border-[var(--border)] bg-[var(--surface-2)]/70 px-2.5 py-2"
         aria-live="polite"
       >
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-            Pre-trade checklist
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Pre-trade
           </p>
           {blocked ? (
             <span className="inline-flex items-center gap-1 text-[10px] text-[var(--danger)]">
               <ShieldAlert className="h-3 w-3" /> Blocked
             </span>
           ) : (
-            <span className="text-[10px] text-[var(--success)]">Ready</span>
+            <span className="text-[10px] text-[var(--success)]">
+              Ready · {checks.length} checks
+            </span>
           )}
         </div>
-        <ul className="space-y-1.5">{checks.map((c) => <Row key={c.label} {...c} />)}</ul>
+        {visible.length > 0 ? (
+          <ul className="space-y-1">
+            {visible.map((c) => (
+              <Row key={c.label} {...c} />
+            ))}
+          </ul>
+        ) : null}
         {blocked ? (
-          <p className="mt-2 text-[10px] text-[var(--danger)]">
-            Execution blocked:{" "}
+          <p className="mt-1.5 text-[10px] text-[var(--danger)]">
             {inputs.riskDecision === "REJECT" && inputs.riskAssessment
               ? formatRiskRejection(inputs.riskAssessment)
-              : failed.join(", ")}
-            .
+              : failed.map((c) => c.label).join(", ")}
+          </p>
+        ) : compact ? (
+          <p className="text-[10px] text-[var(--fg-subtle)]">
+            Detailed rules on{" "}
+            <a href="/risk-center" className="text-[var(--accent)] hover:underline">
+              Risk Center
+            </a>
           </p>
         ) : null}
       </div>
-      <RiskRulesPanel risk={inputs.riskAssessment ?? null} />
     </div>
   );
 });

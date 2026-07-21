@@ -21,7 +21,6 @@ import {
 import { AiDecisionCard } from "@/components/execution/ai-decision-card";
 import {
   EMPTY_EXECUTION_METRICS,
-  ExecutionMetricsStrip,
   metricsFromPipelineResult,
   type ExecutionTimingMetrics,
 } from "@/components/execution/execution-metrics-strip";
@@ -37,6 +36,8 @@ import {
   resolveTradingSymbol,
 } from "@/lib/trading/gold-only";
 import { humanExecutionError } from "@/lib/execution/humanize";
+import { saveLastExecutionMetrics } from "@/lib/execution/last-metrics";
+import Link from "next/link";
 import {
   contractSizeForSymbol,
   lotsFromRiskBudget,
@@ -181,6 +182,12 @@ export const ExecutionOrderTicket = forwardRef<
     if (!connected || !symbol) return;
     try {
       const payload = buildPayload();
+      // Dense terminal: calculate only — validate runs on safety/submit.
+      if (dense) {
+        const c = await mt5Api.calculateOrder(payload);
+        setCalc(asRecord(c));
+        return;
+      }
       const [v, c] = await Promise.all([
         mt5Api.validateOrder(payload),
         mt5Api.calculateOrder(payload),
@@ -200,10 +207,10 @@ export const ExecutionOrderTicket = forwardRef<
     if (!connected || !symbol) return;
     const t = window.setTimeout(() => {
       void refreshEstimates();
-    }, 400);
+    }, dense ? 700 : 400);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, symbol, side, orderType, volume, price, stopLoss, takeProfit]);
+  }, [connected, symbol, side, orderType, volume, price, stopLoss, takeProfit, dense]);
 
   const positionSizeHint = () => {
     if (!Number.isFinite(equity) || equity <= 0) return "—";
@@ -381,15 +388,15 @@ export const ExecutionOrderTicket = forwardRef<
       const totalMs = performance.now() - t0;
       const outcome = str(asRecord(result).outcome);
       if (outcome === "success") {
-        setExecMetrics(
-          metricsFromPipelineResult(asRecord(result), {
-            signalMs,
-            riskMs,
-            orderCheckMs,
-            totalMs,
-            spread: liveSpread,
-          }),
-        );
+        const metrics = metricsFromPipelineResult(asRecord(result), {
+          signalMs,
+          riskMs,
+          orderCheckMs,
+          totalMs,
+          spread: liveSpread,
+        });
+        setExecMetrics(metrics);
+        saveLastExecutionMetrics(metrics);
       }
       const { recordAudit } = await import("@/lib/observability/audit");
       if (outcome === "disabled") {
@@ -509,7 +516,32 @@ export const ExecutionOrderTicket = forwardRef<
           takeProfit={takeProfit || undefined}
         />
 
-        <ExecutionMetricsStrip metrics={execMetrics} />
+        {execMetrics.source === "live" ? (
+          <p className="text-[10px] text-[var(--fg-subtle)]">
+            Last fill · total{" "}
+            {execMetrics.totalMs != null
+              ? `${formatNumber(execMetrics.totalMs, 0)} ms`
+              : "—"}
+            {" · "}
+            <Link href="/monitoring" className="text-[var(--accent)] hover:underline">
+              Execution metrics
+            </Link>
+          </p>
+        ) : (
+          <p className="text-[10px] text-[var(--fg-subtle)]">
+            <Link href="/monitoring" className="text-[var(--accent)] hover:underline">
+              Monitoring
+            </Link>
+            {" · "}
+            <Link href="/analytics" className="text-[var(--accent)] hover:underline">
+              Analytics
+            </Link>
+            {" · "}
+            <Link href="/risk-center" className="text-[var(--accent)] hover:underline">
+              Risk Center
+            </Link>
+          </p>
+        )}
 
         <PreTradeChecklist
           inputs={{
@@ -525,11 +557,8 @@ export const ExecutionOrderTicket = forwardRef<
             riskAssessment: lastRisk,
             marginRequired: str(asRecord(calc).expected_margin, ""),
           }}
+          compact
         />
-
-        <p className="text-[10px] text-[var(--fg-subtle)]">
-          Supported: Market Buy/Sell · Buy/Sell Limit · Buy/Sell Stop · Buy/Sell Stop Limit
-        </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">

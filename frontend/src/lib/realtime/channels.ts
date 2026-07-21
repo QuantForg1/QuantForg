@@ -102,7 +102,7 @@ export const CHANNEL_DEFINITIONS: ChannelDefinition[] = [
       if (!symbol) return Promise.resolve(null);
       return mt5Api.tick(symbol.toUpperCase());
     },
-    intervalMs: 3_000,
+    intervalMs: 4_000,
     hiddenIntervalMs: 20_000,
     requiresAuth: true,
     enabled: (opts) => Boolean(opts?.symbol?.trim()),

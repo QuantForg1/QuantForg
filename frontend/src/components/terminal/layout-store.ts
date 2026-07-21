@@ -1,4 +1,4 @@
-/** Terminal OS layout — chart-priority trading surface (~70–75% chart). */
+/** Terminal OS layout — chart-first trading surface (~75% chart). */
 
 export type TerminalPresetId = "default" | "chart-focus" | "tape-focus";
 
@@ -21,15 +21,15 @@ export type TerminalLayoutState = {
   counselCollapsed: boolean;
 };
 
-export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v3";
+export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v4";
 export const TERMINAL_SYMBOL_KEY = "qf.workspace.symbol";
 
-/** ~72% chart / ~28% blotter in a typical center column (~700px). */
+/** ~75% chart / ~25% blotter; narrow watchlist + ticket rails. */
 export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   preset: "default",
-  leftWidth: 200,
-  rightWidth: 320,
-  bottomHeight: 156,
+  leftWidth: 168,
+  rightWidth: 288,
+  bottomHeight: 136,
   leftCollapsed: false,
   rightCollapsed: false,
   bottomCollapsed: false,
@@ -49,9 +49,9 @@ export const PRESET_TERMINAL: Record<
 > = {
   default: {
     preset: "default",
-    leftWidth: 200,
-    rightWidth: 320,
-    bottomHeight: 156,
+    leftWidth: 168,
+    rightWidth: 288,
+    bottomHeight: 136,
     leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
@@ -68,9 +68,9 @@ export const PRESET_TERMINAL: Record<
   },
   "tape-focus": {
     preset: "tape-focus",
-    leftWidth: 200,
-    rightWidth: 320,
-    bottomHeight: 220,
+    leftWidth: 168,
+    rightWidth: 288,
+    bottomHeight: 200,
     leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
@@ -101,10 +101,17 @@ export function loadTerminalLayout(): TerminalLayoutState {
         parsed.counselCollapsed === undefined
           ? true
           : Boolean(parsed.counselCollapsed),
-      // Cap blotter so chart stays dominant (~70%+)
+      leftWidth: Math.min(
+        280,
+        Math.max(152, Number(parsed.leftWidth) || DEFAULT_TERMINAL_LAYOUT.leftWidth),
+      ),
+      rightWidth: Math.min(
+        340,
+        Math.max(260, Number(parsed.rightWidth) || DEFAULT_TERMINAL_LAYOUT.rightWidth),
+      ),
       bottomHeight: Math.min(
-        220,
-        Math.max(120, Number(parsed.bottomHeight) || DEFAULT_TERMINAL_LAYOUT.bottomHeight),
+        200,
+        Math.max(112, Number(parsed.bottomHeight) || DEFAULT_TERMINAL_LAYOUT.bottomHeight),
       ),
     };
   } catch {

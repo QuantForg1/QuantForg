@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Shield } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageMotion } from "@/components/desk/motion";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -13,24 +13,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DeskEmpty } from "@/components/desk/primitives";
+import { RiskRulesPanel } from "@/components/execution/risk-rules-panel";
 import { riskApi } from "@/lib/api/endpoints";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { ApiError } from "@/lib/api/client";
 import { useTradingSession } from "@/providers/trading-session-provider";
-import { num } from "@/lib/desk";
+import { asRecord, num } from "@/lib/desk";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 
 const schema = z.object({
   symbol: z.string().min(1),
   side: z.enum(["buy", "sell"]),
   volume: z.string().min(1),
-  stop_loss: z.string().optional(),
-  take_profit: z.string().optional(),
+  entry_price: z.string().optional(),
+  stop_distance: z.string().optional(),
+  risk_pct: z.string().optional(),
 });
 
 export default function RiskCenterPage() {
   const session = useTradingSession();
+  const [lastRisk, setLastRisk] = useState<Record<string, unknown> | null>(null);
   const equity = num(session.equity);
   const free = num(session.freeMargin);
   const margin = num(session.margin);
@@ -54,9 +56,10 @@ export default function RiskCenterPage() {
     defaultValues: {
       symbol: TRADING_SYMBOL,
       side: "buy",
-      volume: "0.10",
-      stop_loss: "",
-      take_profit: "",
+      volume: "0.01",
+      entry_price: "",
+      stop_distance: "",
+      risk_pct: "1",
     },
   });
 
@@ -64,14 +67,11 @@ export default function RiskCenterPage() {
     <div>
       <PageHeader
         title="Risk Center"
-        description="Pre-trade checks, live session exposure, and links to deeper risk labs."
+        description="Detailed Risk Engine rules and live session exposure. Terminal keeps only a compact pre-trade gate."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
               <Link href="/risk-lab">Risk Lab</Link>
-            </Button>
-            <Button asChild size="sm" variant="secondary">
-              <Link href="/book">Book</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
               <Link href="/terminal">Terminal</Link>
@@ -117,13 +117,21 @@ export default function RiskCenterPage() {
                 className="space-y-3"
                 onSubmit={form.handleSubmit(async (values) => {
                   try {
-                    const result = await riskApi.check(values);
-                    const decision = String(
-                      (result as Record<string, unknown>).decision ??
-                        (result as Record<string, unknown>).status ??
-                        "completed",
-                    );
-                    toast.success(`Risk check: ${decision}`);
+                    const result = await riskApi.check({
+                      request_id: `risk_center_${Date.now()}`,
+                      symbol: values.symbol,
+                      side: values.side,
+                      requested_lots: values.volume,
+                      entry_price: values.entry_price || undefined,
+                      stop_loss_distance: values.stop_distance || undefined,
+                      sizing_method: "percentage_risk",
+                      risk_per_trade_pct: values.risk_pct || "1",
+                      equity:
+                        session.equity !== "—" ? session.equity : undefined,
+                    });
+                    const rec = asRecord(result);
+                    setLastRisk(rec);
+                    toast.success(`Risk check: ${String(rec.decision ?? "done")}`);
                   } catch (e) {
                     toast.error(
                       e instanceof ApiError ? e.message : "Risk check failed",
@@ -146,20 +154,31 @@ export default function RiskCenterPage() {
                     <option value="sell">Sell</option>
                   </select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="risk-center-volume">Volume</Label>
-                  <Input id="risk-center-volume" {...form.register("volume")} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="risk-center-volume">Volume</Label>
+                    <Input id="risk-center-volume" {...form.register("volume")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="risk-center-risk">Risk %</Label>
+                    <Input id="risk-center-risk" {...form.register("risk_pct")} />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="risk-center-sl">Stop loss</Label>
-                    <Input id="risk-center-sl" {...form.register("stop_loss")} />
+                    <Label htmlFor="risk-center-entry">Entry</Label>
+                    <Input
+                      id="risk-center-entry"
+                      {...form.register("entry_price")}
+                      placeholder="optional"
+                    />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="risk-center-tp">Take profit</Label>
+                    <Label htmlFor="risk-center-sl">Stop distance</Label>
                     <Input
-                      id="risk-center-tp"
-                      {...form.register("take_profit")}
+                      id="risk-center-sl"
+                      {...form.register("stop_distance")}
+                      placeholder="price units"
                     />
                   </div>
                 </div>
@@ -168,13 +187,7 @@ export default function RiskCenterPage() {
             </CardContent>
           </Card>
 
-          <DeskEmpty
-            icon={Shield}
-            title="Live rule engine"
-            description="PASS / WARN / FAIL rule rows appear on the Terminal ticket after a live risk check. Use Risk Center for pre-trade forms; open Terminal for ticket-bound rules."
-            actionLabel="Open Terminal ticket"
-            actionHref="/terminal"
-          />
+          <RiskRulesPanel risk={lastRisk} />
         </div>
       </PageMotion>
     </div>

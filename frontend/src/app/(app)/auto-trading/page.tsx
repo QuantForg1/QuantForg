@@ -64,8 +64,10 @@ export default function AutoTradingPage() {
 
       <PageMotion className="space-y-4">
         <p className="text-xs text-[var(--fg-muted)]">
-          Position management (SL, TP, trailing, break-even, partials) runs through PME.
-          Auto-trade never bypasses the risk engine or kill switch.
+          Production auto path: signal → risk → margin → exposure → spread → session →
+          news → order submit → PME (SL / TP / trail / BE / partial) → audit / journal /
+          analytics. Never bypasses Risk Engine or broker validation. Modes are
+          operator-only (SHADOW → CANARY → LIVE).
         </p>
 
         <Card>

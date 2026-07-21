@@ -134,13 +134,14 @@ export function TerminalShell() {
   const session = useTradingSession();
   const connected = session.connected;
 
+  // Tick via realtime channel only — avoid duplicate shell poller.
   const tickQ = useQuery({
     queryKey: ["mt5-tick", symbol],
     queryFn: () => mt5Api.tick(symbol),
     retry: false,
     enabled: connected && Boolean(symbol),
-    staleTime: 1000,
-    refetchInterval: connected ? 2000 : false,
+    staleTime: 2_500,
+    refetchInterval: false,
   });
 
   const tick = asRecord(tickQ.data);
@@ -163,19 +164,19 @@ export function TerminalShell() {
   const onLeftDelta = useCallback((d: number) => {
     setLayout((prev) => ({
       ...prev,
-      leftWidth: Math.min(420, Math.max(200, prev.leftWidth + d)),
+      leftWidth: Math.min(280, Math.max(152, prev.leftWidth + d)),
     }));
   }, []);
   const onRightDelta = useCallback((d: number) => {
     setLayout((prev) => ({
       ...prev,
-      rightWidth: Math.min(480, Math.max(280, prev.rightWidth - d)),
+      rightWidth: Math.min(340, Math.max(260, prev.rightWidth - d)),
     }));
   }, []);
   const onBottomDelta = useCallback((d: number) => {
     setLayout((prev) => ({
       ...prev,
-      bottomHeight: Math.min(360, Math.max(120, prev.bottomHeight - d)),
+      bottomHeight: Math.min(200, Math.max(112, prev.bottomHeight - d)),
     }));
   }, []);
 
