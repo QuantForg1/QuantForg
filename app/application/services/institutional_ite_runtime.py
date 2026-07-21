@@ -207,7 +207,7 @@ class InstitutionalIteRuntime:
                     account_trading_enabled=account_trading_enabled,
                     mt5_autotrading_enabled=mt5_autotrading_enabled,
                     symbol_tradable=symbol_tradable,
-                    margin_available=True,
+                    margin_available=False,
                     no_broker_restrictions=no_broker_restrictions,
                     ops_mode=self.plane.mode.value,
                     execution_enabled=execution_on,
@@ -233,7 +233,7 @@ class InstitutionalIteRuntime:
             return result
 
         free = account.free_margin
-        margin_ok = free is None or free > 0
+        margin_ok = free is not None and free > 0
         session = getattr(snapshot.session, "session", None)
         session_val = str(getattr(session, "value", None) or session or "off_hours")
         news = snapshot.news
@@ -241,7 +241,7 @@ class InstitutionalIteRuntime:
             AutoTradeLiveFacts(
                 gateway_connected=gw,
                 broker_connected=mt5,
-                market_data_live=market_data_live or bool(account.market_open),
+                market_data_live=bool(market_data_live),
                 risk_engine_pass=risk_allowed,
                 risk_engine_reasons=risk_reasons,
                 account_trading_enabled=account_trading_enabled,

@@ -64,10 +64,12 @@ export const ExecutionOrderTicket = forwardRef<
     connected: boolean;
     bid?: number;
     ask?: number;
+    /** Epoch ms of last broker tick — reject submit when stale. */
+    tickTimeMs?: number | null;
     dense?: boolean;
   }
 >(function ExecutionOrderTicket(
-  { symbol, onSymbolChange, connected, bid, ask, dense = false },
+  { symbol, onSymbolChange, connected, bid, ask, tickTimeMs = null, dense = false },
   ref,
 ) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -126,7 +128,7 @@ export const ExecutionOrderTicket = forwardRef<
     if (trailingStop.trim()) parts.push(`trail:${trailingStop.trim()}`);
     if (breakEven) parts.push("be:1");
     return {
-      request_id: `exec_${Date.now()}`,
+      request_id: `exec_${crypto.randomUUID()}`,
       symbol: symbol.trim().toUpperCase(),
       side,
       order_type: orderType,
@@ -300,6 +302,15 @@ export const ExecutionOrderTicket = forwardRef<
       const { isReadOnlyMode } = await import("@/lib/platform/beta");
       if (isReadOnlyMode()) {
         toast.error("Read-only mode is enabled — live orders are blocked");
+        return;
+      }
+      const MAX_TICK_AGE_MS = 5_000;
+      if (
+        tickTimeMs == null ||
+        !Number.isFinite(tickTimeMs) ||
+        Date.now() - tickTimeMs > MAX_TICK_AGE_MS
+      ) {
+        toast.error("Market price is stale — refresh quote before sending");
         return;
       }
       let payload = {

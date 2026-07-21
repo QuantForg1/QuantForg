@@ -49,6 +49,18 @@ class InMemoryExecutionAttemptRepository:
         self.items: dict[UUID, ExecutionAttempt] = {}
 
     async def add(self, attempt: ExecutionAttempt) -> ExecutionAttempt:
+        # Enforce one non-replay row per (user_id, request_id) — reserve-before-send.
+        if not attempt.idempotent_replay:
+            doomed = [
+                key
+                for key, row in self.items.items()
+                if row.user_id == attempt.user_id
+                and row.request_id == attempt.request_id
+                and not row.idempotent_replay
+                and key != attempt.id
+            ]
+            for key in doomed:
+                del self.items[key]
         self.items[attempt.id] = attempt
         return attempt
 

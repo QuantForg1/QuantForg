@@ -7,7 +7,7 @@ Never bypasses EXECUTION_ENABLED. Never invents broker fills.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -16,11 +16,13 @@ from app.application.services.execution_gateway import ExecutionGateway
 from app.application.services.execution_intelligence import ExecutionIntelligenceService
 from app.application.services.execution_safety import ExecutionSafetyService
 from app.application.services.mt5_order_validation import MT5OrderValidationService
+from app.application.services.risk_engine import RiskCheckInput, RiskEngine
 from app.domain.entities.execution_gateway import ExecutionResult
 from app.domain.entities.execution_safety import ExecutionDecisionRecord
 from app.domain.entities.mt5_order import OrderIntent
 from app.domain.enums.execution import ExecutionDecision, ExecutionOutcome
 from app.domain.enums.order import OrderSide, OrderType
+from app.domain.enums.risk import PositionSizingMethod, RiskDecision
 from app.domain.exceptions.base import ValidationError
 from app.domain.execution_engine.journal import ExecutionJournalStore
 from app.domain.execution_engine.pipeline import STAGE_TO_LIFECYCLE, PipelineStage
@@ -140,6 +142,7 @@ class InstitutionalExecutionEngine:
     order_validation: MT5OrderValidationService
     intelligence: ExecutionIntelligenceService
     journal: ExecutionJournalStore
+    risk_engine: RiskEngine = field(default_factory=RiskEngine)
     gateway_name: str = "execution-gateway"
     broker_name: str = "mt5"
 
@@ -483,6 +486,96 @@ class InstitutionalExecutionEngine:
                 checks=dict(decision.checks),
                 calculated_risk=dict(decision.calculated_risk),
                 decision=decision.decision.value,
+                latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
+                idempotent_replay=decision.idempotent_replay,
+            )
+            result.journal_entry = self._write_journal(result, intent, None, uid)
+            return result, decision
+
+        # Authoritative Risk Engine — never skip on live submit path
+        t0 = time.perf_counter()
+        risk_reject: list[str] = []
+        try:
+            account = self.gateway.adapter.account_snapshot()
+            positions = list(self.gateway.adapter.list_positions())
+            entry = Decimal("0")
+            try:
+                tick = self.gateway.adapter.latest_tick(intent.symbol)
+                entry = (
+                    Decimal(str(tick.bid))
+                    if intent.side is OrderSide.SELL
+                    else Decimal(str(tick.ask))
+                )
+                spread_val = Decimal(str(tick.ask)) - Decimal(str(tick.bid))
+            except (OSError, RuntimeError, ValueError):
+                spread_val = None
+            if intent.price is not None:
+                entry = intent.price.value
+            stop_dist = None
+            if intent.stop_loss is not None and entry > 0:
+                stop_dist = abs(entry - intent.stop_loss.value)
+            assessment = self.risk_engine.evaluate(
+                RiskCheckInput(
+                    user_id=user_id,
+                    request_id=request_id,
+                    symbol=intent.symbol,
+                    side=intent.side.value,
+                    requested_lots=intent.volume.value,
+                    stop_loss_distance=stop_dist,
+                    sizing_method=PositionSizingMethod.FIXED_LOT,
+                    entry_price=entry if entry > 0 else Decimal("1"),
+                    spread=spread_val,
+                ),
+                account=account,
+                positions=positions,
+                peak_equity=account.equity,
+            )
+            if assessment.decision is RiskDecision.REJECT:
+                risk_reject = list(assessment.reasons) or ["Risk Engine REJECT"]
+            elif assessment.decision is RiskDecision.REDUCE_SIZE:
+                approved = assessment.approved_lots
+                if approved is None or approved <= 0:
+                    risk_reject = list(assessment.reasons) or [
+                        "Risk Engine REDUCE_SIZE without approved lots"
+                    ]
+                elif approved < intent.volume.value:
+                    intent = replace(intent, volume=LotSize.of(approved))
+                    volume = str(intent.volume.value)
+        except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
+            risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
+
+        self._stage(
+            stages,
+            stage=PipelineStage.RISK_CHECK,
+            status="failed" if risk_reject else "ok",
+            reason=(
+                "; ".join(risk_reject) if risk_reject else "Risk Engine PASS"
+            ),
+            t0=t0,
+            meta={"component": "risk_engine"},
+        )
+        if risk_reject:
+            self._observe(
+                user_id=uid,
+                request_id=request_id,
+                symbol=symbol,
+                side=side,
+                order_type=order_type,
+                volume=volume,
+                stage=PipelineStage.REJECTED,
+                reason="; ".join(risk_reject),
+            )
+            result = PipelineResult(
+                request_id=request_id,
+                action=action,
+                outcome="rejected",
+                message="; ".join(risk_reject),
+                stages=stages,
+                rejection_reasons=risk_reject,
+                warnings=list(decision.warnings),
+                checks=dict(decision.checks),
+                calculated_risk=dict(decision.calculated_risk),
+                decision=ExecutionDecision.REJECT.value,
                 latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
                 idempotent_replay=decision.idempotent_replay,
             )

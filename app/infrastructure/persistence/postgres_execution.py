@@ -237,9 +237,8 @@ class PostgresExecutionAttemptRepository:
             )
         """
         update_set = """
-            ON CONFLICT (id) DO UPDATE SET
-                user_id = EXCLUDED.user_id,
-                request_id = EXCLUDED.request_id,
+            ON CONFLICT (user_id, request_id) WHERE (idempotent_replay = false)
+            DO UPDATE SET
                 symbol = EXCLUDED.symbol,
                 side = EXCLUDED.side,
                 order_type = EXCLUDED.order_type,
@@ -253,7 +252,6 @@ class PostgresExecutionAttemptRepository:
                 retryable = EXCLUDED.retryable,
                 request_snapshot = EXCLUDED.request_snapshot,
                 result_snapshot = EXCLUDED.result_snapshot,
-                idempotent_replay = EXCLUDED.idempotent_replay,
                 submitted_at = EXCLUDED.submitted_at
         """
         if attempt.idempotent_replay:

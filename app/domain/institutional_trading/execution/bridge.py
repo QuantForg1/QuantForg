@@ -377,10 +377,25 @@ class ExecutionBridge:
         intent = self._build_intent(decision, context)
         request_id = context.request_id or f"ite_{d_hash[:16]}"
 
-        # Mark hash BEFORE OMS call so retries are impossible even on failure
-        self._mark_executed(d_hash)
-        if mode is ExecutionMode.CANARY_LIVE:
-            with self._lock:
+        # Atomic reserve immediately before OMS — prevents concurrent double-send.
+        with self._lock:
+            if d_hash in self._executed_hashes:
+                self.metrics.record_duplicate()
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.DUPLICATE_DECISION,
+                    comment="Duplicate decision hash — execution not allowed",
+                    t0=t0,
+                    status=ExecutionAttemptStatus.DUPLICATE,
+                    count_reject=False,
+                )
+            self._executed_hashes.add(d_hash)
+            if mode is ExecutionMode.CANARY_LIVE:
+                if self._canary_day != context.now.date():
+                    self._canary_day = context.now.date()
+                    self._canary_count = 0
                 self._canary_count += 1
 
         oms_result = self.oms.submit_market(

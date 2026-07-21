@@ -147,6 +147,17 @@ export function TerminalShell() {
   const tick = asRecord(tickQ.data);
   const bid = num(tick.bid);
   const ask = num(tick.ask);
+  const tickTimeMs = (() => {
+    const raw = tick.timestamp ?? tick.time ?? tick.updated_at;
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      return raw < 1e12 ? raw * 1000 : raw;
+    }
+    if (typeof raw === "string" && raw.trim()) {
+      const parsed = Date.parse(raw);
+      return Number.isFinite(parsed) ? parsed : tickQ.dataUpdatedAt;
+    }
+    return tickQ.dataUpdatedAt || null;
+  })();
   const lastPrice = useMemo(() => {
     if (Number.isFinite(bid) && Number.isFinite(ask)) return (bid + ask) / 2;
     const last = num(tick.last);
@@ -435,6 +446,7 @@ export function TerminalShell() {
                 connected={connected}
                 bid={bidOk}
                 ask={askOk}
+                tickTimeMs={tickTimeMs}
                 ticketRef={ticketRef}
               />
             </div>

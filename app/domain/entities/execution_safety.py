@@ -17,7 +17,7 @@ from app.domain.enums.execution import ExecutionDecision
 class ExecutionPolicy:
     """Production policy constraints applied before any execution decision."""
 
-    max_spread: Decimal = Decimal("0.00050")  # absolute price units (e.g. 5 pips FX)
+    max_spread: Decimal = Decimal("2.00")  # absolute price units (XAU-aware default)
     max_slippage: int = 20  # points
     trading_hours_start: time = time(0, 0)
     trading_hours_end: time = time(23, 59, 59)

@@ -102,6 +102,12 @@ class TestAutoTradeSafetyGate:
         assert result.allowed is False
         assert any("Spread" in r for r in result.failed_reasons)
 
+    def test_missing_spread_fail_closed(self) -> None:
+        policy = AutoTradePolicy(enabled=True, max_spread=Decimal("1.00"))
+        result = evaluate_auto_trade_safety(policy, _all_pass_facts(spread=None))
+        assert result.allowed is False
+        assert any("Spread" in r for r in result.failed_reasons)
+
 
 @pytest.mark.unit
 class TestAutoTradeOpsControls:

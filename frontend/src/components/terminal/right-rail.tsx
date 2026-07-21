@@ -15,6 +15,7 @@ export const TerminalRightRail = memo(function TerminalRightRail({
   connected,
   bid,
   ask,
+  tickTimeMs,
   ticketRef,
 }: {
   symbol: string;
@@ -22,6 +23,7 @@ export const TerminalRightRail = memo(function TerminalRightRail({
   connected: boolean;
   bid?: number;
   ask?: number;
+  tickTimeMs?: number | null;
   ticketRef: RefObject<OrderTicketHandle | null>;
 }) {
   return (
@@ -37,6 +39,7 @@ export const TerminalRightRail = memo(function TerminalRightRail({
           connected={connected}
           bid={bid}
           ask={ask}
+          tickTimeMs={tickTimeMs}
           dense
         />
       </div>

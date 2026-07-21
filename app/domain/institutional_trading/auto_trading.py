@@ -247,15 +247,19 @@ def evaluate_auto_trade_safety(
         session_ok,
         f"Session '{session_key or '—'}' not allowed" if not session_ok else "",
     )
-    spread_ok = facts.spread is None or facts.spread <= policy.max_spread
+    spread_ok = facts.spread is not None and facts.spread <= policy.max_spread
     add(
         "max_spread",
         "Maximum spread",
         spread_ok,
         (
-            f"Spread {facts.spread} exceeds max {policy.max_spread}"
-            if not spread_ok
-            else ""
+            "Spread unavailable — fail-closed"
+            if facts.spread is None
+            else (
+                f"Spread {facts.spread} exceeds max {policy.max_spread}"
+                if not spread_ok
+                else ""
+            )
         ),
     )
     if policy.news_filter_enabled:

@@ -313,13 +313,30 @@ class GatewayMT5Client:
 
         try:
             with self._build_http_client() as client:
-                response = client.request(
-                    method,
-                    url,
-                    headers=headers,
-                    json=json_body,
-                    params=params,
-                )
+                # Safe retries: GET + connect failures only. Never retry order_send
+                # after the request may have reached the broker (duplicate risk).
+                attempts = 2 if method.upper() == "GET" else 1
+                last_exc: Exception | None = None
+                response = None
+                for attempt_i in range(attempts):
+                    try:
+                        response = client.request(
+                            method,
+                            url,
+                            headers=headers,
+                            json=json_body,
+                            params=params,
+                        )
+                        last_exc = None
+                        break
+                    except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                        last_exc = exc
+                        if attempt_i + 1 >= attempts:
+                            raise
+                        time.sleep(0.15 * (attempt_i + 1))
+                if response is None and last_exc is not None:
+                    raise last_exc
+                assert response is not None
         except httpx.TooManyRedirects as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
             gateway_metrics.record_request(latency_ms=latency_ms, error=True)

@@ -134,7 +134,7 @@ class ExecutionSafetyService:
             account = self.adapter.account_info()
             trade_mode_ok = True  # mock accounts are tradeable
             checks["account_status"] = trade_mode_ok
-            free_margin = Decimal(str(account.equity))
+            free_margin = Decimal(str(account.free_margin))
             leverage = Decimal(str(getattr(account, "leverage", 100) or 100))
         except (OSError, RuntimeError, ValueError) as exc:
             checks["account_status"] = False
@@ -193,12 +193,18 @@ class ExecutionSafetyService:
         if not ok_margin:
             reasons.append(msg_margin)
 
+        spread = Decimal("0")
         try:
             tick = self.adapter.latest_tick(intent.symbol)
             spread = Decimal(str(tick.ask)) - Decimal(str(tick.bid))
-        except (OSError, RuntimeError, ValueError):
-            spread = Decimal("0")
-            warnings.append("spread unavailable; treated as zero")
+            if spread <= 0:
+                checks["spread_available"] = False
+                reasons.append("invalid spread from broker tick")
+            else:
+                checks["spread_available"] = True
+        except (OSError, RuntimeError, ValueError) as exc:
+            checks["spread_available"] = False
+            reasons.append(f"spread unavailable — fail-closed: {exc}")
 
         stop_distance = Decimal("0")
         if intent.stop_loss:

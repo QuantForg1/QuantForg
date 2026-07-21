@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from threading import Lock
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.application.dto.audit import RecordAuditEventCommand
 from app.application.dto.execution import (
@@ -34,6 +35,19 @@ from app.domain.exceptions.base import ValidationError
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+
+_SUBMIT_LOCKS: dict[str, Lock] = {}
+_SUBMIT_LOCKS_GUARD = Lock()
+
+
+def _submit_lock(user_id: UUID, request_id: str) -> Lock:
+    key = f"{user_id}:{request_id}"
+    with _SUBMIT_LOCKS_GUARD:
+        lock = _SUBMIT_LOCKS.get(key)
+        if lock is None:
+            lock = Lock()
+            _SUBMIT_LOCKS[key] = lock
+        return lock
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +93,15 @@ class SubmitExecutionUseCase:
             existing = await uow.attempts.get_by_request_id(command.user_id, request_id)
 
         if existing is not None:
+            if existing.outcome is ExecutionOutcome.PREPARED:
+                raise ValidationError(
+                    "Execution request already in flight",
+                    details={
+                        "code": "execution_in_flight",
+                        "request_id": request_id,
+                        "outcome": existing.outcome.value,
+                    },
+                )
             replay = ExecutionAttempt.record(
                 user_id=existing.user_id,
                 request_id=existing.request_id,
@@ -148,16 +171,58 @@ class SubmitExecutionUseCase:
             )
             recent = await uow.decisions.list_recent_for_user(command.user_id)
 
-        pipeline, decision = self.engine.run_submit(
-            user_id=command.user_id,
-            request_id=request_id,
-            intent=intent,
-            connected=connected,
-            login=login,
-            recent_decisions=recent,
-            existing_decision=existing_decision,
-            action="submit",
-        )
+        reservation_id = uuid4()
+        lock = _submit_lock(command.user_id, request_id)
+        if not lock.acquire(blocking=False):
+            raise ValidationError(
+                "Execution request already in flight",
+                details={
+                    "code": "execution_in_flight",
+                    "request_id": request_id,
+                },
+            )
+        try:
+            async with self.execution_uow_factory() as uow:
+                raced = await uow.attempts.get_by_request_id(
+                    command.user_id, request_id
+                )
+                if raced is not None:
+                    raise ValidationError(
+                        "Execution request already recorded",
+                        details={
+                            "code": "execution_duplicate",
+                            "request_id": request_id,
+                            "outcome": raced.outcome.value,
+                        },
+                    )
+                reservation = ExecutionAttempt(
+                    id=reservation_id,
+                    user_id=command.user_id,
+                    request_id=request_id,
+                    symbol=intent.symbol,
+                    side=intent.side.value,
+                    order_type=intent.order_type.value,
+                    volume=intent.volume.value,
+                    outcome=ExecutionOutcome.PREPARED,
+                    retcode=0,
+                    message="in_flight",
+                    request_snapshot=dict(intent.to_dict()),
+                )
+                await uow.attempts.add(reservation)
+                await uow.commit()
+
+            pipeline, decision = self.engine.run_submit(
+                user_id=command.user_id,
+                request_id=request_id,
+                intent=intent,
+                connected=connected,
+                login=login,
+                recent_decisions=recent,
+                existing_decision=existing_decision,
+                action="submit",
+            )
+        finally:
+            lock.release()
 
         if decision is not None and not decision.idempotent_replay:
             async with self.execution_uow_factory() as uow:
@@ -165,6 +230,34 @@ class SubmitExecutionUseCase:
                 await uow.commit()
 
         if pipeline.outcome in {"rejected", "retry"}:
+            async with self.execution_uow_factory() as uow:
+                await uow.attempts.add(
+                    ExecutionAttempt.record(
+                        user_id=command.user_id,
+                        request_id=request_id,
+                        symbol=intent.symbol,
+                        side=intent.side.value,
+                        order_type=intent.order_type.value,
+                        volume=intent.volume.value,
+                        result=ExecutionResult(
+                            outcome=(
+                                ExecutionOutcome.RETRY
+                                if pipeline.outcome == "retry"
+                                else ExecutionOutcome.FAILED
+                            ),
+                            retcode=0,
+                            message=pipeline.message
+                            or "Execution pipeline rejected order",
+                            volume=intent.volume.value,
+                            symbol=intent.symbol,
+                            request_id=request_id,
+                            retryable=pipeline.outcome == "retry",
+                        ),
+                        request_snapshot=dict(intent.to_dict()),
+                        entity_id=reservation_id,
+                    )
+                )
+                await uow.commit()
             raise ValidationError(
                 pipeline.message or "Execution pipeline rejected order",
                 details={
@@ -196,6 +289,7 @@ class SubmitExecutionUseCase:
                 "pipeline_latency_ms": pipeline.latency_ms,
                 "stages": [s.to_dict() for s in pipeline.stages],
             },
+            entity_id=reservation_id,
         )
         async with self.execution_uow_factory() as uow:
             await uow.attempts.add(attempt)
