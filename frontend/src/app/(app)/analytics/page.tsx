@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -9,6 +10,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { LazyBarChart } from "@/components/charts/lazy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskTable } from "@/components/desk/primitives";
 import { DeskQueryState } from "@/components/desk/query-state";
 import { paperApi, portfolioApi } from "@/lib/api/endpoints";
@@ -106,13 +108,21 @@ export default function AnalyticsPage() {
     };
   }, [deals, trades]);
 
-  const perf = asRecord(paper.data?.performance);
+  const perf = asRecord(paper.data?.performance ?? paper.data);
+  const winRate = metric(perf, "win_rate", "winRate");
+  const profitFactor = metric(perf, "profit_factor", "profitFactor");
+  const sharpe = metric(perf, "sharpe", "sharpe_ratio", "sharpeRatio");
 
   return (
     <div>
       <PageHeader
         title="Analytics"
-        description="Returns, volatility, distribution, and symbol exposure from live and paper fills."
+        description="Returns, volatility, distribution, and symbol exposure from live and paper fills. Terminal no longer embeds analytics — use this desk or Journal analytics."
+        actions={
+          <Button asChild size="sm" variant="secondary">
+            <Link href="/journal/analytics">Journal analytics</Link>
+          </Button>
+        }
       />
 
       <DeskQueryState
@@ -128,6 +138,28 @@ export default function AnalyticsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
+          {(Number.isFinite(winRate) ||
+            Number.isFinite(profitFactor) ||
+            Number.isFinite(sharpe)) && (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {Number.isFinite(winRate) ? (
+                <StatCard
+                  label="Win rate"
+                  value={formatPct(winRate * (winRate <= 1 ? 100 : 1))}
+                />
+              ) : null}
+              {Number.isFinite(profitFactor) ? (
+                <StatCard
+                  label="Profit factor"
+                  value={formatNumber(profitFactor, 2)}
+                />
+              ) : null}
+              {Number.isFinite(sharpe) ? (
+                <StatCard label="Sharpe" value={formatNumber(sharpe, 2)} />
+              ) : null}
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Daily Return"

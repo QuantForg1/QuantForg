@@ -6,8 +6,9 @@ import {
   ExecutionOrderTicket,
   type OrderTicketHandle,
 } from "@/components/execution/order-ticket";
+import { QuickRiskSummary } from "@/components/terminal/quick-risk-summary";
 
-/** One order ticket — no duplicate account summary (lives on SessionBar). */
+/** Order ticket + quick risk — AI decision stays inside the ticket. */
 export const TerminalRightRail = memo(function TerminalRightRail({
   symbol,
   onSymbolChange,
@@ -39,6 +40,7 @@ export const TerminalRightRail = memo(function TerminalRightRail({
           dense
         />
       </div>
+      <QuickRiskSummary className="shrink-0" />
     </aside>
   );
 });

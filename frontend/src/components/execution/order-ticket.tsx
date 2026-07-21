@@ -82,8 +82,9 @@ export const ExecutionOrderTicket = forwardRef<
     queryFn: mt5Api.account,
     retry: false,
     enabled: connected,
+    staleTime: 15_000,
   });
-  const equity = num(asRecord(accountQ.data).equity);
+  const equity = num(asRecord(accountQ.data).equity) || num(session.equity);
 
   const mid =
     Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null

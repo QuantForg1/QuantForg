@@ -1,13 +1,17 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   Bell,
   BookOpen,
+  Bot,
   Briefcase,
   Building2,
+  Gauge,
   LayoutTemplate,
   NotebookPen,
   Scale,
   Settings,
+  Shield,
   FlaskConical,
 } from "lucide-react";
 
@@ -93,6 +97,30 @@ export const commandItems: NavItem[] = [
   ...appNav.flatMap((g) => g.items),
   { href: "/orders", label: "Orders blotter", icon: BookOpen, hint: "Opens in Terminal" },
   { href: "/positions", label: "Positions", icon: Briefcase, hint: "Opens in Terminal" },
+  {
+    href: "/analytics",
+    label: "Analytics",
+    icon: Activity,
+    hint: "Returns · volatility · exposure",
+  },
+  {
+    href: "/risk-center",
+    label: "Risk Center",
+    icon: Shield,
+    hint: "Pre-trade checks · session exposure",
+  },
+  {
+    href: "/auto-trading",
+    label: "Auto Trading",
+    icon: Bot,
+    hint: "Operator auto-trade controls · PME",
+  },
+  {
+    href: "/monitoring",
+    label: "Monitoring",
+    icon: Gauge,
+    hint: "Gateway · reliability · health",
+  },
   {
     href: "/ops",
     label: "Operations control",

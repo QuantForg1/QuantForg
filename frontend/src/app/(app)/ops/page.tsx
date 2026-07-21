@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -149,7 +150,17 @@ export default function OpsPage() {
     <div>
       <PageHeader
         title="Operations"
-        description="Institutional control plane, system health, and admin monitoring."
+        description="Institutional control plane, system health, and admin monitoring. Auto Trading and Monitoring desks moved to dedicated secondary pages."
+        actions={
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Link href="/auto-trading" className="text-[var(--accent)] hover:underline">
+              Auto Trading
+            </Link>
+            <Link href="/monitoring" className="text-[var(--accent)] hover:underline">
+              Monitoring
+            </Link>
+          </div>
+        }
       />
 
       <div className="mb-6 space-y-4">

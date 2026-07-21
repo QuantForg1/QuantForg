@@ -1,8 +1,9 @@
-/** Terminal OS layout persistence — trader tabs only. */
+/** Terminal OS layout — trading-only surface. */
 
 export type TerminalPresetId = "default" | "chart-focus" | "tape-focus";
 
-export type TerminalBlotterTab = "positions" | "orders" | "history" | "journal";
+/** Positions-first blotter — history/journal live on Journal desk. */
+export type TerminalBlotterTab = "positions" | "orders";
 
 export type TerminalLayoutState = {
   preset: TerminalPresetId;
@@ -20,14 +21,14 @@ export type TerminalLayoutState = {
   counselCollapsed: boolean;
 };
 
-export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v1";
+export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v2";
 export const TERMINAL_SYMBOL_KEY = "qf.workspace.symbol";
 
 export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   preset: "default",
-  leftWidth: 260,
-  rightWidth: 340,
-  bottomHeight: 220,
+  leftWidth: 240,
+  rightWidth: 360,
+  bottomHeight: 180,
   leftCollapsed: false,
   rightCollapsed: false,
   bottomCollapsed: false,
@@ -36,15 +37,10 @@ export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   timeframe: "H1",
   showVolume: true,
   bottomTab: "positions",
-  counselCollapsed: false,
+  counselCollapsed: true,
 };
 
-const TRADER_TABS: TerminalBlotterTab[] = [
-  "positions",
-  "orders",
-  "history",
-  "journal",
-];
+const TRADER_TABS: TerminalBlotterTab[] = ["positions", "orders"];
 
 export const PRESET_TERMINAL: Record<
   TerminalPresetId,
@@ -52,14 +48,14 @@ export const PRESET_TERMINAL: Record<
 > = {
   default: {
     preset: "default",
-    leftWidth: 260,
-    rightWidth: 340,
-    bottomHeight: 220,
+    leftWidth: 240,
+    rightWidth: 360,
+    bottomHeight: 180,
     leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
     chartFullscreen: false,
-    counselCollapsed: false,
+    counselCollapsed: true,
   },
   "chart-focus": {
     preset: "chart-focus",
@@ -71,13 +67,13 @@ export const PRESET_TERMINAL: Record<
   },
   "tape-focus": {
     preset: "tape-focus",
-    leftWidth: 240,
-    rightWidth: 320,
-    bottomHeight: 300,
+    leftWidth: 220,
+    rightWidth: 340,
+    bottomHeight: 260,
     leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
-    counselCollapsed: false,
+    counselCollapsed: true,
   },
 };
 
@@ -91,9 +87,7 @@ function normalizeTab(raw: unknown): TerminalBlotterTab {
 export function loadTerminalLayout(): TerminalLayoutState {
   if (typeof window === "undefined") return DEFAULT_TERMINAL_LAYOUT;
   try {
-    const raw =
-      localStorage.getItem(TERMINAL_LAYOUT_KEY) ||
-      localStorage.getItem("qf.workspace.layout.v2");
+    const raw = localStorage.getItem(TERMINAL_LAYOUT_KEY);
     if (!raw) return DEFAULT_TERMINAL_LAYOUT;
     const parsed = JSON.parse(raw) as Partial<TerminalLayoutState> & {
       bottomTab?: unknown;
@@ -102,7 +96,10 @@ export function loadTerminalLayout(): TerminalLayoutState {
       ...DEFAULT_TERMINAL_LAYOUT,
       ...parsed,
       bottomTab: normalizeTab(parsed.bottomTab),
-      counselCollapsed: Boolean(parsed.counselCollapsed),
+      counselCollapsed:
+        parsed.counselCollapsed === undefined
+          ? true
+          : Boolean(parsed.counselCollapsed),
     };
   } catch {
     return DEFAULT_TERMINAL_LAYOUT;

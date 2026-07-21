@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -30,11 +31,7 @@ import {
   type TerminalBlotterTab,
 } from "@/components/terminal/layout-store";
 import type { OrderTicketHandle } from "@/components/execution/order-ticket";
-import {
-  useExecutionStream,
-  useNotificationsStream,
-  useActivityStream,
-} from "@/hooks/realtime";
+import { useExecutionStream } from "@/hooks/realtime";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asRecord, num } from "@/lib/desk";
@@ -51,12 +48,19 @@ function isTypingTarget(el: EventTarget | null) {
   );
 }
 
+const DESK_LINKS = [
+  { href: "/analytics", label: "Analytics" },
+  { href: "/risk-center", label: "Risk" },
+  { href: "/auto-trading", label: "Auto" },
+  { href: "/monitoring", label: "Monitor" },
+] as const;
+
 const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "B / S", action: "Buy / Sell (confirm)" },
-  { keys: "1–4", action: "Blotter tabs" },
+  { keys: "1–2", action: "Blotter tabs" },
   { keys: "[ / ]", action: "Toggle left / right rail" },
   { keys: "\\", action: "Toggle blotter" },
-  { keys: "C", action: "Toggle Counsel" },
+  { keys: "C", action: "Toggle AI decision strip" },
   { keys: "F", action: "Chart fullscreen" },
   { keys: "Esc", action: "Cancel / exit fullscreen" },
   { keys: "?", action: "This help" },
@@ -65,6 +69,7 @@ const SHORTCUTS: { keys: string; action: string }[] = [
 
 /**
  * QuantForg Terminal OS — flagship zero-scroll trading surface.
+ * Chart · Ticket · AI Decision · Positions · Quick Risk only.
  * Preserves MT5 execution, lightweight-charts, live book, websockets.
  */
 export function TerminalShell() {
@@ -74,6 +79,11 @@ export function TerminalShell() {
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const ticketRef = useRef<OrderTicketHandle | null>(null);
+  const layoutRef = useRef(layout);
+
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
 
   useEffect(() => {
     const stored = loadTerminalLayout();
@@ -121,8 +131,6 @@ export function TerminalShell() {
   }, []);
 
   const realtime = useExecutionStream(symbol);
-  useNotificationsStream();
-  useActivityStream();
   const session = useTradingSession();
   const connected = session.connected;
 
@@ -131,6 +139,8 @@ export function TerminalShell() {
     queryFn: () => mt5Api.tick(symbol),
     retry: false,
     enabled: connected && Boolean(symbol),
+    staleTime: 1000,
+    refetchInterval: connected ? 2000 : false,
   });
 
   const tick = asRecord(tickQ.data);
@@ -165,7 +175,7 @@ export function TerminalShell() {
   const onBottomDelta = useCallback((d: number) => {
     setLayout((prev) => ({
       ...prev,
-      bottomHeight: Math.min(420, Math.max(140, prev.bottomHeight - d)),
+      bottomHeight: Math.min(360, Math.max(120, prev.bottomHeight - d)),
     }));
   }, []);
 
@@ -182,9 +192,10 @@ export function TerminalShell() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const current = layoutRef.current;
       if (e.key === "Escape") {
         ticketRef.current?.cancelDialog();
-        if (layout.chartFullscreen) patchLayout({ chartFullscreen: false });
+        if (current.chartFullscreen) patchLayout({ chartFullscreen: false });
         setHelpOpen(false);
         return;
       }
@@ -212,39 +223,29 @@ export function TerminalShell() {
         setBlotterTab("orders");
         return;
       }
-      if (k === "3") {
-        e.preventDefault();
-        setBlotterTab("history");
-        return;
-      }
-      if (k === "4") {
-        e.preventDefault();
-        setBlotterTab("journal");
-        return;
-      }
       if (e.key === "[") {
         e.preventDefault();
-        patchLayout({ leftCollapsed: !layout.leftCollapsed });
+        patchLayout({ leftCollapsed: !current.leftCollapsed });
         return;
       }
       if (e.key === "]") {
         e.preventDefault();
-        patchLayout({ rightCollapsed: !layout.rightCollapsed });
+        patchLayout({ rightCollapsed: !current.rightCollapsed });
         return;
       }
       if (e.key === "\\") {
         e.preventDefault();
-        patchLayout({ bottomCollapsed: !layout.bottomCollapsed });
+        patchLayout({ bottomCollapsed: !current.bottomCollapsed });
         return;
       }
       if (k === "c") {
         e.preventDefault();
-        patchLayout({ counselCollapsed: !layout.counselCollapsed });
+        patchLayout({ counselCollapsed: !current.counselCollapsed });
         return;
       }
       if (k === "f") {
         e.preventDefault();
-        patchLayout({ chartFullscreen: !layout.chartFullscreen });
+        patchLayout({ chartFullscreen: !current.chartFullscreen });
         return;
       }
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
@@ -254,7 +255,7 @@ export function TerminalShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [layout, patchLayout, setBlotterTab]);
+  }, [patchLayout, setBlotterTab]);
 
   const showLeft = !layout.leftCollapsed && !layout.chartFullscreen;
   const showRight = !layout.rightCollapsed && !layout.chartFullscreen;
@@ -272,9 +273,25 @@ export function TerminalShell() {
     >
       <header className="shrink-0">
         <div className="flex h-9 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
-          <h1 className="text-xs font-semibold tracking-tight text-[var(--fg)]">
-            Terminal
-          </h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <h1 className="shrink-0 text-xs font-semibold tracking-tight text-[var(--fg)]">
+              Terminal
+            </h1>
+            <nav
+              className="hidden items-center gap-2 sm:flex"
+              aria-label="Secondary desks"
+            >
+              {DESK_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)] transition-colors hover:text-[var(--fg)]"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
           <div className="flex items-center gap-0.5">
             <Button
               size="sm"
@@ -308,7 +325,7 @@ export function TerminalShell() {
               className="h-7 px-2 text-[11px]"
               onClick={() => patchLayout({ bottomCollapsed: !layout.bottomCollapsed })}
             >
-              {layout.bottomCollapsed ? "Blotter" : "Hide"}
+              {layout.bottomCollapsed ? "Positions" : "Hide"}
             </Button>
             <Button
               size="sm"
