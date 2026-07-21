@@ -844,6 +844,48 @@ export const alphaEngineApi = {
     }),
 };
 
+/** Trading Kernel V1 — orchestrates only; never order_send / never bypass Risk/Safety */
+export const tradingKernelApi = {
+  status: () => apiFetch<Record<string, unknown>>("/trading-kernel/status"),
+  cycle: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/trading-kernel/cycle", {
+      method: "POST",
+      body,
+    }),
+  events: (limit = 100, traceId?: string) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (traceId) q.set("trace_id", traceId);
+    return apiFetch<Record<string, unknown>>(`/trading-kernel/events?${q}`);
+  },
+  stageReplay: (traceId: string, stage?: string) => {
+    const q = new URLSearchParams({ trace_id: traceId });
+    if (stage) q.set("stage", stage);
+    return apiFetch<Record<string, unknown>>(
+      `/trading-kernel/replay/stage?${q}`,
+    );
+  },
+  deterministicReplay: (traceId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/trading-kernel/replay/deterministic?trace_id=${encodeURIComponent(traceId)}`,
+    ),
+  policies: () => apiFetch<Record<string, unknown>>("/trading-kernel/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/trading-kernel/policies", {
+      method: "POST",
+      body,
+    }),
+  featureFlags: () =>
+    apiFetch<Record<string, unknown>>("/trading-kernel/feature-flags"),
+  setFeatureFlag: (flag: string, enabled: boolean) =>
+    apiFetch<Record<string, unknown>>("/trading-kernel/feature-flags", {
+      method: "POST",
+      body: { flag, enabled },
+    }),
+  plugins: () => apiFetch<Record<string, unknown>>("/trading-kernel/plugins"),
+  certification: () =>
+    apiFetch<Record<string, unknown>>("/trading-kernel/certification"),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

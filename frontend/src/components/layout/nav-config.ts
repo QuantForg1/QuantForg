@@ -223,6 +223,12 @@ export const appNav: NavGroup[] = [
         hint: "Market quality before execution",
       },
       {
+        href: "/trading-kernel",
+        label: "Trading Kernel",
+        icon: Layers3,
+        hint: "Core OS · orchestrate · never bypass",
+      },
+      {
         href: "/gateway",
         label: "Gateway",
         icon: Workflow,
