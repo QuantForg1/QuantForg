@@ -87,8 +87,10 @@ export function metricsFromPipelineResult(
     signalMs?: number;
     riskMs?: number;
     orderCheckMs?: number;
+    brokerFillMs?: number;
     totalMs?: number;
     spread?: string;
+    slippage?: string;
   },
 ): ExecutionTimingMetrics {
   const stages = Array.isArray(result.stages) ? result.stages : [];
@@ -111,11 +113,16 @@ export function metricsFromPipelineResult(
 
   const exec = (result.execution ?? result) as Record<string, unknown>;
   const slippageRaw =
-    exec.slippage ?? result.slippage ?? exec.slippage_points ?? null;
+    client.slippage ??
+    exec.slippage ??
+    result.slippage ??
+    exec.slippage_points ??
+    null;
   const spreadRaw = client.spread ?? exec.spread ?? result.spread ?? null;
 
   const totalFromServer = Number(result.latency_ms);
   const brokerFill =
+    client.brokerFillMs ??
     find("broker_fill", "broker_acceptance", "broker_submission") ??
     (Number.isFinite(Number(exec.latency_ms)) ? Number(exec.latency_ms) : null);
 

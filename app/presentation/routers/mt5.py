@@ -191,6 +191,7 @@ async def mt5_order_validate(
             slippage=body.slippage,
             magic=body.magic,
             comment=body.comment,
+            request_id=body.request_id,
             ip_address=ip,
             user_agent=ua,
         )

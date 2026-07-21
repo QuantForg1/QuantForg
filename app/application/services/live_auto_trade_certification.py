@@ -203,3 +203,73 @@ def reset_live_cert_service_for_tests() -> LiveAutoTradeCertificationService:
     with _SERVICE_LOCK:
         _SERVICE = LiveAutoTradeCertificationService()
         return _SERVICE
+
+
+def seed_certified_demo_report_for_tests(
+    *,
+    account_type: str = "demo",
+) -> LiveCertificationReport:
+    """Test-only: seed a certified Demo report so LIVE promotion can succeed."""
+    from decimal import Decimal
+
+    from app.domain.institutional_trading.live_certification import (
+        LiveCertChecklistResult,
+    )
+
+    svc = reset_live_cert_service_for_tests()
+    trade = LiveTradeEvidence(
+        broker="Weltrade",
+        account_type=account_type,
+        symbol="XAUUSD",
+        volume=DEMO_CERT_VOLUME,
+        ticket=9001,
+        deal=9002,
+        entry=Decimal("2300"),
+        exit=Decimal("2301"),
+        profit_loss=Decimal("1"),
+        execution_latency_ms=42.0,
+        margin_used=Decimal("10"),
+        risk_pct=Decimal("0.5"),
+        audit_id="test-demo-cert-audit",
+        position_closed=True,
+        history_recorded=True,
+        analytics_recorded=True,
+        signal_time_ms=1.0,
+        risk_time_ms=2.0,
+        order_check_time_ms=3.0,
+        broker_fill_time_ms=20.0,
+        total_execution_time_ms=26.0,
+        slippage="0.1",
+        spread="0.40",
+    )
+    stages = build_stage_results(
+        completed=dict.fromkeys(
+            (
+                "signal",
+                "risk_check",
+                "order_check",
+                "order_send",
+                "broker_fill",
+                "position_open",
+                "position_close",
+                "execution_audit",
+                "history",
+                "analytics",
+            ),
+            True,
+        )
+    )
+    report = LiveCertificationReport(
+        certified=True,
+        status="CERTIFIED",
+        checklist=LiveCertChecklistResult(
+            ready=True,
+            conditions=(),
+            failed_reasons=(),
+        ),
+        stages=stages,
+        trade=trade,
+    )
+    with svc._lock:
+        svc._last_report = report
+    return report

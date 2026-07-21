@@ -12,6 +12,9 @@ from app.application.services.institutional_execution_integration import (
     InstitutionalExecutionIntegration,
 )
 from app.application.services.institutional_oms_adapter import RecordingOmsPort
+from app.application.services.live_auto_trade_certification import (
+    seed_certified_demo_report_for_tests,
+)
 from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.decision_models import (
     AccountRiskState,
@@ -154,6 +157,7 @@ def _buy_decision():
 @pytest.mark.unit
 def test_paper_auto_trade_path_signal_to_oms_audit() -> None:
     """Verify: signal → risk PASS → order submitted → broker accepted → audit."""
+    seed_certified_demo_report_for_tests()
     plane = OperationsControlPlane()
     op = _op()
     plane.transition_mode(op, OpsExecutionMode.CANARY, reason="paper", confirmed=True)
@@ -218,6 +222,7 @@ def test_paper_auto_trade_path_signal_to_oms_audit() -> None:
 
 @pytest.mark.unit
 def test_paper_auto_trade_blocked_shows_exact_reason() -> None:
+    seed_certified_demo_report_for_tests()
     plane = OperationsControlPlane()
     op = _op()
     plane.transition_mode(op, OpsExecutionMode.CANARY, reason="x", confirmed=True)

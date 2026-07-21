@@ -384,16 +384,31 @@ export const ExecutionOrderTicket = forwardRef<
         toast.error(err.title, { description: err.description });
         return;
       }
-      const result = await executionApi.submit(payload);
+      const tFill = performance.now();
+      const result = await executionApi.submit({
+        ...payload,
+        signal_time_ms: signalMs,
+        risk_time_ms: riskMs,
+        order_check_time_ms: orderCheckMs,
+        measured_spread: liveSpread,
+      });
+      const brokerFillMs = performance.now() - tFill;
       const totalMs = performance.now() - t0;
       const outcome = str(asRecord(result).outcome);
       if (outcome === "success") {
+        const fillPrice = num(asRecord(result).price, NaN);
+        const measuredSlippage =
+          Number.isFinite(fillPrice) && Number.isFinite(mid)
+            ? String(Math.abs(fillPrice - mid))
+            : undefined;
         const metrics = metricsFromPipelineResult(asRecord(result), {
           signalMs,
           riskMs,
           orderCheckMs,
+          brokerFillMs,
           totalMs,
           spread: liveSpread,
+          slippage: measuredSlippage,
         });
         setExecMetrics(metrics);
         saveLastExecutionMetrics(metrics);

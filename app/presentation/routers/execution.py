@@ -196,6 +196,13 @@ async def execution_submit(
             oms_kind=body.oms_kind,
             ip_address=ip,
             user_agent=ua,
+            signal_time_ms=body.signal_time_ms,
+            risk_time_ms=body.risk_time_ms,
+            order_check_time_ms=body.order_check_time_ms,
+            broker_fill_time_ms=body.broker_fill_time_ms,
+            total_execution_time_ms=body.total_execution_time_ms,
+            measured_spread=body.measured_spread,
+            measured_slippage=body.measured_slippage,
         )
     )
     return ExecutionSubmitResponse(

@@ -84,6 +84,13 @@ class ExecutionSubmitCommand:
     user_agent: str = ""
     # Terminal audit stage for broker attempt (submit vs manage). Does not change OMS.
     audit_stage: str = "submit"
+    signal_time_ms: float | None = None
+    risk_time_ms: float | None = None
+    order_check_time_ms: float | None = None
+    broker_fill_time_ms: float | None = None
+    total_execution_time_ms: float | None = None
+    measured_spread: str | None = None
+    measured_slippage: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

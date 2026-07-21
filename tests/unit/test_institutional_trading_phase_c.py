@@ -421,7 +421,9 @@ class TestExecutionBridgePhaseC:
             user_id=uuid4(), role="owner", display_name="test-op"
         )
         plane = OperationsControlPlane()
-        plane.transition_mode(op, OpsExecutionMode.CANARY, reason="canary", confirmed=True)
+        plane.transition_mode(
+            op, OpsExecutionMode.CANARY, reason="canary", confirmed=True
+        )
         plane.update_auto_trade_controls(op, enabled=True, reason="enable canary auto")
         assert plane.auto_trading_enabled is True
         assert plane.kill_switch_armed is False

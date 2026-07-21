@@ -53,6 +53,14 @@ class ExecutionSubmitRequest(BaseModel):
     position: int = Field(default=0, ge=0)
     order_ticket: int = Field(default=0, ge=0)
     oms_kind: str = Field(default="", max_length=32)
+    # Client-measured timings (ms) — persisted into execution audit; never invents fills
+    signal_time_ms: float | None = None
+    risk_time_ms: float | None = None
+    order_check_time_ms: float | None = None
+    broker_fill_time_ms: float | None = None
+    total_execution_time_ms: float | None = None
+    measured_spread: str | None = Field(default=None, max_length=32)
+    measured_slippage: str | None = Field(default=None, max_length=32)
 
 
 class ExecutionSubmitResponse(BaseModel):

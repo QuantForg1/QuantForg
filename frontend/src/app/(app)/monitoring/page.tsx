@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageMotion } from "@/components/desk/motion";
@@ -10,7 +10,11 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui/button";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
-import { ExecutionMetricsStrip } from "@/components/execution/execution-metrics-strip";
+import {
+  EMPTY_EXECUTION_METRICS,
+  ExecutionMetricsStrip,
+  type ExecutionTimingMetrics,
+} from "@/components/execution/execution-metrics-strip";
 import { loadLastExecutionMetrics } from "@/lib/execution/last-metrics";
 import { mt5Api, platformApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
@@ -46,7 +50,12 @@ export default function MonitoringPage() {
     refetchInterval: 30_000,
   });
 
-  const execMetrics = useMemo(() => loadLastExecutionMetrics(), []);
+  const [execMetrics, setExecMetrics] = useState<ExecutionTimingMetrics>(
+    EMPTY_EXECUTION_METRICS,
+  );
+  useEffect(() => {
+    setExecMetrics(loadLastExecutionMetrics());
+  }, [health.dataUpdatedAt, mt5.dataUpdatedAt]);
 
   const deps = asList(asRecord(health.data).dependencies).map(asRecord);
   const findDep = (name: string) =>

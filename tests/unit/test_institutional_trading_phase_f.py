@@ -17,6 +17,10 @@ from app.application.services.institutional_ops_guards import (
     GuardedOmsManagePort,
     GuardedOmsSubmitPort,
 )
+from app.application.services.live_auto_trade_certification import (
+    reset_live_cert_service_for_tests,
+    seed_certified_demo_report_for_tests,
+)
 from app.domain.institutional_trading.operations.control_plane import (
     OperationsControlPlane,
     PermissionDenied,
@@ -42,6 +46,7 @@ def _op(role: str = "owner") -> OperatorIdentity:
 @pytest.mark.unit
 class TestModeTransitions:
     def test_shadow_to_canary_to_live_to_shadow(self) -> None:
+        seed_certified_demo_report_for_tests()
         plane = OperationsControlPlane()
         op = _op()
         r1 = plane.transition_mode(
@@ -58,6 +63,20 @@ class TestModeTransitions:
         )
         assert r3.ok
         assert plane.mode is OpsExecutionMode.SHADOW
+
+    def test_live_blocked_without_demo_certification(self) -> None:
+        reset_live_cert_service_for_tests()
+        plane = OperationsControlPlane()
+        op = _op()
+        assert plane.transition_mode(
+            op, OpsExecutionMode.CANARY, reason="promote", confirmed=True
+        ).ok
+        blocked = plane.transition_mode(
+            op, OpsExecutionMode.LIVE, reason="go live", confirmed=True
+        )
+        assert blocked.ok is False
+        assert "Demo certification" in blocked.message
+        assert plane.mode is OpsExecutionMode.CANARY
 
     def test_illegal_transition(self) -> None:
         plane = OperationsControlPlane()

@@ -107,9 +107,12 @@ class ValidateMT5OrderUseCase:
 
         if self.execution_audit is not None:
             try:
+                audit_request_id = (
+                    command.request_id or ""
+                ).strip() or f"val_{stored.id.hex}"
                 await self.execution_audit.record(
                     user_id=command.user_id,
-                    request_id=f"val_{stored.id.hex}",
+                    request_id=audit_request_id,
                     stage=ExecutionAuditStage.VALIDATION,
                     symbol=stored.symbol,
                     side=stored.side,

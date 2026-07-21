@@ -7,6 +7,9 @@ from uuid import uuid4
 
 import pytest
 
+from app.application.services.live_auto_trade_certification import (
+    seed_certified_demo_report_for_tests,
+)
 from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
     AutoTradePolicy,
@@ -103,6 +106,7 @@ class TestAutoTradeSafetyGate:
 @pytest.mark.unit
 class TestAutoTradeOpsControls:
     def test_update_controls_and_emergency_stop(self) -> None:
+        seed_certified_demo_report_for_tests()
         plane = OperationsControlPlane()
         op = _op()
         plane.transition_mode(

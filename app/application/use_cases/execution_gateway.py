@@ -222,6 +222,23 @@ class SubmitExecutionUseCase:
                     ExecutionAuditStage.MANAGE,
                 }:
                     terminal_stage = ExecutionAuditStage.SUBMIT
+                timing_payload = {
+                    "signal_time_ms": command.signal_time_ms,
+                    "risk_time_ms": command.risk_time_ms,
+                    "order_check_time_ms": command.order_check_time_ms,
+                    "broker_fill_time_ms": command.broker_fill_time_ms,
+                    "total_execution_time_ms": (
+                        command.total_execution_time_ms
+                        if command.total_execution_time_ms is not None
+                        else pipeline.latency_ms
+                    ),
+                    "pipeline_stages": [
+                        {"stage": s.stage, "elapsed_ms": round(s.elapsed_ms, 3)}
+                        for s in pipeline.stages
+                    ],
+                }
+                snapshot = dict(attempt.request_snapshot)
+                snapshot["execution_timings"] = timing_payload
                 await self.execution_audit.record(
                     user_id=command.user_id,
                     request_id=request_id,
@@ -233,14 +250,33 @@ class SubmitExecutionUseCase:
                     retcode=exec_result.retcode,
                     order_ticket=exec_result.order_ticket,
                     deal_ticket=exec_result.deal_ticket,
-                    latency_ms=pipeline.latency_ms,
-                    gateway_latency_ms=(
-                        float(gateway_ms) if gateway_ms is not None else None
+                    latency_ms=(
+                        float(command.total_execution_time_ms)
+                        if command.total_execution_time_ms is not None
+                        else pipeline.latency_ms
                     ),
-                    railway_processing_ms=None,
-                    cloudflare_latency_ms=None,
-                    slippage=str(command.slippage),
-                    payload_in=dict(attempt.request_snapshot),
+                    gateway_latency_ms=(
+                        float(command.broker_fill_time_ms)
+                        if command.broker_fill_time_ms is not None
+                        else (float(gateway_ms) if gateway_ms is not None else None)
+                    ),
+                    railway_processing_ms=(
+                        float(command.risk_time_ms)
+                        if command.risk_time_ms is not None
+                        else None
+                    ),
+                    cloudflare_latency_ms=(
+                        float(command.signal_time_ms)
+                        if command.signal_time_ms is not None
+                        else None
+                    ),
+                    spread=command.measured_spread,
+                    slippage=(
+                        command.measured_slippage
+                        if command.measured_slippage
+                        else str(command.slippage)
+                    ),
+                    payload_in=snapshot,
                     payload_out=exec_result.to_dict(),
                     related_ids={"attempt_id": str(attempt.id)},
                 )

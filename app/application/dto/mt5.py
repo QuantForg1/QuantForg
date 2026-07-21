@@ -251,6 +251,7 @@ class MT5OrderValidateCommand:
     slippage: int = 10
     magic: int = 0
     comment: str = ""
+    request_id: str | None = None
     ip_address: str = ""
     user_agent: str = ""
 

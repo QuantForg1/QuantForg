@@ -114,6 +114,7 @@ class MT5OrderValidateRequest(BaseModel):
     slippage: int = Field(default=10, ge=0)
     magic: int = Field(default=0, ge=0)
     comment: str = Field(default="", max_length=64)
+    request_id: str | None = Field(default=None, max_length=128)
 
 
 class MT5OrderValidationResponse(BaseModel):

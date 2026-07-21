@@ -66,8 +66,9 @@ export default function AutoTradingPage() {
         <p className="text-xs text-[var(--fg-muted)]">
           Production auto path: signal → risk → margin → exposure → spread → session →
           news → order submit → PME (SL / TP / trail / BE / partial) → audit / journal /
-          analytics. Never bypasses Risk Engine or broker validation. Modes are
-          operator-only (SHADOW → CANARY → LIVE).
+          analytics. Never bypasses Risk Engine or broker validation. Certification
+          sequence is operator-only: SHADOW → CANARY → Demo trade → LIVE. Never certify on
+          a Real account; the first automatic trade must be on Demo.
         </p>
 
         <Card>
@@ -86,8 +87,14 @@ export default function AutoTradingPage() {
               disables auto trading. Mode stays CANARY until an operator promotes.
             </p>
             <p>
+              <span className="font-medium text-[var(--fg)]">DEMO</span> — required certification
+              trade on a Demo account after CANARY. LIVE stays blocked until Demo evidence is
+              certified.
+            </p>
+            <p>
               <span className="font-medium text-[var(--fg)]">LIVE</span> — operator-only promotion
-              from CANARY (confirm required). Never auto-promoted.
+              from CANARY after successful Demo certification (confirm required). Never
+              auto-promoted.
             </p>
           </CardContent>
         </Card>
