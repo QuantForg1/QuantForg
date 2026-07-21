@@ -732,6 +732,46 @@ export const missionControlApi = {
     ),
 };
 
+/** Intelligence Platform — research/replay only; never order_send */
+export const intelligencePlatformApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/intelligence-platform/status"),
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/intelligence-platform/dashboard"),
+  dashboardWithFeeds: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/intelligence-platform/dashboard", {
+      method: "POST",
+      body,
+    }),
+  knowledge: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/intelligence-platform/knowledge?limit=${limit}`,
+    ),
+  addKnowledge: (body: { title: string; body: string; tags?: string[] }) =>
+    apiFetch<Record<string, unknown>>("/intelligence-platform/knowledge", {
+      method: "POST",
+      body,
+    }),
+  searchKnowledge: (q: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/intelligence-platform/knowledge/search?q=${encodeURIComponent(q)}`,
+    ),
+  replayLoad: (body: { strategy_key?: string; bars: Record<string, unknown>[] }) =>
+    apiFetch<Record<string, unknown>>("/intelligence-platform/replay/load", {
+      method: "POST",
+      body,
+    }),
+  replayControl: (action: string) =>
+    apiFetch<Record<string, unknown>>("/intelligence-platform/replay/control", {
+      method: "POST",
+      body: { action },
+    }),
+  decisionReplay: (auditId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/intelligence-platform/decision-replay?audit_id=${encodeURIComponent(auditId)}`,
+    ),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

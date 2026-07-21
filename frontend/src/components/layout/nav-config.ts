@@ -134,6 +134,12 @@ export const appNav: NavGroup[] = [
         hint: "Validate · promote · lab only",
       },
       {
+        href: "/intelligence-platform",
+        label: "Intelligence",
+        icon: BookOpen,
+        hint: "Replay · review · governance",
+      },
+      {
         href: "/ai-signals",
         label: "AI Signals",
         icon: Sparkles,
