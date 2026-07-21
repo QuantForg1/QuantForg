@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bell,
   BookOpen,
+  Bot,
   Briefcase,
   Building2,
   Calendar,
@@ -160,6 +161,12 @@ export const appNav: NavGroup[] = [
         label: "Monitoring",
         icon: Gauge,
         hint: "Production ops · live execution",
+      },
+      {
+        href: "/auto-trading",
+        label: "Auto Trading",
+        icon: Bot,
+        hint: "Autonomous command center",
       },
       {
         href: "/gateway",
