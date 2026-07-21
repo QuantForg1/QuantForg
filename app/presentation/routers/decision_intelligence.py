@@ -52,6 +52,8 @@ class EvaluateRequest(BaseModel):
     operator_action: str | None = None
     operator: str = "system"
     operator_reason: str = ""
+    alpha: dict[str, Any] | None = None
+    alpha_advisory: dict[str, Any] | None = None
 
 
 class PoliciesRequest(BaseModel):

@@ -217,6 +217,12 @@ export const appNav: NavGroup[] = [
         hint: "Market Intelligence Engine V1",
       },
       {
+        href: "/alpha-engine",
+        label: "Alpha Engine",
+        icon: CandlestickChart,
+        hint: "Market quality before execution",
+      },
+      {
         href: "/gateway",
         label: "Gateway",
         icon: Workflow,

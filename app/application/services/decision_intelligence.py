@@ -40,6 +40,7 @@ class DecisionIntelligenceService:
         return self._center.status()
 
     def evaluate(self, payload: dict[str, Any]) -> dict[str, object]:
+        payload = _merge_alpha_advisory(dict(payload))
         cf_raw = payload.get("confidence_factors") or {}
         if not isinstance(cf_raw, dict):
             cf_raw = {}
@@ -83,7 +84,49 @@ class DecisionIntelligenceService:
             operator=str(payload.get("operator") or "system"),
             operator_reason=str(payload.get("operator_reason") or ""),
         )
-        return self._center.evaluate(inp).to_dict()
+        result = self._center.evaluate(inp).to_dict()
+        if payload.get("_alpha_audit"):
+            result["alpha_integration"] = payload["_alpha_audit"]
+        return result
+
+
+def _merge_alpha_advisory(payload: dict[str, Any]) -> dict[str, Any]:
+    """Map Alpha Engine advisory into DI fields without touching Risk/Safety."""
+    alpha = payload.get("alpha") or payload.get("alpha_advisory")
+    if not isinstance(alpha, dict) or not alpha:
+        return payload
+
+    # Never allow alpha to set risk/safety.
+    alpha.pop("risk_engine_passed", None)
+    alpha.pop("safety_engine_passed", None)
+
+    if payload.get("market_regime_ok") is None and "market_regime_ok" in alpha:
+        payload["market_regime_ok"] = alpha.get("market_regime_ok")
+
+    cf = payload.get("confidence_factors")
+    if not isinstance(cf, dict):
+        cf = {}
+    alpha_cf = alpha.get("confidence_factors")
+    if isinstance(alpha_cf, dict):
+        for key, value in alpha_cf.items():
+            if cf.get(key) is None and value is not None:
+                cf[key] = value
+    payload["confidence_factors"] = cf
+
+    if not payload.get("strategy_id") or payload.get("strategy_id") == "default":
+        payload["strategy_id"] = str(
+            alpha.get("strategy_id") or "alpha-engine-v1"
+        )
+
+    payload["_alpha_audit"] = {
+        "integrated": True,
+        "alpha_composite_score": alpha.get("alpha_composite_score"),
+        "alpha_market_quality_band": alpha.get("alpha_market_quality_band"),
+        "never_sets_risk_or_safety": True,
+        "note": alpha.get("note")
+        or "Alpha advisory mapped — Risk/Safety unchanged",
+    }
+    return payload
 
     def history(self, *, limit: int = 50) -> dict[str, object]:
         return {"decisions": self._center.list_history(limit=limit)}
