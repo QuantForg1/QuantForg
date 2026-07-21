@@ -363,6 +363,7 @@ class TestExecutionBridgePhaseC:
 
     def test_canary_mode_one_trade_per_day(self) -> None:
         d1, snap1, acct1 = _buy_decision()
+        d1 = replace(d1, approved_lots=Decimal("0.01"))
         d2 = replace(d1, confidence=93, quality=93)
         assert compute_decision_hash(d1) != compute_decision_hash(d2)
 
@@ -379,6 +380,91 @@ class TestExecutionBridgePhaseC:
         r2 = integ.execute(d2, _ctx(d2, snap1, acct1))
         assert r2.abort_reason is BridgeAbortReason.CANARY_DAILY_CAP
         assert len(oms.calls) == 1
+
+    def test_canary_rejects_lots_above_001(self) -> None:
+        decision, snap, acct = _buy_decision()
+        assert decision.approved_lots == Decimal("0.10")
+        oms = RecordingOmsPort()
+        integ = InstitutionalExecutionIntegration.create(
+            oms,
+            config=ExecutionBridgeConfig(mode=ExecutionMode.CANARY_LIVE),
+        )
+        result = integ.execute(decision, _ctx(decision, snap, acct))
+        assert result.abort_reason is BridgeAbortReason.CANARY_LOT_LIMIT
+        assert oms.calls == []
+
+    def test_canary_rejects_when_position_open(self) -> None:
+        decision, snap, _acct = _buy_decision()
+        decision = replace(decision, approved_lots=Decimal("0.01"))
+        oms = RecordingOmsPort()
+        integ = InstitutionalExecutionIntegration.create(
+            oms,
+            config=ExecutionBridgeConfig(mode=ExecutionMode.CANARY_LIVE),
+        )
+        acct = _account(already_in_trade=True, open_positions=1)
+        result = integ.execute(decision, _ctx(decision, snap, acct))
+        assert result.abort_reason is BridgeAbortReason.CANARY_POSITION_LIMIT
+        assert oms.calls == []
+
+    def test_canary_abnormal_oms_halts_auto_trading(self) -> None:
+        from app.domain.institutional_trading.operations.control_plane import (
+            OperationsControlPlane,
+        )
+        from app.domain.institutional_trading.operations.models import (
+            OperatorIdentity,
+            OpsExecutionMode,
+        )
+
+        decision, snap, acct = _buy_decision()
+        decision = replace(decision, approved_lots=Decimal("0.01"))
+        op = OperatorIdentity(
+            user_id=uuid4(), role="owner", display_name="test-op"
+        )
+        plane = OperationsControlPlane()
+        plane.transition_mode(op, OpsExecutionMode.CANARY, reason="canary", confirmed=True)
+        plane.update_auto_trade_controls(op, enabled=True, reason="enable canary auto")
+        assert plane.auto_trading_enabled is True
+        assert plane.kill_switch_armed is False
+
+        oms = RecordingOmsPort(
+            result=OmsSubmitResult(
+                outcome="failed",
+                message="pipeline rejected",
+                retcode=0,
+                oms_status="failed",
+                gateway_status="ok",
+            )
+        )
+        integ = InstitutionalExecutionIntegration.create(
+            oms,
+            config=ExecutionBridgeConfig(mode=ExecutionMode.CANARY_LIVE),
+        )
+        integ.bridge.bind_ops(plane)
+        ctx = ExecutionBridgeContext(
+            expected_input_hash=decision.input_hash,
+            now=AS_OF,
+            snapshot=snap,
+            account=acct,
+            risk_allowed=True,
+            execution_enabled=True,
+            connected=True,
+            login=12345,
+            user_id=uuid4(),
+            request_id="ite-canary-halt",
+            gateway_connected=True,
+            broker_connected=True,
+            market_data_live=True,
+            account_trading_enabled=True,
+            mt5_autotrading_enabled=True,
+            symbol_tradable=True,
+            no_broker_restrictions=True,
+        )
+        result = integ.execute(decision, ctx)
+        assert result.forwarded_to_oms is True
+        assert result.abort_reason is BridgeAbortReason.OMS_FAILURE
+        assert plane.auto_trading_enabled is False
+        assert plane.kill_switch_armed is True
+        assert plane.mode is OpsExecutionMode.CANARY
 
     def test_input_hash_mismatch(self) -> None:
         decision, snap, acct = _buy_decision()

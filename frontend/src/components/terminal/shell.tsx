@@ -272,7 +272,7 @@ export function TerminalShell() {
       aria-label="QuantForg Terminal"
     >
       <header className="shrink-0">
-        <div className="flex h-9 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
+        <div className="flex h-8 items-center justify-between gap-2 border-b border-[var(--border)] px-2">
           <div className="flex min-w-0 items-center gap-3">
             <h1 className="shrink-0 text-xs font-semibold tracking-tight text-[var(--fg)]">
               Terminal

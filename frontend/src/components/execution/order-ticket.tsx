@@ -19,6 +19,12 @@ import {
   preTradeAllowsExecution,
 } from "@/components/execution/pre-trade-checklist";
 import { AiDecisionCard } from "@/components/execution/ai-decision-card";
+import {
+  EMPTY_EXECUTION_METRICS,
+  ExecutionMetricsStrip,
+  metricsFromPipelineResult,
+  type ExecutionTimingMetrics,
+} from "@/components/execution/execution-metrics-strip";
 import { formatRiskRejection } from "@/components/execution/risk-rules-panel";
 import { executionApi, mt5Api, riskApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
@@ -74,6 +80,9 @@ export const ExecutionOrderTicket = forwardRef<
   const [lastRisk, setLastRisk] = useState<Record<string, unknown> | null>(null);
   const [calc, setCalc] = useState<Record<string, unknown> | null>(null);
   const [validation, setValidation] = useState<Record<string, unknown> | null>(null);
+  const [execMetrics, setExecMetrics] = useState<ExecutionTimingMetrics>(
+    EMPTY_EXECUTION_METRICS,
+  );
   const session = useTradingSession();
   const qc = useQueryClient();
 
@@ -223,6 +232,10 @@ export const ExecutionOrderTicket = forwardRef<
 
   const submitLive = async () => {
     setBusy(true);
+    const t0 = performance.now();
+    let signalMs: number | undefined;
+    let riskMs: number | undefined;
+    let orderCheckMs: number | undefined;
     try {
       const { isReadOnlyMode } = await import("@/lib/platform/beta");
       if (isReadOnlyMode()) {
@@ -234,7 +247,9 @@ export const ExecutionOrderTicket = forwardRef<
         side: confirmMode === "oneclick" ? side : side,
         order_type: confirmMode === "oneclick" ? "market" : orderType,
       };
+      const tSignal = performance.now();
       const v = await mt5Api.validateOrder(payload);
+      signalMs = performance.now() - tSignal;
       setValidation(asRecord(v));
       if (!v.valid) {
         const err = humanExecutionError(asRecord(v), "Order did not pass validation.");
@@ -245,6 +260,7 @@ export const ExecutionOrderTicket = forwardRef<
         Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
           ? String(ask - bid)
           : undefined;
+      const tRisk = performance.now();
       const risk = await riskApi.check({
         request_id: payload.request_id,
         symbol: payload.symbol,
@@ -255,6 +271,7 @@ export const ExecutionOrderTicket = forwardRef<
         spread: liveSpread,
         equity: connected ? undefined : session.equity || undefined,
       });
+      riskMs = performance.now() - tRisk;
       setLastRisk(asRecord(risk));
       const riskDecision = str(asRecord(risk).decision).toUpperCase();
       if (riskDecision === "REJECT") {
@@ -290,7 +307,9 @@ export const ExecutionOrderTicket = forwardRef<
         toast.error("Pre-trade checklist failed — execution blocked");
         return;
       }
+      const tCheck = performance.now();
       const check = await executionApi.check(payload);
+      orderCheckMs = performance.now() - tCheck;
       setLastCheck(asRecord(check));
       if (str(asRecord(check).decision) === "reject") {
         const { recordAudit } = await import("@/lib/observability/audit");
@@ -303,7 +322,19 @@ export const ExecutionOrderTicket = forwardRef<
         return;
       }
       const result = await executionApi.submit(payload);
+      const totalMs = performance.now() - t0;
       const outcome = str(asRecord(result).outcome);
+      if (outcome === "success") {
+        setExecMetrics(
+          metricsFromPipelineResult(asRecord(result), {
+            signalMs,
+            riskMs,
+            orderCheckMs,
+            totalMs,
+            spread: liveSpread,
+          }),
+        );
+      }
       const { recordAudit } = await import("@/lib/observability/audit");
       if (outcome === "disabled") {
         recordAudit("order_submit", "info", "Live send disabled by EXECUTION_ENABLED", {
@@ -392,7 +423,7 @@ export const ExecutionOrderTicket = forwardRef<
           {connected ? "Ready" : "Disabled"}
         </Badge>
       </CardHeader>
-      <CardContent className={cn("space-y-4", dense && "space-y-3 px-3 pb-3")}>
+      <CardContent className={cn("space-y-4", dense && "space-y-2.5 px-2.5 pb-2.5")}>
         <div className="grid grid-cols-2 gap-2">
           <Button
             className={cn("font-semibold", dense ? "h-10 text-sm" : "h-12 text-base")}
@@ -421,6 +452,8 @@ export const ExecutionOrderTicket = forwardRef<
           stopLoss={stopLoss || undefined}
           takeProfit={takeProfit || undefined}
         />
+
+        <ExecutionMetricsStrip metrics={execMetrics} />
 
         <PreTradeChecklist
           inputs={{

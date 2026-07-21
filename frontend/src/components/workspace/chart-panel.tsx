@@ -265,7 +265,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       className="flex h-full min-h-0 flex-col bg-[var(--bg)]"
       aria-label={`${symbol} chart workspace`}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--border)] px-2 py-1">
         <p className="text-sm font-semibold tracking-tight text-[var(--fg)]">{symbol}</p>
         <Badge tone={connected ? "success" : "warning"}>{connected ? "Live" : "Offline"}</Badge>
         {ohlc ? (

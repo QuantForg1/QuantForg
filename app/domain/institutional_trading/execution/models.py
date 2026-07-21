@@ -38,6 +38,8 @@ class BridgeAbortReason(StrEnum):
     KILL_SWITCH = "kill_switch"
     DUPLICATE_DECISION = "duplicate_decision"
     CANARY_DAILY_CAP = "canary_daily_cap"
+    CANARY_LOT_LIMIT = "canary_lot_limit"
+    CANARY_POSITION_LIMIT = "canary_position_limit"
     MISSING_LOTS = "missing_lots"
     MISSING_ZONES = "missing_zones"
     OMS_FAILURE = "oms_failure"

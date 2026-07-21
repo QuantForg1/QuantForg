@@ -206,6 +206,40 @@ class ExecutionBridge:
                 t0=t0,
             )
 
+        # 5b. Canary hard limits (before eligibility — explicit abort reasons)
+        if mode is ExecutionMode.CANARY_LIVE:
+            if (
+                decision.approved_lots is not None
+                and decision.approved_lots > self.config.canary_max_lots
+            ):
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.CANARY_LOT_LIMIT,
+                    comment=(
+                        f"Canary lot limit {self.config.canary_max_lots} "
+                        f"(got {decision.approved_lots})"
+                    ),
+                    t0=t0,
+                )
+            if (
+                context.account.open_positions
+                >= self.config.canary_max_open_positions
+            ):
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.CANARY_POSITION_LIMIT,
+                    comment=(
+                        f"Canary max open positions "
+                        f"{self.config.canary_max_open_positions} "
+                        f"(open={context.account.open_positions})"
+                    ),
+                    t0=t0,
+                )
+
         # 6. PositionEligibility still passes
         eligibility = PositionEligibilityEngine(self.ite_config).evaluate(
             snapshot=context.snapshot,
@@ -288,7 +322,7 @@ class ExecutionBridge:
                 t0=t0,
             )
 
-        # Canary daily cap
+        # Canary daily cap (after geometry — ready to size)
         if mode is ExecutionMode.CANARY_LIVE:
             day = context.now.date()
             with self._lock:
@@ -380,6 +414,22 @@ class ExecutionBridge:
             self.metrics.record_executed(latency)
         else:
             self.metrics.record_rejected(latency)
+            # Canary: immediate stop after abnormal execution
+            if (
+                mode is ExecutionMode.CANARY_LIVE
+                and self.ops_plane is not None
+                and status
+                in {
+                    ExecutionAttemptStatus.OMS_REJECTED,
+                    ExecutionAttemptStatus.ABORTED,
+                }
+            ):
+                self.ops_plane.halt_on_abnormal_execution(
+                    reason=(
+                        f"Canary abnormal execution: {abort_reason.value} "
+                        f"— {oms_result.message}"
+                    )
+                )
 
         self._complete_live_trace(
             tid,

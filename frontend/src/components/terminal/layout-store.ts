@@ -1,4 +1,4 @@
-/** Terminal OS layout — trading-only surface. */
+/** Terminal OS layout — chart-priority trading surface (~70–75% chart). */
 
 export type TerminalPresetId = "default" | "chart-focus" | "tape-focus";
 
@@ -21,14 +21,15 @@ export type TerminalLayoutState = {
   counselCollapsed: boolean;
 };
 
-export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v2";
+export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v3";
 export const TERMINAL_SYMBOL_KEY = "qf.workspace.symbol";
 
+/** ~72% chart / ~28% blotter in a typical center column (~700px). */
 export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   preset: "default",
-  leftWidth: 240,
-  rightWidth: 360,
-  bottomHeight: 180,
+  leftWidth: 200,
+  rightWidth: 320,
+  bottomHeight: 156,
   leftCollapsed: false,
   rightCollapsed: false,
   bottomCollapsed: false,
@@ -48,9 +49,9 @@ export const PRESET_TERMINAL: Record<
 > = {
   default: {
     preset: "default",
-    leftWidth: 240,
-    rightWidth: 360,
-    bottomHeight: 180,
+    leftWidth: 200,
+    rightWidth: 320,
+    bottomHeight: 156,
     leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
@@ -67,9 +68,9 @@ export const PRESET_TERMINAL: Record<
   },
   "tape-focus": {
     preset: "tape-focus",
-    leftWidth: 220,
-    rightWidth: 340,
-    bottomHeight: 260,
+    leftWidth: 200,
+    rightWidth: 320,
+    bottomHeight: 220,
     leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
@@ -100,6 +101,11 @@ export function loadTerminalLayout(): TerminalLayoutState {
         parsed.counselCollapsed === undefined
           ? true
           : Boolean(parsed.counselCollapsed),
+      // Cap blotter so chart stays dominant (~70%+)
+      bottomHeight: Math.min(
+        220,
+        Math.max(120, Number(parsed.bottomHeight) || DEFAULT_TERMINAL_LAYOUT.bottomHeight),
+      ),
     };
   } catch {
     return DEFAULT_TERMINAL_LAYOUT;

@@ -48,7 +48,7 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
   return (
     <div
       className={cn(
-        "flex h-10 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-3",
+        "flex h-9 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2",
         className,
       )}
       role="status"

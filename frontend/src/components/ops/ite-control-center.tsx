@@ -141,6 +141,10 @@ export function IteControlCenter() {
             <div>
               <div className="text-xs text-muted-foreground">Mode</div>
               <ModeBadge mode={str(cc.execution_mode)} />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                SHADOW → CANARY → LIVE. Canary: 0.01 lot · max 1 position · fail-closed halt.
+                LIVE is operator-only.
+              </p>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Kill switch</div>

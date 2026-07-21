@@ -512,6 +512,41 @@ class OperationsControlPlane:
                 now=now,
             )
 
+    def halt_on_abnormal_execution(
+        self, *, reason: str, now: datetime | None = None
+    ) -> None:
+        """Fail-closed canary/live halt — arms kill + disables auto trading.
+
+        Does not change SHADOW/CANARY/LIVE mode (operator-only transitions).
+        """
+        with self._lock:
+            self.kill_switch_armed = True
+            was_auto = self.auto_trading_enabled
+            self.auto_trading_enabled = False
+        self.flag_canary_failure(reason, now=now)
+        self.alerts.raise_alert(
+            kind=AlertKind.KILL_SWITCH,
+            severity=AlertSeverity.CRITICAL,
+            message=f"Abnormal execution halt: {reason}",
+            now=now,
+        )
+        # System audit (no operator identity)
+        from uuid import uuid4
+
+        system = OperatorIdentity(
+            user_id=uuid4(),
+            role="owner",
+            display_name="system:abnormal_halt",
+        )
+        self.audit.record(
+            operator=system,
+            action="abnormal_execution_halt",
+            old_value=f"auto={was_auto}",
+            new_value="kill=True,auto=False",
+            reason=reason,
+            now=now,
+        )
+
     def flag_daily_loss(self, *, now: datetime | None = None) -> None:
         with self._lock:
             self.daily_loss_exceeded = True

@@ -91,7 +91,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
       <div className="min-h-0 flex-1 overflow-hidden" role="tabpanel">
         {tab === "positions" ? (
           session.connected || openCount > 0 ? (
-            <div className="h-full overflow-auto p-2 [&_.rounded-xl]:rounded-md [&_.shadow-sm]:shadow-none">
+            <div className="h-full overflow-auto p-1 [&_.rounded-xl]:rounded-md [&_.shadow-sm]:shadow-none">
               <PositionManager connected={session.connected} />
             </div>
           ) : (
@@ -108,7 +108,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
         ) : null}
 
         {tab === "orders" ? (
-          <div className="h-full overflow-auto p-2 [&_.rounded-xl]:rounded-md [&_.shadow-sm]:shadow-none">
+          <div className="h-full overflow-auto p-1 [&_.rounded-xl]:rounded-md [&_.shadow-sm]:shadow-none">
             <OrdersWorkspace connected={session.connected} />
           </div>
         ) : null}

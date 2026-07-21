@@ -68,6 +68,28 @@ export default function AutoTradingPage() {
           Auto-trade never bypasses the risk engine or kill switch.
         </p>
 
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Execution modes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-xs text-[var(--fg-muted)]">
+            <p>
+              <span className="font-medium text-[var(--fg)]">SHADOW</span> — journal only;
+              OMS never called.
+            </p>
+            <p>
+              <span className="font-medium text-[var(--fg)]">CANARY</span> — live path with hard
+              caps: max 1 open position, 0.01 lot only, Auto Trading ON, full Risk Engine,
+              broker validation, and audit. Abnormal execution immediately arms kill switch and
+              disables auto trading. Mode stays CANARY until an operator promotes.
+            </p>
+            <p>
+              <span className="font-medium text-[var(--fg)]">LIVE</span> — operator-only promotion
+              from CANARY (confirm required). Never auto-promoted.
+            </p>
+          </CardContent>
+        </Card>
+
         <AutoTradeControls />
         <LiveAutoTradeCertificationPanel />
 

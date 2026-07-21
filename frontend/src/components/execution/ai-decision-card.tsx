@@ -3,10 +3,11 @@
 import { memo, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Minus } from "lucide-react";
-import { quantAiApi, strategyApi } from "@/lib/api/endpoints";
+import { quantAiApi, riskApi, strategyApi } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
+import { parseRiskRules } from "@/components/execution/risk-rules-panel";
 
 type Props = {
   symbol: string;
@@ -18,9 +19,24 @@ type Props = {
   className?: string;
 };
 
+function parseRiskEnginePct(risk: Record<string, unknown> | null): number | null {
+  if (!risk) return null;
+  const rules = parseRiskRules(risk);
+  const maxRisk = rules.find((r) => r.id === "max_risk" || /risk per trade/i.test(r.name));
+  if (maxRisk) {
+    const m = maxRisk.current.replace(/%/g, "").trim();
+    const v = Number(m);
+    if (Number.isFinite(v)) return v;
+  }
+  const direct = num(risk.risk_per_trade_pct ?? risk.risk_pct, NaN);
+  return Number.isFinite(direct) ? direct : null;
+}
+
 /**
- * Pre-trade AI Decision Card — live strategy / quant-ai only.
- * Never invents confidence, RR, hold time, or structure reasons.
+ * Pre-trade AI Decision Card — live data only.
+ * Confidence / Reasons from strategy + quant-ai.
+ * Risk per trade from Risk Engine only.
+ * RR only from ticket entry + SL + TP (never estimated).
  */
 export const AiDecisionCard = memo(function AiDecisionCard({
   symbol,
@@ -33,15 +49,15 @@ export const AiDecisionCard = memo(function AiDecisionCard({
 }: Props) {
   const session = useTradingSession();
   const enabled = session.connected && Boolean(symbol.trim());
+  const entry = Number.isFinite(entryPrice) ? Number(entryPrice) : NaN;
+  const sl = num(stopLoss, NaN);
+  const tp = num(takeProfit, NaN);
+  const hasTicketGeometry =
+    Number.isFinite(entry) && entry > 0 && Number.isFinite(sl) && Number.isFinite(tp);
 
   const strategyQ = useQuery({
-    queryKey: ["ai-decision-strategy", symbol, side, session.connected],
-    queryFn: () =>
-      strategyApi.evaluate({
-        symbol,
-        side,
-        volume,
-      }),
+    queryKey: ["ai-decision-strategy", symbol, side, volume, session.connected],
+    queryFn: () => strategyApi.evaluate({ symbol, side, volume }),
     enabled,
     staleTime: 20_000,
     retry: false,
@@ -55,10 +71,35 @@ export const AiDecisionCard = memo(function AiDecisionCard({
     retry: false,
   });
 
+  const riskQ = useQuery({
+    queryKey: [
+      "ai-decision-risk",
+      symbol,
+      side,
+      volume,
+      stopLoss ?? "",
+      Number.isFinite(entry) ? entry : "",
+      session.connected,
+    ],
+    queryFn: () =>
+      riskApi.check({
+        symbol,
+        side,
+        requested_lots: volume,
+        entry_price: Number.isFinite(entry) ? String(entry) : undefined,
+        stop_loss_distance: stopLoss || undefined,
+        equity: session.equity !== "—" ? session.equity : undefined,
+      }),
+    enabled: enabled && Boolean(volume.trim()),
+    staleTime: 12_000,
+    retry: false,
+  });
+
   const card = useMemo(() => {
     const strat = asRecord(strategyQ.data);
     const signal = asRecord(strat.signal);
     const quant = asRecord(quantQ.data);
+    const risk = riskQ.data ? asRecord(riskQ.data) : null;
     const quantUnavailable =
       str(quant.status).toLowerCase() === "unavailable" || !quantQ.data;
 
@@ -78,39 +119,45 @@ export const AiDecisionCard = memo(function AiDecisionCard({
       confidenceSource = "strategy evaluate";
     }
 
-    const direction = str(signal.direction || quant.trend || strat.decision, "").toUpperCase();
+    const direction = str(
+      signal.direction || quant.trend || strat.decision,
+      "",
+    ).toUpperCase();
     const displaySide = direction.includes("SELL")
       ? "SELL"
       : direction.includes("BUY")
         ? "BUY"
         : side.toUpperCase();
 
-    const entry = Number.isFinite(entryPrice) ? Number(entryPrice) : NaN;
-    const sl = num(stopLoss, NaN);
-    const tp = num(takeProfit, NaN);
-    const sugSl = num(quant.suggested_stop, NaN);
-    const sugTp = num(quant.suggested_tp, NaN);
-    const useSl = Number.isFinite(sl) ? sl : sugSl;
-    const useTp = Number.isFinite(tp) ? tp : sugTp;
-
+    // RR — ticket geometry only (never suggested SL/TP)
     let expectedRr: number | null = null;
-    let riskPct: number | null = null;
-    const equity = num(session.equity, NaN);
-    const vol = num(volume, NaN);
-    if (Number.isFinite(entry) && Number.isFinite(useSl) && Number.isFinite(useTp) && entry > 0) {
-      const riskDist = Math.abs(entry - useSl);
-      const rewardDist = Math.abs(useTp - entry);
+    if (hasTicketGeometry) {
+      const riskDist = Math.abs(entry - sl);
+      const rewardDist = Math.abs(tp - entry);
       if (riskDist > 0) expectedRr = rewardDist / riskDist;
-      // Approx gold risk %: volume * |entry-sl| * contract(100) / equity * 100
-      if (Number.isFinite(equity) && equity > 0 && Number.isFinite(vol)) {
-        const dollarRisk = vol * riskDist * 100;
-        riskPct = (dollarRisk / equity) * 100;
-      }
     }
 
+    // Risk per trade — Risk Engine only (requires SL so dollar risk is real)
+    const hasSl = Boolean(String(stopLoss ?? "").trim());
+    const riskPct =
+      riskQ.isError || !hasSl ? null : parseRiskEnginePct(risk);
+    const riskDecision = risk ? str(risk.decision).toUpperCase() : "";
+    const riskSource =
+      riskPct != null
+        ? `Risk Engine (${riskDecision || "assessed"})`
+        : !hasSl
+          ? "Requires stop loss"
+          : riskQ.isLoading
+            ? "Loading Risk Engine…"
+            : "Not available";
+
     const reasons: { ok: boolean; label: string }[] = [];
-    const signalReasons = asList(signal.reasons).map((r) => String(r).trim()).filter(Boolean);
-    const quantReasons = asList(quant.reasons).map((r) => String(r).trim()).filter(Boolean);
+    const signalReasons = asList(signal.reasons)
+      .map((r) => String(r).trim())
+      .filter(Boolean);
+    const quantReasons = asList(quant.reasons)
+      .map((r) => String(r).trim())
+      .filter(Boolean);
     const preconditions = asRecord(strat.preconditions);
     for (const [k, v] of Object.entries(preconditions)) {
       if (typeof v === "boolean") {
@@ -129,10 +176,11 @@ export const AiDecisionCard = memo(function AiDecisionCard({
       confidenceSource,
       expectedRr,
       riskPct,
+      riskSource,
       expectedHold: null as string | null,
       reasons,
       quantUnavailable,
-      loading: strategyQ.isLoading || quantQ.isLoading,
+      loading: strategyQ.isLoading || quantQ.isLoading || riskQ.isLoading,
       error: strategyQ.isError && quantQ.isError,
     };
   }, [
@@ -142,19 +190,22 @@ export const AiDecisionCard = memo(function AiDecisionCard({
     quantQ.data,
     quantQ.isLoading,
     quantQ.isError,
-    entryPrice,
-    stopLoss,
-    takeProfit,
+    riskQ.data,
+    riskQ.isLoading,
+    riskQ.isError,
+    hasTicketGeometry,
+    entry,
+    sl,
+    tp,
     side,
-    volume,
-    session.equity,
+    stopLoss,
   ]);
 
   if (!session.connected) {
     return (
       <div
         className={cn(
-          "rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3",
+          "rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5",
           className,
         )}
       >
@@ -162,7 +213,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
           AI Decision Card
         </p>
         <p className="mt-2 text-[11px] text-[var(--fg-muted)]">
-          Broker offline — live strategy confidence is Not available.
+          Broker offline — Confidence, Risk, RR, and Reasons are Not available.
         </p>
       </div>
     );
@@ -171,27 +222,29 @@ export const AiDecisionCard = memo(function AiDecisionCard({
   return (
     <div
       className={cn(
-        "rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3",
+        "rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5",
         className,
       )}
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
+      <div className="mb-2.5 flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
             AI Decision Card
           </p>
-          <p className="mt-1 font-[family-name:var(--font-display)] text-xl tracking-tight text-[var(--fg)]">
+          <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg tracking-tight text-[var(--fg)]">
             {card.displaySide}
           </p>
           <p className="text-[10px] text-[var(--fg-subtle)]">
-            Source: {card.confidenceSource}
+            Confidence: {card.confidenceSource}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">Confidence</p>
+          <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+            Confidence
+          </p>
           <p
             className={cn(
-              "font-mono text-2xl tabular-nums",
+              "font-mono text-xl tabular-nums",
               card.confidencePct != null && card.confidencePct >= 70
                 ? "text-[var(--success)]"
                 : card.confidencePct != null && card.confidencePct >= 50
@@ -206,28 +259,44 @@ export const AiDecisionCard = memo(function AiDecisionCard({
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-3 gap-2">
+      <div className="mb-2.5 grid grid-cols-3 gap-1.5">
         {(
           [
             [
               "Expected RR",
-              card.expectedRr == null ? "Not available" : `1 : ${formatNumber(card.expectedRr, 2)}`,
+              card.expectedRr == null
+                ? "Not available"
+                : `1 : ${formatNumber(card.expectedRr, 2)}`,
+              hasTicketGeometry
+                ? "Ticket SL/TP"
+                : "Requires entry + SL + TP",
             ],
             [
-              "Risk",
-              card.riskPct == null ? "Not available" : `${formatNumber(card.riskPct, 2)}%`,
+              "Risk / trade",
+              card.riskPct == null
+                ? "Not available"
+                : `${formatNumber(card.riskPct, 2)}%`,
+              card.riskSource,
             ],
-            ["Expected Hold", card.expectedHold ?? "Not available"],
+            ["Expected Hold", "Not available", "Not computed live"],
           ] as const
-        ).map(([label, value]) => (
-          <div key={label} className="rounded border border-[var(--border)]/80 bg-[var(--bg)]/40 px-2 py-1.5">
-            <p className="text-[9px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
-            <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fg)]">{value}</p>
+        ).map(([label, value, hint]) => (
+          <div
+            key={label}
+            className="rounded border border-[var(--border)]/80 bg-[var(--bg)]/40 px-2 py-1.5"
+          >
+            <p className="text-[9px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              {label}
+            </p>
+            <p className="mt-0.5 font-mono text-[11px] tabular-nums text-[var(--fg)]">
+              {value}
+            </p>
+            <p className="mt-0.5 truncate text-[9px] text-[var(--fg-subtle)]">{hint}</p>
           </div>
         ))}
       </div>
 
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
         Reasons
       </p>
       {card.loading ? (
@@ -235,8 +304,8 @@ export const AiDecisionCard = memo(function AiDecisionCard({
       ) : card.error || (!card.reasons.length && card.quantUnavailable) ? (
         <p className="text-[11px] text-[var(--fg-muted)]">Not available</p>
       ) : card.reasons.length ? (
-        <ul className="max-h-36 space-y-1 overflow-y-auto">
-          {card.reasons.slice(0, 12).map((r) => (
+        <ul className="max-h-28 space-y-1 overflow-y-auto">
+          {card.reasons.slice(0, 10).map((r) => (
             <li key={r.label} className="flex items-start gap-1.5 text-[11px]">
               {r.ok ? (
                 <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--success)]" />
