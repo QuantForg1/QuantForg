@@ -503,6 +503,21 @@ export const iteOpsApi = {
     ),
 };
 
+/** QuantForg AI Trading Robot V1 — evaluate only, never order_send */
+export const aiRobotApi = {
+  status: () => apiFetch<Record<string, unknown>>("/ai-robot/status"),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/ai-robot/evaluate", {
+      method: "POST",
+      body,
+    }),
+  selfAnalysis: (body: Record<string, unknown> = {}) =>
+    apiFetch<Record<string, unknown>>("/ai-robot/self-analysis", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Phase G — Production Reliability & Observability */
 export const iteReliabilityApi = {
   dashboard: () =>

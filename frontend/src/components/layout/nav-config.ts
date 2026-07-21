@@ -169,6 +169,12 @@ export const appNav: NavGroup[] = [
         hint: "Autonomous command center",
       },
       {
+        href: "/ai-robot",
+        label: "AI Robot",
+        icon: Shield,
+        hint: "Robot V1 · capital preservation",
+      },
+      {
         href: "/gateway",
         label: "Gateway",
         icon: Workflow,
