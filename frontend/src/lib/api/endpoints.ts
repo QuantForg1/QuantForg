@@ -940,6 +940,86 @@ export const tradingBrainV3Api = {
     }),
 };
 
+/** Research & Validation Platform — pre-production only; never order_send */
+export const researchValidationApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/research-validation/status"),
+  registry: () =>
+    apiFetch<Record<string, unknown>>("/research-validation/registry"),
+  register: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/registry", {
+      method: "POST",
+      body,
+    }),
+  replayLoad: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/replay/load", {
+      method: "POST",
+      body,
+    }),
+  replayStep: () =>
+    apiFetch<Record<string, unknown>>("/research-validation/replay/step", {
+      method: "POST",
+    }),
+  walkForward: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/walk-forward", {
+      method: "POST",
+      body,
+    }),
+  paper: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/paper", {
+      method: "POST",
+      body,
+    }),
+  compare: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/compare", {
+      method: "POST",
+      body,
+    }),
+  certify: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/certify", {
+      method: "POST",
+      body,
+    }),
+  recordVersion: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/versions", {
+      method: "POST",
+      body,
+    }),
+  versions: (strategyKey?: string, limit = 50) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (strategyKey) q.set("strategy_key", strategyKey);
+    return apiFetch<Record<string, unknown>>(
+      `/research-validation/versions?${q}`,
+    );
+  },
+  rollback: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/rollback", {
+      method: "POST",
+      body,
+    }),
+  rollbackAudit: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/research-validation/rollback/audit?limit=${limit}`,
+    ),
+  observatory: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/observatory", {
+      method: "POST",
+      body,
+    }),
+  release: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/release", {
+      method: "POST",
+      body,
+    }),
+  policies: () =>
+    apiFetch<Record<string, unknown>>("/research-validation/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/research-validation/policies", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

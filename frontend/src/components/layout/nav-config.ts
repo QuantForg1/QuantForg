@@ -135,6 +135,12 @@ export const appNav: NavGroup[] = [
         hint: "Validate · promote · lab only",
       },
       {
+        href: "/research-validation",
+        label: "Validation Platform",
+        icon: FlaskConical,
+        hint: "Certify · rollback · release gates",
+      },
+      {
         href: "/intelligence-platform",
         label: "Intelligence",
         icon: BookOpen,
