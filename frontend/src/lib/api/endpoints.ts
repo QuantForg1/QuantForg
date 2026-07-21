@@ -704,6 +704,34 @@ export const decisionIntelligenceApi = {
     }),
 };
 
+/** Mission Control — executive dashboard (not Monitoring); live feeds only */
+export const missionControlApi = {
+  status: () => apiFetch<Record<string, unknown>>("/mission-control/status"),
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/mission-control/dashboard"),
+  dashboardWithFeeds: (body: {
+    capital?: Record<string, unknown> | null;
+    positions?: Record<string, unknown>[] | null;
+    xauusd?: Record<string, unknown> | null;
+    daily?: Record<string, unknown> | null;
+  }) =>
+    apiFetch<Record<string, unknown>>("/mission-control/dashboard", {
+      method: "POST",
+      body,
+    }),
+  notes: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/mission-control/notes?limit=${limit}`),
+  addNote: (body: { text: string; tags?: string[] }) =>
+    apiFetch<Record<string, unknown>>("/mission-control/notes", {
+      method: "POST",
+      body,
+    }),
+  search: (q: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/mission-control/search?q=${encodeURIComponent(q)}`,
+    ),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

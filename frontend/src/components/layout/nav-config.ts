@@ -163,6 +163,12 @@ export const appNav: NavGroup[] = [
     title: "Operations",
     items: [
       {
+        href: "/mission-control",
+        label: "Mission Control",
+        icon: LayoutTemplate,
+        hint: "Executive platform supervision",
+      },
+      {
         href: "/monitoring",
         label: "Monitoring",
         icon: Gauge,
