@@ -128,6 +128,12 @@ export const appNav: NavGroup[] = [
         hint: "Idea → promote pipeline",
       },
       {
+        href: "/strategy-lab",
+        label: "Strategy Lab",
+        icon: Layers3,
+        hint: "Validate · promote · lab only",
+      },
+      {
         href: "/ai-signals",
         label: "AI Signals",
         icon: Sparkles,

@@ -678,6 +678,74 @@ export const quantStudioApi = {
     }),
 };
 
+/** Strategy Research Lab V1 — validation/promotion only, never order_send */
+export const strategyLabApi = {
+  status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),
+  registry: () => apiFetch<Record<string, unknown>>("/strategy-lab/registry"),
+  compare: (runs: Record<string, unknown>[]) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/compare", {
+      method: "POST",
+      body: { runs },
+    }),
+  scorecard: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/scorecard", {
+      method: "POST",
+      body,
+    }),
+  validate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/validate", {
+      method: "POST",
+      body,
+    }),
+  replayLoad: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/replay/load", {
+      method: "POST",
+      body,
+    }),
+  replayControl: (action: string) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/replay/control", {
+      method: "POST",
+      body: { action },
+    }),
+  experimentCreate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/experiments", {
+      method: "POST",
+      body,
+    }),
+  experimentResults: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/experiments/results", {
+      method: "POST",
+      body,
+    }),
+  experimentList: (strategyKey?: string) => {
+    const q = strategyKey
+      ? `?strategy_key=${encodeURIComponent(strategyKey)}`
+      : "";
+    return apiFetch<Record<string, unknown>>(`/strategy-lab/experiments${q}`);
+  },
+  versionRecord: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/versions", {
+      method: "POST",
+      body,
+    }),
+  versions: (strategyKey: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/strategy-lab/versions?strategy_key=${encodeURIComponent(strategyKey)}`,
+    ),
+  promotionOpen: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/promotion/open", {
+      method: "POST",
+      body,
+    }),
+  promotionApprove: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/promotion/approve", {
+      method: "POST",
+      body,
+    }),
+  promotionDashboard: () =>
+    apiFetch<Record<string, unknown>>("/strategy-lab/promotion/dashboard"),
+};
+
 export const researchLabApi = {
   dashboard: (symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
