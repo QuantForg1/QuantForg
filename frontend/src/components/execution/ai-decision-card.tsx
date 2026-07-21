@@ -8,6 +8,7 @@ import { asList, asRecord, num, str } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
 import { parseRiskRules } from "@/components/execution/risk-rules-panel";
+import { stopLossDistance } from "@/lib/execution/position-sizing";
 
 type Props = {
   symbol: string;
@@ -33,10 +34,8 @@ function parseRiskEnginePct(risk: Record<string, unknown> | null): number | null
 }
 
 /**
- * Pre-trade AI Decision Card — live data only.
- * Confidence / Reasons from strategy + quant-ai.
- * Risk per trade from Risk Engine only.
- * RR only from ticket entry + SL + TP (never estimated).
+ * Pre-trade AI Decision Card — live metrics only.
+ * Direction · Confidence · Risk/trade (Risk Engine) · RR · Reasons.
  */
 export const AiDecisionCard = memo(function AiDecisionCard({
   symbol,
@@ -52,8 +51,13 @@ export const AiDecisionCard = memo(function AiDecisionCard({
   const entry = Number.isFinite(entryPrice) ? Number(entryPrice) : NaN;
   const sl = num(stopLoss, NaN);
   const tp = num(takeProfit, NaN);
+  const slDistance = stopLossDistance(entry, sl);
   const hasTicketGeometry =
-    Number.isFinite(entry) && entry > 0 && Number.isFinite(sl) && Number.isFinite(tp);
+    Number.isFinite(entry) &&
+    entry > 0 &&
+    Number.isFinite(sl) &&
+    Number.isFinite(tp) &&
+    slDistance != null;
 
   const strategyQ = useQuery({
     queryKey: ["ai-decision-strategy", symbol, side, volume, session.connected],
@@ -77,7 +81,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
       symbol,
       side,
       volume,
-      stopLoss ?? "",
+      slDistance ?? "",
       Number.isFinite(entry) ? entry : "",
       session.connected,
     ],
@@ -87,10 +91,11 @@ export const AiDecisionCard = memo(function AiDecisionCard({
         side,
         requested_lots: volume,
         entry_price: Number.isFinite(entry) ? String(entry) : undefined,
-        stop_loss_distance: stopLoss || undefined,
+        stop_loss_distance: slDistance != null ? String(slDistance) : undefined,
+        sizing_method: "percentage_risk",
         equity: session.equity !== "—" ? session.equity : undefined,
       }),
-    enabled: enabled && Boolean(volume.trim()),
+    enabled: enabled && Boolean(volume.trim()) && slDistance != null,
     staleTime: 12_000,
     retry: false,
   });
@@ -129,7 +134,6 @@ export const AiDecisionCard = memo(function AiDecisionCard({
         ? "BUY"
         : side.toUpperCase();
 
-    // RR — ticket geometry only (never suggested SL/TP)
     let expectedRr: number | null = null;
     if (hasTicketGeometry) {
       const riskDist = Math.abs(entry - sl);
@@ -137,15 +141,13 @@ export const AiDecisionCard = memo(function AiDecisionCard({
       if (riskDist > 0) expectedRr = rewardDist / riskDist;
     }
 
-    // Risk per trade — Risk Engine only (requires SL so dollar risk is real)
-    const hasSl = Boolean(String(stopLoss ?? "").trim());
     const riskPct =
-      riskQ.isError || !hasSl ? null : parseRiskEnginePct(risk);
+      riskQ.isError || slDistance == null ? null : parseRiskEnginePct(risk);
     const riskDecision = risk ? str(risk.decision).toUpperCase() : "";
     const riskSource =
       riskPct != null
         ? `Risk Engine (${riskDecision || "assessed"})`
-        : !hasSl
+        : slDistance == null
           ? "Requires stop loss"
           : riskQ.isLoading
             ? "Loading Risk Engine…"
@@ -177,7 +179,6 @@ export const AiDecisionCard = memo(function AiDecisionCard({
       expectedRr,
       riskPct,
       riskSource,
-      expectedHold: null as string | null,
       reasons,
       quantUnavailable,
       loading: strategyQ.isLoading || quantQ.isLoading || riskQ.isLoading,
@@ -198,7 +199,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
     sl,
     tp,
     side,
-    stopLoss,
+    slDistance,
   ]);
 
   if (!session.connected) {
@@ -213,7 +214,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
           AI Decision Card
         </p>
         <p className="mt-2 text-[11px] text-[var(--fg-muted)]">
-          Broker offline — Confidence, Risk, RR, and Reasons are Not available.
+          Broker offline — Direction, Confidence, Risk, RR, and Reasons are Not available.
         </p>
       </div>
     );
@@ -234,9 +235,7 @@ export const AiDecisionCard = memo(function AiDecisionCard({
           <p className="mt-0.5 font-[family-name:var(--font-display)] text-lg tracking-tight text-[var(--fg)]">
             {card.displaySide}
           </p>
-          <p className="text-[10px] text-[var(--fg-subtle)]">
-            Confidence: {card.confidenceSource}
-          </p>
+          <p className="text-[10px] text-[var(--fg-subtle)]">Direction</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
@@ -256,14 +255,15 @@ export const AiDecisionCard = memo(function AiDecisionCard({
               ? "Not available"
               : `${formatNumber(card.confidencePct, 0)}%`}
           </p>
+          <p className="text-[9px] text-[var(--fg-subtle)]">{card.confidenceSource}</p>
         </div>
       </div>
 
-      <div className="mb-2.5 grid grid-cols-3 gap-1.5">
+      <div className="mb-2.5 grid grid-cols-2 gap-1.5">
         {(
           [
             [
-              "Expected RR",
+              "Risk / Reward",
               card.expectedRr == null
                 ? "Not available"
                 : `1 : ${formatNumber(card.expectedRr, 2)}`,
@@ -278,7 +278,6 @@ export const AiDecisionCard = memo(function AiDecisionCard({
                 : `${formatNumber(card.riskPct, 2)}%`,
               card.riskSource,
             ],
-            ["Expected Hold", "Not available", "Not computed live"],
           ] as const
         ).map(([label, value, hint]) => (
           <div

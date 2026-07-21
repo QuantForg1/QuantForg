@@ -37,6 +37,12 @@ import {
   resolveTradingSymbol,
 } from "@/lib/trading/gold-only";
 import { humanExecutionError } from "@/lib/execution/humanize";
+import {
+  contractSizeForSymbol,
+  lotsFromRiskBudget,
+  stopLossDistance,
+  type SizingMode,
+} from "@/lib/execution/position-sizing";
 
 const ORDER_TYPES = ["market", "limit", "stop", "stop_limit"] as const;
 const VOLUMES = ["0.01", "0.05", "0.10", "0.50", "1.00"];
@@ -66,6 +72,7 @@ export const ExecutionOrderTicket = forwardRef<
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<OrderType>("market");
   const [volume, setVolume] = useState("0.01");
+  const [sizingMode, setSizingMode] = useState<SizingMode>("percentage_risk");
   const [price, setPrice] = useState("");
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
@@ -105,6 +112,13 @@ export const ExecutionOrderTicket = forwardRef<
       : NaN;
 
   const needsPrice = orderType !== "market";
+  const entryForSize =
+    needsPrice && num(price) > 0
+      ? num(price)
+      : Number.isFinite(mid)
+        ? mid
+        : NaN;
+  const slDist = stopLossDistance(entryForSize, num(stopLoss, NaN));
 
   const buildPayload = () => {
     const parts = [comment.trim() || "quantforg-execution"];
@@ -124,6 +138,44 @@ export const ExecutionOrderTicket = forwardRef<
       comment: parts.join(" | ").slice(0, 31),
     };
   };
+
+  const riskCheckBody = (payload: ReturnType<typeof buildPayload>) => {
+    const liveSpread =
+      Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
+        ? String(ask - bid)
+        : undefined;
+    return {
+      request_id: payload.request_id,
+      symbol: payload.symbol,
+      side: payload.side,
+      requested_lots:
+        sizingMode === "fixed_lot" ? payload.volume : undefined,
+      entry_price: payload.price || String(mid || 1),
+      stop_loss_distance: slDist != null ? String(slDist) : undefined,
+      sizing_method: sizingMode,
+      risk_per_trade_pct:
+        sizingMode === "percentage_risk" ? riskPct : undefined,
+      spread: liveSpread,
+      equity: connected ? undefined : Number.isFinite(equity) ? String(equity) : undefined,
+    };
+  };
+
+  /** Sync lot size from equity · risk% · SL distance (percentage_risk mode). */
+  useEffect(() => {
+    if (sizingMode !== "percentage_risk" || !connected) return;
+    if (slDist == null || !Number.isFinite(equity) || equity <= 0) return;
+    const pct = num(riskPct, NaN);
+    if (!Number.isFinite(pct) || pct <= 0) return;
+    const lots = lotsFromRiskBudget({
+      equity,
+      riskPct: pct,
+      stopDistance: slDist,
+      contractSize: contractSizeForSymbol(symbol),
+    });
+    if (lots == null) return;
+    const next = lots.toFixed(2);
+    setVolume((prev) => (prev === next ? prev : next));
+  }, [sizingMode, connected, equity, riskPct, slDist, symbol]);
 
   const refreshEstimates = async () => {
     if (!connected || !symbol) return;
@@ -171,23 +223,24 @@ export const ExecutionOrderTicket = forwardRef<
         toast.error(err.title, { description: err.description });
         return;
       }
-      const liveSpread =
-        Number.isFinite(bid) && Number.isFinite(ask) && bid != null && ask != null
-          ? String(ask - bid)
-          : undefined;
-      const risk = await riskApi.check({
-        request_id: payload.request_id,
-        symbol: payload.symbol,
-        side: payload.side,
-        requested_lots: payload.volume,
-        entry_price: payload.price || String(mid || 1),
-        stop_loss_distance: stopLoss || undefined,
-        spread: liveSpread,
-        // Live equity/leverage/positions load on the API when broker is attached.
-        equity: connected ? undefined : Number.isFinite(equity) ? String(equity) : undefined,
-      });
+      const risk = await riskApi.check(riskCheckBody(payload));
       setLastRisk(asRecord(risk));
-      const check = await executionApi.check(payload);
+      const approved = str(asRecord(risk).approved_lots);
+      if (
+        sizingMode === "percentage_risk" &&
+        approved &&
+        Number.isFinite(Number(approved)) &&
+        Number(approved) > 0
+      ) {
+        setVolume(Number(approved).toFixed(2));
+      }
+      const check = await executionApi.check({
+        ...payload,
+        volume:
+          sizingMode === "percentage_risk" && approved
+            ? Number(approved).toFixed(2)
+            : payload.volume,
+      });
       setLastCheck(asRecord(check));
       toast.success(`Safety: ${str(asRecord(check).decision)}`);
       if (asListish(asRecord(risk).warnings).length) {
@@ -242,7 +295,7 @@ export const ExecutionOrderTicket = forwardRef<
         toast.error("Read-only mode is enabled — live orders are blocked");
         return;
       }
-      const payload = {
+      let payload = {
         ...buildPayload(),
         side: confirmMode === "oneclick" ? side : side,
         order_type: confirmMode === "oneclick" ? "market" : orderType,
@@ -261,16 +314,7 @@ export const ExecutionOrderTicket = forwardRef<
           ? String(ask - bid)
           : undefined;
       const tRisk = performance.now();
-      const risk = await riskApi.check({
-        request_id: payload.request_id,
-        symbol: payload.symbol,
-        side: payload.side,
-        requested_lots: payload.volume,
-        entry_price: payload.price || String(mid || 1),
-        stop_loss_distance: stopLoss || undefined,
-        spread: liveSpread,
-        equity: connected ? undefined : session.equity || undefined,
-      });
+      const risk = await riskApi.check(riskCheckBody(payload));
       riskMs = performance.now() - tRisk;
       setLastRisk(asRecord(risk));
       const riskDecision = str(asRecord(risk).decision).toUpperCase();
@@ -287,6 +331,18 @@ export const ExecutionOrderTicket = forwardRef<
         );
         toast.error(err.title, { description: detail || err.description });
         return;
+      }
+      const approvedLots = str(asRecord(risk).approved_lots);
+      const sizedVolume =
+        sizingMode === "percentage_risk" &&
+        approvedLots &&
+        Number.isFinite(Number(approvedLots)) &&
+        Number(approvedLots) > 0
+          ? Number(approvedLots).toFixed(2)
+          : payload.volume;
+      if (sizedVolume !== payload.volume) {
+        setVolume(sizedVolume);
+        payload = { ...payload, volume: sizedVolume };
       }
       const gateOk = preTradeAllowsExecution(
         {
@@ -516,6 +572,34 @@ export const ExecutionOrderTicket = forwardRef<
             </select>
           </div>
           <div className="space-y-1.5 sm:col-span-2">
+            <Label>Position sizing</Label>
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={sizingMode === "percentage_risk" ? "default" : "secondary"}
+                onClick={() => setSizingMode("percentage_risk")}
+                disabled={!connected}
+              >
+                Risk %
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={sizingMode === "fixed_lot" ? "default" : "secondary"}
+                onClick={() => setSizingMode("fixed_lot")}
+                disabled={!connected}
+              >
+                Fixed lot
+              </Button>
+            </div>
+            <p className="text-[10px] text-[var(--fg-subtle)]">
+              {sizingMode === "percentage_risk"
+                ? "Lots from equity × risk% ÷ (SL distance × contract size). Risk Engine is authoritative."
+                : "Operator-selected fixed lot. Risk Engine still gates the order."}
+            </p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="exec-volume">Volume</Label>
             <div className="flex flex-wrap gap-1.5">
               {VOLUMES.map((v) => (
@@ -523,8 +607,11 @@ export const ExecutionOrderTicket = forwardRef<
                   key={v}
                   type="button"
                   size="sm"
-                  variant={volume === v ? "default" : "secondary"}
-                  onClick={() => setVolume(v)}
+                  variant={volume === v && sizingMode === "fixed_lot" ? "default" : "secondary"}
+                  onClick={() => {
+                    setSizingMode("fixed_lot");
+                    setVolume(v);
+                  }}
                   disabled={!connected}
                 >
                   {v}
@@ -535,8 +622,12 @@ export const ExecutionOrderTicket = forwardRef<
               id="exec-volume"
               className="mt-2"
               value={volume}
-              onChange={(e) => setVolume(e.target.value)}
-              disabled={!connected}
+              onChange={(e) => {
+                setSizingMode("fixed_lot");
+                setVolume(e.target.value);
+              }}
+              disabled={!connected || sizingMode === "percentage_risk"}
+              readOnly={sizingMode === "percentage_risk"}
             />
           </div>
           {needsPrice ? (
@@ -610,7 +701,11 @@ export const ExecutionOrderTicket = forwardRef<
               disabled={!connected}
             />
             <p className="text-xs text-[var(--fg-subtle)]">
-              Risk budget ≈ {positionSizeHint()} of equity {Number.isFinite(equity) ? formatCurrency(equity) : "—"}
+              {sizingMode === "percentage_risk"
+                ? `Risk budget ≈ ${positionSizeHint()} · SL distance ${
+                    slDist != null ? formatNumber(slDist, 2) : "—"
+                  }`
+                : `Fixed lot ${volume} · risk budget reference ≈ ${positionSizeHint()}`}
             </p>
           </div>
         </div>

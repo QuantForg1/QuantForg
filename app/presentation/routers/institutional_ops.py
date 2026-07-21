@@ -627,6 +627,35 @@ def live_certification_attempt(
                 position_closed=bool(t.get("position_closed")),
                 history_recorded=bool(t.get("history_recorded")),
                 analytics_recorded=bool(t.get("analytics_recorded")),
+                signal_time_ms=(
+                    float(t["signal_time_ms"])
+                    if t.get("signal_time_ms") is not None
+                    else None
+                ),
+                risk_time_ms=(
+                    float(t["risk_time_ms"])
+                    if t.get("risk_time_ms") is not None
+                    else None
+                ),
+                order_check_time_ms=(
+                    float(t["order_check_time_ms"])
+                    if t.get("order_check_time_ms") is not None
+                    else None
+                ),
+                broker_fill_time_ms=(
+                    float(t["broker_fill_time_ms"])
+                    if t.get("broker_fill_time_ms") is not None
+                    else None
+                ),
+                total_execution_time_ms=(
+                    float(t["total_execution_time_ms"])
+                    if t.get("total_execution_time_ms") is not None
+                    else None
+                ),
+                slippage=(
+                    str(t["slippage"]) if t.get("slippage") is not None else None
+                ),
+                spread=str(t["spread"]) if t.get("spread") is not None else None,
             )
         except Exception as exc:
             raise HTTPException(

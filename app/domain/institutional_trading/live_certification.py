@@ -82,6 +82,14 @@ class LiveTradeEvidence:
     position_closed: bool
     history_recorded: bool
     analytics_recorded: bool
+    # Optional real stage timings (ms) — required for canary metric verification
+    signal_time_ms: float | None = None
+    risk_time_ms: float | None = None
+    order_check_time_ms: float | None = None
+    broker_fill_time_ms: float | None = None
+    total_execution_time_ms: float | None = None
+    slippage: str | None = None
+    spread: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -105,6 +113,13 @@ class LiveTradeEvidence:
             "position_closed": self.position_closed,
             "history_recorded": self.history_recorded,
             "analytics_recorded": self.analytics_recorded,
+            "signal_time_ms": self.signal_time_ms,
+            "risk_time_ms": self.risk_time_ms,
+            "order_check_time_ms": self.order_check_time_ms,
+            "broker_fill_time_ms": self.broker_fill_time_ms,
+            "total_execution_time_ms": self.total_execution_time_ms,
+            "slippage": self.slippage,
+            "spread": self.spread,
         }
 
 
@@ -295,6 +310,20 @@ def validate_demo_trade_evidence(trade: LiveTradeEvidence) -> tuple[bool, str]:
         return False, "Audit ID missing"
     if not trade.broker.strip():
         return False, "Broker missing"
+    metrics = (
+        ("signal_time_ms", trade.signal_time_ms),
+        ("risk_time_ms", trade.risk_time_ms),
+        ("order_check_time_ms", trade.order_check_time_ms),
+        ("broker_fill_time_ms", trade.broker_fill_time_ms),
+        ("total_execution_time_ms", trade.total_execution_time_ms),
+    )
+    for name, value in metrics:
+        if value is None or value < 0:
+            return False, f"Execution metric {name} missing from real trade"
+    if trade.slippage is None or not str(trade.slippage).strip():
+        return False, "Slippage missing from real trade"
+    if trade.spread is None or not str(trade.spread).strip():
+        return False, "Spread missing from real trade"
     return True, ""
 
 

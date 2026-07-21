@@ -41,6 +41,34 @@ def _account(equity: str = "10000") -> AccountSnapshot:
 
 
 @pytest.mark.unit
+def test_percentage_risk_uses_operator_risk_pct() -> None:
+    engine = RiskEngine()
+    size_1 = engine.size_position(
+        equity=Decimal("10000"),
+        method=PositionSizingMethod.PERCENTAGE_RISK,
+        requested_lots=None,
+        stop_distance=Decimal("10"),
+        atr=None,
+        entry_price=Decimal("2300"),
+        contract_size=Decimal("100"),
+        risk_per_trade_pct=Decimal("1"),
+    )
+    size_half = engine.size_position(
+        equity=Decimal("10000"),
+        method=PositionSizingMethod.PERCENTAGE_RISK,
+        requested_lots=None,
+        stop_distance=Decimal("10"),
+        atr=None,
+        entry_price=Decimal("2300"),
+        contract_size=Decimal("100"),
+        risk_per_trade_pct=Decimal("0.5"),
+    )
+    assert size_1.approved_lots == Decimal("0.10")
+    assert size_half.approved_lots == Decimal("0.05")
+    assert size_half.approved_lots < size_1.approved_lots
+
+
+@pytest.mark.unit
 class TestPositionSizing:
     def test_fixed_lot_and_cap(self) -> None:
         engine = RiskEngine(

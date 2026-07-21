@@ -141,6 +141,75 @@ def test_certify_rejects_non_demo_volume() -> None:
 
 
 @pytest.mark.unit
+def test_certify_requires_execution_metrics() -> None:
+    checklist = evaluate_live_cert_checklist(
+        facts=_pass_facts(),
+        policy=AutoTradePolicy(enabled=True),
+        mt5_logged_in=True,
+        exposure_pass=True,
+        drawdown_pass=True,
+        account_is_demo=True,
+    )
+    trade = LiveTradeEvidence(
+        broker="Weltrade",
+        account_type="Demo",
+        symbol="XAUUSD",
+        volume=DEMO_CERT_VOLUME,
+        ticket=1,
+        deal=2,
+        entry=Decimal("2300"),
+        exit=Decimal("2301"),
+        profit_loss=Decimal("1"),
+        execution_latency_ms=12.0,
+        margin_used=Decimal("10"),
+        risk_pct=Decimal("1"),
+        audit_id="aud-1",
+        position_closed=True,
+        history_recorded=True,
+        analytics_recorded=True,
+    )
+    stages = build_stage_results(
+        completed=dict.fromkeys(
+            (
+                "signal",
+                "risk_check",
+                "order_check",
+                "order_send",
+                "broker_fill",
+                "position_open",
+                "position_close",
+                "execution_audit",
+                "history",
+                "analytics",
+            ),
+            True,
+        )
+    )
+    report = certify_or_stop(checklist=checklist, stages=stages, trade=trade)
+    assert report.certified is False
+    assert "signal_time_ms" in (report.failure_reason or "")
+
+
+@pytest.mark.unit
+def test_mode_never_auto_switches_on_cert() -> None:
+    plane = OperationsControlPlane()
+    assert plane.mode.value == "SHADOW"
+    svc = LiveAutoTradeCertificationService(plane=plane)
+    report = svc.run_certification_attempt(
+        _op(),
+        facts=_pass_facts(),
+        mt5_logged_in=True,
+        exposure_pass=True,
+        drawdown_pass=True,
+        account_is_demo=True,
+        trade=None,
+        reason="no trade",
+    )
+    assert report.mode_auto_switched is False
+    assert plane.mode.value == "SHADOW"
+
+
+@pytest.mark.unit
 def test_service_disables_auto_trading_on_failure() -> None:
     plane = OperationsControlPlane()
     op = _op()

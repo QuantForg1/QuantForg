@@ -39,11 +39,11 @@ export const ExecutionMetricsStrip = memo(function ExecutionMetricsStrip({
   className?: string;
 }) {
   const rows: [string, string][] = [
-    ["Signal", fmtMs(metrics.signalMs)],
-    ["Risk", fmtMs(metrics.riskMs)],
-    ["Order check", fmtMs(metrics.orderCheckMs)],
-    ["Broker fill", fmtMs(metrics.brokerFillMs)],
-    ["Total", fmtMs(metrics.totalMs)],
+    ["Signal Time", fmtMs(metrics.signalMs)],
+    ["Risk Time", fmtMs(metrics.riskMs)],
+    ["Order Check Time", fmtMs(metrics.orderCheckMs)],
+    ["Broker Fill Time", fmtMs(metrics.brokerFillMs)],
+    ["Total Execution Time", fmtMs(metrics.totalMs)],
     ["Slippage", metrics.slippage?.trim() || "Not available"],
     ["Spread", metrics.spread?.trim() || "Not available"],
   ];

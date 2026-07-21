@@ -36,6 +36,7 @@ async def risk_check(
             atr=body.atr,
             spread=body.spread,
             sizing_method=body.sizing_method,
+            risk_per_trade_pct=body.risk_per_trade_pct,
             entry_price=body.entry_price,
             peak_equity=body.peak_equity,
             daily_pnl=body.daily_pnl,

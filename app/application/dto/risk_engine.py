@@ -20,6 +20,7 @@ class RiskCheckCommand:
     atr: str | None = None
     spread: str | None = None
     sizing_method: str = "percentage_risk"
+    risk_per_trade_pct: str | None = None
     entry_price: str = "1.0"
     peak_equity: str | None = None
     daily_pnl: str = "0"

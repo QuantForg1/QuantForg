@@ -20,6 +20,10 @@ class RiskCheckRequest(BaseModel):
         default="percentage_risk",
         description="fixed_lot | fixed_dollar_risk | percentage_risk | atr_based",
     )
+    risk_per_trade_pct: str | None = Field(
+        default=None,
+        description="Operator risk % of equity for percentage_risk / atr_based sizing",
+    )
     entry_price: str = Field(default="1.0")
     peak_equity: str | None = None
     daily_pnl: str = "0"

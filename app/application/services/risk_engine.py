@@ -60,6 +60,8 @@ class RiskCheckInput:
     atr: Decimal | None = None
     sizing_method: PositionSizingMethod = PositionSizingMethod.PERCENTAGE_RISK
     entry_price: Decimal = Decimal("1")
+    # Optional operator risk % (percentage_risk); None → config.max_risk_per_trade_pct
+    risk_per_trade_pct: Decimal | None = None
     # Institutional extensions (Phase B) — optional; ignored when None / unset
     consecutive_losses: int = 0
     cooldown_active: bool = False
@@ -101,10 +103,16 @@ class RiskEngine:
         atr: Decimal | None,
         entry_price: Decimal,
         contract_size: Decimal | None = None,
+        risk_per_trade_pct: Decimal | None = None,
     ) -> PositionSizeResult:
         cfg = self.config
         cs = contract_size if contract_size is not None else cfg.contract_size
         stop = stop_distance or Decimal("0")
+        risk_pct = (
+            risk_per_trade_pct
+            if risk_per_trade_pct is not None and risk_per_trade_pct > 0
+            else cfg.max_risk_per_trade_pct
+        )
         if method is PositionSizingMethod.FIXED_LOT:
             lots = requested_lots if requested_lots is not None else cfg.fixed_lot
             dollar = lots * stop * cs
@@ -121,7 +129,7 @@ class RiskEngine:
             atr_val = atr if atr is not None and atr > 0 else stop
             if atr_val <= 0:
                 atr_val = entry_price * Decimal("0.001")
-            risk_budget = equity * (cfg.max_risk_per_trade_pct / Decimal("100"))
+            risk_budget = equity * (risk_pct / Decimal("100"))
             distance = atr_val * cfg.atr_multiplier
             lots = (risk_budget / (distance * cs)).quantize(
                 cfg.lot_step, rounding=ROUND_DOWN
@@ -129,7 +137,7 @@ class RiskEngine:
             stop = distance
             dollar = risk_budget
         else:  # PERCENTAGE_RISK
-            risk_budget = equity * (cfg.max_risk_per_trade_pct / Decimal("100"))
+            risk_budget = equity * (risk_pct / Decimal("100"))
             if stop <= 0:
                 stop = entry_price * Decimal("0.001")
             lots = (risk_budget / (stop * cs)).quantize(
@@ -1031,6 +1039,7 @@ class RiskEngine:
             atr=check.atr,
             entry_price=check.entry_price,
             contract_size=contract_size,
+            risk_per_trade_pct=check.risk_per_trade_pct,
         )
         checks["position_sizing"] = size.approved_lots >= self.config.min_lot
 

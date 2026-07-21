@@ -45,9 +45,10 @@ export function LiveAutoTradeCertificationPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Demo first (0.01 lot, max 1 position). SHADOW→LIVE is operator-only.
-          Auto Trading and Execution Enabled must be explicitly enabled by the
-          operator. This panel never sends orders and never fabricates fills.
+          Demo first (0.01 lot, max 1 position). Modes SHADOW → CANARY → LIVE are
+          operator-only — never auto-promoted. Certification requires real Demo
+          fills with Signal / Risk / Order Check / Broker Fill / Total times plus
+          Slippage and Spread. This panel never fabricates fills.
         </p>
 
         <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
