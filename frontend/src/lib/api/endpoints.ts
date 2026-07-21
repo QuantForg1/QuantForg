@@ -886,6 +886,39 @@ export const tradingKernelApi = {
     apiFetch<Record<string, unknown>>("/trading-kernel/certification"),
 };
 
+/** Multi-Agent AI — collaborate before approval; never order_send / never bypass */
+export const multiAgentAiApi = {
+  status: () => apiFetch<Record<string, unknown>>("/multi-agent-ai/status"),
+  collaborate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/multi-agent-ai/collaborate", {
+      method: "POST",
+      body,
+    }),
+  events: (limit = 100, sessionId?: string) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (sessionId) q.set("session_id", sessionId);
+    return apiFetch<Record<string, unknown>>(`/multi-agent-ai/events?${q}`);
+  },
+  memory: (limit = 50, kind?: string) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (kind) q.set("kind", kind);
+    return apiFetch<Record<string, unknown>>(`/multi-agent-ai/memory?${q}`);
+  },
+  storeMemory: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/multi-agent-ai/memory", {
+      method: "POST",
+      body,
+    }),
+  governance: () =>
+    apiFetch<Record<string, unknown>>("/multi-agent-ai/governance"),
+  policies: () => apiFetch<Record<string, unknown>>("/multi-agent-ai/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/multi-agent-ai/policies", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

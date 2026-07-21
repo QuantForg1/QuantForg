@@ -229,6 +229,12 @@ export const appNav: NavGroup[] = [
         hint: "Core OS · orchestrate · never bypass",
       },
       {
+        href: "/multi-agent-ai",
+        label: "Multi-Agent AI",
+        icon: Bot,
+        hint: "Agents collaborate before approval",
+      },
+      {
         href: "/gateway",
         label: "Gateway",
         icon: Workflow,
