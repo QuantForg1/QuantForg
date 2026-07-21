@@ -587,6 +587,13 @@ export const iteReliabilityApi = {
       method: "POST",
       body: {},
     }),
+  recoverSafeRead: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/recovery/safe-read", {
+      method: "POST",
+      body: {},
+    }),
+  shadowReadiness: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/shadow/readiness"),
 };
 
 /** Phase H — Production Validation & Certification */
@@ -770,6 +777,49 @@ export const intelligencePlatformApi = {
     apiFetch<Record<string, unknown>>(
       `/intelligence-platform/decision-replay?audit_id=${encodeURIComponent(auditId)}`,
     ),
+};
+
+/** Production Readiness Program — reliability desk; never order_send */
+export const productionReadinessApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/production-readiness/status"),
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/production-readiness/dashboard"),
+  dashboardWithFeeds: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/production-readiness/dashboard", {
+      method: "POST",
+      body,
+    }),
+  policies: () =>
+    apiFetch<Record<string, unknown>>("/production-readiness/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/production-readiness/policies", {
+      method: "POST",
+      body,
+    }),
+  audit: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/production-readiness/audit?limit=${limit}`,
+    ),
+  logRecovery: (body: {
+    action: string;
+    ok?: boolean;
+    detail?: string;
+    meta?: Record<string, unknown>;
+  }) =>
+    apiFetch<Record<string, unknown>>("/production-readiness/audit/recovery", {
+      method: "POST",
+      body,
+    }),
+  logFailure: (body: {
+    action: string;
+    detail: string;
+    meta?: Record<string, unknown>;
+  }) =>
+    apiFetch<Record<string, unknown>>("/production-readiness/audit/failure", {
+      method: "POST",
+      body,
+    }),
 };
 
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */

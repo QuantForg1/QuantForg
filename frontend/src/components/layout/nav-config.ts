@@ -175,6 +175,12 @@ export const appNav: NavGroup[] = [
         hint: "Executive platform supervision",
       },
       {
+        href: "/production-readiness",
+        label: "Readiness",
+        icon: Shield,
+        hint: "Production readiness program",
+      },
+      {
         href: "/monitoring",
         label: "Monitoring",
         icon: Gauge,
