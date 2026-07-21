@@ -262,3 +262,6 @@ frontend/.env*
 .gateway-stdout.log
 .gateway-stderr.log
 
+# Local scratch / unrelated IDE artifacts
+2025.1
+
