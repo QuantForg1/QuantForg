@@ -24,12 +24,15 @@ export function loadLastExecutionMetrics(): ExecutionTimingMetrics {
     return {
       signalMs: parsed.signalMs ?? null,
       riskMs: parsed.riskMs ?? null,
+      safetyMs: parsed.safetyMs ?? null,
       orderCheckMs: parsed.orderCheckMs ?? null,
       brokerFillMs: parsed.brokerFillMs ?? null,
       totalMs: parsed.totalMs ?? null,
       slippage: parsed.slippage ?? null,
       spread: parsed.spread ?? null,
+      fillStatus: parsed.fillStatus ?? "Filled",
       source: "live",
+      requestId: parsed.requestId,
     };
   } catch {
     return EMPTY_EXECUTION_METRICS;

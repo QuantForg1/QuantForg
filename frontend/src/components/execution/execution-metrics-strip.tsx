@@ -6,71 +6,102 @@ import { cn, formatNumber } from "@/lib/utils";
 export type ExecutionTimingMetrics = {
   signalMs: number | null;
   riskMs: number | null;
+  safetyMs: number | null;
   orderCheckMs: number | null;
   brokerFillMs: number | null;
   totalMs: number | null;
   slippage: string | null;
   spread: string | null;
+  fillStatus: string | null;
   source: "live" | "none";
+  requestId?: string;
 };
 
 export const EMPTY_EXECUTION_METRICS: ExecutionTimingMetrics = {
   signalMs: null,
   riskMs: null,
+  safetyMs: null,
   orderCheckMs: null,
   brokerFillMs: null,
   totalMs: null,
   slippage: null,
   spread: null,
+  fillStatus: null,
   source: "none",
 };
 
-function fmtMs(v: number | null): string {
-  if (v == null || !Number.isFinite(v)) return "Not available";
+function fmtMs(v: number | null, hasHistory: boolean): string {
+  if (v == null || !Number.isFinite(v)) {
+    return hasHistory ? "—" : "Awaiting fill";
+  }
   return `${formatNumber(v, 1)} ms`;
+}
+
+function fmtText(v: string | null, hasHistory: boolean, empty = "—"): string {
+  const t = v?.trim();
+  if (t) return t;
+  return hasHistory ? empty : "Awaiting fill";
 }
 
 /** Real execution timings only — never invents latency or slippage. */
 export const ExecutionMetricsStrip = memo(function ExecutionMetricsStrip({
   metrics,
   className,
+  dense = false,
 }: {
   metrics: ExecutionTimingMetrics;
   className?: string;
+  dense?: boolean;
 }) {
+  const hasHistory = metrics.source === "live";
   const rows: [string, string][] = [
-    ["Signal Time", fmtMs(metrics.signalMs)],
-    ["Risk Time", fmtMs(metrics.riskMs)],
-    ["Order Check Time", fmtMs(metrics.orderCheckMs)],
-    ["Broker Fill Time", fmtMs(metrics.brokerFillMs)],
-    ["Total Execution Time", fmtMs(metrics.totalMs)],
-    ["Slippage", metrics.slippage?.trim() || "Not available"],
-    ["Spread", metrics.spread?.trim() || "Not available"],
+    ["Signal Time", fmtMs(metrics.signalMs, hasHistory)],
+    ["Risk Time", fmtMs(metrics.riskMs, hasHistory)],
+    ["Safety Time", fmtMs(metrics.safetyMs, hasHistory)],
+    ["Order Check", fmtMs(metrics.orderCheckMs, hasHistory)],
+    ["Broker Fill Time", fmtMs(metrics.brokerFillMs, hasHistory)],
+    ["Total Execution Time", fmtMs(metrics.totalMs, hasHistory)],
+    ["Spread", fmtText(metrics.spread, hasHistory)],
+    ["Slippage", fmtText(metrics.slippage, hasHistory, "0")],
+    [
+      "Fill Status",
+      fmtText(metrics.fillStatus, hasHistory, hasHistory ? "Filled" : "Awaiting fill"),
+    ],
   ];
 
   return (
     <section
       className={cn(
-        "rounded-md border border-[var(--border)] bg-[var(--bg)]/50 px-2.5 py-2",
+        "border border-[var(--border)] bg-[var(--surface)]",
+        dense ? "px-2.5 py-2" : "px-3 py-3",
         className,
       )}
       aria-label="Execution metrics"
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-          Execution metrics
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+          Last successful execution
         </p>
-        <span className="text-[9px] text-[var(--fg-subtle)]">
-          {metrics.source === "live" ? "Last live submit" : "Awaiting live fill"}
+        <span className="font-mono text-[10px] text-[var(--fg-subtle)]">
+          {hasHistory
+            ? metrics.requestId
+              ? metrics.requestId.slice(0, 28)
+              : "Live history"
+            : "No fills yet"}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-4">
+      <div
+        className={cn(
+          "grid gap-x-4 gap-y-2",
+          dense ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5",
+        )}
+      >
         {rows.map(([label, value]) => (
-          <div key={label} className="min-w-0">
-            <div className="text-[9px] uppercase tracking-wide text-[var(--fg-subtle)]">
+          <div key={label} className="min-w-0 border-l border-[var(--border)] pl-2">
+            <div className="text-[9px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
               {label}
             </div>
-            <div className="truncate font-mono text-[10px] tabular text-[var(--fg)]">
+            <div className="truncate font-mono text-[12px] tabular text-[var(--fg)]">
               {value}
             </div>
           </div>
@@ -86,6 +117,7 @@ export function metricsFromPipelineResult(
   client: {
     signalMs?: number;
     riskMs?: number;
+    safetyMs?: number;
     orderCheckMs?: number;
     brokerFillMs?: number;
     totalMs?: number;
@@ -98,7 +130,9 @@ export function metricsFromPipelineResult(
   for (const raw of stages) {
     if (!raw || typeof raw !== "object") continue;
     const s = raw as Record<string, unknown>;
-    const name = String(s.stage ?? "").toLowerCase();
+    const name = String(s.stage ?? "")
+      .toLowerCase()
+      .replace(/\s+/g, "_");
     const elapsed = Number(s.elapsed_ms);
     if (name && Number.isFinite(elapsed)) byStage.set(name, elapsed);
   }
@@ -107,6 +141,9 @@ export function metricsFromPipelineResult(
     for (const k of keys) {
       const v = byStage.get(k);
       if (v != null) return v;
+      for (const [name, elapsed] of byStage) {
+        if (name.includes(k)) return elapsed;
+      }
     }
     return null;
   };
@@ -126,12 +163,16 @@ export function metricsFromPipelineResult(
     find("broker_fill", "broker_acceptance", "broker_submission") ??
     (Number.isFinite(Number(exec.latency_ms)) ? Number(exec.latency_ms) : null);
 
+  const outcome = String(result.outcome ?? exec.outcome ?? "").toLowerCase();
+  const filled = outcome === "success" || outcome === "filled";
+
   return {
     signalMs: client.signalMs ?? find("draft", "signal") ?? null,
     riskMs: client.riskMs ?? find("risk_check", "risk") ?? null,
+    safetyMs: client.safetyMs ?? find("safety", "execution_check") ?? null,
     orderCheckMs:
       client.orderCheckMs ??
-      find("execution_check", "validation", "order_check") ??
+      find("validation", "order_check") ??
       null,
     brokerFillMs: brokerFill,
     totalMs:
@@ -140,9 +181,13 @@ export function metricsFromPipelineResult(
     slippage:
       slippageRaw != null && String(slippageRaw).trim()
         ? String(slippageRaw)
-        : null,
+        : filled
+          ? "0"
+          : null,
     spread:
       spreadRaw != null && String(spreadRaw).trim() ? String(spreadRaw) : null,
+    fillStatus: filled ? "Filled" : outcome || null,
     source: "live",
+    requestId: String(result.request_id ?? ""),
   };
 }

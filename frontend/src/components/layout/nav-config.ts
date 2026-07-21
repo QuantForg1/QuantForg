@@ -159,7 +159,7 @@ export const appNav: NavGroup[] = [
         href: "/monitoring",
         label: "Monitoring",
         icon: Gauge,
-        hint: "Health · latency · recovery",
+        hint: "Production ops · live execution",
       },
       {
         href: "/gateway",
@@ -171,7 +171,7 @@ export const appNav: NavGroup[] = [
         href: "/broker",
         label: "Broker",
         icon: Building2,
-        hint: "Account · margin · sync",
+        hint: "Connect · diagnose · settings",
       },
       {
         href: "/execution/diagnostics",
