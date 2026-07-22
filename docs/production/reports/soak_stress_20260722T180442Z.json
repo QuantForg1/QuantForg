@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-22T18:04:42.191397+00:00",
+  "profile": "stress",
+  "elapsed_seconds": 2.841,
+  "accelerated_soak": {
+    "status": "passed",
+    "profile": "stress",
+    "target_hours": 1,
+    "cycles_run": 20,
+    "reconnects_simulated": 3,
+    "duplicates_blocked": 17,
+    "unique_identities": 3,
+    "errors": [],
+    "stability": {
+      "status": "available",
+      "cycle_count": 3,
+      "samples": 3,
+      "avg_loop_latency_ms": 3.700266667389466,
+      "latest": {
+        "cycle": 3,
+        "memory_mb": 214,
+        "cpu_pct": 34,
+        "loop_latency_ms": 5.833000002894551,
+        "queue_size": 4,
+        "worker_health": "ok",
+        "orphan_tasks": 0,
+        "stale_subscriptions": 0
+      }
+    },
+    "history_len": 20,
+    "max_history": 500,
+    "events_len": 84,
+    "max_events": 5000,
+    "memory_bounded": true,
+    "resource_cleanup_ok": true,
+    "continuous_execution": true,
+    "accelerated": true,
+    "wall_clock_hours_not_slept": true,
+    "never_order_send": true,
+    "promise_profitability": false,
+    "checks": {
+      "memory": true,
+      "cpu_samples_recorded": true,
+      "reconnections": true,
+      "duplicate_prevention": true,
+      "resource_cleanup": true
+    }
+  },
+  "wall_clock_sample": null,
+  "process": {
+    "rss_mb": 0.0,
+    "tracemalloc_current_mb": 11.865,
+    "tracemalloc_peak_mb": 12.653
+  },
+  "targets": {
+    "24h": "Run: --profile 24h --wall-seconds 86400 on a dedicated host",
+    "72h": "Run: --profile 72h --wall-seconds 259200 on a dedicated host",
+    "7d": "Run: --profile 72h --wall-seconds 604800 on a dedicated host"
+  },
+  "notes": [
+    "Accelerated profiles validate bounded resources without sleeping wall-clock days.",
+    "Wall-clock samples measure real gateway/MT5 probe stability when configured.",
+    "Do not claim multi-day soak completion unless wall_seconds covers that window."
+  ]
+}

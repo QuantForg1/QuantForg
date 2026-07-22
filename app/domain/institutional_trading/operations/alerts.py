@@ -27,14 +27,23 @@ class AlertService:
         severity: AlertSeverity,
         message: str,
         now: datetime | None = None,
+        dedupe: bool = True,
     ) -> OpsAlert:
-        alert = OpsAlert(
-            kind=kind,
-            severity=severity,
-            message=message,
-            created_at=now or datetime.now(UTC),
-        )
+        """Raise an alert. Unacked same-kind alerts are not duplicated by default."""
         with self._lock:
+            if dedupe:
+                for existing in reversed(self._alerts):
+                    if (
+                        not existing.acknowledged
+                        and existing.kind == kind
+                    ):
+                        return existing
+            alert = OpsAlert(
+                kind=kind,
+                severity=severity,
+                message=message,
+                created_at=now or datetime.now(UTC),
+            )
             self._alerts.append(alert)
             if len(self._alerts) > self.max_alerts:
                 self._alerts = self._alerts[-self.max_alerts :]

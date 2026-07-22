@@ -425,6 +425,8 @@ export const iteOpsApi = {
   controlCenter: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/control-center"),
   readiness: () => apiFetch<Record<string, unknown>>("/ite/ops/readiness"),
+  servicesHealth: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/services-health"),
   setMode: (target: string, reason: string, confirmed: boolean) =>
     apiFetch<Record<string, unknown>>("/ite/ops/mode", {
       method: "POST",

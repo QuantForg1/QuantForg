@@ -134,6 +134,115 @@ def readiness(_user: OperatorUser) -> dict[str, Any]:
     return get_control_plane().readiness_dashboard()
 
 
+@router.get("/services-health")
+def services_health(_user: OperatorUser) -> dict[str, Any]:
+    """Per-service status / uptime / latency / last error for operator desks."""
+    import time
+    from datetime import UTC, datetime
+
+    from app.application.services.auto_trading_status import build_status_facts
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+    from app.application.services.institutional_live_probes import LiveProbeCollector
+    from app.domain.institutional_trading.operations.production_alerts import (
+        evaluate_production_alerts,
+        inputs_from_probes,
+    )
+    from app.domain.institutional_trading.reliability.health import ProbeInputs
+
+    plane = get_control_plane()
+    settings = get_settings()
+    t0 = time.perf_counter()
+    facts, live = build_status_facts(plane, settings=settings)
+    probe_ms = (time.perf_counter() - t0) * 1000.0
+
+    runtime = get_ite_runtime()
+    probes: ProbeInputs
+    if runtime is not None:
+        probes = runtime.probes.collect()
+    else:
+        probes = LiveProbeCollector(settings=settings).collect()
+
+    evaluate_production_alerts(
+        plane,
+        inputs_from_probes(
+            probes,
+            plane=plane,
+            extra={
+                "ticks_fresh": bool(facts.market_data_live),
+                "risk_locked": bool(plane.daily_loss_exceeded),
+                "safety_locked": bool(plane.kill_switch_armed),
+                "database_ok": bool(probes.supabase_up),
+                "calendar_ok": True,
+            },
+        ),
+    )
+
+    health = plane.health.latest()
+    now = datetime.now(UTC).isoformat()
+    gateway_ok = bool(live.get("gateway_connected"))
+    broker_ok = bool(live.get("broker_connected"))
+    services = [
+        {
+            "name": "api",
+            "status": "up",
+            "uptime": "process",
+            "heartbeat_at": now,
+            "latency_ms": round(probe_ms, 2),
+            "last_successful_operation": "services_health",
+            "last_error": None,
+            "reconnect_count": 0,
+        },
+        {
+            "name": "mt5_gateway",
+            "status": "up" if gateway_ok else "down",
+            "uptime": "probe",
+            "heartbeat_at": now,
+            "latency_ms": live.get("gateway_latency_ms"),
+            "last_successful_operation": "gateway_probe" if gateway_ok else None,
+            "last_error": None if gateway_ok else "gateway offline",
+            "reconnect_count": 0,
+        },
+        {
+            "name": "mt5_terminal",
+            "status": "up" if broker_ok else "down",
+            "uptime": "probe",
+            "heartbeat_at": now,
+            "latency_ms": float(probes.gateway_latency_ms or 0.0),
+            "last_successful_operation": "mt5_probe" if broker_ok else None,
+            "last_error": None if broker_ok else "mt5 disconnected",
+            "reconnect_count": 0,
+        },
+        {
+            "name": "database",
+            "status": "up" if probes.supabase_up else "down",
+            "uptime": "probe",
+            "heartbeat_at": now,
+            "latency_ms": float(probes.database_latency_ms or 0.0),
+            "last_successful_operation": "db_probe" if probes.supabase_up else None,
+            "last_error": None if probes.supabase_up else "database unavailable",
+            "reconnect_count": 0,
+        },
+        {
+            "name": "ops_control_plane",
+            "status": "halted" if plane.kill_switch_armed else "up",
+            "uptime": "process",
+            "heartbeat_at": now,
+            "latency_ms": 0.0,
+            "last_successful_operation": "control_center",
+            "last_error": "kill switch armed" if plane.kill_switch_armed else None,
+            "reconnect_count": 0,
+            "execution_mode": plane.mode.value,
+        },
+    ]
+    return {
+        "as_of": now,
+        "ops_health": health.to_dict() if health else None,
+        "live": live,
+        "services": services,
+        "alerts": [a.to_dict() for a in plane.alerts.list(limit=50, unacked_only=True)],
+    }
+
+
 @router.post("/mode")
 def set_mode(
     body: ModeBody,

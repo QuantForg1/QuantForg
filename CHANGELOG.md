@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- Production readiness pack (v1.0.0 ops): `GET /ite/ops/services-health`,
+  production alert kinds + dedupe, expanded runbooks, soak/backup/config-audit
+  scripts, `docs/production/*` guides. ASI sample history removed; Incidents
+  desk wired to reliability API.
 - Trading Ecosystem (`/ecosystem`): journal, playbooks, performance coach,
   watchlists, workspaces, alerts, learning center, report center, prefs, and
   cloud sync — advisory-only; Decision Engine remains gatekeeper.

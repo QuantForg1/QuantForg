@@ -35,23 +35,9 @@ function Panel({
   );
 }
 
-const SAMPLE_HISTORY = Array.from({ length: 24 }, (_, i) => ({
-  session: i % 2 === 0 ? "london" : "new_york",
-  hour_utc: 8 + (i % 10),
-  quality: 55 + (i % 30),
-  outcome_score: 50 + (i % 35),
-  personality: i % 3 === 0 ? "trending" : "mean_reverting",
-  regime: i % 3 === 0 ? "trend" : "range",
-  pattern_id: i % 4 === 0 ? "sweep_reclaim" : "bos_continuation",
-  confidence: 60 + (i % 25),
-  win: i % 3 !== 0,
-  opportunity_id: `opp_${i}`,
-}));
-
 export function AsiWorkspace() {
   const qc = useQueryClient();
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const [withHistory, setWithHistory] = useState(true);
 
   const statusQ = useQuery({
     queryKey: ["asi-status"],
@@ -66,39 +52,40 @@ export function AsiWorkspace() {
   });
 
   const evaluateM = useMutation({
-    mutationFn: () =>
-      adaptiveScalpingIntelligenceApi.evaluate({
+    mutationFn: () => {
+      const liveHistory = asList(asRecord(historyQ.data).items).map(asRecord);
+      return adaptiveScalpingIntelligenceApi.evaluate({
         side: "buy",
         session: "london",
-        hour_utc: 13,
-        weekday: "wednesday",
-        regime: "trend",
-        volatility: "normal",
-        spread: 0.28,
-        personality_hint: "trending",
-        pattern_id: "sweep_reclaim",
-        live_confidence: 72,
-        live_opportunity: { id: "live_1", quality_score: 74 },
-        capital_facts: { max_drawdown_pct: 1.2, daily_loss_pct: 0.3 },
+        hour_utc: new Date().getUTCHours(),
+        weekday: [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday",
+        ][new Date().getUTCDay() === 0 ? 6 : new Date().getUTCDay() - 1],
+        regime: "unknown",
+        volatility: "unknown",
+        personality_hint: "unknown",
+        pattern_id: "unspecified",
+        live_confidence: 0,
+        live_opportunity: null,
+        capital_facts: {},
         decision_context: {
-          decision: "APPROVE",
-          reason: "Supplied decision context for explainability demo",
+          decision: "NO_TRADE",
+          reason: "Evaluate using live ASI history only — no fabricated sample rows",
         },
-        historical_observations: withHistory ? SAMPLE_HISTORY : [],
-        closed_trades: withHistory
-          ? SAMPLE_HISTORY.map((h) => ({
-              win: h.win,
-              pnl: h.win ? 12 : -8,
-              confidence: h.confidence,
-            }))
-          : [],
-        opportunity_catalog: withHistory
-          ? SAMPLE_HISTORY.slice(0, 8).map((h) => ({
-              opportunity_id: h.opportunity_id,
-              pattern_id: h.pattern_id,
-            }))
-          : [],
-      }),
+        historical_observations: liveHistory,
+        closed_trades: [],
+        opportunity_catalog: liveHistory.slice(0, 8).map((h) => ({
+          opportunity_id: str(h.opportunity_id, str(h.id)),
+          pattern_id: str(h.pattern_id),
+        })),
+      });
+    },
     onSuccess: async (data) => {
       setResult(data);
       toast.success(str(data.summary, "ASI evaluated"));
@@ -145,15 +132,9 @@ export function AsiWorkspace() {
             No fabricated stats
           </Badge>
         ) : null}
-        <label className="ml-2 flex items-center gap-1.5 text-[10px] text-[var(--fg-muted)]">
-          <input
-            type="checkbox"
-            checked={withHistory}
-            onChange={(e) => setWithHistory(e.target.checked)}
-            className="size-3.5"
-          />
-          Supply sample history
-        </label>
+        <Badge tone="neutral" className="text-[9px] uppercase">
+          Live history only
+        </Badge>
         <span className="ml-auto font-mono text-[10px] text-[var(--fg-subtle)]">
           {str(statusQ.data?.version, "asi")}
         </span>

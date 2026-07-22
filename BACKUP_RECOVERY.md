@@ -1,6 +1,6 @@
 # Backup & Recovery
 
-**Release:** QuantForg v1.0.0-rc.1  
+**Release:** QuantForg v1.0.0  
 
 ## What to back up
 
@@ -8,11 +8,21 @@
 |-------|----------|-------|
 | Postgres / Supabase data | Managed DB or self-hosted volume | Primary durable store |
 | Migration history | `supabase/migrations/` (in git) | Source of truth for schema |
+| Peak equity / risk HWM | `.quantforg_state/live_account_risk.json` + DB | Required before re-enabling Auto Trading |
+| Research / IVP / LLP / RMIP / PRC | DurableResearchStore export | Process-local unless exported |
+| Trade history / audits | Postgres deals + `execution_audits` | Never invent fills on restore |
 | App config secrets | Secret manager / sealed `.env` | Not in git |
 | Redis | Ephemeral cache | Rebuildable; optional RDB/AOF |
-| Container images | Registry tags | Pin `quantforg:1.0.0-rc.1` |
+| Container images | Registry tags | Pin `quantforg:1.0.0` |
 
 Feature memory UoWs used in default DI are **not** durable — do not rely on process memory for recovery.
+
+### Automated local state backup
+
+```bash
+python scripts/backup_production_state.py
+# → backups/qf_state_<UTC>/MANIFEST.json
+```
 
 ## Migration verify scripts
 
@@ -37,8 +47,8 @@ pg_dump --format=custom --file=quantforg_$(date -u +%Y%m%dT%H%M%SZ).dump \
 
 ### Application artifacts
 
-- Tag and push Docker images for each RC.  
-- Retain matching OpenAPI (`openapi/openapi.v1.0.0-rc1.json`) and this doc set.
+- Tag and push Docker images for each release.  
+- Retain matching OpenAPI (`openapi/openapi.v1.0.0.json`) and `docs/production/*`.
 
 ## Restore
 

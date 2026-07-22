@@ -6,6 +6,41 @@ from dataclasses import dataclass
 from typing import Any
 
 RUNBOOKS: dict[str, dict[str, Any]] = {
+    "startup": {
+        "title": "Platform startup",
+        "steps": [
+            "Confirm EXECUTION_ENABLED intentional (false until Demo certified)",
+            "Start API (Railway) and confirm GET /api/v1/health/live",
+            "Start Windows MT5 Gateway; confirm GET /health status=ok",
+            "Attach or login MT5; confirm login_status connected",
+            "Verify Cloudflare tunnel / gateway URL reachable from API",
+            "Open Monitoring + Broker desks — identical gateway state",
+            "Review /ite/ops/control-center mode (expect SHADOW until promoted)",
+            "Acknowledge overnight alerts before enabling Auto Trading",
+        ],
+    },
+    "shutdown": {
+        "title": "Platform shutdown",
+        "steps": [
+            "Pause Auto Trading (run_state=paused or off)",
+            "Arm kill switch if live risk is open",
+            "Confirm no in-flight OMS requests",
+            "Stop accepting new submissions (EXECUTION_ENABLED=false if lasting)",
+            "Stop API process after drain",
+            "Stop MT5 Gateway service last (after API callers idle)",
+        ],
+    },
+    "restart": {
+        "title": "Controlled restart",
+        "steps": [
+            "Arm kill switch",
+            "Run shutdown checklist",
+            "Restart Gateway, then API",
+            "Confirm peak equity file/DB loaded",
+            "Run startup checklist",
+            "Disarm kill switch only after green health",
+        ],
+    },
     "start_of_trading_day": {
         "title": "Start of trading day",
         "steps": [
@@ -35,6 +70,52 @@ RUNBOOKS: dict[str, dict[str, Any]] = {
             "Re-login MT5 terminal; enable AutoTrading",
             "Verify account sync + symbol XAUUSD tradable",
             "Disarm kill switch after connected=true",
+        ],
+    },
+    "broker_failure": {
+        "title": "Broker / Weltrade failure",
+        "steps": [
+            "Arm kill switch immediately",
+            "Set Auto Trading OFF / STOPPED",
+            "Confirm no ambiguous PREPARED attempts without reconciliation",
+            "Capture gateway /health + last retcodes",
+            "Wait for broker status; do not invent fills",
+            "Reconnect MT5 only after broker confirms sessions",
+            "Disarm kill switch after Monitoring + Broker agree CONNECTED",
+        ],
+    },
+    "recovery": {
+        "title": "Recovery after incident",
+        "steps": [
+            "Keep kill switch armed until root cause known",
+            "Run /ite/reliability/recovery/gateway then /mt5 if needed",
+            "Safe-read only — never auto-retry order_send",
+            "Reconcile open positions vs MT5 terminal",
+            "Verify peak equity + daily PnL gates",
+            "Promote SHADOW → CANARY only after green soak sample",
+        ],
+    },
+    "disaster_recovery": {
+        "title": "Disaster recovery",
+        "steps": [
+            "Declare incident; arm kill switch",
+            "Restore Postgres from latest verified backup (BACKUP_RECOVERY.md)",
+            "Restore .quantforg_state / live_account_risk peak equity",
+            "Restore research DurableResearchStore archive if process-local lost",
+            "Redeploy matching app image tag",
+            "EXECUTION_ENABLED=false until smoke + Demo cert",
+            "Run startup + recovery checklists",
+        ],
+    },
+    "incident_response": {
+        "title": "Incident response",
+        "steps": [
+            "Acknowledge critical alerts in /ite/ops/alerts",
+            "Open /incidents and /monitoring for shared state",
+            "Capture request_ids / decision hashes / retcodes",
+            "Prefer No Trade — halt Auto Trading",
+            "Escalate OWNER/ADMIN; document timeline",
+            "Close incident only after verify + audit entry",
         ],
     },
     "promotion_to_canary": {
