@@ -158,6 +158,12 @@ export function AutoTradingWorkspace() {
     retry: false,
     refetchInterval: 20_000,
   });
+  const optQ = useQuery({
+    queryKey: ["execution-optimization", "auto-ws"],
+    queryFn: () => executionApi.optimization(100),
+    retry: false,
+    refetchInterval: 30_000,
+  });
   const positionsQ = useQuery({
     queryKey: ["portfolio-positions", "auto-ws"],
     queryFn: () => portfolioApi.positions(),
@@ -309,6 +315,28 @@ export function AutoTradingWorkspace() {
   const marketOpen = session.connected && (tick.bid != null || tick.ask != null);
 
   const analytics = asRecord(asRecord(analyticsQ.data).metrics);
+  const optTrends = asRecord(asRecord(asRecord(optQ.data).risk_trends).trends);
+  const sessionOverall = asRecord(
+    asRecord(asRecord(optQ.data).session_analytics).overall,
+  );
+  const pf =
+    sessionOverall.profit_factor != null
+      ? formatNumber(num(sessionOverall.profit_factor), 2)
+      : "—";
+  const expectancy =
+    sessionOverall.expectancy != null
+      ? formatNumber(num(sessionOverall.expectancy), 2)
+      : "—";
+  const avgR =
+    optTrends.average_r != null
+      ? formatNumber(num(optTrends.average_r), 2)
+      : "—";
+  const avgHold =
+    analytics.order_duration_ms_avg != null
+      ? `${formatNumber(num(analytics.order_duration_ms_avg) / 1000, 1)}s`
+      : sessionOverall.avg_duration_seconds != null
+        ? `${formatNumber(num(sessionOverall.avg_duration_seconds), 1)}s`
+        : "—";
   const todayJournal = journalItems.filter((j) => {
     const t = Date.parse(str(j.timestamp || j.submitted_at));
     return Number.isFinite(t) && t >= todayStart.getTime();
@@ -816,10 +844,18 @@ export function AutoTradingWorkspace() {
                     : "—"
                 }
               />
-              <Stat label="Profit Factor" value="—" />
-              <Stat label="Expectancy" value="—" />
-              <Stat label="Average R" value="—" />
-              <Stat label="Avg Hold Time" value="—" />
+              <Stat label="Profit Factor" value={pf} />
+              <Stat label="Expectancy" value={expectancy} />
+              <Stat label="Average R" value={avgR} />
+              <Stat label="Avg Hold Time" value={avgHold} />
+              <Stat
+                label="Latency P95"
+                value={
+                  analytics.order_latency_ms_p95 != null
+                    ? `${formatNumber(num(analytics.order_latency_ms_p95), 0)} ms`
+                    : "—"
+                }
+              />
             </div>
             <p className="mt-2 text-[10px] text-[var(--fg-subtle)]">
               Blank metrics stay empty until enough closed trades exist — never invented.

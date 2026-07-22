@@ -265,6 +265,10 @@ export const executionApi = {
     apiFetch<Record<string, unknown>>(`/execution/journal?limit=${limit}`),
   analytics: (limit = 200) =>
     apiFetch<Record<string, unknown>>(`/execution/analytics?limit=${limit}`),
+  optimization: (limit = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/execution/optimization?limit=${limit}`,
+    ),
   audits: (limit = 50) =>
     apiFetch<Record<string, unknown>>(`/execution/audits?limit=${limit}`),
   auditsByRequest: (requestId: string) =>

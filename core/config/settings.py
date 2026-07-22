@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     app_name: Annotated[str, Field(description="Human-readable application name")] = (
         "QuantForg"
     )
-    app_version: Annotated[str, Field(description="Semantic version string")] = "1.0.0"
+    app_version: Annotated[str, Field(description="Semantic version string")] = "1.0.1"
     app_env: Annotated[
         AppEnvironment,
         Field(

@@ -150,6 +150,8 @@ class ExecutionAnalyticsResponse(BaseModel):
     sample_sizes: dict[str, object] = Field(default_factory=dict)
     data_source: str = ""
     journal_count: int = 0
+    trades: list[dict[str, object]] = Field(default_factory=list)
+    abnormal_executions: list[dict[str, object]] = Field(default_factory=list)
 
 
 class ExecutionAuditItem(BaseModel):

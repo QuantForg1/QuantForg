@@ -276,12 +276,31 @@ class EcosystemService:
         store = get_ecosystem_store()
         paper = get_paper_tracker().reports(user_id)
         coach = self.coach(user_id=user_id)
+        journal_stats = store.journal_stats(user_id)
         report = build_period_report(
             period=period,
-            journal_stats=store.journal_stats(user_id),
+            journal_stats=journal_stats,
             paper=paper,
             coach=coach,
             preferences=store.get_preferences(user_id),
+            performance={
+                "status": "available" if journal_stats else "unavailable",
+                "journal": journal_stats,
+                "paper": paper or {"status": "unavailable"},
+            },
+            risk={"status": "see_/execution/optimization", "source": "trend_analytics"},
+            execution={
+                "status": "see_/execution/analytics",
+                "source": "execution_intelligence",
+            },
+            reliability={
+                "status": "see_/ite/ops/services-health",
+                "source": "institutional_ops",
+            },
+            known_issues=[
+                "Missing metrics stay unavailable — never invented",
+                "Join /execution/optimization for latency percentiles + broker quality",
+            ],
         )
         return {**report, **_security()}
 

@@ -23,6 +23,7 @@ def classify_session_utc(as_of: datetime) -> MarketSession:
     - London: 07:00-16:00 (when not overlap)
     - New York: 12:00-21:00 (when not overlap)
     - Tokyo: 00:00-09:00
+    - Sydney: 21:00-06:00 (when not Tokyo)
     - else off-hours
     """
     moment = as_of
@@ -48,6 +49,8 @@ def classify_session_utc(as_of: datetime) -> MarketSession:
         return MarketSession.NEW_YORK
     if 0.0 <= h < 9.0:
         return MarketSession.TOKYO
+    if h >= 21.0 or h < 6.0:
+        return MarketSession.SYDNEY
     return MarketSession.OFF_HOURS
 
 

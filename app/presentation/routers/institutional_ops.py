@@ -409,8 +409,13 @@ def list_alerts(
     _user: OperatorUser,
     unacked_only: bool = False,
 ) -> dict[str, Any]:
-    rows = get_control_plane().alerts.list(unacked_only=unacked_only)
-    return {"alerts": [a.to_dict() for a in rows]}
+    plane = get_control_plane()
+    rows = plane.alerts.list(unacked_only=unacked_only)
+    return {
+        "alerts": [a.to_dict() for a in rows],
+        "grouped": plane.alerts.grouped(unacked_only=unacked_only),
+        "unacked_count": plane.alerts.unacked_count(),
+    }
 
 
 @router.post("/alerts/ack")

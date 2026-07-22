@@ -164,6 +164,8 @@ class OpsAlert:
     acknowledged_by: str | None = None
     acknowledged_at: datetime | None = None
     id: UUID = field(default_factory=uuid4)
+    occurrence_count: int = 1
+    last_seen_at: datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -176,6 +178,10 @@ class OpsAlert:
             "acknowledged_by": self.acknowledged_by,
             "acknowledged_at": (
                 self.acknowledged_at.isoformat() if self.acknowledged_at else None
+            ),
+            "occurrence_count": self.occurrence_count,
+            "last_seen_at": (
+                self.last_seen_at.isoformat() if self.last_seen_at else None
             ),
         }
 

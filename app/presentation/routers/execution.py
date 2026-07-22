@@ -402,4 +402,75 @@ async def execution_analytics(
         sample_sizes=dict(analytics.get("sample_sizes") or {}),
         data_source=str(analytics.get("data_source") or ""),
         journal_count=len(journal_rows),
+        trades=list(analytics.get("trades") or []),
+        abnormal_executions=list(analytics.get("abnormal_executions") or []),
     )
+
+
+@router.get("/optimization")
+async def execution_optimization(
+    user: CurrentUser,
+    journal: JournalDep,
+    limit: int = Query(default=200, ge=1, le=500),
+) -> dict[str, Any]:
+    """v1.0.1 optimization pack — execution + trend + broker quality (no new AI)."""
+    from app.domain.execution_intelligence.broker_quality import compute_broker_quality
+    from app.domain.execution_intelligence.trend_analytics import (
+        compute_regime_analytics,
+        compute_risk_trends,
+        compute_session_analytics,
+    )
+
+    base = await execution_analytics(user=user, journal=journal, limit=limit)
+    metrics = dict(base.metrics)
+    # Closed-trade shaped rows from journal when present
+    journal_rows = journal.list_for_user(str(user.id), limit=limit)
+    trade_like: list[dict[str, Any]] = []
+    for j in journal_rows:
+        trade_like.append(
+            {
+                "net_pnl": j.get("pnl") or j.get("profit") or j.get("net_pnl"),
+                "closed_at": j.get("completed_at") or j.get("created_at"),
+                "opened_at": j.get("created_at"),
+                "session": j.get("market_session") or j.get("session"),
+                "regime": j.get("regime") or j.get("market_regime"),
+                "r_multiple": j.get("r_multiple"),
+                "risk_amount": j.get("risk_amount"),
+            }
+        )
+
+    broker_q = compute_broker_quality(
+        fill_rate=float(metrics["fill_rate"])
+        if metrics.get("fill_rate") is not None
+        else None,
+        reject_rate=float(metrics["reject_rate"])
+        if metrics.get("reject_rate") is not None
+        else None,
+        avg_slippage=float(metrics["average_slippage"])
+        if metrics.get("average_slippage") is not None
+        else None,
+        latency_p95_ms=float(metrics["order_latency_ms_p95"])
+        if metrics.get("order_latency_ms_p95") is not None
+        else None,
+        attempt_count=int((base.sample_sizes or {}).get("attempts") or 0),
+    )
+    return {
+        "status": base.status,
+        "version": "1.0.1",
+        "execution": {
+            "metrics": metrics,
+            "sample_sizes": base.sample_sizes,
+            "abnormal_executions": base.abnormal_executions,
+            "latency_percentiles": {
+                "p50": metrics.get("order_latency_ms_p50"),
+                "p90": metrics.get("order_latency_ms_p90"),
+                "p95": metrics.get("order_latency_ms_p95"),
+                "p99": metrics.get("order_latency_ms_p99"),
+            },
+        },
+        "risk_trends": compute_risk_trends(trade_like),
+        "session_analytics": compute_session_analytics(trade_like),
+        "regime_analytics": compute_regime_analytics(trade_like),
+        "broker_quality": broker_q,
+        "note": "Optimization analytics only — never invents missing trade facts",
+    }
