@@ -328,6 +328,28 @@ export const replayEvidenceLabApi = {
     }),
 };
 
+export const tradingOperationsCenterApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/dashboard"),
+  brief: () =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/brief"),
+  checklist: () =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/checklist"),
+  endOfDay: () =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/end-of-day"),
+  weekly: () =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/weekly"),
+  monthly: () =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/monthly"),
+  alerts: () =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/alerts"),
+  analyze: (payload: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/trading-operations-center/analyze", {
+      method: "POST",
+      body: payload,
+    }),
+};
+
 export const executionIntelligenceApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/execution-intelligence/dashboard"),
