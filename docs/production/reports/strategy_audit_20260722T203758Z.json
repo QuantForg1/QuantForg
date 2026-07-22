@@ -1,0 +1,228 @@
+{
+  "version": "1.0.1",
+  "never_auto_modifies_strategy": true,
+  "never_modifies_risk_safety_execution": true,
+  "components": [
+    {
+      "component": "Smart Money Concepts",
+      "status": "consistent",
+      "finding": "SMC is a composite of Structure + Liquidity + OB + FVG + MTF trend via ConfluenceEngine; requires an active OB or FVG zone",
+      "evidence": "app/domain/institutional_trading/confluence.py (no_smc_zone)"
+    },
+    {
+      "component": "BOS",
+      "status": "consistent",
+      "finding": "Break of Structure detected on primary TF (H1); contributes structure factor; directional bias from latest BOS",
+      "evidence": "market_structure/structure_analyzer.py + confluence structure"
+    },
+    {
+      "component": "CHOCH",
+      "status": "consistent",
+      "finding": "Change of Character tracked alongside BOS; both raise structure score when present \u2014 ensure direction agrees with MTF bias",
+      "evidence": "market_structure models + confluence factors['structure']"
+    },
+    {
+      "component": "Order Blocks",
+      "status": "consistent",
+      "finding": "OB engine validates/mitigates/breaks zones; confluence requires active OB or FVG for tradable direction",
+      "evidence": "order_block/* + confluence order_blocks branch"
+    },
+    {
+      "component": "Fair Value Gaps",
+      "status": "consistent",
+      "finding": "FVG detector + fill/invalidation/quality; pairs with OB as SMC zone requirement",
+      "evidence": "fair_value_gap/* + confluence fvgs branch"
+    },
+    {
+      "component": "Liquidity Sweeps",
+      "status": "consistent",
+      "finding": "Sweeps/pools/equal H/L feed liquidity factor; sweeps score higher than pools alone",
+      "evidence": "liquidity/sweep_detector.py + confluence liquidity"
+    },
+    {
+      "component": "Market Structure",
+      "status": "consistent",
+      "finding": "Swing \u2192 BOS/CHoCH \u2192 trend snapshot; pipeline order Structure before Liquidity/OB/FVG",
+      "evidence": "institutional_trading/pipeline.py"
+    },
+    {
+      "component": "Trend Filter",
+      "status": "consistent",
+      "finding": "MTF hierarchy H4/H1/M15/M5; H4 must agree with H1 or confluence rejects mtf_not_aligned",
+      "evidence": "trend_engine.py + confluence MTF gate"
+    },
+    {
+      "component": "Session Filter",
+      "status": "consistent",
+      "finding": "Default allowed sessions: london, new_york, london_ny_overlap. Sydney/Tokyo classified but excluded from ITE entries by default",
+      "evidence": "session_filter.py + ITEConfig.allowed_sessions"
+    },
+    {
+      "component": "Volatility Filter",
+      "status": "gap",
+      "finding": "ATR soft/hard factors in confluence + robot volatility filter; qualitative VolatilityProfileResolver is observational \u2014 ensure live ATR always supplied on status polls",
+      "evidence": "confluence ATR factors + ai_trading_robot/filters.py"
+    },
+    {
+      "component": "Frontend strategy toggles",
+      "status": "ui_only",
+      "finding": "localStorage module toggles (SMC/BOS/CHOCH/OB/FVG/Sweep) do not gate ConfluenceEngine \u2014 cosmetic arming only; risk of operator believing modules are independently wired",
+      "evidence": "frontend/src/lib/auto-trading/strategy-modules.ts"
+    },
+    {
+      "component": "Dual signal paths",
+      "status": "complexity",
+      "finding": "Boolean StrategyRuntime preconditions exist alongside full ITE ConfluenceEngine \u2014 potential duplicated/conflicting signal surfaces if both are operator-facing",
+      "evidence": "strategy_runtime.py vs institutional_decision_pipeline.py"
+    },
+    {
+      "component": "News Protection",
+      "status": "gap",
+      "finding": "news_protection_enabled=False until calendar feed wired \u2014 news regime evidence cannot be claimed",
+      "evidence": "ITEConfig.news_protection_enabled"
+    }
+  ],
+  "signal_quality": {
+    "score": 92,
+    "band": "high_confidence",
+    "reasons": [
+      "Trend aligned (MTF)",
+      "BOS present",
+      "Liquidity sweep confirmed",
+      "SMC order block aligned",
+      "Fair value gap present",
+      "Session filter passed",
+      "Spread acceptable",
+      "Volatility filter passed",
+      "SMC aligned"
+    ],
+    "factors": {
+      "trend": 20,
+      "structure": 12,
+      "liquidity": 15,
+      "order_block": 15,
+      "fair_value_gap": 10,
+      "session": 10,
+      "spread": 10,
+      "volatility": 0
+    },
+    "why_entry_allowed": "Trend aligned (MTF); BOS present; Liquidity sweep confirmed; SMC order block aligned; Fair value gap present; Session filter passed; Spread acceptable; Volatility filter passed; SMC aligned",
+    "filter_opportunities": []
+  },
+  "entry_audit": {
+    "status": "insufficient_data",
+    "message": "No completed trades supplied \u2014 never fabricates entry quality"
+  },
+  "exit_audit": {
+    "status": "insufficient_data",
+    "message": "No completed trades supplied \u2014 never fabricates exit quality"
+  },
+  "no_trade_audit": {
+    "status": "insufficient_data",
+    "message": "No decision journal supplied \u2014 cannot prove No Trade reduced losses",
+    "recommendation": "Need more No-Trade / reject decision samples tagged"
+  },
+  "session_performance": {
+    "status": "insufficient_data",
+    "buckets": {},
+    "note": "Sessions never mixed \u2014 each bucket is independent"
+  },
+  "regime_performance": {
+    "status": "insufficient_data",
+    "buckets": {},
+    "note": "Regimes never mixed \u2014 each bucket is independent"
+  },
+  "recommendations": [
+    "Need more Sydney evidence (have 0, want >=20)",
+    "Need more Tokyo evidence (have 0, want >=20)",
+    "Need more London evidence (have 0, want >=20)",
+    "Need more New York evidence (have 0, want >=20)",
+    "Need more Overlap evidence (have 0, want >=20)",
+    "Need more Trend samples (have 0, want >=15)",
+    "Need more Range samples (have 0, want >=15)",
+    "Need more High Volatility samples (have 0, want >=15)",
+    "Need more Low Volatility samples (have 0, want >=15)",
+    "Need more News samples (have 0, want >=10)",
+    "Need more completed XAUUSD trade samples (have 0, want >=50)",
+    "Need more Decision Engine NO_TRADE / WATCH samples for refusal quality",
+    "Clarify operator UX: frontend strategy toggles are preferences only",
+    "Prefer single operator-facing signal path (ITE Confluence) to avoid duplicated signals",
+    "Need more News replay once calendar blackout is wired"
+  ],
+  "human_review": {
+    "strengths": [
+      "Deterministic SMC confluence with MTF alignment hard gate",
+      "OB or FVG zone required \u2014 reduces naked structure entries",
+      "Session filter defaults to London / New York / Overlap only",
+      "Trade quality score (0-100) with explicit reject band",
+      "NO_TRADE / WATCH decisions exist before OMS",
+      "PME exit ladder (BE / partial / trail) is separate from entry logic"
+    ],
+    "weaknesses": [
+      "Frontend strategy toggles do not wire into ConfluenceEngine",
+      "Dual signal surfaces (StrategyRuntime vs ITE) add complexity",
+      "News protection disabled \u2014 news regime unproven",
+      "Sparse live journals limit session/regime statistical power",
+      "ATR volatility may be unevaluated on status-only polls"
+    ],
+    "unknowns": [
+      "Realized RR by session without tagged live deals",
+      "Whether No Trade decisions reduced losses (needs counterfactual replay)",
+      "Sydney/Tokyo edge if sessions were ever enabled",
+      "Stop-out causes distribution without exit_cause tags"
+    ],
+    "open_questions": [
+      "Should operator UI hide localStorage toggles or bind them read-only to ITE?",
+      "Minimum sample size per session before expanding allowed_sessions?",
+      "When should news_protection_enabled flip after calendar certification?",
+      "Is StrategyRuntime still needed for operator desks?"
+    ],
+    "future_replay_plan": [
+      "Replay London-only XAUUSD bars with confluence journal export",
+      "Replay New York + Overlap separately \u2014 never mix buckets",
+      "Tagged News blackout replay once calendar feed is certified",
+      "Trend vs Range labeled walk-forward with fixed ITEConfig",
+      "No-Trade counterfactual: apply rejected signals hypothetically offline"
+    ]
+  },
+  "evidence_summary": {
+    "completed_trades": 0,
+    "decisions": 0,
+    "signal_facts_supplied": true,
+    "recommendation_count": 15,
+    "component_findings": 13,
+    "source": "read_only_xauusd_strategy_audit"
+  },
+  "advisory_only": true,
+  "never_auto_applies": true,
+  "illustrative_signal_score": {
+    "score": 92,
+    "band": "high_confidence",
+    "reasons": [
+      "Trend aligned (MTF)",
+      "BOS present",
+      "Liquidity sweep confirmed",
+      "SMC order block aligned",
+      "Fair value gap present",
+      "Session filter passed",
+      "Spread acceptable",
+      "Volatility filter passed",
+      "SMC aligned"
+    ],
+    "factors": {
+      "trend": 20,
+      "structure": 12,
+      "liquidity": 15,
+      "order_block": 15,
+      "fair_value_gap": 10,
+      "session": 10,
+      "spread": 10,
+      "volatility": 0
+    },
+    "why_entry_allowed": "Trend aligned (MTF); BOS present; Liquidity sweep confirmed; SMC order block aligned; Fair value gap present; Session filter passed; Spread acceptable; Volatility filter passed; SMC aligned",
+    "filter_opportunities": [],
+    "status": "available",
+    "never_auto_applies": true,
+    "display": "Signal Quality 92 / 100"
+  }
+}
