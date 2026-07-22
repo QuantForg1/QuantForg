@@ -1172,6 +1172,46 @@ export const institutionalValidationProgramApi = {
     ),
 };
 
+/** Real Market Intelligence Platform — context only; never order_send */
+export const realMarketIntelligencePlatformApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>(
+      "/real-market-intelligence-platform/status",
+    ),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/real-market-intelligence-platform/evaluate",
+      {
+        method: "POST",
+        body,
+      },
+    ),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/real-market-intelligence-platform/history?limit=${limit}`,
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>(
+      "/real-market-intelligence-platform/policies",
+    ),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/real-market-intelligence-platform/policies",
+      {
+        method: "POST",
+        body,
+      },
+    ),
+  currentContext: () =>
+    apiFetch<Record<string, unknown>>(
+      "/real-market-intelligence-platform/context/current",
+    ),
+  historicalContext: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/real-market-intelligence-platform/context/historical?limit=${limit}`,
+    ),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

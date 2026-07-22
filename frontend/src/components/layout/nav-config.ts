@@ -232,6 +232,12 @@ export const appNav: NavGroup[] = [
         hint: "IVP · read-only evidence · never trades",
       },
       {
+        href: "/real-market-intelligence-platform",
+        label: "Market Context",
+        icon: Radar,
+        hint: "RMIP · real-world context · never trades",
+      },
+      {
         href: "/ai-robot",
         label: "AI Robot",
         icon: Shield,
