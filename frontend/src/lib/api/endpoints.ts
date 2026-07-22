@@ -437,6 +437,27 @@ export const institutionalDataWarehouseApi = {
     }),
 };
 
+export const institutionalObservabilityApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/dashboard"),
+  health: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/health"),
+  latency: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/latency"),
+  resources: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/resources"),
+  errors: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/errors"),
+  uptime: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/uptime"),
+  dependency: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/dependency"),
+  alerts: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/alerts"),
+  reports: () =>
+    apiFetch<Record<string, unknown>>("/institutional-observability/reports"),
+};
+
 export const executionIntelligenceApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/execution-intelligence/dashboard"),

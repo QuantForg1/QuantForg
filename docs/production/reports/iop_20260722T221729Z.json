@@ -1,0 +1,404 @@
+{
+  "version": "1.0.1",
+  "status": "available",
+  "observability_only": true,
+  "never_modifies_trading_behaviour": true,
+  "hard_locks": {
+    "observability_only": true,
+    "never_modifies_trading_behaviour": true,
+    "never_modifies_strategy": true,
+    "never_modifies_risk_safety_execution": true,
+    "never_modifies_performance_intelligence": true,
+    "never_modifies_replay_evidence_lab": true,
+    "never_modifies_trading_operations_center": true,
+    "never_modifies_audit_governance": true,
+    "never_modifies_institutional_data_warehouse": true
+  },
+  "observed_at": "2026-07-22T22:17:29.864276Z",
+  "health": {
+    "status": "available",
+    "overall": "degraded",
+    "counts": {
+      "healthy": 11,
+      "degraded": 1,
+      "down": 0,
+      "unknown": 0,
+      "total": 12
+    },
+    "components": {
+      "api": {
+        "status": "healthy",
+        "latency_ms": 0.001,
+        "detail": "observability process reachable",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "gateway": {
+        "status": "healthy",
+        "detail": "from ops facts",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "broker": {
+        "status": "healthy",
+        "detail": "from ops facts",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "mt5_session": {
+        "status": "healthy",
+        "detail": "from ops facts",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "execution_queue": {
+        "status": "degraded",
+        "detail": "execution_enabled=false (expected in shadow)",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "journal_writer": {
+        "status": "healthy",
+        "detail": "demo journal ok",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "evidence_lab": {
+        "status": "healthy",
+        "detail": "records=0",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "replay_engine": {
+        "status": "healthy",
+        "detail": "replay_lane=0",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "warehouse": {
+        "status": "healthy",
+        "detail": "records=0",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "governance": {
+        "status": "healthy",
+        "detail": "events=0",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "performance_iq": {
+        "status": "healthy",
+        "detail": "module importable",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      },
+      "operations_center": {
+        "status": "healthy",
+        "detail": "module importable",
+        "observed_at": "2026-07-22T22:17:29.620917Z"
+      }
+    },
+    "observability_only": true
+  },
+  "latencies": {
+    "status": "available",
+    "latencies_ms": {
+      "api": 12.5,
+      "gateway": 40.0,
+      "broker": 55.0,
+      "decision": 8.0,
+      "risk": 6.0,
+      "safety": 5.0,
+      "execution": 70.0,
+      "journal": 9.0,
+      "dashboard": 18.0
+    },
+    "measured_count": 9,
+    "high_latency": {},
+    "threshold_ms": 250.0,
+    "note": "Null means not measured \u2014 never fabricated",
+    "observability_only": true
+  },
+  "resources": {
+    "cpu_percent": null,
+    "memory_percent": null,
+    "memory_used_mb": null,
+    "disk_percent": null,
+    "network_bytes_sent": null,
+    "network_bytes_recv": null,
+    "open_connections": null,
+    "queue_depth": 3,
+    "database": {
+      "status": "unknown",
+      "note": "not probed \u2014 never invents"
+    },
+    "cache": {
+      "status": "unknown",
+      "note": "not probed \u2014 never invents"
+    },
+    "source": "basic",
+    "pid": 5244,
+    "observed_at": "2026-07-22T22:17:29.864154Z"
+  },
+  "errors": {
+    "status": "available",
+    "totals": {
+      "warnings": 1,
+      "errors": 1,
+      "critical_events": 1,
+      "timeouts": 1,
+      "reconnects": 1,
+      "retries": 0,
+      "failures": 1,
+      "recovery_events": 1
+    },
+    "by_component": {
+      "gateway": 1,
+      "safety": 1,
+      "broker": 1
+    },
+    "recent": [
+      {
+        "timestamp": "2026-07-22T09:00:00Z",
+        "severity": "warning",
+        "action": "reconnect",
+        "component": "gateway",
+        "result": "success"
+      },
+      {
+        "timestamp": "2026-07-22T09:12:00Z",
+        "severity": "critical",
+        "action": "kill_switch_armed",
+        "component": "safety",
+        "result": "success"
+      },
+      {
+        "timestamp": "2026-07-22T10:00:00Z",
+        "severity": "error",
+        "action": "timeout",
+        "component": "broker",
+        "result": "failure"
+      }
+    ],
+    "sample_size": 3,
+    "note": "Empty when no events supplied \u2014 never fabricates incidents",
+    "observability_only": true
+  },
+  "uptime": {
+    "started_at": "2026-07-22T22:17:29.613150Z",
+    "current_uptime_seconds": 0.3,
+    "uptime_24h_ratio": 0.0,
+    "uptime_7d_ratio": 0.0,
+    "uptime_30d_ratio": 0.0,
+    "restart_history": [
+      {
+        "timestamp": "2026-07-22T22:17:29.613150Z",
+        "event": "process_start",
+        "pid": 5244
+      }
+    ],
+    "note": "24h/7d/30d ratios reflect this process lifetime only \u2014 never invents multi-process historical uptime"
+  },
+  "dependency": {
+    "status": "available",
+    "chain": [
+      "frontend",
+      "api",
+      "gateway",
+      "mt5",
+      "broker",
+      "execution",
+      "warehouse",
+      "reports"
+    ],
+    "nodes": [
+      {
+        "id": "frontend",
+        "component": "api",
+        "status": "healthy",
+        "detail": "observability process reachable"
+      },
+      {
+        "id": "api",
+        "component": "api",
+        "status": "healthy",
+        "detail": "observability process reachable"
+      },
+      {
+        "id": "gateway",
+        "component": "gateway",
+        "status": "healthy",
+        "detail": "from ops facts"
+      },
+      {
+        "id": "mt5",
+        "component": "mt5_session",
+        "status": "healthy",
+        "detail": "from ops facts"
+      },
+      {
+        "id": "broker",
+        "component": "broker",
+        "status": "healthy",
+        "detail": "from ops facts"
+      },
+      {
+        "id": "execution",
+        "component": "execution_queue",
+        "status": "degraded",
+        "detail": "execution_enabled=false (expected in shadow)"
+      },
+      {
+        "id": "warehouse",
+        "component": "warehouse",
+        "status": "healthy",
+        "detail": "records=0"
+      },
+      {
+        "id": "reports",
+        "component": "operations_center",
+        "status": "healthy",
+        "detail": "module importable"
+      }
+    ],
+    "edges": [
+      {
+        "from": "frontend",
+        "to": "api"
+      },
+      {
+        "from": "api",
+        "to": "gateway"
+      },
+      {
+        "from": "gateway",
+        "to": "mt5"
+      },
+      {
+        "from": "mt5",
+        "to": "broker"
+      },
+      {
+        "from": "broker",
+        "to": "execution"
+      },
+      {
+        "from": "execution",
+        "to": "warehouse"
+      },
+      {
+        "from": "warehouse",
+        "to": "reports"
+      }
+    ],
+    "observability_only": true
+  },
+  "alerts": {
+    "status": "available",
+    "count": 0,
+    "alerts": [],
+    "observability_only": true,
+    "note": "Alert detection only \u2014 never auto-remediates trading systems"
+  },
+  "reports": {
+    "daily_health_report": {
+      "report": "daily_health",
+      "period": "24h",
+      "overall": "degraded",
+      "component_counts": {
+        "healthy": 11,
+        "degraded": 1,
+        "down": 0,
+        "unknown": 0,
+        "total": 12
+      },
+      "uptime": {
+        "started_at": "2026-07-22T22:17:29.613150Z",
+        "current_uptime_seconds": 0.3,
+        "uptime_24h_ratio": 0.0,
+        "uptime_7d_ratio": 0.0,
+        "uptime_30d_ratio": 0.0,
+        "restart_history": [
+          {
+            "timestamp": "2026-07-22T22:17:29.613150Z",
+            "event": "process_start",
+            "pid": 5244
+          }
+        ],
+        "note": "24h/7d/30d ratios reflect this process lifetime only \u2014 never invents multi-process historical uptime"
+      },
+      "alert_count": 0,
+      "observability_only": true
+    },
+    "weekly_reliability_report": {
+      "report": "weekly_reliability",
+      "period": "7d",
+      "uptime_7d_ratio": 0.0,
+      "error_totals": {
+        "warnings": 1,
+        "errors": 1,
+        "critical_events": 1,
+        "timeouts": 1,
+        "reconnects": 1,
+        "retries": 0,
+        "failures": 1,
+        "recovery_events": 1
+      },
+      "high_latency": {},
+      "observability_only": true
+    },
+    "monthly_stability_report": {
+      "report": "monthly_stability",
+      "period": "30d",
+      "uptime_30d_ratio": 0.0,
+      "restart_history": [
+        {
+          "timestamp": "2026-07-22T22:17:29.613150Z",
+          "event": "process_start",
+          "pid": 5244
+        }
+      ],
+      "resource_snapshot": {
+        "cpu_percent": null,
+        "memory_percent": null,
+        "memory_used_mb": null,
+        "disk_percent": null,
+        "network_bytes_sent": null,
+        "network_bytes_recv": null,
+        "open_connections": null,
+        "queue_depth": 3,
+        "database": {
+          "status": "unknown",
+          "note": "not probed \u2014 never invents"
+        },
+        "cache": {
+          "status": "unknown",
+          "note": "not probed \u2014 never invents"
+        },
+        "source": "basic",
+        "pid": 5244,
+        "observed_at": "2026-07-22T22:17:29.864154Z"
+      },
+      "observability_only": true
+    },
+    "incident_report": {
+      "report": "incident",
+      "alerts": [],
+      "critical_errors": [
+        {
+          "timestamp": "2026-07-22T09:12:00Z",
+          "severity": "critical",
+          "action": "kill_switch_armed",
+          "component": "safety",
+          "result": "success"
+        }
+      ],
+      "generated_at": "2026-07-22T22:17:29.864296Z",
+      "observability_only": true
+    }
+  },
+  "recommendations": [
+    "Investigate system health overall=degraded",
+    "Observability only \u2014 never modify strategy, risk, safety, or execution"
+  ],
+  "evidence_summary": {
+    "overall": "degraded",
+    "components_healthy": 11,
+    "components_total": 12,
+    "alert_count": 0,
+    "measured_latencies": 9,
+    "error_sample_size": 3,
+    "current_uptime_seconds": 0.3,
+    "observability_only": true
+  }
+}

@@ -16,6 +16,7 @@
 | [TRADING_OPERATIONS_CENTER_REPORT_v1.0.1.md](./TRADING_OPERATIONS_CENTER_REPORT_v1.0.1.md) | ITOC brief · checklist · EOD/weekly/monthly (advisory) |
 | [AUDIT_GOVERNANCE_REPORT_v1.0.1.md](./AUDIT_GOVERNANCE_REPORT_v1.0.1.md) | Audit trail · forensics · compliance (governance only) |
 | [INSTITUTIONAL_DATA_WAREHOUSE_REPORT_v1.0.1.md](./INSTITUTIONAL_DATA_WAREHOUSE_REPORT_v1.0.1.md) | Read-only analytics warehouse · coverage · quality |
+| [INSTITUTIONAL_OBSERVABILITY_REPORT_v1.0.1.md](./INSTITUTIONAL_OBSERVABILITY_REPORT_v1.0.1.md) | Health · latency · uptime · alerts (observability only) |
 | [RELEASE_NOTES_v1.0.1.md](./RELEASE_NOTES_v1.0.1.md) | v1.0.1 notes |
 
 Also: root `OPERATIONS_RUNBOOK.md`, `BACKUP_RECOVERY.md`, `docs/rc1/*`.  

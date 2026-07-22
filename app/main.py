@@ -66,6 +66,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "institutional_data_warehouse",
         "app.presentation.routers.institutional_data_warehouse",
     ),
+    (
+        "institutional_observability",
+        "app.presentation.routers.institutional_observability",
+    ),
     ("execution_intelligence", "app.presentation.routers.execution_intelligence"),
     ("quant_ai", "app.presentation.routers.quant_ai"),
     ("quant_studio", "app.presentation.routers.quant_studio"),

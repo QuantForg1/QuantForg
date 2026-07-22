@@ -207,6 +207,12 @@ export const appNav: NavGroup[] = [
         hint: "Read-only analytics · dataset explorer",
       },
       {
+        href: "/institutional-observability",
+        label: "Observability",
+        icon: Radar,
+        hint: "Health · latency · uptime · alerts",
+      },
+      {
         href: "/production-readiness",
         label: "Readiness",
         icon: Shield,
