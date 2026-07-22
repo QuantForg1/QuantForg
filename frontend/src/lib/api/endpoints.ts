@@ -1140,6 +1140,38 @@ export const alphaFactoryApi = {
     }),
 };
 
+/** Institutional Validation Program — read-only evidence; never order_send */
+export const institutionalValidationProgramApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-validation-program/status",
+    ),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-validation-program/evaluate",
+      {
+        method: "POST",
+        body,
+      },
+    ),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/institutional-validation-program/history?limit=${limit}`,
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-validation-program/policies",
+    ),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/institutional-validation-program/policies",
+      {
+        method: "POST",
+        body,
+      },
+    ),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

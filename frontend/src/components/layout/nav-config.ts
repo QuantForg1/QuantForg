@@ -10,6 +10,7 @@ import {
   Building2,
   Calendar,
   CandlestickChart,
+  ClipboardCheck,
   Crosshair,
   FileText,
   FlaskConical,
@@ -223,6 +224,12 @@ export const appNav: NavGroup[] = [
         label: "Alpha Factory",
         icon: FlaskConical,
         hint: "Research lab · never touches production",
+      },
+      {
+        href: "/institutional-validation-program",
+        label: "Validation Program",
+        icon: ClipboardCheck,
+        hint: "IVP · read-only evidence · never trades",
       },
       {
         href: "/ai-robot",
