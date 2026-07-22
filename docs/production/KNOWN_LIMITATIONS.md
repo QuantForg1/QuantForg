@@ -4,7 +4,7 @@
 
 2. **DurableResearchStore:** Append-only research / IVP / LLP / RMIP / PRC archives are process-local unless exported (`scripts/backup_production_state.py` from a process that holds the data, or Postgres-backed audits).
 
-3. **Execution default:** `EXECUTION_ENABLED=false`. Live `order_send` requires explicit enablement after Demo certification.
+3. **Execution default:** `EXECUTION_ENABLED=false`. Live `order_send` requires explicit OWNER enablement after launch locks PASS. Demo Certification is optional (not a LIVE gate); see [LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md](./LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md).
 
 4. **Candle history:** API may filter large windows (≤5000 bars) — medium residual.
 

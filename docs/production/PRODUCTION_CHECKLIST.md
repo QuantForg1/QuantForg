@@ -3,7 +3,7 @@
 ## Pre-deploy
 
 - [ ] Secrets rotated; no default `SECRET_KEY` in production  
-- [ ] `EXECUTION_ENABLED=false` until Demo cert  
+- [ ] `EXECUTION_ENABLED=false` until OWNER intentionally enables after launch locks PASS  
 - [ ] Gateway URL + caller token configured  
 - [ ] Migrations applied (incl. live account risk)  
 - [ ] `python scripts/config_audit.py` reviewed  
@@ -34,11 +34,12 @@
 
 ## Go-live
 
-- [ ] Demo certification trade complete  
-- [ ] Canary period stable  
+- [ ] Canary period stable (recommended)  
 - [ ] OWNER sign-off recorded  
 - [ ] Runbooks exercised once in staging  
-- [ ] `GET /ite/ops/launch-readiness` — all required items PASS  
+- [ ] `GET /ite/ops/launch-readiness` — all **required** items PASS  
+  (Demo Certification is optional / advisory — not a LIVE gate; see  
+  [LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md](./LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md))  
 - [ ] Railway `EXECUTION_ENABLED=true` (env only; no API flip)  
 - [ ] OWNER promote: `POST /ite/ops/launch-readiness/promote` with `confirmed=true`  
   — or CLI: `poetry run python scripts/launch_readiness.py --remote --promote --confirm`  

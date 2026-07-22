@@ -2,6 +2,7 @@
 
 | Doc | Purpose |
 | --- | --- |
+| [LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md](./LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md) | OWNER policy: Demo Certification optional for LIVE |
 | [ARCHITECTURE_GUIDE.md](./ARCHITECTURE_GUIDE.md) | Runtime path, layers, health |
 | [OPERATIONS_GUIDE.md](./OPERATIONS_GUIDE.md) | Startup, alerts, soak, backups |
 | [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) | Deploy / rollback |
@@ -17,6 +18,9 @@
 | [AUDIT_GOVERNANCE_REPORT_v1.0.1.md](./AUDIT_GOVERNANCE_REPORT_v1.0.1.md) | Audit trail · forensics · compliance (governance only) |
 | [INSTITUTIONAL_DATA_WAREHOUSE_REPORT_v1.0.1.md](./INSTITUTIONAL_DATA_WAREHOUSE_REPORT_v1.0.1.md) | Read-only analytics warehouse · coverage · quality |
 | [INSTITUTIONAL_OBSERVABILITY_REPORT_v1.0.1.md](./INSTITUTIONAL_OBSERVABILITY_REPORT_v1.0.1.md) | Health · latency · uptime · alerts (observability only) |
+| [FINAL_ACCEPTANCE_CERTIFICATION_v1.0.1.md](./FINAL_ACCEPTANCE_CERTIFICATION_v1.0.1.md) | Final acceptance · GO/NO-GO · checklist |
+| [FINAL_ARCHITECTURE_REPORT_v1.0.1.md](./FINAL_ARCHITECTURE_REPORT_v1.0.1.md) | v1.x final architecture inventory |
+| [PRODUCTION_READINESS_REPORT_v1.0.1.md](./PRODUCTION_READINESS_REPORT_v1.0.1.md) | Production readiness · limitations · actions |
 | [RELEASE_NOTES_v1.0.1.md](./RELEASE_NOTES_v1.0.1.md) | v1.0.1 notes |
 
 Also: root `OPERATIONS_RUNBOOK.md`, `BACKUP_RECOVERY.md`, `docs/rc1/*`.  

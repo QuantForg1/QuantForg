@@ -14,7 +14,8 @@
 
 1. Secrets in platform secret store (never git).  
 2. `SECRET_KEY` ≥ 32 chars; rotate from defaults.  
-3. `EXECUTION_ENABLED=false` until Demo certification complete.  
+3. `EXECUTION_ENABLED=false` until OWNER intentionally enables after launch locks PASS  
+   (Demo Certification is optional — see [LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md](./LAUNCH_POLICY_DEMO_CERT_OPTIONAL.md)).  
 4. `MT5_GATEWAY_BASE_URL` + `MT5_GATEWAY_CALLER_TOKEN` match gateway.  
 5. `BETA_INVITE_CODE` server-only if `BETA_MODE=true`.  
 6. Apply migrations including `live_account_risk_state` if using durable HWM.  

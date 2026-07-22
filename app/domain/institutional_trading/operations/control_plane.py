@@ -189,14 +189,6 @@ class OperationsControlPlane:
         self.require(operator, OpsPermission.CHANGE_MODE)
         if target is OpsExecutionMode.LIVE:
             self.require(operator, OpsPermission.ENABLE_LIVE)
-            cert_ok, cert_msg = self._demo_certification_required_for_live()
-            if not cert_ok:
-                return ModeTransitionResult(
-                    ok=False,
-                    from_mode=self.mode,
-                    to_mode=target,
-                    message=cert_msg,
-                )
         if not confirmed:
             return ModeTransitionResult(
                 ok=False,
@@ -241,33 +233,6 @@ class OperationsControlPlane:
             to_mode=target,
             message=f"transitioned {current.value} → {target.value}",
         )
-
-    def _demo_certification_required_for_live(self) -> tuple[bool, str]:
-        """LIVE requires a prior certified Demo trade (SHADOW→CANARY→DEMO→LIVE)."""
-        try:
-            from app.application.services.live_auto_trade_certification import (
-                get_live_cert_service,
-            )
-
-            report = get_live_cert_service().last_report()
-        except Exception:
-            return (
-                False,
-                "Demo certification unavailable — cannot promote to LIVE",
-            )
-        if report is None or not report.certified:
-            return (
-                False,
-                "Demo certification required before LIVE "
-                "(SHADOW → CANARY → Demo trade → LIVE)",
-            )
-        trade = report.trade
-        if trade is None or trade.account_type.lower() != "demo":
-            return (
-                False,
-                "LIVE requires Demo-certified trade evidence",
-            )
-        return True, ""
 
     # --- Config promote / rollback -----------------------------------------
 

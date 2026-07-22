@@ -49,7 +49,8 @@ CHECKLIST_RESOLVE: dict[str, str] = {
     ),
     "ops_live": (
         "Promote Ops mode SHADOW → CANARY → LIVE via "
-        "POST /ite/ops/launch-readiness/promote (Demo cert required)"
+        "POST /ite/ops/launch-readiness/promote "
+        "(Demo Certification is optional — not required for LIVE)"
     ),
     "evidence_healthy": (
         "Ingest live closed trades and replay opportunities into Evidence Lab; "

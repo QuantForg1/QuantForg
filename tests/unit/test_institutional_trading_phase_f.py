@@ -64,19 +64,19 @@ class TestModeTransitions:
         assert r3.ok
         assert plane.mode is OpsExecutionMode.SHADOW
 
-    def test_live_blocked_without_demo_certification(self) -> None:
+    def test_live_allowed_without_demo_certification(self) -> None:
+        """OWNER policy: Demo Certification is optional — not a LIVE gate."""
         reset_live_cert_service_for_tests()
         plane = OperationsControlPlane()
         op = _op()
         assert plane.transition_mode(
             op, OpsExecutionMode.CANARY, reason="promote", confirmed=True
         ).ok
-        blocked = plane.transition_mode(
+        live = plane.transition_mode(
             op, OpsExecutionMode.LIVE, reason="go live", confirmed=True
         )
-        assert blocked.ok is False
-        assert "Demo certification" in blocked.message
-        assert plane.mode is OpsExecutionMode.CANARY
+        assert live.ok is True
+        assert plane.mode is OpsExecutionMode.LIVE
 
     def test_illegal_transition(self) -> None:
         plane = OperationsControlPlane()

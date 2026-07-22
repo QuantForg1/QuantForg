@@ -82,7 +82,7 @@ Auto Trading status builder and ops `HealthMonitor` share the same live probe sn
 
 ## Audit trail
 
-Required spine stages present: validation → risk → safety → submit. Certification pipeline links decision through OMS/gateway/MT5 to journal. Correlated fill linkage on live broker traffic remains an **operational prerequisite** (Demo cert / live journal review).
+Required spine stages present: validation → risk → safety → submit. Certification pipeline links decision through OMS/gateway/MT5 to journal. Correlated fill linkage on live broker traffic remains an **operational best practice** (optional Demo cert tooling / live journal review).
 
 ---
 
@@ -121,7 +121,7 @@ _(None verified as defects in this acceptance pack. No trading-logic changes mad
 
 1. Complete wall-clock soak 24h / 72h / 7d and archive JSON under `docs/production/reports/`
 2. Live MT5 disconnect + gateway restart drill with Monitoring ≡ Broker ≡ Auto Trading
-3. Demo certification trade before `EXECUTION_ENABLED=true`
+3. OWNER launch locks PASS before `EXECUTION_ENABLED=true` (Demo Certification optional)
 4. Confirm peak equity file/DB on durable volume across API restarts
 5. OWNER sign-off on Production Checklist
 6. Confirm CI integration job green on release commit

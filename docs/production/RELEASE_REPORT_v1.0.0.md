@@ -38,7 +38,7 @@
 **READY FOR CONTROLLED LIVE DEPLOYMENT** contingent on:
 
 1. Wall-clock soak completion evidence (24h / 72h / 7d) on dedicated host  
-2. Demo certification before `EXECUTION_ENABLED=true`  
+2. OWNER launch locks PASS before `EXECUTION_ENABLED=true` (Demo Certification optional)  
 3. OWNER sign-off on Production Checklist  
 
 Not an unrestricted GA volume claim without soak wall-clock evidence.

@@ -44,7 +44,7 @@ python scripts/backup_production_state.py --out backups/manual_restore_point
 2. Restore Postgres to latest verified backup.  
 3. Restore `.quantforg_state` peak equity.  
 4. Redeploy matching `1.0.0` image.  
-5. `EXECUTION_ENABLED=false` until smoke + Demo cert.  
+5. `EXECUTION_ENABLED=false` until smoke + launch locks PASS (Demo Certification optional).  
 6. Run `startup` + `recovery` runbooks.
 
 ## Emergency stop

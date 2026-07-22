@@ -80,16 +80,8 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
       void qc.invalidateQueries({ queryKey: ["ite-ops-launch-readiness"] });
       void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
       void qc.invalidateQueries({ queryKey: ["ite-ops-control-center"] });
-      if (d.ok) {
-        const to = str(d.promoted_to, "");
-        toast.success(
-          str(
-            d.message,
-            to === "CANARY"
-              ? "Promoted to CANARY — complete Demo cert before LIVE"
-              : "LIVE armed",
-          ),
-        );
+      if (d.ok || d.promoted) {
+        toast.success(str(d.message, "Promotion applied"));
       } else {
         toast.error(str(d.message, "Promotion refused — see Launch Lock Inspector"));
       }
@@ -143,9 +135,9 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
         ? "Promote to LIVE"
         : "Already LIVE";
   const confirmText =
-    nextTarget === "CANARY"
-      ? "Promote SHADOW → CANARY via official Ops state machine? Demo certification is NOT required for CANARY. Risk/Safety are never bypassed."
-      : "Promote CANARY → LIVE via official Ops state machine? Requires real Demo certification. Risk/Safety are never bypassed. EXECUTION_ENABLED must already be true.";
+    nextTarget === "LIVE"
+      ? "Promote via official Ops state machine (SHADOW → CANARY → LIVE as needed)? Demo Certification is optional and not required. Risk/Safety and remaining launch locks are never bypassed. EXECUTION_ENABLED must already be true."
+      : "Promote SHADOW → CANARY via official Ops state machine? Risk/Safety are never bypassed.";
   const gateEnabled = Boolean(d.ready_for_gate_enabled);
   const execReady = ready && gateEnabled && nextTarget === "NONE";
   const allPass = failed.length === 0 && ordered.length > 0 && nextTarget === "NONE";
@@ -214,6 +206,10 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
         {ordered.map((item) => {
           const key = str(item.key);
           const passed = Boolean(item.passed);
+          const advisory =
+            key === "demo_certification" &&
+            item.required_for_live === false &&
+            item.required_for_canary === false;
           const label = LABEL_OVERRIDE[key] || str(item.label);
           const steps = resolutionLines(str(item.how_to_resolve));
           return (
@@ -221,14 +217,14 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
               key={key}
               className={cn(
                 "border px-3 py-2.5",
-                passed
+                passed || advisory
                   ? "border-[var(--border)] bg-[var(--bg)]/25"
                   : "border-[var(--warning)]/40 bg-[var(--warning)]/5",
               )}
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="flex items-start gap-2">
-                  {passed ? (
+                  {passed || advisory ? (
                     <Check
                       className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]"
                       aria-hidden
@@ -240,13 +236,8 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
                     />
                   )}
                   <div>
-                    <p
-                      className={cn(
-                        "text-sm font-medium",
-                        passed ? "text-[var(--fg)]" : "text-[var(--fg)]",
-                      )}
-                    >
-                      {passed ? "✓" : "✘"} {label}
+                    <p className="text-sm font-medium text-[var(--fg)]">
+                      {passed || advisory ? "✓" : "✘"} {label}
                     </p>
                     <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[var(--fg-subtle)]">
                       Current
@@ -256,12 +247,16 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
                     </p>
                   </div>
                 </div>
-                <Badge tone={passed ? "success" : "warning"}>
-                  {passed ? "PASS" : "LOCK"}
+                <Badge
+                  tone={
+                    passed ? "success" : advisory ? "neutral" : "warning"
+                  }
+                >
+                  {passed ? "PASS" : advisory ? "OPTIONAL" : "LOCK"}
                 </Badge>
               </div>
 
-              {!passed ? (
+              {!passed && !advisory ? (
                 <div className="mt-2 border-t border-[var(--border)] pt-2 text-xs">
                   <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--fg-subtle)]">
                     Why
@@ -282,6 +277,10 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
                     <p className="mt-0.5 text-[var(--fg-muted)]">See OWNER Ops controls</p>
                   )}
                 </div>
+              ) : advisory && !passed ? (
+                <p className="mt-2 border-t border-[var(--border)] pt-2 text-xs text-[var(--fg-muted)]">
+                  Optional advisory — not required for LIVE under OWNER policy.
+                </p>
               ) : null}
             </article>
           );

@@ -21,7 +21,7 @@ Downs live under `supabase/migrations/down/`.
 | --- | --- |
 | `BETA_INVITE_CODE` | Server-only; remove any `NEXT_PUBLIC_BETA_INVITE_CODE` |
 | `MT5_GATEWAY_ALLOW_QUERY_TOKEN` | Default false — use headers |
-| `EXECUTION_ENABLED` | Remain false until Demo cert |
+| `EXECUTION_ENABLED` | Remain false until OWNER launch locks PASS (Demo cert optional) |
 
 Run `python scripts/config_audit.py` and review unused / conflicts.
 

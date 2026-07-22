@@ -23,8 +23,8 @@ Review date: 2026-07-22. No architecture redesign. No second AI.
 1. Multi-day soak (24h / 72h / 7d) requires dedicated host wall-clock — accelerated soak is CI-safe, not a substitute claim.  
 2. Process-local DurableResearchStore needs export from the running API for full archive continuity.  
 3. Candle history API ≤5000-bar window filter (medium).  
-4. `EXECUTION_ENABLED` default false until operator Demo certification.
+4. `EXECUTION_ENABLED` default false until OWNER enables after launch locks PASS (Demo Certification optional — not a LIVE gate).
 
 ## Verdict
 
-**RELEASE CANDIDATE v1.0.0 — READY FOR CONTROLLED LIVE DEPLOYMENT** after operator completes wall-clock soak targets and Demo certification. Not an unrestricted GA claim without soak completion evidence.  
+**RELEASE CANDIDATE v1.0.0 — READY FOR CONTROLLED LIVE DEPLOYMENT** after operator completes wall-clock soak targets and OWNER launch promotion. Demo Certification is optional advisory tooling. Not an unrestricted GA claim without soak completion evidence.  

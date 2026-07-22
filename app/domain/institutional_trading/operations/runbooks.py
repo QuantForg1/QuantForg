@@ -131,9 +131,12 @@ RUNBOOKS: dict[str, dict[str, Any]] = {
         "title": "Promotion to Live",
         "steps": [
             "Confirm canary period stable (no canary failure alerts)",
-            "Complete Demo certification trade (never Real)",
+            "Confirm launch locks PASS (gateway, broker, MT5, EXECUTION_ENABLED, "
+            "kill/safety/risk clear, OWNER confirmation)",
             "Operator confirmation required",
-            "Transition CANARY → LIVE only after Demo certified",
+            "Transition CANARY → LIVE via official Ops state machine",
+            "Optional: Demo certification tooling for operator confidence "
+            "(not a LIVE gate)",
             "Monitor order latency + rejection rate",
         ],
     },

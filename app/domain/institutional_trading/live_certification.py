@@ -1,8 +1,11 @@
-"""Live Auto Trading certification — fail-closed; never fabricates broker fills.
+"""Live Auto Trading certification — optional advisory tooling.
+
+OWNER policy (2026-07-23): Demo Certification is NOT a mandatory LIVE launch
+gate. Mode transitions (SHADOW→CANARY→LIVE) remain operator-only via the ops
+control plane — this module never changes execution mode and never blocks LIVE.
 
 Certification is NOT claimed unless a real OMS/broker trade evidence record
-is supplied. Mode transitions (SHADOW→CANARY→LIVE) remain operator-only via
-the ops control plane — this module never changes execution mode.
+is supplied.
 """
 
 from __future__ import annotations
