@@ -394,6 +394,49 @@ export const auditGovernanceApi = {
   exportUrl: "/audit-governance/export",
 };
 
+export const institutionalDataWarehouseApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/institutional-data-warehouse/dashboard"),
+  datasets: () =>
+    apiFetch<Record<string, unknown>>("/institutional-data-warehouse/datasets"),
+  dataset: (
+    domain: string,
+    params?: {
+      limit?: number;
+      q?: string;
+      since?: string;
+      until?: string;
+      session?: string;
+      environment?: string;
+      strategy_version?: string;
+    },
+  ) => {
+    const sp = new URLSearchParams();
+    if (params?.limit) sp.set("limit", String(params.limit));
+    if (params?.q) sp.set("q", params.q);
+    if (params?.since) sp.set("since", params.since);
+    if (params?.until) sp.set("until", params.until);
+    if (params?.session) sp.set("session", params.session);
+    if (params?.environment) sp.set("environment", params.environment);
+    if (params?.strategy_version) {
+      sp.set("strategy_version", params.strategy_version);
+    }
+    const qs = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/institutional-data-warehouse/datasets/${encodeURIComponent(domain)}${qs ? `?${qs}` : ""}`,
+    );
+  },
+  analytics: () =>
+    apiFetch<Record<string, unknown>>("/institutional-data-warehouse/analytics"),
+  reports: () =>
+    apiFetch<Record<string, unknown>>("/institutional-data-warehouse/reports"),
+  snapshot: () =>
+    apiFetch<Record<string, unknown>>("/institutional-data-warehouse/snapshot", {
+      method: "POST",
+      body: {},
+    }),
+};
+
 export const executionIntelligenceApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/execution-intelligence/dashboard"),

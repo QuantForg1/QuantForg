@@ -15,6 +15,7 @@ import {
   CandlestickChart,
   ClipboardCheck,
   Crosshair,
+  Database,
   FileText,
   FlaskConical,
   Gauge,
@@ -198,6 +199,12 @@ export const appNav: NavGroup[] = [
         label: "Governance",
         icon: Scale,
         hint: "Audit trail · forensics · compliance",
+      },
+      {
+        href: "/institutional-data-warehouse",
+        label: "Data Warehouse",
+        icon: Database,
+        hint: "Read-only analytics · dataset explorer",
       },
       {
         href: "/production-readiness",
