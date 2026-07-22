@@ -664,15 +664,24 @@ export function AutoTradingWorkspace() {
             <Link href="/ops">ITE Ops</Link>
           </Button>
         </div>
-        {primaryBlocker ? (
+        {gateStatus.toLowerCase() !== "enabled" ? (
           <p className="mb-2 text-xs text-[var(--warning)]">
-            <span className="font-medium text-[var(--fg-subtle)]">
-              Gate blocked
-              {blockingCategory ? ` · ${blockingCategory}` : ""}:{" "}
-            </span>
-            {primaryBlocker}
+            Gate Disabled — see{" "}
+            <span className="font-medium text-[var(--fg)]">Launch Lock Inspector</span>
+            {primaryBlocker ? (
+              <>
+                {" "}
+                (primary: {primaryBlocker}
+                {blockingCategory ? ` · ${blockingCategory}` : ""})
+              </>
+            ) : null}
+            . Every lock lists Current, Why, and Resolution.
           </p>
-        ) : null}
+        ) : (
+          <p className="mb-2 text-xs text-[var(--success)]">
+            Launch Ready · Gate Enabled · Execution Ready
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
           <Stat label="Engine" value={runState.toUpperCase()} tone={runState === "running" ? "ok" : "warn"} />
           <Stat label="Market" value={marketOpen ? "OPEN" : session.connected ? "QUIET" : "OFF"} />

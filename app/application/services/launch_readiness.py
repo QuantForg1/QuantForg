@@ -24,13 +24,16 @@ from core.config.settings import Settings, get_settings
 # Resolution guidance — operator actions only (no engine bypass).
 _RESOLVE: dict[str, str] = {
     "ops_mode": (
-        "OWNER/ADMIN: POST /ite/ops/mode with target CANARY then LIVE "
-        "(confirmed=true) after Demo certification — or use "
-        "POST /ite/ops/launch-readiness/promote"
+        "Promote through the official Ops state machine:\n"
+        "SHADOW\n↓\nCANARY\n↓\nLIVE\n"
+        "(POST /ite/ops/launch-readiness/promote or /ite/ops/mode with confirmed=true; "
+        "Demo certification required before LIVE)"
     ),
     "execution_enabled": (
-        "Set Railway/host EXECUTION_ENABLED=true with MT5_GATEWAY_BASE_URL "
-        "configured, then redeploy/restart the API. No HTTP route can flip this."
+        "Set Railway EXECUTION_ENABLED=true\n"
+        "Confirm MT5_GATEWAY_BASE_URL is set\n"
+        "Redeploy / restart the API\n"
+        "(No HTTP route can flip this flag)"
     ),
     "kill_switch": (
         "OWNER/ADMIN: POST /ite/ops/kill-switch/disarm with confirmed=true "
@@ -53,30 +56,31 @@ _RESOLVE: dict[str, str] = {
         "or risk config is adjusted by OWNER with confirmed audit"
     ),
     "gateway": (
-        "Restore Windows MT5 Gateway + Cloudflare tunnel; confirm "
-        "GET gateway /health and Railway MT5_GATEWAY_BASE_URL"
+        "Restore Windows MT5 Gateway + Cloudflare tunnel\n"
+        "Confirm gateway /health and Railway MT5_GATEWAY_BASE_URL"
     ),
     "broker": (
-        "Attach/login MT5 session via Broker desk (Weltrade connect/attach); "
-        "confirm broker_connected on GET /ite/ops/auto-trading"
+        "Attach/login MT5 session via Broker desk (Weltrade connect/attach)\n"
+        "Confirm broker_connected on GET /ite/ops/auto-trading"
     ),
     "mt5_login": (
-        "Complete MT5 login on the gateway host; renew expired session "
-        "from Broker workspace"
+        "Complete MT5 login on the gateway host\n"
+        "Renew expired session from Broker workspace"
     ),
     "market_open": (
-        "Wait for market open / live XAUUSD ticks; confirm market_data_live "
-        "on Auto Trading status"
+        "Wait for market open / live XAUUSD ticks\n"
+        "Confirm market_data_live on Auto Trading status"
     ),
     "trading_allowed": (
-        "Enable account trading at the broker; confirm trade_allowed / "
-        "AutoTrading in MetaTrader 5"
+        "Enable account trading at the broker\n"
+        "Confirm trade_allowed / AutoTrading in MetaTrader 5"
     ),
     "symbol_ready": (
         "Ensure XAUUSD is selectable and tradable on the attached MT5 account"
     ),
     "demo_certification": (
-        "Complete a real Demo 0.01-lot certification trade, then "
+        "Complete Demo Certification\n"
+        "Run a real Demo 0.01-lot certification trade\n"
         "POST /ite/ops/auto-trading/live-certification/attempt "
         "(never fabricate fills)"
     ),
@@ -86,8 +90,8 @@ _RESOLVE: dict[str, str] = {
         "EXECUTION_ENABLED=true"
     ),
     "owner_authorization": (
-        "Authenticate as OWNER or ADMIN and pass confirmed=true on "
-        "promotion / mode / auto-trading mutations"
+        "Authenticate as OWNER or ADMIN\n"
+        "Pass confirmed=true on promotion / mode / auto-trading mutations"
     ),
 }
 

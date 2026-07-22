@@ -88,9 +88,15 @@ class TestLaunchReadiness:
         assert "owner_authorization" in keys
         exec_item = next(i for i in report.items if i.key == "execution_enabled")
         assert "EXECUTION_ENABLED" in exec_item.why
-        assert "Railway" in exec_item.how_to_resolve or "EXECUTION_ENABLED" in (
-            exec_item.how_to_resolve
+        assert "Railway" in exec_item.how_to_resolve
+        assert "Redeploy" in exec_item.how_to_resolve or "redeploy" in (
+            exec_item.how_to_resolve.lower()
         )
+        demo = next(i for i in report.items if i.key == "demo_certification")
+        assert "Complete Demo Certification" in demo.how_to_resolve
+        mode = next(i for i in report.items if i.key == "ops_mode")
+        assert "SHADOW" in mode.how_to_resolve and "CANARY" in mode.how_to_resolve
+        assert "LIVE" in mode.how_to_resolve
 
     def test_refuses_promotion_without_confirmation(self) -> None:
         plane = OperationsControlPlane()
