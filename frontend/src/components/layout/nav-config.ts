@@ -9,6 +9,7 @@ import {
   Brain,
   Briefcase,
   Building2,
+  Cable,
   Calendar,
   CandlestickChart,
   ClipboardCheck,
@@ -250,6 +251,12 @@ export const appNav: NavGroup[] = [
         label: "Readiness Cert",
         icon: BadgeCheck,
         hint: "PRC · certify only · human approval",
+      },
+      {
+        href: "/integration-sprint-v1",
+        label: "Integration Bus",
+        icon: Cable,
+        hint: "Read-only feeds · never trades",
       },
       {
         href: "/ai-robot",

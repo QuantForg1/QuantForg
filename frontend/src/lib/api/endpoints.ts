@@ -1266,6 +1266,46 @@ export const productionReadinessCertificationApi = {
     ),
 };
 
+/** Integration Sprint V1 — read-only feeds + data bus; never order_send */
+export const integrationSprintV1Api = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/integration-sprint-v1/status"),
+  bus: () => apiFetch<Record<string, unknown>>("/integration-sprint-v1/bus"),
+  feed: (name: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/integration-sprint-v1/feeds/${encodeURIComponent(name)}`,
+    ),
+  hydrate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/integration-sprint-v1/hydrate", {
+      method: "POST",
+      body,
+    }),
+  storageList: (namespace: string, limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/integration-sprint-v1/storage/${encodeURIComponent(namespace)}?limit=${limit}`,
+    ),
+  storageAppend: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/integration-sprint-v1/storage/append", {
+      method: "POST",
+      body,
+    }),
+  warehouseIngest: (bars: Record<string, unknown>[]) =>
+    apiFetch<Record<string, unknown>>(
+      "/integration-sprint-v1/warehouse/ingest",
+      {
+        method: "POST",
+        body: { bars },
+      },
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>("/integration-sprint-v1/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/integration-sprint-v1/policies", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),
