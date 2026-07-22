@@ -40,6 +40,7 @@ import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
 import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
+import { LaunchReadinessPanel } from "@/components/ops/launch-readiness-panel";
 
 type RunState = "off" | "running" | "paused" | "stopped";
 
@@ -639,6 +640,7 @@ export function AutoTradingWorkspace() {
   return (
     <div className="space-y-3">
       <ExecutionStateStrip executionState={executionState} />
+      <LaunchReadinessPanel />
       {/* 1. Overview status bar */}
       <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

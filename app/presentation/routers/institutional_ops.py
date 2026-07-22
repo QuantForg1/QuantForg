@@ -141,6 +141,51 @@ def control_center(_user: OperatorUser) -> dict[str, Any]:
     return cc
 
 
+@router.get("/launch-readiness")
+def get_launch_readiness(_user: OperatorUser) -> dict[str, Any]:
+    """OWNER Launch Readiness checklist — WHY + HOW TO RESOLVE per blocker."""
+    from app.application.services.launch_readiness import build_launch_readiness
+
+    plane = get_control_plane()
+    settings = get_settings()
+    # Caller already passed OWNER/ADMIN gate; POST still requires confirmed=true.
+    report = build_launch_readiness(plane, settings=settings, owner_authorized=True)
+    return report.to_dict()
+
+
+class LaunchPromoteBody(ConfirmBody):
+    activate_auto_trading: bool = True
+
+
+@router.post("/launch-readiness/promote")
+def promote_launch_readiness(
+    body: LaunchPromoteBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Official SHADOW→CANARY→LIVE via state machine when all blockers clear.
+
+    Never bypasses Risk/Safety. Never flips EXECUTION_ENABLED.
+    """
+    from app.application.services.launch_readiness import promote_to_live_execution
+
+    plane = get_control_plane()
+    settings = get_settings()
+    op = _operator(user, request, x_forwarded_for)
+    result = promote_to_live_execution(
+        plane,
+        op,
+        reason=body.reason,
+        confirmed=body.confirmed,
+        settings=settings,
+        activate_auto_trading=body.activate_auto_trading,
+    )
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail=result)
+    return result
+
+
 @router.get("/readiness")
 def readiness(_user: OperatorUser) -> dict[str, Any]:
     return get_control_plane().readiness_dashboard()

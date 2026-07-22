@@ -436,6 +436,17 @@ export const iteOpsApi = {
       method: "POST",
       body: { target, reason, confirmed },
     }),
+  launchReadiness: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/launch-readiness"),
+  promoteLaunch: (body: {
+    reason: string;
+    confirmed: boolean;
+    activate_auto_trading?: boolean;
+  }) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/launch-readiness/promote", {
+      method: "POST",
+      body,
+    }),
   armKill: (reason: string, confirmed: boolean) =>
     apiFetch<Record<string, unknown>>("/ite/ops/kill-switch/arm", {
       method: "POST",

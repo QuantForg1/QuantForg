@@ -38,6 +38,11 @@
 - [ ] Canary period stable  
 - [ ] OWNER sign-off recorded  
 - [ ] Runbooks exercised once in staging  
+- [ ] `GET /ite/ops/launch-readiness` — all required items PASS  
+- [ ] Railway `EXECUTION_ENABLED=true` (env only; no API flip)  
+- [ ] OWNER promote: `POST /ite/ops/launch-readiness/promote` with `confirmed=true`  
+  — or CLI: `poetry run python scripts/launch_readiness.py --remote --promote --confirm`  
+- [ ] Verify: Ops LIVE · Gate Enabled · Execution ON · Auto Trading RUNNING  
 
 ## Quality gate
 
