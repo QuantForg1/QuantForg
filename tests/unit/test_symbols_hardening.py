@@ -44,11 +44,11 @@ class TestSymbolsPagination:
         )
         page = await ListMT5SymbolsUseCase(
             uow_factory=factory, adapter=adapter
-        ).execute(user_id=user_id, q="EUR", limit=5, offset=0, include_quotes=False)
+        ).execute(user_id=user_id, q="XAU", limit=5, offset=0, include_quotes=False)
         assert page.total >= 1
         assert len(page.items) <= 5
         assert all(i.bid is None and i.ask is None for i in page.items)
-        assert any(i.code == "EURUSD" for i in page.items)
+        assert any(i.code == "XAUUSD" for i in page.items)
 
 
 @pytest.mark.unit
@@ -75,8 +75,8 @@ class TestGatewayCatalogueCache:
             if path == "/symbols":
                 return {
                     "items": [
-                        {"code": "EURUSD", "description": "Euro", "digits": 5},
-                        {"code": "GBPUSD", "description": "Cable", "digits": 5},
+                        {"code": "XAUUSD", "description": "Gold", "digits": 3},
+                        {"code": "XAGUSD", "description": "Silver", "digits": 3},
                     ]
                 }
             raise AssertionError(f"unexpected path {path}")

@@ -155,12 +155,11 @@ def hydrate_prc(
 
     data = None
     if market.available:
+        # Do not invent integrity PASS — only report that a tick was observed.
         data = {
-            "market_data_integrity_ok": True,
-            "feed_coverage_pct": None,  # unknown — omit fabrication
             "source": "mt5_market_data_feed",
+            "market_tick_observed": True,
         }
-        data = {k: v for k, v in data.items() if v is not None}
 
     research = {
         "ivp_evidence_ok": None,

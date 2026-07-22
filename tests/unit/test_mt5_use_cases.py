@@ -72,7 +72,7 @@ class TestMT5UseCases:
         symbols = await ListMT5SymbolsUseCase(
             uow_factory=factory, adapter=adapter
         ).execute(user_id=user_id)
-        assert any(s.code == "EURUSD" for s in symbols.items)
+        assert any(s.code == "XAUUSD" for s in symbols.items)
 
         disconnected = await DisconnectMT5UseCase(
             uow_factory=factory, adapter=adapter, audit=audit

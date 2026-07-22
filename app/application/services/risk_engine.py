@@ -119,7 +119,7 @@ class RiskEngine:
         elif method is PositionSizingMethod.FIXED_DOLLAR_RISK:
             risk_budget = cfg.fixed_dollar_risk
             if stop <= 0:
-                lots = cfg.min_lot
+                lots = Decimal("0")
             else:
                 lots = (risk_budget / (stop * cs)).quantize(
                     cfg.lot_step, rounding=ROUND_DOWN
@@ -149,7 +149,17 @@ class RiskEngine:
                 lots = min(lots, requested_lots)
 
         if lots < cfg.min_lot:
-            lots = cfg.min_lot
+            # Never promote undersized risk to min_lot — reject via 0 lots.
+            return PositionSizeResult(
+                method=method,
+                requested_lots=(
+                    requested_lots if requested_lots is not None else cfg.min_lot
+                ),
+                approved_lots=Decimal("0"),
+                capped=True,
+                dollar_risk=dollar.quantize(Decimal("0.01")),
+                stop_distance=stop,
+            )
         capped = lots > cfg.max_lot
         approved = min(lots, cfg.max_lot)
         requested = approved if requested_lots is None else requested_lots
@@ -1126,11 +1136,12 @@ class RiskEngine:
                 self.config.lot_step, rounding=ROUND_DOWN
             )
             if reduced < self.config.min_lot:
-                if not exp_ok or not corr_ok:
-                    decision = RiskDecision.REJECT
-                    approved = Decimal("0")
-                else:
-                    approved = self.config.min_lot
+                # Never promote undersized risk to min_lot.
+                decision = RiskDecision.REJECT
+                approved = Decimal("0")
+                reasons.append(
+                    "reduced size below min_lot — reject (no upsize to min_lot)"
+                )
             else:
                 approved = reduced
                 if size.requested_lots > approved:

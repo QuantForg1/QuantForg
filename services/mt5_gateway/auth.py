@@ -104,12 +104,12 @@ def require_gateway_token(
         )
         if cfg.mt5_gateway_auth_debug:
             logger.info(
-                "gateway_auth_debug settings.mt5_gateway_token=%r "
-                "settings_len=%s received=%r received_len=%s header_source=%s",
-                cfg.mt5_gateway_token,
+                "gateway_auth_debug expected_len=%s expected=%s "
+                "received_len=%s received=%s header_source=%s",
                 len(expected),
-                provided,
+                mask_gateway_token(expected),
                 len(provided),
+                mask_gateway_token(provided),
                 header_source,
             )
         if equal:

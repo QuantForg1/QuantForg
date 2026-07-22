@@ -41,7 +41,7 @@ from app.infrastructure.persistence.memory_mt5 import MemoryMT5UnitOfWorkFactory
 
 def _intent() -> OrderIntent:
     return OrderIntent(
-        symbol="EURUSD",
+        symbol="XAUUSD",
         side=OrderSide.BUY,
         order_type=OrderType.MARKET,
         volume=LotSize.of("0.01"),
@@ -225,7 +225,7 @@ class TestSubmitExecutionUseCase:
                 ExecutionSubmitCommand(
                     user_id=user_id,
                     request_id="api-dis-1",
-                    symbol="EURUSD",
+                    symbol="XAUUSD",
                     side="buy",
                     volume="0.01",
                 )
@@ -248,7 +248,7 @@ class TestSubmitExecutionUseCase:
         cmd = ExecutionSubmitCommand(
             user_id=user_id,
             request_id="idem-gw-1",
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side="buy",
             volume="0.01",
         )

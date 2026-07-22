@@ -910,6 +910,7 @@ class GatewayMT5Client:
         except RuntimeError as exc:
             login_status = "error"
             connected = False
+            self._connected = False
             logger.warning("gateway_health_probe_failed", error=str(exc))
         return MT5HealthSnapshot(
             connected=connected,
@@ -1058,8 +1059,21 @@ class GatewayMT5Client:
         date_from: datetime,
         count: int,
     ) -> list[MT5Rate]:
-        _ = date_from
-        return self.copy_rates_from_pos(symbol, timeframe, 0, count)
+        """Fetch recent candles and keep those at/after ``date_from``.
+
+        Gateway HTTP API only exposes ``count`` (no absolute from-time). We
+        over-fetch then filter so callers never get bars silently outside the
+        requested window.
+        """
+        if count < 1:
+            return []
+        start = date_from if date_from.tzinfo else date_from.replace(tzinfo=UTC)
+        fetch = min(5000, max(count, count * 4))
+        rates = self.copy_rates_from_pos(symbol, timeframe, 0, fetch)
+        filtered = [r for r in rates if r.open_time >= start]
+        if not filtered:
+            return []
+        return filtered[-count:]
 
     def copy_rates_range(
         self,
@@ -1068,8 +1082,13 @@ class GatewayMT5Client:
         date_from: datetime,
         date_to: datetime,
     ) -> list[MT5Rate]:
-        _ = date_from, date_to
-        return self.copy_rates_from_pos(symbol, timeframe, 0, 500)
+        """Fetch then filter to ``[date_from, date_to]`` (fail-closed empty)."""
+        start = date_from if date_from.tzinfo else date_from.replace(tzinfo=UTC)
+        end = date_to if date_to.tzinfo else date_to.replace(tzinfo=UTC)
+        if end < start:
+            return []
+        rates = self.copy_rates_from_pos(symbol, timeframe, 0, 5000)
+        return [r for r in rates if start <= r.open_time <= end]
 
     def copy_rates_from_pos(
         self,
@@ -1078,14 +1097,17 @@ class GatewayMT5Client:
         start_pos: int,
         count: int,
     ) -> list[MT5Rate]:
-        _ = start_pos
         self._require_connected()
         if count < 1:
             return []
+        # Gateway returns newest-first window of ``count``; ``start_pos`` is
+        # applied client-side by requesting an extended window then slicing.
+        pos = max(0, int(start_pos))
+        fetch = min(5000, pos + count)
         data = self._request(
             "GET",
             f"/candles/{symbol.strip().upper()}",
-            params={"timeframe": timeframe.value, "count": min(count, 5000)},
+            params={"timeframe": timeframe.value, "count": fetch},
         )
         items = data.get("items") or []
         rates: list[MT5Rate] = []
@@ -1104,7 +1126,10 @@ class GatewayMT5Client:
                     real_volume=Decimal("0"),
                 )
             )
-        return rates
+        # Assume gateway returns chronological ascending; oldest at index 0.
+        if pos:
+            rates = rates[pos:] if pos < len(rates) else []
+        return rates[:count]
 
     def order_check(self, request: TradeRequest) -> MT5OrderCheckResult:
         self._require_connected()
@@ -1200,6 +1225,8 @@ class GatewayMT5Client:
         )
         self._positions_cache = None
         self._positions_cache_at = 0.0
+        self._account_cache = None
+        self._account_cache_at = 0.0
         return MT5OrderSendResult(
             retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
@@ -1219,6 +1246,8 @@ class GatewayMT5Client:
         )
         self._positions_cache = None
         self._positions_cache_at = 0.0
+        self._account_cache = None
+        self._account_cache_at = 0.0
         return MT5OrderSendResult(
             retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
@@ -1315,20 +1344,47 @@ class GatewayMT5Client:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[MT5HistoryOrder]:
-        _ = date_to
         self._require_connected()
-        days = 30
-        if date_from is not None:
-            delta = datetime.now(UTC) - (
-                date_from if date_from.tzinfo else date_from.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
+        start = date_from
+        end = date_to
+        if start is not None and start.tzinfo is None:
+            start = start.replace(tzinfo=UTC)
+        if end is not None and end.tzinfo is None:
+            end = end.replace(tzinfo=UTC)
+
+        if start is not None:
+            span_end = end if end is not None else now
+            days = max(
+                1, min(365, int((span_end - start).total_seconds() // 86400) or 1)
             )
-            days = max(1, min(365, int(delta.total_seconds() // 86400) or 1))
+        elif end is not None:
+            days = 365
+        else:
+            days = 30
+
         data = self._request("GET", "/history/orders", params={"days": days})
         out: list[MT5HistoryOrder] = []
         for row in data.get("items") or []:
             symbol = str(row.get("symbol") or "").strip()
             ticket = int(row.get("ticket") or 0)
             if ticket <= 0 or not symbol:
+                continue
+            raw_t = row.get("time_setup") or row.get("time_done") or row.get("time")
+            if raw_t is not None and (start is not None or end is not None):
+                try:
+                    ts = int(raw_t)
+                    if ts > 10_000_000_000:
+                        ts = ts // 1000
+                    order_time = datetime.fromtimestamp(ts, tz=UTC)
+                    if start is not None and order_time < start:
+                        continue
+                    if end is not None and order_time > end:
+                        continue
+                except (TypeError, ValueError, OSError):
+                    continue
+            elif raw_t is None and (start is not None or end is not None):
+                # Cannot honor window without broker timestamp — fail closed.
                 continue
             out.append(
                 MT5HistoryOrder(
@@ -1349,14 +1405,25 @@ class GatewayMT5Client:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
     ) -> list[MT5Deal]:
-        _ = date_to
         self._require_connected()
-        days = 30
-        if date_from is not None:
-            delta = datetime.now(UTC) - (
-                date_from if date_from.tzinfo else date_from.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
+        start = date_from
+        end = date_to
+        if start is not None and start.tzinfo is None:
+            start = start.replace(tzinfo=UTC)
+        if end is not None and end.tzinfo is None:
+            end = end.replace(tzinfo=UTC)
+
+        if start is not None:
+            span_end = end if end is not None else now
+            days = max(
+                1, min(365, int((span_end - start).total_seconds() // 86400) or 1)
             )
-            days = max(1, min(365, int(delta.total_seconds() // 86400) or 1))
+        elif end is not None:
+            days = 365
+        else:
+            days = 30
+
         data = self._request("GET", "/history/deals", params={"days": days})
         out: list[MT5Deal] = []
         for row in data.get("items") or []:
@@ -1364,9 +1431,9 @@ class GatewayMT5Client:
             ticket = int(row.get("ticket") or 0)
             if ticket <= 0 or not symbol:
                 continue
-            vol = _dec(row.get("volume"), "0.01")
+            vol = _dec(row.get("volume"), "0")
             if vol <= 0:
-                vol = Decimal("0.01")
+                continue
             typ = int(row.get("type") or 0)
             # MT5 DEAL_TYPE_BUY=0, DEAL_TYPE_SELL=1
             side = "buy" if typ % 2 == 0 else "sell"
@@ -1374,7 +1441,7 @@ class GatewayMT5Client:
             deal_type = (
                 "entry_in" if entry == 0 else "entry_out" if entry == 1 else "deal"
             )
-            deal_time = datetime.now(UTC)
+            deal_time: datetime | None = None
             raw_t = row.get("time")
             if raw_t:
                 try:
@@ -1383,7 +1450,16 @@ class GatewayMT5Client:
                         ts = ts // 1000
                     deal_time = datetime.fromtimestamp(ts, tz=UTC)
                 except (TypeError, ValueError, OSError):
-                    deal_time = datetime.now(UTC)
+                    deal_time = None
+            if deal_time is None:
+                if start is not None or end is not None:
+                    continue
+                deal_time = now
+            else:
+                if start is not None and deal_time < start:
+                    continue
+                if end is not None and deal_time > end:
+                    continue
             out.append(
                 MT5Deal(
                     ticket=ticket,

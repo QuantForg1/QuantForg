@@ -18,6 +18,7 @@ from app.domain.institutional_trading.operations.models import (
 class AlertService:
     _alerts: list[OpsAlert] = field(default_factory=list, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
+    max_alerts: int = 5_000
 
     def raise_alert(
         self,
@@ -35,6 +36,8 @@ class AlertService:
         )
         with self._lock:
             self._alerts.append(alert)
+            if len(self._alerts) > self.max_alerts:
+                self._alerts = self._alerts[-self.max_alerts :]
             return alert
 
     def acknowledge(

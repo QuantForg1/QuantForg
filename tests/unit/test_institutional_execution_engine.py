@@ -50,7 +50,7 @@ def test_humanize_reason_market_closed() -> None:
 def test_pipeline_market_buy_observes_stages() -> None:
     engine, _client = _engine(enabled=True)
     intent = parse_order_intent(
-        symbol="EURUSD", side="buy", order_type="market", volume="0.01"
+        symbol="XAUUSD", side="buy", order_type="market", volume="0.01"
     )
     user_id = uuid4()
     pipeline, decision = engine.run_submit(
@@ -80,7 +80,7 @@ def test_pipeline_disabled_never_sends() -> None:
     engine, client = _engine(enabled=False)
     before = len(client.list_positions())
     intent = parse_order_intent(
-        symbol="EURUSD", side="sell", order_type="market", volume="0.01"
+        symbol="XAUUSD", side="sell", order_type="market", volume="0.01"
     )
     pipeline, _ = engine.run_submit(
         user_id=uuid4(),
@@ -114,7 +114,7 @@ def test_cancel_pending_gated() -> None:
 def test_all_order_types_parse() -> None:
     for ot in ("market", "limit", "stop", "stop_limit"):
         intent = parse_order_intent(
-            symbol="EURUSD",
+            symbol="XAUUSD",
             side="buy",
             order_type=ot,
             volume="0.01",

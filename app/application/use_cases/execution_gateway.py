@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from decimal import Decimal
 from threading import Lock
@@ -48,6 +49,16 @@ def _submit_lock(user_id: UUID, request_id: str) -> Lock:
             lock = Lock()
             _SUBMIT_LOCKS[key] = lock
         return lock
+
+
+def _release_submit_lock(user_id: UUID, request_id: str, lock: Lock) -> None:
+    key = f"{user_id}:{request_id}"
+    with contextlib.suppress(RuntimeError):
+        lock.release()
+    with _SUBMIT_LOCKS_GUARD:
+        owned = _SUBMIT_LOCKS.get(key)
+        if owned is lock:
+            del _SUBMIT_LOCKS[key]
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +192,8 @@ class SubmitExecutionUseCase:
                     "request_id": request_id,
                 },
             )
+        pipeline = None
+        decision = None
         try:
             async with self.execution_uow_factory() as uow:
                 raced = await uow.attempts.get_by_request_id(
@@ -211,89 +224,134 @@ class SubmitExecutionUseCase:
                 await uow.attempts.add(reservation)
                 await uow.commit()
 
-            pipeline, decision = self.engine.run_submit(
+            try:
+                pipeline, decision = self.engine.run_submit(
+                    user_id=command.user_id,
+                    request_id=request_id,
+                    intent=intent,
+                    connected=connected,
+                    login=login,
+                    recent_decisions=recent,
+                    existing_decision=existing_decision,
+                    action="submit",
+                )
+            except (OSError, RuntimeError, TimeoutError) as exc:
+                # Transport / gateway failure after PREPARED — finalize attempt
+                # so the reservation is not stuck and never auto-retry send.
+                async with self.execution_uow_factory() as uow:
+                    await uow.attempts.add(
+                        ExecutionAttempt.record(
+                            user_id=command.user_id,
+                            request_id=request_id,
+                            symbol=intent.symbol,
+                            side=intent.side.value,
+                            order_type=intent.order_type.value,
+                            volume=intent.volume.value,
+                            result=ExecutionResult(
+                                outcome=ExecutionOutcome.FAILED,
+                                retcode=0,
+                                message=(
+                                    "Broker transport error after prepare — "
+                                    f"ambiguous; do not auto-retry: {exc}"
+                                ),
+                                volume=intent.volume.value,
+                                symbol=intent.symbol,
+                                request_id=request_id,
+                                retryable=False,
+                            ),
+                            request_snapshot=dict(intent.to_dict()),
+                            entity_id=reservation_id,
+                        )
+                    )
+                    await uow.commit()
+                raise ValidationError(
+                    "Broker transport error — order state ambiguous; "
+                    "do not auto-retry without reconciliation",
+                    details={
+                        "code": "execution_transport_ambiguous",
+                        "request_id": request_id,
+                        "retryable": False,
+                        "error": str(exc),
+                    },
+                ) from exc
+
+            if decision is not None and not decision.idempotent_replay:
+                async with self.execution_uow_factory() as uow:
+                    await uow.decisions.add(decision)
+                    await uow.commit()
+
+            if pipeline.outcome in {"rejected", "retry"}:
+                async with self.execution_uow_factory() as uow:
+                    await uow.attempts.add(
+                        ExecutionAttempt.record(
+                            user_id=command.user_id,
+                            request_id=request_id,
+                            symbol=intent.symbol,
+                            side=intent.side.value,
+                            order_type=intent.order_type.value,
+                            volume=intent.volume.value,
+                            result=ExecutionResult(
+                                outcome=(
+                                    ExecutionOutcome.RETRY
+                                    if pipeline.outcome == "retry"
+                                    else ExecutionOutcome.FAILED
+                                ),
+                                retcode=0,
+                                message=pipeline.message
+                                or "Execution pipeline rejected order",
+                                volume=intent.volume.value,
+                                symbol=intent.symbol,
+                                request_id=request_id,
+                                retryable=pipeline.outcome == "retry",
+                            ),
+                            request_snapshot=dict(intent.to_dict()),
+                            entity_id=reservation_id,
+                        )
+                    )
+                    await uow.commit()
+                raise ValidationError(
+                    pipeline.message or "Execution pipeline rejected order",
+                    details={
+                        "code": "execution_pipeline_rejected",
+                        "request_id": request_id,
+                        "outcome": pipeline.outcome,
+                        "rejection_reasons": list(pipeline.rejection_reasons),
+                        "stages": [s.to_dict() for s in pipeline.stages],
+                    },
+                )
+
+            exec_result = pipeline.execution_result
+            if exec_result is None:
+                raise ValidationError(
+                    "Execution pipeline produced no broker result",
+                    details={
+                        "request_id": request_id,
+                        "outcome": pipeline.outcome,
+                    },
+                )
+
+            attempt = ExecutionAttempt.record(
                 user_id=command.user_id,
                 request_id=request_id,
-                intent=intent,
-                connected=connected,
-                login=login,
-                recent_decisions=recent,
-                existing_decision=existing_decision,
-                action="submit",
-            )
-        finally:
-            lock.release()
-
-        if decision is not None and not decision.idempotent_replay:
-            async with self.execution_uow_factory() as uow:
-                await uow.decisions.add(decision)
-                await uow.commit()
-
-        if pipeline.outcome in {"rejected", "retry"}:
-            async with self.execution_uow_factory() as uow:
-                await uow.attempts.add(
-                    ExecutionAttempt.record(
-                        user_id=command.user_id,
-                        request_id=request_id,
-                        symbol=intent.symbol,
-                        side=intent.side.value,
-                        order_type=intent.order_type.value,
-                        volume=intent.volume.value,
-                        result=ExecutionResult(
-                            outcome=(
-                                ExecutionOutcome.RETRY
-                                if pipeline.outcome == "retry"
-                                else ExecutionOutcome.FAILED
-                            ),
-                            retcode=0,
-                            message=pipeline.message
-                            or "Execution pipeline rejected order",
-                            volume=intent.volume.value,
-                            symbol=intent.symbol,
-                            request_id=request_id,
-                            retryable=pipeline.outcome == "retry",
-                        ),
-                        request_snapshot=dict(intent.to_dict()),
-                        entity_id=reservation_id,
-                    )
-                )
-                await uow.commit()
-            raise ValidationError(
-                pipeline.message or "Execution pipeline rejected order",
-                details={
-                    "code": "execution_pipeline_rejected",
-                    "request_id": request_id,
-                    "outcome": pipeline.outcome,
-                    "rejection_reasons": list(pipeline.rejection_reasons),
+                symbol=intent.symbol,
+                side=intent.side.value,
+                order_type=intent.order_type.value,
+                volume=intent.volume.value,
+                result=exec_result,
+                request_snapshot={
+                    **intent.to_dict(),
+                    "pipeline_latency_ms": pipeline.latency_ms,
                     "stages": [s.to_dict() for s in pipeline.stages],
                 },
+                entity_id=reservation_id,
             )
+            async with self.execution_uow_factory() as uow:
+                await uow.attempts.add(attempt)
+                await uow.commit()
+        finally:
+            _release_submit_lock(command.user_id, request_id, lock)
 
-        exec_result = pipeline.execution_result
-        if exec_result is None:
-            raise ValidationError(
-                "Execution pipeline produced no broker result",
-                details={"request_id": request_id, "outcome": pipeline.outcome},
-            )
-
-        attempt = ExecutionAttempt.record(
-            user_id=command.user_id,
-            request_id=request_id,
-            symbol=intent.symbol,
-            side=intent.side.value,
-            order_type=intent.order_type.value,
-            volume=intent.volume.value,
-            result=exec_result,
-            request_snapshot={
-                **intent.to_dict(),
-                "pipeline_latency_ms": pipeline.latency_ms,
-                "stages": [s.to_dict() for s in pipeline.stages],
-            },
-            entity_id=reservation_id,
-        )
-        async with self.execution_uow_factory() as uow:
-            await uow.attempts.add(attempt)
-            await uow.commit()
+        assert pipeline is not None
 
         if self.execution_audit is not None:
             try:

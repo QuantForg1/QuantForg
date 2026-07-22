@@ -127,16 +127,15 @@ class TestMT5MarketDataUseCases:
         symbols = await ListMT5SymbolsUseCase(
             uow_factory=factory, adapter=adapter
         ).execute(user_id=user_id, include_quotes=True)
-        assert any(s.code == "EURUSD" and s.bid is not None for s in symbols.items)
+        assert any(s.code == "XAUUSD" and s.bid is not None for s in symbols.items)
 
         detail = await GetMT5SymbolUseCase(
             uow_factory=factory, market_data=market
-        ).execute(user_id=user_id, symbol="eurusd")
-        assert detail.code == "EURUSD"
-        assert detail.selected is True
+        ).execute(user_id=user_id, symbol="xauusd")
+        assert detail.code == "XAUUSD"
 
         tick = await GetMT5TickUseCase(uow_factory=factory, market_data=market).execute(
-            user_id=user_id, symbol="EURUSD"
+            user_id=user_id, symbol="XAUUSD"
         )
         assert tick.spread
         assert tick.bid
@@ -146,7 +145,7 @@ class TestMT5MarketDataUseCases:
             uow_factory=factory, market_data=market
         ).execute(
             user_id=user_id,
-            symbol="EURUSD",
+            symbol="XAUUSD",
             timeframe="H1",
             count=12,
         )

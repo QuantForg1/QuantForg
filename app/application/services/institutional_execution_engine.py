@@ -517,33 +517,45 @@ class InstitutionalExecutionEngine:
             stop_dist = None
             if intent.stop_loss is not None and entry > 0:
                 stop_dist = abs(entry - intent.stop_loss.value)
-            assessment = self.risk_engine.evaluate(
-                RiskCheckInput(
-                    user_id=user_id,
-                    request_id=request_id,
-                    symbol=intent.symbol,
-                    side=intent.side.value,
-                    requested_lots=intent.volume.value,
-                    stop_loss_distance=stop_dist,
-                    sizing_method=PositionSizingMethod.FIXED_LOT,
-                    entry_price=entry if entry > 0 else Decimal("1"),
-                    spread=spread_val,
-                ),
-                account=account,
-                positions=positions,
-                peak_equity=account.equity,
-            )
-            if assessment.decision is RiskDecision.REJECT:
-                risk_reject = list(assessment.reasons) or ["Risk Engine REJECT"]
-            elif assessment.decision is RiskDecision.REDUCE_SIZE:
-                approved = assessment.approved_lots
-                if approved is None or approved <= 0:
+            if entry <= 0:
+                risk_reject = [
+                    "Risk Engine unavailable — fail-closed: "
+                    "entry price unresolved from tick/intent"
+                ]
+            else:
+                # Never pass peak_equity=current equity (disables DD gates).
+                # Prefer max(equity, balance) until persisted peak is wired.
+                peak = max(account.equity, account.balance)
+                assessment = self.risk_engine.evaluate(
+                    RiskCheckInput(
+                        user_id=user_id,
+                        request_id=request_id,
+                        symbol=intent.symbol,
+                        side=intent.side.value,
+                        requested_lots=intent.volume.value,
+                        stop_loss_distance=stop_dist,
+                        sizing_method=PositionSizingMethod.FIXED_LOT,
+                        entry_price=entry,
+                        spread=spread_val,
+                    ),
+                    account=account,
+                    positions=positions,
+                    peak_equity=peak if peak > 0 else None,
+                    daily_pnl=account.profit,
+                )
+                if assessment.decision is RiskDecision.REJECT:
                     risk_reject = list(assessment.reasons) or [
-                        "Risk Engine REDUCE_SIZE without approved lots"
+                        "Risk Engine REJECT"
                     ]
-                elif approved < intent.volume.value:
-                    intent = replace(intent, volume=LotSize.of(approved))
-                    volume = str(intent.volume.value)
+                elif assessment.decision is RiskDecision.REDUCE_SIZE:
+                    approved = assessment.approved_lots
+                    if approved is None or approved <= 0:
+                        risk_reject = list(assessment.reasons) or [
+                            "Risk Engine REDUCE_SIZE without approved lots"
+                        ]
+                    elif approved < intent.volume.value:
+                        intent = replace(intent, volume=LotSize.of(approved))
+                        volume = str(intent.volume.value)
         except (OSError, RuntimeError, ValueError, TypeError, ArithmeticError) as exc:
             risk_reject = [f"Risk Engine unavailable — fail-closed: {exc}"]
 

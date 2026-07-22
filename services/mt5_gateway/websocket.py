@@ -27,14 +27,19 @@ async def gateway_ws(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
 
-    raw = websocket.query_params.get("token") or websocket.headers.get(
-        "x-gateway-token", ""
-    )
-    # Also accept Authorization: Bearer for clients that only set that header.
+    # Prefer headers over query-string tokens (query tokens leak into proxies/logs).
+    raw = websocket.headers.get("x-gateway-token", "")
     if not raw:
         auth = websocket.headers.get("authorization", "")
         if auth.lower().startswith("bearer "):
             raw = auth[7:]
+    if not raw:
+        query_tok = websocket.query_params.get("token") or ""
+        if query_tok:
+            logger.warning(
+                "gateway_ws_auth_via_query_token — prefer x-gateway-token header"
+            )
+            raw = query_tok
     token = normalize_gateway_token(raw)
     expected = normalize_gateway_token(settings.mt5_gateway_token)
     equal = tokens_equal(token, expected)

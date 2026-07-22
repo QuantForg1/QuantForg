@@ -65,6 +65,8 @@ class ExecutionBridge:
     ops_plane: OperationsControlPlane | None = None
     reliability: ReliabilityPlatform | None = None
     _executed_hashes: set[str] = field(default_factory=set, repr=False)
+    _executed_hash_order: list[str] = field(default_factory=list, repr=False)
+    _max_executed_hashes: int = field(default=10_000, repr=False)
     _canary_day: date | None = field(default=None, repr=False)
     _canary_count: int = field(default=0, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
@@ -392,11 +394,16 @@ class ExecutionBridge:
                     count_reject=False,
                 )
             self._executed_hashes.add(d_hash)
-            if mode is ExecutionMode.CANARY_LIVE:
-                if self._canary_day != context.now.date():
-                    self._canary_day = context.now.date()
-                    self._canary_count = 0
-                self._canary_count += 1
+            self._executed_hash_order.append(d_hash)
+            while len(self._executed_hash_order) > self._max_executed_hashes:
+                old = self._executed_hash_order.pop(0)
+                self._executed_hashes.discard(old)
+            if (
+                mode is ExecutionMode.CANARY_LIVE
+                and self._canary_day != context.now.date()
+            ):
+                self._canary_day = context.now.date()
+                self._canary_count = 0
 
         oms_result = self.oms.submit_market(
             user_id=context.user_id,
@@ -407,6 +414,20 @@ class ExecutionBridge:
         )
         latency = (time.perf_counter() - t0) * 1000.0
         abort_reason, status, exec_result = self._map_oms_outcome(oms_result)
+
+        # Once OMS was invoked, keep the decision hash (idempotency). Clear
+        # rejects before submit never reach this path; do not free the hash
+        # here or a second execute() could double-send after a failed respond.
+
+        if (
+            mode is ExecutionMode.CANARY_LIVE
+            and status is ExecutionAttemptStatus.OMS_SUCCESS
+        ):
+            with self._lock:
+                if self._canary_day != context.now.date():
+                    self._canary_day = context.now.date()
+                    self._canary_count = 0
+                self._canary_count += 1
 
         entry = self._record(
             decision=decision,

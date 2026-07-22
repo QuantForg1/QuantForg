@@ -26,6 +26,7 @@ ESCALATION_MINUTES: dict[IncidentSeverity, tuple[int, ...]] = {
 class IncidentManager:
     _incidents: list[Incident] = field(default_factory=list, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
+    max_incidents: int = 5_000
 
     def open(
         self,
@@ -45,6 +46,8 @@ class IncidentManager:
         )
         with self._lock:
             self._incidents.append(inc)
+            if len(self._incidents) > self.max_incidents:
+                self._incidents = self._incidents[-self.max_incidents :]
         return inc
 
     def acknowledge(

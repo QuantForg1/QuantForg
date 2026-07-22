@@ -19,6 +19,7 @@ from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfi
 from app.domain.institutional_trading.confluence import ConfluenceEngine
 from app.domain.institutional_trading.decision_models import (
     AccountRiskState,
+    EligibilityResult,
     TradeDecision,
     TradeDirection,
 )
@@ -113,7 +114,22 @@ class InstitutionalDecisionPipeline:
 
         side = "sell" if confluence.direction is TradeDirection.SELL else "buy"
         stop_distance = account.atr * Decimal("1.5") if account.atr else None
-        entry = account.mid_price or Decimal("2300")
+        entry = account.mid_price
+        if entry is None or entry <= 0:
+            # Prefer No Trade — never invent an entry price for risk sizing.
+            return TradeDecisionEngine(config=cfg).decide(
+                snapshot=snapshot,
+                confluence=confluence,
+                eligibility=EligibilityResult(
+                    eligible=False,
+                    checks={"entry_price_available": False},
+                    rejection_reasons=("decision_entry_price_unavailable",),
+                ),
+                account=account,
+                risk_score=100,
+                risk_reasons=("decision_entry_price_unavailable",),
+                approved_lots=Decimal("0"),
+            )
 
         check = RiskCheckInput(
             user_id=self.user_id,

@@ -24,6 +24,7 @@ class RecoveryOrchestrator:
     mt5_reconnect_fn: ReconnectFn | None = None
     safe_read_fn: SafeReadFn | None = None
     max_safe_read_retries: int = 3
+    max_events: int = 5_000
     _events: list[RecoveryEvent] = field(default_factory=list, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
 
@@ -102,6 +103,8 @@ class RecoveryOrchestrator:
         )
         with self._lock:
             self._events.append(ev)
+            if len(self._events) > self.max_events:
+                self._events = self._events[-self.max_events :]
         return ev
 
     def list(self, *, limit: int = 100) -> list[RecoveryEvent]:

@@ -20,7 +20,7 @@ from services.mt5_gateway.token_util import (
 logger = logging.getLogger("quantforg.mt5_gateway.settings")
 
 # Copied from deploy/mt5_gateway/gateway.env.example — len == 32.
-_PLACEHOLDER_TOKEN = "replace-with-strong-random-token"
+_PLACEHOLDER_TOKEN = "replace-with-strong-random-token"  # noqa: S105
 _PLACEHOLDER_PREFIXES = (
     "replace-with",
     "changeme",
@@ -218,8 +218,11 @@ class MT5GatewaySettings(BaseSettings):
         ),
     )
     mt5_gateway_auth_debug: bool = Field(
-        default=True,
-        description="Log token load/repr diagnostics (disable after auth is stable).",
+        default=False,
+        description=(
+            "Log token load diagnostics (masked). Never enable in production "
+            "longer than needed to debug auth."
+        ),
         validation_alias=AliasChoices(
             "MT5_GATEWAY_AUTH_DEBUG", "mt5_gateway_auth_debug"
         ),
@@ -263,7 +266,7 @@ def _resolve_token(
         # Placeholder-only dotenv (misconfigured host).
         return file_token, f"dotenv_placeholder:{file_source}"
     if process_token:
-        return process_token, f"process_env_placeholder"
+        return process_token, "process_env_placeholder"
     return "", "unset"
 
 

@@ -381,6 +381,7 @@ class IntegrationFeeds:
         name = "historical_data_warehouse"
         # Prefer in-memory warehouse bars; optionally backfill from MT5 candles
         bars = list(self._warehouse)
+        mt5_error: str | None = None
         if not bars and self.mt5 is not None:
             try:
                 from app.domain.market_data.timeframe import Timeframe
@@ -395,10 +396,23 @@ class IntegrationFeeds:
                     bars.append(_safe_dict(r))
                 if bars:
                     self._warehouse = bars[: self.config.max_warehouse_bars]
-            except Exception:
+            except Exception as exc:
                 bars = []
+                mt5_error = str(exc)[:200]
 
         if not bars:
+            if mt5_error:
+                h = FeedHealth(
+                    feed=name,
+                    status="error",
+                    latency_ms=0.0,
+                    freshness_seconds=-1.0,
+                    synchronized=False,
+                    message=f"warehouse MT5 backfill failed: {mt5_error}",
+                )
+                return FeedSnapshot(
+                    name, False, None, h, missing_reason="ERROR"
+                )
             h = _missing_health(name, "No historical bars warehoused")
             return FeedSnapshot(
                 name, False, None, h, missing_reason=MISSING

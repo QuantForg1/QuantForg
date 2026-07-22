@@ -208,7 +208,16 @@ class ExecutionSafetyService:
 
         stop_distance = Decimal("0")
         if intent.stop_loss:
-            stop_distance = abs(request.price - intent.stop_loss.value) / cons.point
+            point = cons.point if cons.point and cons.point > 0 else Decimal("0")
+            if point <= 0:
+                checks["stop_distance"] = False
+                reasons.append(
+                    "symbol point invalid — fail-closed before stop math"
+                )
+            else:
+                stop_distance = (
+                    abs(request.price - intent.stop_loss.value) / point
+                )
 
         margin_usage = Decimal("0")
         if free_margin > 0:

@@ -213,18 +213,13 @@ class CheckRiskUseCase:
             )
             return account, []
 
-        # Safe defaults when no live portfolio context (still evaluates)
-        account = AccountSnapshot(
-            login=1,
-            balance=Decimal("10000"),
-            equity=Decimal("10000"),
-            margin=Decimal("0"),
-            free_margin=Decimal("10000"),
-            margin_level=Decimal("0"),
-            profit=Decimal("0"),
-            leverage=100,
+        raise ValidationError(
+            "Live MT5 portfolio unavailable — refuse invented equity",
+            details={
+                "code": "risk_portfolio_unavailable",
+                "hint": "Connect MT5 or supply equity_override for advisory checks",
+            },
         )
-        return account, []
 
     async def _try_live_portfolio(
         self, user_id: UUID

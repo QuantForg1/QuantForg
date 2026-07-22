@@ -256,5 +256,5 @@ def test_paper_auto_trade_blocked_shows_exact_reason() -> None:
     result = integ.bridge.handle(decision, ctx)
     assert result.forwarded_to_oms is False
     assert result.abort_reason is BridgeAbortReason.AUTO_TRADING_BLOCKED
-    assert "Auto Trading toggle is OFF" in result.journal_entry.comment
+    assert "Auto Trading is OFF" in result.journal_entry.comment
     assert oms.calls == []

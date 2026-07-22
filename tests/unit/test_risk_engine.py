@@ -187,25 +187,26 @@ class TestRiskEngineEvaluate:
                 max_symbol_exposure_pct=Decimal("5"),
             )
         )
+        # QuantForg is XAUUSD-only (contract_size=100); metals group correlates.
         positions = [
             MT5Position(
                 ticket=1,
-                symbol="GBPUSD",
+                symbol="XAGUSD",
                 side="buy",
-                volume=Decimal("1.0"),
-                open_price=Decimal("1.26"),
+                volume=Decimal("10.0"),
+                open_price=Decimal("30"),
             )
         ]
         result = engine.evaluate(
             RiskCheckInput(
                 user_id=uuid4(),
                 request_id="risk-corr-1",
-                symbol="EURUSD",
+                symbol="XAUUSD",
                 side="buy",
                 requested_lots=Decimal("1.0"),
-                stop_loss_distance=Decimal("0.001"),
+                stop_loss_distance=Decimal("10"),
                 sizing_method=PositionSizingMethod.FIXED_LOT,
-                entry_price=Decimal("1.08"),
+                entry_price=Decimal("2300"),
             ),
             account=_account("10000"),
             positions=positions,
@@ -220,7 +221,7 @@ class TestRiskEngineEvaluate:
         )
 
     def test_xauusd_min_lot_uses_metal_contract_size(self) -> None:
-        """FX 100k contract must not reject gold 0.01 on a live micro account."""
+        """Gold 0.01 must remain allowable on a live micro account (no FX 100k)."""
         engine = RiskEngine()
         result = engine.evaluate(
             RiskCheckInput(
@@ -229,7 +230,7 @@ class TestRiskEngineEvaluate:
                 symbol="XAUUSD",
                 side="buy",
                 requested_lots=Decimal("0.01"),
-                sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
+                sizing_method=PositionSizingMethod.FIXED_LOT,
                 entry_price=Decimal("4014.137"),
             ),
             account=AccountSnapshot(
