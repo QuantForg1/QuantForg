@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.1",
+  "generated_at": "2026-07-22T18:55:29.138760+00:00",
+  "scope": "acceptance_validation",
+  "wall_clock_soak": {
+    "24h": "PENDING OPERATIONAL EVIDENCE",
+    "72h": "PENDING OPERATIONAL EVIDENCE",
+    "7d": "PENDING OPERATIONAL EVIDENCE",
+    "note": "Do not fabricate. Run scripts/institutional_soak.py --wall-seconds on a host."
+  },
+  "gates": {
+    "acceptance_unit": {
+      "cmd": [
+        "C:\\Users\\P7PROV~1\\AppData\\Local\\Temp\\cursor-sandbox-cache\\3bc25ecc8b0221bbe75a4122c8c5c694\\poetry\\virtualenvs\\quantforg-g0bJn-1N-py3.13\\Scripts\\python.exe",
+        "-m",
+        "pytest",
+        "tests/unit/test_acceptance_validation_v101.py",
+        "tests/unit/test_institutional_trading_phase_g.py",
+        "tests/unit/test_institutional_trading_phase_h.py",
+        "tests/unit/test_auto_trading_status_sync.py",
+        "tests/unit/test_live_account_risk_tracker.py",
+        "-q",
+        "--tb=line",
+        "--no-cov"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "stdout_tail": "................................................                         [100%]\n48 passed in 2.69s\n",
+      "stderr_tail": ""
+    },
+    "soak_stress": {
+      "cmd": [
+        "C:\\Users\\P7PROV~1\\AppData\\Local\\Temp\\cursor-sandbox-cache\\3bc25ecc8b0221bbe75a4122c8c5c694\\poetry\\virtualenvs\\quantforg-g0bJn-1N-py3.13\\Scripts\\python.exe",
+        "C:\\Users\\P7 PROVIDER\\QuantForg\\scripts\\institutional_soak.py",
+        "--profile",
+        "stress"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "stdout_tail": "{\"ok\": true, \"report\": \"C:\\\\Users\\\\P7 PROVIDER\\\\QuantForg\\\\docs\\\\production\\\\reports\\\\soak_stress_20260722T185538Z.json\", \"profile\": \"stress\"}\n",
+      "stderr_tail": ""
+    }
+  }
+}

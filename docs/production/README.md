@@ -8,9 +8,8 @@
 | [RECOVERY_GUIDE.md](./RECOVERY_GUIDE.md) | Incident / DR / reconnect |
 | [PRODUCTION_REVIEW.md](./PRODUCTION_REVIEW.md) | Desk consistency review |
 | [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) | Go-live checklist |
-| [RELEASE_NOTES_v1.0.0.md](./RELEASE_NOTES_v1.0.0.md) | RC release notes |
-| [MIGRATION_NOTES_v1.0.0.md](./MIGRATION_NOTES_v1.0.0.md) | Cutover |
-| [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) | Honest limits |
-| [reports/](./reports/) | Soak + config audit JSON |
+| [ACCEPTANCE_REPORT_v1.0.1.md](./ACCEPTANCE_REPORT_v1.0.1.md) | Scenario / failure / consistency acceptance |
+| [OPTIMIZATION_REPORT_v1.0.1.md](./OPTIMIZATION_REPORT_v1.0.1.md) | v1.0.1 optimization pack |
+| [RELEASE_NOTES_v1.0.1.md](./RELEASE_NOTES_v1.0.1.md) | v1.0.1 notes |
 
 Also: root `OPERATIONS_RUNBOOK.md`, `BACKUP_RECOVERY.md`, `docs/rc1/*`.  
