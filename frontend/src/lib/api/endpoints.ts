@@ -350,6 +350,50 @@ export const tradingOperationsCenterApi = {
     }),
 };
 
+export const auditGovernanceApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/audit-governance/dashboard"),
+  events: (params?: {
+    limit?: number;
+    category?: string;
+    severity?: string;
+    q?: string;
+    since?: string;
+    until?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.limit) sp.set("limit", String(params.limit));
+    if (params?.category) sp.set("category", params.category);
+    if (params?.severity) sp.set("severity", params.severity);
+    if (params?.q) sp.set("q", params.q);
+    if (params?.since) sp.set("since", params.since);
+    if (params?.until) sp.set("until", params.until);
+    const qs = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/audit-governance/events${qs ? `?${qs}` : ""}`,
+    );
+  },
+  timeline: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(
+      `/audit-governance/timeline?limit=${limit}`,
+    ),
+  changeHistory: () =>
+    apiFetch<Record<string, unknown>>("/audit-governance/change-history"),
+  tradeVersions: (tradeId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      tradeId
+        ? `/audit-governance/trade-versions?trade_id=${encodeURIComponent(tradeId)}`
+        : "/audit-governance/trade-versions",
+    ),
+  accountability: () =>
+    apiFetch<Record<string, unknown>>("/audit-governance/accountability"),
+  security: () =>
+    apiFetch<Record<string, unknown>>("/audit-governance/security"),
+  reports: () =>
+    apiFetch<Record<string, unknown>>("/audit-governance/reports"),
+  exportUrl: "/audit-governance/export",
+};
+
 export const executionIntelligenceApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/execution-intelligence/dashboard"),

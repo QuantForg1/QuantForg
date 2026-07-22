@@ -194,6 +194,12 @@ export const appNav: NavGroup[] = [
         hint: "Daily brief · checklist · EOD reviews",
       },
       {
+        href: "/audit-governance",
+        label: "Governance",
+        icon: Scale,
+        hint: "Audit trail · forensics · compliance",
+      },
+      {
         href: "/production-readiness",
         label: "Readiness",
         icon: Shield,

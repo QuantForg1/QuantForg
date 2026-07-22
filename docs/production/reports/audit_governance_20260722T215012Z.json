@@ -1,0 +1,1147 @@
+{
+  "version": "1.0.1",
+  "status": "available",
+  "governance_only": true,
+  "never_modifies_trading_behaviour": true,
+  "hard_locks": {
+    "never_modifies_strategy": true,
+    "never_modifies_risk_safety_execution": true,
+    "never_modifies_performance_intelligence": true,
+    "never_modifies_replay_evidence_lab": true,
+    "never_modifies_trading_operations_center": true,
+    "append_only": true,
+    "immutable_records": true,
+    "never_silently_deleted": true,
+    "never_silently_modified": true,
+    "governance_only": true
+  },
+  "dashboard": {
+    "version": "1.0.1",
+    "status": "available",
+    "governance_only": true,
+    "hard_locks": {
+      "never_modifies_strategy": true,
+      "never_modifies_risk_safety_execution": true,
+      "never_modifies_performance_intelligence": true,
+      "never_modifies_replay_evidence_lab": true,
+      "never_modifies_trading_operations_center": true,
+      "append_only": true,
+      "immutable_records": true,
+      "never_silently_deleted": true,
+      "never_silently_modified": true,
+      "governance_only": true
+    },
+    "security": {
+      "append_only": true,
+      "immutable": true,
+      "chronological": true,
+      "never_silently_deleted": true,
+      "never_silently_modified": true,
+      "record_count": 8,
+      "rejected_mutations": 0
+    },
+    "counts": {
+      "total_events": 8,
+      "critical": 2,
+      "warnings": 2,
+      "config_changes": 1,
+      "trade_version_tags": 1
+    },
+    "by_category": {
+      "operations": 1,
+      "execution": 1,
+      "risk": 0,
+      "safety": 1,
+      "strategy": 1,
+      "replay": 0,
+      "performance": 0,
+      "evidence": 1,
+      "configuration": 0,
+      "gateway": 1,
+      "broker": 1,
+      "security": 0,
+      "system": 1
+    },
+    "recent_events": [
+      {
+        "event_id": "66d7cb04-fb60-4cbb-bcd3-df82a9463575",
+        "timestamp": "2026-07-22T09:00:00Z",
+        "category": "gateway",
+        "severity": "info",
+        "component": "mt5_gateway",
+        "action": "gateway_connected",
+        "previous_state": "disconnected",
+        "new_state": "connected",
+        "actor": "system",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "gateway heartbeat restored",
+        "correlation_id": "corr-demo-1",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": null,
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "76b8b0a8e6c8f87a0edd544fdfd374d30e4440a215e49c37b4fd097b4c1668ad"
+      },
+      {
+        "event_id": "a0832446-717c-4fa3-9a1e-06ef048323f7",
+        "timestamp": "2026-07-22T09:02:00Z",
+        "category": "broker",
+        "severity": "info",
+        "component": "mt5",
+        "action": "broker_login",
+        "previous_state": "logged_out",
+        "new_state": "logged_in",
+        "actor": "operator.alice",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "session start",
+        "correlation_id": "corr-demo-1",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": null,
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "de30282d03c9663cbb196ac32b52b958c05ab105dc6eba2dab1a52f0bfadc1e4"
+      },
+      {
+        "event_id": "19558bf7-7c22-416f-9bcd-5cb3a1839c49",
+        "timestamp": "2026-07-22T09:05:00Z",
+        "category": "operations",
+        "severity": "warning",
+        "component": "ops_control_plane",
+        "action": "ops_promotion",
+        "previous_state": "SHADOW",
+        "new_state": "CANARY",
+        "actor": "owner.bob",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "OWNER-approved canary promote",
+        "correlation_id": "corr-demo-2",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "0dffbb8add882b139b4b8c7f8cccd6176e26c070089e759dd6ee8c799cf6b868"
+      },
+      {
+        "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee",
+        "timestamp": "2026-07-22T09:06:00Z",
+        "category": "execution",
+        "severity": "critical",
+        "component": "execution_gate",
+        "action": "execution_enabled",
+        "previous_state": "false",
+        "new_state": "true",
+        "actor": "owner.bob",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "canary execution arm",
+        "correlation_id": "corr-demo-2",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "b9425c887b77e39520f0f26a96aa792bbe8603caa37b16fcae24ca343e7ed693"
+      },
+      {
+        "event_id": "c1d2729d-e057-486f-9a96-f2b2a1e8b130",
+        "timestamp": "2026-07-22T09:07:00Z",
+        "category": "strategy",
+        "severity": "info",
+        "component": "trade_journal",
+        "action": "trade_version_tagged",
+        "previous_state": null,
+        "new_state": "515822",
+        "actor": "system",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "permanent version stamp",
+        "correlation_id": "corr-demo-3",
+        "session_id": "sess-demo-1",
+        "result": "recorded",
+        "notes": "",
+        "approval": null,
+        "versions": {
+          "strategy": "v1.0.1",
+          "risk": "v1.0.1",
+          "safety": "v1.0.1",
+          "execution": "v1.0.1",
+          "configuration": "v1.0.1"
+        },
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "ab16ececff3983dae6046ce2998c8298941ff20170e2603639b80477c9443a2f"
+      },
+      {
+        "event_id": "1bfdcc99-6b60-4718-8ea2-301a85adbde4",
+        "timestamp": "2026-07-22T09:10:00Z",
+        "category": "system",
+        "severity": "info",
+        "component": "reporting",
+        "action": "daily_report_generated",
+        "previous_state": null,
+        "new_state": "generated",
+        "actor": "system",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "end of morning brief cycle",
+        "correlation_id": "corr-demo-4",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": null,
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "028f391ccd633c4520aef44e9781ecc4b551042399a1192f3f1e68c6cebe4247"
+      },
+      {
+        "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81",
+        "timestamp": "2026-07-22T09:12:00Z",
+        "category": "safety",
+        "severity": "critical",
+        "component": "kill_switch",
+        "action": "kill_switch_armed",
+        "previous_state": "disarmed",
+        "new_state": "armed",
+        "actor": "owner.bob",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "manual safety drill",
+        "correlation_id": "corr-demo-5",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "6f29dd51019c48da9d70ec4da885c5acb62a4f4ff76a9791634c33295ec2d27a"
+      },
+      {
+        "event_id": "da22ee91-7711-4c63-9e79-ac4b8c260bd5",
+        "timestamp": "2026-07-22T09:15:00Z",
+        "category": "evidence",
+        "severity": "warning",
+        "component": "evidence_gates",
+        "action": "evidence_gates_failed",
+        "previous_state": "unknown",
+        "new_state": "failed",
+        "actor": "system",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "insufficient live closed trades",
+        "correlation_id": "corr-demo-6",
+        "session_id": "sess-demo-1",
+        "result": "recorded",
+        "notes": "",
+        "approval": null,
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "b40897cc9f95d351c2da29be0991af9885c15c2cdc9198ecefa661438874cc6f"
+      }
+    ],
+    "critical_events": [
+      {
+        "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee",
+        "timestamp": "2026-07-22T09:06:00Z",
+        "category": "execution",
+        "severity": "critical",
+        "component": "execution_gate",
+        "action": "execution_enabled",
+        "previous_state": "false",
+        "new_state": "true",
+        "actor": "owner.bob",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "canary execution arm",
+        "correlation_id": "corr-demo-2",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "b9425c887b77e39520f0f26a96aa792bbe8603caa37b16fcae24ca343e7ed693"
+      },
+      {
+        "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81",
+        "timestamp": "2026-07-22T09:12:00Z",
+        "category": "safety",
+        "severity": "critical",
+        "component": "kill_switch",
+        "action": "kill_switch_armed",
+        "previous_state": "disarmed",
+        "new_state": "armed",
+        "actor": "owner.bob",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "manual safety drill",
+        "correlation_id": "corr-demo-5",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "6f29dd51019c48da9d70ec4da885c5acb62a4f4ff76a9791634c33295ec2d27a"
+      }
+    ],
+    "warnings": [
+      {
+        "event_id": "19558bf7-7c22-416f-9bcd-5cb3a1839c49",
+        "timestamp": "2026-07-22T09:05:00Z",
+        "category": "operations",
+        "severity": "warning",
+        "component": "ops_control_plane",
+        "action": "ops_promotion",
+        "previous_state": "SHADOW",
+        "new_state": "CANARY",
+        "actor": "owner.bob",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "OWNER-approved canary promote",
+        "correlation_id": "corr-demo-2",
+        "session_id": "sess-demo-1",
+        "result": "success",
+        "notes": "",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "0dffbb8add882b139b4b8c7f8cccd6176e26c070089e759dd6ee8c799cf6b868"
+      },
+      {
+        "event_id": "da22ee91-7711-4c63-9e79-ac4b8c260bd5",
+        "timestamp": "2026-07-22T09:15:00Z",
+        "category": "evidence",
+        "severity": "warning",
+        "component": "evidence_gates",
+        "action": "evidence_gates_failed",
+        "previous_state": "unknown",
+        "new_state": "failed",
+        "actor": "system",
+        "source": "demo",
+        "environment": "demo",
+        "reason": "insufficient live closed trades",
+        "correlation_id": "corr-demo-6",
+        "session_id": "sess-demo-1",
+        "result": "recorded",
+        "notes": "",
+        "approval": null,
+        "versions": {},
+        "immutable": true,
+        "append_only": true,
+        "integrity_hash": "b40897cc9f95d351c2da29be0991af9885c15c2cdc9198ecefa661438874cc6f"
+      }
+    ],
+    "timeline": {
+      "status": "available",
+      "count": 8,
+      "steps": [
+        {
+          "timestamp": "2026-07-22T09:00:00Z",
+          "action": "gateway_connected",
+          "category": "gateway",
+          "severity": "info",
+          "actor": "system",
+          "previous_state": "disconnected",
+          "new_state": "connected",
+          "result": "success",
+          "event_id": "66d7cb04-fb60-4cbb-bcd3-df82a9463575"
+        },
+        {
+          "timestamp": "2026-07-22T09:02:00Z",
+          "action": "broker_login",
+          "category": "broker",
+          "severity": "info",
+          "actor": "operator.alice",
+          "previous_state": "logged_out",
+          "new_state": "logged_in",
+          "result": "success",
+          "event_id": "a0832446-717c-4fa3-9a1e-06ef048323f7"
+        },
+        {
+          "timestamp": "2026-07-22T09:05:00Z",
+          "action": "ops_promotion",
+          "category": "operations",
+          "severity": "warning",
+          "actor": "owner.bob",
+          "previous_state": "SHADOW",
+          "new_state": "CANARY",
+          "result": "success",
+          "event_id": "19558bf7-7c22-416f-9bcd-5cb3a1839c49"
+        },
+        {
+          "timestamp": "2026-07-22T09:06:00Z",
+          "action": "execution_enabled",
+          "category": "execution",
+          "severity": "critical",
+          "actor": "owner.bob",
+          "previous_state": "false",
+          "new_state": "true",
+          "result": "success",
+          "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee"
+        },
+        {
+          "timestamp": "2026-07-22T09:07:00Z",
+          "action": "trade_version_tagged",
+          "category": "strategy",
+          "severity": "info",
+          "actor": "system",
+          "previous_state": null,
+          "new_state": "515822",
+          "result": "recorded",
+          "event_id": "c1d2729d-e057-486f-9a96-f2b2a1e8b130"
+        },
+        {
+          "timestamp": "2026-07-22T09:10:00Z",
+          "action": "daily_report_generated",
+          "category": "system",
+          "severity": "info",
+          "actor": "system",
+          "previous_state": null,
+          "new_state": "generated",
+          "result": "success",
+          "event_id": "1bfdcc99-6b60-4718-8ea2-301a85adbde4"
+        },
+        {
+          "timestamp": "2026-07-22T09:12:00Z",
+          "action": "kill_switch_armed",
+          "category": "safety",
+          "severity": "critical",
+          "actor": "owner.bob",
+          "previous_state": "disarmed",
+          "new_state": "armed",
+          "result": "success",
+          "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81"
+        },
+        {
+          "timestamp": "2026-07-22T09:15:00Z",
+          "action": "evidence_gates_failed",
+          "category": "evidence",
+          "severity": "warning",
+          "actor": "system",
+          "previous_state": "unknown",
+          "new_state": "failed",
+          "result": "recorded",
+          "event_id": "da22ee91-7711-4c63-9e79-ac4b8c260bd5"
+        }
+      ],
+      "note": "Chronological forensic replay of audit history \u2014 read-only"
+    },
+    "accountability": {
+      "status": "available",
+      "sensitive_actions": 3,
+      "by_actor": {
+        "owner.bob": 3
+      },
+      "items": [
+        {
+          "event_id": "19558bf7-7c22-416f-9bcd-5cb3a1839c49",
+          "timestamp": "2026-07-22T09:05:00Z",
+          "action": "ops_promotion",
+          "actor": "owner.bob",
+          "reason": "OWNER-approved canary promote",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "result": "success",
+          "previous_state": "SHADOW",
+          "new_state": "CANARY"
+        },
+        {
+          "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee",
+          "timestamp": "2026-07-22T09:06:00Z",
+          "action": "execution_enabled",
+          "actor": "owner.bob",
+          "reason": "canary execution arm",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "result": "success",
+          "previous_state": "false",
+          "new_state": "true"
+        },
+        {
+          "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81",
+          "timestamp": "2026-07-22T09:12:00Z",
+          "action": "kill_switch_armed",
+          "actor": "owner.bob",
+          "reason": "manual safety drill",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "result": "success",
+          "previous_state": "disarmed",
+          "new_state": "armed"
+        }
+      ],
+      "note": "Who / when / why / approval / result \u2014 governance only"
+    },
+    "filters": {
+      "categories": [
+        "operations",
+        "execution",
+        "risk",
+        "safety",
+        "strategy",
+        "replay",
+        "performance",
+        "evidence",
+        "configuration",
+        "gateway",
+        "broker",
+        "security",
+        "system"
+      ],
+      "severities": [
+        "info",
+        "warning",
+        "critical"
+      ]
+    }
+  },
+  "timeline": {
+    "status": "available",
+    "count": 8,
+    "steps": [
+      {
+        "timestamp": "2026-07-22T09:00:00Z",
+        "action": "gateway_connected",
+        "category": "gateway",
+        "severity": "info",
+        "actor": "system",
+        "previous_state": "disconnected",
+        "new_state": "connected",
+        "result": "success",
+        "event_id": "66d7cb04-fb60-4cbb-bcd3-df82a9463575"
+      },
+      {
+        "timestamp": "2026-07-22T09:02:00Z",
+        "action": "broker_login",
+        "category": "broker",
+        "severity": "info",
+        "actor": "operator.alice",
+        "previous_state": "logged_out",
+        "new_state": "logged_in",
+        "result": "success",
+        "event_id": "a0832446-717c-4fa3-9a1e-06ef048323f7"
+      },
+      {
+        "timestamp": "2026-07-22T09:05:00Z",
+        "action": "ops_promotion",
+        "category": "operations",
+        "severity": "warning",
+        "actor": "owner.bob",
+        "previous_state": "SHADOW",
+        "new_state": "CANARY",
+        "result": "success",
+        "event_id": "19558bf7-7c22-416f-9bcd-5cb3a1839c49"
+      },
+      {
+        "timestamp": "2026-07-22T09:06:00Z",
+        "action": "execution_enabled",
+        "category": "execution",
+        "severity": "critical",
+        "actor": "owner.bob",
+        "previous_state": "false",
+        "new_state": "true",
+        "result": "success",
+        "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee"
+      },
+      {
+        "timestamp": "2026-07-22T09:07:00Z",
+        "action": "trade_version_tagged",
+        "category": "strategy",
+        "severity": "info",
+        "actor": "system",
+        "previous_state": null,
+        "new_state": "515822",
+        "result": "recorded",
+        "event_id": "c1d2729d-e057-486f-9a96-f2b2a1e8b130"
+      },
+      {
+        "timestamp": "2026-07-22T09:10:00Z",
+        "action": "daily_report_generated",
+        "category": "system",
+        "severity": "info",
+        "actor": "system",
+        "previous_state": null,
+        "new_state": "generated",
+        "result": "success",
+        "event_id": "1bfdcc99-6b60-4718-8ea2-301a85adbde4"
+      },
+      {
+        "timestamp": "2026-07-22T09:12:00Z",
+        "action": "kill_switch_armed",
+        "category": "safety",
+        "severity": "critical",
+        "actor": "owner.bob",
+        "previous_state": "disarmed",
+        "new_state": "armed",
+        "result": "success",
+        "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81"
+      },
+      {
+        "timestamp": "2026-07-22T09:15:00Z",
+        "action": "evidence_gates_failed",
+        "category": "evidence",
+        "severity": "warning",
+        "actor": "system",
+        "previous_state": "unknown",
+        "new_state": "failed",
+        "result": "recorded",
+        "event_id": "da22ee91-7711-4c63-9e79-ac4b8c260bd5"
+      }
+    ],
+    "note": "Chronological forensic replay of audit history \u2014 read-only"
+  },
+  "accountability": {
+    "status": "available",
+    "sensitive_actions": 3,
+    "by_actor": {
+      "owner.bob": 3
+    },
+    "items": [
+      {
+        "event_id": "19558bf7-7c22-416f-9bcd-5cb3a1839c49",
+        "timestamp": "2026-07-22T09:05:00Z",
+        "action": "ops_promotion",
+        "actor": "owner.bob",
+        "reason": "OWNER-approved canary promote",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "result": "success",
+        "previous_state": "SHADOW",
+        "new_state": "CANARY"
+      },
+      {
+        "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee",
+        "timestamp": "2026-07-22T09:06:00Z",
+        "action": "execution_enabled",
+        "actor": "owner.bob",
+        "reason": "canary execution arm",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "result": "success",
+        "previous_state": "false",
+        "new_state": "true"
+      },
+      {
+        "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81",
+        "timestamp": "2026-07-22T09:12:00Z",
+        "action": "kill_switch_armed",
+        "actor": "owner.bob",
+        "reason": "manual safety drill",
+        "approval": {
+          "required": true,
+          "granted_by": "owner.bob"
+        },
+        "result": "success",
+        "previous_state": "disarmed",
+        "new_state": "armed"
+      }
+    ],
+    "note": "Who / when / why / approval / result \u2014 governance only"
+  },
+  "change_history": [
+    {
+      "change_id": "825bf4ed-165f-4121-b6e2-f013628560fb",
+      "timestamp": "2026-07-22T09:04:00Z",
+      "scope": "execution_settings",
+      "key": "EXECUTION_ENABLED",
+      "previous_value": "false",
+      "new_value": "true",
+      "environment": "demo",
+      "version": "v1.0.1",
+      "actor": "owner.bob",
+      "approval": "OWNER",
+      "reason": "canary arm",
+      "immutable": true,
+      "never_overwrite_history": true
+    }
+  ],
+  "trade_versions": [
+    {
+      "record_id": "5420644c-98d1-4881-9613-7848f06887c8",
+      "trade_id": "515822",
+      "timestamp": "2026-07-22T09:07:00Z",
+      "strategy_version": "v1.0.1",
+      "risk_version": "v1.0.1",
+      "safety_version": "v1.0.1",
+      "execution_version": "v1.0.1",
+      "configuration_version": "v1.0.1",
+      "versions": {
+        "strategy": "v1.0.1",
+        "risk": "v1.0.1",
+        "safety": "v1.0.1",
+        "execution": "v1.0.1",
+        "configuration": "v1.0.1"
+      },
+      "immutable": true,
+      "note": "Version tags are permanent forensic metadata \u2014 never rewrite"
+    }
+  ],
+  "reports": {
+    "daily_audit_report": {
+      "report": "daily_audit",
+      "period_start": "2026-07-22T00:00:00Z",
+      "period_end": "2026-07-22T21:50:12.074401Z",
+      "event_count": 8,
+      "critical_count": 2,
+      "warning_count": 2,
+      "actions": {
+        "gateway_connected": 1,
+        "broker_login": 1,
+        "ops_promotion": 1,
+        "execution_enabled": 1,
+        "trade_version_tagged": 1,
+        "daily_report_generated": 1,
+        "kill_switch_armed": 1,
+        "evidence_gates_failed": 1
+      },
+      "events": [
+        {
+          "event_id": "66d7cb04-fb60-4cbb-bcd3-df82a9463575",
+          "timestamp": "2026-07-22T09:00:00Z",
+          "category": "gateway",
+          "severity": "info",
+          "component": "mt5_gateway",
+          "action": "gateway_connected",
+          "previous_state": "disconnected",
+          "new_state": "connected",
+          "actor": "system",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "gateway heartbeat restored",
+          "correlation_id": "corr-demo-1",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": null,
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "76b8b0a8e6c8f87a0edd544fdfd374d30e4440a215e49c37b4fd097b4c1668ad"
+        },
+        {
+          "event_id": "a0832446-717c-4fa3-9a1e-06ef048323f7",
+          "timestamp": "2026-07-22T09:02:00Z",
+          "category": "broker",
+          "severity": "info",
+          "component": "mt5",
+          "action": "broker_login",
+          "previous_state": "logged_out",
+          "new_state": "logged_in",
+          "actor": "operator.alice",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "session start",
+          "correlation_id": "corr-demo-1",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": null,
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "de30282d03c9663cbb196ac32b52b958c05ab105dc6eba2dab1a52f0bfadc1e4"
+        },
+        {
+          "event_id": "19558bf7-7c22-416f-9bcd-5cb3a1839c49",
+          "timestamp": "2026-07-22T09:05:00Z",
+          "category": "operations",
+          "severity": "warning",
+          "component": "ops_control_plane",
+          "action": "ops_promotion",
+          "previous_state": "SHADOW",
+          "new_state": "CANARY",
+          "actor": "owner.bob",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "OWNER-approved canary promote",
+          "correlation_id": "corr-demo-2",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "0dffbb8add882b139b4b8c7f8cccd6176e26c070089e759dd6ee8c799cf6b868"
+        },
+        {
+          "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee",
+          "timestamp": "2026-07-22T09:06:00Z",
+          "category": "execution",
+          "severity": "critical",
+          "component": "execution_gate",
+          "action": "execution_enabled",
+          "previous_state": "false",
+          "new_state": "true",
+          "actor": "owner.bob",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "canary execution arm",
+          "correlation_id": "corr-demo-2",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "b9425c887b77e39520f0f26a96aa792bbe8603caa37b16fcae24ca343e7ed693"
+        },
+        {
+          "event_id": "c1d2729d-e057-486f-9a96-f2b2a1e8b130",
+          "timestamp": "2026-07-22T09:07:00Z",
+          "category": "strategy",
+          "severity": "info",
+          "component": "trade_journal",
+          "action": "trade_version_tagged",
+          "previous_state": null,
+          "new_state": "515822",
+          "actor": "system",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "permanent version stamp",
+          "correlation_id": "corr-demo-3",
+          "session_id": "sess-demo-1",
+          "result": "recorded",
+          "notes": "",
+          "approval": null,
+          "versions": {
+            "strategy": "v1.0.1",
+            "risk": "v1.0.1",
+            "safety": "v1.0.1",
+            "execution": "v1.0.1",
+            "configuration": "v1.0.1"
+          },
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "ab16ececff3983dae6046ce2998c8298941ff20170e2603639b80477c9443a2f"
+        },
+        {
+          "event_id": "1bfdcc99-6b60-4718-8ea2-301a85adbde4",
+          "timestamp": "2026-07-22T09:10:00Z",
+          "category": "system",
+          "severity": "info",
+          "component": "reporting",
+          "action": "daily_report_generated",
+          "previous_state": null,
+          "new_state": "generated",
+          "actor": "system",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "end of morning brief cycle",
+          "correlation_id": "corr-demo-4",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": null,
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "028f391ccd633c4520aef44e9781ecc4b551042399a1192f3f1e68c6cebe4247"
+        },
+        {
+          "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81",
+          "timestamp": "2026-07-22T09:12:00Z",
+          "category": "safety",
+          "severity": "critical",
+          "component": "kill_switch",
+          "action": "kill_switch_armed",
+          "previous_state": "disarmed",
+          "new_state": "armed",
+          "actor": "owner.bob",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "manual safety drill",
+          "correlation_id": "corr-demo-5",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "6f29dd51019c48da9d70ec4da885c5acb62a4f4ff76a9791634c33295ec2d27a"
+        },
+        {
+          "event_id": "da22ee91-7711-4c63-9e79-ac4b8c260bd5",
+          "timestamp": "2026-07-22T09:15:00Z",
+          "category": "evidence",
+          "severity": "warning",
+          "component": "evidence_gates",
+          "action": "evidence_gates_failed",
+          "previous_state": "unknown",
+          "new_state": "failed",
+          "actor": "system",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "insufficient live closed trades",
+          "correlation_id": "corr-demo-6",
+          "session_id": "sess-demo-1",
+          "result": "recorded",
+          "notes": "",
+          "approval": null,
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "b40897cc9f95d351c2da29be0991af9885c15c2cdc9198ecefa661438874cc6f"
+        }
+      ],
+      "governance_only": true
+    },
+    "weekly_governance_report": {
+      "report": "weekly_governance",
+      "period_start": "2026-07-15T21:50:12.074541Z",
+      "period_end": "2026-07-22T21:50:12.074541Z",
+      "event_count": 8,
+      "by_category": {
+        "gateway": 1,
+        "broker": 1,
+        "operations": 1,
+        "execution": 1,
+        "strategy": 1,
+        "system": 1,
+        "safety": 1,
+        "evidence": 1
+      },
+      "by_severity": {
+        "info": 4,
+        "warning": 2,
+        "critical": 2
+      },
+      "top_actors": {
+        "system": 4,
+        "owner.bob": 3,
+        "operator.alice": 1
+      },
+      "governance_only": true
+    },
+    "monthly_compliance_report": {
+      "report": "monthly_compliance",
+      "period_start": "2026-06-22T21:50:12.074614Z",
+      "period_end": "2026-07-22T21:50:12.074614Z",
+      "event_count": 8,
+      "critical_events": [
+        {
+          "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee",
+          "timestamp": "2026-07-22T09:06:00Z",
+          "category": "execution",
+          "severity": "critical",
+          "component": "execution_gate",
+          "action": "execution_enabled",
+          "previous_state": "false",
+          "new_state": "true",
+          "actor": "owner.bob",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "canary execution arm",
+          "correlation_id": "corr-demo-2",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "b9425c887b77e39520f0f26a96aa792bbe8603caa37b16fcae24ca343e7ed693"
+        },
+        {
+          "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81",
+          "timestamp": "2026-07-22T09:12:00Z",
+          "category": "safety",
+          "severity": "critical",
+          "component": "kill_switch",
+          "action": "kill_switch_armed",
+          "previous_state": "disarmed",
+          "new_state": "armed",
+          "actor": "owner.bob",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "manual safety drill",
+          "correlation_id": "corr-demo-5",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "6f29dd51019c48da9d70ec4da885c5acb62a4f4ff76a9791634c33295ec2d27a"
+        }
+      ],
+      "config_changes": 1,
+      "trade_version_tags": 1,
+      "compliance_notes": [
+        "Audit store is append-only and immutable",
+        "Configuration history never overwrites prior entries",
+        "Trade version tags permanently record strategy/risk/safety/execution"
+      ],
+      "governance_only": true
+    },
+    "critical_event_report": {
+      "report": "critical_events",
+      "count": 2,
+      "events": [
+        {
+          "event_id": "a41afc83-756e-4617-aa9a-9916043f6eee",
+          "timestamp": "2026-07-22T09:06:00Z",
+          "category": "execution",
+          "severity": "critical",
+          "component": "execution_gate",
+          "action": "execution_enabled",
+          "previous_state": "false",
+          "new_state": "true",
+          "actor": "owner.bob",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "canary execution arm",
+          "correlation_id": "corr-demo-2",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "b9425c887b77e39520f0f26a96aa792bbe8603caa37b16fcae24ca343e7ed693"
+        },
+        {
+          "event_id": "a9d1945e-379f-4c93-b710-541f4e5d7c81",
+          "timestamp": "2026-07-22T09:12:00Z",
+          "category": "safety",
+          "severity": "critical",
+          "component": "kill_switch",
+          "action": "kill_switch_armed",
+          "previous_state": "disarmed",
+          "new_state": "armed",
+          "actor": "owner.bob",
+          "source": "demo",
+          "environment": "demo",
+          "reason": "manual safety drill",
+          "correlation_id": "corr-demo-5",
+          "session_id": "sess-demo-1",
+          "result": "success",
+          "notes": "",
+          "approval": {
+            "required": true,
+            "granted_by": "owner.bob"
+          },
+          "versions": {},
+          "immutable": true,
+          "append_only": true,
+          "integrity_hash": "6f29dd51019c48da9d70ec4da885c5acb62a4f4ff76a9791634c33295ec2d27a"
+        }
+      ],
+      "governance_only": true
+    },
+    "configuration_change_report": {
+      "report": "configuration_changes",
+      "count": 1,
+      "changes": [
+        {
+          "change_id": "825bf4ed-165f-4121-b6e2-f013628560fb",
+          "timestamp": "2026-07-22T09:04:00Z",
+          "scope": "execution_settings",
+          "key": "EXECUTION_ENABLED",
+          "previous_value": "false",
+          "new_value": "true",
+          "environment": "demo",
+          "version": "v1.0.1",
+          "actor": "owner.bob",
+          "approval": "OWNER",
+          "reason": "canary arm",
+          "immutable": true,
+          "never_overwrite_history": true
+        }
+      ],
+      "never_overwrite_history": true,
+      "governance_only": true
+    }
+  },
+  "security": {
+    "append_only": true,
+    "immutable": true,
+    "chronological": true,
+    "never_silently_deleted": true,
+    "never_silently_modified": true,
+    "record_count": 8,
+    "rejected_mutations": 0
+  },
+  "recommendations": [
+    "Review 2 critical governance events (accountability only \u2014 no strategy changes)",
+    "Never modify strategy, risk, safety, execution, Performance IQ, Evidence Lab, or Trading Operations Center from governance"
+  ],
+  "evidence_summary": {
+    "total_events": 8,
+    "critical": 2,
+    "warnings": 2,
+    "config_changes": 1,
+    "trade_version_tags": 1,
+    "append_only": true,
+    "immutable": true
+  }
+}
