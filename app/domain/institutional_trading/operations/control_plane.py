@@ -463,6 +463,22 @@ class OperationsControlPlane:
             reason=reason,
             now=now,
         )
+        try:
+            from app.application.services.ops_state_persistence import save_ops_state
+
+            save_ops_state(
+                {
+                    "auto_trading_enabled": self.auto_trading_enabled,
+                    "auto_trading_run_state": self.auto_trading_run_state,
+                }
+            )
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "auto_trading_persist_failed",
+                error=str(exc),
+            )
         return policy
 
     def evaluate_auto_trading(self, facts: AutoTradeLiveFacts) -> AutoTradeSafetyResult:
@@ -767,6 +783,9 @@ def get_control_plane() -> OperationsControlPlane:
         plane = OperationsControlPlane()
         try:
             from app.application.services.ops_state_persistence import load_ops_state
+            from app.domain.institutional_trading.auto_trading import (
+                normalize_run_state,
+            )
             from app.domain.institutional_trading.operations.models import (
                 OpsExecutionMode,
             )
@@ -775,11 +794,19 @@ def get_control_plane() -> OperationsControlPlane:
             raw_mode = str(state.get("ops_mode") or "").strip().upper()
             if raw_mode in {m.value for m in OpsExecutionMode}:
                 plane.mode = OpsExecutionMode(raw_mode)
+            if "auto_trading_enabled" in state:
+                plane.auto_trading_enabled = bool(state.get("auto_trading_enabled"))
+            raw_run = state.get("auto_trading_run_state")
+            if raw_run is not None:
+                plane.auto_trading_run_state = normalize_run_state(
+                    str(raw_run),
+                    enabled=plane.auto_trading_enabled,
+                )
         except Exception as exc:
             from core.logging import get_logger
 
             get_logger(__name__).warning(
-                "ops_mode_hydrate_failed",
+                "ops_state_hydrate_failed",
                 error=str(exc),
             )
         _GLOBAL_PLANE = plane

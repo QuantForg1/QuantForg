@@ -2,17 +2,21 @@
 """Launch Readiness CLI — audit blockers; optional official promote.
 
 Never bypasses Risk/Safety. Never flips EXECUTION_ENABLED.
-Never fabricates gateway state.
+Never fabricates gateway state. Demo Certification is not a LIVE gate.
 
 Usage (in-process, default):
   poetry run python scripts/launch_readiness.py
   poetry run python scripts/launch_readiness.py --promote --confirm \\
-      --reason "OWNER live after Demo cert"
+      --reason "OWNER live promotion"
 
-Remote (requires OWNER bearer):
+Remote (OWNER bearer or login credentials):
   set QUANTFORG_API_URL=https://quantforg-production.up.railway.app/api/v1
   set QUANTFORG_OWNER_TOKEN=<jwt>
-  poetry run python scripts/launch_readiness.py --remote
+  # OR:
+  set QUANTFORG_OWNER_EMAIL=...
+  set QUANTFORG_OWNER_PASSWORD=...
+  # OR E2E_EMAIL / E2E_PASSWORD
+  poetry run python scripts/launch_readiness.py --remote --promote --confirm
 """
 
 from __future__ import annotations
@@ -42,6 +46,12 @@ def _print_report(payload: dict) -> None:
         print("\nNo required blockers.")
     print(f"\nready_for_promotion={payload.get('ready_for_promotion')}")
     print(f"ready_for_gate_enabled={payload.get('ready_for_gate_enabled')}")
+    print(f"next_promotion_target={payload.get('next_promotion_target')}")
+    ver = payload.get("verification") or {}
+    if ver:
+        print(f"ops_mode={ver.get('ops_mode')}")
+        print(f"gate={ver.get('gate')}")
+        print(f"auto_trading={ver.get('auto_trading')}")
 
 
 def _run_local(*, promote: bool, confirm: bool, reason: str) -> int:
@@ -79,18 +89,61 @@ def _run_local(*, promote: bool, confirm: bool, reason: str) -> int:
     )
     print("\n=== PROMOTE RESULT ===")
     print(json.dumps(result, indent=2, default=str))
-    return 0 if result.get("ok") else 3
+    return 0 if result.get("promoted") or result.get("ok") else 3
+
+
+def _resolve_owner_token(base: str) -> str:
+    token = (os.environ.get("QUANTFORG_OWNER_TOKEN") or "").strip()
+    if token:
+        return token
+    email = (
+        os.environ.get("QUANTFORG_OWNER_EMAIL")
+        or os.environ.get("E2E_EMAIL")
+        or ""
+    ).strip()
+    password = (
+        os.environ.get("QUANTFORG_OWNER_PASSWORD")
+        or os.environ.get("E2E_PASSWORD")
+        or ""
+    ).strip()
+    if not email or not password:
+        return ""
+    import urllib.request
+
+    payload = json.dumps({"email": email, "password": password}).encode("utf-8")
+    req = urllib.request.Request(  # noqa: S310
+        f"{base}/auth/login",
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+        body = json.loads(resp.read().decode("utf-8"))
+    access = str(body.get("access_token") or body.get("access") or "").strip()
+    return access
 
 
 def _run_remote(*, promote: bool, confirm: bool, reason: str) -> int:
     import urllib.error
     import urllib.request
 
-    base = (os.environ.get("QUANTFORG_API_URL") or "").rstrip("/")
-    token = os.environ.get("QUANTFORG_OWNER_TOKEN") or ""
-    if not base or not token:
+    base = (
+        os.environ.get("QUANTFORG_API_URL")
+        or os.environ.get("QF_API_BASE")
+        or "https://quantforg-production.up.railway.app/api/v1"
+    ).rstrip("/")
+    try:
+        token = _resolve_owner_token(base)
+    except Exception as exc:
+        print(f"OWNER login failed: {exc}", file=sys.stderr)
+        return 1
+    if not token:
         print(
-            "Remote mode requires QUANTFORG_API_URL and QUANTFORG_OWNER_TOKEN",
+            "Remote mode requires QUANTFORG_OWNER_TOKEN or "
+            "QUANTFORG_OWNER_EMAIL+QUANTFORG_OWNER_PASSWORD (or E2E_*)",
             file=sys.stderr,
         )
         return 1
@@ -110,7 +163,7 @@ def _run_remote(*, promote: bool, confirm: bool, reason: str) -> int:
                 "Accept": "application/json",
             },
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=45) as resp:  # noqa: S310
             return json.loads(resp.read().decode("utf-8"))
 
     try:
@@ -123,13 +176,17 @@ def _run_remote(*, promote: bool, confirm: bool, reason: str) -> int:
     if not promote:
         return 0 if payload.get("ready_for_promotion") else 2
 
+    if not confirm:
+        print("PROMOTE refused: --confirm required", file=sys.stderr)
+        return 3
+
     try:
         result = _call(
             "POST",
             "/ite/ops/launch-readiness/promote",
             {
                 "reason": reason,
-                "confirmed": confirm,
+                "confirmed": True,
                 "activate_auto_trading": True,
             },
         )
@@ -139,7 +196,20 @@ def _run_remote(*, promote: bool, confirm: bool, reason: str) -> int:
         return 3
     print("\n=== PROMOTE RESULT ===")
     print(json.dumps(result, indent=2, default=str))
-    return 0 if result.get("ok") else 3
+
+    # Post-verify
+    try:
+        post = _call("GET", "/ite/ops/launch-readiness")
+        print("\n=== POST VERIFY ===")
+        ver = post.get("verification") or {}
+        print(json.dumps(ver, indent=2, default=str))
+        mode = str(ver.get("ops_mode") or "").upper()
+        if mode != "LIVE":
+            return 3
+    except Exception as exc:
+        print(f"post-verify failed: {exc}", file=sys.stderr)
+        return 3
+    return 0 if result.get("promoted") or result.get("ok") else 3
 
 
 def main() -> int:
@@ -156,13 +226,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--reason",
-        default="OWNER launch readiness promotion",
+        default="OWNER official LIVE promotion (Demo cert not required)",
         help="Audit reason",
     )
     parser.add_argument(
         "--remote",
         action="store_true",
-        help="Call production API with QUANTFORG_OWNER_TOKEN",
+        help="Call production API with OWNER token or login",
     )
     args = parser.parse_args()
     if args.remote:

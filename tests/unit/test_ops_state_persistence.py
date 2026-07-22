@@ -31,6 +31,28 @@ class TestOpsStatePersistence:
         assert state["ops_mode"] == "CANARY"
         assert path.is_file()
 
+    def test_hydrate_live_and_auto_trading(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "ops_state.json"
+        monkeypatch.setenv("QUANTFORG_OPS_STATE_PATH", str(path))
+        save_ops_state(
+            {
+                "ops_mode": "LIVE",
+                "auto_trading_enabled": True,
+                "auto_trading_run_state": "running",
+            }
+        )
+        from app.domain.institutional_trading.operations import control_plane as cp
+        from app.domain.institutional_trading.operations.models import OpsExecutionMode
+
+        cp._GLOBAL_PLANE = None
+        plane = cp.get_control_plane()
+        assert plane.mode is OpsExecutionMode.LIVE
+        assert plane.auto_trading_enabled is True
+        assert plane.auto_trading_run_state == "running"
+        cp._GLOBAL_PLANE = None
+
     def test_report_from_dict_rejects_uncertified(self) -> None:
         assert report_from_dict({"certified": False}) is None
         assert report_from_dict({}) is None
