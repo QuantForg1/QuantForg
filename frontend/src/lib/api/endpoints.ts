@@ -1071,6 +1071,32 @@ export const scalpingAiV2Api = {
     }),
 };
 
+/** Adaptive Scalping Intelligence — advisory explainability; never order_send */
+export const adaptiveScalpingIntelligenceApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>(
+      "/adaptive-scalping-intelligence/status",
+    ),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/adaptive-scalping-intelligence/evaluate",
+      { method: "POST", body },
+    ),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/adaptive-scalping-intelligence/history?limit=${limit}`,
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>(
+      "/adaptive-scalping-intelligence/policies",
+    ),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/adaptive-scalping-intelligence/policies",
+      { method: "POST", body },
+    ),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

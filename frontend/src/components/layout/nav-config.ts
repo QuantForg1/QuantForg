@@ -207,6 +207,12 @@ export const appNav: NavGroup[] = [
         hint: "XAUUSD scalp · never bypass Risk/Safety",
       },
       {
+        href: "/adaptive-scalping-intelligence",
+        label: "ASI",
+        icon: Brain,
+        hint: "Adaptive intelligence · explainable · advisory",
+      },
+      {
         href: "/ai-robot",
         label: "AI Robot",
         icon: Shield,
