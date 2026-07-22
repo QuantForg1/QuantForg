@@ -1020,6 +1020,31 @@ export const researchValidationApi = {
     }),
 };
 
+/** Institutional XAUUSD Scalping AI V2 — advisory continuous loop; never order_send */
+export const scalpingAiV2Api = {
+  status: () => apiFetch<Record<string, unknown>>("/scalping-ai-v2/status"),
+  cycle: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/scalping-ai-v2/cycle", {
+      method: "POST",
+      body,
+    }),
+  events: (limit = 100, cycleId?: string) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (cycleId) q.set("cycle_id", cycleId);
+    return apiFetch<Record<string, unknown>>(`/scalping-ai-v2/events?${q}`);
+  },
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/scalping-ai-v2/history?limit=${limit}`,
+    ),
+  policies: () => apiFetch<Record<string, unknown>>("/scalping-ai-v2/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/scalping-ai-v2/policies", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

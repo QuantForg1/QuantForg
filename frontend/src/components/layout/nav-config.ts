@@ -10,6 +10,7 @@ import {
   Building2,
   Calendar,
   CandlestickChart,
+  Crosshair,
   FileText,
   FlaskConical,
   Gauge,
@@ -198,6 +199,12 @@ export const appNav: NavGroup[] = [
         label: "Auto Trading",
         icon: Bot,
         hint: "Autonomous command center",
+      },
+      {
+        href: "/scalping-ai-v2",
+        label: "Scalping AI V2",
+        icon: Crosshair,
+        hint: "XAUUSD scalp · never bypass Risk/Safety",
       },
       {
         href: "/ai-robot",

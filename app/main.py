@@ -92,6 +92,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "research_validation_platform",
         "app.presentation.routers.research_validation_platform",
     ),
+    ("scalping_ai_v2", "app.presentation.routers.scalping_ai_v2"),
 )
 
 
