@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PageMotion } from "@/components/desk/motion";
 import { Button } from "@/components/ui/button";
 import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
+import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
 import {
   EMPTY_EXECUTION_METRICS,
   ExecutionMetricsStrip,
@@ -55,6 +56,7 @@ export default function GatewayPage() {
 
       <PageMotion className="space-y-4">
         <WeltradeGatewayStatus />
+        <ExecutionStateStrip />
         <ExecutionMetricsStrip metrics={execMetrics} />
       </PageMotion>
     </div>

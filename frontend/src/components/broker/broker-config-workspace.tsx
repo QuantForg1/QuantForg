@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DeskSkeleton } from "@/components/desk/primitives";
+import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
 import { mt5Api, weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, str } from "@/lib/desk";
@@ -300,6 +301,7 @@ export function BrokerConfigWorkspace() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-3">
+      <ExecutionStateStrip compact />
       <header className="border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

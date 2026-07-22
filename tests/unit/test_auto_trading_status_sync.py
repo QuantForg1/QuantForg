@@ -11,6 +11,7 @@ import pytest
 from app.application.services.auto_trading_status import (
     build_auto_trading_status,
     build_status_facts,
+    resolve_primary_blocker,
 )
 from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
@@ -88,6 +89,14 @@ class TestAutoTradingStatusLiveProbes:
         assert any("OFF" in r or "SHADOW" in r for r in snap.safety.failed_reasons)
         assert "connectivity" not in snap.reason_groups
         assert "operator" in snap.reason_groups
+        assert snap.primary_blocker is not None
+        assert "SHADOW" in snap.primary_blocker or "OFF" in snap.primary_blocker
+        assert snap.blocking_category in {"operator", "configuration"}
+        assert snap.execution_state["ops_mode"] == "SHADOW"
+        assert snap.execution_state["execution_enabled"] is False
+        assert snap.execution_state["gate_status"] == "Disabled"
+        assert snap.execution_state["gateway_connected"] is True
+        assert snap.execution_state["broker_connected"] is True
 
     def test_empty_ops_health_alone_was_the_bug(self) -> None:
         """Regression: empty HealthMonitor must not be the sole gateway truth."""
@@ -137,6 +146,38 @@ class TestStatusSnapshotGates:
         )
         assert "Risk Engine did not PASS" not in result.failed_reasons
         assert "Spread unavailable" not in " ".join(result.failed_reasons)
+
+    def test_primary_blocker_prefers_ops_mode_over_connectivity(self) -> None:
+        plane = OperationsControlPlane()
+        plane.update_auto_trade_controls(
+            _op(),
+            enabled=True,
+            run_state="running",
+            reason="arm for blocker test",
+        )
+        facts = AutoTradeLiveFacts(
+            gateway_connected=True,
+            broker_connected=True,
+            market_data_live=True,
+            risk_engine_pass=True,
+            risk_engine_evaluated=False,
+            account_trading_enabled=True,
+            mt5_autotrading_enabled=True,
+            symbol_tradable=True,
+            margin_available=True,
+            no_broker_restrictions=True,
+            session_evaluated=False,
+            spread_evaluated=False,
+            ops_mode="SHADOW",
+            execution_enabled=False,
+            status_snapshot=True,
+        )
+        safety = plane.evaluate_auto_trading(facts)
+        primary, category = resolve_primary_blocker(safety)
+        assert primary is not None
+        assert "SHADOW" in primary
+        assert category == "operator"
+        assert safety.status == "Disabled"
 
     def test_operator_can_promote_mode(self) -> None:
         plane = OperationsControlPlane()

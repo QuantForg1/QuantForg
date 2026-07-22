@@ -126,7 +126,19 @@ class AckBody(BaseModel):
 
 @router.get("/control-center")
 def control_center(_user: OperatorUser) -> dict[str, Any]:
-    return get_control_plane().control_center()
+    """Control center plus shared execution_state (same source as Auto Trading)."""
+    from app.application.services.auto_trading_status import build_auto_trading_status
+
+    plane = get_control_plane()
+    settings = get_settings()
+    cc = plane.control_center()
+    snap = build_auto_trading_status(plane, settings=settings)
+    cc["execution_enabled"] = snap.execution_state["execution_enabled"]
+    cc["execution_state"] = snap.execution_state
+    cc["primary_blocker"] = snap.primary_blocker
+    cc["blocking_category"] = snap.blocking_category
+    cc["gate_status"] = snap.safety.status
+    return cc
 
 
 @router.get("/readiness")
@@ -491,10 +503,13 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "allowed": safety.allowed,
         "failed_reasons": list(safety.failed_reasons),
         "reason_groups": snap.reason_groups,
+        "primary_blocker": snap.primary_blocker,
+        "blocking_category": snap.blocking_category,
+        "execution_state": snap.execution_state,
         "conditions": [c.to_dict() for c in safety.conditions],
         "policy": plane.auto_trade_policy().to_dict(),
         "emergency_stop": plane.kill_switch_armed,
-        "execution_enabled": bool(getattr(settings, "execution_enabled", False)),
+        "execution_enabled": bool(snap.execution_state["execution_enabled"]),
         "ops_mode": plane.mode.value,
         "live": snap.live,
         "facts": {

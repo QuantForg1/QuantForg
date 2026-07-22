@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
 import { WeltradeGatewayStatus } from "@/components/desk/weltrade-gateway-status";
+import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
 import { ExecutionMetricsStrip } from "@/components/execution/execution-metrics-strip";
 import { ExecutionDiagnosticsPanel } from "@/components/execution/execution-diagnostics";
 import { latestSuccessfulExecution } from "@/lib/execution/ops-metrics";
@@ -142,6 +143,7 @@ export function ProductionOpsDashboard() {
   return (
     <div className="space-y-3">
       <WeltradeGatewayStatus />
+      <ExecutionStateStrip />
 
       <Panel
         title="Live execution metrics"
@@ -231,6 +233,7 @@ export function ProductionOpsDashboard() {
             <Kpi
               label="Execution"
               value={wt.execution_enabled ? "enabled" : "disabled"}
+              hint="Adapter flag ≡ EXECUTION_ENABLED (see strip above)"
             />
             <Kpi label="Login" value={str(mt.login ?? session.login, "—")} />
             <Kpi label="Server" value={str(mt.server ?? session.server, "—")} />

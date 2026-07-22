@@ -39,6 +39,7 @@ import { latestSuccessfulExecution } from "@/lib/execution/ops-metrics";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
+import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
 
 type RunState = "off" | "running" | "paused" | "stopped";
 
@@ -217,6 +218,12 @@ export function AutoTradingWorkspace() {
   const gateStatus = str(asRecord(autoQ.data).status, "—");
   const failedReasons = asList(asRecord(autoQ.data).failed_reasons).map(String);
   const reasonGroups = asRecord(asRecord(autoQ.data).reason_groups);
+  const primaryBlocker = str(asRecord(autoQ.data).primary_blocker, "");
+  const blockingCategory = str(asRecord(autoQ.data).blocking_category, "");
+  const executionState = asRecord(asRecord(autoQ.data).execution_state);
+  const executionEnabled = Boolean(
+    executionState.execution_enabled ?? asRecord(autoQ.data).execution_enabled,
+  );
   const riskReasons = asList(reasonGroups.risk).map(String);
   const connectivityReasons = asList(reasonGroups.connectivity).map(String);
   const operatorReasons = [
@@ -226,16 +233,23 @@ export function AutoTradingWorkspace() {
   ];
   const liveFacts = asRecord(asRecord(autoQ.data).live);
   const gatewayLive = Boolean(
-    liveFacts.gateway_connected ?? asRecord(asRecord(autoQ.data).facts).gateway_connected,
+    executionState.gateway_connected ??
+      liveFacts.gateway_connected ??
+      asRecord(asRecord(autoQ.data).facts).gateway_connected,
   );
   const brokerLive = Boolean(
-    liveFacts.broker_connected ?? asRecord(asRecord(autoQ.data).facts).broker_connected,
+    executionState.broker_connected ??
+      liveFacts.broker_connected ??
+      asRecord(asRecord(autoQ.data).facts).broker_connected,
   );
   const killArmed = Boolean(
-    asRecord(centerQ.data).kill_switch_armed ?? asRecord(autoQ.data).emergency_stop,
+    executionState.kill_switch_armed ??
+      asRecord(centerQ.data).kill_switch_armed ??
+      asRecord(autoQ.data).emergency_stop,
   );
   const opsMode = str(
-    asRecord(autoQ.data).ops_mode ||
+    executionState.ops_mode ||
+      asRecord(autoQ.data).ops_mode ||
       asRecord(centerQ.data).execution_mode ||
       asRecord(centerQ.data).mode,
     "—",
@@ -624,6 +638,7 @@ export function AutoTradingWorkspace() {
 
   return (
     <div className="space-y-3">
+      <ExecutionStateStrip executionState={executionState} />
       {/* 1. Overview status bar */}
       <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -639,11 +654,23 @@ export function AutoTradingWorkspace() {
             <Badge tone={gateStatus.toLowerCase() === "enabled" ? "success" : "warning"}>
               Gate {gateStatus}
             </Badge>
+            <Badge tone={executionEnabled ? "danger" : "neutral"}>
+              EXECUTION_ENABLED={executionEnabled ? "true" : "false"}
+            </Badge>
           </div>
           <Button asChild size="sm" variant="ghost">
             <Link href="/ops">ITE Ops</Link>
           </Button>
         </div>
+        {primaryBlocker ? (
+          <p className="mb-2 text-xs text-[var(--warning)]">
+            <span className="font-medium text-[var(--fg-subtle)]">
+              Gate blocked
+              {blockingCategory ? ` · ${blockingCategory}` : ""}:{" "}
+            </span>
+            {primaryBlocker}
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
           <Stat label="Engine" value={runState.toUpperCase()} tone={runState === "running" ? "ok" : "warn"} />
           <Stat label="Market" value={marketOpen ? "OPEN" : session.connected ? "QUIET" : "OFF"} />
@@ -662,7 +689,7 @@ export function AutoTradingWorkspace() {
             label="Broker"
             value={
               brokerLive || session.connected || asRecord(mt5Q.data).connected
-                ? "LIVE"
+                ? "CONNECTED"
                 : "OFF"
             }
             tone={brokerLive || session.connected ? "ok" : "bad"}
@@ -682,6 +709,11 @@ export function AutoTradingWorkspace() {
             label="Ops Mode"
             value={opsMode}
             tone={opsMode === "LIVE" || opsMode === "CANARY" ? "ok" : "warn"}
+          />
+          <Stat
+            label="Live send"
+            value={executionEnabled ? "ON" : "OFF"}
+            tone={executionEnabled ? "ok" : "warn"}
           />
           <Stat label="Last Signal" value={lastSignalTime} />
           <Stat label="Last Trade" value={lastTradeTime} />

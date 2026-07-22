@@ -20,6 +20,7 @@ from app.application.services.institutional_live_probes import (
 from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
     AutoTradeSafetyResult,
+    normalize_run_state,
 )
 from app.domain.institutional_trading.operations.control_plane import (
     OperationsControlPlane,
@@ -62,6 +63,9 @@ class AutoTradingStatusSnapshot:
     safety: AutoTradeSafetyResult
     live: dict[str, Any]
     reason_groups: dict[str, list[str]]
+    primary_blocker: str | None
+    blocking_category: str | None
+    execution_state: dict[str, Any]
 
 
 def _probe_collector(settings: Settings) -> LiveProbeCollector:
@@ -280,6 +284,52 @@ def group_failed_reasons(safety: AutoTradeSafetyResult) -> dict[str, list[str]]:
     return {k: v for k, v in groups.items() if v}
 
 
+def resolve_primary_blocker(
+    safety: AutoTradeSafetyResult,
+) -> tuple[str | None, str | None]:
+    """First failed condition in gate evaluation order — authoritative UI reason.
+
+    Evaluation order intentionally surfaces operator/mode/configuration before
+    connectivity so green Gateway/Broker never masks SHADOW or EXECUTION_ENABLED.
+    """
+    if safety.allowed:
+        return None, None
+    for cond in safety.conditions:
+        if cond.passed:
+            continue
+        detail = cond.detail or f"{cond.label} failed"
+        return detail, _REASON_GROUPS.get(cond.key, "other")
+    return "Gate Disabled", "other"
+
+
+def build_execution_state(
+    plane: OperationsControlPlane,
+    *,
+    facts: AutoTradeLiveFacts,
+    safety: AutoTradeSafetyResult,
+    primary_blocker: str | None,
+    blocking_category: str | None,
+) -> dict[str, Any]:
+    """Single shared snapshot for Auto Trading / Monitoring / Broker / Gateway."""
+    policy = plane.auto_trade_policy()
+    run_state = normalize_run_state(policy.run_state, enabled=policy.enabled)
+    return {
+        "ops_mode": plane.mode.value,
+        "execution_enabled": bool(facts.execution_enabled),
+        "kill_switch_armed": bool(plane.kill_switch_armed),
+        "oms_orders_allowed": bool(plane.oms_orders_allowed()),
+        "gate_status": safety.status,
+        "gate_allowed": bool(safety.allowed),
+        "primary_blocker": primary_blocker,
+        "blocking_category": blocking_category,
+        "auto_trading_run_state": run_state,
+        "gateway_connected": bool(facts.gateway_connected),
+        "broker_connected": bool(facts.broker_connected),
+        "market_data_live": bool(facts.market_data_live),
+        "source": "auto_trading_status",
+    }
+
+
 def build_auto_trading_status(
     plane: OperationsControlPlane,
     *,
@@ -287,9 +337,20 @@ def build_auto_trading_status(
 ) -> AutoTradingStatusSnapshot:
     facts, live = build_status_facts(plane, settings=settings)
     safety = plane.evaluate_auto_trading(facts)
+    primary, category = resolve_primary_blocker(safety)
+    execution_state = build_execution_state(
+        plane,
+        facts=facts,
+        safety=safety,
+        primary_blocker=primary,
+        blocking_category=category,
+    )
     return AutoTradingStatusSnapshot(
         facts=facts,
         safety=safety,
         live=live,
         reason_groups=group_failed_reasons(safety),
+        primary_blocker=primary,
+        blocking_category=category,
+        execution_state=execution_state,
     )

@@ -141,7 +141,9 @@ export function AutoTradeControls() {
   const d = asRecord(autoQ.data);
   const status = str(d.status, "Disabled");
   const failed = asList(d.failed_reasons).map(String);
+  const primaryBlocker = str(d.primary_blocker, "");
   const live = asRecord(d.live);
+  const execState = asRecord(d.execution_state);
   const conditions = asList(d.conditions).map(asRecord);
   const policy = asRecord(d.policy);
 
@@ -157,10 +159,19 @@ export function AutoTradeControls() {
           <Badge tone={live.gateway_connected ? "success" : "danger"}>
             Gateway {live.gateway_connected ? "connected" : "offline"}
           </Badge>
-          <Badge tone="neutral">Ops {str(d.ops_mode, "—")}</Badge>
+          <Badge tone="neutral">Ops {str(d.ops_mode || execState.ops_mode, "—")}</Badge>
+          <Badge tone={d.execution_enabled ? "danger" : "neutral"}>
+            EXECUTION_ENABLED={d.execution_enabled ? "true" : "false"}
+          </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {primaryBlocker ? (
+          <p className="text-xs text-[var(--warning)]">
+            <span className="font-medium text-[var(--fg-subtle)]">Primary blocker: </span>
+            {primaryBlocker}
+          </p>
+        ) : null}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {RUN_STATES.map((s) => {
             const active = runState === s.id;
