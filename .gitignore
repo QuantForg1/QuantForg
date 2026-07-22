@@ -263,6 +263,7 @@ frontend/.env*
 .live-trade-verify.json
 .gateway-stdout.log
 .gateway-stderr.log
+.quantforg_state/
 
 # Local scratch / unrelated IDE artifacts
 2025.1
