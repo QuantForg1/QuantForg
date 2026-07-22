@@ -1234,6 +1234,38 @@ export const liveLearningProgramApi = {
     }),
 };
 
+/** Production Readiness Certification — certify only; never order_send */
+export const productionReadinessCertificationApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>(
+      "/production-readiness-certification/status",
+    ),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/production-readiness-certification/evaluate",
+      {
+        method: "POST",
+        body,
+      },
+    ),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/production-readiness-certification/history?limit=${limit}`,
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>(
+      "/production-readiness-certification/policies",
+    ),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/production-readiness-certification/policies",
+      {
+        method: "POST",
+        body,
+      },
+    ),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

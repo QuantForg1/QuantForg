@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   AlertTriangle,
+  BadgeCheck,
   Bell,
   BookOpen,
   Bot,
@@ -243,6 +244,12 @@ export const appNav: NavGroup[] = [
         label: "Live Learning",
         icon: GraduationCap,
         hint: "LLP · evidence only · never auto-tunes",
+      },
+      {
+        href: "/production-readiness-certification",
+        label: "Readiness Cert",
+        icon: BadgeCheck,
+        hint: "PRC · certify only · human approval",
       },
       {
         href: "/ai-robot",
