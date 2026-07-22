@@ -219,6 +219,12 @@ export const appNav: NavGroup[] = [
         hint: "Edge score · stability · institutional grade",
       },
       {
+        href: "/alpha-factory",
+        label: "Alpha Factory",
+        icon: FlaskConical,
+        hint: "Research lab · never touches production",
+      },
+      {
         href: "/ai-robot",
         label: "AI Robot",
         icon: Shield,

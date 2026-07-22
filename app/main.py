@@ -101,6 +101,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "institutional_edge_engine",
         "app.presentation.routers.institutional_edge_engine",
     ),
+    ("alpha_factory", "app.presentation.routers.alpha_factory"),
 )
 
 
