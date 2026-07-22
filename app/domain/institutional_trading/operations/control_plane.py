@@ -223,6 +223,18 @@ class OperationsControlPlane:
             reason=reason,
             now=now,
         )
+        try:
+            from app.application.services.ops_state_persistence import save_ops_state
+
+            save_ops_state({"ops_mode": target.value, "ops_mode_reason": reason})
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "ops_mode_persist_failed",
+                error=str(exc),
+                mode=target.value,
+            )
         return ModeTransitionResult(
             ok=True,
             from_mode=current,
@@ -787,7 +799,25 @@ _GLOBAL_PLANE: OperationsControlPlane | None = None
 def get_control_plane() -> OperationsControlPlane:
     global _GLOBAL_PLANE
     if _GLOBAL_PLANE is None:
-        _GLOBAL_PLANE = OperationsControlPlane()
+        plane = OperationsControlPlane()
+        try:
+            from app.application.services.ops_state_persistence import load_ops_state
+            from app.domain.institutional_trading.operations.models import (
+                OpsExecutionMode,
+            )
+
+            state = load_ops_state()
+            raw_mode = str(state.get("ops_mode") or "").strip().upper()
+            if raw_mode in {m.value for m in OpsExecutionMode}:
+                plane.mode = OpsExecutionMode(raw_mode)
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "ops_mode_hydrate_failed",
+                error=str(exc),
+            )
+        _GLOBAL_PLANE = plane
     return _GLOBAL_PLANE
 
 

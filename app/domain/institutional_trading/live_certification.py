@@ -169,6 +169,116 @@ class LiveCertificationReport:
         }
 
 
+def report_from_dict(raw: dict[str, Any]) -> LiveCertificationReport | None:
+    """Rehydrate a previously persisted certification report. Never invents trades."""
+    if not isinstance(raw, dict):
+        return None
+    if not bool(raw.get("certified")):
+        return None
+    trade_raw = raw.get("trade")
+    if not isinstance(trade_raw, dict):
+        return None
+    try:
+        trade = LiveTradeEvidence(
+            broker=str(trade_raw.get("broker") or ""),
+            account_type=str(trade_raw.get("account_type") or ""),
+            symbol=str(trade_raw.get("symbol") or ""),
+            volume=Decimal(str(trade_raw.get("volume"))),
+            ticket=int(trade_raw.get("ticket")),
+            deal=int(trade_raw.get("deal")),
+            entry=Decimal(str(trade_raw.get("entry"))),
+            exit=(
+                Decimal(str(trade_raw["exit"]))
+                if trade_raw.get("exit") is not None
+                else None
+            ),
+            profit_loss=(
+                Decimal(str(trade_raw["profit_loss"]))
+                if trade_raw.get("profit_loss") is not None
+                else None
+            ),
+            execution_latency_ms=float(trade_raw.get("execution_latency_ms") or 0),
+            margin_used=(
+                Decimal(str(trade_raw["margin_used"]))
+                if trade_raw.get("margin_used") is not None
+                else None
+            ),
+            risk_pct=Decimal(str(trade_raw.get("risk_pct") or "0")),
+            audit_id=str(trade_raw.get("audit_id") or ""),
+            position_closed=bool(trade_raw.get("position_closed")),
+            history_recorded=bool(trade_raw.get("history_recorded")),
+            analytics_recorded=bool(trade_raw.get("analytics_recorded")),
+            signal_time_ms=trade_raw.get("signal_time_ms"),
+            risk_time_ms=trade_raw.get("risk_time_ms"),
+            order_check_time_ms=trade_raw.get("order_check_time_ms"),
+            broker_fill_time_ms=trade_raw.get("broker_fill_time_ms"),
+            total_execution_time_ms=trade_raw.get("total_execution_time_ms"),
+            slippage=trade_raw.get("slippage"),
+            spread=trade_raw.get("spread"),
+        )
+    except Exception:
+        return None
+
+    stages_raw = raw.get("stages") if isinstance(raw.get("stages"), list) else []
+    stages = tuple(
+        LiveTradeStageResult(
+            stage=str(s.get("stage") or ""),
+            passed=bool(s.get("passed")),
+            detail=str(s.get("detail") or ""),
+        )
+        for s in stages_raw
+        if isinstance(s, dict)
+    )
+    checklist_raw = (
+        raw.get("checklist") if isinstance(raw.get("checklist"), dict) else {}
+    )
+    conditions: list[LiveCertCondition] = []
+    raw_conditions = checklist_raw.get("conditions") or ()
+    if isinstance(raw_conditions, (list, tuple)):
+        for c in raw_conditions:
+            if isinstance(c, dict):
+                conditions.append(
+                    LiveCertCondition(
+                        key=str(c.get("key") or ""),
+                        label=str(c.get("label") or ""),
+                        passed=bool(c.get("passed")),
+                        detail=str(c.get("detail") or ""),
+                    )
+                )
+    checklist = LiveCertChecklistResult(
+        ready=bool(checklist_raw.get("ready")),
+        conditions=tuple(conditions),
+        failed_reasons=tuple(checklist_raw.get("failed_reasons") or ()),
+    )
+    try:
+        report_id = UUID(str(raw.get("id"))) if raw.get("id") else uuid4()
+    except Exception:
+        report_id = uuid4()
+    created_raw = raw.get("created_at")
+    try:
+        created_at = (
+            datetime.fromisoformat(str(created_raw).replace("Z", "+00:00"))
+            if created_raw
+            else datetime.now(UTC)
+        )
+    except Exception:
+        created_at = datetime.now(UTC)
+    return LiveCertificationReport(
+        certified=True,
+        status=str(raw.get("status") or "CERTIFIED"),
+        checklist=checklist,
+        stages=stages,
+        trade=trade,
+        failure_reason=raw.get("failure_reason"),
+        auto_trading_disabled_on_failure=bool(
+            raw.get("auto_trading_disabled_on_failure")
+        ),
+        mode_auto_switched=False,
+        id=report_id,
+        created_at=created_at if created_at.tzinfo else created_at.replace(tzinfo=UTC),
+    )
+
+
 def evaluate_live_cert_checklist(
     *,
     facts: AutoTradeLiveFacts,

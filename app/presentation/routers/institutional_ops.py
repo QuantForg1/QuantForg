@@ -164,9 +164,10 @@ def promote_launch_readiness(
     request: Request,
     x_forwarded_for: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """Official SHADOW→CANARY→LIVE via state machine when all blockers clear.
+    """Official SHADOW→CANARY (infra), then CANARY→LIVE (Demo cert).
 
     Never bypasses Risk/Safety. Never flips EXECUTION_ENABLED.
+    Never fabricates Demo certification — LIVE requires prior cert evidence.
     """
     from app.application.services.launch_readiness import promote_to_live_execution
 

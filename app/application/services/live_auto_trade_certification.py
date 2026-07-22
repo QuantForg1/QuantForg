@@ -179,11 +179,52 @@ class LiveAutoTradeCertificationService:
 
         with self._lock:
             self._last_report = report
+        if (
+            report.certified
+            and report.trade is not None
+            and report.trade.account_type.lower() == "demo"
+        ):
+            try:
+                from app.application.services.ops_state_persistence import (
+                    save_ops_state,
+                )
+
+                save_ops_state({"demo_certification_report": report.to_dict()})
+            except Exception as exc:
+                logger.warning(
+                    "demo_cert_persist_failed",
+                    error=str(exc),
+                )
         return report
 
     def last_report(self) -> LiveCertificationReport | None:
         with self._lock:
             return self._last_report
+
+    def hydrate_from_durable_store(self) -> bool:
+        """Load last certified Demo report from disk if present. Never invents."""
+        try:
+            from app.application.services.ops_state_persistence import load_ops_state
+            from app.domain.institutional_trading.live_certification import (
+                report_from_dict,
+            )
+
+            state = load_ops_state()
+            raw = state.get("demo_certification_report")
+            if not isinstance(raw, dict):
+                return False
+            report = report_from_dict(raw)
+            if report is None or not report.certified:
+                return False
+            trade = report.trade
+            if trade is None or trade.account_type.lower() != "demo":
+                return False
+            with self._lock:
+                self._last_report = report
+            return True
+        except Exception as exc:
+            logger.warning("demo_cert_hydrate_failed", error=str(exc))
+            return False
 
 
 _SERVICE: LiveAutoTradeCertificationService | None = None
@@ -195,6 +236,7 @@ def get_live_cert_service() -> LiveAutoTradeCertificationService:
     with _SERVICE_LOCK:
         if _SERVICE is None:
             _SERVICE = LiveAutoTradeCertificationService()
+            _SERVICE.hydrate_from_durable_store()
         return _SERVICE
 
 

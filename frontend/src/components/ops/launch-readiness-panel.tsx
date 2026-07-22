@@ -81,7 +81,15 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
       void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
       void qc.invalidateQueries({ queryKey: ["ite-ops-control-center"] });
       if (d.ok) {
-        toast.success(str(d.message, "LIVE armed"));
+        const to = str(d.promoted_to, "");
+        toast.success(
+          str(
+            d.message,
+            to === "CANARY"
+              ? "Promoted to CANARY — complete Demo cert before LIVE"
+              : "LIVE armed",
+          ),
+        );
       } else {
         toast.error(str(d.message, "Promotion refused — see Launch Lock Inspector"));
       }
@@ -119,11 +127,28 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
       .filter((item) => !orderedKeys.has(str(item.key))),
   ];
 
-  const failed = ordered.filter((item) => !item.passed);
+  const failed = ordered.filter((item) => {
+    if (item.passed) return false;
+    const target = str(d.next_promotion_target, "LIVE").toUpperCase();
+    if (target === "CANARY") return item.required_for_canary !== false;
+    if (target === "LIVE") return item.required_for_live !== false;
+    return Boolean(item.required_for_promotion);
+  });
   const ready = Boolean(d.ready_for_promotion);
+  const nextTarget = str(d.next_promotion_target, "LIVE").toUpperCase();
+  const promoteLabel =
+    nextTarget === "CANARY"
+      ? "Promote to CANARY"
+      : nextTarget === "LIVE"
+        ? "Promote to LIVE"
+        : "Already LIVE";
+  const confirmText =
+    nextTarget === "CANARY"
+      ? "Promote SHADOW → CANARY via official Ops state machine? Demo certification is NOT required for CANARY. Risk/Safety are never bypassed."
+      : "Promote CANARY → LIVE via official Ops state machine? Requires real Demo certification. Risk/Safety are never bypassed. EXECUTION_ENABLED must already be true.";
   const gateEnabled = Boolean(d.ready_for_gate_enabled);
-  const execReady = ready && gateEnabled;
-  const allPass = failed.length === 0 && ordered.length > 0;
+  const execReady = ready && gateEnabled && nextTarget === "NONE";
+  const allPass = failed.length === 0 && ordered.length > 0 && nextTarget === "NONE";
 
   return (
     <section
@@ -140,23 +165,20 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
           </h2>
           <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
             Every execution prerequisite — never only “Gate Disabled”.
+            {nextTarget !== "NONE" ? ` Next: ${nextTarget}.` : ""}
           </p>
         </div>
         <Button
           size="sm"
-          disabled={!ready || promote.isPending}
+          disabled={!ready || promote.isPending || nextTarget === "NONE"}
           onClick={() => {
-            if (
-              !window.confirm(
-                "Promote SHADOW → CANARY → LIVE via official Ops state machine? Risk/Safety are never bypassed. EXECUTION_ENABLED must already be true in Railway.",
-              )
-            ) {
+            if (!window.confirm(confirmText)) {
               return;
             }
             promote.mutate();
           }}
         >
-          {promote.isPending ? "Promoting…" : "Promote to LIVE"}
+          {promote.isPending ? "Promoting…" : promoteLabel}
         </Button>
       </div>
 

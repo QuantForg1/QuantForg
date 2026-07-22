@@ -2,6 +2,9 @@
 
 Never bypasses Risk/Safety. Never flips EXECUTION_ENABLED (env only).
 Never fabricates gateway/broker/market facts.
+
+Official path: SHADOW → CANARY (infra ready) → Demo cert → LIVE.
+Demo certification is required for LIVE only — not for CANARY.
 """
 
 from __future__ import annotations
@@ -79,10 +82,11 @@ _RESOLVE: dict[str, str] = {
         "Ensure XAUUSD is selectable and tradable on the attached MT5 account"
     ),
     "demo_certification": (
-        "Complete Demo Certification\n"
+        "Complete Demo Certification after CANARY:\n"
         "Run a real Demo 0.01-lot certification trade\n"
         "POST /ite/ops/auto-trading/live-certification/attempt "
-        "(never fabricate fills)"
+        "(never fabricate fills)\n"
+        "Then promote CANARY → LIVE"
     ),
     "auto_trading_run_state": (
         "OWNER/ADMIN: POST /ite/ops/auto-trading with run_state=running "
@@ -95,6 +99,25 @@ _RESOLVE: dict[str, str] = {
     ),
 }
 
+# Shared infra/safety locks for any promotion step (not Demo cert, not mode).
+_INFRA_KEYS = frozenset(
+    {
+        "execution_enabled",
+        "kill_switch",
+        "emergency_stop",
+        "safety_lock",
+        "risk_lock",
+        "daily_loss_lock",
+        "gateway",
+        "broker",
+        "mt5_login",
+        "market_open",
+        "trading_allowed",
+        "symbol_ready",
+        "owner_authorization",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class LaunchChecklistItem:
@@ -105,6 +128,8 @@ class LaunchChecklistItem:
     why: str
     how_to_resolve: str
     required_for_promotion: bool = True
+    required_for_canary: bool = True
+    required_for_live: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -115,13 +140,18 @@ class LaunchChecklistItem:
             "why": self.why,
             "how_to_resolve": self.how_to_resolve,
             "required_for_promotion": self.required_for_promotion,
+            "required_for_canary": self.required_for_canary,
+            "required_for_live": self.required_for_live,
         }
 
 
 @dataclass(frozen=True, slots=True)
 class LaunchReadinessReport:
     ready_for_promotion: bool
+    ready_for_canary: bool
+    ready_for_live: bool
     ready_for_gate_enabled: bool
+    next_promotion_target: str
     items: tuple[LaunchChecklistItem, ...]
     blockers: tuple[dict[str, str], ...]
     execution_state: dict[str, Any]
@@ -132,7 +162,10 @@ class LaunchReadinessReport:
     def to_dict(self) -> dict[str, Any]:
         return {
             "ready_for_promotion": self.ready_for_promotion,
+            "ready_for_canary": self.ready_for_canary,
+            "ready_for_live": self.ready_for_live,
             "ready_for_gate_enabled": self.ready_for_gate_enabled,
+            "next_promotion_target": self.next_promotion_target,
             "items": [i.to_dict() for i in self.items],
             "blockers": list(self.blockers),
             "execution_state": self.execution_state,
@@ -154,6 +187,8 @@ def _item(
     value: str,
     why: str,
     required_for_promotion: bool = True,
+    required_for_canary: bool = True,
+    required_for_live: bool = True,
 ) -> LaunchChecklistItem:
     return LaunchChecklistItem(
         key=key,
@@ -167,6 +202,8 @@ def _item(
             else _RESOLVE.get(key, "Resolve via OWNER Ops controls")
         ),
         required_for_promotion=required_for_promotion,
+        required_for_canary=required_for_canary,
+        required_for_live=required_for_live,
     )
 
 
@@ -214,6 +251,9 @@ def build_launch_readiness(
             passed=mode_ok,
             value=mode.value,
             why=f"Ops mode is {mode.value} — SHADOW journals only; OMS blocked",
+            required_for_canary=False,
+            required_for_live=False,
+            required_for_promotion=False,
         ),
         _item(
             "execution_enabled",
@@ -314,14 +354,17 @@ def build_launch_readiness(
                 else "NOT READY"
             ),
             why="Symbol XAUUSD not tradable / not ready",
-            required_for_promotion=True,
         ),
         _item(
             "demo_certification",
             "Demo Certification",
             passed=demo_ok,
             value="CERTIFIED" if demo_ok else "MISSING",
-            why="Demo certification required before LIVE",
+            why="Demo certification required before LIVE (not required for CANARY)",
+            required_for_canary=False,
+            required_for_live=True,
+            # Shown as blocker for next step only when targeting LIVE
+            required_for_promotion=mode is not OpsExecutionMode.SHADOW,
         ),
         _item(
             "auto_trading_run_state",
@@ -329,7 +372,9 @@ def build_launch_readiness(
             passed=run_ok,
             value=str(policy.to_dict().get("run_state", "off")).upper(),
             why="Auto Trading is not RUNNING",
-            required_for_promotion=False,  # set during promote
+            required_for_promotion=False,
+            required_for_canary=False,
+            required_for_live=False,
         ),
         _item(
             "owner_authorization",
@@ -340,44 +385,58 @@ def build_launch_readiness(
         ),
     )
 
-    blockers = tuple(
-        {
-            "key": i.key,
-            "label": i.label,
-            "why": i.why,
-            "how_to_resolve": i.how_to_resolve,
-            "value": i.value,
-        }
-        for i in items
-        if not i.passed and i.required_for_promotion
-    )
+    by_key = {i.key: i for i in items}
+    infra_ok = all(by_key[k].passed for k in _INFRA_KEYS if k in by_key)
+    ready_for_canary = infra_ok
+    ready_for_live = infra_ok and demo_ok
 
-    # Promotion requires infra + env + demo cert + kill clear.
-    # Mode/run_state are outcomes of promotion, not prerequisites.
-    promo_required_keys = {
-        "execution_enabled",
-        "kill_switch",
-        "emergency_stop",
-        "safety_lock",
-        "risk_lock",
-        "daily_loss_lock",
-        "gateway",
-        "broker",
-        "mt5_login",
-        "market_open",
-        "trading_allowed",
-        "symbol_ready",
-        "demo_certification",
-        "owner_authorization",
-    }
-    ready_for_promotion = all(
-        i.passed for i in items if i.key in promo_required_keys
-    )
+    if mode is OpsExecutionMode.SHADOW:
+        next_target = "CANARY"
+        ready_for_promotion = ready_for_canary
+        blockers = tuple(
+            {
+                "key": i.key,
+                "label": i.label,
+                "why": i.why,
+                "how_to_resolve": i.how_to_resolve,
+                "value": i.value,
+            }
+            for i in items
+            if not i.passed and i.required_for_canary
+        )
+    elif mode is OpsExecutionMode.CANARY:
+        next_target = "LIVE"
+        ready_for_promotion = ready_for_live
+        blockers = tuple(
+            {
+                "key": i.key,
+                "label": i.label,
+                "why": i.why,
+                "how_to_resolve": i.how_to_resolve,
+                "value": i.value,
+            }
+            for i in items
+            if not i.passed and i.required_for_live
+        )
+    else:
+        next_target = "NONE"
+        ready_for_promotion = False
+        blockers = ()
 
     plan: list[str] = []
     if mode is OpsExecutionMode.SHADOW:
-        plan.append("POST /ite/ops/mode target=CANARY (confirmed)")
-    if mode in {OpsExecutionMode.SHADOW, OpsExecutionMode.CANARY}:
+        plan.append(
+            "POST /ite/ops/mode target=CANARY (confirmed) — no Demo cert yet"
+        )
+        plan.append("Run real Demo 0.01 certification trade under CANARY")
+        plan.append("POST /ite/ops/auto-trading/live-certification/attempt")
+        plan.append("POST /ite/ops/mode target=LIVE (confirmed, Demo cert)")
+    elif mode is OpsExecutionMode.CANARY:
+        if not demo_ok:
+            plan.append(
+                "Complete Demo certification before LIVE "
+                "(POST .../live-certification/attempt)"
+            )
         plan.append("POST /ite/ops/mode target=LIVE (confirmed, Demo cert)")
     plan.append("POST /ite/ops/auto-trading run_state=running (confirmed)")
     plan.append("GET /ite/ops/auto-trading — verify Gate Enabled")
@@ -391,13 +450,18 @@ def build_launch_readiness(
         "broker": "CONNECTED" if facts.broker_connected else "OFF",
         "risk": "READY" if not risk_locked else "LOCKED",
         "safety": "READY" if not safety_locked else "LOCKED",
+        "demo_certified": demo_ok,
+        "next_promotion_target": next_target,
         "primary_blocker": snap.primary_blocker,
         "blocking_category": snap.blocking_category,
     }
 
     return LaunchReadinessReport(
         ready_for_promotion=ready_for_promotion,
+        ready_for_canary=ready_for_canary,
+        ready_for_live=ready_for_live,
         ready_for_gate_enabled=bool(snap.safety.allowed),
+        next_promotion_target=next_target,
         items=items,
         blockers=blockers,
         execution_state=state,
@@ -416,9 +480,10 @@ def promote_to_live_execution(
     settings: Settings | None = None,
     activate_auto_trading: bool = True,
 ) -> dict[str, Any]:
-    """SHADOW→CANARY→LIVE via plane.transition_mode only, then optionally RUNNING.
+    """Official stepwise promote: SHADOW→CANARY, then CANARY→LIVE when certified.
 
-    Refuses when any required blocker remains. Never sets EXECUTION_ENABLED.
+    Never sets EXECUTION_ENABLED. Never fabricates Demo certification.
+    CANARY does not require Demo cert; LIVE does.
     """
     cfg = settings or get_settings()
     pre = build_launch_readiness(plane, settings=cfg, owner_authorized=True)
@@ -429,17 +494,18 @@ def promote_to_live_execution(
             "message": "operator confirmation required",
             "readiness": pre.to_dict(),
         }
-    if not pre.ready_for_promotion:
-        return {
-            "ok": False,
-            "promoted": False,
-            "message": "launch blockers remain — promotion refused",
-            "readiness": pre.to_dict(),
-        }
 
     steps: list[dict[str, Any]] = []
     try:
+        # Step 1: SHADOW → CANARY when infra ready (Demo cert not required)
         if plane.mode is OpsExecutionMode.SHADOW:
+            if not pre.ready_for_canary:
+                return {
+                    "ok": False,
+                    "promoted": False,
+                    "message": "launch blockers remain — CANARY promotion refused",
+                    "readiness": pre.to_dict(),
+                }
             result = plane.transition_mode(
                 operator,
                 OpsExecutionMode.CANARY,
@@ -466,7 +532,65 @@ def promote_to_live_execution(
                     ).to_dict(),
                 }
 
+            mid = build_launch_readiness(plane, settings=cfg, owner_authorized=True)
+            if not mid.demo_certified:
+                # Official path stops here until real Demo certification
+                if activate_auto_trading:
+                    try:
+                        policy = plane.update_auto_trade_controls(
+                            operator,
+                            run_state="running",
+                            enabled=True,
+                            reason=reason,
+                        )
+                        steps.append(
+                            {
+                                "action": "auto_trading",
+                                "run_state": policy.to_dict().get("run_state"),
+                                "ok": True,
+                            }
+                        )
+                    except PermissionDenied as exc:
+                        steps.append(
+                            {
+                                "action": "auto_trading",
+                                "ok": False,
+                                "message": str(exc),
+                            }
+                        )
+                post = build_launch_readiness(
+                    plane, settings=cfg, owner_authorized=True
+                )
+                return {
+                    "ok": True,
+                    "promoted": False,
+                    "promoted_to": "CANARY",
+                    "message": (
+                        "Promoted SHADOW → CANARY. Complete Demo certification "
+                        "(real 0.01 Demo trade + live-certification/attempt) "
+                        "before LIVE."
+                    ),
+                    "steps": steps,
+                    "readiness": post.to_dict(),
+                    "verification": post.verification,
+                }
+
+        # Step 2: CANARY → LIVE only with Demo certification
         if plane.mode is OpsExecutionMode.CANARY:
+            mid = build_launch_readiness(plane, settings=cfg, owner_authorized=True)
+            if not mid.ready_for_live:
+                return {
+                    "ok": False,
+                    "promoted": False,
+                    "promoted_to": "CANARY" if steps else None,
+                    "message": (
+                        "Demo certification required before LIVE"
+                        if not mid.demo_certified
+                        else "launch blockers remain — LIVE promotion refused"
+                    ),
+                    "steps": steps,
+                    "readiness": mid.to_dict(),
+                }
             result = plane.transition_mode(
                 operator,
                 OpsExecutionMode.LIVE,
@@ -524,6 +648,7 @@ def promote_to_live_execution(
     return {
         "ok": live_ok and gate_ok,
         "promoted": live_ok,
+        "promoted_to": plane.mode.value,
         "message": (
             "LIVE execution armed — Gate Enabled"
             if live_ok and gate_ok

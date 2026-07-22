@@ -13,6 +13,7 @@ from app.application.services.launch_readiness import (
     promote_to_live_execution,
 )
 from app.application.services.live_auto_trade_certification import (
+    reset_live_cert_service_for_tests,
     seed_certified_demo_report_for_tests,
 )
 from app.domain.institutional_trading.operations.control_plane import (
@@ -76,27 +77,43 @@ def _patch_status(*, execution_enabled: bool):
 class TestLaunchReadiness:
     def test_reports_why_and_how_when_shadow(self) -> None:
         plane = OperationsControlPlane()
+        reset_live_cert_service_for_tests()
         p1, p2, settings = _patch_status(execution_enabled=False)
         with p1, p2:
             report = build_launch_readiness(
                 plane, settings=settings, owner_authorized=False
             )
         assert report.ready_for_promotion is False
+        assert report.next_promotion_target == "CANARY"
         keys = {b["key"] for b in report.blockers}
         assert "execution_enabled" in keys
-        assert "demo_certification" in keys
         assert "owner_authorization" in keys
+        # Demo cert is LIVE-only — not a CANARY blocker
+        assert "demo_certification" not in keys
+        assert report.ready_for_canary is False
+        assert report.ready_for_live is False
         exec_item = next(i for i in report.items if i.key == "execution_enabled")
         assert "EXECUTION_ENABLED" in exec_item.why
         assert "Railway" in exec_item.how_to_resolve
-        assert "Redeploy" in exec_item.how_to_resolve or "redeploy" in (
-            exec_item.how_to_resolve.lower()
-        )
         demo = next(i for i in report.items if i.key == "demo_certification")
         assert "Complete Demo Certification" in demo.how_to_resolve
         mode = next(i for i in report.items if i.key == "ops_mode")
         assert "SHADOW" in mode.how_to_resolve and "CANARY" in mode.how_to_resolve
         assert "LIVE" in mode.how_to_resolve
+
+    def test_shadow_canary_ready_without_demo_cert(self) -> None:
+        plane = OperationsControlPlane()
+        reset_live_cert_service_for_tests()
+        p1, p2, settings = _patch_status(execution_enabled=True)
+        with p1, p2:
+            report = build_launch_readiness(
+                plane, settings=settings, owner_authorized=True
+            )
+        assert report.demo_certified is False
+        assert report.ready_for_canary is True
+        assert report.ready_for_live is False
+        assert report.ready_for_promotion is True
+        assert report.next_promotion_target == "CANARY"
 
     def test_refuses_promotion_without_confirmation(self) -> None:
         plane = OperationsControlPlane()
@@ -130,7 +147,45 @@ class TestLaunchReadiness:
         assert plane.mode is OpsExecutionMode.SHADOW
         assert "blockers" in str(out.get("message", "")).lower() or out[
             "readiness"
-        ]["ready_for_promotion"] is False
+        ]["ready_for_canary"] is False
+
+    def test_promotes_shadow_to_canary_without_demo_cert(self) -> None:
+        plane = OperationsControlPlane()
+        reset_live_cert_service_for_tests()
+        p1, p2, settings = _patch_status(execution_enabled=True)
+        with p1, p2:
+            out = promote_to_live_execution(
+                plane,
+                _op(),
+                reason="OWNER canary step",
+                confirmed=True,
+                settings=settings,
+            )
+        assert plane.mode is OpsExecutionMode.CANARY
+        assert out["ok"] is True
+        assert out["promoted"] is False
+        assert out.get("promoted_to") == "CANARY"
+        assert "Demo certification" in out["message"]
+        assert any(s.get("to") == "CANARY" for s in out["steps"])
+        assert not any(s.get("to") == "LIVE" for s in out["steps"])
+
+    def test_refuses_live_without_demo_cert_from_canary(self) -> None:
+        plane = OperationsControlPlane()
+        plane.mode = OpsExecutionMode.CANARY
+        reset_live_cert_service_for_tests()
+        p1, p2, settings = _patch_status(execution_enabled=True)
+        with p1, p2:
+            out = promote_to_live_execution(
+                plane,
+                _op(),
+                reason="attempt live without cert",
+                confirmed=True,
+                settings=settings,
+            )
+        assert plane.mode is OpsExecutionMode.CANARY
+        assert out["ok"] is False
+        assert out["promoted"] is False
+        assert "Demo certification" in out["message"]
 
     def test_official_shadow_canary_live_when_ready(self) -> None:
         plane = OperationsControlPlane()

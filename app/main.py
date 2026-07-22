@@ -262,15 +262,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         )
         shadow_task = None
         runtime = getattr(container, "ite_runtime", None)
-        if runtime is not None and not settings.execution_enabled:
+        if runtime is not None:
+            # Official cycle loop for all modes. SHADOW journals only
+            # (oms_orders_allowed=False); CANARY/LIVE may send OMS when
+            # Risk/Safety/Gate allow. Never auto-flips Ops mode.
             shadow_task = asyncio.create_task(
-                runtime.run_forever(), name="ite-shadow-orchestrator"
+                runtime.run_forever(), name="ite-orchestrator"
             )
-            logger.info("shadow_orchestrator_task_started")
-        elif settings.execution_enabled:
-            logger.warning(
-                "shadow_orchestrator_not_started",
-                reason="EXECUTION_ENABLED=true — refuse auto shadow loop",
+            logger.info(
+                "ite_orchestrator_task_started",
+                execution_enabled=bool(settings.execution_enabled),
             )
         logger.info("startup_complete")
     except Exception as exc:

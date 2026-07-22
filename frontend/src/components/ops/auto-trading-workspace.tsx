@@ -610,12 +610,28 @@ export function AutoTradingWorkspace() {
   };
 
   const signalRows = signals.slice(0, 20).map((s) => {
-    const decision = str(s.decision || s.status || s.outcome, "queued").toLowerCase();
-    let status = "Queued";
-    if (decision.includes("allow") || decision.includes("approv")) status = "Approved";
-    else if (decision.includes("reject") || decision.includes("block")) status = "Rejected";
-    else if (decision.includes("execut") || decision.includes("fill")) status = "Executed";
-    else if (decision.includes("expir")) status = "Expired";
+    const decision = str(s.decision || s.status || s.outcome, "").toLowerCase();
+    let status = "No decision";
+    if (!decision) {
+      status =
+        opsMode === "SHADOW"
+          ? "Shadow hold"
+          : opsMode === "CANARY" || opsMode === "LIVE"
+            ? "Awaiting cycle"
+            : "No decision";
+    } else if (decision.includes("allow") || decision.includes("approv")) {
+      status = "Approved";
+    } else if (decision.includes("reject") || decision.includes("block")) {
+      status = "Rejected";
+    } else if (decision.includes("execut") || decision.includes("fill")) {
+      status = "Executed";
+    } else if (decision.includes("expir")) {
+      status = "Expired";
+    } else if (decision.includes("queue") || decision.includes("pending")) {
+      status = opsMode === "SHADOW" ? "Shadow hold" : "Queued";
+    } else {
+      status = decision.charAt(0).toUpperCase() + decision.slice(1);
+    }
     return [
       str(s.created_at || s.timestamp || s.time, "—").replace("T", " ").slice(0, 19),
       str(s.side || s.direction, "—").toUpperCase(),
