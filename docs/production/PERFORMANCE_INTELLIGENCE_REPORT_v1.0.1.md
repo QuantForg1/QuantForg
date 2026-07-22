@@ -1,0 +1,617 @@
+# QuantForg v1.0.1 — Institutional Performance Intelligence
+
+**Generated:** 2026-07-22T20:56:12Z
+**Scope:** Journals / closed-trade evidence only. Never fabricates metrics. Never modifies strategy, risk, safety, or execution.
+
+## Evidence summary
+
+```json
+{
+  "closed_trades_with_pnl": 3,
+  "raw_trade_rows": 3,
+  "decisions": 3,
+  "recommendation_count": 11,
+  "period": "monthly"
+}
+```
+
+## Performance
+
+```json
+{
+  "status": "available",
+  "metrics": {
+    "total_trades": 3,
+    "winning_trades": 2,
+    "losing_trades": 1,
+    "win_rate": 0.6667,
+    "profit_factor": 4.3333,
+    "expectancy": 10.0,
+    "average_win": 19.5,
+    "average_loss": 9.0,
+    "average_rr": 0.8667,
+    "largest_win": 25.0,
+    "largest_loss": -9.0,
+    "consecutive_wins": 1,
+    "consecutive_losses": 1,
+    "maximum_drawdown_pct": 36.0,
+    "recovery_factor": 0.8333,
+    "net_pnl": 30.0
+  },
+  "sample_size": 3,
+  "note": "From supplied closed-trade PnL only \u2014 never fabricated"
+}
+```
+
+## Sessions
+
+```json
+{
+  "status": "available",
+  "overall": {
+    "status": "available",
+    "trade_count": 3,
+    "win_rate": 0.6667,
+    "expectancy": 10.0,
+    "profit_factor": 4.3333,
+    "avg_duration_seconds": 3800.0,
+    "average_rr": 0.8667,
+    "net_pnl": 30.0
+  },
+  "sessions": {
+    "sydney": {
+      "status": "empty",
+      "trade_count": 0,
+      "win_rate": null,
+      "expectancy": null,
+      "profit_factor": null,
+      "avg_duration_seconds": null,
+      "average_rr": null,
+      "net_pnl": null
+    },
+    "tokyo": {
+      "status": "empty",
+      "trade_count": 0,
+      "win_rate": null,
+      "expectancy": null,
+      "profit_factor": null,
+      "avg_duration_seconds": null,
+      "average_rr": null,
+      "net_pnl": null
+    },
+    "london": {
+      "status": "available",
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "expectancy": 25.0,
+      "profit_factor": null,
+      "avg_duration_seconds": 4200.0,
+      "average_rr": 2.1,
+      "net_pnl": 25.0
+    },
+    "new_york": {
+      "status": "available",
+      "trade_count": 1,
+      "win_rate": 0.0,
+      "expectancy": -9.0,
+      "profit_factor": 0.0,
+      "avg_duration_seconds": 2400.0,
+      "average_rr": -0.9,
+      "net_pnl": -9.0
+    },
+    "overlap": {
+      "status": "available",
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "expectancy": 14.0,
+      "profit_factor": null,
+      "avg_duration_seconds": 4800.0,
+      "average_rr": 1.4,
+      "net_pnl": 14.0
+    },
+    "off_hours": {
+      "status": "empty",
+      "trade_count": 0,
+      "win_rate": null,
+      "expectancy": null,
+      "profit_factor": null,
+      "avg_duration_seconds": null,
+      "average_rr": null,
+      "net_pnl": null
+    }
+  },
+  "note": "Sessions evaluated separately \u2014 never mixed"
+}
+```
+
+## Regimes
+
+```json
+{
+  "status": "available",
+  "regimes": {
+    "trend": {
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "expectancy": 25.0,
+      "average_hold_seconds": 4200.0,
+      "status": "available"
+    },
+    "range": {
+      "trade_count": 1,
+      "win_rate": 0.0,
+      "expectancy": -9.0,
+      "average_hold_seconds": 2400.0,
+      "status": "available"
+    },
+    "high_volatility": {
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "expectancy": 14.0,
+      "average_hold_seconds": 4800.0,
+      "status": "available"
+    },
+    "low_volatility": {
+      "trade_count": 0,
+      "win_rate": null,
+      "expectancy": null,
+      "average_hold_seconds": null,
+      "status": "empty"
+    },
+    "news": {
+      "trade_count": 0,
+      "win_rate": null,
+      "expectancy": null,
+      "average_hold_seconds": null,
+      "status": "empty"
+    }
+  },
+  "unlabeled_trades": 0,
+  "note": "Regimes evaluated separately \u2014 never mixed; unlabeled excluded"
+}
+```
+
+## Signals
+
+```json
+{
+  "status": "available",
+  "tagged_trades": 3,
+  "untagged_trades": 0,
+  "signals": {
+    "bos": {
+      "status": "available",
+      "trade_count": 2,
+      "win_rate": 1.0,
+      "expectancy": 19.5,
+      "profit_factor": null,
+      "avg_duration_seconds": 4500.0
+    },
+    "choch": {
+      "status": "available",
+      "trade_count": 1,
+      "win_rate": 0.0,
+      "expectancy": -9.0,
+      "profit_factor": 0.0,
+      "avg_duration_seconds": 2400.0
+    },
+    "liquidity_sweep": {
+      "status": "available",
+      "trade_count": 2,
+      "win_rate": 1.0,
+      "expectancy": 19.5,
+      "profit_factor": null,
+      "avg_duration_seconds": 4500.0
+    },
+    "order_block": {
+      "status": "available",
+      "trade_count": 2,
+      "win_rate": 1.0,
+      "expectancy": 19.5,
+      "profit_factor": null,
+      "avg_duration_seconds": 4500.0
+    },
+    "fair_value_gap": {
+      "status": "available",
+      "trade_count": 1,
+      "win_rate": 0.0,
+      "expectancy": -9.0,
+      "profit_factor": 0.0,
+      "avg_duration_seconds": 2400.0
+    },
+    "confluence": {
+      "status": "available",
+      "trade_count": 3,
+      "win_rate": 0.6667,
+      "expectancy": 10.0,
+      "profit_factor": 4.3333,
+      "avg_duration_seconds": 3800.0
+    },
+    "confluence_90_plus": {
+      "status": "available",
+      "trade_count": 1,
+      "win_rate": 1.0,
+      "expectancy": 25.0,
+      "profit_factor": null,
+      "avg_duration_seconds": 4200.0
+    },
+    "confluence_80_89": {
+      "status": "available",
+      "trade_count": 2,
+      "win_rate": 0.5,
+      "expectancy": 2.5,
+      "profit_factor": 1.5556,
+      "avg_duration_seconds": 3600.0
+    },
+    "confluence_below_80": {
+      "status": "empty",
+      "trade_count": 0,
+      "win_rate": null,
+      "expectancy": null,
+      "profit_factor": null,
+      "avg_duration_seconds": null
+    }
+  },
+  "combinations": [
+    {
+      "combination": "bos+liquidity_sweep+order_block",
+      "status": "available",
+      "trade_count": 2,
+      "win_rate": 1.0,
+      "expectancy": 19.5,
+      "profit_factor": null,
+      "avg_duration_seconds": 4500.0
+    },
+    {
+      "combination": "choch+fair_value_gap",
+      "status": "available",
+      "trade_count": 1,
+      "win_rate": 0.0,
+      "expectancy": -9.0,
+      "profit_factor": 0.0,
+      "avg_duration_seconds": 2400.0
+    }
+  ],
+  "best_combination": {
+    "combination": "bos+liquidity_sweep+order_block",
+    "status": "available",
+    "trade_count": 2,
+    "win_rate": 1.0,
+    "expectancy": 19.5,
+    "profit_factor": null,
+    "avg_duration_seconds": 4500.0
+  },
+  "note": "Signal tags from supplied confluence/reasons only \u2014 never invented"
+}
+```
+
+## NO_TRADE
+
+```json
+{
+  "status": "available",
+  "total_decisions": 3,
+  "no_trade_count": 3,
+  "no_trade_rate": 1.0,
+  "sample_reasons": [
+    "spread too wide",
+    "mtf_not_aligned",
+    "quality below threshold"
+  ],
+  "assessment": "No Trade path exists in TradeDecisionEngine; loss-reduction proof requires paired counterfactual replay",
+  "reason_histogram": {
+    "spread too wide": 1,
+    "mtf_not_aligned": 1,
+    "quality below threshold": 1
+  },
+  "estimated_bad_trades_avoided": {
+    "count_proxy": 3,
+    "status": "research_only",
+    "note": "Proxy count of NO_TRADE decisions with risk/quality reasons \u2014 not realized PnL; never fabricates savings"
+  },
+  "research_only": true
+}
+```
+
+## Time
+
+```json
+{
+  "status": "available",
+  "metrics": {
+    "average_trade_duration_seconds": 3800.0,
+    "fastest_trade_seconds": 2400.0,
+    "longest_trade_seconds": 4800.0,
+    "average_time_to_tp_seconds": 4500.0,
+    "average_time_to_sl_seconds": 2400.0,
+    "duration_sample_size": 3,
+    "tp_sample_size": 2,
+    "sl_sample_size": 1
+  },
+  "note": "Missing timestamps stay null \u2014 never fabricated"
+}
+```
+
+## Period report
+
+```json
+{
+  "period": "monthly",
+  "generated_at": "2026-07-22T20:56:12.844374+00:00",
+  "window_start": "2026-06-22T20:56:12.844374+00:00",
+  "performance_summary": {
+    "status": "available",
+    "metrics": {
+      "total_trades": 3,
+      "winning_trades": 2,
+      "losing_trades": 1,
+      "win_rate": 0.6667,
+      "profit_factor": 4.3333,
+      "expectancy": 10.0,
+      "average_win": 19.5,
+      "average_loss": 9.0,
+      "average_rr": 0.8667,
+      "largest_win": 25.0,
+      "largest_loss": -9.0,
+      "consecutive_wins": 1,
+      "consecutive_losses": 1,
+      "maximum_drawdown_pct": 36.0,
+      "recovery_factor": 0.8333,
+      "net_pnl": 30.0
+    },
+    "sample_size": 3,
+    "note": "From supplied closed-trade PnL only \u2014 never fabricated"
+  },
+  "risk_summary": {
+    "status": "available",
+    "report_type": "trend_only",
+    "trends": {
+      "daily_drawdown_pct": null,
+      "weekly_drawdown_pct": 36.0,
+      "monthly_drawdown_pct": 36.0,
+      "consecutive_wins_max": 1,
+      "consecutive_losses_max": 1,
+      "consecutive_wins_current": 1,
+      "consecutive_losses_current": 0,
+      "average_r": 0.8667,
+      "largest_winner": 25.0,
+      "largest_loser": -9.0,
+      "trade_count": 3
+    },
+    "note": "Trend report only \u2014 not a trading signal"
+  },
+  "session_summary": {
+    "status": "available",
+    "overall": {
+      "status": "available",
+      "trade_count": 3,
+      "win_rate": 0.6667,
+      "expectancy": 10.0,
+      "profit_factor": 4.3333,
+      "avg_duration_seconds": 3800.0,
+      "average_rr": 0.8667,
+      "net_pnl": 30.0
+    },
+    "sessions": {
+      "sydney": {
+        "status": "empty",
+        "trade_count": 0,
+        "win_rate": null,
+        "expectancy": null,
+        "profit_factor": null,
+        "avg_duration_seconds": null,
+        "average_rr": null,
+        "net_pnl": null
+      },
+      "tokyo": {
+        "status": "empty",
+        "trade_count": 0,
+        "win_rate": null,
+        "expectancy": null,
+        "profit_factor": null,
+        "avg_duration_seconds": null,
+        "average_rr": null,
+        "net_pnl": null
+      },
+      "london": {
+        "status": "available",
+        "trade_count": 1,
+        "win_rate": 1.0,
+        "expectancy": 25.0,
+        "profit_factor": null,
+        "avg_duration_seconds": 4200.0,
+        "average_rr": 2.1,
+        "net_pnl": 25.0
+      },
+      "new_york": {
+        "status": "available",
+        "trade_count": 1,
+        "win_rate": 0.0,
+        "expectancy": -9.0,
+        "profit_factor": 0.0,
+        "avg_duration_seconds": 2400.0,
+        "average_rr": -0.9,
+        "net_pnl": -9.0
+      },
+      "overlap": {
+        "status": "available",
+        "trade_count": 1,
+        "win_rate": 1.0,
+        "expectancy": 14.0,
+        "profit_factor": null,
+        "avg_duration_seconds": 4800.0,
+        "average_rr": 1.4,
+        "net_pnl": 14.0
+      },
+      "off_hours": {
+        "status": "empty",
+        "trade_count": 0,
+        "win_rate": null,
+        "expectancy": null,
+        "profit_factor": null,
+        "avg_duration_seconds": null,
+        "average_rr": null,
+        "net_pnl": null
+      }
+    },
+    "note": "Sessions evaluated separately \u2014 never mixed"
+  },
+  "strategy_summary": {
+    "status": "available",
+    "tagged_trades": 3,
+    "untagged_trades": 0,
+    "signals": {
+      "bos": {
+        "status": "available",
+        "trade_count": 2,
+        "win_rate": 1.0,
+        "expectancy": 19.5,
+        "profit_factor": null,
+        "avg_duration_seconds": 4500.0
+      },
+      "choch": {
+        "status": "available",
+        "trade_count": 1,
+        "win_rate": 0.0,
+        "expectancy": -9.0,
+        "profit_factor": 0.0,
+        "avg_duration_seconds": 2400.0
+      },
+      "liquidity_sweep": {
+        "status": "available",
+        "trade_count": 2,
+        "win_rate": 1.0,
+        "expectancy": 19.5,
+        "profit_factor": null,
+        "avg_duration_seconds": 4500.0
+      },
+      "order_block": {
+        "status": "available",
+        "trade_count": 2,
+        "win_rate": 1.0,
+        "expectancy": 19.5,
+        "profit_factor": null,
+        "avg_duration_seconds": 4500.0
+      },
+      "fair_value_gap": {
+        "status": "available",
+        "trade_count": 1,
+        "win_rate": 0.0,
+        "expectancy": -9.0,
+        "profit_factor": 0.0,
+        "avg_duration_seconds": 2400.0
+      },
+      "confluence": {
+        "status": "available",
+        "trade_count": 3,
+        "win_rate": 0.6667,
+        "expectancy": 10.0,
+        "profit_factor": 4.3333,
+        "avg_duration_seconds": 3800.0
+      },
+      "confluence_90_plus": {
+        "status": "available",
+        "trade_count": 1,
+        "win_rate": 1.0,
+        "expectancy": 25.0,
+        "profit_factor": null,
+        "avg_duration_seconds": 4200.0
+      },
+      "confluence_80_89": {
+        "status": "available",
+        "trade_count": 2,
+        "win_rate": 0.5,
+        "expectancy": 2.5,
+        "profit_factor": 1.5556,
+        "avg_duration_seconds": 3600.0
+      },
+      "confluence_below_80": {
+        "status": "empty",
+        "trade_count": 0,
+        "win_rate": null,
+        "expectancy": null,
+        "profit_factor": null,
+        "avg_duration_seconds": null
+      }
+    },
+    "combinations": [
+      {
+        "combination": "bos+liquidity_sweep+order_block",
+        "status": "available",
+        "trade_count": 2,
+        "win_rate": 1.0,
+        "expectancy": 19.5,
+        "profit_factor": null,
+        "avg_duration_seconds": 4500.0
+      },
+      {
+        "combination": "choch+fair_value_gap",
+        "status": "available",
+        "trade_count": 1,
+        "win_rate": 0.0,
+        "expectancy": -9.0,
+        "profit_factor": 0.0,
+        "avg_duration_seconds": 2400.0
+      }
+    ],
+    "best_combination": {
+      "combination": "bos+liquidity_sweep+order_block",
+      "status": "available",
+      "trade_count": 2,
+      "win_rate": 1.0,
+      "expectancy": 19.5,
+      "profit_factor": null,
+      "avg_duration_seconds": 4500.0
+    },
+    "note": "Signal tags from supplied confluence/reasons only \u2014 never invented"
+  },
+  "no_trade_summary": {
+    "status": "available",
+    "total_decisions": 3,
+    "no_trade_count": 3,
+    "no_trade_rate": 1.0,
+    "sample_reasons": [
+      "spread too wide",
+      "mtf_not_aligned",
+      "quality below threshold"
+    ],
+    "assessment": "No Trade path exists in TradeDecisionEngine; loss-reduction proof requires paired counterfactual replay",
+    "reason_histogram": {
+      "spread too wide": 1,
+      "mtf_not_aligned": 1,
+      "quality below threshold": 1
+    },
+    "estimated_bad_trades_avoided": {
+      "count_proxy": 3,
+      "status": "research_only",
+      "note": "Proxy count of NO_TRADE decisions with risk/quality reasons \u2014 not realized PnL; never fabricates savings"
+    },
+    "research_only": true
+  },
+  "open_questions": [
+    "Need more closed trades in this period for stable KPIs"
+  ],
+  "never_auto_modifies_strategy": true
+}
+```
+
+## Recommendations (never auto-applied)
+
+- Need more closed-trade evidence (have 3, want >=50)
+- Need more London session samples (have 1)
+- Need more New York session samples (have 1)
+- Need more Overlap session samples (have 1)
+- Need more Tokyo session samples (have 0)
+- Need more Sydney session samples (have 0)
+- Need more trend regime samples (have 1)
+- Need more range regime samples (have 1)
+- Need more high volatility regime samples (have 1)
+- Need more low volatility regime samples (have 0)
+- Research focus: best tagged combination so far is bos+liquidity_sweep+order_block (n=2) — do not auto-change strategy
+
+## Hard locks
+
+- never_modifies_strategy: true
+- never_modifies_risk_safety_execution: true
+- never_fabricates_metrics: true
+

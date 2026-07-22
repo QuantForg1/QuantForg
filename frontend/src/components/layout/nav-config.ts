@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   BadgeCheck,
+  BarChart3,
   Bell,
   BookOpen,
   Bot,
@@ -358,6 +359,12 @@ export const appNav: NavGroup[] = [
         label: "Analytics",
         icon: Activity,
         hint: "Win rate · expectancy · DD",
+      },
+      {
+        href: "/performance-intelligence",
+        label: "Performance IQ",
+        icon: BarChart3,
+        hint: "Sessions · regimes · signals · NO_TRADE",
       },
       {
         href: "/reports",

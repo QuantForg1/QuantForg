@@ -277,6 +277,36 @@ export const executionApi = {
     ),
 };
 
+/** Institutional Performance Intelligence — journals only; advisory. */
+export const performanceIntelligenceApi = {
+  dashboard: (limit = 200, period = "monthly") =>
+    apiFetch<Record<string, unknown>>(
+      `/performance-intelligence/dashboard?limit=${limit}&period=${encodeURIComponent(period)}`,
+    ),
+  sessions: (limit = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/performance-intelligence/sessions?limit=${limit}`,
+    ),
+  regimes: (limit = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/performance-intelligence/regimes?limit=${limit}`,
+    ),
+  signals: (limit = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/performance-intelligence/signals?limit=${limit}`,
+    ),
+  noTrade: () =>
+    apiFetch<Record<string, unknown>>("/performance-intelligence/no-trade"),
+  time: (limit = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/performance-intelligence/time?limit=${limit}`,
+    ),
+  reports: (period = "monthly", limit = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/performance-intelligence/reports?period=${encodeURIComponent(period)}&limit=${limit}`,
+    ),
+};
+
 export const executionIntelligenceApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/execution-intelligence/dashboard"),
