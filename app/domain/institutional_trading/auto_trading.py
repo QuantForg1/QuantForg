@@ -77,21 +77,28 @@ class AutoTradeLiveFacts:
     market_data_live: bool = False
     risk_engine_pass: bool = False
     risk_engine_reasons: tuple[str, ...] = ()
+    risk_engine_evaluated: bool = True
     account_trading_enabled: bool = False
     mt5_autotrading_enabled: bool = False
+    account_flags_evaluated: bool = True
     symbol: str = "XAUUSD"
     symbol_tradable: bool = False
     margin_available: bool = False
+    margin_evaluated: bool = True
     no_broker_restrictions: bool = False
     open_positions: int = 0
     session: str = "off_hours"
+    session_evaluated: bool = True
     spread: Decimal | None = None
+    spread_evaluated: bool = True
     news_blocked: bool = False
     news_reason: str = ""
     daily_loss_exceeded: bool = False
     emergency_stop: bool = False
     ops_mode: str = "SHADOW"
     execution_enabled: bool = False
+    # Status polls: unknown trade-context must not invent FAIL.
+    status_snapshot: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,30 +221,71 @@ def evaluate_auto_trade_safety(
     add(
         "risk_engine",
         "Risk Engine PASS",
-        facts.risk_engine_pass,
+        True
+        if (facts.status_snapshot and not facts.risk_engine_evaluated)
+        else facts.risk_engine_pass,
         (
             "; ".join(facts.risk_engine_reasons)
             if facts.risk_engine_reasons
-            else "Risk Engine did not PASS"
+            else (
+                "Risk Engine not evaluated — no pending auto-trade decision"
+                if facts.status_snapshot and not facts.risk_engine_evaluated
+                else "Risk Engine did not PASS"
+            )
         )
-        if not facts.risk_engine_pass
-        else "",
+        if not (
+            facts.risk_engine_pass
+            or (facts.status_snapshot and not facts.risk_engine_evaluated)
+        )
+        else (
+            "; ".join(facts.risk_engine_reasons)
+            if facts.status_snapshot and facts.risk_engine_reasons
+            else ""
+        ),
+    )
+    account_ok = (
+        True
+        if (facts.status_snapshot and not facts.account_flags_evaluated)
+        else facts.account_trading_enabled
     )
     add(
         "account_trading",
         "Account trading enabled",
-        facts.account_trading_enabled,
-        "Account trading is disabled" if not facts.account_trading_enabled else "",
+        account_ok,
+        (
+            "Account trading flags not reported by gateway — not blocking status"
+            if facts.status_snapshot and not facts.account_flags_evaluated
+            else (
+                "Account trading is disabled"
+                if not facts.account_trading_enabled
+                else ""
+            )
+        )
+        if not account_ok
+        or (facts.status_snapshot and not facts.account_flags_evaluated)
+        else "",
+    )
+    mt5_at_ok = (
+        True
+        if (facts.status_snapshot and not facts.account_flags_evaluated)
+        else facts.mt5_autotrading_enabled
     )
     add(
         "mt5_autotrading",
         "AutoTrading enabled in MT5 terminal",
-        facts.mt5_autotrading_enabled,
+        mt5_at_ok,
         (
-            "AutoTrading is disabled in MetaTrader 5"
-            if not facts.mt5_autotrading_enabled
-            else ""
-        ),
+            "MT5 AutoTrading flag not reported by gateway — not blocking status"
+            if facts.status_snapshot and not facts.account_flags_evaluated
+            else (
+                "AutoTrading is disabled in MetaTrader 5"
+                if not facts.mt5_autotrading_enabled
+                else ""
+            )
+        )
+        if not mt5_at_ok
+        or (facts.status_snapshot and not facts.account_flags_evaluated)
+        else "",
     )
     symbol_u = (facts.symbol or "").strip().upper()
     allowed_syms = {s.strip().upper() for s in policy.allowed_symbols if s.strip()}
@@ -262,11 +310,23 @@ def evaluate_auto_trade_safety(
             else ""
         ),
     )
+    margin_ok = (
+        True
+        if (facts.status_snapshot and not facts.margin_evaluated)
+        else facts.margin_available
+    )
     add(
         "margin_available",
         "Margin available",
-        facts.margin_available,
-        "Insufficient free margin" if not facts.margin_available else "",
+        margin_ok,
+        (
+            "Free margin not sampled — not blocking status"
+            if facts.status_snapshot and not facts.margin_evaluated
+            else ("Insufficient free margin" if not facts.margin_available else "")
+        )
+        if not margin_ok
+        or (facts.status_snapshot and not facts.margin_evaluated)
+        else "",
     )
     add(
         "broker_restrictions",
@@ -294,19 +354,26 @@ def evaluate_auto_trade_safety(
     )
     session_key = (facts.session or "").strip().lower()
     allowed_sessions = {s.strip().lower() for s in policy.allowed_sessions if s.strip()}
-    session_ok = session_key in allowed_sessions if allowed_sessions else False
+    if facts.status_snapshot and not facts.session_evaluated:
+        session_ok = True
+        session_detail = "Trading session not evaluated — no pending auto-trade"
+    else:
+        session_ok = session_key in allowed_sessions if allowed_sessions else False
+        session_detail = (
+            f"Session '{session_key or '—'}' not allowed" if not session_ok else ""
+        )
     add(
         "trading_session",
         "Allowed trading session",
         session_ok,
-        f"Session '{session_key or '—'}' not allowed" if not session_ok else "",
+        session_detail,
     )
-    spread_ok = facts.spread is not None and facts.spread <= policy.max_spread
-    add(
-        "max_spread",
-        "Maximum spread",
-        spread_ok,
-        (
+    if facts.status_snapshot and not facts.spread_evaluated:
+        spread_ok = True
+        spread_detail = "Spread not sampled — not blocking status"
+    else:
+        spread_ok = facts.spread is not None and facts.spread <= policy.max_spread
+        spread_detail = (
             "Spread unavailable — fail-closed"
             if facts.spread is None
             else (
@@ -314,7 +381,12 @@ def evaluate_auto_trade_safety(
                 if not spread_ok
                 else ""
             )
-        ),
+        )
+    add(
+        "max_spread",
+        "Maximum spread",
+        spread_ok,
+        spread_detail,
     )
     if policy.news_filter_enabled:
         news_ok = not facts.news_blocked

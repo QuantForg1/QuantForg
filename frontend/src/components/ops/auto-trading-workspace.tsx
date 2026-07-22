@@ -210,8 +210,35 @@ export function AutoTradingWorkspace() {
   const maxOpen = num(policy.max_open_positions, 1);
   const gateStatus = str(asRecord(autoQ.data).status, "—");
   const failedReasons = asList(asRecord(autoQ.data).failed_reasons).map(String);
-  const killArmed = Boolean(asRecord(centerQ.data).kill_switch_armed);
-  const opsMode = str(asRecord(centerQ.data).mode, "—");
+  const reasonGroups = asRecord(asRecord(autoQ.data).reason_groups);
+  const riskReasons = asList(reasonGroups.risk).map(String);
+  const connectivityReasons = asList(reasonGroups.connectivity).map(String);
+  const operatorReasons = [
+    ...asList(reasonGroups.operator).map(String),
+    ...asList(reasonGroups.configuration).map(String),
+    ...asList(reasonGroups.safety).map(String),
+  ];
+  const liveFacts = asRecord(asRecord(autoQ.data).live);
+  const gatewayLive = Boolean(
+    liveFacts.gateway_connected ?? asRecord(asRecord(autoQ.data).facts).gateway_connected,
+  );
+  const brokerLive = Boolean(
+    liveFacts.broker_connected ?? asRecord(asRecord(autoQ.data).facts).broker_connected,
+  );
+  const killArmed = Boolean(
+    asRecord(centerQ.data).kill_switch_armed ?? asRecord(autoQ.data).emergency_stop,
+  );
+  const opsMode = str(
+    asRecord(autoQ.data).ops_mode ||
+      asRecord(centerQ.data).execution_mode ||
+      asRecord(centerQ.data).mode,
+    "—",
+  );
+
+  // Keep Auto Trading gate in sync with the same session the Broker page uses.
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
+  }, [qc, session.gatewayOnline, session.connected]);
 
   const positions = useMemo(
     () => asList(asRecord(positionsQ.data).items ?? positionsQ.data).map(asRecord),
@@ -589,7 +616,7 @@ export function AutoTradingWorkspace() {
             <Link href="/ops">ITE Ops</Link>
           </Button>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 xl:grid-cols-11">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
           <Stat label="Engine" value={runState.toUpperCase()} tone={runState === "running" ? "ok" : "warn"} />
           <Stat label="Market" value={marketOpen ? "OPEN" : session.connected ? "QUIET" : "OFF"} />
           <Stat
@@ -599,14 +626,34 @@ export function AutoTradingWorkspace() {
             }
           />
           <Stat
+            label="Gateway"
+            value={gatewayLive ? "CONNECTED" : "OFFLINE"}
+            tone={gatewayLive ? "ok" : "bad"}
+          />
+          <Stat
             label="Broker"
-            value={session.connected || asRecord(mt5Q.data).connected ? "LIVE" : "OFF"}
-            tone={session.connected ? "ok" : "bad"}
+            value={
+              brokerLive || session.connected || asRecord(mt5Q.data).connected
+                ? "LIVE"
+                : "OFF"
+            }
+            tone={brokerLive || session.connected ? "ok" : "bad"}
           />
           <Stat
             label="Risk"
-            value={failedReasons.length ? "BLOCK" : "PASS"}
-            tone={failedReasons.length ? "bad" : "ok"}
+            value={
+              riskReasons.length
+                ? "BLOCK"
+                : asRecord(asRecord(autoQ.data).facts).risk_engine_evaluated === false
+                  ? "N/A"
+                  : "PASS"
+            }
+            tone={riskReasons.length ? "bad" : "neutral"}
+          />
+          <Stat
+            label="Ops Mode"
+            value={opsMode}
+            tone={opsMode === "LIVE" || opsMode === "CANARY" ? "ok" : "warn"}
           />
           <Stat label="Last Signal" value={lastSignalTime} />
           <Stat label="Last Trade" value={lastTradeTime} />
@@ -627,11 +674,47 @@ export function AutoTradingWorkspace() {
           <p className="mt-2 text-xs text-[var(--warning)]">{autoPausedNote}</p>
         ) : null}
         {failedReasons.length > 0 ? (
-          <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-[var(--fg-muted)]">
-            {failedReasons.slice(0, 4).map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
+          <div className="mt-2 space-y-1.5 text-xs text-[var(--fg-muted)]">
+            {operatorReasons.length > 0 ? (
+              <div>
+                <p className="font-medium text-[var(--fg-subtle)]">Operator / configuration</p>
+                <ul className="list-disc space-y-0.5 pl-4">
+                  {operatorReasons.slice(0, 4).map((r) => (
+                    <li key={`op-${r}`}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {connectivityReasons.length > 0 ? (
+              <div>
+                <p className="font-medium text-[var(--fg-subtle)]">Connectivity</p>
+                <ul className="list-disc space-y-0.5 pl-4">
+                  {connectivityReasons.map((r) => (
+                    <li key={`conn-${r}`}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {riskReasons.length > 0 ? (
+              <div>
+                <p className="font-medium text-[var(--fg-subtle)]">Risk</p>
+                <ul className="list-disc space-y-0.5 pl-4">
+                  {riskReasons.map((r) => (
+                    <li key={`risk-${r}`}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {operatorReasons.length === 0 &&
+            connectivityReasons.length === 0 &&
+            riskReasons.length === 0 ? (
+              <ul className="list-disc space-y-0.5 pl-4">
+                {failedReasons.slice(0, 6).map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ) : null}
       </section>
 

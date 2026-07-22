@@ -13,8 +13,8 @@ from uuid import UUID
 from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
     AutoTradePolicy,
-    AutoTradeSafetyResult,
     AutoTradeRunState,
+    AutoTradeSafetyResult,
     evaluate_auto_trade_safety,
     normalize_run_state,
 )
@@ -512,15 +512,20 @@ class OperationsControlPlane:
                 market_data_live=facts.market_data_live,
                 risk_engine_pass=facts.risk_engine_pass,
                 risk_engine_reasons=facts.risk_engine_reasons,
+                risk_engine_evaluated=facts.risk_engine_evaluated,
                 account_trading_enabled=facts.account_trading_enabled,
                 mt5_autotrading_enabled=facts.mt5_autotrading_enabled,
+                account_flags_evaluated=facts.account_flags_evaluated,
                 symbol=facts.symbol,
                 symbol_tradable=facts.symbol_tradable,
                 margin_available=facts.margin_available,
+                margin_evaluated=facts.margin_evaluated,
                 no_broker_restrictions=facts.no_broker_restrictions,
                 open_positions=facts.open_positions,
                 session=facts.session,
+                session_evaluated=facts.session_evaluated,
                 spread=facts.spread,
+                spread_evaluated=facts.spread_evaluated,
                 news_blocked=facts.news_blocked,
                 news_reason=facts.news_reason,
                 daily_loss_exceeded=self.daily_loss_exceeded
@@ -528,6 +533,7 @@ class OperationsControlPlane:
                 emergency_stop=self.kill_switch_armed or facts.emergency_stop,
                 ops_mode=self.mode.value,
                 execution_enabled=facts.execution_enabled,
+                status_snapshot=facts.status_snapshot,
             )
         return evaluate_auto_trade_safety(policy, merged)
 
@@ -689,13 +695,19 @@ class OperationsControlPlane:
                     "operational" if not self.kill_switch_armed else "halted_oms"
                 ),
                 "gateway_status": (
-                    "up" if health and health.gateway_available else "unknown"
+                    "up"
+                    if health and health.gateway_available
+                    else ("down" if health is not None else "unknown")
                 ),
                 "mt5_status": (
-                    "connected" if health and health.mt5_connected else "unknown"
+                    "connected"
+                    if health and health.mt5_connected
+                    else ("disconnected" if health is not None else "unknown")
                 ),
                 "execution_mode": self.mode.value,
+                "mode": self.mode.value,
                 "kill_switch": self.kill_switch_armed,
+                "kill_switch_armed": self.kill_switch_armed,
                 "shadow_mode": self.mode is OpsExecutionMode.SHADOW,
                 "canary_mode": self.mode is OpsExecutionMode.CANARY,
                 "live_mode": self.mode is OpsExecutionMode.LIVE,

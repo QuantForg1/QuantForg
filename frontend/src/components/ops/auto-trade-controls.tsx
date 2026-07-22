@@ -141,6 +141,7 @@ export function AutoTradeControls() {
   const d = asRecord(autoQ.data);
   const status = str(d.status, "Disabled");
   const failed = asList(d.failed_reasons).map(String);
+  const live = asRecord(d.live);
   const conditions = asList(d.conditions).map(asRecord);
   const policy = asRecord(d.policy);
 
@@ -153,6 +154,10 @@ export function AutoTradeControls() {
           <Badge tone={status === "Enabled" ? "success" : "warning"}>
             Gate {status}
           </Badge>
+          <Badge tone={live.gateway_connected ? "success" : "danger"}>
+            Gateway {live.gateway_connected ? "connected" : "offline"}
+          </Badge>
+          <Badge tone="neutral">Ops {str(d.ops_mode, "—")}</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

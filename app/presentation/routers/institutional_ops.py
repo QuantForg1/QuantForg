@@ -365,34 +365,32 @@ def execute_runbook(
 
 @router.get("/auto-trading")
 def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
-    """Auto Trading status + controls. Fail-closed evaluation without live facts."""
+    """Auto Trading status — live gateway probes (same source as Broker/Monitoring)."""
+    from app.application.services.auto_trading_status import build_auto_trading_status
+
     plane = get_control_plane()
     settings = get_settings()
-    health = plane.health.latest()
-    facts = AutoTradeLiveFacts(
-        gateway_connected=bool(health and health.gateway_available),
-        broker_connected=bool(health and health.mt5_connected),
-        market_data_live=False,
-        risk_engine_pass=False,
-        account_trading_enabled=False,
-        mt5_autotrading_enabled=False,
-        symbol_tradable=False,
-        margin_available=False,
-        no_broker_restrictions=False,
-        emergency_stop=plane.kill_switch_armed,
-        ops_mode=plane.mode.value,
-        execution_enabled=bool(getattr(settings, "execution_enabled", False)),
-    )
-    safety = plane.evaluate_auto_trading(facts)
+    snap = build_auto_trading_status(plane, settings=settings)
+    safety = snap.safety
     return {
         "status": safety.status,
         "allowed": safety.allowed,
         "failed_reasons": list(safety.failed_reasons),
+        "reason_groups": snap.reason_groups,
         "conditions": [c.to_dict() for c in safety.conditions],
         "policy": plane.auto_trade_policy().to_dict(),
         "emergency_stop": plane.kill_switch_armed,
         "execution_enabled": bool(getattr(settings, "execution_enabled", False)),
         "ops_mode": plane.mode.value,
+        "live": snap.live,
+        "facts": {
+            "gateway_connected": snap.facts.gateway_connected,
+            "broker_connected": snap.facts.broker_connected,
+            "market_data_live": snap.facts.market_data_live,
+            "risk_engine_pass": snap.facts.risk_engine_pass,
+            "risk_engine_evaluated": snap.facts.risk_engine_evaluated,
+            "status_snapshot": snap.facts.status_snapshot,
+        },
     }
 
 
