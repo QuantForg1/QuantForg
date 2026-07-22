@@ -75,6 +75,7 @@ class ShadowCycleResult:
     safety_failed_reasons: tuple[str, ...] = ()
     snapshot_present: bool = False
     market_context_reason: str | None = None
+    market_context_diagnostics: dict[str, Any] | None = None
     signal_id: str | None = None
     oms_message: str | None = None
     broker_retcode: int | None = None
@@ -96,6 +97,7 @@ class ShadowCycleResult:
             "safety_failed_reasons": list(self.safety_failed_reasons),
             "snapshot_present": self.snapshot_present,
             "market_context_reason": self.market_context_reason,
+            "market_context_diagnostics": self.market_context_diagnostics,
             "signal_id": self.signal_id,
             "oms_message": self.oms_message,
             "broker_retcode": self.broker_retcode,
@@ -586,6 +588,7 @@ class InstitutionalIteRuntime:
                         abort_reason="NO_MARKET_CONTEXT",
                         snapshot_present=False,
                         market_context_reason=ctx.reason,
+                        market_context_diagnostics=dict(ctx.diagnostics),
                         latency_ms=ctx.latency_ms,
                     )
                     with self._lock:
@@ -596,6 +599,7 @@ class InstitutionalIteRuntime:
                         outcome="no_snapshot",
                         reason=ctx.reason,
                         bars=ctx.bars_loaded,
+                        diagnostics=ctx.diagnostics,
                         mode=self.plane.mode.value,
                     )
                 else:
@@ -641,6 +645,13 @@ class InstitutionalIteRuntime:
                             no_broker_restrictions=no_restr,
                             risk_allowed=True,
                         )
+                    with self._lock:
+                        if self._last_cycle is not None:
+                            self._last_cycle.market_context_diagnostics = dict(
+                                ctx.diagnostics
+                            )
+                            self._last_cycle.market_context_reason = ctx.reason
+                            self._last_cycle.snapshot_present = True
             except Exception as exc:
                 logger.exception("ite_orchestrator_cycle_failed", error=str(exc))
                 with self._lock:

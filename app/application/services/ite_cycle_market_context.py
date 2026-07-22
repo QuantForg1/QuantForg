@@ -6,7 +6,7 @@ If market data cannot be loaded, returns an explicit failure reason.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -47,6 +47,7 @@ class IteCycleMarketContext:
     spread: Decimal | None = None
     latency_ms: float = 0.0
     bars_loaded: dict[str, int] | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -65,6 +66,7 @@ class IteCycleMarketContext:
             "symbol": getattr(self.snapshot, "symbol", None)
             if self.snapshot is not None
             else None,
+            "diagnostics": dict(self.diagnostics),
         }
 
 
@@ -84,6 +86,44 @@ def _rate_to_candle(rate: Any) -> Candle:
     )
 
 
+def _client_of(mt5_adapter: Any) -> Any:
+    return getattr(mt5_adapter, "client", None) or getattr(
+        mt5_adapter, "_client", None
+    )
+
+
+def _ensure_gateway_session(mt5_adapter: Any, diag: dict[str, Any]) -> str | None:
+    """Adopt live gateway session into this process if needed.
+
+    Returns failure reason or None when connected enough for market reads.
+    """
+    client = _client_of(mt5_adapter)
+    if client is None:
+        diag["connection"] = "NO_CLIENT"
+        return "MT5 client missing on adapter"
+    connected = bool(getattr(client, "is_connected", False))
+    diag["connection"] = "CONNECTED" if connected else "DISCONNECTED"
+    diag["session_mode"] = str(getattr(client, "session_mode", "") or "unknown")
+    if connected:
+        return None
+    adopt = getattr(client, "adopt_existing_session", None)
+    if callable(adopt):
+        try:
+            ok = bool(adopt())
+            diag["adopt_existing_session"] = ok
+            if ok:
+                diag["connection"] = "ADOPTED"
+                diag["session_mode"] = str(
+                    getattr(client, "session_mode", "") or "attached"
+                )
+                return None
+        except Exception as exc:
+            diag["adopt_existing_session"] = False
+            diag["adopt_error"] = str(exc)
+            return f"Gateway session adopt failed: {exc}"
+    return "MT5 gateway session not connected (process flag false; adopt unavailable)"
+
+
 async def build_ite_cycle_market_context(
     mt5_adapter: Any | None,
     *,
@@ -93,12 +133,55 @@ async def build_ite_cycle_market_context(
     import time
 
     t0 = time.perf_counter()
-    if mt5_adapter is None:
+    diag: dict[str, Any] = {
+        "symbol": symbol,
+        "timeframes": [tf.value for tf, _ in _TF_COUNTS],
+        "connection": "UNKNOWN",
+        "account": "UNKNOWN",
+        "terminal": "UNKNOWN",
+        "bars": {},
+        "ticks": "UNKNOWN",
+        "snapshot": "PENDING",
+        "server_time": None,
+        "bid": None,
+        "ask": None,
+        "spread": None,
+        "volume": None,
+        "balance": None,
+        "equity": None,
+        "margin": None,
+        "leverage": None,
+        "positions": None,
+        "orders": None,
+    }
+
+    def _fail(reason: str, **extra: Any) -> IteCycleMarketContext:
+        diag.update(extra)
+        diag["snapshot"] = "FAIL"
+        diag["reason"] = reason
         return IteCycleMarketContext(
             ok=False,
-            reason="MT5 adapter unavailable — cannot load market snapshot",
+            reason=reason,
             latency_ms=(time.perf_counter() - t0) * 1000.0,
+            bars_loaded=diag.get("bars") if isinstance(diag.get("bars"), dict) else {},
+            diagnostics=diag,
+            market_data_live=bool(diag.get("ticks") == "LIVE"),
+            spread=(
+                Decimal(str(diag["spread"]))
+                if diag.get("spread") is not None
+                else None
+            ),
         )
+
+    if mt5_adapter is None:
+        return _fail(
+            "MT5 adapter unavailable — cannot load market snapshot",
+            connection="NO_ADAPTER",
+        )
+
+    session_err = _ensure_gateway_session(mt5_adapter, diag)
+    if session_err:
+        return _fail(session_err)
 
     bars_by_tf: dict[Timeframe, list[Candle]] = {}
     bars_loaded: dict[str, int] = {}
@@ -108,24 +191,25 @@ async def build_ite_cycle_market_context(
             candles = [_rate_to_candle(r) for r in (rates or [])]
             bars_by_tf[tf] = candles
             bars_loaded[tf.value] = len(candles)
+            diag["bars"][tf.value] = {
+                "requested": count,
+                "loaded": len(candles),
+                "ok": len(candles) >= 50,
+            }
             if len(candles) < 50:
-                return IteCycleMarketContext(
-                    ok=False,
-                    reason=(
-                        f"Insufficient {tf.value} bars for analysis "
-                        f"(got {len(candles)}, need ≥50)"
-                    ),
-                    latency_ms=(time.perf_counter() - t0) * 1000.0,
-                    bars_loaded=bars_loaded,
+                return _fail(
+                    f"Insufficient {tf.value} bars for analysis "
+                    f"(got {len(candles)}, need ≥50)",
+                    bars=diag["bars"],
                 )
     except Exception as exc:
         logger.warning("ite_cycle_bars_load_failed", error=str(exc))
-        return IteCycleMarketContext(
-            ok=False,
-            reason=f"Market data load failed: {exc}",
-            latency_ms=(time.perf_counter() - t0) * 1000.0,
-            bars_loaded=bars_loaded,
-        )
+        return _fail(f"Market data load failed: {exc}", bars=bars_loaded)
+
+    diag["bars"] = {
+        k: v if isinstance(v, dict) else {"loaded": v, "ok": int(v) >= 50}
+        for k, v in {**bars_loaded, **diag["bars"]}.items()
+    }
 
     spread: Decimal | None = None
     market_data_live = False
@@ -134,11 +218,26 @@ async def build_ite_cycle_market_context(
         if tick is not None:
             bid = Decimal(str(getattr(tick, "bid", 0) or 0))
             ask = Decimal(str(getattr(tick, "ask", 0) or 0))
+            vol = getattr(tick, "volume", None)
+            ts = getattr(tick, "timestamp", None)
+            diag["bid"] = str(bid)
+            diag["ask"] = str(ask)
+            diag["volume"] = str(vol) if vol is not None else None
+            diag["server_time"] = (
+                ts.isoformat() if hasattr(ts, "isoformat") else str(ts or "")
+            )
             if ask > 0 and bid > 0:
                 spread = ask - bid
                 market_data_live = True
+                diag["ticks"] = "LIVE"
+                diag["spread"] = str(spread)
+            else:
+                diag["ticks"] = "INVALID"
+        else:
+            diag["ticks"] = "EMPTY"
     except Exception as exc:
         logger.info("ite_cycle_tick_failed", error=str(exc))
+        diag["ticks"] = f"ERROR: {exc}"
 
     try:
         snapshot = await InstitutionalTradingAnalysisService().analyze_bars(
@@ -146,15 +245,24 @@ async def build_ite_cycle_market_context(
             as_of=datetime.now(UTC),
             spread=spread,
         )
+        diag["snapshot"] = "OK"
+        try:
+            sess = getattr(snapshot, "session", None)
+            diag["trading_session"] = str(
+                getattr(getattr(sess, "session", None), "value", None)
+                or getattr(sess, "session", None)
+                or ""
+            )
+            diag["session_allowed"] = bool(getattr(sess, "allowed", False))
+        except Exception as exc:
+            logger.debug("ite_cycle_session_diag_failed", error=str(exc))
     except Exception as exc:
         logger.warning("ite_cycle_analyze_failed", error=str(exc))
-        return IteCycleMarketContext(
-            ok=False,
-            reason=f"Strategy analysis failed: {exc}",
-            latency_ms=(time.perf_counter() - t0) * 1000.0,
-            bars_loaded=bars_loaded,
-            market_data_live=market_data_live,
-            spread=spread,
+        return _fail(
+            f"Strategy analysis failed: {exc}",
+            bars=bars_loaded,
+            ticks=diag.get("ticks"),
+            snapshot="ANALYZE_FAIL",
         )
 
     equity = Decimal("0")
@@ -164,37 +272,41 @@ async def build_ite_cycle_market_context(
     try:
         info = mt5_adapter.account_info()
         equity = Decimal(str(getattr(info, "equity", 0) or 0))
+        balance = Decimal(str(getattr(info, "balance", 0) or 0))
+        margin = Decimal(str(getattr(info, "margin", 0) or 0))
+        leverage = int(getattr(info, "leverage", 0) or 0)
         free_raw = getattr(info, "free_margin", None)
         if free_raw is not None:
             free_margin = Decimal(str(free_raw))
-        # trade_mode present ⇒ terminal reports an account capable of trading
         trade_mode = str(getattr(info, "trade_mode", "") or "").strip().lower()
         account_trading_enabled = trade_mode not in {"", "disabled", "0"}
         if not account_trading_enabled and equity > 0:
-            # Connected live account with equity — treat as trading-capable
-            # only when gateway did not explicitly disable.
             account_trading_enabled = True
+        diag["account"] = "OK"
+        diag["terminal"] = str(getattr(info, "server", "") or "")
+        diag["balance"] = str(balance)
+        diag["equity"] = str(equity)
+        diag["margin"] = str(margin)
+        diag["free_margin"] = str(free_margin) if free_margin is not None else None
+        diag["leverage"] = leverage
+        diag["login"] = int(getattr(info, "login", 0) or 0)
     except Exception as exc:
         logger.warning("ite_cycle_account_failed", error=str(exc))
-        return IteCycleMarketContext(
-            ok=False,
-            reason=f"Account info unavailable: {exc}",
-            latency_ms=(time.perf_counter() - t0) * 1000.0,
-            bars_loaded=bars_loaded,
-            market_data_live=market_data_live,
-            spread=spread,
-            snapshot=snapshot,
+        return _fail(
+            f"Account info unavailable: {exc}",
+            bars=bars_loaded,
+            ticks=diag.get("ticks"),
+            snapshot="OK",
+            account="FAIL",
         )
 
     if equity <= 0:
-        return IteCycleMarketContext(
-            ok=False,
-            reason="Account equity unavailable or zero — refusing fabricated equity",
-            latency_ms=(time.perf_counter() - t0) * 1000.0,
-            bars_loaded=bars_loaded,
-            market_data_live=market_data_live,
-            spread=spread,
-            snapshot=snapshot,
+        return _fail(
+            "Account equity unavailable or zero — refusing fabricated equity",
+            bars=bars_loaded,
+            ticks=diag.get("ticks"),
+            snapshot="OK",
+            account="ZERO_EQUITY",
         )
 
     try:
@@ -206,8 +318,23 @@ async def build_ite_cycle_market_context(
                 if str(getattr(p, "symbol", "")).upper() == symbol.upper()
             ]
         )
+        diag["positions"] = open_positions
     except Exception as exc:
         logger.info("ite_cycle_positions_failed", error=str(exc))
+        diag["positions"] = f"ERROR: {exc}"
+
+    try:
+        client = _client_of(mt5_adapter)
+        orders_fn = getattr(client, "list_orders", None) or getattr(
+            mt5_adapter, "list_orders", None
+        )
+        if callable(orders_fn):
+            orders = orders_fn()
+            diag["orders"] = len(orders or [])
+        else:
+            diag["orders"] = "N/A"
+    except Exception as exc:
+        diag["orders"] = f"ERROR: {exc}"
 
     mid = None
     try:
@@ -229,8 +356,10 @@ async def build_ite_cycle_market_context(
         peak_equity=equity,
         daily_pnl=Decimal("0"),
         weekly_pnl=Decimal("0"),
-        open_positions=open_positions,
-        already_in_trade=open_positions > 0,
+        open_positions=open_positions if isinstance(open_positions, int) else 0,
+        already_in_trade=(
+            open_positions > 0 if isinstance(open_positions, int) else False
+        ),
         consecutive_losses=0,
         cooldown_active=False,
         cooldown_remaining_minutes=0,
@@ -240,6 +369,8 @@ async def build_ite_cycle_market_context(
         free_margin=free_margin,
     )
 
+    diag["reason"] = "market context ready"
+    diag["snapshot"] = "OK"
     return IteCycleMarketContext(
         ok=True,
         snapshot=snapshot,
@@ -247,10 +378,11 @@ async def build_ite_cycle_market_context(
         reason="market context ready",
         market_data_live=market_data_live,
         account_trading_enabled=account_trading_enabled,
-        mt5_autotrading_enabled=False,  # set by caller from live probes
+        mt5_autotrading_enabled=False,
         symbol_tradable=market_data_live,
         no_broker_restrictions=True,
         spread=spread,
         latency_ms=(time.perf_counter() - t0) * 1000.0,
         bars_loaded=bars_loaded,
+        diagnostics=diag,
     )

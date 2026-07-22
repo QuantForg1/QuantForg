@@ -1501,5 +1501,11 @@ class GatewayMT5Client:
         return self._request("GET", "/diagnostics")
 
     def _require_connected(self) -> None:
-        if not self._connected:
-            raise RuntimeError("MT5 gateway session not connected")
+        if self._connected:
+            return
+        # Process restart / new worker: adopt live Windows gateway session
+        # without re-login. Never invents a session — only binds if gateway
+        # reports connected/attached.
+        if self.adopt_existing_session():
+            return
+        raise RuntimeError("MT5 gateway session not connected")
