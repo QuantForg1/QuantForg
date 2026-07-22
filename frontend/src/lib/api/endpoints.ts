@@ -1097,6 +1097,28 @@ export const adaptiveScalpingIntelligenceApi = {
     ),
 };
 
+/** Institutional Edge Engine — advisory edge analytics; never disables trading */
+export const institutionalEdgeEngineApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/institutional-edge-engine/status"),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/institutional-edge-engine/evaluate", {
+      method: "POST",
+      body,
+    }),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/institutional-edge-engine/history?limit=${limit}`,
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>("/institutional-edge-engine/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/institutional-edge-engine/policies", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),

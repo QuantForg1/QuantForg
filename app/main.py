@@ -97,6 +97,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "adaptive_scalping_intelligence",
         "app.presentation.routers.adaptive_scalping_intelligence",
     ),
+    (
+        "institutional_edge_engine",
+        "app.presentation.routers.institutional_edge_engine",
+    ),
 )
 
 

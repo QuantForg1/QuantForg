@@ -213,6 +213,12 @@ export const appNav: NavGroup[] = [
         hint: "Adaptive intelligence · explainable · advisory",
       },
       {
+        href: "/institutional-edge-engine",
+        label: "Edge Engine",
+        icon: Gauge,
+        hint: "Edge score · stability · institutional grade",
+      },
+      {
         href: "/ai-robot",
         label: "AI Robot",
         icon: Shield,
