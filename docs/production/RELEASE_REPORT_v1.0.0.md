@@ -2,6 +2,7 @@
 
 **Date:** 2026-07-22  
 **Version:** 1.0.0  
+**Commit:** `fd30ffd2c6da8c99701b37ae9d01bd117236c97f`  
 **Type:** Long-running institutional operations pack (no new modules / no second AI)
 
 ## Deliverables
@@ -19,9 +20,18 @@
 | 9 | Final production review | Done — PRODUCTION_REVIEW.md |
 | 10 | RC packaging | Done — release/migration notes, checklist, known limitations |
 
-## Validation
+## Validation (this commit)
 
-See CI / local gate results recorded at commit time.
+| Gate | Result |
+| --- | --- |
+| ruff (changed paths) | Pass |
+| pytest `test_production_ops_v1` | Pass (3) |
+| soak `--profile stress` | Pass → `docs/production/reports/soak_stress_*.json` |
+| config audit | Pass |
+| frontend typecheck | Pass |
+| frontend lint | Pass |
+| frontend build | Pass |
+| Full integration / wall-clock 24h–7d | Not run in-session (operator host) |
 
 ## Release readiness
 
