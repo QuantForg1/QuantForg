@@ -103,6 +103,28 @@ def shadow_status(_user: OperatorUser) -> dict[str, Any]:
     return runtime.status()
 
 
+@router.get("/execution-attempts")
+def execution_attempts(
+    _user: OperatorUser,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Read-only bridge execution attempt journal (includes NO_TRADE reasons)."""
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+    runtime = get_ite_runtime()
+    if runtime is None:
+        raise HTTPException(status_code=503, detail="ITE runtime not wired")
+    journal = getattr(runtime.execution.bridge, "journal", None)
+    if journal is None or not hasattr(journal, "list"):
+        return {"items": [], "count": 0}
+    capped = max(1, min(int(limit), 200))
+    items = [
+        r.to_dict() if hasattr(r, "to_dict") else dict(r)
+        for r in journal.list(limit=capped)
+    ]
+    return {"items": items, "count": len(items)}
+
+
 @router.post("/shadow/cycle")
 def shadow_cycle(_user: OperatorUser) -> dict[str, Any]:
     """Run one automatic shadow cycle (health + optional decision path)."""

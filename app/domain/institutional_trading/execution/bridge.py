@@ -113,12 +113,16 @@ class ExecutionBridge:
         tid = self._ensure_trace(trace_id, decision_id=str(decision.id))
 
         if not actionable:
+            reasons = tuple(getattr(decision, "reasons", ()) or ())
+            reason_txt = "; ".join(reasons) if reasons else "no reasons"
             result = self._abort(
                 decision=decision,
                 context=context,
                 decision_hash=d_hash,
                 reason=BridgeAbortReason.IGNORED_ACTION,
-                comment=f"Ignored action {decision.action.value}",
+                comment=(
+                    f"Ignored action {decision.action.value}: {reason_txt}"
+                ),
                 t0=t0,
                 status=ExecutionAttemptStatus.ABORTED,
             )

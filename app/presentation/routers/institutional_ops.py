@@ -544,6 +544,22 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
     settings = get_settings()
     snap = build_auto_trading_status(plane, settings=settings)
     safety = snap.safety
+    orchestrator = None
+    recent_attempts: list[dict[str, Any]] = []
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        if runtime is not None:
+            orchestrator = runtime.status()
+            journal = getattr(runtime.execution.bridge, "journal", None)
+            if journal is not None and hasattr(journal, "list"):
+                recent_attempts = [
+                    r.to_dict() if hasattr(r, "to_dict") else dict(r)
+                    for r in journal.list(limit=20)
+                ]
+    except Exception:
+        orchestrator = None
     return {
         "status": safety.status,
         "allowed": safety.allowed,
@@ -566,6 +582,8 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
             "risk_engine_evaluated": snap.facts.risk_engine_evaluated,
             "status_snapshot": snap.facts.status_snapshot,
         },
+        "orchestrator": orchestrator,
+        "recent_execution_attempts": recent_attempts,
     }
 
 

@@ -69,6 +69,17 @@ class ShadowCycleResult:
     forwarded_to_oms: bool = False
     detail: str = ""
     health: dict[str, Any] | None = None
+    cycle_outcome: str = "unknown"
+    abort_reason: str | None = None
+    decision_reasons: tuple[str, ...] = ()
+    safety_failed_reasons: tuple[str, ...] = ()
+    snapshot_present: bool = False
+    market_context_reason: str | None = None
+    signal_id: str | None = None
+    oms_message: str | None = None
+    broker_retcode: int | None = None
+    mt5_ticket: int | None = None
+    latency_ms: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -79,6 +90,17 @@ class ShadowCycleResult:
             "forwarded_to_oms": self.forwarded_to_oms,
             "detail": self.detail,
             "health": self.health,
+            "cycle_outcome": self.cycle_outcome,
+            "abort_reason": self.abort_reason,
+            "decision_reasons": list(self.decision_reasons),
+            "safety_failed_reasons": list(self.safety_failed_reasons),
+            "snapshot_present": self.snapshot_present,
+            "market_context_reason": self.market_context_reason,
+            "signal_id": self.signal_id,
+            "oms_message": self.oms_message,
+            "broker_retcode": self.broker_retcode,
+            "mt5_ticket": self.mt5_ticket,
+            "latency_ms": self.latency_ms,
         }
 
 
@@ -97,6 +119,7 @@ class InstitutionalIteRuntime:
         default_factory=InstitutionalDecisionPipeline
     )
     interval_seconds: float = 60.0
+    mt5_adapter: Any | None = None
     _stop: Event = field(default_factory=Event, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
     _last_cycle: ShadowCycleResult | None = field(default=None, repr=False)
@@ -226,10 +249,21 @@ class InstitutionalIteRuntime:
                     )
                 ),
                 health=health.get("health") if isinstance(health, dict) else None,
+                cycle_outcome="no_snapshot",
+                abort_reason="NO_SNAPSHOT",
+                safety_failed_reasons=tuple(safety.failed_reasons),
+                snapshot_present=False,
+                market_context_reason="snapshot/account not supplied",
             )
             with self._lock:
                 self._last_cycle = result
                 self._cycles += 1
+            logger.info(
+                "ite_cycle_outcome",
+                outcome=result.cycle_outcome,
+                detail=result.detail,
+                mode=result.mode,
+            )
             return result
 
         free = account.free_margin
@@ -268,10 +302,20 @@ class InstitutionalIteRuntime:
                 mode=self.plane.mode.value,
                 detail="; ".join(safety.failed_reasons) or "Auto Trading Disabled",
                 health=health.get("health") if isinstance(health, dict) else None,
+                cycle_outcome="safety_blocked",
+                abort_reason="SAFETY_BLOCKED",
+                safety_failed_reasons=tuple(safety.failed_reasons),
+                snapshot_present=True,
             )
             with self._lock:
                 self._last_cycle = result
                 self._cycles += 1
+            logger.info(
+                "ite_cycle_outcome",
+                outcome=result.cycle_outcome,
+                reasons=list(result.safety_failed_reasons),
+                mode=result.mode,
+            )
             return result
 
         return self._run_cycle(
@@ -316,6 +360,9 @@ class InstitutionalIteRuntime:
                 mode=self.plane.mode.value,
                 detail="no snapshot/account — health tick only",
                 health=health.get("health") if isinstance(health, dict) else None,
+                cycle_outcome="no_snapshot",
+                abort_reason="NO_SNAPSHOT",
+                snapshot_present=False,
             )
             with self._lock:
                 self._last_cycle = result
@@ -329,6 +376,7 @@ class InstitutionalIteRuntime:
         )
 
         decision = self.decision_pipeline.run(snapshot, account)
+        decision_reasons = tuple(getattr(decision, "reasons", ()) or ())
         self.reliability.traces.span(
             tid,
             TraceStage.DECISION,
@@ -387,61 +435,100 @@ class InstitutionalIteRuntime:
             )
             self.position_management.evaluate(ticket, pctx)
 
+        reason_detail = (
+            f"action={decision.action.value} "
+            f"forwarded={bridge_result.forwarded_to_oms} "
+            f"abort={bridge_result.abort_reason.value}"
+        )
+        if decision_reasons:
+            reason_detail += f" reasons={';'.join(decision_reasons)}"
         self.reliability.timeline.append(
             TimelineEvent(
                 timestamp=datetime.now(UTC),
                 category="shadow" if force_shadow else "auto",
                 action="cycle",
-                detail=(
-                    f"action={decision.action.value} "
-                    f"forwarded={bridge_result.forwarded_to_oms} "
-                    f"abort={bridge_result.abort_reason.value}"
-                ),
+                detail=reason_detail,
                 severity="INFO",
                 trace_id=tid,
             )
         )
 
-        if force_shadow:
-            result = ShadowCycleResult(
-                ok=not bridge_result.forwarded_to_oms,
-                trace_id=tid,
-                mode=OpsExecutionMode.SHADOW.value,
-                decision_action=decision.action.value,
-                forwarded_to_oms=bridge_result.forwarded_to_oms,
-                detail="shadow cycle complete",
-                health=health.get("health") if isinstance(health, dict) else None,
+        oms_message = None
+        broker_retcode = None
+        mt5_ticket = None
+        entry = getattr(bridge_result, "journal_entry", None)
+        if entry is not None:
+            oms_message = getattr(entry, "comment", None)
+            broker_retcode = getattr(entry, "retcode", None)
+            mt5_ticket = getattr(entry, "ticket", None) or getattr(
+                entry, "order_ticket", None
             )
-            with self._lock:
-                self._last_cycle = result
-                self._cycles += 1
-            if bridge_result.forwarded_to_oms:
-                logger.error(
-                    "shadow_cycle_forwarded_to_oms",
-                    trace_id=tid,
-                    detail="BUG — shadow must never call OMS",
-                )
-            return result
 
-        result = ShadowCycleResult(
-            ok=True,
-            trace_id=tid,
-            mode=self.plane.mode.value,
-            decision_action=decision.action.value,
-            forwarded_to_oms=bridge_result.forwarded_to_oms,
-            detail=(
+        if bridge_result.forwarded_to_oms:
+            cycle_outcome = "forwarded"
+        elif str(decision.action.value) in {"NO_TRADE", "WATCH"}:
+            cycle_outcome = "no_trade"
+        else:
+            cycle_outcome = "aborted"
+
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        detail = (
+            "shadow cycle complete"
+            if force_shadow
+            else (
                 "auto cycle forwarded"
                 if bridge_result.forwarded_to_oms
                 else (
-                    bridge_result.journal_entry.comment
+                    (entry.comment if entry is not None else None)
                     or bridge_result.abort_reason.value
                 )
+            )
+        )
+        if not bridge_result.forwarded_to_oms and decision_reasons:
+            detail = f"{detail} | {'; '.join(decision_reasons)}"
+
+        result = ShadowCycleResult(
+            ok=(not bridge_result.forwarded_to_oms) if force_shadow else True,
+            trace_id=tid,
+            mode=(
+                OpsExecutionMode.SHADOW.value
+                if force_shadow
+                else self.plane.mode.value
             ),
+            decision_action=decision.action.value,
+            forwarded_to_oms=bridge_result.forwarded_to_oms,
+            detail=detail,
             health=health.get("health") if isinstance(health, dict) else None,
+            cycle_outcome="shadow" if force_shadow else cycle_outcome,
+            abort_reason=bridge_result.abort_reason.value,
+            decision_reasons=decision_reasons,
+            snapshot_present=True,
+            signal_id=str(getattr(decision, "id", "") or "") or None,
+            oms_message=str(oms_message) if oms_message else None,
+            broker_retcode=int(broker_retcode) if broker_retcode is not None else None,
+            mt5_ticket=int(mt5_ticket) if mt5_ticket is not None else None,
+            latency_ms=round(latency_ms, 3),
         )
         with self._lock:
             self._last_cycle = result
             self._cycles += 1
+        if force_shadow and bridge_result.forwarded_to_oms:
+            logger.error(
+                "shadow_cycle_forwarded_to_oms",
+                trace_id=tid,
+                detail="BUG — shadow must never call OMS",
+            )
+        logger.info(
+            "ite_cycle_outcome",
+            outcome=result.cycle_outcome,
+            decision_action=result.decision_action,
+            abort_reason=result.abort_reason,
+            reasons=list(result.decision_reasons),
+            forwarded_to_oms=result.forwarded_to_oms,
+            signal_id=result.signal_id,
+            latency_ms=result.latency_ms,
+            mode=result.mode,
+        )
         return result
 
     def status(self) -> dict[str, Any]:
@@ -468,7 +555,7 @@ class InstitutionalIteRuntime:
         self._stop.set()
 
     async def run_forever(self) -> None:
-        """Background loop — health + shadow or safe auto cycles."""
+        """Background loop — live market context → Decision→Risk→Safety→OMS."""
         logger.info(
             "ite_orchestrator_started",
             interval_seconds=self.interval_seconds,
@@ -476,12 +563,96 @@ class InstitutionalIteRuntime:
         )
         while not self._stop.is_set():
             try:
-                if self.plane.mode is OpsExecutionMode.SHADOW:
-                    self.run_shadow_cycle()
+                from app.application.services.auto_trading_status import (
+                    _enrich_from_adapter,
+                )
+                from app.application.services.ite_cycle_market_context import (
+                    build_ite_cycle_market_context,
+                )
+
+                enrich = _enrich_from_adapter(self.probes)
+                ctx = await build_ite_cycle_market_context(self.mt5_adapter)
+                if not ctx.ok or ctx.snapshot is None or ctx.account is None:
+                    health = self.tick_health()
+                    result = ShadowCycleResult(
+                        ok=True,
+                        trace_id=None,
+                        mode=self.plane.mode.value,
+                        detail=ctx.reason or "market context unavailable",
+                        health=(
+                            health.get("health") if isinstance(health, dict) else None
+                        ),
+                        cycle_outcome="no_snapshot",
+                        abort_reason="NO_MARKET_CONTEXT",
+                        snapshot_present=False,
+                        market_context_reason=ctx.reason,
+                        latency_ms=ctx.latency_ms,
+                    )
+                    with self._lock:
+                        self._last_cycle = result
+                        self._cycles += 1
+                    logger.info(
+                        "ite_cycle_outcome",
+                        outcome="no_snapshot",
+                        reason=ctx.reason,
+                        bars=ctx.bars_loaded,
+                        mode=self.plane.mode.value,
+                    )
                 else:
-                    self.run_auto_cycle()
+                    mt5_at = (
+                        bool(enrich["mt5_autotrading_enabled"])
+                        if enrich.get("mt5_autotrading_enabled") is not None
+                        else True
+                    )
+                    acct_ok = (
+                        bool(enrich["account_trading_enabled"])
+                        if enrich.get("account_trading_enabled") is not None
+                        else ctx.account_trading_enabled
+                    )
+                    sym_ok = (
+                        bool(enrich["symbol_tradable"])
+                        if enrich.get("symbol_tradable") is not None
+                        else ctx.symbol_tradable
+                    )
+                    mkt_ok = (
+                        bool(enrich["market_data_live"])
+                        if enrich.get("market_data_live") is not None
+                        else ctx.market_data_live
+                    )
+                    no_restr = (
+                        bool(enrich["no_broker_restrictions"])
+                        if enrich.get("no_broker_restrictions") is not None
+                        else True
+                    )
+                    if self.plane.mode is OpsExecutionMode.SHADOW:
+                        self.run_shadow_cycle(
+                            snapshot=ctx.snapshot, account=ctx.account
+                        )
+                    else:
+                        self.run_auto_cycle(
+                            snapshot=ctx.snapshot,
+                            account=ctx.account,
+                            gateway_connected=True,
+                            broker_connected=True,
+                            market_data_live=mkt_ok,
+                            account_trading_enabled=acct_ok,
+                            mt5_autotrading_enabled=mt5_at,
+                            symbol_tradable=sym_ok,
+                            no_broker_restrictions=no_restr,
+                            risk_allowed=True,
+                        )
             except Exception as exc:
                 logger.exception("ite_orchestrator_cycle_failed", error=str(exc))
+                with self._lock:
+                    self._last_cycle = ShadowCycleResult(
+                        ok=False,
+                        trace_id=None,
+                        mode=self.plane.mode.value,
+                        detail=f"cycle exception: {exc}",
+                        cycle_outcome="error",
+                        abort_reason="CYCLE_EXCEPTION",
+                    )
+                    self._cycles += 1
             for _ in range(int(max(1, self.interval_seconds))):
                 if self._stop.is_set():
                     break
@@ -551,6 +722,7 @@ def build_ite_runtime(
         execution=execution,
         position_management=pme,
         interval_seconds=interval_seconds,
+        mt5_adapter=mt5_adapter,
     )
 
 
