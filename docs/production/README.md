@@ -12,6 +12,7 @@
 | [OPTIMIZATION_REPORT_v1.0.1.md](./OPTIMIZATION_REPORT_v1.0.1.md) | v1.0.1 optimization pack |
 | [STRATEGY_AUDIT_REPORT_v1.0.1.md](./STRATEGY_AUDIT_REPORT_v1.0.1.md) | XAUUSD SMC strategy evidence audit (recommendations only) |
 | [PERFORMANCE_INTELLIGENCE_REPORT_v1.0.1.md](./PERFORMANCE_INTELLIGENCE_REPORT_v1.0.1.md) | Institutional Performance IQ from journals |
+| [REPLAY_EVIDENCE_LAB_REPORT_v1.0.1.md](./REPLAY_EVIDENCE_LAB_REPORT_v1.0.1.md) | Replay · evidence lanes · confidence gates (advisory) |
 | [RELEASE_NOTES_v1.0.1.md](./RELEASE_NOTES_v1.0.1.md) | v1.0.1 notes |
 
 Also: root `OPERATIONS_RUNBOOK.md`, `BACKUP_RECOVERY.md`, `docs/rc1/*`.  

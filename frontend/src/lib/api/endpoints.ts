@@ -307,6 +307,27 @@ export const performanceIntelligenceApi = {
     ),
 };
 
+export const replayEvidenceLabApi = {
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/replay-evidence-lab/dashboard"),
+  confidence: () =>
+    apiFetch<Record<string, unknown>>("/replay-evidence-lab/confidence"),
+  gates: () => apiFetch<Record<string, unknown>>("/replay-evidence-lab/gates"),
+  counterfactual: () =>
+    apiFetch<Record<string, unknown>>("/replay-evidence-lab/counterfactual"),
+  reports: () =>
+    apiFetch<Record<string, unknown>>("/replay-evidence-lab/reports"),
+  evidence: (lane: "live" | "demo" | "replay" | "research", limit = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/replay-evidence-lab/evidence/${lane}?limit=${limit}`,
+    ),
+  replay: (payload: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/replay-evidence-lab/replay", {
+      method: "POST",
+      body: payload,
+    }),
+};
+
 export const executionIntelligenceApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/execution-intelligence/dashboard"),

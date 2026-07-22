@@ -367,6 +367,12 @@ export const appNav: NavGroup[] = [
         hint: "Sessions · regimes · signals · NO_TRADE",
       },
       {
+        href: "/replay-evidence-lab",
+        label: "Evidence Lab",
+        icon: FlaskConical,
+        hint: "Replay · counterfactual · confidence gates",
+      },
+      {
         href: "/reports",
         label: "Reports",
         icon: FileText,
