@@ -15,6 +15,10 @@ from uuid import UUID
 from app.application.services.execution_gateway import ExecutionGateway
 from app.application.services.execution_intelligence import ExecutionIntelligenceService
 from app.application.services.execution_safety import ExecutionSafetyService
+from app.application.services.live_account_risk_tracker import (
+    LiveAccountRiskTracker,
+    get_live_account_risk_tracker,
+)
 from app.application.services.mt5_order_validation import MT5OrderValidationService
 from app.application.services.risk_engine import RiskCheckInput, RiskEngine
 from app.domain.entities.execution_gateway import ExecutionResult
@@ -146,6 +150,9 @@ class InstitutionalExecutionEngine:
     intelligence: ExecutionIntelligenceService
     journal: ExecutionJournalStore
     risk_engine: RiskEngine = field(default_factory=RiskEngine)
+    risk_tracker: LiveAccountRiskTracker = field(
+        default_factory=get_live_account_risk_tracker
+    )
     gateway_name: str = "execution-gateway"
     broker_name: str = "mt5"
 
@@ -523,9 +530,28 @@ class InstitutionalExecutionEngine:
                     "entry price unresolved from tick/intent"
                 ]
             else:
-                # Never pass peak_equity=current equity (disables DD gates).
-                # Prefer max(equity, balance) until persisted peak is wired.
-                peak = max(account.equity, account.balance)
+                # Authoritative peak (persisted HWM) + daily PnL from MT5 deals.
+                deals: list[Any] = []
+                try:
+                    from datetime import UTC, datetime, timedelta
+
+                    day_start = datetime.now(UTC).replace(
+                        hour=0, minute=0, second=0, microsecond=0
+                    )
+                    deals = list(
+                        self.gateway.adapter.history_deals(
+                            date_from=day_start,
+                            date_to=datetime.now(UTC) + timedelta(days=1),
+                        )
+                    )
+                except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
+                    deals = []
+                peak, daily_pnl = self.risk_tracker.resolve_for_risk(
+                    login=int(account.login or 0),
+                    equity=account.equity,
+                    balance=account.balance,
+                    deals=deals,
+                )
                 assessment = self.risk_engine.evaluate(
                     RiskCheckInput(
                         user_id=user_id,
@@ -541,7 +567,7 @@ class InstitutionalExecutionEngine:
                     account=account,
                     positions=positions,
                     peak_equity=peak if peak > 0 else None,
-                    daily_pnl=account.profit,
+                    daily_pnl=daily_pnl,
                 )
                 if assessment.decision is RiskDecision.REJECT:
                     risk_reject = list(assessment.reasons) or [

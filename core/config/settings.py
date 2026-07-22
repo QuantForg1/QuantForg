@@ -370,6 +370,24 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Closed beta (server-side invite; never NEXT_PUBLIC) ------------------
+    beta_mode: Annotated[
+        bool,
+        Field(
+            description="Require invite unlock for closed beta UI gates.",
+            validation_alias=AliasChoices("BETA_MODE", "beta_mode"),
+        ),
+    ] = False
+    beta_invite_code: Annotated[
+        str,
+        Field(
+            description=(
+                "Server-only beta invite code. Never expose via NEXT_PUBLIC_*."
+            ),
+            validation_alias=AliasChoices("BETA_INVITE_CODE", "beta_invite_code"),
+        ),
+    ] = ""
+
     # -- Market Intelligence (optional licensed feeds) -----------------------
     news_intelligence_feed_url: Annotated[
         str,

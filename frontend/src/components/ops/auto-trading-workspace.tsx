@@ -171,19 +171,19 @@ export function AutoTradingWorkspace() {
     refetchInterval: 8_000,
   });
   const mt5Q = useQuery({
-    queryKey: ["mt5-status", "auto-ws"],
+    queryKey: ["mt5-status"],
     queryFn: () => mt5Api.status(),
     retry: false,
     refetchInterval: 10_000,
   });
   const healthQ = useQuery({
-    queryKey: ["weltrade-health", "auto-ws"],
+    queryKey: ["weltrade-health"],
     queryFn: () => weltradeApi.health(),
     retry: false,
     refetchInterval: 10_000,
   });
   const tickQ = useQuery({
-    queryKey: ["mt5-tick", TRADING_SYMBOL, "auto-ws"],
+    queryKey: ["mt5-tick", TRADING_SYMBOL],
     queryFn: () => mt5Api.tick(TRADING_SYMBOL),
     enabled: session.connected,
     staleTime: 2_000,

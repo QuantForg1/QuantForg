@@ -77,14 +77,17 @@ export function BetaInviteGate({ children }: { children: React.ReactNode }) {
         <Button
           className="w-full"
           onClick={() => {
-            if (unlockBeta(code)) {
-              recordAudit("beta_unlock", "success", "Beta invite accepted");
-              setBlocked(false);
-              toast.success("Beta unlocked");
-            } else {
-              recordAudit("beta_unlock", "failure", "Beta invite rejected");
-              toast.error("Invalid invite code");
-            }
+            void (async () => {
+              const ok = await unlockBeta(code);
+              if (ok) {
+                recordAudit("beta_unlock", "success", "Beta invite accepted");
+                setBlocked(false);
+                toast.success("Beta unlocked");
+              } else {
+                recordAudit("beta_unlock", "failure", "Beta invite rejected");
+                toast.error("Invalid invite code");
+              }
+            })();
           }}
         >
           Unlock

@@ -38,6 +38,7 @@ logger = get_logger(__name__)
 _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("health", "app.presentation.routers.health"),
     ("version", "app.presentation.routers.version"),
+    ("beta_access", "app.presentation.routers.beta_access"),
     ("auth", "app.presentation.routers.auth"),
     ("profile", "app.presentation.routers.profile"),
     ("settings", "app.presentation.routers.settings"),

@@ -36,8 +36,15 @@ async def gateway_ws(websocket: WebSocket) -> None:
     if not raw:
         query_tok = websocket.query_params.get("token") or ""
         if query_tok:
+            if not settings.mt5_gateway_allow_query_token:
+                logger.warning(
+                    "gateway_ws_query_token_rejected — set "
+                    "MT5_GATEWAY_ALLOW_QUERY_TOKEN=true only for legacy clients"
+                )
+                await websocket.close(code=4401)
+                return
             logger.warning(
-                "gateway_ws_auth_via_query_token — prefer x-gateway-token header"
+                "gateway_ws_auth_via_query_token — prefer Authorization header"
             )
             raw = query_tok
     token = normalize_gateway_token(raw)

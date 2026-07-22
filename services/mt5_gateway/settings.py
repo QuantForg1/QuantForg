@@ -210,6 +210,16 @@ class MT5GatewaySettings(BaseSettings):
     mt5_reconnect_backoff_seconds: float = Field(default=2.0, gt=0)
     mt5_gateway_allow_unauthenticated_health: bool = Field(default=True)
     mt5_gateway_enable_websocket: bool = Field(default=True)
+    mt5_gateway_allow_query_token: bool = Field(
+        default=False,
+        description=(
+            "Allow ?token= on WebSocket URL. Default False — prefer "
+            "Authorization: Bearer or x-gateway-token header (query tokens leak)."
+        ),
+        validation_alias=AliasChoices(
+            "MT5_GATEWAY_ALLOW_QUERY_TOKEN", "mt5_gateway_allow_query_token"
+        ),
+    )
     mt5_gateway_auto_attach: bool = Field(
         default=False,
         description=(

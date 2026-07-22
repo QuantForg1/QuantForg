@@ -4,7 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -115,6 +117,7 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
     : gatewayStatusLabel(health);
 
   const invalidateAll = useCallback(async () => {
+    // Drop all broker/gateway caches so reconnect never serves stale status.
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["mt5-status"] }),
       qc.invalidateQueries({ queryKey: ["portfolio"] }),
@@ -127,8 +130,24 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
       qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] }),
       qc.invalidateQueries({ queryKey: ["brokers"] }),
       qc.invalidateQueries({ queryKey: ["mt5-account"] }),
+      qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] }),
+      qc.invalidateQueries({ queryKey: ["ite-ops-center"] }),
+      qc.invalidateQueries({ queryKey: ["portfolio-positions"] }),
     ]);
   }, [qc]);
+
+  const prevConnected = useRef<boolean | null>(null);
+  useEffect(() => {
+    // On reconnect (false → true) or disconnect, flush stale gateway caches.
+    if (prevConnected.current === null) {
+      prevConnected.current = connected;
+      return;
+    }
+    if (prevConnected.current !== connected) {
+      prevConnected.current = connected;
+      void invalidateAll();
+    }
+  }, [connected, invalidateAll]);
 
   const positions = useMemo(() => {
     // Dedicated /positions is source of truth so closes leave Open Positions immediately.
