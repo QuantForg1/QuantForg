@@ -47,6 +47,22 @@ class DuplicateProtection:
             "reason": "Identity claimed",
         }
 
+    def export_identities(self) -> list[str]:
+        with self._lock:
+            return sorted(self._seen)
+
+    def import_identities(self, identities: list[str] | None) -> int:
+        if not identities:
+            return 0
+        added = 0
+        with self._lock:
+            for eid in identities:
+                if not eid or eid in self._seen:
+                    continue
+                self._seen.add(str(eid))
+                added += 1
+        return added
+
 
 def supervise_active_trade(
     inp: ScalpCycleInput, config: ScalpingAiV2Config

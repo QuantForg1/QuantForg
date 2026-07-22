@@ -13,7 +13,7 @@ from app.domain.trading.xauusd_specs import MAX_SPREAD, coerce_max_spread
 class ScalpingAiV2Config:
     """Configuration Center — every production knob is configurable."""
 
-    version: str = "scalping-ai-v2.0.0"
+    version: str = "scalping-ai-v2.1.0"
     symbol: str = GOLD_SYMBOL
     # Market quality
     min_market_quality: Decimal = Decimal("60")
@@ -65,6 +65,11 @@ class ScalpingAiV2Config:
     prefer_no_trade: bool = True
     max_events: int = 5000
     max_history: int = 500
+    # V2.1 hardening knobs
+    retry_jitter_ratio: float = 0.2
+    max_clock_drift_ms: int = 5000
+    max_loop_latency_ms: int = 5000
+    state_persist_enabled: bool = True
     feature_flags: dict[str, bool] = field(
         default_factory=lambda: {
             "market_quality": True,
@@ -83,6 +88,19 @@ class ScalpingAiV2Config:
             "analytics": True,
             "post_trade": True,
             "observability": True,
+            "long_running_stability": True,
+            "state_persistence": True,
+            "restart_recovery": True,
+            "mt5_synchronization": True,
+            "data_integrity": True,
+            "safe_mode": True,
+            "emergency_stop": True,
+            "latency_monitor": True,
+            "intelligent_retry": True,
+            "production_diagnostics": True,
+            "soak_testing": True,
+            "production_audit": True,
+            "operator_dashboard": True,
         }
     )
 
@@ -165,6 +183,10 @@ class ScalpingAiV2Config:
             ),
             max_events=int(data["max_events"]),
             max_history=int(data["max_history"]),
+            retry_jitter_ratio=float(data.get("retry_jitter_ratio", 0.2)),
+            max_clock_drift_ms=int(data.get("max_clock_drift_ms", 5000)),
+            max_loop_latency_ms=int(data.get("max_loop_latency_ms", 5000)),
+            state_persist_enabled=bool(data.get("state_persist_enabled", True)),
             feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
         )
 
@@ -211,6 +233,10 @@ class ScalpingAiV2Config:
             "prefer_no_trade": True,
             "max_events": self.max_events,
             "max_history": self.max_history,
+            "retry_jitter_ratio": self.retry_jitter_ratio,
+            "max_clock_drift_ms": self.max_clock_drift_ms,
+            "max_loop_latency_ms": self.max_loop_latency_ms,
+            "state_persist_enabled": self.state_persist_enabled,
             "feature_flags": dict(self.feature_flags),
         }
 

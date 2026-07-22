@@ -1,4 +1,4 @@
-"""Scalping AI V2 API — continuous advisory loop; never order_send."""
+"""Scalping AI V2 / V2.1 API — continuous advisory loop; never order_send."""
 
 from __future__ import annotations
 
@@ -67,6 +67,15 @@ class CycleRequest(BaseModel):
     news_blackout: bool | None = None
     technique: str | None = None
     execution_identity: str | None = None
+    # V2.1
+    market_data: dict[str, Any] | None = None
+    mt5_sync: dict[str, Any] | None = None
+    restart: bool | None = None
+    resources: dict[str, Any] | None = None
+    latencies: dict[str, Any] | None = None
+    failure_code: str | None = None
+    emergency_stop: bool | None = None
+    correlation_id: str | None = None
 
 
 class PoliciesRequest(BaseModel):
@@ -87,8 +96,17 @@ class PoliciesRequest(BaseModel):
     max_retries: int | None = Field(default=None, ge=0, le=20)
     retry_backoff_ms: int | None = Field(default=None, ge=10, le=60_000)
     max_retry_backoff_ms: int | None = Field(default=None, ge=100, le=300_000)
+    retry_jitter_ratio: float | None = Field(default=None, ge=0, le=1)
     allowed_sessions: list[str] | None = None
     feature_flags: dict[str, bool] | None = None
+
+
+class EmergencyRequest(BaseModel):
+    reason: str = "operator"
+
+
+class SoakRequest(BaseModel):
+    profile: str = Field(default="24h", pattern="^(24h|48h|72h|stress)$")
 
 
 @router.get("/status")
@@ -137,3 +155,54 @@ async def scalping_ai_v2_update_policies(
     _ = user
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     return _service.update_policies(updates)
+
+
+@router.get("/diagnostics")
+async def scalping_ai_v2_diagnostics(user: CurrentUser) -> dict[str, Any]:
+    _ = user
+    return _service.diagnostics()
+
+
+@router.get("/operator")
+async def scalping_ai_v2_operator(user: CurrentUser) -> dict[str, Any]:
+    _ = user
+    return _service.operator_dashboard()
+
+
+@router.get("/audit")
+async def scalping_ai_v2_audit(
+    user: CurrentUser,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    _ = user
+    return _service.audit(limit=limit)
+
+
+@router.get("/state")
+async def scalping_ai_v2_state(user: CurrentUser) -> dict[str, Any]:
+    _ = user
+    return _service.state()
+
+
+@router.post("/emergency-stop")
+async def scalping_ai_v2_emergency_stop(
+    body: EmergencyRequest, user: CurrentUser
+) -> dict[str, Any]:
+    _ = user
+    return _service.arm_emergency_stop(body.reason)
+
+
+@router.post("/emergency-stop/clear")
+async def scalping_ai_v2_emergency_clear(
+    body: EmergencyRequest, user: CurrentUser
+) -> dict[str, Any]:
+    _ = user
+    return _service.clear_emergency_stop(body.reason)
+
+
+@router.post("/soak")
+async def scalping_ai_v2_soak(
+    body: SoakRequest, user: CurrentUser
+) -> dict[str, Any]:
+    _ = user
+    return _service.soak(profile=body.profile)

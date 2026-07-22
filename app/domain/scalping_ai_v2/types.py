@@ -100,3 +100,12 @@ class ScalpCycleInput:
     news_blackout: bool | None = None
     technique: str | None = None
     execution_identity: str | None = None
+    # V2.1 hardening inputs (supplied facts only)
+    market_data: dict[str, Any] | None = None
+    mt5_sync: dict[str, Any] | None = None
+    restart: bool | None = None
+    resources: dict[str, Any] | None = None
+    latencies: dict[str, Any] | None = None
+    failure_code: str | None = None
+    emergency_stop: bool | None = None
+    correlation_id: str | None = None

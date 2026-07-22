@@ -1,4 +1,4 @@
-"""Application service — Institutional XAUUSD Scalping AI V2."""
+"""Application service — Institutional XAUUSD Scalping AI V2 / V2.1."""
 
 from __future__ import annotations
 
@@ -35,3 +35,26 @@ class ScalpingAiV2Service:
 
     def cycle(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._system.run_cycle(input_from_dict(payload))
+
+    def diagnostics(self) -> dict[str, Any]:
+        return self._system.diagnostics()
+
+    def operator_dashboard(self) -> dict[str, Any]:
+        return self._system.operator_dashboard()
+
+    def audit(self, *, limit: int = 100) -> dict[str, Any]:
+        return self._system.list_audit(limit=limit)
+
+    def arm_emergency_stop(self, reason: str = "operator") -> dict[str, Any]:
+        return self._system.arm_emergency_stop(reason)
+
+    def clear_emergency_stop(
+        self, reason: str = "operator_clear"
+    ) -> dict[str, Any]:
+        return self._system.clear_emergency_stop(reason)
+
+    def soak(self, profile: str = "24h") -> dict[str, Any]:
+        return self._system.run_soak(profile=profile)
+
+    def state(self) -> dict[str, Any]:
+        return self._system.state_store.export_for_restart()

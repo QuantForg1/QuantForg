@@ -44,6 +44,13 @@ def test_scalping_ai_v2_router_registered(app) -> None:
     assert any("scalping-ai-v2" in p for p in paths)
     assert any(p.endswith("/status") and "scalping-ai-v2" in p for p in paths)
     assert any(p.endswith("/cycle") and "scalping-ai-v2" in p for p in paths)
+    assert any(
+        p.endswith("/diagnostics") and "scalping-ai-v2" in p for p in paths
+    )
+    assert any(
+        p.endswith("/emergency-stop") and "scalping-ai-v2" in p for p in paths
+    )
+    assert any(p.endswith("/soak") and "scalping-ai-v2" in p for p in paths)
 
 
 def test_scalping_domain_isolated_from_order_send() -> None:

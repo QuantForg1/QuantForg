@@ -1043,6 +1043,32 @@ export const scalpingAiV2Api = {
       method: "POST",
       body,
     }),
+  diagnostics: () =>
+    apiFetch<Record<string, unknown>>("/scalping-ai-v2/diagnostics"),
+  operator: () => apiFetch<Record<string, unknown>>("/scalping-ai-v2/operator"),
+  audit: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/scalping-ai-v2/audit?limit=${limit}`,
+    ),
+  state: () => apiFetch<Record<string, unknown>>("/scalping-ai-v2/state"),
+  emergencyStop: (reason = "operator") =>
+    apiFetch<Record<string, unknown>>("/scalping-ai-v2/emergency-stop", {
+      method: "POST",
+      body: { reason },
+    }),
+  clearEmergencyStop: (reason = "operator_clear") =>
+    apiFetch<Record<string, unknown>>(
+      "/scalping-ai-v2/emergency-stop/clear",
+      {
+        method: "POST",
+        body: { reason },
+      },
+    ),
+  soak: (profile: "24h" | "48h" | "72h" | "stress" = "24h") =>
+    apiFetch<Record<string, unknown>>("/scalping-ai-v2/soak", {
+      method: "POST",
+      body: { profile },
+    }),
 };
 
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */

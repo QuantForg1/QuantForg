@@ -28,6 +28,17 @@ EVENT_TYPES: tuple[str, ...] = (
     "WatchdogAlert",
     "DuplicateBlocked",
     "CycleCompleted",
+    # V2.1 hardening
+    "SafeModeEntered",
+    "SafeModeExited",
+    "EmergencyStopArmed",
+    "EmergencyStopCleared",
+    "StatePersisted",
+    "StateRestored",
+    "Mt5DriftDetected",
+    "DataIntegrityRejected",
+    "RestartRecoveryStarted",
+    "LatencySampled",
 )
 
 
