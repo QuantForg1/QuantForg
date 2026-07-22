@@ -15,6 +15,7 @@ import {
   FileText,
   FlaskConical,
   Gauge,
+  GraduationCap,
   History,
   Keyboard,
   Layers3,
@@ -236,6 +237,12 @@ export const appNav: NavGroup[] = [
         label: "Market Context",
         icon: Radar,
         hint: "RMIP · real-world context · never trades",
+      },
+      {
+        href: "/live-learning-program",
+        label: "Live Learning",
+        icon: GraduationCap,
+        hint: "LLP · evidence only · never auto-tunes",
       },
       {
         href: "/ai-robot",

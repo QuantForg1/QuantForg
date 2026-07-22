@@ -1212,6 +1212,28 @@ export const realMarketIntelligencePlatformApi = {
     ),
 };
 
+/** Live Learning Program — evidence only; never order_send / never auto-tune */
+export const liveLearningProgramApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/live-learning-program/status"),
+  evaluate: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/live-learning-program/evaluate", {
+      method: "POST",
+      body,
+    }),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/live-learning-program/history?limit=${limit}`,
+    ),
+  policies: () =>
+    apiFetch<Record<string, unknown>>("/live-learning-program/policies"),
+  updatePolicies: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/live-learning-program/policies", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Strategy Research Lab V1 — validation/promotion only, never order_send */
 export const strategyLabApi = {
   status: () => apiFetch<Record<string, unknown>>("/strategy-lab/status"),
