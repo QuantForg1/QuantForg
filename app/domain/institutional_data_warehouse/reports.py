@@ -153,6 +153,12 @@ def build_recommendations(
 
 
 def build_warehouse_pack(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
+    from app.domain.institutional_data_warehouse.dimensional import build_dimensional_model
+    from app.domain.institutional_data_warehouse.quality_monitor import (
+        run_data_quality_monitor,
+    )
+    from app.domain.institutional_data_warehouse.retention import retention_status
+
     health = build_health_report(wh)
     coverage = build_coverage_report(wh)
     quality = build_quality_report(wh)
@@ -161,19 +167,34 @@ def build_warehouse_pack(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     recommendations = build_recommendations(
         health=health, coverage=coverage, quality=quality
     )
+    dq = run_data_quality_monitor(wh)
+    retention = retention_status(wh)
+    dimensional = build_dimensional_model(wh)
     return {
-        "version": "1.0.1",
+        "version": "1.1.0",
         "status": "available",
         "read_only": True,
         "analytics_infrastructure_only": True,
         "hard_locks": HARD_LOCKS,
         "inventory": wh.inventory(),
+        "storage": wh.storage_stats(),
+        "growth": {
+            "ingest_batches": wh.inventory().get("ingest_batches"),
+            "event_flow": wh.event_flow(limit=30),
+            "total_records": wh.inventory().get("total_records"),
+        },
+        "event_flow": wh.event_flow(limit=40),
+        "data_quality_monitor": dq,
+        "retention": retention,
+        "dimensional_model": dimensional,
         "analytics": analytics,
         "reports": {
             "warehouse_health_report": health,
             "data_coverage_report": coverage,
             "data_quality_report": quality,
             "correlation_report": correlation,
+            "data_quality_monitor": dq,
+            "retention_policy": retention,
         },
         "recommendations": recommendations,
         "evidence_summary": {
@@ -183,6 +204,7 @@ def build_warehouse_pack(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
             ),
             "domains_total": len(DATA_DOMAINS),
             "completeness_ratio": quality.get("completeness_ratio"),
+            "integrity_score": dq.get("integrity_score"),
             "cross_domain_correlations": correlation.get(
                 "cross_domain_correlations"
             ),

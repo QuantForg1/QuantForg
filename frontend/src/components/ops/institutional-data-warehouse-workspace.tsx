@@ -33,14 +33,24 @@ function fmtPct(v: unknown): string {
 
 const DOMAINS = [
   "market",
-  "trades",
-  "orders",
   "signals",
+  "strategy_decisions",
   "risk",
   "safety",
+  "oms",
   "execution",
-  "performance",
+  "gateway",
+  "broker",
   "replay",
+  "research",
+  "portfolio",
+  "regimes",
+  "opportunity",
+  "diagnostics",
+  "audit",
+  "trades",
+  "orders",
+  "performance",
   "evidence",
   "governance",
   "configuration",
@@ -110,6 +120,10 @@ export function InstitutionalDataWarehouseWorkspace() {
   );
   const quality = asRecord(asRecord(d.reports).data_quality_report);
   const correlation = asRecord(asRecord(d.reports).correlation_report);
+  const dq = asRecord(d.data_quality_monitor ?? asRecord(d.reports).data_quality_monitor);
+  const storage = asRecord(d.storage ?? asRecord(inventory.storage));
+  const growth = asRecord(d.growth);
+  const eventFlow = asList(d.event_flow ?? growth.event_flow).map(asRecord);
   const summary = asRecord(d.evidence_summary);
   const recs = asList(asRecord(reportsQ.data).recommendations).map(String);
   const items = asList(asRecord(dataQ.data).items).map(asRecord);
@@ -133,8 +147,9 @@ export function InstitutionalDataWarehouseWorkspace() {
           <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
             Institutional Data Warehouse
           </span>
-          <Badge tone="neutral">v{str(d.version, "1.0.1")}</Badge>
+          <Badge tone="neutral">v{str(d.version, "1.1.0")}</Badge>
           <Badge tone="success">read-only</Badge>
+          <Badge tone="warning">immutable events</Badge>
           <Badge tone="neutral">
             n={str(summary.total_records ?? inventory.total_records, "0")}
           </Badge>
@@ -152,11 +167,75 @@ export function InstitutionalDataWarehouseWorkspace() {
         </Button>
       </div>
 
+      <section className="border border-[var(--border)] bg-[var(--surface)] p-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+          Data health
+        </h3>
+        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
+          <Stat label="Total records" value={str(inventory.total_records, "0")} />
+          <Stat
+            label="Domains populated"
+            value={`${str(summary.domains_populated, "0")}/${str(summary.domains_total, "23")}`}
+          />
+          <Stat label="Completeness" value={fmtPct(quality.completeness_ratio)} />
+          <Stat
+            label="Integrity score"
+            value={str(dq.integrity_score ?? summary.integrity_score, "—")}
+          />
+          <Stat
+            label="Cross-domain corr"
+            value={str(correlation.cross_domain_correlations, "0")}
+          />
+          <Stat label="NO_TRADE" value={str(noTrade.no_trade_count, "0")} />
+        </div>
+      </section>
+
+      <section className="border border-[var(--border)] bg-[var(--surface)] p-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+          Storage · Growth · Event flow
+        </h3>
+        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <Stat label="Approx MB" value={str(storage.approx_mb, "0")} />
+          <Stat label="Ingest batches" value={str(storage.ingest_batches ?? growth.ingest_batches, "0")} />
+          <Stat label="Duplicates" value={str(dq.duplicates, "0")} />
+          <Stat label="Ordering issues" value={str(dq.ordering_violations, "0")} />
+        </div>
+        <ul className="mt-3 max-h-28 space-y-1 overflow-auto font-mono text-[11px] text-[var(--fg-muted)]">
+          {eventFlow.length === 0 ? (
+            <li>No ingest flow yet.</li>
+          ) : (
+            eventFlow
+              .slice()
+              .reverse()
+              .map((e, i) => (
+                <li key={`${str(e.at)}-${i}`}>
+                  {str(e.at, "").slice(0, 19)} · {str(e.domain)} · +{str(e.records, "0")}
+                </li>
+              ))
+          )}
+        </ul>
+      </section>
+
+      <section className="border border-[var(--border)] bg-[var(--surface)] p-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+          Data quality
+        </h3>
+        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <Stat label="Scanned" value={str(dq.records_scanned, "0")} />
+          <Stat label="Missing events" value={str(dq.missing_events, "0")} />
+          <Stat label="Avg latency (s)" value={str(dq.latency_seconds_avg, "—")} />
+          <Stat
+            label="Replay coverage"
+            value={fmtPct(asRecord(analytics.replay_coverage).coverage_ratio)}
+          />
+        </div>
+      </section>
+
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
         <Stat label="Total records" value={str(inventory.total_records, "0")} />
         <Stat
           label="Domains populated"
-          value={`${str(summary.domains_populated, "0")}/${str(summary.domains_total, "13")}`}
+          value={`${str(summary.domains_populated, "0")}/${str(summary.domains_total, "23")}`}
         />
         <Stat label="Completeness" value={fmtPct(quality.completeness_ratio)} />
         <Stat

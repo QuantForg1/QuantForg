@@ -146,6 +146,52 @@ async def warehouse_reports(_user: CurrentUser) -> dict[str, Any]:
     }
 
 
+@router.get("/dimensional")
+async def warehouse_dimensional(_user: CurrentUser) -> dict[str, Any]:
+    from app.application.services.institutional_data_warehouse import query_dimensional
+
+    return query_dimensional()
+
+
+@router.get("/quality")
+async def warehouse_quality(_user: CurrentUser) -> dict[str, Any]:
+    from app.application.services.institutional_data_warehouse import query_data_quality
+
+    return query_data_quality()
+
+
+@router.get("/retention")
+async def warehouse_retention(
+    _user: CurrentUser,
+    apply: bool = Query(default=False),
+) -> dict[str, Any]:
+    from app.application.services.institutional_data_warehouse import query_retention
+
+    return query_retention(apply=apply)
+
+
+@router.get("/query/aggregate")
+async def warehouse_aggregate(
+    _user: CurrentUser,
+    domain: str = Query(default="trades"),
+    grain: str = Query(default="day"),
+) -> dict[str, Any]:
+    from app.application.services.institutional_data_warehouse import query_aggregation
+
+    return query_aggregation(domain=domain, grain=grain)
+
+
+@router.get("/query/rolling")
+async def warehouse_rolling(
+    _user: CurrentUser,
+    domain: str = Query(default="trades"),
+    window: int = Query(default=20, ge=2, le=200),
+) -> dict[str, Any]:
+    from app.application.services.institutional_data_warehouse import query_rolling
+
+    return query_rolling(domain=domain, window=window)
+
+
 @router.get("/export")
 async def export_dataset(
     _user: CurrentUser,

@@ -430,6 +430,22 @@ export const institutionalDataWarehouseApi = {
     apiFetch<Record<string, unknown>>("/institutional-data-warehouse/analytics"),
   reports: () =>
     apiFetch<Record<string, unknown>>("/institutional-data-warehouse/reports"),
+  dimensional: () =>
+    apiFetch<Record<string, unknown>>("/institutional-data-warehouse/dimensional"),
+  quality: () =>
+    apiFetch<Record<string, unknown>>("/institutional-data-warehouse/quality"),
+  retention: (apply = false) =>
+    apiFetch<Record<string, unknown>>(
+      `/institutional-data-warehouse/retention?apply=${apply ? "true" : "false"}`,
+    ),
+  aggregate: (domain = "trades", grain = "day") =>
+    apiFetch<Record<string, unknown>>(
+      `/institutional-data-warehouse/query/aggregate?domain=${encodeURIComponent(domain)}&grain=${encodeURIComponent(grain)}`,
+    ),
+  rolling: (domain = "trades", window = 20) =>
+    apiFetch<Record<string, unknown>>(
+      `/institutional-data-warehouse/query/rolling?domain=${encodeURIComponent(domain)}&window=${window}`,
+    ),
   snapshot: () =>
     apiFetch<Record<string, unknown>>("/institutional-data-warehouse/snapshot", {
       method: "POST",

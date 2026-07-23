@@ -89,11 +89,16 @@ class TestInstitutionalDataWarehouse:
         wh = InstitutionalDataWarehouse()
         _seed(wh)
         row = wh.list("trades")[0]
+        assert row["uuid"]
         assert row["timestamp"]
+        assert row["source"]
         assert row["correlation_id"] == "c1"
         assert row["trade_id"] == "T1"
         assert row["session"] == "london"
+        assert row["trading_day"] == "2026-07-20"
+        assert row["environment"] == "demo"
         assert row["symbol"] == "XAUUSD"
+        assert row["immutable"] is True
         assert row["strategy_version"] == "v1.0.1"
         assert row["risk_version"] == "v1.0.1"
         assert row["safety_version"] == "v1.0.1"
@@ -131,12 +136,18 @@ class TestInstitutionalDataWarehouse:
         pack = build_warehouse_pack(wh)
         assert pack["read_only"] is True
         assert pack["hard_locks"]["never_modifies_production_records"] is True
+        assert pack["hard_locks"]["immutable_event_storage"] is True
         assert "warehouse_health_report" in pack["reports"]
         assert "data_coverage_report" in pack["reports"]
         assert "data_quality_report" in pack["reports"]
         assert "correlation_report" in pack["reports"]
+        assert "data_quality_monitor" in pack["reports"]
         assert pack["reports"]["correlation_report"]["cross_domain_correlations"] >= 1
         assert isinstance(pack["recommendations"], list)
+        assert "integrity_score" in pack["data_quality_monitor"]
+        assert "dimensional_model" in pack
+        assert "storage" in pack
+        assert "fact_trades" in pack["dimensional_model"]["fact_rows"]
 
     def test_missing_fields_not_fabricated(self) -> None:
         wh = InstitutionalDataWarehouse()
@@ -145,3 +156,54 @@ class TestInstitutionalDataWarehouse:
         assert row["timestamp"] is None
         assert row["strategy_version"] is None
         assert row["correlation_id"] is None
+
+    def test_dimensional_and_quality_and_retention(self) -> None:
+        from app.domain.institutional_data_warehouse.dimensional import (
+            build_dimensional_model,
+            historical_aggregation,
+            rolling_statistics,
+        )
+        from app.domain.institutional_data_warehouse.quality_monitor import (
+            run_data_quality_monitor,
+        )
+        from app.domain.institutional_data_warehouse.retention import (
+            apply_retention_classification,
+            retention_status,
+        )
+
+        wh = InstitutionalDataWarehouse()
+        _seed(wh)
+        dim = build_dimensional_model(wh)
+        assert dim["star_schema"] is True
+        assert dim["fact_rows"]["fact_trades"] == 2
+        agg = historical_aggregation(wh, domain="trades", grain="day")
+        assert agg["series"]
+        roll = rolling_statistics(wh, domain="trades", window=2)
+        assert roll["status"] in {"available", "unavailable"}
+        dq = run_data_quality_monitor(wh)
+        assert 0 <= float(dq["integrity_score"]) <= 100
+        ret = retention_status(wh)
+        assert "tier_counts" in ret
+        applied = apply_retention_classification(wh)
+        assert applied["never_deletes_production"] is True
+
+    def test_performance_budget(self) -> None:
+        import time
+
+        wh = InstitutionalDataWarehouse()
+        rows = [
+            {
+                "timestamp": f"2026-07-20T{i % 24:02d}:00:00Z",
+                "trade_id": f"T{i}",
+                "correlation_id": f"c{i % 10}",
+                "session": "london",
+                "net_pnl": (i % 5) - 2,
+            }
+            for i in range(400)
+        ]
+        t0 = time.perf_counter()
+        wh.ingest("trades", rows, environment="demo", replace=True)
+        pack = build_warehouse_pack(wh)
+        elapsed = time.perf_counter() - t0
+        assert pack["inventory"]["total_records"] >= 400
+        assert elapsed < 8.0

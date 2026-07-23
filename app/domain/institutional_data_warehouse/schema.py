@@ -1,4 +1,4 @@
-"""Normalize warehouse records — never invent missing production facts."""
+"""Normalize warehouse records — immutable event envelope; never invent facts."""
 
 from __future__ import annotations
 
@@ -33,8 +33,9 @@ def normalize_warehouse_record(
     *,
     domain: str,
     environment: str | None = None,
+    source: str | None = None,
 ) -> dict[str, Any] | None:
-    """Map a source row into a warehouse record. Returns None if not a dict."""
+    """Map a source row into an immutable warehouse event. Returns None if invalid."""
     if not isinstance(raw, dict):
         return None
 
@@ -44,6 +45,7 @@ def normalize_warehouse_record(
         or raw.get("opened_at")
         or raw.get("created_at")
         or raw.get("submitted_at")
+        or raw.get("observed_at")
     )
     versions = raw.get("versions") if isinstance(raw.get("versions"), dict) else {}
 
@@ -56,29 +58,44 @@ def normalize_warehouse_record(
             return str(raw.get(f"{key}_version"))
         return None
 
+    event_uuid = str(raw.get("uuid") or raw.get("warehouse_id") or uuid4())
+    trading_day = None
+    if ts is not None:
+        trading_day = ts.astimezone(UTC).date().isoformat()
+    elif raw.get("trading_day"):
+        trading_day = str(raw.get("trading_day"))
+
     record = {
-        "warehouse_id": str(raw.get("warehouse_id") or uuid4()),
+        "uuid": event_uuid,
+        "warehouse_id": event_uuid,  # backward compatible
         "domain": domain,
         "timestamp": _iso(ts) if ts else None,
+        "source": source
+        or raw.get("source")
+        or raw.get("emitter")
+        or f"idw:{domain}",
         "correlation_id": (
             str(raw["correlation_id"])
             if raw.get("correlation_id") is not None
             else None
         ),
-        "trade_id": (
-            str(raw.get("trade_id") or raw.get("id") or raw.get("order_id") or "")
-            or None
-        ),
         "session": raw.get("session") or raw.get("market_session"),
-        "symbol": raw.get("symbol") or raw.get("instrument") or "XAUUSD",
+        "trading_day": trading_day,
         "environment": environment
         or raw.get("environment")
         or raw.get("evidence_lane")
         or "unknown",
+        "trade_id": (
+            str(raw.get("trade_id") or raw.get("id") or raw.get("order_id") or "")
+            or None
+        ),
+        "symbol": raw.get("symbol") or raw.get("instrument") or "XAUUSD",
         "strategy_version": _ver("strategy", "strategy_version"),
         "risk_version": _ver("risk", "risk_version"),
         "safety_version": _ver("safety", "safety_version"),
         "execution_version": _ver("execution", "execution_version"),
+        "retention_tier": str(raw.get("retention_tier") or "raw_events"),
+        "immutable": True,
         "payload": dict(raw),
         "read_only": True,
         "source_mutated": False,

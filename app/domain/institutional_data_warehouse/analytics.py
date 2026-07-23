@@ -177,6 +177,11 @@ def risk_event_history(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
 
 
 def run_analytics(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
+    from app.domain.institutional_data_warehouse.dimensional import (
+        historical_aggregation,
+        rolling_statistics,
+    )
+
     return {
         "performance_by_strategy_version": performance_by_strategy_version(wh),
         "performance_by_session": performance_by_session(wh),
@@ -186,5 +191,7 @@ def run_analytics(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
         "replay_coverage": replay_coverage(wh),
         "evidence_growth": evidence_growth(wh),
         "risk_event_history": risk_event_history(wh),
+        "historical_aggregation": historical_aggregation(wh, domain="trades", grain="day"),
+        "rolling_statistics": rolling_statistics(wh, domain="trades", window=20),
         "read_only": True,
     }

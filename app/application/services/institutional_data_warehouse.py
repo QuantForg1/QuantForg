@@ -123,6 +123,77 @@ def snapshot_read_only_sources(
         ingested.setdefault("safety", 0)
         ingested.setdefault("configuration", 0)
 
+    # Optional read-only copies from research / ops analytics desks
+    try:
+        from app.domain.institutional_research_lab import get_irl
+
+        lab = get_irl()
+        experiments = lab.list_experiments(limit=100)
+        ingested["research"] = wh.ingest(
+            "research",
+            experiments,
+            environment="research",
+            replace=True,
+            source="irl",
+        )
+    except Exception:
+        ingested.setdefault("research", 0)
+
+    try:
+        from app.application.services.market_regime_intelligence import (
+            build_market_regime_intelligence,
+        )
+
+        regime = build_market_regime_intelligence(limit=50)
+        hist = regime.get("history") if isinstance(regime.get("history"), list) else []
+        current = regime.get("current")
+        rows = list(hist)
+        if isinstance(current, dict):
+            rows = [current, *rows]
+        ingested["regimes"] = wh.ingest(
+            "regimes", rows, environment="analytics", replace=True, source="mri"
+        )
+    except Exception:
+        ingested.setdefault("regimes", 0)
+
+    try:
+        from app.application.services.adaptive_opportunity_timeline import (
+            timeline_snapshot_from_diagnostics,
+        )
+        from app.application.services.strategy_diagnostics import (
+            get_strategy_diagnostics_store,
+        )
+
+        snap = get_strategy_diagnostics_store().snapshot(limit=50)
+        tl = timeline_snapshot_from_diagnostics(snap, limit=50)
+        points = tl.get("points") if isinstance(tl.get("points"), list) else []
+        ingested["opportunity"] = wh.ingest(
+            "opportunity",
+            points,
+            environment="analytics",
+            replace=True,
+            source="opportunity_timeline",
+        )
+    except Exception:
+        ingested.setdefault("opportunity", 0)
+
+    try:
+        from app.application.services.strategy_diagnostics import (
+            get_strategy_diagnostics_store,
+        )
+
+        snap = get_strategy_diagnostics_store().snapshot(limit=50)
+        cycles = list(snap.get("cycles") or [])
+        ingested["diagnostics"] = wh.ingest(
+            "diagnostics",
+            cycles,
+            environment="analytics",
+            replace=True,
+            source="diagnostics",
+        )
+    except Exception:
+        ingested.setdefault("diagnostics", 0)
+
     return {
         "status": "available",
         "ingested": ingested,
@@ -286,6 +357,76 @@ def seed_demo_warehouse() -> dict[str, Any]:
         environment="demo",
         replace=True,
     )
+    wh.ingest(
+        "oms",
+        [{"timestamp": "2026-07-20T08:00:01Z", "correlation_id": corr, "oms_status": "filled"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "gateway",
+        [{"timestamp": "2026-07-20T08:00:02Z", "correlation_id": corr, "action": "health_ok"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "broker",
+        [{"timestamp": "2026-07-20T08:00:03Z", "correlation_id": corr, "action": "deal"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "research",
+        [{"timestamp": "2026-07-21T10:00:00Z", "correlation_id": corr, "verdict": "Research Passed"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "portfolio",
+        [{"timestamp": "2026-07-21T11:00:00Z", "correlation_id": corr, "net_profit": 16}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "regimes",
+        [{"timestamp": "2026-07-21T11:05:00Z", "correlation_id": corr, "regime": "trend"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "opportunity",
+        [{"timestamp": "2026-07-21T11:06:00Z", "correlation_id": corr, "meter": 42}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "diagnostics",
+        [{"timestamp": "2026-07-21T11:07:00Z", "correlation_id": corr, "cycle_id": "c-1"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "audit",
+        [{"timestamp": "2026-07-22T09:05:00Z", "correlation_id": corr, "action": "ops_promotion"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
+    wh.ingest(
+        "strategy_decisions",
+        [{"timestamp": "2026-07-20T07:59:00Z", "correlation_id": corr, "decision": "BUY"}],
+        environment="demo",
+        replace=True,
+        source="idw:demo",
+    )
     # Mirror into process warehouse for API demos
     process = get_warehouse()
     process.clear()
@@ -295,12 +436,63 @@ def seed_demo_warehouse() -> dict[str, Any]:
             [r["payload"] for r in wh.list(domain, limit=10_000)],  # type: ignore[arg-type]
             environment="demo",
             replace=True,
+            source="idw:demo",
         )
     return build_warehouse_pack(wh)
 
 
 def query_analytics() -> dict[str, Any]:
     return run_analytics(get_warehouse())
+
+
+def query_dimensional() -> dict[str, Any]:
+    from app.domain.institutional_data_warehouse.dimensional import (
+        build_dimensional_model,
+    )
+
+    return build_dimensional_model(get_warehouse())
+
+
+def query_data_quality() -> dict[str, Any]:
+    from app.domain.institutional_data_warehouse.quality_monitor import (
+        run_data_quality_monitor,
+    )
+
+    return run_data_quality_monitor(get_warehouse())
+
+
+def query_retention(*, apply: bool = False) -> dict[str, Any]:
+    from app.domain.institutional_data_warehouse.retention import (
+        apply_retention_classification,
+        retention_status,
+    )
+
+    wh = get_warehouse()
+    if apply:
+        return apply_retention_classification(wh)
+    return retention_status(wh)
+
+
+def query_aggregation(
+    *,
+    domain: str = "trades",
+    grain: str = "day",
+) -> dict[str, Any]:
+    from app.domain.institutional_data_warehouse.dimensional import (
+        historical_aggregation,
+    )
+
+    return historical_aggregation(get_warehouse(), domain=domain, grain=grain)
+
+
+def query_rolling(
+    *,
+    domain: str = "trades",
+    window: int = 20,
+) -> dict[str, Any]:
+    from app.domain.institutional_data_warehouse.dimensional import rolling_statistics
+
+    return rolling_statistics(get_warehouse(), domain=domain, window=window)
 
 
 # silence unused import for type alias consumers

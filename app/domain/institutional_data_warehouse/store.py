@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
@@ -19,6 +20,8 @@ class InstitutionalDataWarehouse:
         }
         self._lock = Lock()
         self._ingest_batches = 0
+        self._ingest_history: list[dict[str, Any]] = []
+        self._created_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     def clear(self, domain: DataDomain | None = None) -> None:
         """Clear warehouse copies only — never production sources."""
@@ -29,6 +32,14 @@ class InstitutionalDataWarehouse:
             else:
                 self._datasets[str(domain)] = []
 
+    def replace_rows(self, domain: DataDomain, rows: list[dict[str, Any]]) -> int:
+        """Replace warehouse domain copies (already-normalized envelopes)."""
+        if domain not in DATA_DOMAINS:
+            raise ValueError(f"Unknown warehouse domain: {domain}")
+        with self._lock:
+            self._datasets[domain] = [deepcopy(r) for r in rows]
+            return len(self._datasets[domain])
+
     def ingest(
         self,
         domain: DataDomain,
@@ -36,6 +47,7 @@ class InstitutionalDataWarehouse:
         *,
         environment: str | None = None,
         replace: bool = False,
+        source: str | None = None,
     ) -> int:
         if domain not in DATA_DOMAINS:
             raise ValueError(f"Unknown warehouse domain: {domain}")
@@ -43,9 +55,11 @@ class InstitutionalDataWarehouse:
         for raw in rows or []:
             if not isinstance(raw, dict):
                 continue
-            # Deep-copy source before normalize — never mutate caller rows
             rec = normalize_warehouse_record(
-                deepcopy(raw), domain=domain, environment=environment
+                deepcopy(raw),
+                domain=domain,
+                environment=environment,
+                source=source,
             )
             if rec is not None:
                 normalized.append(rec)
@@ -55,6 +69,16 @@ class InstitutionalDataWarehouse:
             else:
                 self._datasets[domain].extend(normalized)
             self._ingest_batches += 1
+            self._ingest_history.append(
+                {
+                    "at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                    "domain": domain,
+                    "records": len(normalized),
+                    "replace": replace,
+                }
+            )
+            if len(self._ingest_history) > 200:
+                self._ingest_history = self._ingest_history[-150:]
             return len(normalized)
 
     def list(
@@ -102,6 +126,29 @@ class InstitutionalDataWarehouse:
         with self._lock:
             return {d: len(self._datasets[d]) for d in DATA_DOMAINS}
 
+    def event_flow(self, *, limit: int = 40) -> list[dict[str, Any]]:
+        with self._lock:
+            return deepcopy(self._ingest_history[-limit:])
+
+    def storage_stats(self) -> dict[str, Any]:
+        counts = self.counts()
+        total = sum(counts.values())
+        approx_bytes = 0
+        with self._lock:
+            for rows in self._datasets.values():
+                for row in rows:
+                    approx_bytes += len(str(row))
+        return {
+            "total_records": total,
+            "approx_bytes": approx_bytes,
+            "approx_mb": round(approx_bytes / (1024 * 1024), 4),
+            "domains_populated": sum(1 for n in counts.values() if n > 0),
+            "domains_total": len(DATA_DOMAINS),
+            "ingest_batches": self._ingest_batches,
+            "created_at": self._created_at,
+            "read_only": True,
+        }
+
     def inventory(self) -> dict[str, Any]:
         counts = self.counts()
         return {
@@ -109,8 +156,11 @@ class InstitutionalDataWarehouse:
             "domains": counts,
             "total_records": sum(counts.values()),
             "ingest_batches": self._ingest_batches,
+            "storage": self.storage_stats(),
+            "event_flow": self.event_flow(limit=20),
             "read_only": True,
             "never_modifies_production_records": True,
+            "immutable_event_storage": True,
         }
 
 
