@@ -681,6 +681,10 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/live-execution-explain?limit=${limit}`,
     ),
+  adaptiveOpportunity: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/adaptive-opportunity?limit=${limit}`,
+    ),
   thresholdPromotion: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion"),
   thresholdPromote: (body: {

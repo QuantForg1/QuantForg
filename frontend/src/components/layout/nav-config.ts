@@ -277,6 +277,12 @@ export const appNav: NavGroup[] = [
         hint: "Decision card · first block · full trace",
       },
       {
+        href: "/adaptive-opportunity",
+        label: "Adaptive Opportunity",
+        icon: Gauge,
+        hint: "What is missing · opportunity meter · wait ETA",
+      },
+      {
         href: "/micro-account-analyzer",
         label: "Micro Account Analyzer",
         icon: Coins,
