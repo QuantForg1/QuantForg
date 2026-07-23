@@ -673,6 +673,8 @@ export const iteOpsApi = {
     }),
   autoTrading: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/auto-trading"),
+  witnessHealth: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/witness-health"),
   updateAutoTrading: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/ite/ops/auto-trading", {
       method: "POST",

@@ -22,6 +22,7 @@ import {
   FlaskConical,
   Gauge,
   GraduationCap,
+  HeartPulse,
   History,
   Keyboard,
   Layers3,
@@ -245,6 +246,12 @@ export const appNav: NavGroup[] = [
         label: "Production Reliability",
         icon: Activity,
         hint: "DNS · network incidents · reconnects · uptime",
+      },
+      {
+        href: "/witness-health",
+        label: "Witness Health",
+        icon: HeartPulse,
+        hint: "Auth vs execution · heartbeat continuity",
       },
       {
         href: "/production-acceptance",

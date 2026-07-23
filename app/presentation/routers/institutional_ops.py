@@ -589,6 +589,17 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
     }
 
 
+@router.get("/witness-health")
+def get_witness_health(_user: OperatorUser) -> dict[str, Any]:
+    """Witness authentication vs trading execution health (read-only).
+
+    Auth failures (HTTP 401) never alter Production Acceptance.
+    """
+    from app.application.services.witness_observability import dashboard_payload
+
+    return dashboard_payload()
+
+
 @router.post("/auto-trading")
 def update_auto_trading(
     body: AutoTradeControlsBody,
