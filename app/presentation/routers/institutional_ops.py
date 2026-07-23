@@ -145,6 +145,47 @@ class AckBody(BaseModel):
     alert_id: str
 
 
+@router.get("/institutional-control-center")
+def get_institutional_control_center(_user: OperatorUser) -> dict[str, Any]:
+    """Operations → Institutional Control Center (STRICTLY READ ONLY)."""
+    from app.application.services.institutional_control_center import (
+        build_institutional_control_center,
+    )
+
+    return build_institutional_control_center()
+
+
+@router.get("/institutional-control-center/system")
+def get_icc_system(_user: OperatorUser) -> dict[str, Any]:
+    payload = get_institutional_control_center(_user)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {"system_status": sections.get("system_status"), "advisory_only": True}
+
+
+@router.get("/institutional-control-center/kpis")
+def get_icc_kpis(_user: OperatorUser) -> dict[str, Any]:
+    payload = get_institutional_control_center(_user)
+    return {
+        "executive_kpis": payload.get("executive_kpis"),
+        "system_overall": payload.get("system_overall"),
+        "advisory_only": True,
+    }
+
+
+@router.get("/institutional-control-center/alerts")
+def get_icc_alerts(_user: OperatorUser) -> dict[str, Any]:
+    payload = get_institutional_control_center(_user)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {"alerts": sections.get("alerts"), "advisory_only": True}
+
+
+@router.get("/institutional-control-center/timeline")
+def get_icc_timeline(_user: OperatorUser) -> dict[str, Any]:
+    payload = get_institutional_control_center(_user)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {"operational_timeline": sections.get("operational_timeline"), "advisory_only": True}
+
+
 @router.get("/control-center")
 def control_center(_user: OperatorUser) -> dict[str, Any]:
     """Control center plus shared execution_state (same source as Auto Trading)."""

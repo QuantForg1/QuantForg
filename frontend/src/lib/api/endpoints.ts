@@ -735,6 +735,18 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       "/ite/ops/production-readiness-review/executive",
     ),
+  institutionalControlCenter: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/institutional-control-center"),
+  institutionalControlCenterKpis: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/institutional-control-center/kpis"),
+  institutionalControlCenterAlerts: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/institutional-control-center/alerts",
+    ),
+  institutionalControlCenterTimeline: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/institutional-control-center/timeline",
+    ),
   thresholdPromotion: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion"),
   thresholdPromote: (body: {

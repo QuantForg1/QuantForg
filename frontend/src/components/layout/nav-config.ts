@@ -211,6 +211,12 @@ export const appNav: NavGroup[] = [
     title: "Operations",
     items: [
       {
+        href: "/institutional-control-center",
+        label: "Institutional Control Center",
+        icon: LayoutTemplate,
+        hint: "Executive cockpit · all subsystems · read-only",
+      },
+      {
         href: "/mission-control",
         label: "Mission Control",
         icon: LayoutTemplate,
