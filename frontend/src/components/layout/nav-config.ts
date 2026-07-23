@@ -278,6 +278,12 @@ export const appNav: NavGroup[] = [
         hint: "Allowed/blocked · execution window metrics",
       },
       {
+        href: "/execution-timeline",
+        label: "Execution Timeline",
+        icon: ListOrdered,
+        hint: "Chronological stages · blockers · filters",
+      },
+      {
         href: "/production-replay",
         label: "Production Replay",
         icon: Repeat,
