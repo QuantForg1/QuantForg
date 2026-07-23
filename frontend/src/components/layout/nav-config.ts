@@ -20,6 +20,7 @@ import {
   FileText,
   FileLock2,
   FlaskConical,
+  Flame,
   Gauge,
   GraduationCap,
   HeartPulse,
@@ -252,6 +253,12 @@ export const appNav: NavGroup[] = [
         label: "Witness Health",
         icon: HeartPulse,
         hint: "Auth vs execution · heartbeat continuity",
+      },
+      {
+        href: "/production-burnin",
+        label: "Burn-in Monitor",
+        icon: Flame,
+        hint: "Stability until first live fill",
       },
       {
         href: "/production-acceptance",
