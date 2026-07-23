@@ -10,8 +10,8 @@ export default function AutoTradingPage() {
   return (
     <div>
       <PageHeader
-        title="Auto Trading"
-        description="Institutional command center for autonomous XAUUSD trading. Risk Engine and Safety Engine are never bypassed — all closes and submits use the production execution pipeline."
+        title="Trading Operations Center"
+        description="Institutional ops desk UI-only redesign — live market, strategy bias, risk, safety, execution pipeline, and system health. Risk Engine and Safety Engine are never bypassed; all closes and submits use the production execution pipeline."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">

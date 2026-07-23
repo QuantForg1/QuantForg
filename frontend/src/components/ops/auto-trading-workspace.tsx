@@ -5,9 +5,6 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Activity,
-  AlertTriangle,
-  Bot,
   Pause,
   Play,
   ShieldAlert,
@@ -17,13 +14,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/execution/confirm-dialog";
-import { DeskEmpty, DeskError, DeskSkeleton, DeskTable } from "@/components/desk/primitives";
+import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import {
   executionApi,
+  institutionalObservabilityApi,
   iteOpsApi,
   mt5Api,
   portfolioApi,
   strategyApi,
+  platformApi,
   weltradeApi,
 } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
@@ -39,64 +38,20 @@ import { latestSuccessfulExecution } from "@/lib/execution/ops-metrics";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
-import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
 import { LaunchReadinessPanel } from "@/components/ops/launch-readiness-panel";
+import {
+  BiasMeter,
+  ExecutionPipeline,
+  HealthDot,
+  JournalRow,
+  MetricCard,
+  OpsPanel,
+  StatusPill,
+  UtcClock,
+  type PipelineStageState,
+} from "@/components/ops/auto-trading-ops-ui";
 
 type RunState = "off" | "running" | "paused" | "stopped";
-
-function Panel({
-  title,
-  children,
-  action,
-  danger,
-}: {
-  title: string;
-  children: React.ReactNode;
-  action?: React.ReactNode;
-  danger?: boolean;
-}) {
-  return (
-    <section
-      className={cn(
-        "border bg-[var(--surface)]",
-        danger ? "border-[var(--danger)]/50" : "border-[var(--border)]",
-      )}
-    >
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          {title}
-        </h2>
-        {action}
-      </header>
-      <div className="p-3">{children}</div>
-    </section>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ok" | "warn" | "bad" | "neutral";
-}) {
-  const color =
-    tone === "ok"
-      ? "text-[var(--success)]"
-      : tone === "warn"
-        ? "text-[var(--warning)]"
-        : tone === "bad"
-          ? "text-[var(--danger)]"
-          : "text-[var(--fg)]";
-  return (
-    <div className="min-w-0 border border-[var(--border)] bg-[var(--bg)]/35 px-2.5 py-2">
-      <p className="text-[9px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">{label}</p>
-      <p className={cn("mt-1 truncate font-mono text-[12px] tabular", color)}>{value}</p>
-    </div>
-  );
-}
 
 function startOfUtcDay(d = new Date()): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -201,6 +156,30 @@ export function AutoTradingWorkspace() {
   const auditLogQ = useQuery({
     queryKey: ["ite-ops-audit", "auto-ws"],
     queryFn: () => iteOpsApi.audit(40),
+    retry: false,
+    refetchInterval: 20_000,
+  });
+  const servicesHealthQ = useQuery({
+    queryKey: ["ite-ops-services-health", "auto-ws"],
+    queryFn: iteOpsApi.servicesHealth,
+    retry: false,
+    refetchInterval: 20_000,
+  });
+  const obsHealthQ = useQuery({
+    queryKey: ["institutional-observability", "auto-ws"],
+    queryFn: institutionalObservabilityApi.health,
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  const obsResourcesQ = useQuery({
+    queryKey: ["institutional-observability-resources", "auto-ws"],
+    queryFn: institutionalObservabilityApi.resources,
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  const apiHealthQ = useQuery({
+    queryKey: ["system-health", "auto-ws"],
+    queryFn: platformApi.health,
     retry: false,
     refetchInterval: 20_000,
   });
@@ -653,162 +632,445 @@ export function AutoTradingWorkspace() {
     );
   }
 
+  const orch = asRecord(asRecord(autoQ.data).orchestrator);
+  const last = asRecord(orch.last_cycle);
+  const diag = asRecord(last.market_context_diagnostics);
+  const decisionReasons = asList(last.decision_reasons).map(String);
+  const safetyCycleReasons = asList(
+    last.safety_failed_reasons ?? failedReasons,
+  ).map(String);
+
+  const tradingSession = str(diag.trading_session || diag.session, "—");
+  const sessionAllowed =
+    diag.session_allowed === true ||
+    diag.session_allowed === "true" ||
+    str(diag.session_allowed).toLowerCase() === "true";
+
+  const bidRaw = tick.bid ?? diag.bid;
+  const askRaw = tick.ask ?? diag.ask;
+  const bid = Number.isFinite(num(bidRaw))
+    ? formatNumber(num(bidRaw), 3)
+    : str(bidRaw, "—");
+  const ask = Number.isFinite(num(askRaw))
+    ? formatNumber(num(askRaw), 3)
+    : str(askRaw, "—");
+  const spreadRaw =
+    tick.spread ??
+    diag.spread ??
+    (Number.isFinite(num(tick.bid)) && Number.isFinite(num(tick.ask))
+      ? num(tick.ask) - num(tick.bid)
+      : NaN);
+  const spread = Number.isFinite(num(spreadRaw))
+    ? formatNumber(num(spreadRaw), 2)
+    : str(spreadRaw, "—");
+
+  const atr =
+    Number.isFinite(num(diag.atr))
+      ? formatNumber(num(diag.atr), 2)
+      : str(diag.atr, "—");
+  const volatility = str(
+    diag.volatility_level || diag.volatility || diag.regime_volatility,
+    "—",
+  );
+  const trend = str(
+    diag.trend ||
+      decisionReasons.find((r) => /trend|aligned|BOS|CHOCH/i.test(r)),
+    "—",
+  );
+  const marketRegime = str(
+    diag.market_regime || diag.regime || tradingSession,
+    "—",
+  );
+  const liquidity = str(
+    diag.liquidity_level || diag.liquidity,
+    "—",
+  );
+
+  const qualityMatch =
+    decisionReasons.find((r) => /Trade quality/i.test(r)) ??
+    str(last.detail, "");
+  const qualityScore =
+    qualityMatch.match(/Trade quality\s+(\d+)/i)?.[1] ??
+    (str(diag.trade_quality, "") !== "" ? str(diag.trade_quality) : "—");
+  const confluenceMatch =
+    decisionReasons.find((r) => /Confluence/i.test(r)) ?? "";
+  const confluenceScore =
+    confluenceMatch.match(/Confluence\s+(\d+)/i)?.[1] ??
+    (str(diag.confluence, "") !== "" ? str(diag.confluence) : "—");
+  const confidence =
+    confluenceScore !== "—"
+      ? confluenceScore
+      : str(last.confidence ?? diag.confidence, "—");
+
+  const decisionAction = str(last.decision_action, "").toUpperCase();
+  const bias: "BUY" | "SELL" | "WAIT" =
+    decisionAction === "BUY" || decisionAction === "LONG"
+      ? "BUY"
+      : decisionAction === "SELL" || decisionAction === "SHORT"
+        ? "SELL"
+        : "WAIT";
+
+  const cycleOutcome = str(last.cycle_outcome, "").toLowerCase();
+  const forwarded = Boolean(last.forwarded_to_oms);
+  const hasTicket = last.mt5_ticket != null && str(last.mt5_ticket) !== "";
+  const latencyMs =
+    last.latency_ms != null && Number.isFinite(num(last.latency_ms))
+      ? `${formatNumber(num(last.latency_ms), 0)} ms`
+      : analytics.latency_ms_avg != null
+        ? `${formatNumber(num(analytics.latency_ms_avg), 0)} ms`
+        : "—";
+
+  const stageOf = (
+    ok: boolean,
+    fail: boolean,
+    running = false,
+  ): PipelineStageState => {
+    if (fail) return "failed";
+    if (ok) return "success";
+    if (running) return "running";
+    return "waiting";
+  };
+
+  const livePipeline: {
+    id: string;
+    label: string;
+    state: PipelineStageState;
+    detail?: string;
+  }[] = [
+    {
+      id: "market",
+      label: "Market",
+      state: stageOf(
+        Boolean(last.snapshot_present) || str(diag.snapshot) === "OK" || marketOpen,
+        cycleOutcome === "no_snapshot",
+        Boolean(orch.running),
+      ),
+      detail: str(diag.ticks || diag.snapshot, ""),
+    },
+    {
+      id: "strategy",
+      label: "Strategy",
+      state: stageOf(
+        Boolean(last.signal_id) || decisionReasons.length > 0,
+        /strategy|analyze/i.test(str(last.abort_reason)),
+      ),
+      detail: str(last.signal_id, ""),
+    },
+    {
+      id: "decision",
+      label: "Decision",
+      state: stageOf(
+        Boolean(last.decision_action) || cycleOutcome.includes("no_trade"),
+        cycleOutcome.includes("decision") && cycleOutcome.includes("fail"),
+      ),
+      detail: str(last.decision_action || last.cycle_outcome, ""),
+    },
+    {
+      id: "risk",
+      label: "Risk",
+      state: stageOf(
+        cycleOutcome === "forwarded" ||
+          cycleOutcome === "safety_blocked" ||
+          (cycleOutcome.length > 0 && !cycleOutcome.includes("risk")),
+        cycleOutcome.includes("risk") || riskReasons.length > 0,
+      ),
+      detail: riskReasons[0] || "",
+    },
+    {
+      id: "safety",
+      label: "Safety",
+      state: stageOf(
+        forwarded || hasTicket || cycleOutcome === "forwarded",
+        cycleOutcome.includes("safety") || safetyCycleReasons.length > 0,
+      ),
+      detail: safetyCycleReasons[0] || str(last.detail, ""),
+    },
+    {
+      id: "oms",
+      label: "OMS",
+      state: stageOf(
+        forwarded,
+        Boolean(str(last.oms_message)) && !forwarded && cycleOutcome.includes("oms"),
+      ),
+      detail: str(last.oms_message, ""),
+    },
+    {
+      id: "broker",
+      label: "Broker",
+      state: stageOf(
+        last.broker_retcode != null || hasTicket,
+        last.broker_retcode != null && Number(last.broker_retcode) !== 0 && !hasTicket,
+      ),
+      detail:
+        last.broker_retcode != null ? `retcode ${str(last.broker_retcode)}` : "",
+    },
+    {
+      id: "mt5",
+      label: "MT5",
+      state: stageOf(hasTicket, false),
+      detail: hasTicket ? `ticket ${str(last.mt5_ticket)}` : "",
+    },
+    {
+      id: "journal",
+      label: "Journal",
+      state: stageOf(
+        todayJournal.length > 0 || hasTicket || eventTimeline.length > 0,
+        false,
+      ),
+      detail: todayJournal.length ? `${todayJournal.length} today` : "",
+    },
+  ];
+
+  const journalTimeline = [
+    ...todayJournal.slice(0, 24).map((j) => {
+      const row = asRecord(j);
+      return {
+        time: str(row.timestamp || row.submitted_at || row.created_at, "—")
+          .replace("T", " ")
+          .slice(11, 19),
+        type: str(row.action || row.kind || row.stage || "event", "event"),
+        reason: str(
+          row.reason || row.message || row.comment || row.detail,
+          "",
+        ).slice(0, 120),
+        status: str(row.execution_result || row.outcome || row.status, "—"),
+        latency:
+          row.latency_ms != null || row.elapsed_ms != null
+            ? `${formatNumber(num(row.latency_ms ?? row.elapsed_ms), 0)} ms`
+            : "—",
+      };
+    }),
+    ...(todayJournal.length === 0
+      ? eventTimeline.slice(0, 16).map((e) => ({
+          time: e.at || "—",
+          type: e.label.split("·")[0]?.trim() || "event",
+          reason: e.detail || e.label,
+          status: /fail|block|reject/i.test(e.label) ? "blocked" : "info",
+          latency: "—",
+        }))
+      : []),
+  ];
+
+  const obsRes = asRecord(obsResourcesQ.data);
+  const obsHealth = asRecord(obsHealthQ.data);
+  const obsComps = asRecord(obsHealth.components ?? obsHealth);
+  const svcHealth = asRecord(servicesHealthQ.data);
+  const apiHealth = asRecord(apiHealthQ.data);
+  const apiDeps = asList(apiHealth.dependencies).map(asRecord);
+  const findDep = (name: string) =>
+    apiDeps.find((d) => str(d.name).toLowerCase().includes(name.toLowerCase()));
+
+  const cpuPct =
+    obsRes.cpu_percent != null
+      ? `${formatNumber(num(obsRes.cpu_percent), 1)}%`
+      : "—";
+  const ramPct =
+    obsRes.memory_percent != null
+      ? `${formatNumber(num(obsRes.memory_percent), 1)}%`
+      : obsRes.memory_used_mb != null
+        ? `${formatNumber(num(obsRes.memory_used_mb), 0)} MB`
+        : "—";
+
+  const dbDep = findDep("postgres") || findDep("database") || findDep("supabase");
+  const redisDep = findDep("redis");
+  const dbOk =
+    dbDep != null
+      ? /ok|up|healthy|pass/i.test(str(dbDep.status))
+      : asRecord(obsComps.warehouse).status
+        ? /healthy|ok/i.test(str(asRecord(obsComps.warehouse).status))
+        : null;
+  const redisOk =
+    redisDep != null
+      ? /ok|up|healthy|pass/i.test(str(redisDep.status))
+      : null;
+  const apiOk =
+    apiHealthQ.isError
+      ? false
+      : apiHealth.status != null
+        ? /ok|up|healthy|pass/i.test(str(apiHealth.status))
+        : apiHealthQ.isSuccess
+          ? true
+          : null;
+  const gatewayHealthOk = gatewayLive;
+  const mt5HealthOk = Boolean(
+    brokerLive || session.connected || asRecord(mt5Q.data).connected,
+  );
+  const railwayOk =
+    asRecord(svcHealth.railway).status != null
+      ? /ok|up|healthy/i.test(str(asRecord(svcHealth.railway).status))
+      : asRecord(obsComps.api).status
+        ? /healthy|ok/i.test(str(asRecord(obsComps.api).status))
+        : apiOk;
+
+  const safetyBlocked =
+    safetyCycleReasons.length > 0 || cycleOutcome.includes("safety");
+  const safetyStatusLabel = safetyBlocked
+    ? "BLOCK"
+    : gateStatus.toLowerCase() === "enabled" && !killArmed
+      ? "PASS"
+      : str(gateStatus, "—").toUpperCase();
+  const exactSafetyReason =
+    safetyCycleReasons[0] ||
+    primaryBlocker ||
+    str(last.detail || last.abort_reason, "—");
+
+  const riskStatusLabel = riskReasons.length
+    ? "BLOCK"
+    : cycleOutcome.includes("risk")
+      ? "BLOCK"
+      : "PASS";
+
+  const signalsToday = todayWins + todayFails || todayJournal.length;
+  const rejectedToday = todayFails;
+  const executedToday = todayWins;
+  const pnlToday = todayPl + floating;
+  const mt5Connected = mt5HealthOk;
+  const gateEnabled = gateStatus.toLowerCase() === "enabled";
   return (
     <div className="space-y-3">
-      <ExecutionStateStrip executionState={executionState} />
-      <LaunchReadinessPanel />
-      {/* 1. Overview status bar */}
-      <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      {/* Header */}
+      <section className="border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-2.5 backdrop-blur-[2px]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Bot className="h-4 w-4 text-[var(--fg-subtle)]" aria-hidden />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-              Auto Trading · Command Center
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
+              Trading Operations Center
             </span>
-            <Badge tone={toneRun(runState)}>{runState.toUpperCase()}</Badge>
+            <StatusPill label={opsMode} ok={opsMode === "LIVE" || opsMode === "CANARY"} warn={opsMode === "SHADOW"} />
+            <StatusPill label="Gateway" ok={gatewayLive} />
+            <StatusPill label="Broker" ok={brokerLive || mt5Connected} />
+            <StatusPill label="MT5" ok={mt5Connected} />
+            <StatusPill
+              label={`Auto ${runState}`}
+              ok={runState === "running"}
+              warn={runState === "paused"}
+            />
+            <StatusPill label={`Gate ${gateStatus}`} ok={gateEnabled} warn={!gateEnabled} />
             <Badge tone={killArmed ? "danger" : "neutral"}>
               {killArmed ? "KILL ARMED" : "Kill clear"}
             </Badge>
-            <Badge tone={gateStatus.toLowerCase() === "enabled" ? "success" : "warning"}>
-              Gate {gateStatus}
-            </Badge>
             <Badge tone={executionEnabled ? "danger" : "neutral"}>
-              EXECUTION_ENABLED={executionEnabled ? "true" : "false"}
+              EXEC={executionEnabled ? "ON" : "OFF"}
             </Badge>
           </div>
-          <Button asChild size="sm" variant="ghost">
-            <Link href="/ops">ITE Ops</Link>
-          </Button>
-        </div>
-        {gateStatus.toLowerCase() !== "enabled" ? (
-          <p className="mb-2 text-xs text-[var(--warning)]">
-            Gate Disabled — see{" "}
-            <span className="font-medium text-[var(--fg)]">Launch Lock Inspector</span>
-            {primaryBlocker ? (
-              <>
-                {" "}
-                (primary: {primaryBlocker}
-                {blockingCategory ? ` · ${blockingCategory}` : ""})
-              </>
-            ) : null}
-            . Every lock lists Current, Why, and Resolution.
-          </p>
-        ) : (
-          <p className="mb-2 text-xs text-[var(--success)]">
-            Launch Ready · Gate Enabled · Execution Ready
-          </p>
-        )}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-          <Stat label="Engine" value={runState.toUpperCase()} tone={runState === "running" ? "ok" : "warn"} />
-          <Stat label="Market" value={marketOpen ? "OPEN" : session.connected ? "QUIET" : "OFF"} />
-          <Stat
-            label="Strategy"
-            value={
-              Object.values(toggles).some(Boolean) ? "ARMED" : "ALL OFF"
-            }
-          />
-          <Stat
-            label="Gateway"
-            value={gatewayLive ? "CONNECTED" : "OFFLINE"}
-            tone={gatewayLive ? "ok" : "bad"}
-          />
-          <Stat
-            label="Broker"
-            value={
-              brokerLive || session.connected || asRecord(mt5Q.data).connected
-                ? "CONNECTED"
-                : "OFF"
-            }
-            tone={brokerLive || session.connected ? "ok" : "bad"}
-          />
-          <Stat
-            label="Risk"
-            value={
-              riskReasons.length
-                ? "BLOCK"
-                : asRecord(asRecord(autoQ.data).facts).risk_engine_evaluated === false
-                  ? "N/A"
-                  : "PASS"
-            }
-            tone={riskReasons.length ? "bad" : "neutral"}
-          />
-          <Stat
-            label="Ops Mode"
-            value={opsMode}
-            tone={opsMode === "LIVE" || opsMode === "CANARY" ? "ok" : "warn"}
-          />
-          <Stat
-            label="Live send"
-            value={executionEnabled ? "ON" : "OFF"}
-            tone={executionEnabled ? "ok" : "warn"}
-          />
-          <Stat label="Last Signal" value={lastSignalTime} />
-          <Stat label="Last Trade" value={lastTradeTime} />
-          <Stat
-            label="Today P/L"
-            value={formatNumber(todayPl + floating, 2)}
-            tone={todayPl + floating >= 0 ? "ok" : "bad"}
-          />
-          <Stat label="Active Trades" value={String(positions.length)} />
-          <Stat
-            label="Daily Risk Used"
-            value={`${formatNumber(dailyRiskUsed, 2)}% / ${formatNumber(maxDailyLossPct, 1)}%`}
-            tone={dailyRiskUsed >= maxDailyLossPct ? "bad" : "neutral"}
-          />
-          <Stat label="Emergency" value={killArmed ? "STOP" : "READY"} tone={killArmed ? "bad" : "neutral"} />
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-mono text-[11px] tabular text-[var(--fg-muted)]">
+              Latency {latencyMs}
+            </span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--fg-muted)]">
+              {tradingSession}
+            </span>
+            <span className="font-mono text-[11px] text-[var(--fg)]">{TRADING_SYMBOL}</span>
+            <UtcClock />
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/ops">ITE Ops</Link>
+            </Button>
+          </div>
         </div>
         {autoPausedNote ? (
           <p className="mt-2 text-xs text-[var(--warning)]">{autoPausedNote}</p>
         ) : null}
-        {failedReasons.length > 0 ? (
-          <div className="mt-2 space-y-1.5 text-xs text-[var(--fg-muted)]">
-            {operatorReasons.length > 0 ? (
-              <div>
-                <p className="font-medium text-[var(--fg-subtle)]">Operator / configuration</p>
-                <ul className="list-disc space-y-0.5 pl-4">
-                  {operatorReasons.slice(0, 4).map((r) => (
-                    <li key={`op-${r}`}>{r}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {connectivityReasons.length > 0 ? (
-              <div>
-                <p className="font-medium text-[var(--fg-subtle)]">Connectivity</p>
-                <ul className="list-disc space-y-0.5 pl-4">
-                  {connectivityReasons.map((r) => (
-                    <li key={`conn-${r}`}>{r}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {riskReasons.length > 0 ? (
-              <div>
-                <p className="font-medium text-[var(--fg-subtle)]">Risk</p>
-                <ul className="list-disc space-y-0.5 pl-4">
-                  {riskReasons.map((r) => (
-                    <li key={`risk-${r}`}>{r}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {operatorReasons.length === 0 &&
-            connectivityReasons.length === 0 &&
-            riskReasons.length === 0 ? (
-              <ul className="list-disc space-y-0.5 pl-4">
-                {failedReasons.slice(0, 6).map((r) => (
-                  <li key={r}>{r}</li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+        {primaryBlocker ? (
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">
+            Primary blocker:{" "}
+            <span className="font-medium text-[var(--fg)]">{primaryBlocker}</span>
+            {blockingCategory ? ` · ${blockingCategory}` : ""}
+          </p>
         ) : null}
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
-        {/* 2. Strategy control */}
-        <Panel title="Strategy control">
-          <div className="grid gap-2 sm:grid-cols-2">
+      <LaunchReadinessPanel />
+
+      {/* Controls */}
+      <OpsPanel
+        title="Operator controls"
+        action={
+          <Badge tone={toneRun(runState)}>{runState.toUpperCase()}</Badge>
+        }
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={setRunMut.isPending || runState === "running"}
+            onClick={() => setRunMut.mutate("running")}
+          >
+            <Play className="h-4 w-4" />
+            Start
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={setRunMut.isPending || runState === "paused"}
+            onClick={() => setRunMut.mutate("paused")}
+          >
+            <Pause className="h-4 w-4" />
+            Pause
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={setRunMut.isPending}
+            onClick={() => setRunMut.mutate("stopped")}
+          >
+            <Square className="h-4 w-4" />
+            Stop
+          </Button>
+          <Button variant="outline" onClick={() => setConfirmCloseAll(true)}>
+            <XCircle className="h-4 w-4" />
+            Close All
+          </Button>
+          <Button variant="outline" onClick={() => setConfirmCancel(true)}>
+            Cancel Pending
+          </Button>
+          <Button variant="danger" onClick={() => setConfirmEmergency(true)}>
+            <ShieldAlert className="h-4 w-4" />
+            Emergency Stop
+          </Button>
+        </div>
+        {busyLabel ? (
+          <p className="mt-2 text-xs text-[var(--accent)]">{busyLabel}</p>
+        ) : null}
+        <p className="mt-2 text-[10px] text-[var(--fg-subtle)]">
+          Closes and cancels use the production execution pipeline — never a direct MT5 bypass.
+        </p>
+      </OpsPanel>
+
+      {/* Live market */}
+      <OpsPanel title="Live market">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+          <MetricCard label="Bid" value={bid} large tone="buy" />
+          <MetricCard label="Ask" value={ask} large tone="sell" />
+          <MetricCard label="Spread" value={spread} large />
+          <MetricCard label="ATR" value={atr} />
+          <MetricCard label="Volatility" value={volatility} />
+          <MetricCard label="Trend" value={trend} />
+          <MetricCard label="Regime" value={marketRegime} />
+          <MetricCard label="Liquidity" value={liquidity} />
+        </div>
+        <p className="mt-2 font-mono text-[10px] text-[var(--fg-subtle)]">
+          Mid {Number.isFinite(mid) ? formatNumber(mid, 3) : "—"} · Market{" "}
+          {marketOpen ? "OPEN" : session.connected ? "QUIET" : "OFF"}
+        </p>
+      </OpsPanel>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        {/* AI strategy */}
+        <OpsPanel title="AI strategy">
+          <BiasMeter bias={bias} />
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <MetricCard label="Quality" value={String(qualityScore)} tone="accent" />
+            <MetricCard label="Confluence" value={String(confluenceScore)} tone="accent" />
+            <MetricCard label="Confidence" value={String(confidence)} />
+            <MetricCard label="Session" value={tradingSession} />
+            <MetricCard label="Signal ID" value={str(last.signal_id, "—")} />
+            <MetricCard
+              label="Decision"
+              value={str(last.decision_action || last.cycle_outcome, "—")}
+            />
+          </div>
+          <p className="mt-3 text-[12px] text-[var(--fg-muted)]">
+            Reason:{" "}
+            <span className="text-[var(--fg)]">
+              {decisionReasons[0] || exactSafetyReason || "—"}
+            </span>
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {AUTO_STRATEGY_MODULES.map((m) => {
               const st = strategyStats(m.id);
               const on = toggles[m.id];
@@ -818,174 +1080,162 @@ export function AutoTradingWorkspace() {
                   type="button"
                   onClick={() => toggleStrategy(m.id)}
                   className={cn(
-                    "border px-3 py-2.5 text-left transition",
+                    "border px-3 py-2.5 text-left transition-colors duration-[var(--duration-os)]",
                     on
-                      ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                      ? "border-[var(--accent)]/50 bg-[var(--accent-soft)]"
                       : "border-[var(--border)] opacity-70",
                   )}
                   aria-pressed={on}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-[var(--fg)]">
-                      {on ? "✓ " : ""}
-                      {m.label}
-                    </span>
+                    <span className="text-sm font-medium text-[var(--fg)]">{m.label}</span>
                     <Badge tone={on ? "success" : "neutral"}>{st.status}</Badge>
                   </div>
                   <p className="mt-1 text-[10px] text-[var(--fg-subtle)]">{m.hint}</p>
-                  <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] text-[var(--fg-muted)]">
-                    <span>Win rate: {st.winRate}</span>
-                    <span>Today: {st.todayTrades}</span>
-                    <span className="col-span-2 truncate">Last signal: {st.lastSignal}</span>
-                    <span className="col-span-2 truncate">Last exec: {st.lastExecution}</span>
-                  </div>
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 text-[10px] text-[var(--fg-subtle)]">
-            Toggles are operator arming preferences for XAUUSD modules. Submits still require Risk
-            Engine + Safety + EXECUTION_ENABLED via the institutional pipeline.
-          </p>
-        </Panel>
+        </OpsPanel>
 
-        {/* 6 + 7 risk + performance */}
-        <div className="space-y-3">
-          <Panel title="Daily risk center">
-            <div className="grid grid-cols-2 gap-2">
-              <Stat label="Daily Drawdown" value={`${formatNumber(dailyDdPct, 2)}%`} />
-              <Stat label="Today's Risk" value={`${formatNumber(dailyRiskUsed, 2)}%`} />
-              <Stat
-                label="Open Exposure"
-                value={formatNumber(openExposure, 2)}
-              />
-              <Stat label="Max Exposure" value={`${formatNumber(maxDailyLossPct, 1)}% DD`} />
-              <Stat
-                label="Remaining Capacity"
-                value={`${formatNumber(remainingCapacity, 2)}%`}
-                tone={remainingCapacity <= 0 ? "bad" : "ok"}
-              />
-              <Stat label="Risk / Trade" value={`${formatNumber(riskPerTradePct, 2)}%`} />
-            </div>
-            {remainingCapacity <= 0 ? (
-              <p className="mt-2 text-xs text-[var(--danger)]">
-                Daily limit reached — Auto Trading pauses automatically.
-              </p>
-            ) : null}
-          </Panel>
-
-          <Panel title="Performance · today">
-            <div className="grid grid-cols-2 gap-2">
-              <Stat label="Win Rate" value={todayWinRate} />
-              <Stat
-                label="Avg Execution"
-                value={
-                  analytics.latency_ms_avg != null
-                    ? `${formatNumber(num(analytics.latency_ms_avg), 0)} ms`
-                    : latestFill?.metrics.totalMs != null
-                      ? `${formatNumber(latestFill.metrics.totalMs, 0)} ms`
-                      : "—"
-                }
-              />
-              <Stat
-                label="Broker Fill"
-                value={
-                  latestFill?.metrics.brokerFillMs != null
-                    ? `${formatNumber(latestFill.metrics.brokerFillMs, 0)} ms`
-                    : "—"
-                }
-              />
-              <Stat
-                label="Fill Rate"
-                value={
-                  analytics.fill_rate != null
-                    ? `${formatNumber(num(analytics.fill_rate) * 100, 0)}%`
-                    : "—"
-                }
-              />
-              <Stat label="Profit Factor" value={pf} />
-              <Stat label="Expectancy" value={expectancy} />
-              <Stat label="Average R" value={avgR} />
-              <Stat label="Avg Hold Time" value={avgHold} />
-              <Stat
-                label="Latency P95"
-                value={
-                  analytics.order_latency_ms_p95 != null
-                    ? `${formatNumber(num(analytics.order_latency_ms_p95), 0)} ms`
-                    : "—"
-                }
-              />
-            </div>
-            <p className="mt-2 text-[10px] text-[var(--fg-subtle)]">
-              Blank metrics stay empty until enough closed trades exist — never invented.
-            </p>
-          </Panel>
-        </div>
+        {/* Risk */}
+        <OpsPanel title="Risk engine">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <MetricCard
+              label="Today's Risk"
+              value={`${formatNumber(dailyRiskUsed, 2)}%`}
+              tone={dailyRiskUsed >= maxDailyLossPct ? "bad" : "neutral"}
+            />
+            <MetricCard label="Exposure" value={formatNumber(openExposure, 2)} />
+            <MetricCard label="Open Positions" value={String(positions.length)} />
+            <MetricCard
+              label="Risk / Trade"
+              value={`${formatNumber(riskPerTradePct, 2)}%`}
+            />
+            <MetricCard
+              label="Daily Loss"
+              value={`${formatNumber(dailyLossPct, 2)}%`}
+              tone={dailyLossPct > 0 ? "warn" : "neutral"}
+            />
+            <MetricCard
+              label="Risk Status"
+              value={riskStatusLabel}
+              tone={riskStatusLabel === "BLOCK" ? "bad" : "ok"}
+            />
+            <MetricCard
+              label="Limit"
+              value={`${formatNumber(maxDailyLossPct, 1)}%`}
+            />
+            <MetricCard label="Ops Mode" value={opsMode} />
+          </div>
+          {riskReasons.length > 0 ? (
+            <ul className="mt-3 list-disc space-y-0.5 pl-4 text-[11px] text-[var(--danger)]">
+              {riskReasons.slice(0, 4).map((r) => (
+                <li key={`risk-${r}`}>{r}</li>
+              ))}
+            </ul>
+          ) : null}
+        </OpsPanel>
       </div>
 
-      {/* 3. Signal center */}
-      <Panel
-        title="Signal center"
+      {/* Safety */}
+      <OpsPanel
+        title="Safety engine"
         action={
-          <Button asChild size="sm" variant="ghost">
-            <Link href="/ai-signals">Counsel</Link>
-          </Button>
+          <Badge tone={safetyBlocked || killArmed ? "danger" : "success"}>
+            {safetyStatusLabel}
+          </Badge>
         }
       >
-        {signalsQ.isLoading ? (
-          <DeskSkeleton rows={3} />
-        ) : signalRows.length === 0 ? (
-          <DeskEmpty
-            icon={Activity}
-            title="No live signals"
-            description="Strategy Runtime signals appear here when generated. QuantForg never fabricates signal rows."
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <MetricCard
+            label="Status"
+            value={safetyStatusLabel}
+            tone={safetyBlocked ? "bad" : "ok"}
           />
-        ) : (
-          <DeskTable
-            columns={[
-              "Time",
-              "Direction",
-              "Confidence",
-              "Entry",
-              "SL",
-              "TP",
-              "Risk %",
-              "Decision",
-            ]}
-            rows={signalRows}
+          <MetricCard
+            label="Allowed Session"
+            value={sessionAllowed ? "YES" : "NO"}
+            tone={sessionAllowed ? "ok" : "warn"}
           />
-        )}
-      </Panel>
+          <MetricCard label="Session" value={tradingSession} />
+          <MetricCard
+            label="Emergency"
+            value={killArmed ? "ARMED" : "CLEAR"}
+            tone={killArmed ? "bad" : "ok"}
+          />
+        </div>
+        <p className="mt-3 text-[12px] text-[var(--fg-muted)]">
+          Exact reason:{" "}
+          <span className="font-medium text-[var(--fg)]">{exactSafetyReason}</span>
+        </p>
+      </OpsPanel>
 
-      {/* 4. Decision pipeline */}
-      <Panel title="Decision pipeline · last successful execution">
-        {latestFill ? (
-          <div className="flex flex-wrap items-stretch gap-1">
-            {pipelineStages.map((s, i) => (
-              <div key={s.label} className="flex items-center gap-1">
-                <div className="min-w-[6.5rem] border border-[var(--border)] bg-[var(--bg)]/40 px-2 py-2">
-                  <p className="text-[9px] uppercase tracking-[0.1em] text-[var(--fg-subtle)]">
-                    {s.label}
-                  </p>
-                  <p className="mt-1 font-mono text-[11px] tabular text-[var(--fg)]">{s.dur}</p>
-                </div>
-                {i < pipelineStages.length - 1 ? (
-                  <span className="text-[var(--fg-subtle)]" aria-hidden>
-                    →
-                  </span>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--fg-muted)]">
-            Pipeline timings appear after the next successful fill through Risk → Safety → Broker.
+      {/* Performance */}
+      <OpsPanel title="Performance · today">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+          <MetricCard label="Signals" value={String(signalsToday || "—")} />
+          <MetricCard label="Rejected" value={String(rejectedToday || "—")} />
+          <MetricCard label="Executed" value={String(executedToday || "—")} />
+          <MetricCard label="Win Rate" value={todayWinRate} />
+          <MetricCard
+            label="PnL"
+            value={formatNumber(pnlToday, 2)}
+            tone={pnlToday >= 0 ? "ok" : "bad"}
+          />
+          <MetricCard label="Avg Latency" value={latencyMs} />
+          <MetricCard
+            label="Fill Rate"
+            value={
+              analytics.fill_rate != null
+                ? `${formatNumber(num(analytics.fill_rate) * 100, 0)}%`
+                : "—"
+            }
+          />
+        </div>
+      </OpsPanel>
+
+      {/* Pipeline */}
+      <OpsPanel title="Execution pipeline · last cycle">
+        <ExecutionPipeline stages={livePipeline} />
+        {!orch.last_cycle ? (
+          <p className="mt-2 text-sm text-[var(--fg-muted)]">
+            Pipeline stages update from the live orchestrator cycle — never fabricated.
           </p>
-        )}
-      </Panel>
+        ) : null}
+      </OpsPanel>
 
-      {/* 5. Active positions */}
-      <Panel title="Active positions">
+      {/* Journal */}
+      <OpsPanel title="Trade journal">
+        {journalTimeline.length === 0 ? (
+          <p className="text-sm text-[var(--fg-muted)]">
+            Live journal and cycle events appear here.
+          </p>
+        ) : (
+          <ul>
+            <li className="mb-1 hidden grid-cols-[4.75rem_6.5rem_1fr_5.5rem_4.5rem] gap-2 text-[9px] uppercase tracking-[0.1em] text-[var(--fg-subtle)] md:grid">
+              <span>Time</span>
+              <span>Type</span>
+              <span>Reason</span>
+              <span>Status</span>
+              <span className="text-right">Latency</span>
+            </li>
+            {journalTimeline.map((row, i) => (
+              <JournalRow
+                key={`${row.time}-${row.type}-${i}`}
+                time={row.time}
+                type={row.type}
+                reason={row.reason}
+                status={row.status}
+                latency={row.latency}
+              />
+            ))}
+          </ul>
+        )}
+      </OpsPanel>
+
+      {/* Positions */}
+      <OpsPanel title="Active positions">
         {positions.length === 0 ? (
           <p className="text-sm text-[var(--fg-muted)]">No open positions.</p>
         ) : (
@@ -993,14 +1243,18 @@ export function AutoTradingWorkspace() {
             {positions.map((p) => {
               const entry = num(p.open_price ?? p.price_open);
               const pnl = num(p.profit);
-              const cur = Number.isFinite(mid) ? mid : num(p.current_price ?? p.price_current);
+              const cur = Number.isFinite(mid)
+                ? mid
+                : num(p.current_price ?? p.price_current);
               return (
                 <div
                   key={str(p.ticket)}
                   className="border border-[var(--border)] bg-[var(--bg)]/30 p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <Badge tone={str(p.side).toLowerCase() === "buy" ? "success" : "danger"}>
+                    <Badge
+                      tone={str(p.side).toLowerCase() === "buy" ? "success" : "danger"}
+                    >
                       {str(p.side).toUpperCase()}
                     </Badge>
                     <span className="font-mono text-[10px] text-[var(--fg-subtle)]">
@@ -1009,7 +1263,9 @@ export function AutoTradingWorkspace() {
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-1 text-[11px]">
                     <span className="text-[var(--fg-subtle)]">Entry</span>
-                    <span className="font-mono tabular text-right">{formatNumber(entry, 3)}</span>
+                    <span className="font-mono tabular text-right">
+                      {formatNumber(entry, 3)}
+                    </span>
                     <span className="text-[var(--fg-subtle)]">Current</span>
                     <span className="font-mono tabular text-right">
                       {Number.isFinite(cur) ? formatNumber(cur, 3) : "—"}
@@ -1023,141 +1279,37 @@ export function AutoTradingWorkspace() {
                     >
                       {formatNumber(pnl, 2)}
                     </span>
-                    <span className="text-[var(--fg-subtle)]">SL</span>
-                    <span className="font-mono tabular text-right">
-                      {str(p.stop_loss ?? p.sl, "—")}
-                    </span>
-                    <span className="text-[var(--fg-subtle)]">TP</span>
-                    <span className="font-mono tabular text-right">
-                      {str(p.take_profit ?? p.tp, "—")}
-                    </span>
                     <span className="text-[var(--fg-subtle)]">Volume</span>
                     <span className="font-mono tabular text-right">{str(p.volume)}</span>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-3 w-full"
-                    disabled={closeAllMut.isPending}
-                    onClick={() => {
-                      const side = str(p.side).toLowerCase() === "buy" ? "sell" : "buy";
-                      void executionApi
-                        .manage({
-                          request_id: `at_close_${str(p.ticket)}_${Date.now()}`,
-                          action: "close",
-                          symbol: str(p.symbol, TRADING_SYMBOL),
-                          ticket: Number(str(p.ticket)) || null,
-                          side,
-                          order_type: "market",
-                          volume: str(p.volume, "0.01"),
-                          price: null,
-                          stop_loss: null,
-                          take_profit: null,
-                          slippage: 10,
-                          magic: 0,
-                          comment: "auto-workspace-close",
-                        })
-                        .then(() => {
-                          toast.success("Close submitted");
-                          invalidate();
-                        })
-                        .catch((e: unknown) =>
-                          toast.error(
-                            e instanceof ApiError ? e.message : "Close failed",
-                          ),
-                        );
-                    }}
-                  >
-                    Close Position
-                  </Button>
                 </div>
               );
             })}
           </div>
         )}
-      </Panel>
+      </OpsPanel>
 
-      {/* 8. Safety */}
-      <Panel
-        title="Safety · emergency"
-        danger
-        action={
-          <span className="text-[10px] text-[var(--fg-subtle)]">Mode {opsMode}</span>
-        }
-      >
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            disabled={setRunMut.isPending || runState === "paused"}
-            onClick={() => setRunMut.mutate("paused")}
-          >
-            <Pause className="h-4 w-4" />
-            Pause Auto Trading
-          </Button>
-          <Button
-            disabled={setRunMut.isPending || runState === "running"}
-            onClick={() => setRunMut.mutate("running")}
-          >
-            <Play className="h-4 w-4" />
-            Resume
-          </Button>
-          <Button variant="outline" onClick={() => setConfirmCloseAll(true)}>
-            <XCircle className="h-4 w-4" />
-            Close All Positions
-          </Button>
-          <Button variant="outline" onClick={() => setConfirmCancel(true)}>
-            Cancel Pending Orders
-          </Button>
-          <Button variant="danger" onClick={() => setConfirmEmergency(true)}>
-            <ShieldAlert className="h-4 w-4" />
-            Emergency Stop
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={setRunMut.isPending}
-            onClick={() => setRunMut.mutate("stopped")}
-          >
-            <Square className="h-4 w-4" />
-            Stop
-          </Button>
+      {/* System health */}
+      <OpsPanel title="System health">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <HealthDot label="CPU" ok={obsRes.cpu_percent != null ? num(obsRes.cpu_percent) < 90 : null} value={cpuPct} />
+          <HealthDot label="RAM" ok={obsRes.memory_percent != null ? num(obsRes.memory_percent) < 90 : null} value={ramPct} />
+          <HealthDot label="Gateway" ok={gatewayHealthOk} />
+          <HealthDot
+            label="Database"
+            ok={dbOk}
+            value={dbDep ? str(dbDep.status, "—") : undefined}
+          />
+          <HealthDot
+            label="Redis"
+            ok={redisOk}
+            value={redisDep ? str(redisDep.status, "—") : undefined}
+          />
+          <HealthDot label="API" ok={apiOk} />
+          <HealthDot label="Railway" ok={railwayOk} />
+          <HealthDot label="MT5" ok={mt5HealthOk} />
         </div>
-        <p className="mt-3 flex items-start gap-2 text-xs text-[var(--fg-muted)]">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--warning)]" />
-          Emergency Stop requires confirmation. Closes and cancels use the existing execution
-          pipeline (Risk → Safety → Gateway) — never a direct MT5 bypass.
-        </p>
-        {busyLabel ? (
-          <p className="mt-2 text-xs text-[var(--accent)]">{busyLabel}</p>
-        ) : null}
-      </Panel>
-
-      {/* 9. Event timeline */}
-      <Panel title="Event timeline">
-        {eventTimeline.length === 0 ? (
-          <p className="text-sm text-[var(--fg-muted)]">
-            Live auto-trade and execution events appear here.
-          </p>
-        ) : (
-          <ul className="space-y-1.5">
-            {eventTimeline.map((e, i) => (
-              <li
-                key={`${e.at}-${e.label}-${i}`}
-                className="grid grid-cols-[4.5rem_1fr] gap-3 border-b border-[var(--border)]/60 py-1.5 text-sm last:border-0"
-              >
-                <span className="font-mono text-[11px] tabular text-[var(--fg-subtle)]">
-                  {e.at || "—"}
-                </span>
-                <div>
-                  <p className="text-[var(--fg)]">{e.label}</p>
-                  {e.detail ? (
-                    <p className="text-[11px] text-[var(--fg-muted)]">{e.detail}</p>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+      </OpsPanel>
 
       <ConfirmDialog
         open={confirmEmergency}
@@ -1191,4 +1343,5 @@ export function AutoTradingWorkspace() {
       />
     </div>
   );
+
 }
