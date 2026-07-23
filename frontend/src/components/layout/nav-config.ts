@@ -231,6 +231,12 @@ export const appNav: NavGroup[] = [
         hint: "Autonomous command center",
       },
       {
+        href: "/production-validation",
+        label: "Production Validation",
+        icon: BadgeCheck,
+        hint: "Live pipeline · evidence only · never trades",
+      },
+      {
         href: "/scalping-ai-v2",
         label: "Scalping AI V2",
         icon: Crosshair,
