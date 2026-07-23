@@ -237,6 +237,12 @@ export const appNav: NavGroup[] = [
         hint: "Live pipeline · evidence only · never trades",
       },
       {
+        href: "/production-acceptance",
+        label: "Production Acceptance",
+        icon: ClipboardCheck,
+        hint: "Read-only certification · first-fill evidence",
+      },
+      {
         href: "/scalping-ai-v2",
         label: "Scalping AI V2",
         icon: Crosshair,
