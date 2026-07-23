@@ -1,0 +1,344 @@
+{
+  "schema_version": "1.0.0",
+  "report_type": "micro_account_feasibility",
+  "generated_at": "2026-07-23T16:24:42.572130+00:00",
+  "symbol": "XAUUSD",
+  "mode_id": "MICRO_ACCOUNT_MODE",
+  "institutional_mode_modified": false,
+  "institutional_unchanged": {
+    "quality": 80,
+    "confluence": 80,
+    "risk_per_trade_pct": "1.0",
+    "config_version": "ite-v1.0.0",
+    "never_upsize_below_min_lot": true
+  },
+  "assumptions": {
+    "atr": "12.00",
+    "atr_stop_multiplier": "1.5",
+    "stop_distance": "18.0000",
+    "broker_min_lot": "0.01",
+    "contract_size": "100",
+    "dollar_risk_at_min_lot": "18.00",
+    "formula": "dollar_risk = lots \u00d7 stop_distance \u00d7 contract_size",
+    "lot_formula": "lots = floor((equity \u00d7 risk_pct/100) / (stop \u00d7 contract_size) / lot_step) \u00d7 lot_step; reject if lots < min_lot"
+  },
+  "profile": {
+    "mode_id": "MICRO_ACCOUNT_MODE",
+    "symbol": "XAUUSD",
+    "supported_balances": [
+      "50",
+      "100",
+      "250",
+      "500"
+    ],
+    "recommended_max_risk_pct": "2.0",
+    "hard_max_risk_pct": "5.0",
+    "drawdown_horizon_pct": "20",
+    "broker_min_lot": "0.01",
+    "broker_lot_step": "0.01",
+    "contract_size": "100",
+    "atr_stop_multiplier": "1.5",
+    "notes": [
+      "Does not modify Institutional Mode (Q80/C80/1% risk).",
+      "Never fakes lots or bypasses broker VOLUME_MIN.",
+      "Never upsizes below min_lot to force execution.",
+      "If min_lot risk exceeds hard_max_risk_pct \u2192 NOT_TRADABLE (reject)."
+    ],
+    "institutional_mode_modified": false
+  },
+  "balances": [
+    {
+      "equity": "50",
+      "atr": "12.00",
+      "stop_distance": "18.0000",
+      "broker_min_lot": "0.01",
+      "max_loss_per_trade": "18.00",
+      "min_usable_risk_pct": "36.00",
+      "smallest_executable_lot": null,
+      "consecutive_losses_to_20pct_dd": 0,
+      "tradability": "not_tradable",
+      "within_hard_max": false,
+      "within_recommended": false,
+      "reasons": [
+        "Broker min_lot 0.01 implies $18.00 loss (36.00% of $50), which exceeds hard_max_risk_pct=5.0%. Cannot execute without faking lots or exceeding max account risk.",
+        "$50 cannot safely trade XAUUSD with broker min_lot 0.01 under mathematically correct sizing."
+      ],
+      "recommendations": [
+        "Higher account balance \u2014 \u2265 $900.00 for \u22642.0% risk at current stop, or \u2265 $360.00 for hard ceiling 5.0%.",
+        "Broker supporting smaller minimum lot (e.g. 0.001) \u2014 would cut dollar risk ~10\u00d7 at the same stop.",
+        "Lower-risk instrument \u2014 not supported on QuantForg (XAUUSD-only platform)."
+      ]
+    },
+    {
+      "equity": "100",
+      "atr": "12.00",
+      "stop_distance": "18.0000",
+      "broker_min_lot": "0.01",
+      "max_loss_per_trade": "18.00",
+      "min_usable_risk_pct": "18.00",
+      "smallest_executable_lot": null,
+      "consecutive_losses_to_20pct_dd": 1,
+      "tradability": "not_tradable",
+      "within_hard_max": false,
+      "within_recommended": false,
+      "reasons": [
+        "Broker min_lot 0.01 implies $18.00 loss (18.00% of $100), which exceeds hard_max_risk_pct=5.0%. Cannot execute without faking lots or exceeding max account risk."
+      ],
+      "recommendations": [
+        "Higher account balance \u2014 \u2265 $900.00 for \u22642.0% risk at current stop, or \u2265 $360.00 for hard ceiling 5.0%.",
+        "Broker supporting smaller minimum lot (e.g. 0.001) \u2014 would cut dollar risk ~10\u00d7 at the same stop.",
+        "Lower-risk instrument \u2014 not supported on QuantForg (XAUUSD-only platform)."
+      ]
+    },
+    {
+      "equity": "250",
+      "atr": "12.00",
+      "stop_distance": "18.0000",
+      "broker_min_lot": "0.01",
+      "max_loss_per_trade": "18.00",
+      "min_usable_risk_pct": "7.20",
+      "smallest_executable_lot": null,
+      "consecutive_losses_to_20pct_dd": 2,
+      "tradability": "not_tradable",
+      "within_hard_max": false,
+      "within_recommended": false,
+      "reasons": [
+        "Broker min_lot 0.01 implies $18.00 loss (7.20% of $250), which exceeds hard_max_risk_pct=5.0%. Cannot execute without faking lots or exceeding max account risk."
+      ],
+      "recommendations": [
+        "Higher account balance \u2014 \u2265 $900.00 for \u22642.0% risk at current stop, or \u2265 $360.00 for hard ceiling 5.0%.",
+        "Broker supporting smaller minimum lot (e.g. 0.001) \u2014 would cut dollar risk ~10\u00d7 at the same stop.",
+        "Lower-risk instrument \u2014 not supported on QuantForg (XAUUSD-only platform)."
+      ]
+    },
+    {
+      "equity": "500",
+      "atr": "12.00",
+      "stop_distance": "18.0000",
+      "broker_min_lot": "0.01",
+      "max_loss_per_trade": "18.00",
+      "min_usable_risk_pct": "3.60",
+      "smallest_executable_lot": "0.01",
+      "consecutive_losses_to_20pct_dd": 5,
+      "tradability": "conditional",
+      "within_hard_max": true,
+      "within_recommended": false,
+      "reasons": [
+        "Executable at min_lot 0.01 only by accepting 3.60% risk (above recommended 2.0%, within hard max 5.0%)."
+      ],
+      "recommendations": [
+        "Prefer higher equity so min_lot risk \u2264 2.0% (need \u2265 $900.00).",
+        "Do not force Institutional 1% sizing \u2014 it would calculate sub-min lots and correctly reject (no upsize)."
+      ]
+    }
+  ],
+  "summary": {
+    "safe_supported_balances": [],
+    "conditional_supported_balances": [
+      "500"
+    ],
+    "not_tradable_supported_balances": [
+      "50",
+      "100",
+      "250"
+    ],
+    "first_safe_supported_balance": null,
+    "first_conditional_supported_balance": "500",
+    "exact_equity_floor_safe": "900.00",
+    "exact_equity_floor_hard_max": "360.00",
+    "exact_equity_floor_institutional_1pct": "1800.00",
+    "xauusd_safely_tradable_at_supported_balances": [],
+    "xauusd_conditionally_tradable_at_supported_balances": [
+      "500"
+    ],
+    "fifty_dollar_explicit": "$50 cannot safely trade XAUUSD with broker min_lot 0.01 under mathematically correct sizing (would require 36.00% risk at ATR=12.00, stop=18.0000; hard max is 5.0%). Do not force execution."
+  },
+  "atr_sensitivity": [
+    {
+      "atr": "8",
+      "stop_distance": "12.0000",
+      "dollar_risk_at_min_lot": "12.00",
+      "equity_floor_safe": "600.00",
+      "equity_floor_hard": "240.00",
+      "by_balance": {
+        "50": {
+          "min_usable_risk_pct": "24.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 0
+        },
+        "100": {
+          "min_usable_risk_pct": "12.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 1
+        },
+        "250": {
+          "min_usable_risk_pct": "4.80",
+          "tradability": "conditional",
+          "consecutive_losses_to_20pct_dd": 4
+        },
+        "500": {
+          "min_usable_risk_pct": "2.40",
+          "tradability": "conditional",
+          "consecutive_losses_to_20pct_dd": 8
+        }
+      }
+    },
+    {
+      "atr": "10",
+      "stop_distance": "15.0000",
+      "dollar_risk_at_min_lot": "15.00",
+      "equity_floor_safe": "750.00",
+      "equity_floor_hard": "300.00",
+      "by_balance": {
+        "50": {
+          "min_usable_risk_pct": "30.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 0
+        },
+        "100": {
+          "min_usable_risk_pct": "15.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 1
+        },
+        "250": {
+          "min_usable_risk_pct": "6.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 3
+        },
+        "500": {
+          "min_usable_risk_pct": "3.00",
+          "tradability": "conditional",
+          "consecutive_losses_to_20pct_dd": 6
+        }
+      }
+    },
+    {
+      "atr": "12",
+      "stop_distance": "18.0000",
+      "dollar_risk_at_min_lot": "18.00",
+      "equity_floor_safe": "900.00",
+      "equity_floor_hard": "360.00",
+      "by_balance": {
+        "50": {
+          "min_usable_risk_pct": "36.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 0
+        },
+        "100": {
+          "min_usable_risk_pct": "18.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 1
+        },
+        "250": {
+          "min_usable_risk_pct": "7.20",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 2
+        },
+        "500": {
+          "min_usable_risk_pct": "3.60",
+          "tradability": "conditional",
+          "consecutive_losses_to_20pct_dd": 5
+        }
+      }
+    },
+    {
+      "atr": "15",
+      "stop_distance": "22.5000",
+      "dollar_risk_at_min_lot": "22.50",
+      "equity_floor_safe": "1125.00",
+      "equity_floor_hard": "450.00",
+      "by_balance": {
+        "50": {
+          "min_usable_risk_pct": "45.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 0
+        },
+        "100": {
+          "min_usable_risk_pct": "22.50",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 0
+        },
+        "250": {
+          "min_usable_risk_pct": "9.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 2
+        },
+        "500": {
+          "min_usable_risk_pct": "4.50",
+          "tradability": "conditional",
+          "consecutive_losses_to_20pct_dd": 4
+        }
+      }
+    },
+    {
+      "atr": "20",
+      "stop_distance": "30.0000",
+      "dollar_risk_at_min_lot": "30.00",
+      "equity_floor_safe": "1500.00",
+      "equity_floor_hard": "600.00",
+      "by_balance": {
+        "50": {
+          "min_usable_risk_pct": "60.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 0
+        },
+        "100": {
+          "min_usable_risk_pct": "30.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 0
+        },
+        "250": {
+          "min_usable_risk_pct": "12.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 1
+        },
+        "500": {
+          "min_usable_risk_pct": "6.00",
+          "tradability": "not_tradable",
+          "consecutive_losses_to_20pct_dd": 3
+        }
+      }
+    }
+  ],
+  "recommended_policy": {
+    "mode_id": "MICRO_ACCOUNT_MODE",
+    "institutional_mode_unchanged": true,
+    "institutional_defaults": {
+      "quality": 80,
+      "confluence": 80,
+      "risk_per_trade_pct": "1.0",
+      "never_upsize_below_min_lot": true
+    },
+    "micro_policy": {
+      "enabled_by_default": false,
+      "activation": "explicit_operator_selection_only",
+      "recommended_max_risk_pct": "2.0",
+      "hard_max_risk_pct": "5.0",
+      "broker_min_lot": "0.01",
+      "never_fake_lots": true,
+      "never_bypass_broker_minimum": true,
+      "never_exceed_hard_max_risk": true,
+      "if_calculated_lots_below_min_lot": "REJECT (approved_lots=0)",
+      "reference_atr": "12.00",
+      "reference_stop_distance": "18.0000",
+      "dollar_risk_at_min_lot": "18.00",
+      "equity_floor_safe_recommended_pct": "900.00",
+      "equity_floor_hard_max_pct": "360.00",
+      "equity_floor_institutional_1pct": "1800.00",
+      "supported_balances": [
+        "50",
+        "100",
+        "250",
+        "500"
+      ],
+      "xauusd_only": true,
+      "lower_risk_instrument_supported": false
+    },
+    "recommendations": [
+      "Do not enable MICRO_ACCOUNT_MODE for balances below $360.00 at ATR=12.00 (min_lot stop-loss exceeds hard max 5.0%).",
+      "Treat balances \u2265 $900.00 as the first \u2018safe\u2019 XAUUSD micro tier at \u22642.0% risk (still below Institutional 1% floor).",
+      "Institutional 1% sizing with min_lot 0.01 requires equity \u2265 $1800.00 at this stop \u2014 keep Institutional Mode for those accounts.",
+      "If stuck at $50\u2013$100: fund higher, or use a broker with 0.001 min lot \u2014 do not force 0.01 fills."
+    ]
+  }
+}
