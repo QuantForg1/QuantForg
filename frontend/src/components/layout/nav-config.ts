@@ -148,6 +148,12 @@ export const appNav: NavGroup[] = [
         hint: "Validate · promote · lab only",
       },
       {
+        href: "/threshold-performance-analysis",
+        label: "Threshold Performance",
+        icon: BarChart3,
+        hint: "Offline Q×C gate matrix · research only",
+      },
+      {
         href: "/research-validation",
         label: "Validation Platform",
         icon: FlaskConical,

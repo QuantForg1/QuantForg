@@ -1039,6 +1039,19 @@ export const productionReplayApi = {
   report: () => apiFetch<Record<string, unknown>>("/production-replay/report"),
 };
 
+/** Threshold Performance Analysis — offline research; never mutates live gates */
+export const thresholdPerformanceApi = {
+  status: () =>
+    apiFetch<Record<string, unknown>>("/threshold-performance-analysis/status"),
+  run: (body: { days?: number; max_evaluations?: number } = {}) =>
+    apiFetch<Record<string, unknown>>("/threshold-performance-analysis/run", {
+      method: "POST",
+      body,
+    }),
+  report: () =>
+    apiFetch<Record<string, unknown>>("/threshold-performance-analysis/report"),
+};
+
 /** Alpha Engine V1 — market quality scoring; never order_send */
 export const alphaEngineApi = {
   status: () => apiFetch<Record<string, unknown>>("/alpha-engine/status"),
