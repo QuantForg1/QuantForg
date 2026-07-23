@@ -167,6 +167,7 @@ class InstitutionalIteRuntime:
         *,
         snapshot: Any | None = None,
         account: AccountRiskState | None = None,
+        market_context_diagnostics: dict[str, Any] | None = None,
     ) -> ShadowCycleResult:
         """One automatic Decision→…→Reliability shadow cycle. Never order_send."""
         health = self.tick_health()
@@ -188,6 +189,7 @@ class InstitutionalIteRuntime:
             health=health,
             execution_enabled=False,
             force_shadow=True,
+            market_context_diagnostics=market_context_diagnostics,
         )
 
     def run_auto_cycle(
@@ -204,6 +206,7 @@ class InstitutionalIteRuntime:
         no_broker_restrictions: bool = False,
         risk_allowed: bool = False,
         risk_reasons: tuple[str, ...] = (),
+        market_context_diagnostics: dict[str, Any] | None = None,
     ) -> ShadowCycleResult:
         """CANARY/LIVE auto-trade cycle — submits only when safety gate passes."""
         health = self.tick_health()
@@ -335,6 +338,7 @@ class InstitutionalIteRuntime:
             no_broker_restrictions=no_broker_restrictions,
             risk_allowed=risk_allowed,
             risk_reasons=risk_reasons,
+            market_context_diagnostics=market_context_diagnostics,
         )
 
     def _run_cycle(
@@ -354,6 +358,7 @@ class InstitutionalIteRuntime:
         no_broker_restrictions: bool = False,
         risk_allowed: bool = True,
         risk_reasons: tuple[str, ...] = (),
+        market_context_diagnostics: dict[str, Any] | None = None,
     ) -> ShadowCycleResult:
         if snapshot is None or account is None:
             result = ShadowCycleResult(
@@ -369,6 +374,25 @@ class InstitutionalIteRuntime:
             with self._lock:
                 self._last_cycle = result
                 self._cycles += 1
+            try:
+                from app.application.services.strategy_diagnostics import (
+                    get_strategy_diagnostics_store,
+                )
+
+                get_strategy_diagnostics_store().record_from_artefacts(
+                    snapshot=None,
+                    decision=None,
+                    cycle_outcome="no_snapshot",
+                    decision_action=None,
+                    abort_reason="NO_SNAPSHOT",
+                    decision_reasons=(),
+                    market_context_diagnostics=market_context_diagnostics,
+                    signal_id=None,
+                    forwarded_to_oms=False,
+                    trace_id=None,
+                )
+            except Exception:
+                logger.exception("strategy_diagnostics_record_failed")
             return result
 
         tid = new_trace_id()
@@ -505,6 +529,11 @@ class InstitutionalIteRuntime:
             abort_reason=bridge_result.abort_reason.value,
             decision_reasons=decision_reasons,
             snapshot_present=True,
+            market_context_diagnostics=(
+                dict(market_context_diagnostics)
+                if market_context_diagnostics
+                else None
+            ),
             signal_id=str(getattr(decision, "id", "") or "") or None,
             oms_message=str(oms_message) if oms_message else None,
             broker_retcode=int(broker_retcode) if broker_retcode is not None else None,
@@ -514,6 +543,26 @@ class InstitutionalIteRuntime:
         with self._lock:
             self._last_cycle = result
             self._cycles += 1
+        # Observation only — never mutates decision / risk / safety / OMS.
+        try:
+            from app.application.services.strategy_diagnostics import (
+                get_strategy_diagnostics_store,
+            )
+
+            get_strategy_diagnostics_store().record_from_artefacts(
+                snapshot=snapshot,
+                decision=decision,
+                cycle_outcome=result.cycle_outcome,
+                decision_action=result.decision_action,
+                abort_reason=result.abort_reason,
+                decision_reasons=decision_reasons,
+                market_context_diagnostics=result.market_context_diagnostics,
+                signal_id=result.signal_id,
+                forwarded_to_oms=result.forwarded_to_oms,
+                trace_id=result.trace_id,
+            )
+        except Exception:
+            logger.exception("strategy_diagnostics_record_failed")
         if force_shadow and bridge_result.forwarded_to_oms:
             logger.error(
                 "shadow_cycle_forwarded_to_oms",
@@ -552,6 +601,14 @@ class InstitutionalIteRuntime:
             "interval_seconds": self.interval_seconds,
             "running": not self._stop.is_set(),
         }
+
+    def strategy_diagnostics(self, *, limit: int = 100) -> dict[str, Any]:
+        """Read-only NO_TRADE diagnostics for Operations desk."""
+        from app.application.services.strategy_diagnostics import (
+            get_strategy_diagnostics_store,
+        )
+
+        return get_strategy_diagnostics_store().snapshot(limit=limit)
 
     def stop(self) -> None:
         self._stop.set()
@@ -594,6 +651,25 @@ class InstitutionalIteRuntime:
                     with self._lock:
                         self._last_cycle = result
                         self._cycles += 1
+                    try:
+                        from app.application.services.strategy_diagnostics import (
+                            get_strategy_diagnostics_store,
+                        )
+
+                        get_strategy_diagnostics_store().record_from_artefacts(
+                            snapshot=None,
+                            decision=None,
+                            cycle_outcome="no_snapshot",
+                            decision_action=None,
+                            abort_reason="NO_MARKET_CONTEXT",
+                            decision_reasons=(),
+                            market_context_diagnostics=dict(ctx.diagnostics),
+                            signal_id=None,
+                            forwarded_to_oms=False,
+                            trace_id=None,
+                        )
+                    except Exception:
+                        logger.exception("strategy_diagnostics_record_failed")
                     logger.info(
                         "ite_cycle_outcome",
                         outcome="no_snapshot",
@@ -630,7 +706,9 @@ class InstitutionalIteRuntime:
                     )
                     if self.plane.mode is OpsExecutionMode.SHADOW:
                         self.run_shadow_cycle(
-                            snapshot=ctx.snapshot, account=ctx.account
+                            snapshot=ctx.snapshot,
+                            account=ctx.account,
+                            market_context_diagnostics=dict(ctx.diagnostics),
                         )
                     else:
                         self.run_auto_cycle(
@@ -644,6 +722,7 @@ class InstitutionalIteRuntime:
                             symbol_tradable=sym_ok,
                             no_broker_restrictions=no_restr,
                             risk_allowed=True,
+                            market_context_diagnostics=dict(ctx.diagnostics),
                         )
                     with self._lock:
                         if self._last_cycle is not None:

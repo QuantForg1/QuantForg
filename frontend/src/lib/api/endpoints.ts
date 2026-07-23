@@ -673,6 +673,10 @@ export const iteOpsApi = {
     }),
   autoTrading: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/auto-trading"),
+  strategyDiagnostics: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/strategy-diagnostics?limit=${limit}`,
+    ),
   witnessHealth: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/witness-health"),
   updateAutoTrading: (body: Record<string, unknown>) =>

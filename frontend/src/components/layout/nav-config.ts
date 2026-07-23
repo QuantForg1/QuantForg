@@ -249,6 +249,12 @@ export const appNav: NavGroup[] = [
         hint: "Live pipeline · evidence only · never trades",
       },
       {
+        href: "/strategy-diagnostics",
+        label: "Strategy Diagnostics",
+        icon: ScanSearch,
+        hint: "Why NO_TRADE · quality · confluence · MTF",
+      },
+      {
         href: "/production-reliability",
         label: "Production Reliability",
         icon: Activity,

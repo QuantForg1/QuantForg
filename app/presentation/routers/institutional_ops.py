@@ -600,6 +600,35 @@ def get_witness_health(_user: OperatorUser) -> dict[str, Any]:
     return dashboard_payload()
 
 
+@router.get("/strategy-diagnostics")
+def get_strategy_diagnostics(
+    _user: OperatorUser,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Operations → Strategy Diagnostics — why NO_TRADE (observation only).
+
+    Never mutates strategy, risk, safety, OMS, or MT5. Never lowers thresholds
+    or forces execution.
+    """
+    from app.application.services.strategy_diagnostics import (
+        get_strategy_diagnostics_store,
+    )
+
+    window = max(1, min(int(limit or 100), 100))
+    payload = get_strategy_diagnostics_store().snapshot(limit=window)
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        if runtime is not None:
+            payload["orchestrator_cycles"] = runtime.status().get("cycles")
+            payload["orchestrator_last_cycle"] = runtime.status().get("last_cycle")
+    except Exception:
+        payload["orchestrator_cycles"] = None
+        payload["orchestrator_last_cycle"] = None
+    return payload
+
+
 @router.post("/auto-trading")
 def update_auto_trading(
     body: AutoTradeControlsBody,
