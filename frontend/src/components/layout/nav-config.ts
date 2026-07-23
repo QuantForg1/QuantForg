@@ -231,6 +231,12 @@ export const appNav: NavGroup[] = [
         hint: "Production ops · live execution",
       },
       {
+        href: "/operations-runbook",
+        label: "Operations Runbook",
+        icon: BookOpen,
+        hint: "State guidance · evidence · operator actions",
+      },
+      {
         href: "/auto-trading",
         label: "Auto Trading",
         icon: Bot,
