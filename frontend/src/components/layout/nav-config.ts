@@ -267,6 +267,12 @@ export const appNav: NavGroup[] = [
         hint: "Read-only certification · first-fill evidence",
       },
       {
+        href: "/automatic-production-acceptance",
+        label: "Auto Acceptance",
+        icon: BadgeCheck,
+        hint: "Evidence-only gate · immutable report",
+      },
+      {
         href: "/first-execution-evidence",
         label: "First Execution Evidence",
         icon: FileLock2,

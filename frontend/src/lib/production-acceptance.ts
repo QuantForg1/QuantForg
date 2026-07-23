@@ -13,6 +13,7 @@ import {
   reconcileFirstExecutionEvidence,
   saveFirstExecutionEvidence,
 } from "@/lib/first-execution-evidence";
+import { runAutomaticAcceptanceEngine } from "@/lib/automatic-production-acceptance";
 
 const STORAGE_KEY = "quantforg.production_acceptance.v1";
 
@@ -444,14 +445,14 @@ export function buildProductionAcceptanceModel(input: {
   };
 
   const durable = bool(persistence.durable) || bool(persistence.postgres_has_state);
-  const accepted =
-    firstExecution != null &&
-    isCompleteSuccessfulExecution({
-      omsRequestId: firstExecution.omsRequest,
-      brokerResponse: firstExecution.brokerResponse,
-      mt5Ticket: firstExecution.mt5Ticket,
-      dealId: firstExecution.dealId,
-    });
+
+  // Align with Automatic Production Acceptance Engine (evidence-only, no override)
+  const autoEng = runAutomaticAcceptanceEngine({
+    autoTrading: input.autoTrading,
+    journal: input.journal,
+    audits: input.audits,
+  });
+  const accepted = autoEng.status === "PRODUCTION ACCEPTED";
 
   const certItems: PassFail[] = [
     {
