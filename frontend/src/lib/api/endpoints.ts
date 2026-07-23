@@ -1020,6 +1020,17 @@ export const productionReadinessApi = {
     }),
 };
 
+/** Production Replay & Validation — simulation-only walk-forward; never order_send */
+export const productionReplayApi = {
+  status: () => apiFetch<Record<string, unknown>>("/production-replay/status"),
+  run: (body: { days?: number; max_evaluations?: number } = {}) =>
+    apiFetch<Record<string, unknown>>("/production-replay/run", {
+      method: "POST",
+      body,
+    }),
+  report: () => apiFetch<Record<string, unknown>>("/production-replay/report"),
+};
+
 /** Alpha Engine V1 — market quality scoring; never order_send */
 export const alphaEngineApi = {
   status: () => apiFetch<Record<string, unknown>>("/alpha-engine/status"),

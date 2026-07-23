@@ -29,6 +29,7 @@ import {
   NotebookPen,
   PieChart,
   Radar,
+  Repeat,
   Scale,
   ScanSearch,
   Settings,
@@ -241,6 +242,12 @@ export const appNav: NavGroup[] = [
         label: "Production Acceptance",
         icon: ClipboardCheck,
         hint: "Read-only certification · first-fill evidence",
+      },
+      {
+        href: "/production-replay",
+        label: "Production Replay",
+        icon: Repeat,
+        hint: "Simulation-only walk-forward replay · never trades",
       },
       {
         href: "/scalping-ai-v2",
