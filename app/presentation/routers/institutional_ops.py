@@ -650,6 +650,27 @@ def get_strategy_diagnostics(
     return payload
 
 
+@router.get("/live-execution-explain")
+def get_live_execution_explain(
+    _user: OperatorUser,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Operations → Live Execution Explain Mode (decision cards only).
+
+    Never mutates Strategy, Thresholds, Risk, Safety, or OMS.
+    """
+    window = max(1, min(int(limit or 50), 100))
+    from app.application.services.live_execution_explain import (
+        explain_snapshot_from_diagnostics,
+    )
+    from app.application.services.strategy_diagnostics import (
+        get_strategy_diagnostics_store,
+    )
+
+    diagnostics = get_strategy_diagnostics_store().snapshot(limit=window)
+    return explain_snapshot_from_diagnostics(diagnostics)
+
+
 @router.get("/threshold-promotion")
 def get_threshold_promotion(_user: OperatorUser) -> dict[str, Any]:
     """Operations → Threshold Promotion status (never auto-applies)."""

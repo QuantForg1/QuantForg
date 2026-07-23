@@ -526,17 +526,27 @@ class StrategyDiagnosticsStore:
         latest = recent[-1] if recent else None
         stats = compute_diagnostics_statistics(recent, window=window)
         insights = generate_smart_insights(stats, latest)
+        from app.application.services.live_execution_explain import (
+            enrich_cycles_with_explain,
+        )
+
+        cycles_newest_first = list(reversed(recent))
+        explained = enrich_cycles_with_explain(cycles_newest_first)
         return {
             "advisory_only": True,
             "mutates_engines": False,
             "window": window,
-            "latest": latest,
-            "cycles": list(reversed(recent)),  # newest first for Ops desk
+            "latest": explained[0] if explained else None,
+            "cycles": explained,
             "statistics": stats,
             "smart_insights": insights,
             "thresholds": {
                 "required_quality": int(self._config.min_trade_quality_score),
                 "required_confluence": int(self._config.min_confluence_score),
+            },
+            "live_execution_explain": {
+                "latest": (explained[0].get("explain") if explained else None),
+                "count": len(explained),
             },
         }
 

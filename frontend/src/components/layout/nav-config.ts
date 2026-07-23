@@ -33,6 +33,7 @@ import {
   LayoutTemplate,
   LineChart,
   ListOrdered,
+  MessageSquareWarning,
   NotebookPen,
   PieChart,
   Radar,
@@ -268,6 +269,12 @@ export const appNav: NavGroup[] = [
         label: "Strategy Diagnostics",
         icon: ScanSearch,
         hint: "Why NO_TRADE · quality · confluence · MTF",
+      },
+      {
+        href: "/live-execution-explain",
+        label: "Live Execution Explain",
+        icon: MessageSquareWarning,
+        hint: "Decision card · first block · full trace",
       },
       {
         href: "/micro-account-analyzer",

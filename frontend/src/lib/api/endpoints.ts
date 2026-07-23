@@ -677,6 +677,10 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/strategy-diagnostics?limit=${limit}`,
     ),
+  liveExecutionExplain: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/live-execution-explain?limit=${limit}`,
+    ),
   thresholdPromotion: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion"),
   thresholdPromote: (body: {
