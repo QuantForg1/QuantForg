@@ -283,6 +283,12 @@ export const appNav: NavGroup[] = [
         hint: "What is missing · opportunity meter · wait ETA",
       },
       {
+        href: "/opportunity-timeline",
+        label: "Opportunity Timeline",
+        icon: LineChart,
+        hint: "Last 100 evals · trends · approaching / weakening",
+      },
+      {
         href: "/micro-account-analyzer",
         label: "Micro Account Analyzer",
         icon: Coins,

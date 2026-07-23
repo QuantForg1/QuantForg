@@ -693,6 +693,27 @@ def get_adaptive_opportunity(
     return opportunity_snapshot_from_diagnostics(diagnostics)
 
 
+@router.get("/adaptive-opportunity-timeline")
+def get_adaptive_opportunity_timeline(
+    _user: OperatorUser,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Operations → Adaptive Opportunity Timeline (history + prediction).
+
+    Never mutates Strategy, Risk, Safety, Thresholds, or OMS.
+    """
+    window = max(1, min(int(limit or 100), 100))
+    from app.application.services.adaptive_opportunity_timeline import (
+        timeline_snapshot_from_diagnostics,
+    )
+    from app.application.services.strategy_diagnostics import (
+        get_strategy_diagnostics_store,
+    )
+
+    diagnostics = get_strategy_diagnostics_store().snapshot(limit=window)
+    return timeline_snapshot_from_diagnostics(diagnostics, limit=window)
+
+
 @router.get("/threshold-promotion")
 def get_threshold_promotion(_user: OperatorUser) -> dict[str, Any]:
     """Operations → Threshold Promotion status (never auto-applies)."""
