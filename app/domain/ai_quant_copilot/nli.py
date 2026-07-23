@@ -248,6 +248,31 @@ def answer_question(
             ),
         }
 
+    if any(k in q for k in ("knowledge graph", "qkg", "lineage", "root cause", "graph")):
+        try:
+            from app.domain.quant_knowledge_graph import qkg_query_for_ai
+
+            gq = qkg_query_for_ai(question)
+            return {
+                "question": question,
+                **package_evidence(
+                    answer=f"QKG ({gq.get('capability')}): graph evidence attached.",
+                    evidence=[gq],
+                    source_subsystem="quant_knowledge_graph",
+                    confidence=0.7,
+                ),
+            }
+        except Exception:  # noqa: BLE001
+            return {
+                "question": question,
+                **package_evidence(
+                    answer="QKG unavailable in this snapshot.",
+                    evidence=[],
+                    source_subsystem="quant_knowledge_graph",
+                    confidence=0.2,
+                ),
+            }
+
     # Default — never answer without evidence
     return {
         "question": question,

@@ -164,6 +164,12 @@ export const appNav: NavGroup[] = [
         hint: "AQC · ops Q&A · investigations · evidence",
       },
       {
+        href: "/quant-knowledge-graph",
+        label: "Knowledge Graph",
+        icon: Workflow,
+        hint: "QKG · nodes · relationships · evidence chains",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

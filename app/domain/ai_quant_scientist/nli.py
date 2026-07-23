@@ -94,6 +94,18 @@ def answer_question(question: str, *, pack: dict[str, Any]) -> dict[str, Any]:
             patterns[:5],
         )
 
+    if any(k in q for k in ("knowledge graph", "qkg", "lineage", "root cause", "graph")):
+        try:
+            from app.domain.quant_knowledge_graph import qkg_query_for_ai
+
+            gq = qkg_query_for_ai(question)
+            return _base(
+                f"QKG ({gq.get('capability')}): graph query result attached.",
+                [gq],
+            )
+        except Exception:  # noqa: BLE001
+            return _base("QKG unavailable in this snapshot.", [])
+
     # Default: summarize recommendations
     return _base(
         f"AQS has {len(recommendations)} open research recommendations. "

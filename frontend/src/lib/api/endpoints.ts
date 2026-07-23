@@ -1800,6 +1800,55 @@ export const aqcApi = {
   correlations: () => apiFetch<Record<string, unknown>>("/aqc/correlations"),
 };
 
+/** Quant Knowledge Graph — read-only institutional knowledge layer */
+export const qkgApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),
+  graph: (limitNodes = 200, limitEdges = 400) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/graph?limit_nodes=${limitNodes}&limit_edges=${limitEdges}`,
+    ),
+  search: (q?: string, nodeType?: string, limit = 50) => {
+    const sp = new URLSearchParams();
+    sp.set("limit", String(limit));
+    if (q) sp.set("q", q);
+    if (nodeType) sp.set("node_type", nodeType);
+    return apiFetch<Record<string, unknown>>(`/qkg/search?${sp}`);
+  },
+  relationships: (nodeId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/relationships/${encodeURIComponent(nodeId)}`,
+    ),
+  dependencies: (nodeId: string, depth = 3) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/dependencies/${encodeURIComponent(nodeId)}?depth=${depth}`,
+    ),
+  evidence: (nodeId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/evidence/${encodeURIComponent(nodeId)}`,
+    ),
+  recommendationTrace: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/recommendation-trace/${encodeURIComponent(id)}`,
+    ),
+  lineage: (nodeId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/lineage/${encodeURIComponent(nodeId)}`,
+    ),
+  impact: (nodeId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/impact/${encodeURIComponent(nodeId)}`,
+    ),
+  rootCause: (nodeId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qkg/root-cause/${encodeURIComponent(nodeId)}`,
+    ),
+  ai: (q: string, nodeId?: string) => {
+    const sp = new URLSearchParams();
+    sp.set("q", q);
+    if (nodeId) sp.set("node_id", nodeId);
+    return apiFetch<Record<string, unknown>>(`/qkg/ai?${sp}`);
+  },
+};
 
 /** Institutional Research Lab — completely isolated from production trading */
 export const irlApi = {
