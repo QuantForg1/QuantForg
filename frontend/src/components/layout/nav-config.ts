@@ -289,6 +289,12 @@ export const appNav: NavGroup[] = [
         hint: "Last 100 evals · trends · approaching / weakening",
       },
       {
+        href: "/strategy-intelligence-center",
+        label: "Strategy Intelligence",
+        icon: Brain,
+        hint: "Closed trades · patterns · historical favorability",
+      },
+      {
         href: "/micro-account-analyzer",
         label: "Micro Account Analyzer",
         icon: Coins,

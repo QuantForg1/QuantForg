@@ -714,6 +714,24 @@ def get_adaptive_opportunity_timeline(
     return timeline_snapshot_from_diagnostics(diagnostics, limit=window)
 
 
+@router.get("/strategy-intelligence-center")
+def get_strategy_intelligence_center(
+    _user: OperatorUser,
+    days: int = 90,
+) -> dict[str, Any]:
+    """Operations → Strategy Intelligence Center (read-only post-trade IQ).
+
+    Never mutates Strategy, Risk, Safety, OMS, Thresholds, or Auto Trading.
+    Never auto-optimizes.
+    """
+    window_days = max(1, min(int(days or 90), 365))
+    from app.application.services.strategy_intelligence_center import (
+        build_strategy_intelligence_center,
+    )
+
+    return build_strategy_intelligence_center(days=window_days)
+
+
 @router.get("/threshold-promotion")
 def get_threshold_promotion(_user: OperatorUser) -> dict[str, Any]:
     """Operations → Threshold Promotion status (never auto-applies)."""
