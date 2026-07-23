@@ -79,6 +79,7 @@ export function ThresholdPromotionWorkspace() {
   const live = asRecord(monitoring.live);
   const promoted = bool(root.promoted);
   const comparison = asList(evidence.comparison);
+  const experimentalBadge = str(root.experimental_badge, "");
 
   return (
     <div className="space-y-4">
@@ -86,7 +87,25 @@ export function ThresholdPromotionWorkspace() {
         <Badge tone="neutral">OPERATOR GATED</Badge>
         <Badge tone="warning">NEVER AUTO-PROMOTE</Badge>
         <Badge tone="warning">NEVER AUTO-ROLLBACK</Badge>
+        {experimentalBadge ? (
+          <Badge tone="warning">{experimentalBadge}</Badge>
+        ) : null}
       </div>
+
+      {experimentalBadge ? (
+        <div
+          className="border border-[var(--warning)]/40 bg-[var(--warning)]/10 px-3 py-2 text-[13px] text-[var(--warning)]"
+          role="status"
+        >
+          {experimentalBadge} — manage at{" "}
+          <a
+            className="underline"
+            href="/experimental-threshold"
+          >
+            Experimental Threshold
+          </a>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <OpsPanel title="Current Production">

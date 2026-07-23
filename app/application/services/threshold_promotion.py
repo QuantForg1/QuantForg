@@ -267,17 +267,42 @@ def _load_candidate_validation_summary() -> dict[str, Any]:
 
 def status_payload() -> dict[str, Any]:
     store = get_threshold_promotion_store()
-    # Ensure runtime matches store if process restarted with hydrated overlay
-    overlay = store.active_overlay()
-    apply_overlay_to_runtime(overlay)
+    # Experimental profile owns the overlay when active (never fight over gates).
+    try:
+        from app.application.services.experimental_threshold_profile import (
+            is_experimental_active,
+            get_experimental_threshold_store,
+        )
+
+        if is_experimental_active():
+            exp = get_experimental_threshold_store()
+            apply_overlay_to_runtime(exp.active_overlay())
+        else:
+            overlay = store.active_overlay()
+            apply_overlay_to_runtime(overlay)
+    except Exception:
+        overlay = store.active_overlay()
+        apply_overlay_to_runtime(overlay)
     evidence = _load_candidate_validation_summary()
     with store._lock:
         monitoring = _compute_monitoring_locked(store)
+        experimental_badge = None
+        try:
+            from app.application.services.experimental_threshold_profile import (
+                BADGE_LABEL,
+                is_experimental_active,
+            )
+
+            if is_experimental_active():
+                experimental_badge = BADGE_LABEL
+        except Exception:
+            pass
         return {
             "schema_version": "1.0.0",
             "never_auto_promotes": True,
             "never_auto_rollbacks": True,
             "default_baseline_immutable": True,
+            "experimental_badge": experimental_badge,
             "production": {
                 "label": "Current Production (active)",
                 "quality": store.active_quality,
@@ -332,6 +357,21 @@ def promote_candidate(
     reason_clean = (reason or "").strip()
     if len(reason_clean) < 8:
         raise ValueError("reason required (min 8 characters)")
+
+    try:
+        from app.application.services.experimental_threshold_profile import (
+            is_experimental_active,
+        )
+
+        if is_experimental_active():
+            raise ValueError(
+                "EXPERIMENTAL_75 is active — rollback experimental profile before "
+                "promoting candidate Q70/C75"
+            )
+    except ValueError:
+        raise
+    except Exception:
+        pass
 
     store = get_threshold_promotion_store()
     now = datetime.now(UTC)

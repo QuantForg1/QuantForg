@@ -693,6 +693,20 @@ export const iteOpsApi = {
       method: "POST",
       body,
     }),
+  experimentalThreshold: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/experimental-threshold"),
+  experimentalActivate: (body: { reason: string; confirmed: boolean }) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/experimental-threshold/activate", {
+      method: "POST",
+      body,
+    }),
+  experimentalRollback: (body: { reason: string; confirmed: boolean }) =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/experimental-threshold/rollback",
+      { method: "POST", body },
+    ),
+  experimentalReport: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/experimental-threshold/report"),
   witnessHealth: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/witness-health"),
   updateAutoTrading: (body: Record<string, unknown>) =>

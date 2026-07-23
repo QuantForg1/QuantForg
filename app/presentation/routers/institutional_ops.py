@@ -78,6 +78,18 @@ class ThresholdRollbackBody(BaseModel):
     confirmed: bool = False
 
 
+class ExperimentalActivateBody(BaseModel):
+    reason: str = Field(min_length=8)
+    confirmed: bool = False
+
+
+class ExperimentalRollbackBody(BaseModel):
+    reason: str = Field(
+        default="operator_rollback_experimental_to_80_80", min_length=1
+    )
+    confirmed: bool = False
+
+
 class RiskBody(ConfirmBody):
     risk_per_trade_pct: str
     max_daily_loss_pct: str
@@ -691,6 +703,87 @@ def post_threshold_rollback(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/experimental-threshold")
+def get_experimental_threshold(_user: OperatorUser) -> dict[str, Any]:
+    """Operations → Experimental Threshold Profile (Q75/C75 overlay)."""
+    from app.application.services.experimental_threshold_profile import status_payload
+
+    return status_payload()
+
+
+@router.post("/experimental-threshold/activate")
+def post_experimental_activate(
+    body: ExperimentalActivateBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Explicit activate EXPERIMENTAL_75 — requires confirmed=true."""
+    from app.application.services.experimental_threshold_profile import (
+        activate_experimental_75,
+    )
+
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="confirmation required")
+    op = _operator(user, request, x_forwarded_for)
+    try:
+        return activate_experimental_75(
+            operator=op,
+            reason=body.reason,
+            confirmed=body.confirmed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/experimental-threshold/rollback")
+def post_experimental_rollback(
+    body: ExperimentalRollbackBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """One-click rollback Experimental → Institutional Q80/C80."""
+    from app.application.services.experimental_threshold_profile import (
+        rollback_experimental_to_production,
+    )
+
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="confirmation required")
+    op = _operator(user, request, x_forwarded_for)
+    try:
+        return rollback_experimental_to_production(
+            operator=op,
+            reason=body.reason,
+            confirmed=body.confirmed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/experimental-threshold/report")
+def get_experimental_report(_user: OperatorUser) -> dict[str, Any]:
+    """Latest EXPERIMENTAL_THRESHOLD_REPORT (empty until 100 evals)."""
+    from app.application.services.experimental_threshold_profile import (
+        generate_experimental_threshold_report,
+        get_experimental_threshold_store,
+        status_payload,
+    )
+
+    store = get_experimental_threshold_store()
+    if store.last_report is not None:
+        return store.last_report
+    if store.evaluations > 0:
+        return generate_experimental_threshold_report(store)
+    return {
+        "status": "empty",
+        "message": "Report generates automatically after 100 eligible evaluations.",
+        "evaluations": store.evaluations,
+        "eval_target": 100,
+        **{k: status_payload()[k] for k in ("profile_id", "active", "badge")},
+    }
 
 
 @router.post("/auto-trading")

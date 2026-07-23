@@ -502,6 +502,15 @@ class StrategyDiagnosticsStore:
             observe_cycle(cycle)
         except Exception:
             pass
+        # Experimental 75/75 monitor (100-eval report; never auto-promote).
+        try:
+            from app.application.services.experimental_threshold_profile import (
+                observe_experimental_cycle,
+            )
+
+            observe_experimental_cycle(cycle)
+        except Exception:
+            pass
 
     def record_from_artefacts(self, **kwargs: Any) -> dict[str, Any]:
         cycle = extract_cycle_diagnostics(config=self._config, **kwargs)

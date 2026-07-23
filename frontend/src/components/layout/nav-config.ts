@@ -282,6 +282,12 @@ export const appNav: NavGroup[] = [
         hint: "Promote 70/75 · rollback 80/80 · operator gated",
       },
       {
+        href: "/experimental-threshold",
+        label: "Experimental Threshold",
+        icon: FlaskConical,
+        hint: "EXPERIMENTAL_75 · Q75/C75 overlay · 100-eval report",
+      },
+      {
         href: "/production-reliability",
         label: "Production Reliability",
         icon: Activity,
