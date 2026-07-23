@@ -98,6 +98,9 @@ def _enrich_from_adapter(
     out: dict[str, Any] = {
         "account_trading_enabled": None,
         "mt5_autotrading_enabled": None,
+        "dlls_allowed": None,
+        "autotrading_support": None,
+        "dll_support": None,
         "symbol_tradable": None,
         "no_broker_restrictions": None,
         "market_data_live": None,
@@ -128,20 +131,49 @@ def _enrich_from_adapter(
             payload.get("account") if isinstance(payload.get("account"), dict) else {}
         )
         # Explicit flags when gateway exposes them — never invent True.
+        # AutoTrading comes from terminal_info.trade_allowed (not account trade_allowed).
         for key, dest in (
-            ("trade_allowed", "account_trading_enabled"),
             ("account_trade_allowed", "account_trading_enabled"),
             ("trading_allowed", "account_trading_enabled"),
             ("autotrading", "mt5_autotrading_enabled"),
             ("autotrading_enabled", "mt5_autotrading_enabled"),
             ("mt5_autotrading_enabled", "mt5_autotrading_enabled"),
+            ("terminal_trade_allowed", "mt5_autotrading_enabled"),
+            ("dlls_allowed", "dlls_allowed"),
+            ("dll_allowed", "dlls_allowed"),
+            ("dll_enabled", "dlls_allowed"),
         ):
-            if key in payload:
+            if key in payload and payload.get(key) is not None:
                 out[dest] = bool(payload.get(key))
-            elif isinstance(mt5, dict) and key in mt5:
+            elif isinstance(mt5, dict) and key in mt5 and mt5.get(key) is not None:
                 out[dest] = bool(mt5.get(key))
-            elif isinstance(account, dict) and key in account:
+            elif (
+                isinstance(account, dict)
+                and key in account
+                and account.get(key) is not None
+                and dest == "account_trading_enabled"
+            ):
                 out[dest] = bool(account.get(key))
+
+        # Bare trade_allowed on account → account trading; on mt5 nested → AutoTrading.
+        if out["account_trading_enabled"] is None and isinstance(account, dict):
+            if account.get("trade_allowed") is not None:
+                out["account_trading_enabled"] = bool(account.get("trade_allowed"))
+        if out["mt5_autotrading_enabled"] is None and isinstance(mt5, dict):
+            if mt5.get("trade_allowed") is not None:
+                # Only if explicitly nested under mt5 (terminal-level).
+                out["mt5_autotrading_enabled"] = bool(mt5.get("trade_allowed"))
+
+        support = (
+            mt5.get("capability_support")
+            if isinstance(mt5.get("capability_support"), dict)
+            else payload.get("capability_support")
+        )
+        if isinstance(support, dict):
+            if support.get("autotrading") is not None:
+                out["autotrading_support"] = str(support.get("autotrading"))
+            if support.get("dll") is not None:
+                out["dll_support"] = str(support.get("dll"))
 
         trade_mode = account.get("trade_mode") or payload.get("trade_mode")
         if trade_mode is not None and out["account_trading_enabled"] is None:

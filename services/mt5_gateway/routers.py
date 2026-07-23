@@ -90,6 +90,8 @@ async def health(request: Request) -> dict[str, Any]:
                 timeout=ceiling,
             )
         except TimeoutError:
+            from services.mt5_gateway.runtime import _empty_capability_fields
+
             mt5_payload = {
                 "connected": False,
                 "session_mode": getattr(
@@ -114,6 +116,9 @@ async def health(request: Request) -> dict[str, Any]:
                 ),
                 "degraded": True,
                 "probe": "async_ceiling",
+                **_empty_capability_fields(
+                    reason="health probe timed out — terminal capabilities not read"
+                ),
             }
         payload["mt5"] = mt5_payload
         payload["bridge_available"] = runtime.bridge.available

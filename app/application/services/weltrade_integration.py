@@ -234,6 +234,30 @@ class WeltradeIntegrationService:
         elif gateway_reachable and diagnostic == "ok":
             diagnostic = "Gateway Online"
 
+        mt5_block = (
+            gateway_payload.get("mt5")
+            if isinstance(gateway_payload.get("mt5"), dict)
+            else {}
+        )
+        # Prefer nested mt5 capabilities; fall back to top-level if present.
+        auto_raw = mt5_block.get("mt5_autotrading_enabled")
+        if auto_raw is None:
+            auto_raw = mt5_block.get("terminal_trade_allowed")
+        if auto_raw is None:
+            auto_raw = gateway_payload.get("mt5_autotrading_enabled")
+        dll_raw = mt5_block.get("dlls_allowed")
+        if dll_raw is None:
+            dll_raw = mt5_block.get("dll_allowed")
+        if dll_raw is None:
+            dll_raw = gateway_payload.get("dlls_allowed")
+        support = (
+            mt5_block.get("capability_support")
+            if isinstance(mt5_block.get("capability_support"), dict)
+            else gateway_payload.get("capability_support")
+        )
+        if not isinstance(support, dict):
+            support = {}
+
         return {
             "ok": tunnel_reachable,
             "healthy": bool(gateway_reachable),
@@ -258,6 +282,27 @@ class WeltradeIntegrationService:
                 "bridge_available": gateway_payload.get("bridge_available"),
                 "token_configured": gateway_payload.get("token_configured"),
             },
+            # Terminal capability flags — never invented; null when unknown.
+            "mt5_autotrading_enabled": (
+                bool(auto_raw) if auto_raw is not None else None
+            ),
+            "dll_allowed": bool(dll_raw) if dll_raw is not None else None,
+            "dll_enabled": bool(dll_raw) if dll_raw is not None else None,
+            "dlls_allowed": bool(dll_raw) if dll_raw is not None else None,
+            "autotrading_support": str(
+                support.get("autotrading")
+                or (
+                    "SUPPORTED"
+                    if auto_raw is not None
+                    else "NOT_SUPPORTED"
+                )
+            ),
+            "dll_support": str(
+                support.get("dll")
+                or ("SUPPORTED" if dll_raw is not None else "NOT_SUPPORTED")
+            ),
+            "capability_note": mt5_block.get("capability_note")
+            or gateway_payload.get("capability_note"),
             "transport": transport,
             "detail": detail,
             "upstream_error": upstream_error,

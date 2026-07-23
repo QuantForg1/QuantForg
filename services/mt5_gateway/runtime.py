@@ -116,6 +116,67 @@ def _safe_int(value: Any, default: int = 0) -> int:
             return default
 
 
+def _terminal_capability_fields(term: Any | None) -> dict[str, Any]:
+    """Extract AutoTrading / DLL flags from MetaTrader5.terminal_info().
+
+    The official MetaTrader5 Python API exposes:
+      - terminal_info().trade_allowed  → Algo Trading / AutoTrading toolbar
+      - terminal_info().dlls_allowed   → Allow DLL imports
+
+    Never invents values. When attributes are absent, reports NOT_SUPPORTED.
+    """
+    if term is None:
+        return {
+            "terminal_trade_allowed": None,
+            "mt5_autotrading_enabled": None,
+            "dlls_allowed": None,
+            "dll_allowed": None,
+            "capability_support": {
+                "autotrading": "NOT_SUPPORTED",
+                "dll": "NOT_SUPPORTED",
+            },
+            "capability_note": "terminal_info unavailable",
+        }
+
+    has_trade = hasattr(term, "trade_allowed")
+    has_dll = hasattr(term, "dlls_allowed")
+    trade_raw = getattr(term, "trade_allowed", None) if has_trade else None
+    dll_raw = getattr(term, "dlls_allowed", None) if has_dll else None
+    trade_val = bool(trade_raw) if trade_raw is not None else None
+    dll_val = bool(dll_raw) if dll_raw is not None else None
+    return {
+        "terminal_trade_allowed": trade_val,
+        "mt5_autotrading_enabled": trade_val,
+        "dlls_allowed": dll_val,
+        "dll_allowed": dll_val,
+        "capability_support": {
+            "autotrading": "SUPPORTED" if has_trade else "NOT_SUPPORTED",
+            "dll": "SUPPORTED" if has_dll else "NOT_SUPPORTED",
+        },
+        "capability_note": (
+            "From MetaTrader5.terminal_info() "
+            "(trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+            if has_trade or has_dll
+            else "terminal_info present but capability attributes missing"
+        ),
+    }
+
+
+def _empty_capability_fields(*, reason: str) -> dict[str, Any]:
+    """Explicit unknown capability block — never invent Enabled/Disabled."""
+    return {
+        "terminal_trade_allowed": None,
+        "mt5_autotrading_enabled": None,
+        "dlls_allowed": None,
+        "dll_allowed": None,
+        "capability_support": {
+            "autotrading": "NOT_SUPPORTED",
+            "dll": "NOT_SUPPORTED",
+        },
+        "capability_note": reason,
+    }
+
+
 def _parse_mt5_version(raw: Any) -> tuple[int, int, str]:
     """Parse MetaTrader5.version().
 
@@ -490,7 +551,12 @@ class MT5GatewayRuntime:
         version = ""
         degraded = False
         probe = "skipped"
+        caps = _empty_capability_fields(reason="MT5 session not connected — capabilities not probed")
         if not (self.bridge.available and self.diagnostics.connected):
+            if not self.bridge.available:
+                caps = _empty_capability_fields(
+                    reason="MetaTrader5 bridge unavailable — capabilities NOT_SUPPORTED"
+                )
             return {
                 "connected": False,
                 "session_mode": self.diagnostics.session_mode,
@@ -504,6 +570,7 @@ class MT5GatewayRuntime:
                 "bridge_available": self.bridge.available,
                 "degraded": False,
                 "probe": probe,
+                **caps,
             }
 
         timeout = float(self.settings.mt5_health_probe_timeout_seconds)
@@ -549,6 +616,9 @@ class MT5GatewayRuntime:
                 "bridge_available": self.bridge.available,
                 "degraded": degraded,
                 "probe": probe,
+                **_empty_capability_fields(
+                    reason="account_info probe timed out — terminal capabilities not read"
+                ),
             }
         except Exception as exc:
             logger.exception("mt5_gateway_health_account_failed")
@@ -569,6 +639,9 @@ class MT5GatewayRuntime:
                 "bridge_available": self.bridge.available,
                 "degraded": True,
                 "probe": probe,
+                **_empty_capability_fields(
+                    reason="account_info probe failed — terminal capabilities not read"
+                ),
             }
 
         # Metadata must never flip a healthy session to disconnected.
@@ -582,12 +655,20 @@ class MT5GatewayRuntime:
             )
             if term is not None:
                 terminal_build = _safe_int(getattr(term, "build", 0), 0)
+                caps = _terminal_capability_fields(term)
+            else:
+                caps = _empty_capability_fields(
+                    reason="terminal_info returned None"
+                )
         except Exception as exc:
             logger.info(
                 "mt5_gateway_health_terminal_skipped: %s",
                 f"{type(exc).__name__}: {exc}",
             )
             self._record_failure(f"terminal_info: {type(exc).__name__}: {exc}")
+            caps = _empty_capability_fields(
+                reason=f"terminal_info probe failed: {type(exc).__name__}"
+            )
 
         try:
             major, build, release = call_mt5_bounded(
@@ -622,6 +703,7 @@ class MT5GatewayRuntime:
             "bridge_available": self.bridge.available,
             "degraded": degraded,
             "probe": probe,
+            **caps,
         }
 
     def _heartbeat_is_fresh(self) -> bool:

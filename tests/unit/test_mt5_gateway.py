@@ -74,7 +74,11 @@ class _FakeBridge(LiveMT5Bridge):
         )
 
     def terminal_info(self) -> Any:
-        return SimpleNamespace(build=4000)
+        return SimpleNamespace(
+            build=4000,
+            trade_allowed=True,
+            dlls_allowed=True,
+        )
 
     def version(self) -> tuple[int, int, str]:
         return (5, 0, "4000")
@@ -257,6 +261,38 @@ class TestMT5Gateway:
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
         assert body["auto_attach_enabled"] is False
+        mt5 = body.get("mt5") or {}
+        # No session yet — capabilities not probed (never invent Enabled).
+        assert mt5.get("mt5_autotrading_enabled") is None
+        assert mt5.get("dlls_allowed") is None
+        support = mt5.get("capability_support") or {}
+        assert support.get("autotrading") == "NOT_SUPPORTED"
+        assert support.get("dll") == "NOT_SUPPORTED"
+
+    def test_health_reports_terminal_capabilities_when_connected(
+        self, client: TestClient
+    ) -> None:
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        res = client.post(
+            "/session/connect",
+            headers=headers,
+            json={
+                "login": 111,
+                "password": "secret",
+                "server": "Weltrade-Demo",
+            },
+        )
+        assert res.status_code == 200
+        health = client.get("/health")
+        assert health.status_code == 200
+        mt5 = health.json()["mt5"]
+        assert mt5["connected"] is True
+        # FakeBridge.terminal_info exposes trade_allowed / dlls_allowed.
+        assert mt5.get("mt5_autotrading_enabled") is True
+        assert mt5.get("dlls_allowed") is True
+        support = mt5.get("capability_support") or {}
+        assert support.get("autotrading") == "SUPPORTED"
+        assert support.get("dll") == "SUPPORTED"
 
     def test_health_hints_when_token_missing(
         self, monkeypatch: pytest.MonkeyPatch

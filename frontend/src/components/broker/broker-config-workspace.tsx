@@ -26,9 +26,33 @@ import { cn } from "@/lib/utils";
 
 type AccountType = "demo" | "live";
 
-function Diag({ ok, label }: { ok: boolean | null; label: string }) {
+function Diag({
+  ok,
+  label,
+  support,
+}: {
+  ok: boolean | null;
+  label: string;
+  /** When set, use Enabled/Disabled/Unknown capability labels. */
+  support?: string | null;
+}) {
+  const capabilityMode = support != null;
   const tone =
-    ok === true ? "text-[var(--success)]" : ok === false ? "text-[var(--fg-muted)]" : "text-[var(--fg-subtle)]";
+    ok === true
+      ? "text-[var(--success)]"
+      : ok === false
+        ? capabilityMode
+          ? "text-[var(--danger)]"
+          : "text-[var(--fg-muted)]"
+        : "text-[var(--fg-subtle)]";
+  let status: string;
+  if (ok === true) {
+    status = capabilityMode ? "✅ Enabled" : "OK";
+  } else if (ok === false) {
+    status = capabilityMode ? "❌ Disabled" : "NO";
+  } else {
+    status = "⚪ Unknown (MT5 API limitation)";
+  }
   return (
     <div className="flex items-center gap-2 border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-2.5">
       {ok === true ? (
@@ -37,8 +61,15 @@ function Diag({ ok, label }: { ok: boolean | null; label: string }) {
         <Circle className={cn("h-3.5 w-3.5 shrink-0", tone)} aria-hidden />
       )}
       <span className="text-sm text-[var(--fg)]">{label}</span>
-      <span className={cn("ml-auto font-mono text-[10px] uppercase", tone)}>
-        {ok === true ? "OK" : ok === false ? "NO" : "—"}
+      <span
+        className={cn(
+          "ml-auto max-w-[55%] truncate text-right font-mono text-[10px]",
+          !capabilityMode && "uppercase",
+          tone,
+        )}
+        title={status}
+      >
+        {status}
       </span>
     </div>
   );
@@ -291,9 +322,13 @@ export function BrokerConfigWorkspace() {
       ? null
       : Boolean(health.mt5_autotrading_enabled);
   const dllEnabled =
-    health.dll_allowed == null && health.dll_enabled == null
+    health.dll_allowed == null &&
+    health.dll_enabled == null &&
+    health.dlls_allowed == null
       ? null
-      : Boolean(health.dll_allowed ?? health.dll_enabled);
+      : Boolean(health.dll_allowed ?? health.dll_enabled ?? health.dlls_allowed);
+  const autoSupport = str(health.autotrading_support, "");
+  const dllSupport = str(health.dll_support, "");
 
   if (healthQ.isLoading && mt5Q.isLoading && !session.login) {
     return <DeskSkeleton rows={6} />;
@@ -381,15 +416,24 @@ export function BrokerConfigWorkspace() {
           <Diag ok={gatewayOnline} label="Gateway Connected" />
           <Diag ok={loginOk} label="Login OK" />
           <Diag ok={tradingAllowed} label="Trading Allowed" />
-          <Diag ok={autoTrading} label="AutoTrading Enabled" />
-          <Diag ok={dllEnabled} label="DLL Enabled" />
+          <Diag
+            ok={autoTrading}
+            label="AutoTrading Enabled"
+            support={autoSupport || (autoTrading == null ? "NOT_SUPPORTED" : "SUPPORTED")}
+          />
+          <Diag
+            ok={dllEnabled}
+            label="DLL Enabled"
+            support={dllSupport || (dllEnabled == null ? "NOT_SUPPORTED" : "SUPPORTED")}
+          />
           <Diag ok={marketOpen} label="Market Open" />
           <Diag ok={symbolAvailable} label="Symbol Available (XAUUSD)" />
           <Diag ok={pingHealthy} label="Ping Healthy" />
         </div>
         <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
-          AutoTrading / DLL reflect terminal-side flags when the gateway reports them; otherwise
-          shown as unknown (—) — never invented.
+          AutoTrading / DLL come from MetaTrader5.terminal_info() via the gateway
+          (trade_allowed / dlls_allowed). States: Enabled, Disabled, or Unknown
+          (MT5 API limitation) — never invented.
         </p>
       </Section>
 
