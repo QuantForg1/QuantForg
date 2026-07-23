@@ -697,6 +697,14 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/market-regime-intelligence?limit=${limit}`,
     ),
+  portfolioAnalytics: (days = 365, strategyId = "production") =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/portfolio-analytics?days=${days}&strategy_id=${encodeURIComponent(strategyId)}`,
+    ),
+  portfolioAnalyticsReport: (period: string, days = 365) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/portfolio-analytics/reports/${period}?days=${days}`,
+    ),
   thresholdPromotion: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion"),
   thresholdPromote: (body: {

@@ -750,6 +750,141 @@ def get_market_regime_intelligence(
     return build_market_regime_intelligence(limit=window)
 
 
+@router.get("/portfolio-analytics")
+def get_portfolio_analytics(
+    _user: OperatorUser,
+    days: int = 365,
+    strategy_id: str = "production",
+) -> dict[str, Any]:
+    """Operations → Institutional Portfolio Analytics (STRICTLY READ ONLY)."""
+    window = max(1, min(int(days or 365), 1825))
+    from app.application.services.institutional_portfolio_analytics import (
+        build_institutional_portfolio_analytics,
+    )
+
+    return build_institutional_portfolio_analytics(
+        days=window, strategy_id=(strategy_id or "production")[:64]
+    )
+
+
+@router.get("/portfolio-analytics/dashboard")
+def get_portfolio_analytics_dashboard(
+    _user: OperatorUser,
+    days: int = 365,
+) -> dict[str, Any]:
+    payload = get_portfolio_analytics(_user, days=days)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {
+        "dashboard": sections.get("dashboard"),
+        "institutional_health_score": sections.get("health_score"),
+        "observed_at": payload.get("observed_at"),
+        "advisory_only": True,
+    }
+
+
+@router.get("/portfolio-analytics/risk")
+def get_portfolio_analytics_risk(
+    _user: OperatorUser,
+    days: int = 365,
+) -> dict[str, Any]:
+    payload = get_portfolio_analytics(_user, days=days)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {"risk_analytics": sections.get("risk"), "advisory_only": True}
+
+
+@router.get("/portfolio-analytics/performance")
+def get_portfolio_analytics_performance(
+    _user: OperatorUser,
+    days: int = 365,
+) -> dict[str, Any]:
+    payload = get_portfolio_analytics(_user, days=days)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {
+        "performance_analytics": sections.get("performance"),
+        "advisory_only": True,
+    }
+
+
+@router.get("/portfolio-analytics/health")
+def get_portfolio_analytics_health(
+    _user: OperatorUser,
+    days: int = 365,
+) -> dict[str, Any]:
+    payload = get_portfolio_analytics(_user, days=days)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {
+        "institutional_health_score": sections.get("health_score"),
+        "advisory_only": True,
+    }
+
+
+@router.get("/portfolio-analytics/reports/{period}")
+def get_portfolio_analytics_report(
+    period: str,
+    _user: OperatorUser,
+    days: int = 365,
+) -> dict[str, Any]:
+    allowed = {"daily", "weekly", "monthly", "quarterly", "yearly"}
+    key = (period or "weekly").lower()
+    if key not in allowed:
+        key = "weekly"
+    payload = get_portfolio_analytics(_user, days=days)
+    reports = payload.get("reports") or {}
+    return {
+        "period": key,
+        "report": reports.get(key),
+        "advisory_only": True,
+    }
+
+
+@router.get("/portfolio-analytics/export.csv")
+def get_portfolio_analytics_export_csv(
+    _user: OperatorUser,
+    days: int = 365,
+) -> Any:
+    from fastapi.responses import Response
+
+    from app.application.services.institutional_portfolio_analytics import (
+        analytics_to_csv,
+        build_institutional_portfolio_analytics,
+    )
+
+    window = max(1, min(int(days or 365), 1825))
+    payload = build_institutional_portfolio_analytics(days=window)
+    body = analytics_to_csv(payload)
+    return Response(
+        content=body,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=portfolio-analytics.csv"
+        },
+    )
+
+
+@router.get("/portfolio-analytics/export.pdf")
+def get_portfolio_analytics_export_pdf(
+    _user: OperatorUser,
+    days: int = 365,
+) -> Any:
+    from fastapi.responses import Response
+
+    from app.application.services.institutional_portfolio_analytics import (
+        analytics_to_pdf_bytes,
+        build_institutional_portfolio_analytics,
+    )
+
+    window = max(1, min(int(days or 365), 1825))
+    payload = build_institutional_portfolio_analytics(days=window)
+    body = analytics_to_pdf_bytes(payload)
+    return Response(
+        content=body,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=portfolio-analytics.pdf"
+        },
+    )
+
+
 @router.get("/threshold-promotion")
 def get_threshold_promotion(_user: OperatorUser) -> dict[str, Any]:
     """Operations → Threshold Promotion status (never auto-applies)."""

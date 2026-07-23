@@ -301,6 +301,12 @@ export const appNav: NavGroup[] = [
         hint: "TRENDING · BREAKOUT · vol · history · performance",
       },
       {
+        href: "/portfolio-analytics",
+        label: "Portfolio Analytics",
+        icon: PieChart,
+        hint: "Institutional dashboard · risk · health · reports",
+      },
+      {
         href: "/micro-account-analyzer",
         label: "Micro Account Analyzer",
         icon: Coins,
