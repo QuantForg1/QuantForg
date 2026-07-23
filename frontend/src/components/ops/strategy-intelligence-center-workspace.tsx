@@ -2,7 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Brain } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { MetricCard, OpsPanel } from "@/components/ops/auto-trading-ops-ui";
 import { iteOpsApi } from "@/lib/api/endpoints";
@@ -130,6 +132,34 @@ export function StrategyIntelligenceCenterWorkspace() {
       </div>
 
       <ScoreBanner score={score} />
+
+      {asRecord(root.market_regime_intelligence).current_regime ? (
+        <OpsPanel title="Market Regime (integrated)">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+                Current Regime
+              </p>
+              <p className="text-[18px] font-semibold text-[var(--fg)]">
+                {str(asRecord(root.market_regime_intelligence).current_regime)}
+                {asRecord(root.market_regime_intelligence).secondary_regime
+                  ? ` · ${str(asRecord(root.market_regime_intelligence).secondary_regime)}`
+                  : ""}
+              </p>
+              <p className="mt-1 font-mono text-[12px] text-[var(--fg-muted)]">
+                Confidence{" "}
+                {str(
+                  asRecord(root.market_regime_intelligence).confidence_display,
+                  "—",
+                )}
+              </p>
+            </div>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/market-regime-intelligence">Regime Dashboard</Link>
+            </Button>
+          </div>
+        </OpsPanel>
+      ) : null}
 
       <OpsPanel title="Intelligence">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

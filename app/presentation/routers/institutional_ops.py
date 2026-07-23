@@ -732,6 +732,24 @@ def get_strategy_intelligence_center(
     return build_strategy_intelligence_center(days=window_days)
 
 
+@router.get("/market-regime-intelligence")
+def get_market_regime_intelligence(
+    _user: OperatorUser,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Operations → Market Regime Intelligence Dashboard (read-only).
+
+    Never mutates Strategy, Risk, Safety, OMS, Thresholds, or Execution.
+    Never influences trade decisions.
+    """
+    window = max(1, min(int(limit or 100), 100))
+    from app.application.services.market_regime_intelligence import (
+        build_market_regime_intelligence,
+    )
+
+    return build_market_regime_intelligence(limit=window)
+
+
 @router.get("/threshold-promotion")
 def get_threshold_promotion(_user: OperatorUser) -> dict[str, Any]:
     """Operations → Threshold Promotion status (never auto-applies)."""

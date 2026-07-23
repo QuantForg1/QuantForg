@@ -825,4 +825,22 @@ def build_strategy_intelligence_center(
     payload["deal_source"] = deal_meta
     payload["diagnostics_cycles_joined"] = len(cycles)
     payload["observed_at"] = datetime.now(UTC).isoformat()
+
+    # Soft-integrate Market Regime Intelligence (read-only; never influences execution).
+    try:
+        from app.application.services.market_regime_intelligence import (
+            regime_summary_for_sic,
+        )
+
+        payload["market_regime_intelligence"] = regime_summary_for_sic(
+            diagnostics=diagnostics
+            or {"cycles": cycles, "latest": current_cycle},
+            trades=list(payload.get("trades") or []),
+        )
+    except Exception:
+        payload["market_regime_intelligence"] = {
+            "advisory_only": True,
+            "status": "unavailable",
+        }
+
     return payload

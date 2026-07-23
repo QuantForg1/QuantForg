@@ -693,6 +693,10 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/strategy-intelligence-center?days=${days}`,
     ),
+  marketRegimeIntelligence: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/market-regime-intelligence?limit=${limit}`,
+    ),
   thresholdPromotion: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion"),
   thresholdPromote: (body: {

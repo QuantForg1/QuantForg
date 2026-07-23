@@ -295,6 +295,12 @@ export const appNav: NavGroup[] = [
         hint: "Closed trades · patterns · historical favorability",
       },
       {
+        href: "/market-regime-intelligence",
+        label: "Market Regime",
+        icon: Layers3,
+        hint: "TRENDING · BREAKOUT · vol · history · performance",
+      },
+      {
         href: "/micro-account-analyzer",
         label: "Micro Account Analyzer",
         icon: Coins,
