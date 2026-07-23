@@ -750,6 +750,66 @@ def get_market_regime_intelligence(
     return build_market_regime_intelligence(limit=window)
 
 
+@router.get("/production-readiness-review")
+def get_production_readiness_review(
+    _user: OperatorUser,
+    write_report: bool = False,
+) -> dict[str, Any]:
+    """Operations → Institutional Production Readiness Review (STRICTLY READ ONLY)."""
+    from app.application.services.institutional_production_readiness_review import (
+        build_institutional_production_readiness_review,
+    )
+
+    return build_institutional_production_readiness_review(
+        write_report=bool(write_report),
+    )
+
+
+@router.get("/production-readiness-review/checklist")
+def get_production_readiness_review_checklist(
+    _user: OperatorUser,
+) -> dict[str, Any]:
+    payload = get_production_readiness_review(_user, write_report=False)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {
+        "production_checklist": sections.get("production_checklist"),
+        "overall_production_readiness_score": payload.get(
+            "overall_production_readiness_score"
+        ),
+        "recommendation": payload.get("recommendation"),
+        "advisory_only": True,
+    }
+
+
+@router.get("/production-readiness-review/risks")
+def get_production_readiness_review_risks(
+    _user: OperatorUser,
+) -> dict[str, Any]:
+    payload = get_production_readiness_review(_user, write_report=False)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {
+        "risk_register": sections.get("risk_register"),
+        "advisory_only": True,
+    }
+
+
+@router.get("/production-readiness-review/executive")
+def get_production_readiness_review_executive(
+    _user: OperatorUser,
+) -> dict[str, Any]:
+    payload = get_production_readiness_review(_user, write_report=False)
+    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    return {
+        "executive_summary": sections.get("executive_summary"),
+        "overall_production_readiness_score": payload.get(
+            "overall_production_readiness_score"
+        ),
+        "recommendation": payload.get("recommendation"),
+        "summary": payload.get("summary"),
+        "advisory_only": True,
+    }
+
+
 @router.get("/portfolio-analytics")
 def get_portfolio_analytics(
     _user: OperatorUser,

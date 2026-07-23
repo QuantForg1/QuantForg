@@ -307,6 +307,12 @@ export const appNav: NavGroup[] = [
         hint: "Institutional dashboard · risk · health · reports",
       },
       {
+        href: "/production-readiness-review",
+        label: "Production Readiness Review",
+        icon: ClipboardCheck,
+        hint: "Institutional PRR · score · risks · checklist",
+      },
+      {
         href: "/micro-account-analyzer",
         label: "Micro Account Analyzer",
         icon: Coins,

@@ -705,6 +705,20 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/portfolio-analytics/reports/${period}?days=${days}`,
     ),
+  productionReadinessReview: (writeReport = false) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/production-readiness-review?write_report=${writeReport ? "true" : "false"}`,
+    ),
+  productionReadinessReviewChecklist: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/production-readiness-review/checklist",
+    ),
+  productionReadinessReviewRisks: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/production-readiness-review/risks"),
+  productionReadinessReviewExecutive: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/ops/production-readiness-review/executive",
+    ),
   thresholdPromotion: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion"),
   thresholdPromote: (body: {

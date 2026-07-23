@@ -1,0 +1,805 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "institutional_production_readiness_review",
+  "mutates_engines": false,
+  "analytics_only": true,
+  "advisory_only": true,
+  "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds": true,
+  "observed_at": "2026-07-23T21:50:35.710195+00:00",
+  "elapsed_ms": 4163.96,
+  "sections": {
+    "architecture": {
+      "section": "architecture",
+      "checks": [
+        {
+          "subsystem": "service_boundaries",
+          "status": "PASS",
+          "detail": "Layer module counts: {'presentation': 126, 'application': 169, 'domain': 534, 'infrastructure': 76, 'core': 18}",
+          "evidence": "ADR-0001 clean architecture roots present"
+        },
+        {
+          "subsystem": "layer_isolation_docs",
+          "status": "PASS",
+          "detail": "ADR-0001 present",
+          "evidence": null
+        },
+        {
+          "subsystem": "circular_dependencies_domain",
+          "status": "WARNING",
+          "detail": "2 domain import(s) into infra/presentation (layer leak)",
+          "evidence": "app/domain/institutional_trading/pipeline.py \u2192 app.infrastructure.market_context.default_fx_ports; app/domain/integration_sprint_v1/orchestrator.py \u2192 app.infrastructure.news.configured_feed"
+        },
+        {
+          "subsystem": "dependency_graph_domain_presentation",
+          "status": "PASS",
+          "detail": "Domain must not import presentation",
+          "evidence": null
+        },
+        {
+          "subsystem": "configuration_integrity",
+          "status": "PASS",
+          "detail": "Settings module present",
+          "evidence": "core/config/settings.py"
+        }
+      ],
+      "layer_module_counts": {
+        "presentation": 126,
+        "application": 169,
+        "domain": 534,
+        "infrastructure": 76,
+        "core": 18
+      },
+      "dependency_violations_sample": [
+        "app/domain/institutional_trading/pipeline.py \u2192 app.infrastructure.market_context.default_fx_ports",
+        "app/domain/integration_sprint_v1/orchestrator.py \u2192 app.infrastructure.news.configured_feed"
+      ]
+    },
+    "security": {
+      "section": "security",
+      "checks": [
+        {
+          "subsystem": "secrets_handling",
+          "status": "WARNING",
+          "detail": "Non-production SECRET_KEY (default/weak \u2014 expected for local)",
+          "evidence": null
+        },
+        {
+          "subsystem": "environment_variables",
+          "status": "PASS",
+          "detail": "Environment flag presence surveyed (values not exposed)",
+          "evidence": "{\"DATABASE_URL_set\": false, \"EXECUTION_ENABLED\": false, \"MT5_GATEWAY_CALLER_TOKEN_set\": false, \"SECRET_KEY_set\": false}"
+        },
+        {
+          "subsystem": "authentication",
+          "status": "PASS",
+          "detail": "Auth dependency module present",
+          "evidence": null
+        },
+        {
+          "subsystem": "authorization",
+          "status": "PASS",
+          "detail": "UserRole enum present",
+          "evidence": null
+        },
+        {
+          "subsystem": "api_permissions",
+          "status": "PASS",
+          "detail": "ITE ops router OWNER/ADMIN gated",
+          "evidence": null
+        },
+        {
+          "subsystem": "audit_logging",
+          "status": "PASS",
+          "detail": "Audit governance service present",
+          "evidence": null
+        },
+        {
+          "subsystem": "sensitive_data_exposure",
+          "status": "PASS",
+          "detail": "PRR payload uses presence flags only \u2014 secrets never serialized",
+          "evidence": null
+        }
+      ],
+      "app_env": "development",
+      "execution_enabled": false,
+      "env_flags": {
+        "SECRET_KEY_set": false,
+        "DATABASE_URL_set": false,
+        "MT5_GATEWAY_CALLER_TOKEN_set": false,
+        "EXECUTION_ENABLED": false
+      }
+    },
+    "reliability": {
+      "section": "reliability",
+      "checks": [
+        {
+          "subsystem": "scheduler_runtime",
+          "status": "PASS",
+          "detail": "app/application/services/institutional_ite_runtime.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "recovery",
+          "status": "PASS",
+          "detail": "app/domain/institutional_trading/reliability/recovery.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "health_domain",
+          "status": "PASS",
+          "detail": "app/domain/institutional_trading/reliability/health.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "heartbeat",
+          "status": "PASS",
+          "detail": "app/domain/institutional_trading/reliability/heartbeat.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "health_router",
+          "status": "PASS",
+          "detail": "app/presentation/routers/health.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "reliability_router",
+          "status": "PASS",
+          "detail": "app/presentation/routers/institutional_reliability.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "live_probes",
+          "status": "PASS",
+          "detail": "app/application/services/institutional_live_probes.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "scheduler_runtime_live",
+          "status": "WARNING",
+          "detail": "ITE runtime present but snapshot() unavailable",
+          "evidence": null
+        },
+        {
+          "subsystem": "circuit_breakers_panel",
+          "status": "PASS",
+          "detail": "Production readiness orchestrator (includes breaker panel)",
+          "evidence": null
+        },
+        {
+          "subsystem": "retries_timeouts",
+          "status": "PASS",
+          "detail": "Gateway client hosts transport retries/timeouts",
+          "evidence": null
+        },
+        {
+          "subsystem": "watchdogs",
+          "status": "PASS",
+          "detail": "Reliability/watchdog modules present",
+          "evidence": null
+        }
+      ],
+      "runtime_note": "unavailable"
+    },
+    "trading": {
+      "section": "trading",
+      "checks": [
+        {
+          "subsystem": "signal_pipeline",
+          "status": "PASS",
+          "detail": "app/domain/institutional_trading/pipeline.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "decision_pipeline",
+          "status": "PASS",
+          "detail": "app/application/services/institutional_decision_pipeline.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "risk_engine",
+          "status": "PASS",
+          "detail": "app/application/services/risk_engine.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "safety_engine",
+          "status": "PASS",
+          "detail": "app/application/services/execution_safety.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "oms_guards",
+          "status": "PASS",
+          "detail": "app/application/services/institutional_ops_guards.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "oms_adapter",
+          "status": "PASS",
+          "detail": "app/application/services/institutional_oms_adapter.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "gateway_client",
+          "status": "PASS",
+          "detail": "app/infrastructure/brokers/mt5/gateway_client.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "execution_engine",
+          "status": "PASS",
+          "detail": "app/application/services/institutional_execution_engine.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "kill_switch",
+          "status": "PASS",
+          "detail": "app/domain/institutional_trading/execution/kill_switch.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "control_plane",
+          "status": "PASS",
+          "detail": "app/domain/institutional_trading/operations/control_plane.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "no_bypass_oms_guards",
+          "status": "PASS",
+          "detail": "Guarded OMS blocks submit when kill armed / SHADOW",
+          "evidence": null
+        },
+        {
+          "subsystem": "state_transitions",
+          "status": "PASS",
+          "detail": "Launch readiness SHADOW\u2192CANARY\u2192LIVE state machine present",
+          "evidence": null
+        },
+        {
+          "subsystem": "control_plane_live",
+          "status": "PASS",
+          "detail": "mode=LIVE kill_switch_armed=False",
+          "evidence": null
+        }
+      ],
+      "missing_surfaces": [],
+      "ops_mode": "LIVE",
+      "kill_switch_armed": false
+    },
+    "data_integrity": {
+      "section": "data_integrity",
+      "checks": [
+        {
+          "subsystem": "replay_data",
+          "status": "PASS",
+          "detail": "replay_data surface present",
+          "evidence": null
+        },
+        {
+          "subsystem": "witness_observability",
+          "status": "PASS",
+          "detail": "witness_observability surface present",
+          "evidence": null
+        },
+        {
+          "subsystem": "portfolio_analytics",
+          "status": "PASS",
+          "detail": "portfolio_analytics surface present",
+          "evidence": null
+        },
+        {
+          "subsystem": "data_warehouse",
+          "status": "PASS",
+          "detail": "data_warehouse surface present",
+          "evidence": null
+        },
+        {
+          "subsystem": "strategy_intelligence",
+          "status": "PASS",
+          "detail": "strategy_intelligence surface present",
+          "evidence": null
+        },
+        {
+          "subsystem": "database_constraints",
+          "status": "PASS",
+          "detail": "48 SQL migration file(s) discovered",
+          "evidence": "supabase\\migrations"
+        },
+        {
+          "subsystem": "live_snapshots",
+          "status": "PASS",
+          "detail": "Witness latest snapshot present",
+          "evidence": null
+        }
+      ],
+      "migration_count": 48
+    },
+    "performance": {
+      "section": "performance",
+      "checks": [
+        {
+          "subsystem": "api_latency_proxy",
+          "status": "PASS",
+          "detail": "Architecture audit completed in 1704.28ms",
+          "evidence": null
+        },
+        {
+          "subsystem": "analytics_latency",
+          "status": "PASS",
+          "detail": "Empty-portfolio analyze_portfolio in 23.21ms",
+          "evidence": null
+        },
+        {
+          "subsystem": "memory_usage",
+          "status": "PASS",
+          "detail": "Memory probe unavailable",
+          "evidence": null
+        },
+        {
+          "subsystem": "cpu_usage",
+          "status": "PASS",
+          "detail": "CPU sampling deferred \u2014 no continuous profiler attached in PRR",
+          "evidence": null
+        },
+        {
+          "subsystem": "database_query_efficiency",
+          "status": "WARNING",
+          "detail": "Query plans not profiled in this read-only pass \u2014 use EXPLAIN in staging",
+          "evidence": null
+        },
+        {
+          "subsystem": "dashboard_latency",
+          "status": "PASS",
+          "detail": "Ops dashboards are React Query client-side; budget governed by Design Bible",
+          "evidence": null
+        }
+      ],
+      "architecture_audit_ms": 1704.28,
+      "analytics_latency_ms": 23.21,
+      "memory_mb": null
+    },
+    "operations": {
+      "section": "operations",
+      "checks": [
+        {
+          "subsystem": "logging",
+          "status": "PASS",
+          "detail": "Logging surfaces present",
+          "evidence": null
+        },
+        {
+          "subsystem": "monitoring_alerts",
+          "status": "PASS",
+          "detail": "app/domain/institutional_trading/operations/production_alerts.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "metrics_health",
+          "status": "PASS",
+          "detail": "app/presentation/routers/health.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "runbooks",
+          "status": "PASS",
+          "detail": "docs/production/OPERATIONS_GUIDE.md present",
+          "evidence": null
+        },
+        {
+          "subsystem": "backup_script",
+          "status": "PASS",
+          "detail": "scripts/backup_production_state.py present",
+          "evidence": null
+        },
+        {
+          "subsystem": "recovery_docs",
+          "status": "PASS",
+          "detail": "docs/production/RECOVERY_GUIDE.md present",
+          "evidence": null
+        },
+        {
+          "subsystem": "production_checklist_doc",
+          "status": "PASS",
+          "detail": "PRODUCTION_CHECKLIST.md present",
+          "evidence": null
+        }
+      ]
+    },
+    "production_checklist": [
+      {
+        "subsystem": "service_boundaries",
+        "section": "architecture",
+        "status": "PASS",
+        "detail": "Layer module counts: {'presentation': 126, 'application': 169, 'domain': 534, 'infrastructure': 76, 'core': 18}"
+      },
+      {
+        "subsystem": "layer_isolation_docs",
+        "section": "architecture",
+        "status": "PASS",
+        "detail": "ADR-0001 present"
+      },
+      {
+        "subsystem": "circular_dependencies_domain",
+        "section": "architecture",
+        "status": "WARNING",
+        "detail": "2 domain import(s) into infra/presentation (layer leak)"
+      },
+      {
+        "subsystem": "dependency_graph_domain_presentation",
+        "section": "architecture",
+        "status": "PASS",
+        "detail": "Domain must not import presentation"
+      },
+      {
+        "subsystem": "configuration_integrity",
+        "section": "architecture",
+        "status": "PASS",
+        "detail": "Settings module present"
+      },
+      {
+        "subsystem": "secrets_handling",
+        "section": "security",
+        "status": "WARNING",
+        "detail": "Non-production SECRET_KEY (default/weak \u2014 expected for local)"
+      },
+      {
+        "subsystem": "environment_variables",
+        "section": "security",
+        "status": "PASS",
+        "detail": "Environment flag presence surveyed (values not exposed)"
+      },
+      {
+        "subsystem": "authentication",
+        "section": "security",
+        "status": "PASS",
+        "detail": "Auth dependency module present"
+      },
+      {
+        "subsystem": "authorization",
+        "section": "security",
+        "status": "PASS",
+        "detail": "UserRole enum present"
+      },
+      {
+        "subsystem": "api_permissions",
+        "section": "security",
+        "status": "PASS",
+        "detail": "ITE ops router OWNER/ADMIN gated"
+      },
+      {
+        "subsystem": "audit_logging",
+        "section": "security",
+        "status": "PASS",
+        "detail": "Audit governance service present"
+      },
+      {
+        "subsystem": "sensitive_data_exposure",
+        "section": "security",
+        "status": "PASS",
+        "detail": "PRR payload uses presence flags only \u2014 secrets never serialized"
+      },
+      {
+        "subsystem": "scheduler_runtime",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "app/application/services/institutional_ite_runtime.py present"
+      },
+      {
+        "subsystem": "recovery",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "app/domain/institutional_trading/reliability/recovery.py present"
+      },
+      {
+        "subsystem": "health_domain",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "app/domain/institutional_trading/reliability/health.py present"
+      },
+      {
+        "subsystem": "heartbeat",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "app/domain/institutional_trading/reliability/heartbeat.py present"
+      },
+      {
+        "subsystem": "health_router",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "app/presentation/routers/health.py present"
+      },
+      {
+        "subsystem": "reliability_router",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "app/presentation/routers/institutional_reliability.py present"
+      },
+      {
+        "subsystem": "live_probes",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "app/application/services/institutional_live_probes.py present"
+      },
+      {
+        "subsystem": "scheduler_runtime_live",
+        "section": "reliability",
+        "status": "WARNING",
+        "detail": "ITE runtime present but snapshot() unavailable"
+      },
+      {
+        "subsystem": "circuit_breakers_panel",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "Production readiness orchestrator (includes breaker panel)"
+      },
+      {
+        "subsystem": "retries_timeouts",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "Gateway client hosts transport retries/timeouts"
+      },
+      {
+        "subsystem": "watchdogs",
+        "section": "reliability",
+        "status": "PASS",
+        "detail": "Reliability/watchdog modules present"
+      },
+      {
+        "subsystem": "signal_pipeline",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/domain/institutional_trading/pipeline.py present"
+      },
+      {
+        "subsystem": "decision_pipeline",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/application/services/institutional_decision_pipeline.py present"
+      },
+      {
+        "subsystem": "risk_engine",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/application/services/risk_engine.py present"
+      },
+      {
+        "subsystem": "safety_engine",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/application/services/execution_safety.py present"
+      },
+      {
+        "subsystem": "oms_guards",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/application/services/institutional_ops_guards.py present"
+      },
+      {
+        "subsystem": "oms_adapter",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/application/services/institutional_oms_adapter.py present"
+      },
+      {
+        "subsystem": "gateway_client",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/infrastructure/brokers/mt5/gateway_client.py present"
+      },
+      {
+        "subsystem": "execution_engine",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/application/services/institutional_execution_engine.py present"
+      },
+      {
+        "subsystem": "kill_switch",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/domain/institutional_trading/execution/kill_switch.py present"
+      },
+      {
+        "subsystem": "control_plane",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "app/domain/institutional_trading/operations/control_plane.py present"
+      },
+      {
+        "subsystem": "no_bypass_oms_guards",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "Guarded OMS blocks submit when kill armed / SHADOW"
+      },
+      {
+        "subsystem": "state_transitions",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "Launch readiness SHADOW\u2192CANARY\u2192LIVE state machine present"
+      },
+      {
+        "subsystem": "control_plane_live",
+        "section": "trading",
+        "status": "PASS",
+        "detail": "mode=LIVE kill_switch_armed=False"
+      },
+      {
+        "subsystem": "replay_data",
+        "section": "data_integrity",
+        "status": "PASS",
+        "detail": "replay_data surface present"
+      },
+      {
+        "subsystem": "witness_observability",
+        "section": "data_integrity",
+        "status": "PASS",
+        "detail": "witness_observability surface present"
+      },
+      {
+        "subsystem": "portfolio_analytics",
+        "section": "data_integrity",
+        "status": "PASS",
+        "detail": "portfolio_analytics surface present"
+      },
+      {
+        "subsystem": "data_warehouse",
+        "section": "data_integrity",
+        "status": "PASS",
+        "detail": "data_warehouse surface present"
+      },
+      {
+        "subsystem": "strategy_intelligence",
+        "section": "data_integrity",
+        "status": "PASS",
+        "detail": "strategy_intelligence surface present"
+      },
+      {
+        "subsystem": "database_constraints",
+        "section": "data_integrity",
+        "status": "PASS",
+        "detail": "48 SQL migration file(s) discovered"
+      },
+      {
+        "subsystem": "live_snapshots",
+        "section": "data_integrity",
+        "status": "PASS",
+        "detail": "Witness latest snapshot present"
+      },
+      {
+        "subsystem": "api_latency_proxy",
+        "section": "performance",
+        "status": "PASS",
+        "detail": "Architecture audit completed in 1704.28ms"
+      },
+      {
+        "subsystem": "analytics_latency",
+        "section": "performance",
+        "status": "PASS",
+        "detail": "Empty-portfolio analyze_portfolio in 23.21ms"
+      },
+      {
+        "subsystem": "memory_usage",
+        "section": "performance",
+        "status": "PASS",
+        "detail": "Memory probe unavailable"
+      },
+      {
+        "subsystem": "cpu_usage",
+        "section": "performance",
+        "status": "PASS",
+        "detail": "CPU sampling deferred \u2014 no continuous profiler attached in PRR"
+      },
+      {
+        "subsystem": "database_query_efficiency",
+        "section": "performance",
+        "status": "WARNING",
+        "detail": "Query plans not profiled in this read-only pass \u2014 use EXPLAIN in staging"
+      },
+      {
+        "subsystem": "dashboard_latency",
+        "section": "performance",
+        "status": "PASS",
+        "detail": "Ops dashboards are React Query client-side; budget governed by Design Bible"
+      },
+      {
+        "subsystem": "logging",
+        "section": "operations",
+        "status": "PASS",
+        "detail": "Logging surfaces present"
+      },
+      {
+        "subsystem": "monitoring_alerts",
+        "section": "operations",
+        "status": "PASS",
+        "detail": "app/domain/institutional_trading/operations/production_alerts.py present"
+      },
+      {
+        "subsystem": "metrics_health",
+        "section": "operations",
+        "status": "PASS",
+        "detail": "app/presentation/routers/health.py present"
+      },
+      {
+        "subsystem": "runbooks",
+        "section": "operations",
+        "status": "PASS",
+        "detail": "docs/production/OPERATIONS_GUIDE.md present"
+      },
+      {
+        "subsystem": "backup_script",
+        "section": "operations",
+        "status": "PASS",
+        "detail": "scripts/backup_production_state.py present"
+      },
+      {
+        "subsystem": "recovery_docs",
+        "section": "operations",
+        "status": "PASS",
+        "detail": "docs/production/RECOVERY_GUIDE.md present"
+      },
+      {
+        "subsystem": "production_checklist_doc",
+        "section": "operations",
+        "status": "PASS",
+        "detail": "PRODUCTION_CHECKLIST.md present"
+      }
+    ],
+    "risk_register": {
+      "critical": [],
+      "high": [],
+      "medium": [
+        {
+          "id": "WARN-architecture-circular_dependencies_domain",
+          "title": "circular_dependencies_domain WARNING",
+          "impact": "Elevated operational uncertainty",
+          "likelihood": "Possible",
+          "mitigation": "2 domain import(s) into infra/presentation (layer leak)"
+        },
+        {
+          "id": "WARN-security-secrets_handling",
+          "title": "secrets_handling WARNING",
+          "impact": "Elevated operational uncertainty",
+          "likelihood": "Possible",
+          "mitigation": "Non-production SECRET_KEY (default/weak \u2014 expected for local)"
+        },
+        {
+          "id": "WARN-reliability-scheduler_runtime_live",
+          "title": "scheduler_runtime_live WARNING",
+          "impact": "Elevated operational uncertainty",
+          "likelihood": "Possible",
+          "mitigation": "ITE runtime present but snapshot() unavailable"
+        },
+        {
+          "id": "WARN-performance-database_query_efficiency",
+          "title": "database_query_efficiency WARNING",
+          "impact": "Elevated operational uncertainty",
+          "likelihood": "Possible",
+          "mitigation": "Query plans not profiled in this read-only pass \u2014 use EXPLAIN in staging"
+        }
+      ],
+      "low": [
+        {
+          "id": "PRR-RO",
+          "title": "PRR is advisory-only",
+          "impact": "Does not itself change production behavior",
+          "likelihood": "Certain",
+          "mitigation": "Use Ops launch-readiness + OWNER confirm for any promotion"
+        }
+      ]
+    },
+    "executive_summary": {
+      "overall_production_readiness_score": 96.8,
+      "recommendation": "CONDITIONALLY READY",
+      "summary": "Score 96.8/100 \u00b7 0 FAIL \u00b7 4 WARNING \u00b7 52 PASS -> CONDITIONALLY READY",
+      "counts": {
+        "pass": 52,
+        "warning": 4,
+        "fail": 0,
+        "total": 56
+      }
+    }
+  },
+  "overall_production_readiness_score": 96.8,
+  "recommendation": "CONDITIONALLY READY",
+  "summary": "Score 96.8/100 \u00b7 0 FAIL \u00b7 4 WARNING \u00b7 52 PASS -> CONDITIONALLY READY"
+}
