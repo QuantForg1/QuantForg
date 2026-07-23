@@ -12,6 +12,7 @@ import {
   Building2,
   Cable,
   Calendar,
+  CalendarClock,
   CandlestickChart,
   ClipboardCheck,
   Crosshair,
@@ -255,6 +256,12 @@ export const appNav: NavGroup[] = [
         label: "Acceptance Countdown",
         icon: Timer,
         hint: "First eligible fill · session ETA · blockers",
+      },
+      {
+        href: "/session-readiness",
+        label: "Session Readiness",
+        icon: CalendarClock,
+        hint: "Allowed/blocked · execution window metrics",
       },
       {
         href: "/production-replay",
