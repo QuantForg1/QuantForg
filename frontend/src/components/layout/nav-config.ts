@@ -18,6 +18,7 @@ import {
   Crosshair,
   Database,
   FileText,
+  FileLock2,
   FlaskConical,
   Gauge,
   GraduationCap,
@@ -250,6 +251,12 @@ export const appNav: NavGroup[] = [
         label: "Production Acceptance",
         icon: ClipboardCheck,
         hint: "Read-only certification · first-fill evidence",
+      },
+      {
+        href: "/first-execution-evidence",
+        label: "First Execution Evidence",
+        icon: FileLock2,
+        hint: "Immutable write-once first live fill",
       },
       {
         href: "/production-acceptance-countdown",

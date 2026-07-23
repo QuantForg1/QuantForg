@@ -1,10 +1,18 @@
 /** Production Acceptance — read-only certification model.
 
 Never mutates trading engines. Never fabricates fills.
-First-execution evidence persists in localStorage when a real ticket is observed.
+First-execution evidence is immutable (write-once) via first-execution-evidence.
+PRODUCTION ACCEPTED only when OMS + broker accept + MT5 ticket + Deal ID exist.
 */
 import { asList, asRecord, bool, str } from "@/lib/desk";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import {
+  type FirstExecutionEvidenceRecord,
+  isCompleteSuccessfulExecution,
+  loadFirstExecutionEvidence,
+  reconcileFirstExecutionEvidence,
+  saveFirstExecutionEvidence,
+} from "@/lib/first-execution-evidence";
 
 const STORAGE_KEY = "quantforg.production_acceptance.v1";
 
@@ -20,15 +28,18 @@ export type PipelineStage = {
   detail: string;
 };
 
+/** @deprecated Prefer FirstExecutionEvidenceRecord — kept for desk UI mapping. */
 export type FirstExecutionEvidence = {
   signalId: string;
   utcTime: string;
   session: string;
   quality: string;
   confluence: string;
+  decisionId: string;
   riskResult: string;
   safetyResult: string;
   omsRequest: string;
+  brokerRequestId: string;
   brokerResponse: string;
   mt5Ticket: string;
   dealId: string;
@@ -39,7 +50,8 @@ export type FirstExecutionEvidence = {
   journalId: string;
   auditId: string;
   capturedAt: string;
-  source: "live_cycle" | "journal" | "stored";
+  source: "live_cycle" | "journal" | "stored" | "migrated";
+  locked: boolean;
 };
 
 export type HistoryEvent = {
@@ -54,45 +66,66 @@ export type StoredBlob = {
   history: Partial<Record<string, string>>;
 };
 
-function parseQuality(reasons: string[]): string {
-  for (const r of reasons) {
-    const m = r.match(/Trade quality\s+(\d+)/i);
-    if (m?.[1]) return m[1];
-  }
-  return "—";
-}
-
-function parseConfluence(reasons: string[]): string {
-  for (const r of reasons) {
-    const m = r.match(/Confluence\s+(\d+)/i);
-    if (m?.[1]) return m[1];
-  }
-  return "—";
+export function toDeskEvidence(
+  rec: FirstExecutionEvidenceRecord | null,
+): FirstExecutionEvidence | null {
+  if (!rec) return null;
+  return {
+    signalId: rec.signalId,
+    utcTime: rec.utcTimestamp,
+    session: rec.session,
+    quality: rec.quality,
+    confluence: rec.confluence,
+    decisionId: rec.decisionId,
+    riskResult: rec.riskResult,
+    safetyResult: rec.safetyResult,
+    omsRequest: rec.omsRequestId,
+    brokerRequestId: rec.brokerRequestId,
+    brokerResponse: rec.brokerResponse,
+    mt5Ticket: rec.mt5Ticket,
+    dealId: rec.dealId,
+    entryPrice: rec.entryPrice,
+    stopLoss: rec.stopLoss,
+    takeProfit: rec.takeProfit,
+    latency: rec.executionLatency,
+    journalId: rec.journalId,
+    auditId: rec.auditId,
+    capturedAt: rec.lockedAt,
+    source: rec.source === "migrated" ? "migrated" : rec.source,
+    locked: true,
+  };
 }
 
 export function loadAcceptanceStore(): StoredBlob {
-  if (typeof window === "undefined") {
-    return { firstExecution: null, history: {} };
+  const evidence = loadFirstExecutionEvidence();
+  let history: Partial<Record<string, string>> = {};
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as StoredBlob;
+        history = parsed.history ?? {};
+      }
+    } catch {
+      /* ignore */
+    }
   }
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { firstExecution: null, history: {} };
-    const parsed = JSON.parse(raw) as StoredBlob;
-    return {
-      firstExecution: parsed.firstExecution ?? null,
-      history: parsed.history ?? {},
-    };
-  } catch {
-    return { firstExecution: null, history: {} };
-  }
+  return {
+    firstExecution: toDeskEvidence(evidence.record),
+    history,
+  };
 }
 
 export function saveAcceptanceStore(blob: StoredBlob): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(blob));
+    // History only in acceptance key — evidence is owned by immutable store
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ firstExecution: null, history: blob.history }),
+    );
   } catch {
-    /* quota / private mode — evidence still shown live */
+    /* quota */
   }
 }
 
@@ -119,7 +152,7 @@ export function buildProductionAcceptanceModel(input: {
   rejection: { status: string; reason: string } | null;
   firstExecution: FirstExecutionEvidence | null;
   storePatch: StoredBlob;
-  certification: "PRODUCTION ACCEPTED" | "NOT YET ACCEPTED";
+  certification: "PRODUCTION ACCEPTED" | "WAITING";
   certItems: PassFail[];
   history: HistoryEvent[];
   opsMode: string;
@@ -135,9 +168,6 @@ export function buildProductionAcceptanceModel(input: {
   const policy = asRecord(auto.policy);
   const center = asRecord(input.controlCenter);
   const mt5 = asRecord(input.mt5Status);
-  const journalItems = asList(
-    asRecord(input.journal).items ?? asRecord(input.journal).entries ?? input.journal,
-  ).map(asRecord);
   const auditItems = asList(
     asRecord(input.audits).items ?? asRecord(input.audits).audits ?? input.audits,
   ).map(asRecord);
@@ -333,78 +363,56 @@ export function buildProductionAcceptanceModel(input: {
       }
     : null;
 
-  // First execution evidence from live cycle or journal
-  let liveEvidence: FirstExecutionEvidence | null = null;
-  if (last.mt5_ticket != null) {
-    liveEvidence = {
-      signalId: str(last.signal_id, "—"),
-      utcTime: cycleAt,
-      session: str(diag.trading_session, "—"),
-      quality: parseQuality(reasons),
-      confluence: parseConfluence(reasons),
-      riskResult: riskOk ? "PASS" : "FAIL",
-      safetyResult: safetyOk ? "PASS" : "BLOCK",
-      omsRequest: str(last.oms_message || last.trace_id, "—"),
-      brokerResponse: last.broker_retcode != null ? String(last.broker_retcode) : "—",
-      mt5Ticket: String(last.mt5_ticket),
-      dealId: "—",
-      entryPrice: "—",
-      stopLoss: "—",
-      takeProfit: "—",
-      latency: last.latency_ms != null ? `${str(last.latency_ms)} ms` : "—",
-      journalId: str(last.trace_id, "—"),
-      auditId: str(last.trace_id, "—"),
-      capturedAt: nowIso,
-      source: "live_cycle",
-    };
-  } else {
-    const fill = journalItems.find((j) => {
-      const ticket = j.ticket ?? j.mt5_ticket;
-      const result = str(j.execution_result || j.outcome || j.status).toLowerCase();
-      return (
-        ticket != null ||
-        result.includes("fill") ||
-        result.includes("success")
-      );
-    });
-    if (fill) {
-      liveEvidence = {
-        signalId: str(fill.signal_id || fill.request_id, "—"),
-        utcTime: str(fill.timestamp || fill.submitted_at || fill.created_at, nowIso),
-        session: str(fill.session, "—"),
-        quality: str(fill.quality, "—"),
-        confluence: str(fill.confluence, "—"),
-        riskResult: str(fill.risk_result, "PASS"),
-        safetyResult: str(fill.safety_result, "PASS"),
-        omsRequest: str(fill.request_id || fill.oms_request_id, "—"),
-        brokerResponse: str(fill.retcode ?? fill.broker_retcode, "—"),
-        mt5Ticket: str(fill.ticket ?? fill.mt5_ticket, "—"),
-        dealId: str(fill.deal ?? fill.deal_id, "—"),
-        entryPrice: str(fill.price ?? fill.fill_price ?? fill.entry, "—"),
-        stopLoss: str(fill.stop_loss ?? fill.sl, "—"),
-        takeProfit: str(fill.take_profit ?? fill.tp, "—"),
-        latency:
-          fill.latency_ms != null ? `${str(fill.latency_ms)} ms` : "—",
-        journalId: str(fill.id || fill.request_id, "—"),
-        auditId: str(
-          auditItems.find(
-            (a) => str(a.request_id) === str(fill.request_id),
-          )?.id,
-          "—",
-        ),
-        capturedAt: nowIso,
-        source: "journal",
-      };
-    }
-  }
+  // Immutable first-execution evidence (write-once; never overwrite)
+  const existingLocked =
+    input.store.firstExecution?.locked &&
+    isCompleteSuccessfulExecution({
+      omsRequestId: input.store.firstExecution.omsRequest,
+      brokerResponse: input.store.firstExecution.brokerResponse,
+      mt5Ticket: input.store.firstExecution.mt5Ticket,
+      dealId: input.store.firstExecution.dealId,
+    })
+      ? {
+          locked: true as const,
+          lockedAt: input.store.firstExecution.capturedAt,
+          utcTimestamp: input.store.firstExecution.utcTime,
+          session: input.store.firstExecution.session,
+          signalId: input.store.firstExecution.signalId,
+          quality: input.store.firstExecution.quality,
+          confluence: input.store.firstExecution.confluence,
+          decisionId: input.store.firstExecution.decisionId,
+          riskResult: input.store.firstExecution.riskResult,
+          safetyResult: input.store.firstExecution.safetyResult,
+          omsRequestId: input.store.firstExecution.omsRequest,
+          brokerRequestId: input.store.firstExecution.brokerRequestId,
+          brokerResponse: input.store.firstExecution.brokerResponse,
+          mt5Ticket: input.store.firstExecution.mt5Ticket,
+          dealId: input.store.firstExecution.dealId,
+          entryPrice: input.store.firstExecution.entryPrice,
+          stopLoss: input.store.firstExecution.stopLoss,
+          takeProfit: input.store.firstExecution.takeProfit,
+          executionLatency: input.store.firstExecution.latency,
+          journalId: input.store.firstExecution.journalId,
+          auditId: input.store.firstExecution.auditId,
+          source:
+            input.store.firstExecution.source === "migrated"
+              ? ("migrated" as const)
+              : input.store.firstExecution.source === "journal"
+                ? ("journal" as const)
+                : ("live_cycle" as const),
+        }
+      : loadFirstExecutionEvidence().record;
 
-  const stored = input.store.firstExecution;
-  const firstExecution =
-    stored && stored.mt5Ticket && stored.mt5Ticket !== "—"
-      ? stored
-      : liveEvidence && liveEvidence.mt5Ticket !== "—"
-        ? liveEvidence
-        : null;
+  const reconciled = reconcileFirstExecutionEvidence({
+    autoTrading: input.autoTrading,
+    journal: input.journal,
+    audits: input.audits,
+    existing: existingLocked,
+  });
+  if (reconciled.storePatch.record && !existingLocked?.locked) {
+    saveFirstExecutionEvidence(reconciled.storePatch);
+  }
+  const firstExecution = toDeskEvidence(reconciled.record);
 
   let historyMap = { ...input.store.history };
   if (opsMode.toUpperCase() === "LIVE") {
@@ -431,24 +439,19 @@ export function buildProductionAcceptanceModel(input: {
   }
 
   const storePatch: StoredBlob = {
-    firstExecution:
-      firstExecution && (!stored || stored.source !== "stored")
-        ? { ...firstExecution, source: stored ? stored.source : firstExecution.source }
-        : firstExecution ?? stored,
+    firstExecution,
     history: historyMap,
   };
-  // Prefer keeping first permanent capture
-  if (stored?.mt5Ticket && stored.mt5Ticket !== "—") {
-    storePatch.firstExecution = { ...stored, source: "stored" };
-  } else if (liveEvidence?.mt5Ticket && liveEvidence.mt5Ticket !== "—") {
-    storePatch.firstExecution = { ...liveEvidence, source: "stored" };
-  }
 
   const durable = bool(persistence.durable) || bool(persistence.postgres_has_state);
-  const hasFill = Boolean(
-    storePatch.firstExecution?.mt5Ticket &&
-      storePatch.firstExecution.mt5Ticket !== "—",
-  );
+  const accepted =
+    firstExecution != null &&
+    isCompleteSuccessfulExecution({
+      omsRequestId: firstExecution.omsRequest,
+      brokerResponse: firstExecution.brokerResponse,
+      mt5Ticket: firstExecution.mt5Ticket,
+      dealId: firstExecution.dealId,
+    });
 
   const certItems: PassFail[] = [
     {
@@ -473,12 +476,25 @@ export function buildProductionAcceptanceModel(input: {
       detail: "OPERATIONAL",
     },
     {
-      label: "OMS",
-      passed: hasFill || bool(exec.oms_orders_allowed),
-      detail: hasFill ? "EXECUTED" : bool(exec.oms_orders_allowed) ? "READY" : "IDLE",
+      label: "OMS request",
+      passed: accepted || Boolean(firstExecution?.omsRequest && firstExecution.omsRequest !== "—"),
+      detail: accepted ? "CONFIRMED" : "WAITING",
     },
-    { label: "Broker", passed: brokerOk, detail: brokerOk ? "PASS" : "FAIL" },
-    { label: "MT5", passed: mt5Ok, detail: mt5Ok ? "PASS" : "FAIL" },
+    {
+      label: "Broker accepted",
+      passed: accepted,
+      detail: accepted ? "ACCEPTED" : "WAITING",
+    },
+    {
+      label: "MT5 ticket",
+      passed: Boolean(firstExecution?.mt5Ticket && firstExecution.mt5Ticket !== "—"),
+      detail: firstExecution?.mt5Ticket ?? "WAITING",
+    },
+    {
+      label: "Deal ID",
+      passed: Boolean(firstExecution?.dealId && firstExecution.dealId !== "—"),
+      detail: firstExecution?.dealId ?? "WAITING",
+    },
     {
       label: "Persistence",
       passed: durable,
@@ -491,9 +507,9 @@ export function buildProductionAcceptanceModel(input: {
     },
   ];
 
-  const certification: "PRODUCTION ACCEPTED" | "NOT YET ACCEPTED" = hasFill
+  const certification: "PRODUCTION ACCEPTED" | "WAITING" = accepted
     ? "PRODUCTION ACCEPTED"
-    : "NOT YET ACCEPTED";
+    : "WAITING";
 
   const history: HistoryEvent[] = [
     {
@@ -542,7 +558,7 @@ export function buildProductionAcceptanceModel(input: {
       id: "fill",
       label: "First Filled Trade",
       at: historyMap.fill ?? null,
-      done: Boolean(historyMap.fill),
+      done: accepted,
     },
   ];
 

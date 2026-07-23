@@ -335,9 +335,10 @@ export function buildAcceptanceCountdownModel(input: {
   const hasTicket = Boolean(
     firstTrade?.mt5Ticket && firstTrade.mt5Ticket !== "—",
   );
-  const status: CountdownStatus = hasTicket
-    ? "PRODUCTION ACCEPTED"
-    : "WAITING FOR FIRST ELIGIBLE EXECUTION";
+  const status: CountdownStatus =
+    base.certification === "PRODUCTION ACCEPTED"
+      ? "PRODUCTION ACCEPTED"
+      : "WAITING FOR FIRST ELIGIBLE EXECUTION";
 
   const productionState: ProductionStateRow[] = [
     {
