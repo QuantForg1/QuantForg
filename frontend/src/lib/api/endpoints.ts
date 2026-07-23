@@ -1732,6 +1732,37 @@ export const strategyLabApi = {
     apiFetch<Record<string, unknown>>("/strategy-lab/promotion/dashboard"),
 };
 
+/** AI Quant Scientist — advisory research only; never modifies production */
+export const aqsApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/aqs/dashboard"),
+  feed: () => apiFetch<Record<string, unknown>>("/aqs/feed"),
+  recommendations: (status?: string, limit = 100) => {
+    const sp = new URLSearchParams();
+    sp.set("limit", String(limit));
+    if (status) sp.set("status", status);
+    return apiFetch<Record<string, unknown>>(`/aqs/recommendations?${sp}`);
+  },
+  recommendation: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/aqs/recommendations/${encodeURIComponent(id)}`,
+    ),
+  setStatus: (id: string, status: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/aqs/recommendations/${encodeURIComponent(id)}/status`,
+      { method: "POST", body: { status } },
+    ),
+  patterns: () => apiFetch<Record<string, unknown>>("/aqs/patterns"),
+  compare: () => apiFetch<Record<string, unknown>>("/aqs/compare"),
+  regimes: () => apiFetch<Record<string, unknown>>("/aqs/regimes"),
+  sensitivity: () => apiFetch<Record<string, unknown>>("/aqs/sensitivity"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/aqs/reports?limit=${limit}`),
+  ask: (q: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/aqs/ask?q=${encodeURIComponent(q)}`,
+    ),
+};
+
 /** Institutional Research Lab — completely isolated from production trading */
 export const irlApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/irl/dashboard"),

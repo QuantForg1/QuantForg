@@ -152,6 +152,12 @@ export const appNav: NavGroup[] = [
         hint: "IRL · experiments · replay · leaderboard · isolated",
       },
       {
+        href: "/ai-quant-scientist",
+        label: "AI Quant Scientist",
+        icon: Brain,
+        hint: "AQS · patterns · recommendations · explainability",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
