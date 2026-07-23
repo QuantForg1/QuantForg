@@ -55,6 +55,13 @@ def serialize_symbol_specs(info: Any, *, tick: Any | None = None) -> dict[str, A
         "volume_max": str(getattr(info, "volume_max", 0) or 0),
         "volume_step": str(getattr(info, "volume_step", 0) or 0),
         "volume_limit": str(getattr(info, "volume_limit", 0) or 0),
+        # Tick geometry — read-only; never invent fills
+        "tick_size": str(
+            getattr(info, "trade_tick_size", None)
+            or getattr(info, "point", 0)
+            or 0
+        ),
+        "tick_value": str(getattr(info, "trade_tick_value", 0) or 0),
         "stops_level": int(getattr(info, "trade_stops_level", 0) or 0),
         "freeze_level": int(getattr(info, "trade_freeze_level", 0) or 0),
         "filling_mode": filling_raw,

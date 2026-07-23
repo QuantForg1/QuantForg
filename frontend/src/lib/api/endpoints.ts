@@ -1079,6 +1079,23 @@ export const candidateValidationApi = {
   report: () => apiFetch<Record<string, unknown>>("/candidate-validation/report"),
 };
 
+/** Micro Account Analyzer — feasibility only; never mutates Institutional Mode */
+export const microAccountAnalyzerApi = {
+  profiles: () =>
+    apiFetch<Record<string, unknown>>("/micro-account-analyzer/profiles"),
+  analyze: (body: {
+    balance?: string;
+    risk_pct?: string;
+    atr?: string | null;
+    use_live_broker?: boolean;
+    use_live_atr?: boolean;
+  } = {}) =>
+    apiFetch<Record<string, unknown>>("/micro-account-analyzer/analyze", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Alpha Engine V1 — market quality scoring; never order_send */
 export const alphaEngineApi = {
   status: () => apiFetch<Record<string, unknown>>("/alpha-engine/status"),

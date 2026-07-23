@@ -1,0 +1,219 @@
+{
+  "schema_version": "1.0.0",
+  "analyzer": "Micro Account Analyzer",
+  "symbol": "XAUUSD",
+  "institutional_mode_modified": false,
+  "strategy_oms_safety_unchanged": true,
+  "profiles": {
+    "INSTITUTIONAL": {
+      "profile_id": "INSTITUTIONAL",
+      "frozen": true,
+      "quality": 80,
+      "confluence": 80,
+      "risk_pct": "1.0",
+      "reject_below_min_lot": true,
+      "never_upsize_below_min_lot": true,
+      "config_version": "ite-v1.0.0",
+      "modified_by_micro_mode": false
+    },
+    "MICRO_ACCOUNT_MODE": {
+      "profile_id": "MICRO_ACCOUNT_MODE",
+      "frozen": false,
+      "independent_of_institutional": true,
+      "target_balances": [
+        "50",
+        "100",
+        "250",
+        "500"
+      ],
+      "recommended_max_risk_pct": "2.0",
+      "hard_max_risk_pct": "5.0",
+      "broker_min_lot": "0.01",
+      "never_fake_lots": true,
+      "never_bypass_broker_rules": true,
+      "never_force_min_lot": true,
+      "activates_live_execution": false,
+      "notes": [
+        "Advisory / sizing analyzer only \u2014 does not weaken Institutional Mode.",
+        "Does not change Strategy, OMS, Safety, or Institutional risk policy."
+      ]
+    }
+  },
+  "balance": "50",
+  "broker_specs": {
+    "symbol": "XAUUSD",
+    "volume_min": "0.01",
+    "volume_step": "0.01",
+    "volume_max": "1000.0",
+    "contract_size": "100.0",
+    "tick_size": "0.001",
+    "tick_value": "0.10",
+    "source": "live_broker",
+    "micro_account_compatible": false,
+    "micro_compatible_label": "Standard min lot (not nano)"
+  },
+  "risk_pct": "2",
+  "atr": "12.00",
+  "atr_stop": "18.0000",
+  "atr_stop_multiplier": "1.5",
+  "calculated_lots": "0.00",
+  "eligible": false,
+  "eligible_label": "NO",
+  "status": "NOT ELIGIBLE",
+  "reason": "NOT ELIGIBLE: calculated lots 0.00 < broker min_lot 0.01. Min-lot stop-loss is $18.00 (36.00% of $50); selected risk 2% budget cannot fund a real lot without faking size or bypassing broker rules.",
+  "recommended_risk_pct": null,
+  "estimated_lot_size": null,
+  "maximum_loss": "18.00",
+  "min_safe_balances_by_risk": [
+    {
+      "risk_pct": "0.25",
+      "min_safe_balance": "7200.00",
+      "dollar_risk_at_min_lot": "18.00",
+      "broker_min_lot": "0.01"
+    },
+    {
+      "risk_pct": "0.50",
+      "min_safe_balance": "3600.00",
+      "dollar_risk_at_min_lot": "18.00",
+      "broker_min_lot": "0.01"
+    },
+    {
+      "risk_pct": "0.75",
+      "min_safe_balance": "2400.00",
+      "dollar_risk_at_min_lot": "18.00",
+      "broker_min_lot": "0.01"
+    },
+    {
+      "risk_pct": "1.00",
+      "min_safe_balance": "1800.00",
+      "dollar_risk_at_min_lot": "18.00",
+      "broker_min_lot": "0.01"
+    },
+    {
+      "risk_pct": "1.50",
+      "min_safe_balance": "1200.00",
+      "dollar_risk_at_min_lot": "18.00",
+      "broker_min_lot": "0.01"
+    },
+    {
+      "risk_pct": "2.00",
+      "min_safe_balance": "900.00",
+      "dollar_risk_at_min_lot": "18.00",
+      "broker_min_lot": "0.01"
+    }
+  ],
+  "supported_balance_matrix": [
+    {
+      "balance": "50",
+      "risk_pct": "2",
+      "atr": "12.00",
+      "atr_stop": "18.0000",
+      "calculated_lots": "0.00",
+      "max_loss": "18.00",
+      "eligible": false,
+      "status": "NOT ELIGIBLE",
+      "reason": "NOT ELIGIBLE: calculated lots 0.00 < broker min_lot 0.01. Min-lot stop-loss is $18.00 (36.00% of $50); selected risk 2% budget cannot fund a real lot without faking size or bypassing broker rules.",
+      "recommended_risk_pct": null,
+      "estimated_lot_size": null
+    },
+    {
+      "balance": "100",
+      "risk_pct": "2",
+      "atr": "12.00",
+      "atr_stop": "18.0000",
+      "calculated_lots": "0.00",
+      "max_loss": "18.00",
+      "eligible": false,
+      "status": "NOT ELIGIBLE",
+      "reason": "NOT ELIGIBLE: calculated lots 0.00 < broker min_lot 0.01. Min-lot stop-loss is $18.00 (18.00% of $100); selected risk 2% budget cannot fund a real lot without faking size or bypassing broker rules.",
+      "recommended_risk_pct": null,
+      "estimated_lot_size": null
+    },
+    {
+      "balance": "250",
+      "risk_pct": "2",
+      "atr": "12.00",
+      "atr_stop": "18.0000",
+      "calculated_lots": "0.00",
+      "max_loss": "18.00",
+      "eligible": false,
+      "status": "NOT ELIGIBLE",
+      "reason": "NOT ELIGIBLE: calculated lots 0.00 < broker min_lot 0.01. Min-lot stop-loss is $18.00 (7.20% of $250); selected risk 2% budget cannot fund a real lot without faking size or bypassing broker rules.",
+      "recommended_risk_pct": null,
+      "estimated_lot_size": null
+    },
+    {
+      "balance": "500",
+      "risk_pct": "2",
+      "atr": "12.00",
+      "atr_stop": "18.0000",
+      "calculated_lots": "0.00",
+      "max_loss": "18.00",
+      "eligible": false,
+      "status": "NOT ELIGIBLE",
+      "reason": "NOT ELIGIBLE: calculated lots 0.00 < broker min_lot 0.01. Min-lot stop-loss is $18.00 (3.60% of $500); selected risk 2% budget cannot fund a real lot without faking size or bypassing broker rules.",
+      "recommended_risk_pct": null,
+      "estimated_lot_size": null
+    }
+  ],
+  "fifty_dollar_clear_statement": "$50 is NOT tradable on this broker for XAUUSD at ATR=12.00 (stop=18.0000): NOT ELIGIBLE: calculated lots 0.00 < broker min_lot 0.01. Min-lot stop-loss is $18.00 (36.00% of $50); selected risk 2% budget cannot fund a real lot without faking size or bypassing broker rules.",
+  "flow": [
+    {
+      "step": "Balance",
+      "value": "50"
+    },
+    {
+      "step": "Broker Specs",
+      "value": "min=0.01 step=0.01 cs=100.0 tick=0.001/0.10 (live_broker)"
+    },
+    {
+      "step": "Risk %",
+      "value": "2"
+    },
+    {
+      "step": "ATR Stop",
+      "value": "18.0000"
+    },
+    {
+      "step": "Calculated Lots",
+      "value": "0.00"
+    },
+    {
+      "step": "Eligible",
+      "value": "NO"
+    },
+    {
+      "step": "Reason",
+      "value": "NOT ELIGIBLE: calculated lots 0.00 < broker min_lot 0.01. Min-lot stop-loss is $18.00 (36.00% of $50); selected risk 2% budget cannot fund a real lot without faking size or bypassing broker rules."
+    }
+  ],
+  "generated_at": "2026-07-23T16:36:03.943093+00:00",
+  "live_broker": {
+    "attempted": true,
+    "ok": true,
+    "di_error": "DI container has not been initialised",
+    "via": "direct_gateway",
+    "gateway_url": "http://127.0.0.1:8765"
+  },
+  "live_atr": {
+    "attempted": true,
+    "ok": false,
+    "timeframe": "M15",
+    "error": "DI container has not been initialised",
+    "source": "reference_fallback"
+  },
+  "risk_ladder_pct": [
+    "0.25",
+    "0.50",
+    "0.75",
+    "1.00",
+    "1.50",
+    "2.00"
+  ],
+  "supported_balances": [
+    "50",
+    "100",
+    "250",
+    "500"
+  ]
+}

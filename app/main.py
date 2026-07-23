@@ -102,6 +102,8 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "threshold_performance_analysis",
         "app.presentation.routers.threshold_performance_analysis",
     ),
+    ("candidate_validation", "app.presentation.routers.candidate_validation"),
+    ("micro_account_analyzer", "app.presentation.routers.micro_account_analyzer"),
     ("alpha_engine", "app.presentation.routers.alpha_engine"),
     ("trading_kernel", "app.presentation.routers.trading_kernel"),
     ("multi_agent_ai", "app.presentation.routers.multi_agent_ai"),

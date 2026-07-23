@@ -16,6 +16,7 @@ import {
   CalendarClock,
   CandlestickChart,
   ClipboardCheck,
+  Coins,
   Crosshair,
   Database,
   FileText,
@@ -267,6 +268,12 @@ export const appNav: NavGroup[] = [
         label: "Strategy Diagnostics",
         icon: ScanSearch,
         hint: "Why NO_TRADE · quality · confluence · MTF",
+      },
+      {
+        href: "/micro-account-analyzer",
+        label: "Micro Account Analyzer",
+        icon: Coins,
+        hint: "XAUUSD micro balances · broker min lot · eligibility",
       },
       {
         href: "/threshold-promotion",
