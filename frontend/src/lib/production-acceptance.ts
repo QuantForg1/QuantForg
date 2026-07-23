@@ -49,7 +49,7 @@ export type HistoryEvent = {
   done: boolean;
 };
 
-type StoredBlob = {
+export type StoredBlob = {
   firstExecution: FirstExecutionEvidence | null;
   history: Partial<Record<string, string>>;
 };

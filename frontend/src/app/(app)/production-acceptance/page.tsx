@@ -21,6 +21,9 @@ export default function ProductionAcceptancePage() {
               <Link href="/production-validation">Validation</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
+              <Link href="/production-acceptance-countdown">Countdown</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
               <Link href="/monitoring">Monitoring</Link>
             </Button>
           </div>

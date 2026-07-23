@@ -36,6 +36,7 @@ import {
   Shield,
   Sparkles,
   Target,
+  Timer,
   Workflow,
 } from "lucide-react";
 
@@ -248,6 +249,12 @@ export const appNav: NavGroup[] = [
         label: "Production Acceptance",
         icon: ClipboardCheck,
         hint: "Read-only certification · first-fill evidence",
+      },
+      {
+        href: "/production-acceptance-countdown",
+        label: "Acceptance Countdown",
+        icon: Timer,
+        hint: "First eligible fill · session ETA · blockers",
       },
       {
         href: "/production-replay",
