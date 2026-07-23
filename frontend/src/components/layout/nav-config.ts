@@ -146,6 +146,12 @@ export const appNav: NavGroup[] = [
         hint: "Idea → promote pipeline",
       },
       {
+        href: "/institutional-research-lab",
+        label: "Institutional Research Lab",
+        icon: FlaskConical,
+        hint: "IRL · experiments · replay · leaderboard · isolated",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

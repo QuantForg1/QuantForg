@@ -1704,6 +1704,58 @@ export const strategyLabApi = {
     apiFetch<Record<string, unknown>>("/strategy-lab/promotion/dashboard"),
 };
 
+/** Institutional Research Lab — completely isolated from production trading */
+export const irlApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/irl/dashboard"),
+  experiments: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/irl/experiments?limit=${limit}`),
+  createExperiment: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/irl/experiments", {
+      method: "POST",
+      body,
+    }),
+  experiment: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/irl/experiments/${encodeURIComponent(id)}`),
+  updateExperiment: (id: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(`/irl/experiments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body,
+    }),
+  replay: (id: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      `/irl/experiments/${encodeURIComponent(id)}/replay`,
+      { method: "POST", body },
+    ),
+  jobs: (limit = 50, experimentId?: string) => {
+    const q = experimentId
+      ? `?limit=${limit}&experiment_id=${encodeURIComponent(experimentId)}`
+      : `?limit=${limit}`;
+    return apiFetch<Record<string, unknown>>(`/irl/jobs${q}`);
+  },
+  leaderboard: (rankBy = "composite", limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/irl/leaderboard?rank_by=${encodeURIComponent(rankBy)}&limit=${limit}`,
+    ),
+  reports: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/irl/reports?limit=${limit}`),
+  benchmark: () => apiFetch<Record<string, unknown>>("/irl/benchmark"),
+  addNote: (id: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      `/irl/experiments/${encodeURIComponent(id)}/notes`,
+      { method: "POST", body },
+    ),
+  archive: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/irl/experiments/${encodeURIComponent(id)}/archive`,
+      { method: "POST", body: {} },
+    ),
+  setVerdict: (id: string, verdict: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/irl/experiments/${encodeURIComponent(id)}/verdict`,
+      { method: "POST", body: { verdict } },
+    ),
+};
+
 export const researchLabApi = {
   dashboard: (symbol = TRADING_SYMBOL) =>
     apiFetch<Record<string, unknown>>(
