@@ -782,7 +782,10 @@ def get_control_plane() -> OperationsControlPlane:
     if _GLOBAL_PLANE is None:
         plane = OperationsControlPlane()
         try:
-            from app.application.services.ops_state_persistence import load_ops_state
+            from app.application.services.ops_state_persistence import (
+                load_ops_state,
+                ops_state_diagnostics,
+            )
             from app.domain.institutional_trading.auto_trading import (
                 normalize_run_state,
             )
@@ -802,6 +805,16 @@ def get_control_plane() -> OperationsControlPlane:
                     str(raw_run),
                     enabled=plane.auto_trading_enabled,
                 )
+            diag = ops_state_diagnostics()
+            from core.logging import get_logger
+
+            get_logger(__name__).info(
+                "ops_state_hydrated",
+                ops_mode=plane.mode.value,
+                hydrate_source=diag.get("hydrate_source"),
+                durable=diag.get("durable"),
+                postgres_has_state=diag.get("postgres_has_state"),
+            )
         except Exception as exc:
             from core.logging import get_logger
 

@@ -436,6 +436,9 @@ def build_launch_readiness(
     plan.append("POST /ite/ops/auto-trading run_state=running (confirmed)")
     plan.append("GET /ite/ops/auto-trading — verify Gate Enabled")
 
+    from app.application.services.ops_state_persistence import ops_state_diagnostics
+
+    persistence = ops_state_diagnostics()
     verification = {
         "ops_mode": mode.value,
         "gate": snap.safety.status,
@@ -450,6 +453,12 @@ def build_launch_readiness(
         "next_promotion_target": next_target,
         "primary_blocker": snap.primary_blocker,
         "blocking_category": snap.blocking_category,
+        "persistence": persistence,
+        "persisted_ops_mode": persistence.get("persisted_ops_mode"),
+        "ops_mode_matches_persistence": (
+            persistence.get("persisted_ops_mode") is None
+            or str(persistence.get("persisted_ops_mode")).upper() == mode.value
+        ),
     }
 
     return LaunchReadinessReport(

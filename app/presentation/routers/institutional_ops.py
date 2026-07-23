@@ -539,6 +539,7 @@ def execute_runbook(
 def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
     """Auto Trading status — live gateway probes (same source as Broker/Monitoring)."""
     from app.application.services.auto_trading_status import build_auto_trading_status
+    from app.application.services.ops_state_persistence import ops_state_diagnostics
 
     plane = get_control_plane()
     settings = get_settings()
@@ -584,6 +585,7 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         },
         "orchestrator": orchestrator,
         "recent_execution_attempts": recent_attempts,
+        "persistence": ops_state_diagnostics(),
     }
 
 

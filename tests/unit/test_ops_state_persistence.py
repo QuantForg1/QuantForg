@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from app.application.services import ops_state_persistence as osp
 from app.application.services.live_auto_trade_certification import (
     get_live_cert_service,
     reset_live_cert_service_for_tests,
@@ -14,9 +16,18 @@ from app.application.services.live_auto_trade_certification import (
 )
 from app.application.services.ops_state_persistence import (
     load_ops_state,
+    ops_state_diagnostics,
     save_ops_state,
 )
 from app.domain.institutional_trading.live_certification import report_from_dict
+
+
+@pytest.fixture(autouse=True)
+def _no_postgres(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default unit tests to file-only persistence (no live Supabase I/O)."""
+    monkeypatch.setattr(osp, "_supabase_rest_config", lambda: None)
+    monkeypatch.setattr(osp, "_load_postgres_state", lambda: {})
+    monkeypatch.setattr(osp, "_save_postgres_state", lambda _state: False)
 
 
 @pytest.mark.unit
@@ -52,6 +63,32 @@ class TestOpsStatePersistence:
         assert plane.auto_trading_enabled is True
         assert plane.auto_trading_run_state == "running"
         cp._GLOBAL_PLANE = None
+
+    def test_postgres_wins_over_stale_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "ops_state.json"
+        monkeypatch.setenv("QUANTFORG_OPS_STATE_PATH", str(path))
+        path.write_text('{"ops_mode": "SHADOW"}', encoding="utf-8")
+
+        def _pg() -> dict[str, Any]:
+            return {
+                "ops_mode": "LIVE",
+                "auto_trading_enabled": True,
+                "auto_trading_run_state": "running",
+            }
+
+        monkeypatch.setattr(
+            osp, "_supabase_rest_config", lambda: ("https://example.test/rest/v1", "k")
+        )
+        monkeypatch.setattr(osp, "_load_postgres_state", _pg)
+        state = load_ops_state()
+        assert state["ops_mode"] == "LIVE"
+        assert state["_hydrate_source"] == "postgres"
+        diag = ops_state_diagnostics()
+        assert diag["persisted_ops_mode"] == "LIVE"
+        assert diag["postgres_has_state"] is True
+        assert diag["durable"] is True
 
     def test_report_from_dict_rejects_uncertified(self) -> None:
         assert report_from_dict({"certified": False}) is None
