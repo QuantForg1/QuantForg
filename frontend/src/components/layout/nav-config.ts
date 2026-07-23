@@ -170,6 +170,12 @@ export const appNav: NavGroup[] = [
         hint: "QKG · nodes · relationships · evidence chains",
       },
       {
+        href: "/execution-quality-suite",
+        label: "Execution Quality",
+        icon: Gauge,
+        hint: "EQS · latency · slippage · fill quality",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

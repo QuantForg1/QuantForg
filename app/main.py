@@ -157,6 +157,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "quant_knowledge_graph",
         "app.presentation.routers.quant_knowledge_graph",
     ),
+    (
+        "execution_quality_suite",
+        "app.presentation.routers.execution_quality_suite",
+    ),
 )
 
 

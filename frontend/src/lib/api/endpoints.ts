@@ -1800,6 +1800,23 @@ export const aqcApi = {
   correlations: () => apiFetch<Record<string, unknown>>("/aqc/correlations"),
 };
 
+/** Execution Quality Suite — read-only execution intelligence */
+export const eqsApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/eqs/dashboard"),
+  latency: () => apiFetch<Record<string, unknown>>("/eqs/latency"),
+  slippage: () => apiFetch<Record<string, unknown>>("/eqs/slippage"),
+  timelines: (limit = 40) =>
+    apiFetch<Record<string, unknown>>(`/eqs/timelines?limit=${limit}`),
+  fillQuality: () => apiFetch<Record<string, unknown>>("/eqs/fill-quality"),
+  consistency: () => apiFetch<Record<string, unknown>>("/eqs/consistency"),
+  brokerHealth: () => apiFetch<Record<string, unknown>>("/eqs/broker-health"),
+  score: () => apiFetch<Record<string, unknown>>("/eqs/score"),
+  alerts: () => apiFetch<Record<string, unknown>>("/eqs/alerts"),
+  evidence: () => apiFetch<Record<string, unknown>>("/eqs/evidence"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/eqs/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),
