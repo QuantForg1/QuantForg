@@ -1763,6 +1763,44 @@ export const aqsApi = {
     ),
 };
 
+/** AI Quant Copilot — operational explanations only (never modifies production) */
+export const aqcApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/aqc/dashboard"),
+  ask: (q: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/aqc/ask?q=${encodeURIComponent(q)}`,
+    ),
+  investigations: (limit = 40) =>
+    apiFetch<Record<string, unknown>>(`/aqc/investigations?limit=${limit}`),
+  investigation: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/aqc/investigations/${encodeURIComponent(id)}`,
+    ),
+  timeline: () => apiFetch<Record<string, unknown>>("/aqc/timeline"),
+  comparison: () => apiFetch<Record<string, unknown>>("/aqc/comparison"),
+  evidence: () => apiFetch<Record<string, unknown>>("/aqc/evidence"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/aqc/reports?limit=${limit}`),
+  recommendations: (opts?: {
+    status?: string;
+    minConfidence?: number;
+    researchArea?: string;
+    limit?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    sp.set("limit", String(opts?.limit ?? 50));
+    if (opts?.status) sp.set("status", opts.status);
+    if (opts?.minConfidence != null)
+      sp.set("min_confidence", String(opts.minConfidence));
+    if (opts?.researchArea) sp.set("research_area", opts.researchArea);
+    return apiFetch<Record<string, unknown>>(`/aqc/recommendations?${sp}`);
+  },
+  conversations: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/aqc/conversations?limit=${limit}`),
+  correlations: () => apiFetch<Record<string, unknown>>("/aqc/correlations"),
+};
+
+
 /** Institutional Research Lab — completely isolated from production trading */
 export const irlApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/irl/dashboard"),

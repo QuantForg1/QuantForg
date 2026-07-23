@@ -158,6 +158,12 @@ export const appNav: NavGroup[] = [
         hint: "AQS · patterns · recommendations · explainability",
       },
       {
+        href: "/ai-quant-copilot",
+        label: "AI Quant Copilot",
+        icon: Bot,
+        hint: "AQC · ops Q&A · investigations · evidence",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
