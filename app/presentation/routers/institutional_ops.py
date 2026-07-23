@@ -69,6 +69,15 @@ class RollbackBody(ConfirmBody):
     target_config_version: str
 
 
+class ThresholdPromoteBody(ConfirmBody):
+    evidence_reference: str | None = None
+
+
+class ThresholdRollbackBody(BaseModel):
+    reason: str = Field(default="operator_rollback_to_80_80", min_length=1)
+    confirmed: bool = False
+
+
 class RiskBody(ConfirmBody):
     risk_per_trade_pct: str
     max_daily_loss_pct: str
@@ -627,6 +636,61 @@ def get_strategy_diagnostics(
         payload["orchestrator_cycles"] = None
         payload["orchestrator_last_cycle"] = None
     return payload
+
+
+@router.get("/threshold-promotion")
+def get_threshold_promotion(_user: OperatorUser) -> dict[str, Any]:
+    """Operations → Threshold Promotion status (never auto-applies)."""
+    from app.application.services.threshold_promotion import status_payload
+
+    return status_payload()
+
+
+@router.post("/threshold-promotion/promote")
+def post_threshold_promote(
+    body: ThresholdPromoteBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Explicit promote Q70/C75 — requires confirmed=true. Never automatic."""
+    from app.application.services.threshold_promotion import promote_candidate
+
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="confirmation required")
+    op = _operator(user, request, x_forwarded_for)
+    try:
+        return promote_candidate(
+            operator=op,
+            reason=body.reason,
+            confirmed=body.confirmed,
+            evidence_reference=body.evidence_reference,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/threshold-promotion/rollback")
+def post_threshold_rollback(
+    body: ThresholdRollbackBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Single-click rollback to Q80/C80. Never automatic."""
+    from app.application.services.threshold_promotion import rollback_to_production
+
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="confirmation required")
+    op = _operator(user, request, x_forwarded_for)
+    try:
+        return rollback_to_production(
+            operator=op,
+            reason=body.reason,
+            confirmed=body.confirmed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/auto-trading")

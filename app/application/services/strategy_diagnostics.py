@@ -482,6 +482,13 @@ class StrategyDiagnosticsStore:
     def record(self, cycle: dict[str, Any]) -> None:
         with self._lock:
             self._cycles.append(dict(cycle))
+        # Post-promotion monitor (warning only; never auto-rollback).
+        try:
+            from app.application.services.threshold_promotion import observe_cycle
+
+            observe_cycle(cycle)
+        except Exception:
+            pass
 
     def record_from_artefacts(self, **kwargs: Any) -> dict[str, Any]:
         cycle = extract_cycle_diagnostics(config=self._config, **kwargs)

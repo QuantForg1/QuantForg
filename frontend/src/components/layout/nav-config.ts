@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   AlertTriangle,
+  ArrowUpFromLine,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -22,6 +23,7 @@ import {
   FlaskConical,
   Flame,
   Gauge,
+  GitCompare,
   GraduationCap,
   HeartPulse,
   History,
@@ -154,6 +156,12 @@ export const appNav: NavGroup[] = [
         hint: "Offline Q×C gate matrix · research only",
       },
       {
+        href: "/candidate-validation",
+        label: "Candidate Validation",
+        icon: GitCompare,
+        hint: "Production 80/80 vs candidate 70/75",
+      },
+      {
         href: "/research-validation",
         label: "Validation Platform",
         icon: FlaskConical,
@@ -259,6 +267,12 @@ export const appNav: NavGroup[] = [
         label: "Strategy Diagnostics",
         icon: ScanSearch,
         hint: "Why NO_TRADE · quality · confluence · MTF",
+      },
+      {
+        href: "/threshold-promotion",
+        label: "Threshold Promotion",
+        icon: ArrowUpFromLine,
+        hint: "Promote 70/75 · rollback 80/80 · operator gated",
       },
       {
         href: "/production-reliability",

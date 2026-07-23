@@ -677,6 +677,22 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/strategy-diagnostics?limit=${limit}`,
     ),
+  thresholdPromotion: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion"),
+  thresholdPromote: (body: {
+    reason: string;
+    confirmed: boolean;
+    evidence_reference?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion/promote", {
+      method: "POST",
+      body,
+    }),
+  thresholdRollback: (body: { reason: string; confirmed: boolean }) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/threshold-promotion/rollback", {
+      method: "POST",
+      body,
+    }),
   witnessHealth: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/witness-health"),
   updateAutoTrading: (body: Record<string, unknown>) =>
@@ -1050,6 +1066,17 @@ export const thresholdPerformanceApi = {
     }),
   report: () =>
     apiFetch<Record<string, unknown>>("/threshold-performance-analysis/report"),
+};
+
+/** Candidate Validation — production 80/80 vs candidate 70/75; never mutates production */
+export const candidateValidationApi = {
+  status: () => apiFetch<Record<string, unknown>>("/candidate-validation/status"),
+  run: (body: { days?: number; max_evaluations?: number } = {}) =>
+    apiFetch<Record<string, unknown>>("/candidate-validation/run", {
+      method: "POST",
+      body,
+    }),
+  report: () => apiFetch<Record<string, unknown>>("/candidate-validation/report"),
 };
 
 /** Alpha Engine V1 — market quality scoring; never order_send */
