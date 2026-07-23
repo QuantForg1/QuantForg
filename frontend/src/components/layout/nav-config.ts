@@ -279,6 +279,12 @@ export const appNav: NavGroup[] = [
         hint: "Evidence-only gate · immutable report",
       },
       {
+        href: "/production-acceptance-test",
+        label: "Acceptance Test (PAT)",
+        icon: FlaskConical,
+        hint: "First live fill checklist · PDF/JSON export",
+      },
+      {
         href: "/first-execution-evidence",
         label: "First Execution Evidence",
         icon: FileLock2,
