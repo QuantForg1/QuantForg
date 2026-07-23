@@ -403,6 +403,53 @@ class InstitutionalIteRuntime:
 
         decision = self.decision_pipeline.run(snapshot, account)
         decision_reasons = tuple(getattr(decision, "reasons", ()) or ())
+
+        # Enrich diagnostics with live ATR sizing facts (observational only).
+        sizing_diag: dict[str, Any] = dict(market_context_diagnostics or {})
+        atr_val = getattr(account, "atr", None)
+        stop_dist = (
+            (atr_val * Decimal("1.5")).quantize(Decimal("0.0001"))
+            if atr_val is not None and atr_val > 0
+            else None
+        )
+        risk_pct = getattr(self.decision_pipeline.config, "risk_per_trade_pct", None)
+        if risk_pct is None:
+            risk_pct = Decimal("1.0")
+        risk_budget = (
+            (account.equity * (Decimal(str(risk_pct)) / Decimal("100"))).quantize(
+                Decimal("0.01")
+            )
+            if account.equity is not None
+            else None
+        )
+        sizing_diag.update(
+            {
+                "atr": str(atr_val) if atr_val is not None else sizing_diag.get("atr"),
+                "stop_distance": (
+                    str(stop_dist)
+                    if stop_dist is not None
+                    else sizing_diag.get("stop_distance")
+                ),
+                "risk_budget": (
+                    str(risk_budget)
+                    if risk_budget is not None
+                    else sizing_diag.get("risk_budget")
+                ),
+                "risk_pct": str(risk_pct),
+                "calculated_lots": (
+                    str(decision.approved_lots)
+                    if decision.approved_lots is not None
+                    else sizing_diag.get("calculated_lots")
+                ),
+                "approved_lots": (
+                    str(decision.approved_lots)
+                    if decision.approved_lots is not None
+                    else None
+                ),
+            }
+        )
+        market_context_diagnostics = sizing_diag
+
         self.reliability.traces.span(
             tid,
             TraceStage.DECISION,

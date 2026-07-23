@@ -125,6 +125,7 @@ class MarketAnalysisSnapshot:
     news: NewsProtectionStatus
     trade_quality: TradeQualityScore
     spread: Decimal | None = None
+    atr: Decimal | None = None
     id: UUID = field(default_factory=uuid4)
     schema_version: str = "1.0.0"
 
@@ -163,4 +164,5 @@ class MarketAnalysisSnapshot:
             "news": self.news.to_dict(),
             "trade_quality": self.trade_quality.to_dict(),
             "spread": str(self.spread) if self.spread is not None else None,
+            "atr": str(self.atr) if self.atr is not None else None,
         }

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.domain.fair_value_gap.engine import FairValueGapEngine
+from app.domain.institutional_trading.atr import compute_atr
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.fingerprint import compute_input_hash
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -173,6 +174,12 @@ class InstitutionalAnalysisPipeline:
             spread=str(spread) if spread is not None else None,
         )
 
+        # ATR on entry confirmation TF (M15) — sizing input only; not a strategy gate.
+        entry_bars = list(
+            self.bars.as_mapping().get(cfg.entry_confirmation_tf, [])
+        )
+        atr = compute_atr(entry_bars)
+
         return MarketAnalysisSnapshot(
             symbol=code_str,
             as_of=moment,
@@ -188,4 +195,5 @@ class InstitutionalAnalysisPipeline:
             news=news,
             trade_quality=quality,
             spread=spread,
+            atr=atr,
         )

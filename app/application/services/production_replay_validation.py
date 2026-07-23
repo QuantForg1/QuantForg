@@ -34,6 +34,7 @@ from app.application.services.institutional_decision_pipeline import (
 from app.application.services.institutional_trading_analysis import (
     InstitutionalTradingAnalysisService,
 )
+from app.domain.institutional_trading.atr import compute_atr
 from app.domain.institutional_trading.decision_models import (
     AccountRiskState,
     DecisionAction,
@@ -246,21 +247,8 @@ class _Opportunity:
 
 
 def _compute_atr(candles: list[Candle], *, period: int = 14) -> Decimal | None:
-    """Simple True-Range average — self-contained, never touches RiskEngine."""
-    if len(candles) < 2:
-        return None
-    trs: list[Decimal] = []
-    prev_close = candles[0].close.value
-    for c in candles[1:]:
-        high = c.high.value
-        low = c.low.value
-        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
-        trs.append(tr)
-        prev_close = c.close.value
-    window = trs[-period:] if len(trs) >= period else trs
-    if not window:
-        return None
-    return sum(window, start=Decimal("0")) / Decimal(len(window))
+    """Delegate to shared ITE ATR helper (same TR-window average)."""
+    return compute_atr(candles, period=period)
 
 
 def _rejection_reason(decision: TradeDecision) -> str:

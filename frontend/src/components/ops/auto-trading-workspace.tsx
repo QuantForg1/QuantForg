@@ -668,6 +668,18 @@ export function AutoTradingWorkspace() {
     Number.isFinite(num(diag.atr))
       ? formatNumber(num(diag.atr), 2)
       : str(diag.atr, "—");
+  const stopDistance =
+    Number.isFinite(num(diag.stop_distance))
+      ? formatNumber(num(diag.stop_distance), 2)
+      : str(diag.stop_distance, "—");
+  const riskBudget =
+    Number.isFinite(num(diag.risk_budget))
+      ? formatNumber(num(diag.risk_budget), 2)
+      : str(diag.risk_budget, "—");
+  const calculatedLots =
+    Number.isFinite(num(diag.calculated_lots ?? diag.approved_lots))
+      ? formatNumber(num(diag.calculated_lots ?? diag.approved_lots), 2)
+      : str(diag.calculated_lots ?? diag.approved_lots, "—");
   const volatility = str(
     diag.volatility_level || diag.volatility || diag.regime_volatility,
     "—",
@@ -1038,6 +1050,9 @@ export function AutoTradingWorkspace() {
           <MetricCard label="Ask" value={ask} large tone="sell" />
           <MetricCard label="Spread" value={spread} large />
           <MetricCard label="ATR" value={atr} />
+          <MetricCard label="Stop distance" value={stopDistance} />
+          <MetricCard label="Risk budget" value={riskBudget} />
+          <MetricCard label="Calculated lots" value={calculatedLots} />
           <MetricCard label="Volatility" value={volatility} />
           <MetricCard label="Trend" value={trend} />
           <MetricCard label="Regime" value={marketRegime} />

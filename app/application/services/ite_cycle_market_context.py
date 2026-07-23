@@ -350,6 +350,7 @@ async def build_ite_cycle_market_context(
         atr = getattr(snapshot, "atr", None)
     except Exception:
         atr = None
+    atr_dec = Decimal(str(atr)) if atr is not None else None
 
     account = AccountRiskState(
         equity=equity,
@@ -364,10 +365,33 @@ async def build_ite_cycle_market_context(
         cooldown_active=False,
         cooldown_remaining_minutes=0,
         market_open=market_data_live,
-        atr=Decimal(str(atr)) if atr is not None else None,
+        atr=atr_dec,
         mid_price=mid,
         free_margin=free_margin,
     )
+
+    # Sizing diagnostics (observational) — same formulas as decision → risk path.
+    from app.domain.institutional_trading.atr import stop_distance_from_atr
+    from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+    from decimal import ROUND_DOWN
+
+    stop_dist = stop_distance_from_atr(atr_dec)
+    risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct
+    risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.01"))
+    contract_size = Decimal("100")
+    lot_step = Decimal("0.01")
+    raw_lots: Decimal | None = None
+    calc_lots: Decimal | None = None
+    if stop_dist is not None and stop_dist > 0:
+        raw_lots = risk_budget / (stop_dist * contract_size)
+        calc_lots = raw_lots.quantize(lot_step, rounding=ROUND_DOWN)
+
+    diag["atr"] = str(atr_dec) if atr_dec is not None else None
+    diag["stop_distance"] = str(stop_dist) if stop_dist is not None else None
+    diag["risk_budget"] = str(risk_budget)
+    diag["risk_pct"] = str(risk_pct)
+    diag["raw_lots"] = str(raw_lots) if raw_lots is not None else None
+    diag["calculated_lots"] = str(calc_lots) if calc_lots is not None else None
 
     diag["reason"] = "market context ready"
     diag["snapshot"] = "OK"

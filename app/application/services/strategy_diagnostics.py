@@ -314,6 +314,19 @@ def extract_cycle_diagnostics(
             "decision_reasons": [str(r) for r in decision_reasons],
         },
         "volume_raw": str(volume_raw) if volume_raw is not None else None,
+        "sizing": {
+            "atr": diag.get("atr"),
+            "stop_distance": diag.get("stop_distance"),
+            "risk_budget": diag.get("risk_budget"),
+            "risk_pct": diag.get("risk_pct"),
+            "raw_lots": diag.get("raw_lots"),
+            "calculated_lots": diag.get("calculated_lots"),
+            "approved_lots": diag.get("approved_lots"),
+        },
+        "atr": diag.get("atr"),
+        "stop_distance": diag.get("stop_distance"),
+        "risk_budget": diag.get("risk_budget"),
+        "calculated_lots": diag.get("calculated_lots"),
         "advisory_only": True,
     }
 
