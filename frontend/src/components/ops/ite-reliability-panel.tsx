@@ -82,6 +82,7 @@ export function IteReliabilityPanel() {
   const d = asRecord(dash.data);
   const health = asRecord(d.health);
   const metrics = asRecord(d.metrics);
+  const net = asRecord(d.network);
   const series = asList(d.latency_series).map(asRecord);
   const incidents = asList(d.active_incidents).map(asRecord);
   const recovery = asList(d.recovery_events).map(asRecord);
@@ -90,6 +91,7 @@ export function IteReliabilityPanel() {
     label: str(s.t).slice(11, 19) || "t",
     value: num(s.gateway, 0),
   }));
+  const lastNet = asRecord(net.last_network_incident);
 
   return (
     <div className="space-y-4">
@@ -100,6 +102,43 @@ export function IteReliabilityPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div>
+              <div className="text-xs text-muted-foreground">Gateway uptime</div>
+              <div className="text-xl font-semibold">
+                {num(net.gateway_uptime_pct, 100).toFixed(2)}%
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">DNS failures (24h)</div>
+              <div className="text-xl font-semibold">{str(net.dns_failures_24h, "0")}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Reconnect count</div>
+              <div className="text-xl font-semibold">{str(net.reconnect_count, "0")}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Avg reconnect</div>
+              <div className="text-xl font-semibold">
+                {num(net.average_reconnect_time_ms, 0).toFixed(0)} ms
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">MT5 uptime</div>
+              <div className="text-xl font-semibold">
+                {num(net.mt5_connection_uptime_pct, 100).toFixed(2)}%
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Last network incident</div>
+              <div className="text-sm font-medium">
+                {lastNet.timestamp
+                  ? `${str(lastNet.severity)} · ${str(lastNet.timestamp).slice(11, 19)}`
+                  : "None"}
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <div className="text-xs text-muted-foreground">Health score</div>

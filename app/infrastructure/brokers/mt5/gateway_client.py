@@ -161,7 +161,14 @@ def classify_gateway_failure(
         return "TLS failure"
     if "connection refused" in err or "connecterror" in et:
         return "Gateway refused connection"
-    if "name or service not known" in err or "nodename" in err:
+    if (
+        "getaddrinfo" in err
+        or "name or service not known" in err
+        or "nodename" in err
+        or "name resolution" in err
+        or "nameresolution" in et
+        or "gaierror" in et
+    ):
         return "DNS failure"
     if cloudflare and ("523" in err or "524" in err or "522" in err):
         return "Cloudflare timeout"
@@ -248,6 +255,15 @@ class GatewayMT5Client:
 
     def _record_upstream(self, payload: dict[str, Any]) -> None:
         self._last_upstream = payload
+        # Observability only — never changes request/execution behaviour.
+        try:
+            from app.domain.institutional_trading.reliability.platform import (
+                get_reliability_platform,
+            )
+
+            get_reliability_platform().network.observe_upstream(payload)
+        except Exception:
+            pass
 
     def _build_http_client(self) -> httpx.Client:
         """Prefer HTTP/2; fall back to 1.1 if the runtime lacks ``h2``."""
@@ -331,6 +347,23 @@ class GatewayMT5Client:
                         break
                     except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
                         last_exc = exc
+                        # No silent reconnect — log every transport retry.
+                        try:
+                            from app.domain.institutional_trading.reliability.platform import (
+                                get_reliability_platform,
+                            )
+
+                            get_reliability_platform().network.log_reconnect_attempt(
+                                component="gateway",
+                                attempt=attempt_i + 1,
+                                detail=(
+                                    f"{type(exc).__name__}: {exc} "
+                                    f"({method} {path})"
+                                ),
+                                success=False,
+                            )
+                        except Exception:
+                            pass
                         if attempt_i + 1 >= attempts:
                             raise
                         time.sleep(0.15 * (attempt_i + 1))

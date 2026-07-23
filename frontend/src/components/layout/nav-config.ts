@@ -238,6 +238,12 @@ export const appNav: NavGroup[] = [
         hint: "Live pipeline · evidence only · never trades",
       },
       {
+        href: "/production-reliability",
+        label: "Production Reliability",
+        icon: Activity,
+        hint: "DNS · network incidents · reconnects · uptime",
+      },
+      {
         href: "/production-acceptance",
         label: "Production Acceptance",
         icon: ClipboardCheck,

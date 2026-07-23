@@ -742,6 +742,8 @@ export const aiRobotApi = {
 export const iteReliabilityApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/dashboard"),
+  network: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/ite/reliability/tick", {
       method: "POST",

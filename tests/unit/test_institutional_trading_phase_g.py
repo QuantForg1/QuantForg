@@ -199,3 +199,5 @@ class TestOperationalDashboard:
         assert "active_incidents" in dash
         assert "recovery_events" in dash
         assert "metrics" in dash
+        assert "network" in dash
+        assert "gateway_uptime_pct" in dash["network"]

@@ -17,6 +17,9 @@ from app.domain.institutional_trading.reliability.models import (
     RecoveryAction,
     TraceStage,
 )
+from app.domain.institutional_trading.reliability.network_incidents import (
+    NetworkIncidentTracker,
+)
 from app.domain.institutional_trading.reliability.platform import (
     ReliabilityPlatform,
 )
@@ -31,6 +34,7 @@ __all__ = [
     "IncidentManager",
     "IncidentSeverity",
     "LiveMetricsRegistry",
+    "NetworkIncidentTracker",
     "RecoveryAction",
     "RecoveryOrchestrator",
     "ReliabilityPlatform",

@@ -61,6 +61,19 @@ def dashboard(_user: OperatorUser) -> dict[str, Any]:
     return get_reliability_platform().operational_dashboard()
 
 
+@router.get("/network")
+def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
+    """DNS/network incidents, reconnect log, gateway/MT5 uptime."""
+    platform = get_reliability_platform()
+    return {
+        "network": platform.network.dashboard(),
+        "incidents": [i.to_dict() for i in platform.network.list_incidents(limit=100)],
+        "reconnect_log": [
+            e.to_dict() for e in platform.network.list_reconnect_logs(limit=100)
+        ],
+    }
+
+
 @router.post("/tick")
 def tick(body: ProbeBody, _user: OperatorUser) -> dict[str, Any]:
     """Health tick — live probes by default (no manual CF/Railway flags required)."""

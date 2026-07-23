@@ -22,6 +22,9 @@ from app.domain.institutional_trading.reliability.models import (
     TimelineEvent,
     TraceStage,
 )
+from app.domain.institutional_trading.reliability.network_incidents import (
+    NetworkIncidentTracker,
+)
 from app.domain.institutional_trading.reliability.notifications import NotificationBus
 from app.domain.institutional_trading.reliability.recovery import RecoveryOrchestrator
 from app.domain.institutional_trading.reliability.timeline import AuditTimeline
@@ -39,6 +42,10 @@ class ReliabilityPlatform:
     notifications: NotificationBus = field(default_factory=NotificationBus)
     timeline: AuditTimeline = field(default_factory=AuditTimeline)
     chaos: ChaosHarness = field(default_factory=ChaosHarness)
+    network: NetworkIncidentTracker = field(default_factory=NetworkIncidentTracker)
+
+    def __post_init__(self) -> None:
+        self.recovery.attach_network(self.network)
 
     def tick(
         self,
@@ -51,6 +58,12 @@ class ReliabilityPlatform:
         moment = now or datetime.now(UTC)
         probed = self.chaos.apply_to_probes(probes)
         snap = self.health.observe(probed, now=moment)
+        # Network/DNS reliability — probe flips open/close incidents + uptime
+        self.network.observe_health(
+            gateway_available=snap.gateway_available,
+            mt5_connected=snap.mt5_connected,
+            now=moment,
+        )
         self.timeline.append(
             TimelineEvent(
                 timestamp=moment,
@@ -115,6 +128,7 @@ class ReliabilityPlatform:
             "missing_heartbeats": [c.value for c in missing],
             "open_incidents": self.incidents.open_count(),
             "metrics": self.metrics.snapshot(),
+            "network": self.network.dashboard(),
         }
 
     def record_trade_path(
@@ -187,6 +201,13 @@ class ReliabilityPlatform:
             "metrics": self.metrics.snapshot(),
             "chaos_active": list(self.chaos.active()),
             "heartbeats": self.heartbeats.snapshot(),
+            "network": self.network.dashboard(),
+            "network_incidents": [
+                i.to_dict() for i in self.network.list_incidents(limit=50)
+            ],
+            "reconnect_log": [
+                e.to_dict() for e in self.network.list_reconnect_logs(limit=50)
+            ],
         }
 
 
