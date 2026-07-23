@@ -1,0 +1,572 @@
+{
+  "version": "1.0.1",
+  "generated_at": "2026-07-22T22:30:16.494378Z",
+  "scope": "final_acceptance_readiness_certification",
+  "certification_only": true,
+  "never_overrides_evidence_gates": true,
+  "never_modifies_trading_behaviour": true,
+  "architecture": {
+    "status": "available",
+    "version": "1.0.1",
+    "inventory": [
+      {
+        "id": "strategy",
+        "label": "Trading Strategy / Decision",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.institutional_trading.trade_decision"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "risk",
+        "label": "Risk Engine",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.institutional_trading.eligibility"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "safety",
+        "label": "Safety / Kill Switch",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.institutional_trading.execution.kill_switch"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "execution",
+        "label": "Execution Pipeline",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.institutional_trading.operations.control_plane"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "performance_iq",
+        "label": "Performance Intelligence",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.performance_intelligence"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "replay_evidence_lab",
+        "label": "Replay & Evidence Lab",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.replay_evidence_lab"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "trading_operations_center",
+        "label": "Trading Operations Center",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.trading_operations_center"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "audit_governance",
+        "label": "Audit Trail & Governance",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.audit_governance"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "warehouse",
+        "label": "Institutional Data Warehouse",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.institutional_data_warehouse"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "observability",
+        "label": "Institutional Observability",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.domain.institutional_observability"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      },
+      {
+        "id": "launch_readiness",
+        "label": "Launch Readiness",
+        "present": true,
+        "healthy": true,
+        "version": "1.0.1",
+        "dependencies": [
+          "app.application.services.launch_readiness"
+        ],
+        "readiness": "ready",
+        "detail": "module importable"
+      }
+    ],
+    "routers_registered": [
+      "performance_intelligence",
+      "replay_evidence_lab",
+      "trading_operations_center",
+      "audit_governance",
+      "institutional_data_warehouse",
+      "institutional_observability"
+    ],
+    "routers_missing": [],
+    "routers_detail": "ok",
+    "all_present": true
+  },
+  "operational_readiness": {
+    "status": "available",
+    "source": "auto_trading_status",
+    "facts": {
+      "gateway": false,
+      "broker": false,
+      "mt5": false,
+      "ops_mode": "SHADOW",
+      "execution_enabled": false,
+      "kill_switch_armed": false
+    },
+    "evidence_gates": {
+      "status": "available",
+      "thresholds": {
+        "min_live_closed_trades": 50,
+        "min_replay_opportunities": 500,
+        "min_no_trade_observations": 100
+      },
+      "checks": [
+        {
+          "id": "live_closed_trades",
+          "label": "Live closed trades",
+          "observed": 0,
+          "required": 50,
+          "passed": false
+        },
+        {
+          "id": "replay_opportunities",
+          "label": "Replay opportunities",
+          "observed": 0,
+          "required": 500,
+          "passed": false
+        },
+        {
+          "id": "no_trade_observations",
+          "label": "NO_TRADE observations",
+          "observed": 0,
+          "required": 100,
+          "passed": false
+        }
+      ],
+      "all_passed": false,
+      "may_recommend_strategy_changes": false,
+      "advisory_only": true,
+      "never_auto_modifies_strategy": true,
+      "note": "Strategy-change recommendations remain blocked until all evidence gates pass \u2014 gates are advisory and never mutate production"
+    },
+    "confidence": {
+      "status": "available",
+      "observability_overall": "degraded",
+      "alert_count": 0
+    },
+    "observability": {
+      "status": "available",
+      "observability_overall": "degraded",
+      "alert_count": 0
+    },
+    "governance": {
+      "status": "available",
+      "record_count": 0,
+      "append_only": true,
+      "immutable": true
+    },
+    "warehouse": {
+      "status": "available",
+      "total_records": 0,
+      "read_only": true
+    },
+    "performance_iq": {
+      "status": "module_present",
+      "note": "advisory; journals only"
+    },
+    "replay_lab": {
+      "status": "module_present",
+      "evidence_gates": {
+        "status": "available",
+        "thresholds": {
+          "min_live_closed_trades": 50,
+          "min_replay_opportunities": 500,
+          "min_no_trade_observations": 100
+        },
+        "checks": [
+          {
+            "id": "live_closed_trades",
+            "label": "Live closed trades",
+            "observed": 0,
+            "required": 50,
+            "passed": false
+          },
+          {
+            "id": "replay_opportunities",
+            "label": "Replay opportunities",
+            "observed": 0,
+            "required": 500,
+            "passed": false
+          },
+          {
+            "id": "no_trade_observations",
+            "label": "NO_TRADE observations",
+            "observed": 0,
+            "required": 100,
+            "passed": false
+          }
+        ],
+        "all_passed": false,
+        "may_recommend_strategy_changes": false,
+        "advisory_only": true,
+        "never_auto_modifies_strategy": true,
+        "note": "Strategy-change recommendations remain blocked until all evidence gates pass \u2014 gates are advisory and never mutate production"
+      },
+      "note": "never override evidence gates"
+    }
+  },
+  "acceptance_checklist": [
+    {
+      "id": "arch_strategy",
+      "label": "Architecture: Trading Strategy / Decision",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_risk",
+      "label": "Architecture: Risk Engine",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_safety",
+      "label": "Architecture: Safety / Kill Switch",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_execution",
+      "label": "Architecture: Execution Pipeline",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_performance_iq",
+      "label": "Architecture: Performance Intelligence",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_replay_evidence_lab",
+      "label": "Architecture: Replay & Evidence Lab",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_trading_operations_center",
+      "label": "Architecture: Trading Operations Center",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_audit_governance",
+      "label": "Architecture: Audit Trail & Governance",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_warehouse",
+      "label": "Architecture: Institutional Data Warehouse",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_observability",
+      "label": "Architecture: Institutional Observability",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "arch_launch_readiness",
+      "label": "Architecture: Launch Readiness",
+      "status": "PASS",
+      "reason": "Present and importable (module importable)",
+      "resolution": "None"
+    },
+    {
+      "id": "routers",
+      "label": "Advisory routers registered",
+      "status": "PASS",
+      "reason": "All expected advisory routers present in _ROUTER_SPECS",
+      "resolution": "None"
+    },
+    {
+      "id": "gateway",
+      "label": "Gateway connected",
+      "status": "FAIL",
+      "reason": "gateway=False",
+      "resolution": "Restore connectivity / promote via official ops path (see Launch Readiness)"
+    },
+    {
+      "id": "broker",
+      "label": "Broker connected",
+      "status": "FAIL",
+      "reason": "broker=False",
+      "resolution": "Restore connectivity / promote via official ops path (see Launch Readiness)"
+    },
+    {
+      "id": "mt5",
+      "label": "MT5 session",
+      "status": "FAIL",
+      "reason": "mt5=False",
+      "resolution": "Restore connectivity / promote via official ops path (see Launch Readiness)"
+    },
+    {
+      "id": "ops_mode",
+      "label": "Ops Mode",
+      "status": "FAIL",
+      "reason": "ops_mode=SHADOW (not LIVE)",
+      "resolution": "Promote SHADOW\u2192CANARY\u2192LIVE via official OWNER path only"
+    },
+    {
+      "id": "execution_enabled",
+      "label": "Execution Enabled",
+      "status": "FAIL",
+      "reason": "execution_enabled=false (env only; no API bypass)",
+      "resolution": "Set EXECUTION_ENABLED=true on Railway and restart API"
+    },
+    {
+      "id": "evidence_gates",
+      "label": "Evidence Gates",
+      "status": "FAIL",
+      "reason": "Evidence gates not passed \u2014 never overridden. Failed: ['live_closed_trades', 'replay_opportunities', 'no_trade_observations']",
+      "resolution": "Accumulate live closed trades / replay opportunities / NO_TRADE observations to threshold"
+    },
+    {
+      "id": "performance_iq",
+      "label": "Performance IQ",
+      "status": "PASS",
+      "reason": "status=module_present",
+      "resolution": "None"
+    },
+    {
+      "id": "replay_lab",
+      "label": "Replay Lab",
+      "status": "PASS",
+      "reason": "status=module_present",
+      "resolution": "None"
+    },
+    {
+      "id": "governance",
+      "label": "Governance",
+      "status": "PASS",
+      "reason": "status=available",
+      "resolution": "None"
+    },
+    {
+      "id": "warehouse",
+      "label": "Warehouse",
+      "status": "PASS",
+      "reason": "status=available",
+      "resolution": "None"
+    },
+    {
+      "id": "observability",
+      "label": "Observability",
+      "status": "PASS",
+      "reason": "status=available",
+      "resolution": "None"
+    },
+    {
+      "id": "confidence",
+      "label": "Confidence",
+      "status": "FAIL",
+      "reason": "Confidence blocked while evidence gates fail (never overridden)",
+      "resolution": "Clear evidence gates before claiming high confidence"
+    }
+  ],
+  "production_risk_review": {
+    "known_risks": [
+      "Default Ops Mode is SHADOW until OWNER promotes",
+      "EXECUTION_ENABLED is env-only and defaults false in many deploys",
+      "In-memory control plane resets on process restart"
+    ],
+    "operational_risks": [
+      "Gateway connected: gateway=False",
+      "Broker connected: broker=False",
+      "MT5 session: mt5=False",
+      "Ops Mode: ops_mode=SHADOW (not LIVE)",
+      "Execution Enabled: execution_enabled=false (env only; no API bypass)"
+    ],
+    "evidence_risks": [
+      "Evidence Gates: Evidence gates not passed \u2014 never overridden. Failed: ['live_closed_trades', 'replay_opportunities', 'no_trade_observations']",
+      "Confidence: Confidence blocked while evidence gates fail (never overridden)"
+    ],
+    "infrastructure_risks": [
+      "Wall-clock soak 24h/72h/7d remains PENDING OPERATIONAL EVIDENCE",
+      "psutil/resource metrics may be unavailable in some hosts",
+      "Gateway depends on Windows MT5 + Cloudflare tunnel"
+    ],
+    "outstanding_dependencies": [
+      "Restore connectivity / promote via official ops path (see Launch Readiness)",
+      "Restore connectivity / promote via official ops path (see Launch Readiness)",
+      "Restore connectivity / promote via official ops path (see Launch Readiness)",
+      "Promote SHADOW\u2192CANARY\u2192LIVE via official OWNER path only",
+      "Set EXECUTION_ENABLED=true on Railway and restart API",
+      "Accumulate live closed trades / replay opportunities / NO_TRADE observations to threshold",
+      "Clear evidence gates before claiming high confidence"
+    ],
+    "decision_context": "READY FOR CONTROLLED DEMO",
+    "evidence_gates_snapshot": {
+      "status": "available",
+      "thresholds": {
+        "min_live_closed_trades": 50,
+        "min_replay_opportunities": 500,
+        "min_no_trade_observations": 100
+      },
+      "checks": [
+        {
+          "id": "live_closed_trades",
+          "label": "Live closed trades",
+          "observed": 0,
+          "required": 50,
+          "passed": false
+        },
+        {
+          "id": "replay_opportunities",
+          "label": "Replay opportunities",
+          "observed": 0,
+          "required": 500,
+          "passed": false
+        },
+        {
+          "id": "no_trade_observations",
+          "label": "NO_TRADE observations",
+          "observed": 0,
+          "required": 100,
+          "passed": false
+        }
+      ],
+      "all_passed": false,
+      "may_recommend_strategy_changes": false,
+      "advisory_only": true,
+      "never_auto_modifies_strategy": true,
+      "note": "Strategy-change recommendations remain blocked until all evidence gates pass \u2014 gates are advisory and never mutate production"
+    }
+  },
+  "go_nogo": {
+    "decision": "READY FOR CONTROLLED DEMO",
+    "explanation": [
+      "Architecture complete; evidence gates not passed \u2014 LIVE blocked (never overridden)",
+      "Controlled Demo allowed for operator drills without LIVE execution"
+    ],
+    "fail_count": 7,
+    "blocked_count": 0,
+    "pass_count": 17,
+    "never_overrides_evidence_gates": true
+  },
+  "outstanding_blockers": [
+    {
+      "id": "gateway",
+      "status": "FAIL",
+      "reason": "gateway=False",
+      "resolution": "Restore connectivity / promote via official ops path (see Launch Readiness)"
+    },
+    {
+      "id": "broker",
+      "status": "FAIL",
+      "reason": "broker=False",
+      "resolution": "Restore connectivity / promote via official ops path (see Launch Readiness)"
+    },
+    {
+      "id": "mt5",
+      "status": "FAIL",
+      "reason": "mt5=False",
+      "resolution": "Restore connectivity / promote via official ops path (see Launch Readiness)"
+    },
+    {
+      "id": "ops_mode",
+      "status": "FAIL",
+      "reason": "ops_mode=SHADOW (not LIVE)",
+      "resolution": "Promote SHADOW\u2192CANARY\u2192LIVE via official OWNER path only"
+    },
+    {
+      "id": "execution_enabled",
+      "status": "FAIL",
+      "reason": "execution_enabled=false (env only; no API bypass)",
+      "resolution": "Set EXECUTION_ENABLED=true on Railway and restart API"
+    },
+    {
+      "id": "evidence_gates",
+      "status": "FAIL",
+      "reason": "Evidence gates not passed \u2014 never overridden. Failed: ['live_closed_trades', 'replay_opportunities', 'no_trade_observations']",
+      "resolution": "Accumulate live closed trades / replay opportunities / NO_TRADE observations to threshold"
+    },
+    {
+      "id": "confidence",
+      "status": "FAIL",
+      "reason": "Confidence blocked while evidence gates fail (never overridden)",
+      "resolution": "Clear evidence gates before claiming high confidence"
+    }
+  ],
+  "evidence_summary": {
+    "decision": "READY FOR CONTROLLED DEMO",
+    "pass": 17,
+    "fail": 7,
+    "blocked": 0,
+    "architecture_all_present": true,
+    "evidence_gates_passed": false
+  }
+}
