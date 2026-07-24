@@ -270,6 +270,12 @@ export const appNav: NavGroup[] = [
         hint: "QDIE · recommendations · evidence · trade-offs",
       },
       {
+        href: "/quantforg-strategy-factory",
+        label: "Strategy Factory",
+        icon: Workflow,
+        hint: "QSF · pipeline · dossiers · human approvals",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

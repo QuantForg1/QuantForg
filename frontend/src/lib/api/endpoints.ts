@@ -2215,6 +2215,30 @@ export const qdieApi = {
     apiFetch<Record<string, unknown>>(`/qdie/history?limit=${limit}`),
 };
 
+/** QuantForg Strategy Factory — governed idea→paper pipeline (human-gated) */
+export const qsfApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qsf/dashboard"),
+  pipeline: () => apiFetch<Record<string, unknown>>("/qsf/pipeline"),
+  workItems: () => apiFetch<Record<string, unknown>>("/qsf/work-items"),
+  dossiers: () => apiFetch<Record<string, unknown>>("/qsf/dossiers"),
+  evidence: () => apiFetch<Record<string, unknown>>("/qsf/evidence"),
+  approvals: () => apiFetch<Record<string, unknown>>("/qsf/approvals"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/qsf/reports?limit=${limit}`),
+  approve: (body: {
+    strategy_id: string;
+    to_stage: string;
+    decision: "approved" | "rejected";
+    comment?: string;
+    approver?: string;
+    work_item_id?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/qsf/pipeline/approve", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

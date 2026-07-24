@@ -221,6 +221,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "quantforg_decision_intelligence",
         "app.presentation.routers.quantforg_decision_intelligence",
     ),
+    (
+        "quantforg_strategy_factory",
+        "app.presentation.routers.quantforg_strategy_factory",
+    ),
 )
 
 
