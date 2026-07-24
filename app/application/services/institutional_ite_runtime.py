@@ -600,6 +600,67 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("performance_lab_duel_failed")
 
+        # v9 Portfolio Intelligence — portfolio-aware queue/protection (no auto-reallocate)
+        try:
+            from app.domain.institutional_trading.portfolio_intelligence import (
+                evaluate_capital_protection,
+                build_portfolio_state,
+                get_opportunity_queue,
+                get_dynamic_risk_budget,
+            )
+
+            open_syms = [
+                str(getattr(p, "symbol", "") or "")
+                for p in self.position_management.engine._positions.values()
+            ]
+            st = build_portfolio_state(
+                equity=float(account.equity or 0),
+                free_margin=float(account.free_margin or 0)
+                if getattr(account, "free_margin", None) is not None
+                else None,
+                open_symbols=open_syms,
+                daily_pnl=float(account.daily_pnl or 0),
+                weekly_pnl=float(account.weekly_pnl or 0),
+                current_drawdown_pct=(
+                    float(abs(account.daily_pnl) / account.equity * 100)
+                    if account.equity and account.daily_pnl < 0
+                    else 0.0
+                ),
+            )
+            budget = get_dynamic_risk_budget().budget_for_state(st)
+            prot = evaluate_capital_protection(
+                st, candidate_symbol=str(getattr(decision, "symbol", "") or "")
+            )
+            get_opportunity_queue().rebuild(
+                [
+                    {
+                        "symbol": getattr(decision, "symbol", ""),
+                        "direction": str(
+                            getattr(getattr(decision, "direction", None), "value", "")
+                        ),
+                        "opportunity_score": int(getattr(decision, "confidence", 0) or 0),
+                        "ai_confidence": int(getattr(decision, "confidence", 0) or 0),
+                        "expected_rr": float(getattr(decision, "estimated_rr", 0) or 0),
+                    }
+                ],
+                st,
+                risk_budget_pct=float(budget["risk_budget_pct"]),
+            )
+            if not prot.allow_new_exposure:
+                logger.warning(
+                    "portfolio_capital_protection_block_new",
+                    reasons=list(prot.reasons),
+                    scale=prot.new_exposure_scale,
+                )
+            elif prot.new_exposure_scale < 1.0:
+                logger.warning(
+                    "portfolio_capital_protection_scale",
+                    scale=prot.new_exposure_scale,
+                    reasons=list(prot.reasons),
+                )
+        except Exception:
+            logger.exception("portfolio_intelligence_cycle_failed")
+
         decision_reasons = tuple(getattr(decision, "reasons", ()) or ())
         if self._manual_execution or forced_override:
             logger.warning(

@@ -103,6 +103,16 @@ def performance_lab_dashboard(
     )
 
 
+@router.get("/portfolio-intelligence")
+def portfolio_intelligence_dashboard(_user: OperatorUser) -> dict[str, Any]:
+    """v9 Institutional Portfolio Intelligence — allocation, risk budget, queue, stress."""
+    from app.application.services.portfolio_intelligence import (
+        build_portfolio_intelligence_dashboard,
+    )
+
+    return build_portfolio_intelligence_dashboard()
+
+
 @router.get("/network")
 def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """DNS/network incidents, reconnect log, gateway/MT5 uptime."""

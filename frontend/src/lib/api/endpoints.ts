@@ -880,6 +880,10 @@ export const iteReliabilityApi = {
       `/ite/reliability/performance-lab${q ? `?${q}` : ""}`,
     );
   },
+  portfolioIntelligence: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/reliability/portfolio-intelligence",
+    ),
   network: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>

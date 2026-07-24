@@ -497,6 +497,12 @@ export const appNav: NavGroup[] = [
         hint: "Champion vs Challenger · calibration · replay",
       },
       {
+        href: "/portfolio-intelligence",
+        label: "Portfolio Intelligence",
+        icon: PieChart,
+        hint: "AI portfolio manager · allocation · risk budget",
+      },
+      {
         href: "/witness-health",
         label: "Witness Health",
         icon: HeartPulse,
