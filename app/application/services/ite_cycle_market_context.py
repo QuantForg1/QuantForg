@@ -128,6 +128,7 @@ async def build_ite_cycle_market_context(
     mt5_adapter: Any | None,
     *,
     symbol: str = GOLD_SYMBOL,
+    position_engine: Any | None = None,
 ) -> IteCycleMarketContext:
     """Load XAUUSD multi-TF bars + account for one auto/shadow cycle."""
     import time
@@ -310,18 +311,24 @@ async def build_ite_cycle_market_context(
         )
 
     try:
-        positions = mt5_adapter.list_positions()
-        open_positions = len(
-            [
-                p
-                for p in (positions or [])
-                if str(getattr(p, "symbol", "")).upper() == symbol.upper()
-            ]
+        from app.application.services.mt5_position_truth import force_sync_positions
+
+        # Force Sync Positions — never trust a cached open count alone.
+        sync = force_sync_positions(
+            mt5_adapter,
+            symbol=symbol,
+            position_engine=position_engine,
         )
+        open_positions = int(sync.mt5_positions)
         diag["positions"] = open_positions
+        diag["mt5_positions"] = sync.mt5_positions
+        diag["internal_positions"] = sync.internal_positions
+        diag["position_truth_repaired"] = sync.repaired
+        diag["position_tickets"] = list(sync.tickets)
     except Exception as exc:
         logger.info("ite_cycle_positions_failed", error=str(exc))
         diag["positions"] = f"ERROR: {exc}"
+        open_positions = 0
 
     try:
         client = _client_of(mt5_adapter)

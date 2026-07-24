@@ -759,6 +759,11 @@ class GatewayMT5Client:
         self._positions_cache = None
         self._positions_cache_at = 0.0
 
+    def invalidate_positions_cache(self) -> None:
+        """Force next list_positions() to hit gateway GET /positions."""
+        self._positions_cache = None
+        self._positions_cache_at = 0.0
+
     def shutdown(self) -> None:
         if self._initialized and self.token:
             with contextlib.suppress(RuntimeError):

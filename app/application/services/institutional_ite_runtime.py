@@ -276,6 +276,33 @@ class InstitutionalIteRuntime:
         session = getattr(snapshot.session, "session", None)
         session_val = str(getattr(session, "value", None) or session or "off_hours")
         news = snapshot.news
+
+        # Force Sync Positions before max-open / safety evaluation.
+        # MT5 is source of truth — never block solely on stale internal counts.
+        try:
+            from app.application.services.mt5_position_truth import (
+                apply_mt5_position_truth,
+                force_sync_positions,
+            )
+
+            prior_internal = int(account.open_positions)
+            sync = force_sync_positions(
+                self.mt5_adapter,
+                symbol=str(getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD"),
+                internal_positions=prior_internal,
+                position_engine=self.position_management.engine,
+            )
+            account = apply_mt5_position_truth(account, sync)
+            if sync.repaired or sync.mt5_positions != prior_internal:
+                logger.warning(
+                    "force_sync_before_safety",
+                    mt5_positions=sync.mt5_positions,
+                    internal_positions=prior_internal,
+                    repaired=sync.repaired,
+                )
+        except Exception:
+            logger.exception("force_sync_positions_before_safety_failed")
+
         safety = self.plane.evaluate_auto_trading(
             AutoTradeLiveFacts(
                 gateway_connected=gw,
@@ -300,6 +327,62 @@ class InstitutionalIteRuntime:
                 execution_enabled=execution_on,
             )
         )
+        if not safety.allowed:
+            # Last-chance Force Sync if the only blocker is max open positions.
+            max_open_block = any(
+                "Open positions" in r and "at max" in r
+                for r in (safety.failed_reasons or ())
+            )
+            if max_open_block:
+                try:
+                    from app.application.services.mt5_position_truth import (
+                        apply_mt5_position_truth,
+                        force_sync_positions,
+                    )
+
+                    prior_internal = int(account.open_positions)
+                    sync = force_sync_positions(
+                        self.mt5_adapter,
+                        symbol=str(
+                            getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD"
+                        ),
+                        internal_positions=prior_internal,
+                        position_engine=self.position_management.engine,
+                    )
+                    account = apply_mt5_position_truth(account, sync)
+                    logger.warning(
+                        "force_sync_before_max_open_reject",
+                        mt5_positions=sync.mt5_positions,
+                        internal_positions=prior_internal,
+                        repaired=sync.repaired,
+                    )
+                    safety = self.plane.evaluate_auto_trading(
+                        AutoTradeLiveFacts(
+                            gateway_connected=gw,
+                            broker_connected=mt5,
+                            market_data_live=bool(market_data_live),
+                            risk_engine_pass=risk_allowed,
+                            risk_engine_reasons=risk_reasons,
+                            account_trading_enabled=account_trading_enabled,
+                            mt5_autotrading_enabled=mt5_autotrading_enabled,
+                            symbol=getattr(snapshot, "symbol", "XAUUSD"),
+                            symbol_tradable=symbol_tradable,
+                            margin_available=margin_ok,
+                            no_broker_restrictions=no_broker_restrictions,
+                            open_positions=account.open_positions,
+                            session=session_val,
+                            spread=getattr(snapshot, "spread", None),
+                            news_blocked=bool(news.blocked),
+                            news_reason=str(news.reason or ""),
+                            daily_loss_exceeded=self.plane.daily_loss_exceeded,
+                            emergency_stop=self.plane.kill_switch_armed,
+                            ops_mode=self.plane.mode.value,
+                            execution_enabled=execution_on,
+                        )
+                    )
+                except Exception:
+                    logger.exception("force_sync_before_max_open_reject_failed")
+
         if not safety.allowed:
             from app.domain.institutional_trading.force_first_trade import (
                 is_force_first_trade_armed,
@@ -793,7 +876,10 @@ class InstitutionalIteRuntime:
                 )
 
                 enrich = _enrich_from_adapter(self.probes)
-                ctx = await build_ite_cycle_market_context(self.mt5_adapter)
+                ctx = await build_ite_cycle_market_context(
+                    self.mt5_adapter,
+                    position_engine=self.position_management.engine,
+                )
                 if not ctx.ok or ctx.snapshot is None or ctx.account is None:
                     health = self.tick_health()
                     result = ShadowCycleResult(

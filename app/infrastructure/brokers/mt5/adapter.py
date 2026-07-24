@@ -307,6 +307,18 @@ class MT5Adapter:
     def list_positions(self) -> list[MT5Position]:
         return self._client.list_positions()
 
+    def force_refresh_positions(self) -> list[MT5Position]:
+        """Bypass client cache and re-query live MT5 positions."""
+        client = self._client
+        invalidate = getattr(client, "invalidate_positions_cache", None)
+        if callable(invalidate):
+            invalidate()
+        else:
+            clear = getattr(client, "_clear_data_caches", None)
+            if callable(clear):
+                clear()
+        return self.list_positions()
+
     def position_by_ticket(self, ticket: int) -> MT5Position | None:
         return self._client.position_by_ticket(ticket)
 

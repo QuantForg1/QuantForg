@@ -73,6 +73,17 @@ class PositionManagementEngine:
         with self._lock:
             return self._positions.get(ticket)
 
+    def drop_missing_tickets(self, live_tickets: set[int]) -> int:
+        """Remove managed tickets absent from live MT5. Returns removed count."""
+        live = {int(t) for t in live_tickets}
+        removed = 0
+        with self._lock:
+            stale = [t for t in list(self._positions.keys()) if int(t) not in live]
+            for ticket in stale:
+                if self._positions.pop(ticket, None) is not None:
+                    removed += 1
+        return removed
+
     def evaluate(
         self,
         ticket: int,
