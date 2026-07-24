@@ -30,7 +30,6 @@ from app.domain.institutional_trading.decision_models import (
 )
 from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
-from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
 from app.domain.market_structure.enums import TrendDirection
 from core.logging import get_logger
 
@@ -348,15 +347,37 @@ def maybe_override_decision(
             )
             return decision, False
 
-        engine = TradeDecisionEngine(config=ite_config)
-        entry_zone, stop_zone, target_zone, rr, invalidations = engine._geometry(
-            snapshot, direction, account
-        )
-        if entry_zone is None or stop_zone is None or target_zone is None:
+        mid = account.mid_price
+        if mid is None or mid <= 0:
             logger.error(
-                "FORCE_FIRST_TRADE REJECTED before OMS: missing entry/stop/target zones"
+                "FORCE_FIRST_TRADE REJECTED before OMS: no mid price for market SL/TP"
             )
             return decision, False
+        atr = account.atr if account.atr is not None and account.atr > 0 else None
+        stop_dist = (
+            (atr * Decimal("1.5")).quantize(Decimal("0.01"))
+            if atr is not None
+            else (mid * Decimal("0.001")).quantize(Decimal("0.01"))
+        )
+        if stop_dist <= 0:
+            stop_dist = Decimal("1")
+        # Market-order geometry must be valid vs live mid (not stale OB/FVG zones).
+        from app.domain.institutional_trading.decision_models import PriceZone
+
+        entry_zone = PriceZone(low=mid, high=mid, mid=mid)
+        if direction is TradeDirection.BUY:
+            sl = mid - stop_dist
+            tp = mid + (stop_dist * Decimal("2"))
+            stop_zone = PriceZone(low=sl, high=sl, mid=sl)
+            target_zone = PriceZone(low=tp, high=tp, mid=tp)
+            invalidations = ("Forced BUY: close below stop",)
+        else:
+            sl = mid + stop_dist
+            tp = mid - (stop_dist * Decimal("2"))
+            stop_zone = PriceZone(low=sl, high=sl, mid=sl)
+            target_zone = PriceZone(low=tp, high=tp, mid=tp)
+            invalidations = ("Forced SELL: close above stop",)
+        rr = Decimal("2.00")
 
         action = (
             DecisionAction.BUY
