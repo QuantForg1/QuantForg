@@ -199,6 +199,16 @@ def rc1_generate_report(period: str, _user: OperatorUser) -> dict[str, Any]:
     }
 
 
+@router.get("/ai-scalping")
+def ai_scalping_dashboard(_user: OperatorUser) -> dict[str, Any]:
+    """Institutional AI Scalping v5 — setup, diagnostics, validation (quality-first)."""
+    from app.application.services.ai_scalping_dashboard import (
+        build_ai_scalping_dashboard,
+    )
+
+    return build_ai_scalping_dashboard()
+
+
 @router.get("/network")
 def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """DNS/network incidents, reconnect log, gateway/MT5 uptime."""

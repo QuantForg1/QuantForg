@@ -131,11 +131,15 @@ class InstitutionalDecisionPipeline:
         if account.equity > 0 and account.daily_pnl < 0:
             daily_dd = abs(account.daily_pnl) / account.equity * Decimal("100")
 
-        # Scalping AI score overlay (observability + historical prior)
+        # Scalping AI score overlay — quality gates + balanced BUY/SELL
+        ai_score = None
         if cfg.is_scalping():
             try:
                 from app.domain.institutional_trading.ai_scalping.config import (
                     DEFAULT_AI_SCALPING_CONFIG,
+                )
+                from app.domain.institutional_trading.ai_scalping.diagnostics import (
+                    get_scalping_diagnostics_store,
                 )
                 from app.domain.institutional_trading.ai_scalping.learning import (
                     get_scalping_learning_store,
@@ -163,8 +167,28 @@ class InstitutionalDecisionPipeline:
                     config=DEFAULT_AI_SCALPING_CONFIG,
                 )
                 self._last_ai_score = ai_score.to_dict()
+                diag = get_scalping_diagnostics_store()
+                if ai_score.reject:
+                    diag.record(
+                        outcome="rejected",
+                        symbol=str(snapshot.symbol),
+                        direction=ai_score.direction,
+                        confidence=ai_score.confidence,
+                        reason=ai_score.reject_reason or "quality gates failed",
+                        details=ai_score.to_dict(),
+                    )
+                else:
+                    diag.record(
+                        outcome="taken",
+                        symbol=str(snapshot.symbol),
+                        direction=ai_score.direction,
+                        confidence=ai_score.confidence,
+                        reason="; ".join(ai_score.reasons[-3:]) or "quality gates passed",
+                        details=ai_score.to_dict(),
+                    )
             except Exception:
                 self._last_ai_score = None
+                ai_score = None
         else:
             self._last_ai_score = None
 
@@ -174,9 +198,34 @@ class InstitutionalDecisionPipeline:
             current_drawdown_pct=daily_dd if daily_dd > 0 else None,
         )
 
-        side = "sell" if confluence.direction is TradeDirection.SELL else "buy"
-        stop_mult = Decimal("1.25") if cfg.is_scalping() else Decimal("1.5")
+        # Prefer institutional AI direction when gates pass (never BUY-only default)
+        if (
+            ai_score is not None
+            and not ai_score.reject
+            and ai_score.direction in {"BUY", "SELL"}
+        ):
+            side = "buy" if ai_score.direction == "BUY" else "sell"
+        else:
+            side = "sell" if confluence.direction is TradeDirection.SELL else "buy"
+            # If AI rejected, still compute side for diagnostics but block below
+            if ai_score is not None and ai_score.direction in {"BUY", "SELL"}:
+                side = "buy" if ai_score.direction == "BUY" else "sell"
+
+        stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")
         stop_distance = account.atr * stop_mult if account.atr else None
+        # Structure-based stop distance when AI computed one
+        if ai_score is not None and self._last_ai_score:
+            raw_sd = self._last_ai_score.get("stop_loss")
+            entry_s = self._last_ai_score.get("entry")
+            try:
+                if raw_sd and entry_s and account.mid_price:
+                    from decimal import Decimal as _D
+
+                    sd = abs(_D(str(entry_s)) - _D(str(raw_sd)))
+                    if sd > 0:
+                        stop_distance = sd
+            except Exception:
+                pass
         entry = account.mid_price
         if entry is None or entry <= 0:
             # Prefer No Trade — never invent an entry price for risk sizing.
@@ -280,6 +329,14 @@ class InstitutionalDecisionPipeline:
             if not add.allow:
                 risk_allowed = False
                 risk_reasons.append(add.reason)
+                approved_lots = Decimal("0")
+
+            # Institutional quality gates — never bypass risk; block weak setups
+            if ai_score is not None and ai_score.reject:
+                risk_allowed = False
+                risk_reasons.append(
+                    f"ai_scalping_quality_reject:{ai_score.reject_reason or 'gates'}"
+                )
                 approved_lots = Decimal("0")
 
         eligibility = PositionEligibilityEngine(config=cfg).evaluate(

@@ -38,7 +38,8 @@ def test_scalping_ite_config_drops_h4_requirement() -> None:
     assert cfg.entry_confirmation_tf is Timeframe.M5
     assert cfg.execution_management_tf is Timeframe.M1
     assert Timeframe.H4 not in cfg.analysis_timeframes()
-    assert cfg.max_open_trades == 3
+    assert cfg.max_open_trades == 2
+    assert cfg.risk_per_trade_pct == DEFAULT_AI_SCALPING_CONFIG.risk_per_trade_pct
 
 
 @pytest.mark.unit

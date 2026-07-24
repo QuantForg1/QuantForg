@@ -1,0 +1,132 @@
+"""Institutional quality gates — reject weak scalping setups with reasons."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any
+
+from app.domain.institutional_trading.ai_scalping.config import (
+    AiScalpingConfig,
+    DEFAULT_AI_SCALPING_CONFIG,
+)
+from app.domain.institutional_trading.ai_scalping.direction import DirectionDecision
+from app.domain.institutional_trading.ai_scalping.session_intelligence import (
+    SessionAssessment,
+)
+from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
+    SpreadAssessment,
+)
+from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
+    ResolvedThresholds,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class QualityGateResult:
+    passed: bool
+    rejects: tuple[str, ...]
+    checks: dict[str, bool]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "rejects": list(self.rejects),
+            "checks": dict(self.checks),
+        }
+
+
+def evaluate_quality_gates(
+    *,
+    direction: DirectionDecision,
+    momentum: int,
+    liquidity: int,
+    structure_score: int,
+    session: SessionAssessment,
+    spread: SpreadAssessment,
+    thresholds: ResolvedThresholds,
+    confidence: int,
+    trade_quality: int,
+    expected_rr: Decimal | None,
+    atr_pct: Decimal | None,
+    config: AiScalpingConfig | None = None,
+) -> QualityGateResult:
+    """Trade only when structure, liquidity, momentum, spread, vol, session align."""
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    rejects: list[str] = []
+    checks: dict[str, bool] = {}
+
+    strong_structure = structure_score >= cfg.min_structure_score
+    checks["strong_structure"] = strong_structure
+    if cfg.require_strong_structure and not strong_structure:
+        rejects.append(
+            f"Weak structure score {structure_score} < {cfg.min_structure_score}"
+        )
+
+    liq_ok = liquidity >= cfg.min_liquidity_score
+    checks["high_liquidity"] = liq_ok
+    if cfg.require_liquidity_event and not liq_ok:
+        rejects.append(
+            f"Insufficient liquidity score {liquidity} < {cfg.min_liquidity_score}"
+        )
+
+    mom_ok = momentum >= cfg.min_momentum_score
+    checks["momentum_confirmation"] = mom_ok
+    if cfg.require_momentum_confirm and not mom_ok:
+        rejects.append(
+            f"Momentum {momentum} < {cfg.min_momentum_score} — no confirmation"
+        )
+
+    spread_ok = not spread.reject
+    checks["tight_spread"] = spread_ok
+    if cfg.require_tight_spread and not spread_ok:
+        rejects.append(spread.reason or "Spread reject")
+
+    # Valid volatility — reject dead / extreme without expansion context
+    vol_ok = True
+    if atr_pct is not None:
+        if atr_pct <= 0:
+            vol_ok = False
+            rejects.append("Invalid volatility (ATR% ≤ 0)")
+        elif thresholds.band == "low" and atr_pct < cfg.atr_low_pct / Decimal("2"):
+            vol_ok = False
+            rejects.append(f"Volatility too compressed ATR%={atr_pct}")
+    checks["valid_volatility"] = vol_ok
+    if cfg.require_valid_volatility and not vol_ok and "Invalid" not in " ".join(rejects):
+        pass  # already appended
+
+    session_ok = session.stars >= cfg.min_session_stars
+    checks["session_quality"] = session_ok
+    if cfg.require_session_quality and not session_ok:
+        rejects.append(
+            f"Session quality {session.stars}★ < {cfg.min_session_stars}★"
+        )
+
+    checks["clear_direction"] = direction.direction.value in {"BUY", "SELL"}
+    if not checks["clear_direction"]:
+        rejects.append("No clear BUY/SELL edge (balanced scores → reject)")
+
+    checks["adaptive_confidence"] = confidence >= thresholds.confidence
+    if not checks["adaptive_confidence"]:
+        rejects.append(
+            f"Confidence {confidence} < adaptive {thresholds.confidence} ({thresholds.band})"
+        )
+
+    checks["adaptive_quality"] = trade_quality >= thresholds.quality
+    if not checks["adaptive_quality"]:
+        rejects.append(
+            f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"
+        )
+
+    rr_ok = expected_rr is not None and expected_rr >= cfg.min_expected_rr
+    checks["min_rr"] = bool(rr_ok)
+    if not rr_ok:
+        rejects.append(
+            f"Expected RR {expected_rr} below minimum {cfg.min_expected_rr}"
+        )
+
+    return QualityGateResult(
+        passed=len(rejects) == 0,
+        rejects=tuple(rejects),
+        checks=checks,
+    )

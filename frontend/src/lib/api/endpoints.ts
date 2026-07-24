@@ -912,6 +912,8 @@ export const iteReliabilityApi = {
       `/ite/reliability/rc1/reports/${period}`,
       { method: "POST", body: {} },
     ),
+  aiScalping: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/ai-scalping"),
   network: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>

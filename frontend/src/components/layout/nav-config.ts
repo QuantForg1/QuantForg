@@ -516,6 +516,12 @@ export const appNav: NavGroup[] = [
         hint: "RC1 checklist · smoke · go-live score",
       },
       {
+        href: "/ai-scalping",
+        label: "AI Scalping",
+        icon: Crosshair,
+        hint: "H1/M15/M5/M1 · BUY/SELL quality gates",
+      },
+      {
         href: "/witness-health",
         label: "Witness Health",
         icon: HeartPulse,

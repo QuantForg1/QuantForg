@@ -165,6 +165,20 @@ def plan_action(
             target_state=PositionLifecycleState.EXITED,
         )
 
+    # --- Momentum fade — exit quickly when edge disappears (scalping) ---
+    if (
+        context.ai_momentum is not None
+        and int(context.ai_momentum) < 40
+        and r < Decimal("0.8")
+        and hold_minutes >= 1.0
+    ):
+        return PlannedAction(
+            ManageActionKind.EMERGENCY_EXIT,
+            f"Momentum faded ({context.ai_momentum}) — exit scalping trade",
+            volume=position.remaining_volume,
+            target_state=PositionLifecycleState.EXITED,
+        )
+
     # --- Progressive management (never skip states) ---
     mid = context.mid_price or context.current_price
     regime = volatility_regime(context.atr, mid, config)

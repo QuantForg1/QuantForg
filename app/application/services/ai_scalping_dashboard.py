@@ -1,0 +1,113 @@
+"""Institutional AI Scalping v5 executive dashboard."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from app.domain.institutional_trading.ai_scalping import (
+    DEFAULT_AI_SCALPING_CONFIG,
+    compare_backtest_vs_live,
+    get_scalping_diagnostics_store,
+    get_scalping_learning_store,
+)
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+def build_ai_scalping_dashboard() -> dict[str, Any]:
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    current: dict[str, Any] = {}
+    try:
+        from app.application.services.ai_scalping_mode import current_mode_snapshot
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        current = current_mode_snapshot(get_ite_runtime())
+    except Exception:
+        logger.exception("ai_scalping_dashboard_mode_failed")
+
+    ai_score = current.get("ai_score") if isinstance(current, dict) else None
+    if not isinstance(ai_score, dict):
+        ai_score = {}
+
+    diagnostics = get_scalping_diagnostics_store()
+    learning = None
+    try:
+        learning = get_scalping_learning_store().summary()
+    except Exception:
+        pass
+
+    # Live vs backtest validation stub from learning / performance stores
+    live_metrics: dict[str, Any] = {}
+    backtest_metrics: dict[str, Any] = {}
+    try:
+        from app.domain.institutional_trading.production_hardening.performance import (
+            get_live_performance_monitor,
+        )
+
+        live_metrics = get_live_performance_monitor().snapshot() or {}
+    except Exception:
+        pass
+    try:
+        from app.domain.institutional_trading.production_hardening.backtest_live import (
+            get_backtest_live_store,
+        )
+
+        bt = get_backtest_live_store().snapshot()
+        if isinstance(bt, dict):
+            backtest_metrics = bt.get("backtest") or bt.get("latest_backtest") or {}
+    except Exception:
+        pass
+
+    validation = compare_backtest_vs_live(
+        backtest=backtest_metrics if isinstance(backtest_metrics, dict) else {},
+        live=live_metrics if isinstance(live_metrics, dict) else {},
+    )
+
+    setup = {
+        "direction": ai_score.get("direction"),
+        "confidence": ai_score.get("ai_confidence"),
+        "reason": (
+            ai_score.get("reject_reason")
+            or "; ".join((ai_score.get("reasons") or [])[-3:])
+            or None
+        ),
+        "expected_hold_time": ai_score.get("expected_hold_time"),
+        "expected_rr": ai_score.get("expected_rr"),
+        "entry": ai_score.get("entry"),
+        "stop_loss": ai_score.get("stop_loss"),
+        "take_profit": ai_score.get("take_profit"),
+        "momentum": ai_score.get("momentum"),
+        "liquidity": ai_score.get("liquidity"),
+        "structure": ai_score.get("structure_score"),
+        "buy_score": ai_score.get("buy_score"),
+        "sell_score": ai_score.get("sell_score"),
+        "reject": ai_score.get("reject"),
+        "quality_checks": ai_score.get("quality_checks"),
+    }
+
+    return {
+        "version": cfg.version,
+        "config": cfg.to_dict(),
+        "mission": (
+            "Institutional AI scalping — H1/M15/M5/M1, balanced BUY/SELL, "
+            "reject weak setups. Do not increase risk until quality improves."
+        ),
+        "current_setup": setup,
+        "mode": current,
+        "diagnostics": {
+            "summary": diagnostics.summary(),
+            "recent": diagnostics.recent(limit=40),
+        },
+        "learning": learning,
+        "validation": validation,
+        "universe": list(cfg.universe),
+        "safeguards": {
+            "allow_martingale": False,
+            "allow_grid": False,
+            "never_prefer_buy_only": True,
+            "risk_increase_locked": True,
+            "risk_per_trade_pct": str(cfg.risk_per_trade_pct),
+            "broker_safety_intact": True,
+        },
+    }

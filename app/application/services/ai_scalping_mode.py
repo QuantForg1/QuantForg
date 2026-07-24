@@ -26,11 +26,13 @@ def pme_config_for_scalping(
     cfg = scalp or DEFAULT_AI_SCALPING_CONFIG
     return replace(
         DEFAULT_PME_CONFIG,
-        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping",
+        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v5",
         break_even_at_r=cfg.break_even_at_r,
         partial_at_r=cfg.partial_at_r,
         partial_close_pct=cfg.partial_close_pct,
         trail_after_r=cfg.trail_after_r,
+        time_stop_minutes=cfg.time_stop_minutes,
+        time_stop_min_r=cfg.time_stop_min_r,
         volume_step=cfg.broker_lot_step,
         min_volume=cfg.broker_min_lot,
     )
