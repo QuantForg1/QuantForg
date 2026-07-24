@@ -139,7 +139,11 @@ class TestExecutionSafetyService:
         events = safety.drain_events()
         assert any(e.event_type == "execution.approved" for e in events)
 
-    def test_policy_symbol_rejection(self) -> None:
+    def test_policy_symbol_rejection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "app.domain.trading.gold_only.gold_only_enabled",
+            lambda: True,
+        )
         adapter = MT5Adapter(client=MockMT5Client())
         adapter.initialize()
         from app.domain.interfaces.mt5_client import MT5LoginRequest
@@ -149,7 +153,7 @@ class TestExecutionSafetyService:
         safety = ExecutionSafetyService(
             adapter=adapter,
             order_validation=validation,
-            policy=ExecutionPolicy(),  # XAUUSD-only whitelist
+            policy=ExecutionPolicy(),  # XAUUSD-only whitelist when gold-only
         )
         intent = OrderIntent(
             symbol="GBPUSD",
