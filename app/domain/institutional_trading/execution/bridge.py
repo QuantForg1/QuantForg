@@ -416,8 +416,12 @@ class ExecutionBridge:
             is_forced_test_decision,
         )
 
-        if is_forced_test_decision(decision):
-            logger.warning("Submitting order...")
+        logger.warning(
+            "Submitting Order...",
+            action=str(getattr(decision.action, "value", decision.action)),
+            lots=str(getattr(decision, "approved_lots", None) or ""),
+            forced=is_forced_test_decision(decision),
+        )
         intent = self._build_intent(decision, context)
         request_id = context.request_id or f"ite_{d_hash[:16]}"
 
@@ -490,8 +494,24 @@ class ExecutionBridge:
 
         if status is ExecutionAttemptStatus.OMS_SUCCESS:
             self.metrics.record_executed(latency)
+            logger.warning(
+                "MT5 Accepted",
+                ticket=oms_result.order_ticket or oms_result.deal_ticket,
+            )
         else:
             self.metrics.record_rejected(latency)
+            logger.warning(
+                "Rejected because: %s",
+                oms_result.message or exec_result or abort_reason.value,
+            )
+            logger.warning(
+                "execution_stop_detail",
+                function="ExecutionBridge.handle → oms.submit_market",
+                file="app/domain/institutional_trading/execution/bridge.py",
+                abort_reason=abort_reason.value,
+                retcode=oms_result.retcode,
+                reason=oms_result.message or exec_result,
+            )
             # Canary: immediate stop after abnormal execution
             if (
                 mode is ExecutionMode.CANARY_LIVE
@@ -657,6 +677,20 @@ class ExecutionBridge:
         count_reject: bool = True,
     ) -> ExecutionBridgeResult:
         latency = (time.perf_counter() - t0) * 1000.0
+        logger.warning(
+            "Rejected because: %s",
+            comment or reason.value,
+        )
+        logger.warning(
+            "execution_gate_abort",
+            result="FAIL",
+            function="ExecutionBridge.handle → _abort",
+            file="app/domain/institutional_trading/execution/bridge.py",
+            abort_reason=reason.value,
+            condition=f"abort_reason == {reason.value}",
+            reason=comment or reason.value,
+            action=str(getattr(decision.action, "value", decision.action)),
+        )
         if count_reject and status is not ExecutionAttemptStatus.DUPLICATE:
             self.metrics.record_rejected(latency)
         entry = self._record(

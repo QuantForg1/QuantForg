@@ -38,6 +38,9 @@ from app.domain.value_objects.mt5_order import (
     StopLoss,
     TakeProfit,
 )
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -310,11 +313,30 @@ class InstitutionalExecutionEngine:
                 validation_ok = False
                 ok_check = False
                 check_res = None
-                val_reasons.append(
+                closeonly_reason = (
                     f"Broker {intent.symbol} trade_mode={trade_mode} "
                     f"(current={trade_mode}, required=full). "
                     "MT5 rejects new entries with retcode 10044: "
                     "Only position closing is allowed."
+                )
+                val_reasons.append(closeonly_reason)
+                logger.warning("Rejected because: %s", closeonly_reason)
+                logger.warning(
+                    "oms_validation_abort",
+                    result="FAIL",
+                    function="InstitutionalExecutionEngine.run_submit",
+                    file=(
+                        "app/application/services/"
+                        "institutional_execution_engine.py"
+                    ),
+                    line=309,
+                    condition=(
+                        "trade_mode in {'closeonly','close_only'} "
+                        "and not is_manage"
+                    ),
+                    current=trade_mode,
+                    required="full",
+                    reason=closeonly_reason,
                 )
             else:
                 check_res = self.order_validation.adapter.order_check(request)
