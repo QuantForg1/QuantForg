@@ -1886,6 +1886,59 @@ export const iseApi = {
     ),
 };
 
+/** Institutional Release & Deployment — human approval governance */
+export const irdpApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/irdp/dashboard"),
+  releases: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/irdp/releases?limit=${limit}`),
+  release: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/irdp/releases/${encodeURIComponent(id)}`,
+    ),
+  createRelease: (body: {
+    version: string;
+    component?: string;
+    notes?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/irdp/releases", {
+      method: "POST",
+      body,
+    }),
+  advance: (id: string, toStage?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/irdp/releases/${encodeURIComponent(id)}/advance`,
+      { method: "POST", body: { to_stage: toStage ?? null } },
+    ),
+  approve: (
+    id: string,
+    body: { approver: string; decision: string; comment?: string },
+  ) =>
+    apiFetch<Record<string, unknown>>(
+      `/irdp/releases/${encodeURIComponent(id)}/approve`,
+      { method: "POST", body },
+    ),
+  rollbackPlan: (
+    id: string,
+    body: { requested_by: string; reason?: string },
+  ) =>
+    apiFetch<Record<string, unknown>>(
+      `/irdp/releases/${encodeURIComponent(id)}/rollback-plan`,
+      { method: "POST", body },
+    ),
+  checklist: () => apiFetch<Record<string, unknown>>("/irdp/checklist"),
+  monitoring: () => apiFetch<Record<string, unknown>>("/irdp/monitoring"),
+  approvals: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/irdp/approvals?limit=${limit}`),
+  rollbacks: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/irdp/rollbacks?limit=${limit}`),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/irdp/reports?limit=${limit}`),
+  audit: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/irdp/releases/${encodeURIComponent(id)}/audit`,
+    ),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

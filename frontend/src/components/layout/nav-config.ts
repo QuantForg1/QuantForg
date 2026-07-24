@@ -194,6 +194,12 @@ export const appNav: NavGroup[] = [
         hint: "ISE · digital twin · monte carlo · stress",
       },
       {
+        href: "/institutional-release",
+        label: "Release Platform",
+        icon: ArrowUpFromLine,
+        hint: "IRDP · approval · rollback · release health",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
