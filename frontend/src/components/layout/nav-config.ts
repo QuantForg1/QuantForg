@@ -188,6 +188,12 @@ export const appNav: NavGroup[] = [
         hint: "CVF · drift · replay vs live · evidence",
       },
       {
+        href: "/institutional-simulation",
+        label: "Simulation Engine",
+        icon: Repeat,
+        hint: "ISE · digital twin · monte carlo · stress",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

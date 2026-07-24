@@ -130,6 +130,23 @@ def gather_knowledge_sources() -> dict[str, Any]:
     )
     availability["audit"] = isinstance(sources["audit"], list)
 
+    sources["ise"] = _safe(
+        lambda: {
+            "simulations": __import__(
+                "app.domain.institutional_simulation_engine", fromlist=["get_ise"]
+            )
+            .get_ise()
+            .store.list_simulations(limit=40),
+            "nodes": __import__(
+                "app.domain.institutional_simulation_engine", fromlist=["get_ise"]
+            )
+            .get_ise()
+            .store.knowledge_nodes(limit=40),
+        },
+        {"simulations": [], "nodes": []},
+    )
+    availability["ise"] = isinstance(sources["ise"], dict)
+
     return {
         "sources": sources,
         "availability": availability,

@@ -1846,6 +1846,46 @@ export const cvfApi = {
     apiFetch<Record<string, unknown>>(`/cvf/reports?limit=${limit}`),
 };
 
+/** Institutional Simulation Engine — isolated digital twin */
+export const iseApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/ise/dashboard"),
+  catalog: () => apiFetch<Record<string, unknown>>("/ise/catalog"),
+  simulate: (mode: string, scenario?: string, paths = 100) => {
+    const sp = new URLSearchParams();
+    sp.set("mode", mode);
+    sp.set("paths", String(paths));
+    if (scenario) sp.set("scenario", scenario);
+    return apiFetch<Record<string, unknown>>(`/ise/simulate?${sp}`);
+  },
+  simulations: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/ise/simulations?limit=${limit}`),
+  simulation: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/ise/simulations/${encodeURIComponent(id)}`,
+    ),
+  aqsAnalysis: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/ise/simulations/${encodeURIComponent(id)}/aqs`,
+    ),
+  monteCarlo: (paths = 100, scenario?: string) => {
+    const sp = new URLSearchParams();
+    sp.set("paths", String(paths));
+    if (scenario) sp.set("scenario", scenario);
+    return apiFetch<Record<string, unknown>>(`/ise/monte-carlo?${sp}`);
+  },
+  walkForward: () => apiFetch<Record<string, unknown>>("/ise/walk-forward"),
+  stress: (stress = "volatility_spike") =>
+    apiFetch<Record<string, unknown>>(
+      `/ise/stress?stress=${encodeURIComponent(stress)}`,
+    ),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/ise/reports?limit=${limit}`),
+  knowledgeNodes: (limit = 40) =>
+    apiFetch<Record<string, unknown>>(
+      `/ise/knowledge-nodes?limit=${limit}`,
+    ),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

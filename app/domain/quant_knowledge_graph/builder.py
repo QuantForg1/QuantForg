@@ -247,6 +247,48 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
                 )
             )
 
+    # Institutional Simulation Engine — every simulation is a knowledge node
+    ise = _as_dict(sources.get("ise"))
+    for node in _as_list(ise.get("nodes"))[:40]:
+        if not isinstance(node, dict):
+            continue
+        nid = str(node.get("id") or _nid("simulation", uuid4()))
+        sid = add_node(
+            _node(
+                node_id=nid,
+                node_type=NodeType.RESEARCH_EXPERIMENT,
+                label=str(node.get("label") or "ISE Simulation"),
+                props={**(node.get("properties") or {}), "digital_twin": True},
+                source_subsystem="institutional_simulation_engine",
+            )
+        )
+        add_edge(
+            _edge(source=sid, target=strategy_id, relation=RelationType.DERIVED_FROM)
+        )
+    for sim in _as_list(ise.get("simulations"))[:40]:
+        if not isinstance(sim, dict):
+            continue
+        nid = _nid("simulation", sim.get("simulation_id") or uuid4())
+        if nid in nodes:
+            continue
+        sid = add_node(
+            _node(
+                node_id=nid,
+                node_type=NodeType.RESEARCH_EXPERIMENT,
+                label=str(sim.get("title") or sim.get("mode") or "ISE Simulation"),
+                props={
+                    "mode": sim.get("mode"),
+                    "scenario": sim.get("scenario"),
+                    "metrics": sim.get("metrics"),
+                    "digital_twin": True,
+                },
+                source_subsystem="institutional_simulation_engine",
+            )
+        )
+        add_edge(
+            _edge(source=sid, target=strategy_id, relation=RelationType.DERIVED_FROM)
+        )
+
     for job in _as_list(irl.get("jobs"))[:30]:
         if not isinstance(job, dict):
             continue

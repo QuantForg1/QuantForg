@@ -106,6 +106,23 @@ def answer_question(question: str, *, pack: dict[str, Any]) -> dict[str, Any]:
         except Exception:  # noqa: BLE001
             return _base("QKG unavailable in this snapshot.", [])
 
+    if any(k in q for k in ("simulation", "ise", "monte carlo", "walk forward", "digital twin")):
+        try:
+            from app.domain.institutional_simulation_engine import get_ise
+
+            sims = get_ise().store.list_simulations(limit=5)
+            analyses = [
+                get_ise().analyze_for_aqs(str(s.get("simulation_id")))
+                for s in sims
+                if s.get("simulation_id")
+            ]
+            return _base(
+                f"ISE digital twin: {len(sims)} recent isolated simulations analyzed.",
+                [s for s in analyses if s],
+            )
+        except Exception:  # noqa: BLE001
+            return _base("ISE unavailable in this snapshot.", [])
+
     # Default: summarize recommendations
     return _base(
         f"AQS has {len(recommendations)} open research recommendations. "
