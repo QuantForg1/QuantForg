@@ -200,6 +200,12 @@ export const appNav: NavGroup[] = [
         hint: "IRDP · approval · rollback · release health",
       },
       {
+        href: "/institutional-risk-analytics",
+        label: "Risk Analytics",
+        icon: Scale,
+        hint: "IRAP · exposure · drawdown · VaR · stress",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

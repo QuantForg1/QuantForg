@@ -1939,6 +1939,20 @@ export const irdpApi = {
     ),
 };
 
+/** Institutional Risk Analytics Platform — read-only portfolio risk intelligence */
+export const irapApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/irap/dashboard"),
+  metrics: () => apiFetch<Record<string, unknown>>("/irap/metrics"),
+  exposure: () => apiFetch<Record<string, unknown>>("/irap/exposure"),
+  drawdown: () => apiFetch<Record<string, unknown>>("/irap/drawdown"),
+  correlation: () => apiFetch<Record<string, unknown>>("/irap/correlation"),
+  stress: () => apiFetch<Record<string, unknown>>("/irap/stress"),
+  alerts: () => apiFetch<Record<string, unknown>>("/irap/alerts"),
+  trends: () => apiFetch<Record<string, unknown>>("/irap/trends"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/irap/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

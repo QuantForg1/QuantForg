@@ -177,6 +177,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "institutional_release_deployment",
         "app.presentation.routers.institutional_release_deployment",
     ),
+    (
+        "institutional_risk_analytics",
+        "app.presentation.routers.institutional_risk_analytics",
+    ),
 )
 
 
