@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.application.services.portfolio_intelligence import PortfolioIntelligenceService
+from app.application.services.portfolio_intelligence_lab import PortfolioIntelligenceService
 
 
 @lru_cache(maxsize=1)

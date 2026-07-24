@@ -803,6 +803,9 @@ class Settings(BaseSettings):
         if port == 6543 or "pooler.supabase.com" in host:
             args["statement_cache_size"] = 0
 
+        # Fail fast on Railway — never hang healthchecks on unreachable DB.
+        args.setdefault("timeout", 10)
+
         if not use_ssl:
             return args
 

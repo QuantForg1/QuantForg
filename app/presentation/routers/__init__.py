@@ -1,67 +1,11 @@
-"""HTTP API routers."""
+"""HTTP API routers.
 
-from app.presentation.routers import (
-    auth,
-    backtest,
-    broker_accounts,
-    broker_connections,
-    broker_connectivity,
-    brokers,
-    decision_engine,
-    ecosystem,
-    execution,
-    execution_intelligence,
-    gateway_manager,
-    health,
-    intelligence,
-    mt5,
-    notifications,
-    ops,
-    organizations,
-    paper,
-    portfolio,
-    portfolio_intelligence,
-    profile,
-    quant_ai,
-    quant_studio,
-    research_lab,
-    risk,
-    settings,
-    strategy,
-    version,
-    walkforward,
-    weltrade,
-)
+Keep this package init lightweight. Eager imports here break
+``importlib.import_module("app.presentation.routers.*")`` during
+``create_app`` if any single router has a broken dependency — including
+health probes needed by Railway.
+"""
 
-__all__ = [
-    "auth",
-    "backtest",
-    "broker_accounts",
-    "broker_connections",
-    "broker_connectivity",
-    "brokers",
-    "decision_engine",
-    "ecosystem",
-    "execution",
-    "execution_intelligence",
-    "gateway_manager",
-    "health",
-    "intelligence",
-    "mt5",
-    "notifications",
-    "ops",
-    "organizations",
-    "paper",
-    "portfolio",
-    "portfolio_intelligence",
-    "profile",
-    "quant_ai",
-    "quant_studio",
-    "research_lab",
-    "risk",
-    "settings",
-    "strategy",
-    "version",
-    "walkforward",
-    "weltrade",
-]
+from __future__ import annotations
+
+__all__: list[str] = []

@@ -33,6 +33,12 @@ from core.security.headers import SecurityHeaders
 
 logger = get_logger(__name__)
 
+# Minimal routers required before Railway healthchecks. Everything else is
+# registered after the server is listening (see lifespan deferred boot).
+_CORE_ROUTER_NAMES: frozenset[str] = frozenset(
+    {"health", "version", "auth", "beta_access"}
+)
+
 # Routers are registered one-by-one (lazy import) so a single broken module
 # can be skipped via QF_DISABLED_COMPONENTS without taking down the process.
 _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
@@ -270,20 +276,28 @@ def _is_disabled(name: str) -> bool:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Manage application startup and shutdown.
 
-    Startup
-    -------
-    1. Load settings and configure structured logging.
-    2. Construct the DI container with database manager.
-    3. Open PostgreSQL and Redis connections (optional deps fail soft).
-
-    Shutdown
-    --------
-    1. Close Redis and PostgreSQL connections gracefully.
+    Critical for Railway: yield as soon as the DI shell exists so
+    ``/health/live`` can answer. Heavy DB / Redis / MT5 / ITE work runs in
+    a background task and must never block the healthcheck window.
     """
     import sys
+    import time
+
+    t0 = time.perf_counter()
+    print("Server starting...", flush=True)
+    logger.info("server_starting")
 
     settings = get_settings()
     configure_logging(settings)
+    port_env = os.environ.get("PORT") or str(settings.port)
+    host_env = os.environ.get("HOST") or settings.host or "0.0.0.0"
+    print("Environment loaded...", flush=True)
+    logger.info(
+        "environment_loaded",
+        port=port_env,
+        host=host_env,
+        app_env=settings.app_env.value,
+    )
 
     from urllib.parse import urlparse
 
@@ -307,8 +321,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         "startup_diagnostics",
         python_version=sys.version.split()[0],
         app_env=settings.app_env.value,
-        port=settings.port,
-        host=settings.host,
+        port=port_env,
+        host=host_env,
         reload=settings.reload,
         debug=settings.debug,
         execution_enabled=bool(settings.execution_enabled),
@@ -339,51 +353,102 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     container = Container(settings=settings, database=database)
     set_container(container)
     set_database_manager(database)
-    # Keep FastAPI state in sync for any code that inspects app.state.container.
     _app.state.container = container
-    shadow_task = None
+    shadow_task: asyncio.Task[Any] | None = None
+    boot_task: asyncio.Task[Any] | None = None
 
-    try:
-        await container.startup()
-        gw_url = (settings.mt5_gateway_base_url or "").strip()
-        gw_tok = bool((settings.mt5_gateway_caller_token or "").strip())
-        logger.info(
-            "application_started",
-            name=settings.app_name,
-            version=settings.app_version,
-            env=settings.app_env.value,
-            execution_enabled=bool(settings.execution_enabled),
-            redis_connected=container.redis is not None,
-            supabase_connected=container.supabase is not None,
-            mt5_gateway_base_url_configured=bool(gw_url),
-            mt5_gateway_caller_token_configured=gw_tok,
-            mt5_gateway_backed=bool(
-                gw_url
-                and gw_tok
-                and getattr(container, "mt5_adapter", None) is not None
-            ),
-        )
-        shadow_task = None
-        runtime = getattr(container, "ite_runtime", None)
-        if runtime is not None:
-            # Official cycle loop for all modes. SHADOW journals only
-            # (oms_orders_allowed=False); CANARY/LIVE may send OMS when
-            # Risk/Safety/Gate allow. Never auto-flips Ops mode.
-            shadow_task = asyncio.create_task(
-                runtime.run_forever(), name="ite-orchestrator"
+    async def _deferred_boot() -> None:
+        nonlocal shadow_task
+        # Finish mounting non-core routers after listen (production path).
+        pending = tuple(getattr(_app.state, "pending_router_specs", ()) or ())
+        if pending:
+            t_routes = time.perf_counter()
+            _register_routers(
+                _app,
+                settings,
+                specs=pending,
+                mount_unprefixed_health=False,
             )
+            print(
+                f"AI: deferred routers {round((time.perf_counter() - t_routes) * 1000.0, 1)}ms",
+                flush=True,
+            )
+            _app.state.pending_router_specs = ()
+
+        t_db = time.perf_counter()
+        try:
+            await container.startup()
+            db_ms = round((time.perf_counter() - t_db) * 1000.0, 1)
+            logger.info("startup_timing", phase="database_and_infra_ms", ms=db_ms)
+            print(f"Database: {db_ms}ms", flush=True)
+            print("Gateway: scheduled (non-blocking recovery)", flush=True)
+
+            gw_url = (settings.mt5_gateway_base_url or "").strip()
+            gw_tok = bool((settings.mt5_gateway_caller_token or "").strip())
             logger.info(
-                "ite_orchestrator_task_started",
+                "application_started",
+                name=settings.app_name,
+                version=settings.app_version,
+                env=settings.app_env.value,
                 execution_enabled=bool(settings.execution_enabled),
+                redis_connected=container.redis is not None,
+                supabase_connected=container.supabase is not None,
+                mt5_gateway_base_url_configured=bool(gw_url),
+                mt5_gateway_caller_token_configured=gw_tok,
+                mt5_gateway_backed=bool(
+                    gw_url
+                    and gw_tok
+                    and getattr(container, "mt5_adapter", None) is not None
+                ),
             )
-        logger.info("startup_complete")
-    except Exception as exc:
-        # Last-resort: keep process alive for liveness probes.
-        logger.exception("application_startup_degraded", error=str(exc))
+            runtime = getattr(container, "ite_runtime", None)
+            if runtime is not None:
+                shadow_task = asyncio.create_task(
+                    runtime.run_forever(), name="ite-orchestrator"
+                )
+                logger.info(
+                    "ite_orchestrator_task_started",
+                    execution_enabled=bool(settings.execution_enabled),
+                )
+            total_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+            logger.info("startup_complete", startup_total_ms=total_ms)
+            print(f"Startup Total: {total_ms}ms", flush=True)
+            if total_ms > 5000:
+                logger.warning(
+                    "startup_exceeded_5s",
+                    startup_total_ms=total_ms,
+                    hint="Check Database / AI(ITE) / Gateway recovery timing logs",
+                )
+        except Exception as exc:
+            logger.exception("application_startup_degraded", error=str(exc))
+
+    # Yield ASAP so Railway healthchecks succeed.
+    # Tests default to sync boot (full wiring before yield). Production never blocks.
+    print("Health endpoint ready...", flush=True)
+    print(f"Listening on PORT {port_env}", flush=True)
+    logger.info("health_endpoint_ready", port=port_env, host=host_env)
+    ready_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+    logger.info("startup_timing", phase="ready_to_serve_ms", ms=ready_ms)
+
+    sync_env = os.environ.get("QF_SYNC_STARTUP", "").lower()
+    if sync_env in {"0", "false", "no", "off"}:
+        sync_boot = False
+    elif sync_env in {"1", "true", "yes", "on"}:
+        sync_boot = True
+    else:
+        sync_boot = bool(settings.is_testing)
+    if sync_boot:
+        await _deferred_boot()
+    else:
+        boot_task = asyncio.create_task(_deferred_boot(), name="deferred-boot")
 
     yield
 
     try:
+        if boot_task is not None and not boot_task.done():
+            boot_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await boot_task
         runtime = getattr(container, "ite_runtime", None)
         if runtime is not None:
             runtime.stop()
@@ -483,23 +548,47 @@ def _register_middleware(application: FastAPI, settings: Settings) -> list[str]:
     return registered
 
 
-def _register_routers(application: FastAPI, settings: Settings) -> dict[str, Any]:
-    """Import and mount routers one-by-one; skip failures and disabled names."""
+def _register_routers(
+    application: FastAPI,
+    settings: Settings,
+    *,
+    specs: tuple[tuple[str, str], ...] | None = None,
+    mount_unprefixed_health: bool = True,
+) -> dict[str, Any]:
+    """Import and mount routers one-by-one; skip failures and disabled names.
+
+    Health is always registered first (and unprefixed) so Railway probes work
+    even if a later institutional router fails to import.
+    """
+    import time
+
+    t0 = time.perf_counter()
     prefix = settings.api_prefix
     registered: list[str] = []
     failed: list[str] = []
     first_failure: str | None = None
+    selected = specs if specs is not None else _ROUTER_SPECS
 
-    for name, module_path in _ROUTER_SPECS:
+    # Ensure health is first in the registration order.
+    ordered = sorted(
+        selected,
+        key=lambda item: 0 if item[0] == "health" else 1,
+    )
+
+    for name, module_path in ordered:
         if _is_disabled(name):
             logger.warning("router_skipped", router=name, reason="disabled")
             continue
+        t_r = time.perf_counter()
         try:
             module = importlib.import_module(module_path)
             router = module.router
             application.include_router(router, prefix=prefix)
             registered.append(name)
-            logger.info("router_registered", router=name, prefix=prefix)
+            ms = round((time.perf_counter() - t_r) * 1000.0, 1)
+            logger.info("router_registered", router=name, prefix=prefix, ms=ms)
+            if ms > 2000:
+                logger.warning("router_registration_slow", router=name, ms=ms)
         except Exception as exc:
             failed.append(name)
             if first_failure is None:
@@ -511,12 +600,18 @@ def _register_routers(application: FastAPI, settings: Settings) -> dict[str, Any
                 error=str(exc),
             )
 
-    # Unprefixed health for Railway / platform probes (GET /health).
-    if not _is_disabled("health") and "health" in registered:
+    # Unprefixed health for Railway / platform probes (GET /health, /health/live).
+    if (
+        mount_unprefixed_health
+        and not _is_disabled("health")
+        and "health" in registered
+    ):
         try:
             health_module = importlib.import_module("app.presentation.routers.health")
             application.include_router(health_module.router)
             logger.info("router_registered", router="health_unprefixed", prefix="")
+            print("Routes loaded...", flush=True)
+            print("Health endpoint ready...", flush=True)
         except Exception as exc:
             logger.exception(
                 "router_registration_failed",
@@ -524,12 +619,21 @@ def _register_routers(application: FastAPI, settings: Settings) -> dict[str, Any
                 error=str(exc),
             )
 
+    route_ms = round((time.perf_counter() - t0) * 1000.0, 1)
     summary = {
         "registered": registered,
         "failed": failed,
         "first_failure": first_failure,
+        "route_registration_ms": route_ms,
     }
     logger.info("router_registration_complete", **summary)
+    print(f"Route Registration: {route_ms}ms", flush=True)
+    if route_ms > 5000:
+        logger.warning(
+            "route_registration_exceeded_5s",
+            route_registration_ms=route_ms,
+            first_failure=first_failure,
+        )
     return summary
 
 
@@ -542,6 +646,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         Optional settings override (useful in tests). When omitted the
         process-wide singleton from :func:`get_settings` is used.
     """
+    import time
+
+    t0 = time.perf_counter()
     if settings is None:
         settings = get_settings()
 
@@ -570,7 +677,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def root() -> dict[str, str]:
         return {"status": "ok"}
 
-    _register_routers(application, settings)
+    # Production: register core probes only so create_app returns quickly and
+    # Railway can healthcheck within seconds. Remaining routers load after listen.
+    # Tests default to eager; override with QF_EAGER_ROUTERS=false for smoke.
+    eager_env = os.environ.get("QF_EAGER_ROUTERS", "").lower()
+    if eager_env in {"0", "false", "no", "off"}:
+        eager = False
+    elif eager_env in {"1", "true", "yes", "on"}:
+        eager = True
+    else:
+        eager = bool(settings.is_testing)
+    if eager:
+        _register_routers(application, settings, specs=_ROUTER_SPECS)
+        application.state.pending_router_specs = ()
+    else:
+        core_specs = tuple(
+            s for s in _ROUTER_SPECS if s[0] in _CORE_ROUTER_NAMES
+        )
+        _register_routers(application, settings, specs=core_specs)
+        application.state.pending_router_specs = tuple(
+            s for s in _ROUTER_SPECS if s[0] not in _CORE_ROUTER_NAMES
+        )
+
+    total_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+    logger.info("create_app_complete", ms=total_ms, eager_routers=eager)
+    if total_ms > 5000:
+        logger.warning("create_app_exceeded_5s", ms=total_ms)
 
     return application
 
@@ -578,10 +710,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 def run() -> None:
     """CLI entrypoint used by ``poetry run quantforg``."""
     settings = get_settings()
+    # Railway injects PORT; never prefer a baked 8000 over the platform port.
+    port = int(os.environ.get("PORT") or settings.port)
+    host = os.environ.get("HOST") or settings.host or "0.0.0.0"
+    print(f"Listening on PORT {port} host={host}", flush=True)
     uvicorn.run(
         "app.main:app",
-        host=settings.host,
-        port=settings.port,
+        host=host,
+        port=port,
         reload=settings.reload and settings.is_development,
         workers=1,
         log_level=settings.log_level.lower(),

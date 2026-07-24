@@ -52,6 +52,8 @@ APP_TARGET="app.main:app"
 LIFESPAN_FLAG="on"
 
 echo "quantforg_entrypoint PORT=${PORT} HOST=${HOST} APP_TARGET=${APP_TARGET} ALLOWED_HOSTS=${ALLOWED_HOSTS}"
+echo "Server starting..."
+echo "Environment loaded..."
 
 python - <<'PY'
 import os

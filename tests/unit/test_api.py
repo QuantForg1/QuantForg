@@ -25,15 +25,21 @@ from app.presentation.dependencies.services import (
     get_version_service,
 )
 from app.presentation.middleware.error_handler import register_exception_handlers
-from app.presentation.routers import health, version
+from app.presentation.routers.health import router as health_router
+from app.presentation.routers.version import router as version_router
 
 
 def _build_test_app() -> FastAPI:
     """Minimal FastAPI app with only foundation routers and mocked services."""
     application = FastAPI()
     register_exception_handlers(application)
-    application.include_router(health.router, prefix="/api/v1")
-    application.include_router(version.router, prefix="/api/v1")
+    application.include_router(health_router, prefix="/api/v1")
+    application.include_router(health_router)  # Railway unprefixed probes
+    application.include_router(version_router, prefix="/api/v1")
+
+    @application.get("/")
+    async def root() -> dict[str, str]:
+        return {"status": "ok"}
 
     mock_version = MagicMock(spec=VersionService)
     mock_version.get_version.return_value = VersionInfo(
@@ -108,13 +114,20 @@ class TestHealthEndpoints:
         client = TestClient(_build_test_app())
         response = client.get("/api/v1/health/live")
         assert response.status_code == 200
-        assert response.json()["status"] == "alive"
+        assert response.json()["status"] == "ok"
 
     def test_readiness(self) -> None:
         client = TestClient(_build_test_app())
         response = client.get("/api/v1/health/ready")
         assert response.status_code == 200
-        assert response.json()["status"] == "healthy"
+        assert response.json()["status"] == "ok"
+
+    def test_healthz_and_ready_aliases(self) -> None:
+        client = TestClient(_build_test_app())
+        for path in ("/", "/health", "/healthz", "/ready", "/health/live"):
+            response = client.get(path)
+            assert response.status_code == 200, path
+            assert response.json()["status"] == "ok", path
 
     def test_metrics_requires_auth(self) -> None:
         client = TestClient(_build_test_app())
@@ -123,9 +136,9 @@ class TestHealthEndpoints:
         body = response.json()
         assert body["error"]["code"] == "missing_token"
 
-    def test_health_healthy(self) -> None:
+    def test_health_status_detailed(self) -> None:
         client = TestClient(_build_test_app())
-        response = client.get("/api/v1/health")
+        response = client.get("/api/v1/health/status")
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "healthy"
@@ -150,6 +163,6 @@ class TestHealthEndpoints:
         )
         application.dependency_overrides[get_health_service] = lambda: mock_health
         client = TestClient(application)
-        response = client.get("/api/v1/health")
+        response = client.get("/api/v1/health/status")
         assert response.status_code == 200
         assert response.json()["status"] == "unhealthy"

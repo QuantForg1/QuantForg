@@ -46,19 +46,49 @@ def _maybe_503(response: Response, report_status: HealthStatus) -> None:
 
 @router.get(
     "/health",
+    summary="Platform health (instant)",
+    description="Immediate 200 for Railway / load balancers. No dependency I/O.",
+    status_code=status.HTTP_200_OK,
+)
+async def health_check() -> dict[str, str]:
+    """Instant liveness — never blocks on DB, Redis, or MT5."""
+    return {"status": "ok"}
+
+
+@router.get(
+    "/healthz",
+    summary="Alias liveness probe",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.get(
+    "/ready",
+    summary="Alias ready probe",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def ready_alias() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.get(
+    "/health/status",
     response_model=HealthResponse,
-    summary="Liveness and readiness probe",
+    summary="Detailed dependency health",
     description=(
-        "Returns the aggregated health of the application and its "
-        "infrastructure dependencies (PostgreSQL, Redis). "
+        "Aggregated health of PostgreSQL / Redis. "
         "HTTP 200 by default; set HEALTH_HTTP_STRICT=true for 503 on failure."
     ),
 )
-async def health_check(
+async def health_status(
     response: Response,
     service: HealthService = Depends(get_health_service),
 ) -> HealthResponse:
-    """Execute health probes and return a structured report."""
+    """Execute dependency probes and return a structured report."""
     report = await service.check()
     _maybe_503(response, report.status)
     return _to_response(report)
@@ -66,21 +96,13 @@ async def health_check(
 
 @router.get(
     "/health/ready",
-    response_model=HealthResponse,
-    summary="Readiness probe",
-    description=(
-        "Kubernetes-style readiness probe. Checks PostgreSQL and Redis. "
-        "HTTP 200 by default; set HEALTH_HTTP_STRICT=true for 503 on failure."
-    ),
+    summary="Readiness probe (instant)",
+    description="Immediate 200 — process accepts traffic. Use /health/status for deps.",
+    status_code=status.HTTP_200_OK,
 )
-async def readiness(
-    response: Response,
-    service: HealthService = Depends(get_health_service),
-) -> HealthResponse:
-    """Ready when infrastructure dependencies are healthy."""
-    report = await service.check()
-    _maybe_503(response, report.status)
-    return _to_response(report)
+async def readiness() -> dict[str, str]:
+    """Ready for edge probes — does not wait on infrastructure."""
+    return {"status": "ok"}
 
 
 @router.get(
@@ -90,8 +112,8 @@ async def readiness(
     status_code=status.HTTP_200_OK,
 )
 async def liveness() -> dict[str, str]:
-    """Kubernetes-style liveness probe — process is running."""
-    return {"status": "alive"}
+    """Kubernetes / Railway liveness — process is running."""
+    return {"status": "ok"}
 
 
 @router.get(
