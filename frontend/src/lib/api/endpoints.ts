@@ -2039,6 +2039,19 @@ export const icpApi = {
     apiFetch<Record<string, unknown>>(`/icp/reports?limit=${limit}`),
 };
 
+/** QuantForg Certification Suite — institutional quality gate (read-only) */
+export const qcsApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qcs/dashboard"),
+  readiness: () => apiFetch<Record<string, unknown>>("/qcs/readiness"),
+  scores: () => apiFetch<Record<string, unknown>>("/qcs/scores"),
+  checks: () => apiFetch<Record<string, unknown>>("/qcs/checks"),
+  blockers: () => apiFetch<Record<string, unknown>>("/qcs/blockers"),
+  evidence: () => apiFetch<Record<string, unknown>>("/qcs/evidence"),
+  timeline: () => apiFetch<Record<string, unknown>>("/qcs/timeline"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/qcs/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

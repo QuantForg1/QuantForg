@@ -227,6 +227,12 @@ export const appNav: NavGroup[] = [
         hint: "ICP · executive health · timeline · dependencies",
       },
       {
+        href: "/quantforg-certification",
+        label: "Certification",
+        icon: BadgeCheck,
+        hint: "QCS · readiness · blockers · institutional gate",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
