@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj
+2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj
+3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj
+4 0 obj<< /Length 1699 >>stream
+BT
+/F1 9 Tf
+12 TL
+1 0 0 1 40 780 Tm (Candidate Validation Report) Tj
+1 0 0 1 40 768 Tm (- Generated: 2026-07-23T10:33:32.267763+00:00) Tj
+1 0 0 1 40 756 Tm (- Symbol: XAUUSD) Tj
+1 0 0 1 40 744 Tm (- Offline research only ? production never modified) Tj
+1 0 0 1 40 732 Tm (- Evaluations: 109) Tj
+1 0 0 1 40 720 Tm (Configurations) Tj
+1 0 0 1 40 708 Tm (- Current Production: Quality 80 / Confluence 80) Tj
+1 0 0 1 40 696 Tm (- Candidate: Quality 70 / Confluence 75) Tj
+1 0 0 1 40 684 Tm (Comparison) Tj
+1 0 0 1 40 672 Tm (| Metric | Production 80/80 | Candidate 70/75 | Delta |) Tj
+1 0 0 1 40 660 Tm (|---|---:|---:|---:|) Tj
+1 0 0 1 40 648 Tm (| Trades | 22 | 26 | 4.0 |) Tj
+1 0 0 1 40 636 Tm (| Win Rate | 0.9091 | 0.9231 | 0.014 |) Tj
+1 0 0 1 40 624 Tm (| Profit Factor | 42.5111 | 50.7596 | 8.2485 |) Tj
+1 0 0 1 40 612 Tm (| Expectancy | 195.457723 | 199.062196 | 3.604473 |) Tj
+1 0 0 1 40 600 Tm (| Net Profit | 4406.2154 | 5281.7626 | 875.5472 |) Tj
+1 0 0 1 40 588 Tm (| Maximum Drawdown | 15.5775 | 15.5775 | 0.0 |) Tj
+1 0 0 1 40 576 Tm (| Recovery Factor | 282.8577 | 339.0636 | 56.2059 |) Tj
+1 0 0 1 40 564 Tm (| Sharpe Ratio | 11.3193 | 13.5152 | 2.1959 |) Tj
+1 0 0 1 40 552 Tm (| Average RR | 2.0028 | 2.0314 | 0.0286 |) Tj
+1 0 0 1 40 540 Tm (Decision) Tj
+1 0 0 1 40 528 Tm (Candidate Q70/C75 meets PF? + Expectancy? + non-material DD tests versus production Q80/C80. Production remain) Tj
+1 0 0 1 40 516 Tm (Gate checks) Tj
+1 0 0 1 40 504 Tm (- Profit Factor improves: True) Tj
+1 0 0 1 40 492 Tm (- Expectancy improves: True) Tj
+1 0 0 1 40 480 Tm (- Drawdown not materially worse: True) Tj
+1 0 0 1 40 468 Tm (Production thresholds remain Q80/C80. This report never applies changes.) Tj
+ET
+endstream endobj
+5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000056 00000 n 
+0000000111 00000 n 
+0000000235 00000 n 
+0000001984 00000 n 
+trailer<< /Size 6 /Root 1 0 R >>
+startxref
+2052
+%%EOF

@@ -1,0 +1,831 @@
+{
+  "schema_version": "1.0.0",
+  "report_type": "institutional_execution_validation",
+  "generated_at": "2026-07-23T16:05:59.403559+00:00",
+  "symbol": "XAUUSD",
+  "offline": true,
+  "simulation_only": true,
+  "live_order_send_called": false,
+  "strategy_modified": false,
+  "thresholds_modified": false,
+  "risk_policy_modified": false,
+  "safety_policy_modified": false,
+  "production_gates": {
+    "min_quality": 80,
+    "min_confluence": 80,
+    "broker_min_lot": "0.01",
+    "ite_config_version": "ite-v1.0.0",
+    "allowed_sessions": [
+      "london",
+      "london_ny_overlap",
+      "new_york"
+    ]
+  },
+  "params": {
+    "days": 90,
+    "max_evaluations": 200,
+    "max_valid_setups": 3,
+    "equity": "10000",
+    "bar_source": "synthetic_deterministic"
+  },
+  "eligible_bars_considered": 3584,
+  "evaluations": 5,
+  "valid_production_setup_exists": true,
+  "valid_setup_count": 3,
+  "none_exists_reason": "",
+  "valid_setups": [
+    {
+      "as_of": "2026-05-04T08:45:00+00:00",
+      "session": "london",
+      "action": "BUY",
+      "quality": 90,
+      "confluence": 90,
+      "mtf_aligned": true,
+      "mtf_score": 92,
+      "approved_lots": "0.45",
+      "atr": "1.4771",
+      "mid_price": "2300.17",
+      "equity": "10000",
+      "decision_id": "9dc58cad-df9c-43ea-bff9-c3c726da19e0",
+      "input_hash": "15f707b670ed487b140054d09faffa81",
+      "execution_trace": {
+        "pipeline_complete": true,
+        "execution_decision": "EXECUTE_TRADE",
+        "stages": [
+          {
+            "stage": "Market Data",
+            "status": "PASS",
+            "detail": "bars as_of=2026-05-04T08:45:00+00:00 spread=0.30"
+          },
+          {
+            "stage": "Signal Generation",
+            "status": "PASS",
+            "detail": "action=BUY id=9dc58cad-df9c-43ea-bff9-c3c726da19e0"
+          },
+          {
+            "stage": "MTF Alignment",
+            "status": "PASS",
+            "detail": "aligned=True score=92"
+          },
+          {
+            "stage": "Quality",
+            "status": "PASS",
+            "detail": "90 >= 80"
+          },
+          {
+            "stage": "Confluence",
+            "status": "PASS",
+            "detail": "90 >= 80"
+          },
+          {
+            "stage": "Risk",
+            "status": "PASS",
+            "detail": "approved_lots=0.45 (>= 0.01)"
+          },
+          {
+            "stage": "Safety",
+            "status": "PASS",
+            "detail": "status=Enabled"
+          },
+          {
+            "stage": "Execution Decision",
+            "status": "EXECUTE_TRADE",
+            "detail": "BUY lots=0.45"
+          },
+          {
+            "stage": "OMS",
+            "status": "PASS",
+            "detail": "outcome=success ticket=700001"
+          },
+          {
+            "stage": "MT5 Gateway",
+            "status": "Order Sent (simulated/offline)",
+            "detail": "gateway_status=order_sent"
+          },
+          {
+            "stage": "Broker",
+            "status": "Order Filled (simulated/offline)",
+            "detail": "deal=800001 retcode=10009"
+          }
+        ],
+        "safety": {
+          "allowed": true,
+          "status": "Enabled",
+          "failed_reasons": [],
+          "conditions": [
+            {
+              "key": "auto_trading_toggle",
+              "label": "Auto Trading ON",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "auto_trading_run_state",
+              "label": "Auto Trading RUNNING",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "emergency_stop",
+              "label": "Emergency STOP disarmed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "ops_mode",
+              "label": "Ops mode CANARY or LIVE",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "execution_enabled",
+              "label": "Account execution enabled (EXECUTION_ENABLED)",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "gateway_connected",
+              "label": "MT5 Gateway connected",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "broker_connected",
+              "label": "Broker connected",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "market_data_live",
+              "label": "Market data live",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "risk_engine",
+              "label": "Risk Engine PASS",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "account_trading",
+              "label": "Account trading enabled",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "mt5_autotrading",
+              "label": "AutoTrading enabled in MT5 terminal",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "symbol_allowed",
+              "label": "Symbol allowed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "symbol_tradable",
+              "label": "Symbol tradable",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "margin_available",
+              "label": "Margin available",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "broker_restrictions",
+              "label": "No broker restrictions",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "daily_loss",
+              "label": "Daily loss limit OK",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "max_open_positions",
+              "label": "Maximum open positions",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "trading_session",
+              "label": "Allowed trading session",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "max_spread",
+              "label": "Maximum spread",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "news_filter",
+              "label": "News filter",
+              "passed": true,
+              "detail": "News filter OFF \u2014 not blocking"
+            }
+          ],
+          "policy": {
+            "enabled": true,
+            "run_state": "running",
+            "max_open_positions": 1,
+            "risk_per_trade_pct": "1.0",
+            "max_daily_loss_pct": "3.0",
+            "allowed_sessions": [
+              "london",
+              "new_york",
+              "london_ny_overlap"
+            ],
+            "allowed_symbols": [
+              "XAUUSD"
+            ],
+            "max_spread": "2.00",
+            "news_filter_enabled": false,
+            "may_open_new_trades": true,
+            "may_manage_positions": true
+          }
+        },
+        "bridge": {
+          "id": "502e78e2-2188-4343-8c55-f82748c139ee",
+          "schema_version": "1.0.0",
+          "decision_hash": "c99e31722475b5289a27b58e55dd44c4f8bb2f9b16b1fb75769e47de39b965df",
+          "input_hash": "d37c9555ae2191b39d898a36acf59868",
+          "timestamp": "2026-05-04T08:45:00+00:00",
+          "decision_action": "BUY",
+          "confidence": 90,
+          "quality": 90,
+          "approved_lots": "0.45",
+          "oms_status": "success",
+          "gateway_status": "order_sent",
+          "mt5_ticket": 700001,
+          "mt5_deal": 800001,
+          "retcode": 10009,
+          "comment": "offline simulated fill",
+          "latency_ms": 0.373,
+          "execution_result": "success",
+          "abort_reason": "none",
+          "mode": "LIVE",
+          "status": "oms_success",
+          "symbol": "XAUUSD",
+          "request_id": "offline_exec_val_9dc58cad-df9c-43ea-bff9-c3c726da19e0"
+        },
+        "oms_intent": {
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "order_type": "market",
+          "volume": "0.45",
+          "price": null,
+          "stop_loss": "2292.60435",
+          "take_profit": "2302.309125",
+          "slippage": 10,
+          "magic": 260720,
+          "comment": "ite:v1:d37c9555ae21",
+          "position": 0,
+          "order_ticket": 0,
+          "oms_kind": ""
+        },
+        "oms_calls": 1,
+        "latency_ms": 0.715
+      }
+    },
+    {
+      "as_of": "2026-05-05T08:15:00+00:00",
+      "session": "london",
+      "action": "SELL",
+      "quality": 87,
+      "confluence": 80,
+      "mtf_aligned": true,
+      "mtf_score": 70,
+      "approved_lots": "0.45",
+      "atr": "1.4621",
+      "mid_price": "2296.33",
+      "equity": "10000",
+      "decision_id": "f92cdc94-2634-4612-92ea-7ed0a219e266",
+      "input_hash": "ab033538f74957e9dac0fe4f086b1c2f",
+      "execution_trace": {
+        "pipeline_complete": true,
+        "execution_decision": "EXECUTE_TRADE",
+        "stages": [
+          {
+            "stage": "Market Data",
+            "status": "PASS",
+            "detail": "bars as_of=2026-05-05T08:15:00+00:00 spread=0.30"
+          },
+          {
+            "stage": "Signal Generation",
+            "status": "PASS",
+            "detail": "action=SELL id=f92cdc94-2634-4612-92ea-7ed0a219e266"
+          },
+          {
+            "stage": "MTF Alignment",
+            "status": "PASS",
+            "detail": "aligned=True score=70"
+          },
+          {
+            "stage": "Quality",
+            "status": "PASS",
+            "detail": "87 >= 80"
+          },
+          {
+            "stage": "Confluence",
+            "status": "PASS",
+            "detail": "80 >= 80"
+          },
+          {
+            "stage": "Risk",
+            "status": "PASS",
+            "detail": "approved_lots=0.45 (>= 0.01)"
+          },
+          {
+            "stage": "Safety",
+            "status": "PASS",
+            "detail": "status=Enabled"
+          },
+          {
+            "stage": "Execution Decision",
+            "status": "EXECUTE_TRADE",
+            "detail": "SELL lots=0.45"
+          },
+          {
+            "stage": "OMS",
+            "status": "PASS",
+            "detail": "outcome=success ticket=700001"
+          },
+          {
+            "stage": "MT5 Gateway",
+            "status": "Order Sent (simulated/offline)",
+            "detail": "gateway_status=order_sent"
+          },
+          {
+            "stage": "Broker",
+            "status": "Order Filled (simulated/offline)",
+            "detail": "deal=800001 retcode=10009"
+          }
+        ],
+        "safety": {
+          "allowed": true,
+          "status": "Enabled",
+          "failed_reasons": [],
+          "conditions": [
+            {
+              "key": "auto_trading_toggle",
+              "label": "Auto Trading ON",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "auto_trading_run_state",
+              "label": "Auto Trading RUNNING",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "emergency_stop",
+              "label": "Emergency STOP disarmed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "ops_mode",
+              "label": "Ops mode CANARY or LIVE",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "execution_enabled",
+              "label": "Account execution enabled (EXECUTION_ENABLED)",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "gateway_connected",
+              "label": "MT5 Gateway connected",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "broker_connected",
+              "label": "Broker connected",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "market_data_live",
+              "label": "Market data live",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "risk_engine",
+              "label": "Risk Engine PASS",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "account_trading",
+              "label": "Account trading enabled",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "mt5_autotrading",
+              "label": "AutoTrading enabled in MT5 terminal",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "symbol_allowed",
+              "label": "Symbol allowed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "symbol_tradable",
+              "label": "Symbol tradable",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "margin_available",
+              "label": "Margin available",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "broker_restrictions",
+              "label": "No broker restrictions",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "daily_loss",
+              "label": "Daily loss limit OK",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "max_open_positions",
+              "label": "Maximum open positions",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "trading_session",
+              "label": "Allowed trading session",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "max_spread",
+              "label": "Maximum spread",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "news_filter",
+              "label": "News filter",
+              "passed": true,
+              "detail": "News filter OFF \u2014 not blocking"
+            }
+          ],
+          "policy": {
+            "enabled": true,
+            "run_state": "running",
+            "max_open_positions": 1,
+            "risk_per_trade_pct": "1.0",
+            "max_daily_loss_pct": "3.0",
+            "allowed_sessions": [
+              "london",
+              "new_york",
+              "london_ny_overlap"
+            ],
+            "allowed_symbols": [
+              "XAUUSD"
+            ],
+            "max_spread": "2.00",
+            "news_filter_enabled": false,
+            "may_open_new_trades": true,
+            "may_manage_positions": true
+          }
+        },
+        "bridge": {
+          "id": "ea5e4eb4-0053-4590-9710-afd47d3dea76",
+          "schema_version": "1.0.0",
+          "decision_hash": "a9e90451981aa72cee040fc98b2322f5deb73b09912bc0597c52c5938155dc46",
+          "input_hash": "21ad61b9ba90d2ec9c8cca1dfdcfb859",
+          "timestamp": "2026-05-05T08:15:00+00:00",
+          "decision_action": "SELL",
+          "confidence": 80,
+          "quality": 87,
+          "approved_lots": "0.45",
+          "oms_status": "success",
+          "gateway_status": "order_sent",
+          "mt5_ticket": 700001,
+          "mt5_deal": 800001,
+          "retcode": 10009,
+          "comment": "offline simulated fill",
+          "latency_ms": 0.32,
+          "execution_result": "success",
+          "abort_reason": "none",
+          "mode": "LIVE",
+          "status": "oms_success",
+          "symbol": "XAUUSD",
+          "request_id": "offline_exec_val_f92cdc94-2634-4612-92ea-7ed0a219e266"
+        },
+        "oms_intent": {
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "order_type": "market",
+          "volume": "0.45",
+          "price": null,
+          "stop_loss": "2309.14315",
+          "take_profit": "2299.487125",
+          "slippage": 10,
+          "magic": 260720,
+          "comment": "ite:v1:21ad61b9ba90",
+          "position": 0,
+          "order_ticket": 0,
+          "oms_kind": ""
+        },
+        "oms_calls": 1,
+        "latency_ms": 0.618
+      }
+    },
+    {
+      "as_of": "2026-05-05T12:45:00+00:00",
+      "session": "london",
+      "action": "SELL",
+      "quality": 87,
+      "confluence": 80,
+      "mtf_aligned": true,
+      "mtf_score": 70,
+      "approved_lots": "0.44",
+      "atr": "1.4921",
+      "mid_price": "2296.24",
+      "equity": "10000",
+      "decision_id": "54934978-f99a-4fb4-af19-4cf71e570972",
+      "input_hash": "a809e398a28343af3a56e756053c3f7d",
+      "execution_trace": {
+        "pipeline_complete": true,
+        "execution_decision": "EXECUTE_TRADE",
+        "stages": [
+          {
+            "stage": "Market Data",
+            "status": "PASS",
+            "detail": "bars as_of=2026-05-05T12:45:00+00:00 spread=0.30"
+          },
+          {
+            "stage": "Signal Generation",
+            "status": "PASS",
+            "detail": "action=SELL id=54934978-f99a-4fb4-af19-4cf71e570972"
+          },
+          {
+            "stage": "MTF Alignment",
+            "status": "PASS",
+            "detail": "aligned=True score=70"
+          },
+          {
+            "stage": "Quality",
+            "status": "PASS",
+            "detail": "87 >= 80"
+          },
+          {
+            "stage": "Confluence",
+            "status": "PASS",
+            "detail": "80 >= 80"
+          },
+          {
+            "stage": "Risk",
+            "status": "PASS",
+            "detail": "approved_lots=0.44 (>= 0.01)"
+          },
+          {
+            "stage": "Safety",
+            "status": "PASS",
+            "detail": "status=Enabled"
+          },
+          {
+            "stage": "Execution Decision",
+            "status": "EXECUTE_TRADE",
+            "detail": "SELL lots=0.44"
+          },
+          {
+            "stage": "OMS",
+            "status": "PASS",
+            "detail": "outcome=success ticket=700001"
+          },
+          {
+            "stage": "MT5 Gateway",
+            "status": "Order Sent (simulated/offline)",
+            "detail": "gateway_status=order_sent"
+          },
+          {
+            "stage": "Broker",
+            "status": "Order Filled (simulated/offline)",
+            "detail": "deal=800001 retcode=10009"
+          }
+        ],
+        "safety": {
+          "allowed": true,
+          "status": "Enabled",
+          "failed_reasons": [],
+          "conditions": [
+            {
+              "key": "auto_trading_toggle",
+              "label": "Auto Trading ON",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "auto_trading_run_state",
+              "label": "Auto Trading RUNNING",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "emergency_stop",
+              "label": "Emergency STOP disarmed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "ops_mode",
+              "label": "Ops mode CANARY or LIVE",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "execution_enabled",
+              "label": "Account execution enabled (EXECUTION_ENABLED)",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "gateway_connected",
+              "label": "MT5 Gateway connected",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "broker_connected",
+              "label": "Broker connected",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "market_data_live",
+              "label": "Market data live",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "risk_engine",
+              "label": "Risk Engine PASS",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "account_trading",
+              "label": "Account trading enabled",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "mt5_autotrading",
+              "label": "AutoTrading enabled in MT5 terminal",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "symbol_allowed",
+              "label": "Symbol allowed",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "symbol_tradable",
+              "label": "Symbol tradable",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "margin_available",
+              "label": "Margin available",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "broker_restrictions",
+              "label": "No broker restrictions",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "daily_loss",
+              "label": "Daily loss limit OK",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "max_open_positions",
+              "label": "Maximum open positions",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "trading_session",
+              "label": "Allowed trading session",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "max_spread",
+              "label": "Maximum spread",
+              "passed": true,
+              "detail": ""
+            },
+            {
+              "key": "news_filter",
+              "label": "News filter",
+              "passed": true,
+              "detail": "News filter OFF \u2014 not blocking"
+            }
+          ],
+          "policy": {
+            "enabled": true,
+            "run_state": "running",
+            "max_open_positions": 1,
+            "risk_per_trade_pct": "1.0",
+            "max_daily_loss_pct": "3.0",
+            "allowed_sessions": [
+              "london",
+              "new_york",
+              "london_ny_overlap"
+            ],
+            "allowed_symbols": [
+              "XAUUSD"
+            ],
+            "max_spread": "2.00",
+            "news_filter_enabled": false,
+            "may_open_new_trades": true,
+            "may_manage_positions": true
+          }
+        },
+        "bridge": {
+          "id": "94e609fa-dae1-4b35-9896-77bfccee5dd5",
+          "schema_version": "1.0.0",
+          "decision_hash": "3a0efdc84f031fc449b9363a775148eebff5ea0f3bb3f947b5c38b32e64bf3f3",
+          "input_hash": "1585f9bb5247bfe40ee49823afb002fd",
+          "timestamp": "2026-05-05T12:45:00+00:00",
+          "decision_action": "SELL",
+          "confidence": 80,
+          "quality": 87,
+          "approved_lots": "0.44",
+          "oms_status": "success",
+          "gateway_status": "order_sent",
+          "mt5_ticket": 700001,
+          "mt5_deal": 800001,
+          "retcode": 10009,
+          "comment": "offline simulated fill",
+          "latency_ms": 0.296,
+          "execution_result": "success",
+          "abort_reason": "none",
+          "mode": "LIVE",
+          "status": "oms_success",
+          "symbol": "XAUUSD",
+          "request_id": "offline_exec_val_54934978-f99a-4fb4-af19-4cf71e570972"
+        },
+        "oms_intent": {
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "order_type": "market",
+          "volume": "0.44",
+          "price": null,
+          "stop_loss": "2309.18815",
+          "take_profit": "2299.374625",
+          "slippage": 10,
+          "magic": 260720,
+          "comment": "ite:v1:1585f9bb5247",
+          "position": 0,
+          "order_ticket": 0,
+          "oms_kind": ""
+        },
+        "oms_calls": 1,
+        "latency_ms": 0.576
+      }
+    }
+  ],
+  "near_misses_sample": [],
+  "reject_tallies": {
+    "action=NO_TRADE": 2
+  }
+}

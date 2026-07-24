@@ -898,6 +898,20 @@ export const iteReliabilityApi = {
       `/ite/reliability/research-platform/reports/${period}`,
       { method: "POST", body: {} },
     ),
+  rc1: (currentCapital = 200) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/reliability/rc1?current_capital=${currentCapital}`,
+    ),
+  rc1Smoke: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/rc1/smoke", {
+      method: "POST",
+      body: {},
+    }),
+  rc1Report: (period: "daily" | "weekly" | "monthly") =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/reliability/rc1/reports/${period}`,
+      { method: "POST", body: {} },
+    ),
   network: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>

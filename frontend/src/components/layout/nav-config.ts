@@ -45,6 +45,7 @@ import {
   ScanSearch,
   Settings,
   Shield,
+  ShieldCheck,
   Sparkles,
   Store,
   Target,
@@ -507,6 +508,12 @@ export const appNav: NavGroup[] = [
         label: "Research Platform",
         icon: FlaskConical,
         hint: "Experiments · backtests · models · promotions",
+      },
+      {
+        href: "/rc1",
+        label: "Release Candidate",
+        icon: ShieldCheck,
+        hint: "RC1 checklist · smoke · go-live score",
       },
       {
         href: "/witness-health",

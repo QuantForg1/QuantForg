@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0.0",
+  "report_type": "EXPERIMENTAL_THRESHOLD_REPORT",
+  "generated_at": "2026-07-23T17:01:43.623026+00:00",
+  "profile_id": "EXPERIMENTAL_75",
+  "eval_target": 100,
+  "evaluations": 100,
+  "activated_at": "2026-07-23T17:01:43.549024+00:00",
+  "config_version": "ite-gates-experimental-q75-c75-20260723T170143Z",
+  "default_ite_config_unchanged": true,
+  "default_baseline": {
+    "quality": 80,
+    "confluence": 80
+  },
+  "experimental": {
+    "quality": 75,
+    "confluence": 75
+  },
+  "comparison": {
+    "experimental": {
+      "label": "EXPERIMENTAL_75 (Q75/C75)",
+      "evaluations": 100,
+      "signals_generated": 100,
+      "trades_executed": 66,
+      "rejected": 0,
+      "win_rate": null,
+      "profit_factor": null,
+      "expectancy": null,
+      "drawdown_pct": null,
+      "average_rr": null,
+      "rejection_reasons": [],
+      "note": "Win/PF/Expectancy/DD require enriched cycle outcomes when available; signals/executions/rejections always tracked."
+    },
+    "baseline_80_80": {
+      "label": "Baseline shadow (Q80/C80)",
+      "evaluations": 100,
+      "signals_generated": 66,
+      "trades_executed": 66,
+      "rejected": 34,
+      "win_rate": null,
+      "profit_factor": null,
+      "expectancy": null,
+      "drawdown_pct": null,
+      "average_rr": null,
+      "rejection_reasons": [
+        {
+          "reason": "below_baseline_gates q=76 c=76 need 80/80",
+          "count": 34
+        }
+      ],
+      "note": "Win/PF/Expectancy/DD require enriched cycle outcomes when available; signals/executions/rejections always tracked."
+    }
+  },
+  "execution_increased": true,
+  "performance_improved": false,
+  "recommendation": "Revert to 80/80",
+  "recommendation_detail": {
+    "execution_increased": true,
+    "performance_improved": false,
+    "recommendation": "Revert to 80/80",
+    "summary": "Insufficient evidence that 75/75 improves performance vs baseline 80/80 (or outcomes not enriched). Recommend revert to Institutional Q80/C80. Operator approval still required \u2014 never auto-promoted.",
+    "auto_promoted": false,
+    "operator_approval_required": true
+  },
+  "never_auto_promotes": true,
+  "risk_safety_oms_unchanged": true
+}

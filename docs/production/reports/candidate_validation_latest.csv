@@ -1,0 +1,10 @@
+metric,key,production,candidate,delta
+Trades,executed_trades,22,26,4.0
+Win Rate,win_rate,0.9091,0.9231,0.014
+Profit Factor,profit_factor,42.5111,50.7596,8.2485
+Expectancy,expectancy,195.457723,199.062196,3.604473
+Net Profit,net_profit,4406.2154,5281.7626,875.5472
+Maximum Drawdown,maximum_drawdown_pct,15.5775,15.5775,0.0
+Recovery Factor,recovery_factor,282.8577,339.0636,56.2059
+Sharpe Ratio,sharpe_ratio,11.3193,13.5152,2.1959
+Average RR,average_rr,2.0028,2.0314,0.0286

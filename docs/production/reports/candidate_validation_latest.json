@@ -1,0 +1,192 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-23T10:33:32.267763+00:00",
+  "status": "available",
+  "symbol": "XAUUSD",
+  "research_only": true,
+  "offline_only": true,
+  "advisory_only": true,
+  "never_modifies_production": true,
+  "never_modifies_strategy": true,
+  "never_modifies_risk_safety_oms_mt5": true,
+  "same_replay": {
+    "days": 90,
+    "max_evaluations": 120,
+    "evaluations": 109,
+    "spread_model": "fixed_0.30_points",
+    "commission_model": "none_explicit_embedded_in_R_pnl",
+    "latency_model": "identical_walk_clock_shared_bars",
+    "slippage_model": "half_spread_research"
+  },
+  "production": {
+    "label": "Current Production",
+    "quality_gate": 80,
+    "confluence_gate": 80,
+    "metrics": {
+      "executed_trades": 22,
+      "win_rate": 0.9091,
+      "profit_factor": 42.5111,
+      "expectancy": 195.457723,
+      "net_profit": 4406.2154,
+      "maximum_drawdown_pct": 15.5775,
+      "recovery_factor": 282.8577,
+      "sharpe_ratio": 11.3193,
+      "average_rr": 2.0028
+    },
+    "cell": {
+      "quality_gate": 80,
+      "confluence_gate": 80,
+      "is_baseline": true,
+      "total_signals": 109,
+      "executed_trades": 22,
+      "rejected_trades": 87,
+      "win_rate": 0.9091,
+      "loss_rate": 0.0455,
+      "average_rr": 2.0028,
+      "average_holding_time_sec": 2822.7,
+      "profit_factor": 42.5111,
+      "gross_profit": 4512.3609,
+      "gross_loss": 106.1455,
+      "net_profit": 4406.2154,
+      "expectancy": 195.457723,
+      "maximum_drawdown_pct": 15.5775,
+      "recovery_factor": 282.8577,
+      "sharpe_ratio": 11.3193,
+      "average_spread": 0.3,
+      "average_slippage": 0.15
+    }
+  },
+  "candidate": {
+    "label": "Candidate",
+    "quality_gate": 70,
+    "confluence_gate": 75,
+    "metrics": {
+      "executed_trades": 26,
+      "win_rate": 0.9231,
+      "profit_factor": 50.7596,
+      "expectancy": 199.062196,
+      "net_profit": 5281.7626,
+      "maximum_drawdown_pct": 15.5775,
+      "recovery_factor": 339.0636,
+      "sharpe_ratio": 13.5152,
+      "average_rr": 2.0314
+    },
+    "cell": {
+      "quality_gate": 70,
+      "confluence_gate": 75,
+      "is_baseline": false,
+      "total_signals": 109,
+      "executed_trades": 26,
+      "rejected_trades": 83,
+      "win_rate": 0.9231,
+      "loss_rate": 0.0385,
+      "average_rr": 2.0314,
+      "average_holding_time_sec": 2526.9,
+      "profit_factor": 50.7596,
+      "gross_profit": 5387.9081,
+      "gross_loss": 106.1455,
+      "net_profit": 5281.7626,
+      "expectancy": 199.062196,
+      "maximum_drawdown_pct": 15.5775,
+      "recovery_factor": 339.0636,
+      "sharpe_ratio": 13.5152,
+      "average_spread": 0.3,
+      "average_slippage": 0.15
+    }
+  },
+  "comparison": [
+    {
+      "metric": "Trades",
+      "key": "executed_trades",
+      "production": 22,
+      "candidate": 26,
+      "delta": 4.0
+    },
+    {
+      "metric": "Win Rate",
+      "key": "win_rate",
+      "production": 0.9091,
+      "candidate": 0.9231,
+      "delta": 0.014
+    },
+    {
+      "metric": "Profit Factor",
+      "key": "profit_factor",
+      "production": 42.5111,
+      "candidate": 50.7596,
+      "delta": 8.2485
+    },
+    {
+      "metric": "Expectancy",
+      "key": "expectancy",
+      "production": 195.457723,
+      "candidate": 199.062196,
+      "delta": 3.604473
+    },
+    {
+      "metric": "Net Profit",
+      "key": "net_profit",
+      "production": 4406.2154,
+      "candidate": 5281.7626,
+      "delta": 875.5472
+    },
+    {
+      "metric": "Maximum Drawdown",
+      "key": "maximum_drawdown_pct",
+      "production": 15.5775,
+      "candidate": 15.5775,
+      "delta": 0.0
+    },
+    {
+      "metric": "Recovery Factor",
+      "key": "recovery_factor",
+      "production": 282.8577,
+      "candidate": 339.0636,
+      "delta": 56.2059
+    },
+    {
+      "metric": "Sharpe Ratio",
+      "key": "sharpe_ratio",
+      "production": 11.3193,
+      "candidate": 13.5152,
+      "delta": 2.1959
+    },
+    {
+      "metric": "Average RR",
+      "key": "average_rr",
+      "production": 2.0028,
+      "candidate": 2.0314,
+      "delta": 0.0286
+    }
+  ],
+  "decision": {
+    "action": "research_candidate_eligible",
+    "recommend_candidate": true,
+    "auto_applied": false,
+    "never_modifies_production": true,
+    "keep_production_until_operator_promotes": true,
+    "production": {
+      "quality_gate": 80,
+      "confluence_gate": 80
+    },
+    "candidate": {
+      "quality_gate": 70,
+      "confluence_gate": 75
+    },
+    "summary": "Candidate Q70/C75 meets PF\u2191 + Expectancy\u2191 + non-material DD tests versus production Q80/C80. Production remains unchanged until an operator explicitly promotes.",
+    "checks": {
+      "profit_factor_improves": true,
+      "expectancy_improves": true,
+      "drawdown_not_materially_worse": true,
+      "production_profit_factor": 42.5111,
+      "candidate_profit_factor": 50.7596,
+      "production_expectancy": 195.457723,
+      "candidate_expectancy": 199.062196,
+      "production_drawdown_pct": 15.5775,
+      "candidate_drawdown_pct": 15.5775,
+      "drawdown_accept_cap": 17.135250000000003
+    }
+  },
+  "source_evaluations": 109,
+  "elapsed_ms": 14884.0
+}

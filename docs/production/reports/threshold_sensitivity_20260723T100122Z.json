@@ -1,0 +1,145 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-23T10:01:22.571309+00:00",
+  "advisory_only": true,
+  "statistics_only": true,
+  "never_modifies_strategy": true,
+  "never_modifies_thresholds": true,
+  "never_modifies_live_engine": true,
+  "never_modifies_risk_safety_oms_mt5": true,
+  "method": "Counterfactual score-gate: would_execute iff quality >= quality_gate AND confluence >= confluence_gate. Scores come from unchanged historical replay pipeline; live ITEConfig gates remain 80/80.",
+  "baseline": {
+    "quality_gate": 80,
+    "confluence_gate": 80
+  },
+  "gate_ladder": [
+    80,
+    75,
+    70,
+    65,
+    60
+  ],
+  "source": {
+    "kind": "production_replay",
+    "simulation_only": true,
+    "order_send_called": false,
+    "days": 30,
+    "max_evaluations": 120,
+    "replay_generated_at": "2026-07-23T10:01:12.962612+00:00",
+    "eligible_bars_considered": 1232,
+    "n_opportunities": 78
+  },
+  "sample": {
+    "n_scored_evaluations": 78,
+    "average_quality": 70.37,
+    "average_confluence": 59.0,
+    "min_quality": 40,
+    "max_quality": 94,
+    "min_confluence": 28,
+    "max_confluence": 92
+  },
+  "quality_gate_sensitivity": [
+    {
+      "gate": 80,
+      "quality_gate": 80,
+      "confluence_gate": 80,
+      "evaluations": 78,
+      "would_execute_count": 19,
+      "execution_pct": 24.36,
+      "sweep": "quality",
+      "held_confluence_gate": 80
+    },
+    {
+      "gate": 75,
+      "quality_gate": 75,
+      "confluence_gate": 80,
+      "evaluations": 78,
+      "would_execute_count": 19,
+      "execution_pct": 24.36,
+      "sweep": "quality",
+      "held_confluence_gate": 80
+    },
+    {
+      "gate": 70,
+      "quality_gate": 70,
+      "confluence_gate": 80,
+      "evaluations": 78,
+      "would_execute_count": 19,
+      "execution_pct": 24.36,
+      "sweep": "quality",
+      "held_confluence_gate": 80
+    },
+    {
+      "gate": 65,
+      "quality_gate": 65,
+      "confluence_gate": 80,
+      "evaluations": 78,
+      "would_execute_count": 19,
+      "execution_pct": 24.36,
+      "sweep": "quality",
+      "held_confluence_gate": 80
+    },
+    {
+      "gate": 60,
+      "quality_gate": 60,
+      "confluence_gate": 80,
+      "evaluations": 78,
+      "would_execute_count": 19,
+      "execution_pct": 24.36,
+      "sweep": "quality",
+      "held_confluence_gate": 80
+    }
+  ],
+  "confluence_gate_sensitivity": [
+    {
+      "gate": 80,
+      "quality_gate": 80,
+      "confluence_gate": 80,
+      "evaluations": 78,
+      "would_execute_count": 19,
+      "execution_pct": 24.36,
+      "sweep": "confluence",
+      "held_quality_gate": 80
+    },
+    {
+      "gate": 75,
+      "quality_gate": 80,
+      "confluence_gate": 75,
+      "evaluations": 78,
+      "would_execute_count": 20,
+      "execution_pct": 25.64,
+      "sweep": "confluence",
+      "held_quality_gate": 80
+    },
+    {
+      "gate": 70,
+      "quality_gate": 80,
+      "confluence_gate": 70,
+      "evaluations": 78,
+      "would_execute_count": 24,
+      "execution_pct": 30.77,
+      "sweep": "confluence",
+      "held_quality_gate": 80
+    },
+    {
+      "gate": 65,
+      "quality_gate": 80,
+      "confluence_gate": 65,
+      "evaluations": 78,
+      "would_execute_count": 26,
+      "execution_pct": 33.33,
+      "sweep": "confluence",
+      "held_quality_gate": 80
+    },
+    {
+      "gate": 60,
+      "quality_gate": 80,
+      "confluence_gate": 60,
+      "evaluations": 78,
+      "would_execute_count": 26,
+      "execution_pct": 33.33,
+      "sweep": "confluence",
+      "held_quality_gate": 80
+    }
+  ]
+}

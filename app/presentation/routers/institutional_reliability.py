@@ -164,6 +164,41 @@ def generate_institutional_report(period: str, _user: OperatorUser) -> dict[str,
     }
 
 
+@router.get("/rc1")
+def rc1_dashboard(
+    _user: OperatorUser,
+    current_capital: float = 200.0,
+) -> dict[str, Any]:
+    """RC1 Production Readiness — checklist, live stats, go-live score (validation only)."""
+    from app.application.services.release_candidate import build_rc1_dashboard
+
+    return build_rc1_dashboard(current_capital=current_capital)
+
+
+@router.post("/rc1/smoke")
+def rc1_smoke(_user: OperatorUser) -> dict[str, Any]:
+    """One-click production smoke — never places real trades."""
+    from app.domain.institutional_trading.release_candidate import run_production_smoke
+
+    return run_production_smoke(use_live_probes=True)
+
+
+@router.post("/rc1/reports/{period}")
+def rc1_generate_report(period: str, _user: OperatorUser) -> dict[str, Any]:
+    from app.domain.institutional_trading.release_candidate import (
+        get_rc1_reporting_store,
+        report_to_csv,
+        report_to_pdf_text,
+    )
+
+    report = get_rc1_reporting_store().generate(period)
+    return {
+        **report,
+        "csv": report_to_csv(report),
+        "pdf_text": report_to_pdf_text(report),
+    }
+
+
 @router.get("/network")
 def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """DNS/network incidents, reconnect log, gateway/MT5 uptime."""
