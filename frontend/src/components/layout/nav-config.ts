@@ -276,6 +276,12 @@ export const appNav: NavGroup[] = [
         hint: "QSF · pipeline · dossiers · human approvals",
       },
       {
+        href: "/quantforg-paper-trading",
+        label: "Paper Trading",
+        icon: ClipboardCheck,
+        hint: "QPTCM · campaigns · graduation · paper only",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

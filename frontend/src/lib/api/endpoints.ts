@@ -2239,6 +2239,29 @@ export const qsfApi = {
     }),
 };
 
+/** QuantForg Paper Trading Campaign Manager — paper-only, human-gated */
+export const qptcmApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qptcm/dashboard"),
+  campaigns: () => apiFetch<Record<string, unknown>>("/qptcm/campaigns"),
+  timeline: () => apiFetch<Record<string, unknown>>("/qptcm/timeline"),
+  evidence: () => apiFetch<Record<string, unknown>>("/qptcm/evidence"),
+  graduation: () => apiFetch<Record<string, unknown>>("/qptcm/graduation"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/qptcm/reports?limit=${limit}`),
+  approvals: () => apiFetch<Record<string, unknown>>("/qptcm/approvals"),
+  approve: (body: {
+    campaign_id: string;
+    to_state: string;
+    decision: "approved" | "rejected";
+    comment?: string;
+    approver?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/qptcm/lifecycle/approve", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),
