@@ -5,6 +5,7 @@ import {
   ArrowUpFromLine,
   BadgeCheck,
   BarChart3,
+  Beaker,
   Bell,
   BookOpen,
   Bot,
@@ -211,6 +212,12 @@ export const appNav: NavGroup[] = [
         label: "Strategy Lifecycle",
         icon: Library,
         hint: "ISLM · registry · health · evidence · approval",
+      },
+      {
+        href: "/institutional-experimentation",
+        label: "Experimentation",
+        icon: Beaker,
+        hint: "IEP · hypothesis · compare · evidence · decision",
       },
       {
         href: "/strategy-lab",

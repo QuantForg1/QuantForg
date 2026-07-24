@@ -1999,6 +1999,34 @@ export const islmApi = {
     }),
 };
 
+/** Institutional Experimentation Platform — research governance (read-only) */
+export const iepApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/iep/dashboard"),
+  registry: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/iep/registry?limit=${limit}`),
+  experiment: (experimentId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/iep/experiments/${encodeURIComponent(experimentId)}`,
+    ),
+  hypothesis: () => apiFetch<Record<string, unknown>>("/iep/hypothesis"),
+  comparison: () => apiFetch<Record<string, unknown>>("/iep/comparison"),
+  evidence: (experimentId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      experimentId
+        ? `/iep/evidence?experiment_id=${encodeURIComponent(experimentId)}`
+        : "/iep/evidence",
+    ),
+  decisions: () => apiFetch<Record<string, unknown>>("/iep/decisions"),
+  statistics: (experimentId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      experimentId
+        ? `/iep/statistics?experiment_id=${encodeURIComponent(experimentId)}`
+        : "/iep/statistics",
+    ),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/iep/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),
