@@ -1817,6 +1817,21 @@ export const eqsApi = {
     apiFetch<Record<string, unknown>>(`/eqs/reports?limit=${limit}`),
 };
 
+/** Reliability Engineering Suite — read-only platform reliability */
+export const resApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/res/dashboard"),
+  health: () => apiFetch<Record<string, unknown>>("/res/health"),
+  services: () => apiFetch<Record<string, unknown>>("/res/services"),
+  availability: () => apiFetch<Record<string, unknown>>("/res/availability"),
+  recovery: () => apiFetch<Record<string, unknown>>("/res/recovery"),
+  failures: () => apiFetch<Record<string, unknown>>("/res/failures"),
+  trends: () => apiFetch<Record<string, unknown>>("/res/trends"),
+  score: () => apiFetch<Record<string, unknown>>("/res/score"),
+  evidence: () => apiFetch<Record<string, unknown>>("/res/evidence"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/res/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

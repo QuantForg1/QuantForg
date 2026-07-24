@@ -176,6 +176,12 @@ export const appNav: NavGroup[] = [
         hint: "EQS · latency · slippage · fill quality",
       },
       {
+        href: "/reliability-engineering-suite",
+        label: "Reliability Suite",
+        icon: HeartPulse,
+        hint: "RES · health · recovery · failures",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
