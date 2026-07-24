@@ -318,12 +318,34 @@ class Container:
                 interval_seconds=interval,
             )
             set_ite_runtime(self.ite_runtime)
+            # Restore swing/scalping/alpha knobs after restart (ops state hydrate).
+            try:
+                from app.application.services.ai_scalping_mode import (
+                    apply_trading_mode_to_runtime,
+                )
+
+                plane = self.ite_runtime.plane
+                mode = str(getattr(plane, "trading_mode", "swing") or "swing")
+                if bool(getattr(plane, "alpha_engine_enabled", False)) and mode == "swing":
+                    mode = "alpha"
+                applied = apply_trading_mode_to_runtime(self.ite_runtime, mode=mode)
+                logger.info(
+                    "trading_mode_restored_on_startup",
+                    mode=applied.get("trading_mode"),
+                    max_open=getattr(plane, "max_open_trades", None),
+                )
+            except Exception as mode_exc:
+                logger.exception(
+                    "trading_mode_restore_on_startup_failed",
+                    error=str(mode_exc),
+                )
             logger.info(
                 "ite_runtime_wired",
                 mode=self.ite_runtime.plane.mode.value,
                 kill_switch=self.ite_runtime.plane.kill_switch_armed,
                 execution_enabled=bool(self.settings.execution_enabled),
                 oms_orders_allowed=self.ite_runtime.plane.oms_orders_allowed(),
+                trading_mode=getattr(self.ite_runtime.plane, "trading_mode", "swing"),
             )
             # Production hardening v6 — restore open MT5 positions AFTER listen.
             # Never block web startup / Railway healthchecks on gateway I/O.
@@ -347,22 +369,43 @@ class Container:
                     engine = self.ite_runtime.position_management.engine
 
                     async def _recover_bg() -> None:
-                        try:
-                            from functools import partial
+                        last_err: str | None = None
+                        for attempt in range(1, 6):
+                            try:
+                                from functools import partial
 
-                            recovery = await asyncio.to_thread(
-                                partial(
-                                    recover_positions_from_mt5,
-                                    mt5_adapter=adapter,
-                                    engine=engine,
+                                recovery = await asyncio.to_thread(
+                                    partial(
+                                        recover_positions_from_mt5,
+                                        mt5_adapter=adapter,
+                                        engine=engine,
+                                    )
                                 )
-                            )
-                            logger.info("position_recovery_on_startup", **recovery)
-                        except Exception as rec_exc:
-                            logger.warning(
-                                "position_recovery_on_startup_failed",
-                                error=str(rec_exc),
-                            )
+                                if recovery.get("ok"):
+                                    logger.info(
+                                        "position_recovery_on_startup",
+                                        attempt=attempt,
+                                        **{
+                                            k: v
+                                            for k, v in recovery.items()
+                                            if k != "ok"
+                                        },
+                                        ok=True,
+                                    )
+                                    return
+                                last_err = str(recovery.get("error") or "not_ok")
+                            except Exception as rec_exc:
+                                last_err = str(rec_exc)
+                                logger.warning(
+                                    "position_recovery_on_startup_retry",
+                                    attempt=attempt,
+                                    error=last_err,
+                                )
+                            await asyncio.sleep(min(2.0 * attempt, 10.0))
+                        logger.warning(
+                            "position_recovery_on_startup_failed",
+                            error=last_err or "exhausted_retries",
+                        )
 
                     asyncio.create_task(_recover_bg(), name="mt5-position-recovery")
                     logger.info("position_recovery_scheduled_background")

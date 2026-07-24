@@ -73,12 +73,34 @@ class PositionManagementEngine:
         with self._lock:
             return self._positions.get(ticket)
 
-    def drop_missing_tickets(self, live_tickets: set[int]) -> int:
-        """Remove managed tickets absent from live MT5. Returns removed count."""
+    def drop_missing_tickets(
+        self,
+        live_tickets: set[int],
+        *,
+        symbol: str | None = None,
+    ) -> int:
+        """Remove managed tickets absent from live MT5. Returns removed count.
+
+        When ``symbol`` is set, only that symbol's tickets are candidates for
+        drop — never wipe other symbols during a symbol-scoped sync.
+        """
+        from app.domain.trading.gold_only import GOLD_SYMBOL, is_gold_symbol
+
         live = {int(t) for t in live_tickets}
+        target = (symbol or "").strip().upper() or None
         removed = 0
         with self._lock:
-            stale = [t for t in list(self._positions.keys()) if int(t) not in live]
+            stale: list[int] = []
+            for ticket, pos in list(self._positions.items()):
+                if target is not None:
+                    sym = str(getattr(pos, "symbol", "") or "").strip().upper()
+                    if target == GOLD_SYMBOL:
+                        if sym and not is_gold_symbol(sym):
+                            continue
+                    elif sym and sym != target:
+                        continue
+                if int(ticket) not in live:
+                    stale.append(int(ticket))
             for ticket in stale:
                 if self._positions.pop(ticket, None) is not None:
                     removed += 1
@@ -185,6 +207,36 @@ class PositionManagementEngine:
             )
 
         t0 = time.perf_counter()
+        # Min-lot positions cannot partial-close — advance lifecycle locally so
+        # trail / time-stop remain reachable (objectively broken otherwise).
+        if (
+            plan.kind is ManageActionKind.PARTIAL_CLOSE
+            and (plan.volume is None or plan.volume <= 0)
+        ):
+            position.partial_done = True
+            if plan.target_state is not None:
+                PositionStateMachine.assert_transition(position.state, plan.target_state)
+                position.state = plan.target_state
+            latency = (time.perf_counter() - t0) * 1000.0
+            self.metrics.record_partial(success=True)
+            rec = self._record(
+                position=position,
+                context=context,
+                plan=plan,
+                outcome=ManageOutcome.SUCCESS,
+                latency_ms=latency,
+                fingerprint=fp,
+                to_state=position.state,
+                comment=plan.reason,
+            )
+            position.last_manage_fingerprint = fp
+            return PositionManageResult(
+                position=position,
+                action=plan.kind,
+                record=rec,
+                skipped=False,
+            )
+
         oms_result = self._dispatch(position, context, plan)
         latency = (time.perf_counter() - t0) * 1000.0
 
@@ -209,8 +261,8 @@ class PositionManagementEngine:
                 retcode=oms_result.retcode,
                 oms=oms_result,
             )
-            # Mark fingerprint so identical retries are blocked
-            position.last_manage_fingerprint = fp
+            # Do NOT fingerprint failed manages — transient OMS/gateway rejects
+            # must retry next cycle or exits stall and continuous scalping dies.
             return PositionManageResult(
                 position=position,
                 action=plan.kind,

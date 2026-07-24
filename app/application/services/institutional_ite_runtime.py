@@ -401,6 +401,16 @@ class InstitutionalIteRuntime:
                 and not account.already_in_trade
             )
             if not can_force:
+                # Entry blocked (max-open / paused / session / etc.) — still manage
+                # open MT5 positions so exits free the slot for continuous scalping.
+                try:
+                    self._sync_and_manage_open_positions(
+                        snapshot=snapshot,
+                        account=account,
+                        reason="safety_blocked_manage",
+                    )
+                except Exception:
+                    logger.exception("safety_blocked_manage_failed")
                 result = ShadowCycleResult(
                     ok=True,
                     trace_id=None,
@@ -420,6 +430,9 @@ class InstitutionalIteRuntime:
                     outcome=result.cycle_outcome,
                     reasons=list(result.safety_failed_reasons),
                     mode=result.mode,
+                    pme_positions=len(
+                        getattr(self.position_management.engine, "_positions", {}) or {}
+                    ),
                 )
                 return result
             logger.warning(
@@ -444,6 +457,113 @@ class InstitutionalIteRuntime:
             risk_reasons=risk_reasons,
             market_context_diagnostics=market_context_diagnostics,
         )
+
+    def _sync_and_manage_open_positions(
+        self,
+        *,
+        snapshot: Any,
+        account: AccountRiskState,
+        reason: str = "cycle",
+    ) -> int:
+        """Upsert live MT5 fills into PME, then evaluate each managed ticket.
+
+        Never opens trades. Required for continuous scalping: without this,
+        fills sit unmanaged, max-open never clears, and the loop stalls.
+        """
+        symbol = str(getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD")
+        engine = self.position_management.engine
+        try:
+            from app.domain.institutional_trading.production_hardening.position_recovery import (
+                recover_positions_from_mt5,
+            )
+
+            if self.mt5_adapter is not None:
+                recovery = recover_positions_from_mt5(
+                    mt5_adapter=self.mt5_adapter,
+                    engine=engine,
+                    symbol=symbol,
+                )
+                if int(recovery.get("registered") or 0) > 0:
+                    logger.warning(
+                        "Position Opened — PME registered from MT5",
+                        registered=recovery.get("registered"),
+                        mt5_positions=recovery.get("mt5_positions"),
+                        tickets=recovery.get("tickets"),
+                        reason=reason,
+                    )
+        except Exception:
+            logger.exception("pme_recover_before_manage_failed", reason=reason)
+
+        managed = 0
+        for ticket in list(getattr(engine, "_positions", {}).keys()):
+            pos = engine.get(ticket)
+            if pos is None:
+                continue
+            pctx = PositionManageContext(
+                now=datetime.now(UTC),
+                current_price=account.mid_price or Decimal("2300"),
+                atr=account.atr or Decimal("1"),
+                spread=getattr(snapshot, "spread", None),
+                market_open=True,
+                position_still_open=True,
+                kill_switch_armed=self.plane.kill_switch_armed,
+                daily_loss_exceeded=self.plane.daily_loss_exceeded,
+                user_id=self.user_id,
+            )
+            result = self.position_management.evaluate(ticket, pctx)
+            managed += 1
+            try:
+                action_v = getattr(
+                    getattr(result, "action", None),
+                    "value",
+                    getattr(result, "action", None),
+                )
+                if action_v and str(action_v).lower() not in {"skip", "none", ""}:
+                    logger.warning(
+                        "Position Managed",
+                        ticket=ticket,
+                        action=str(action_v),
+                        reason=reason,
+                    )
+                to_state = getattr(
+                    getattr(result, "record", None), "to_state", None
+                )
+                to_v = getattr(to_state, "value", to_state)
+                pos_state = getattr(
+                    getattr(result, "position", None), "state", None
+                )
+                pos_v = getattr(pos_state, "value", pos_state)
+                if str(to_v or pos_v or "").lower() in {"exited", "closed"}:
+                    logger.warning(
+                        "Position Closed",
+                        ticket=ticket,
+                        reason=reason,
+                        exit_reason=getattr(
+                            getattr(result, "record", None), "reason", ""
+                        ),
+                    )
+            except Exception:
+                logger.exception("pme_manage_log_failed", ticket=ticket)
+
+        try:
+            from app.domain.institutional_trading.production_hardening.position_recovery import (
+                persist_pme_state,
+            )
+
+            persist_pme_state(engine)
+            from app.domain.institutional_trading.production_hardening.observe import (
+                record_lifecycle,
+            )
+
+            if getattr(engine, "_positions", None):
+                record_lifecycle(
+                    stage="POSITION_MONITOR",
+                    status="ok",
+                    detail=f"managed={len(engine._positions)} reason={reason}",
+                )
+        except Exception:
+            logger.exception("hardening_pme_persist_failed", reason=reason)
+        return managed
 
     def _run_cycle(
         self,
@@ -1024,42 +1144,15 @@ class InstitutionalIteRuntime:
                 except Exception:
                     logger.exception("force_first_trade_reject_log_failed")
 
-        for ticket in list(self.position_management.engine._positions.keys()):
-            pos = self.position_management.engine.get(ticket)
-            if pos is None:
-                continue
-            pctx = PositionManageContext(
-                now=datetime.now(UTC),
-                current_price=account.mid_price or Decimal("2300"),
-                atr=account.atr or Decimal("1"),
-                spread=snapshot.spread,
-                market_open=True,
-                position_still_open=True,
-                kill_switch_armed=self.plane.kill_switch_armed,
-                daily_loss_exceeded=self.plane.daily_loss_exceeded,
-                user_id=self.user_id,
-            )
-            self.position_management.evaluate(ticket, pctx)
-
-        try:
-            from app.domain.institutional_trading.production_hardening.position_recovery import (
-                persist_pme_state,
-            )
-
-            persist_pme_state(self.position_management.engine)
-            from app.domain.institutional_trading.production_hardening.observe import (
-                record_lifecycle,
-            )
-
-            if self.position_management.engine._positions:
-                record_lifecycle(
-                    stage="POSITION_MONITOR",
-                    status="ok",
-                    detail=f"managed={len(self.position_management.engine._positions)}",
-                    trace_id=tid,
-                )
-        except Exception:
-            logger.exception("hardening_pme_persist_failed")
+        self._sync_and_manage_open_positions(
+            snapshot=snapshot,
+            account=account,
+            reason=(
+                "post_fill_manage"
+                if bool(getattr(bridge_result, "forwarded_to_oms", False))
+                else "cycle_manage"
+            ),
+        )
 
         reason_detail = (
             f"action={decision.action.value} "

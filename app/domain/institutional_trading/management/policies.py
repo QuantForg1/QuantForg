@@ -208,12 +208,19 @@ def plan_action(
         and r >= config.partial_at_r
     ):
         vol = partial_close_volume(position, config)
-        if vol <= 0:
-            return PlannedAction(ManageActionKind.NOOP, "Partial volume too small")
+        if vol > 0:
+            return PlannedAction(
+                ManageActionKind.PARTIAL_CLOSE,
+                f"Partial close {config.partial_close_pct}% at {r}R",
+                volume=vol,
+                target_state=PositionLifecycleState.PARTIAL,
+            )
+        # Min-lot (e.g. 0.01): partial volume rounds to 0 — advance lifecycle
+        # so trail can run. Does not change R thresholds or strategy knobs.
         return PlannedAction(
             ManageActionKind.PARTIAL_CLOSE,
-            f"Partial close {config.partial_close_pct}% at {r}R",
-            volume=vol,
+            "Partial skipped — volume below broker min lot; advance to PARTIAL",
+            volume=Decimal("0"),
             target_state=PositionLifecycleState.PARTIAL,
         )
 

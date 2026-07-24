@@ -87,11 +87,25 @@ def apply_trading_mode_to_runtime(
             runtime.position_management.engine, "config"
         ):
             runtime.position_management.engine.config = pme
+        # Keep ops safety max-open aligned with ITE mode (entry gate uses plane).
+        plane = getattr(runtime, "plane", None)
+        if plane is not None and hasattr(plane, "max_open_trades"):
+            try:
+                plane.max_open_trades = max(
+                    int(getattr(ite, "max_open_trades", 1) or 1),
+                    int(getattr(plane, "max_open_trades", 1) or 1),
+                )
+                if mode_l in {"scalping", "alpha"} and plane.max_open_trades < 2:
+                    plane.max_open_trades = max(2, int(ite.max_open_trades or 2))
+                plane.trading_mode = mode_l
+            except Exception:
+                logger.exception("trading_mode_plane_sync_failed")
         logger.warning(
             "trading_mode_applied",
             mode=mode_l,
             ite_version=ite.config_version,
             max_open=ite.max_open_trades,
+            plane_max_open=getattr(plane, "max_open_trades", None),
             tfs=[t.value for t in ite.analysis_timeframes()],
         )
 

@@ -178,12 +178,26 @@ def recover_positions_from_mt5(
             side = str(getattr(row, "side", "buy") or "buy").lower()
             entry = Decimal(str(getattr(row, "open_price", 0) or 0))
             volume = Decimal(str(getattr(row, "volume", 0) or 0))
+            broker_sl = Decimal(str(getattr(row, "stop_loss", 0) or 0))
+            broker_tp = Decimal(str(getattr(row, "take_profit", 0) or 0))
             sl = Decimal(str(snap.get("current_stop") or snap.get("initial_stop") or 0))
+            if sl <= 0 and broker_sl > 0:
+                sl = broker_sl
             if sl <= 0:
-                # Prefer No Trade geometry invention — use 1% distance placeholder for PME only
-                sl = entry * Decimal("0.99") if side == "buy" else entry * Decimal("1.01")
+                # Last resort only — prefer broker SL; never invent when SL exists
+                sl = (
+                    entry * Decimal("0.99")
+                    if side == "buy"
+                    else entry * Decimal("1.01")
+                )
+            tp = Decimal(str(snap.get("current_tp") or 0))
+            if tp <= 0 and broker_tp > 0:
+                tp = broker_tp
             risk = abs(entry - sl) or Decimal("1")
             opened = datetime.now(UTC)
+            opened_raw = getattr(row, "opened_at", None)
+            if isinstance(opened_raw, datetime):
+                opened = opened_raw if opened_raw.tzinfo else opened_raw.replace(tzinfo=UTC)
             state = PositionLifecycleState.OPEN
             state_raw = str(snap.get("state") or "")
             if state_raw in {s.value for s in PositionLifecycleState}:
@@ -200,11 +214,13 @@ def recover_positions_from_mt5(
                 opened_at=opened,
                 state=state,
                 current_stop=Decimal(str(snap.get("current_stop") or sl)),
-                current_tp=Decimal(str(snap.get("current_tp") or 0)),
+                current_tp=tp,
                 be_moved=bool(snap.get("be_moved", False)),
                 partial_done=bool(snap.get("partial_done", False)),
                 trailing_active=bool(snap.get("trailing_active", False)),
                 max_favorable_r=Decimal(str(snap.get("max_favorable_r") or 0)),
+                magic=int(getattr(row, "magic", 260720) or 260720),
+                comment=str(getattr(row, "comment", "") or "")[:64],
             )
             if hasattr(engine, "register"):
                 engine.register(managed)

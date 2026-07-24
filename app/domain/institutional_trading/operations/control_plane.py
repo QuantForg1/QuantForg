@@ -511,6 +511,10 @@ class OperationsControlPlane:
                 {
                     "auto_trading_enabled": self.auto_trading_enabled,
                     "auto_trading_run_state": self.auto_trading_run_state,
+                    "trading_mode": self.trading_mode,
+                    "max_open_positions": self.max_open_trades,
+                    "alpha_engine_enabled": self.alpha_engine_enabled,
+                    "compounding_enabled": self.compounding_enabled,
                 }
             )
         except Exception as exc:
@@ -849,6 +853,49 @@ def get_control_plane() -> OperationsControlPlane:
                     str(raw_run),
                     enabled=plane.auto_trading_enabled,
                 )
+            raw_tm = str(state.get("trading_mode") or "").strip().lower()
+            if raw_tm in {"swing", "scalping", "alpha"}:
+                plane.trading_mode = raw_tm
+            elif (
+                "trading_mode" not in state
+                and plane.mode
+                in {OpsExecutionMode.LIVE, OpsExecutionMode.CANARY}
+                and plane.auto_trading_run_state in {"running", "paused"}
+            ):
+                # Restart continuity: LIVE auto desk lost trading_mode on
+                # redeploy because it was never persisted — restore scalping.
+                plane.trading_mode = "scalping"
+                if plane.max_open_trades < 3:
+                    plane.max_open_trades = 3
+                try:
+                    from app.application.services.ops_state_persistence import (
+                        save_ops_state,
+                    )
+
+                    save_ops_state(
+                        {
+                            "trading_mode": "scalping",
+                            "max_open_positions": plane.max_open_trades,
+                        }
+                    )
+                except Exception as tm_exc:
+                    from core.logging import get_logger as _get_logger
+
+                    _get_logger(__name__).warning(
+                        "trading_mode_continuity_persist_failed",
+                        error=str(tm_exc),
+                    )
+            if "max_open_positions" in state:
+                try:
+                    mop = int(state.get("max_open_positions"))
+                    if mop >= 1:
+                        plane.max_open_trades = mop
+                except (TypeError, ValueError):
+                    pass
+            if "alpha_engine_enabled" in state:
+                plane.alpha_engine_enabled = bool(state.get("alpha_engine_enabled"))
+            if "compounding_enabled" in state:
+                plane.compounding_enabled = bool(state.get("compounding_enabled"))
             # Railway restart continuity: never strand the desk in PAUSED when
             # launch locks already pass — auto-promote to RUNNING.
             try:
@@ -876,6 +923,8 @@ def get_control_plane() -> OperationsControlPlane:
                 "ops_state_hydrated",
                 ops_mode=plane.mode.value,
                 auto_trading_run_state=plane.auto_trading_run_state,
+                trading_mode=plane.trading_mode,
+                max_open_positions=plane.max_open_trades,
                 hydrate_source=diag.get("hydrate_source"),
                 durable=diag.get("durable"),
                 postgres_has_state=diag.get("postgres_has_state"),

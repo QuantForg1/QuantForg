@@ -461,9 +461,17 @@ class ExecutionBridge:
         latency = (time.perf_counter() - t0) * 1000.0
         abort_reason, status, exec_result = self._map_oms_outcome(oms_result)
 
-        # Once OMS was invoked, keep the decision hash (idempotency). Clear
-        # rejects before submit never reach this path; do not free the hash
-        # here or a second execute() could double-send after a failed respond.
+        # Keep hash on success and on ambiguous gateway/timeout (may have filled).
+        # Release on definitive broker/OMS rejects so the next cycle can retry.
+        if status is not ExecutionAttemptStatus.OMS_SUCCESS and abort_reason not in {
+            BridgeAbortReason.GATEWAY_FAILURE,
+        }:
+            with self._lock:
+                self._executed_hashes.discard(d_hash)
+                try:
+                    self._executed_hash_order.remove(d_hash)
+                except ValueError:
+                    pass
 
         if (
             mode is ExecutionMode.CANARY_LIVE

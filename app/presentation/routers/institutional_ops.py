@@ -1307,7 +1307,14 @@ def update_auto_trading(
             mode=apply_mode,
             scalp=scalp,
         )
-    except Exception:
+    except Exception as exc:
+        from core.logging import get_logger
+
+        get_logger(__name__).exception(
+            "trading_mode_apply_failed",
+            error=str(exc),
+            trading_mode=getattr(policy, "trading_mode", None),
+        )
         mode_payload = None
     return {"policy": policy.to_dict(), "trading_mode_applied": mode_payload}
 

@@ -328,9 +328,18 @@ async def build_ite_cycle_market_context(
         diag["position_truth_repaired"] = sync.repaired
         diag["position_tickets"] = list(sync.tickets)
     except Exception as exc:
-        logger.info("ite_cycle_positions_failed", error=str(exc))
+        logger.warning("ite_cycle_positions_failed", error=str(exc))
         diag["positions"] = f"ERROR: {exc}"
-        open_positions = 0
+        diag["positions_sync_failed"] = True
+        # Fail-closed for new entries — never treat a sync error as flat book.
+        engine_n = 0
+        if position_engine is not None:
+            try:
+                engine_n = len(getattr(position_engine, "_positions", {}) or {})
+            except Exception:
+                engine_n = 0
+        open_positions = max(int(engine_n), 1)
+        diag["positions_fail_closed_count"] = open_positions
 
     try:
         client = _client_of(mt5_adapter)

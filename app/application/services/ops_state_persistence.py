@@ -261,4 +261,6 @@ def ops_state_diagnostics() -> dict[str, Any]:
         "persisted_ops_mode": state.get("ops_mode"),
         "persisted_auto_trading_run_state": state.get("auto_trading_run_state"),
         "persisted_auto_trading_enabled": state.get("auto_trading_enabled"),
+        "persisted_trading_mode": state.get("trading_mode"),
+        "persisted_max_open_positions": state.get("max_open_positions"),
     }

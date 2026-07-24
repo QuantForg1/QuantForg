@@ -98,19 +98,39 @@ def _repair_internal_engine(
     position_engine: Any | None,
     *,
     live_tickets: set[int],
+    symbol: str | None = None,
 ) -> int:
-    """Drop managed tickets that no longer exist on MT5. Returns removed count."""
+    """Drop managed tickets that no longer exist on MT5. Returns removed count.
+
+    Symbol-scoped repair never drops tickets for other symbols.
+    """
     if position_engine is None:
         return 0
     drop = getattr(position_engine, "drop_missing_tickets", None)
     if callable(drop):
-        return int(drop(live_tickets) or 0)
+        try:
+            return int(drop(live_tickets, symbol=symbol) or 0)
+        except TypeError:
+            # Older engines without symbol kwarg — fall through carefully
+            if symbol is None:
+                return int(drop(live_tickets) or 0)
     positions = getattr(position_engine, "_positions", None)
     if not isinstance(positions, dict):
         return 0
+    target = (symbol or "").strip().upper() or None
     lock = getattr(position_engine, "_lock", None)
     removed = 0
-    stale = [t for t in list(positions.keys()) if int(t) not in live_tickets]
+    stale: list[int] = []
+    for ticket, pos in list(positions.items()):
+        if target is not None:
+            sym = str(getattr(pos, "symbol", "") or "").strip().upper()
+            if target == GOLD_SYMBOL:
+                if sym and not is_gold_symbol(sym):
+                    continue
+            elif sym and sym != target:
+                continue
+        if int(ticket) not in live_tickets:
+            stale.append(int(ticket))
     if lock is not None:
         with lock:
             for ticket in stale:
@@ -155,7 +175,9 @@ def force_sync_positions(
         position_engine is not None and engine_count != mt5_count
     ):
         removed = _repair_internal_engine(
-            position_engine, live_tickets=set(tickets)
+            position_engine,
+            live_tickets=set(tickets),
+            symbol=sym,
         )
         repaired = True
         logger.warning(
