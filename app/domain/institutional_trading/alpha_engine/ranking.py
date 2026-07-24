@@ -94,6 +94,14 @@ def score_opportunity(
         weights = get_learning_weight_store().apply_to_weights(weights)
     except Exception:
         pass
+    # v7 weight optimizer — additional SMC factor multipliers (rules unchanged)
+    try:
+        from app.domain.institutional_trading.ai_validation import get_weight_optimizer
+
+        optimized = get_weight_optimizer().apply_to_weights(weights)
+        weights = {k: max(1, int(round(v))) for k, v in optimized.items()}
+    except Exception:
+        pass
     factors = {
         "confidence": _clamp(ai_confidence),
         "trend": _clamp(trend_strength),

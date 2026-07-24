@@ -485,6 +485,12 @@ export const appNav: NavGroup[] = [
         hint: "DNS · network incidents · reconnects · uptime",
       },
       {
+        href: "/ai-validation",
+        label: "AI Validation",
+        icon: Brain,
+        hint: "Shadow AI · strategy metrics · slippage · optimizer",
+      },
+      {
         href: "/witness-health",
         label: "Witness Health",
         icon: HeartPulse,

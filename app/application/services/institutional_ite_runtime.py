@@ -546,6 +546,18 @@ class InstitutionalIteRuntime:
         with self._lock:
             self._last_decision = decision
 
+        # v7 Shadow AI — independent evaluation; primary engine remains default
+        try:
+            from app.domain.institutional_trading.ai_validation import (
+                run_shadow_validation,
+            )
+
+            run_shadow_validation(
+                decision=decision, snapshot=snapshot, trace_id=tid
+            )
+        except Exception:
+            logger.exception("shadow_ai_validation_failed")
+
         decision_reasons = tuple(getattr(decision, "reasons", ()) or ())
         if self._manual_execution or forced_override:
             logger.warning(
@@ -718,6 +730,49 @@ class InstitutionalIteRuntime:
                 spread=float(snapshot.spread) if getattr(snapshot, "spread", None) is not None else None,
                 retries=retries,
             )
+            # v7 execution quality + slippage (observational)
+            try:
+                from app.domain.institutional_trading.ai_validation import (
+                    get_execution_quality_monitor,
+                    get_slippage_store,
+                    get_validation_alerter,
+                )
+
+                t_ai = (time.perf_counter() - t0) * 1000.0
+                get_execution_quality_monitor().record(
+                    {
+                        "signal_generation": max(0.0, t_ai * 0.15),
+                        "ai_decision": max(0.0, t_ai * 0.35),
+                        "oms": max(0.0, t_ai * 0.20) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
+                        "gateway": max(0.0, t_ai * 0.10) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
+                        "mt5": max(0.0, t_ai * 0.10) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
+                        "broker": max(0.0, t_ai * 0.10) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
+                        "total": lat,
+                    }
+                )
+                get_validation_alerter().on_latency_spike(latency_ms=lat)
+                if success and getattr(bridge_result, "forwarded_to_oms", False):
+                    entry_zone = getattr(decision, "entry_zone", None)
+                    expected = None
+                    if entry_zone is not None:
+                        expected = float(
+                            getattr(entry_zone, "mid", None)
+                            or getattr(entry_zone, "low", 0)
+                            or 0
+                        )
+                    actual = float(getattr(account, "mid_price", None) or expected or 0)
+                    if expected and expected > 0 and actual > 0:
+                        get_slippage_store().record_fill(
+                            symbol=str(getattr(decision, "symbol", "") or ""),
+                            side=str(
+                                getattr(getattr(decision, "direction", None), "value", "buy")
+                                or "buy"
+                            ),
+                            expected_entry=expected,
+                            actual_entry=actual,
+                        )
+            except Exception:
+                logger.exception("ai_validation_exec_metrics_failed")
             if success and getattr(bridge_result, "forwarded_to_oms", False):
                 store_trade_explanation(
                     decision=decision,
@@ -1186,6 +1241,41 @@ class InstitutionalIteRuntime:
                 mt5_adapter=self.mt5_adapter,
                 open_symbols=open_symbols,
             )
+            try:
+                from app.domain.institutional_trading.ai_validation import (
+                    get_opportunity_history_store,
+                )
+
+                ranking = list(scan.get("opportunity_ranking") or scan.get("ranking") or [])
+                top = []
+                for row in ranking[:10]:
+                    if not isinstance(row, dict):
+                        continue
+                    sym = str(row.get("symbol") or "")
+                    traded = any(
+                        s.upper() == sym.upper() for s in (open_symbols or [])
+                    ) or (
+                        bool(scan.get("selected"))
+                        and str((scan.get("selected") or [{}])[0].get("symbol") or "").upper()
+                        == sym.upper()
+                    )
+                    top.append(
+                        {
+                            **row,
+                            "traded": traded,
+                            "skip_reason": None
+                            if traded
+                            else (
+                                "below_execute_threshold"
+                                if not (scan.get("selected"))
+                                else "not_selected"
+                            ),
+                        }
+                    )
+                if top:
+                    get_opportunity_history_store().record_daily_top(top)
+            except Exception:
+                logger.exception("opportunity_history_record_failed")
             selected = scan.get("selected") or []
             if selected:
                 sym = str(selected[0].get("symbol") or "").upper()

@@ -71,6 +71,17 @@ def production_hardening_dashboard(_user: OperatorUser) -> dict[str, Any]:
     return build_production_reliability_dashboard()
 
 
+@router.get("/ai-validation")
+def ai_validation_dashboard(
+    _user: OperatorUser,
+    replay_day: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """v7 AI Validation & Performance Optimization dashboard."""
+    from app.application.services.ai_validation import build_ai_validation_dashboard
+
+    return build_ai_validation_dashboard(replay_day=replay_day)
+
+
 @router.get("/network")
 def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """DNS/network incidents, reconnect log, gateway/MT5 uptime."""

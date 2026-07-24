@@ -856,6 +856,12 @@ export const iteReliabilityApi = {
     apiFetch<Record<string, unknown>>("/ite/reliability/dashboard"),
   productionHardening: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/production-hardening"),
+  aiValidation: (replayDay?: string) => {
+    const q = replayDay ? `?replay_day=${encodeURIComponent(replayDay)}` : "";
+    return apiFetch<Record<string, unknown>>(
+      `/ite/reliability/ai-validation${q}`,
+    );
+  },
   network: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>
