@@ -360,13 +360,28 @@ def maybe_override_decision(
             )
             return decision, False
         atr = account.atr if account.atr is not None and account.atr > 0 else None
-        stop_dist = (
-            (atr * Decimal("1.5")).quantize(Decimal("0.01"))
-            if atr is not None
-            else (mid * Decimal("0.001")).quantize(Decimal("0.01"))
-        )
+        # FX mids (~1.1) must not use gold-style 0.01 quantize / floor=1.0 —
+        # that made SELL TP negative (TakeProfit must be non-negative).
+        if mid >= Decimal("50"):
+            quant = Decimal("0.01")
+            floor = Decimal("0.50")
+        else:
+            quant = Decimal("0.00001")
+            floor = (mid * Decimal("0.0005")).quantize(quant)
+            if floor <= 0:
+                floor = Decimal("0.00010")
+        if atr is not None:
+            stop_dist = (atr * Decimal("1.5")).quantize(quant)
+        else:
+            stop_dist = (mid * Decimal("0.001")).quantize(quant)
         if stop_dist <= 0:
-            stop_dist = Decimal("1")
+            stop_dist = floor
+        # Cap so SELL TP (mid - 2R) and BUY SL stay strictly positive.
+        max_stop = (mid / Decimal("4")).quantize(quant)
+        if max_stop > 0 and stop_dist > max_stop:
+            stop_dist = max_stop
+        if stop_dist <= 0:
+            stop_dist = floor
         # Market-order geometry must be valid vs live mid (not stale OB/FVG zones).
         from app.domain.institutional_trading.decision_models import PriceZone
 
@@ -383,6 +398,16 @@ def maybe_override_decision(
             stop_zone = PriceZone(low=sl, high=sl, mid=sl)
             target_zone = PriceZone(low=tp, high=tp, mid=tp)
             invalidations = ("Forced SELL: close above stop",)
+        if sl <= 0 or tp <= 0:
+            logger.error(
+                "FORCE_FIRST_TRADE REJECTED before OMS: invalid SL/TP geometry "
+                "(mid=%s stop_dist=%s sl=%s tp=%s)",
+                mid,
+                stop_dist,
+                sl,
+                tp,
+            )
+            return decision, False
         rr = Decimal("2.00")
 
         action = (

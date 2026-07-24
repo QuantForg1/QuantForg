@@ -328,6 +328,33 @@ def test_record_success_disarms_and_blocks_second() -> None:
 
 
 @pytest.mark.unit
+def test_eurusd_sell_keeps_positive_take_profit() -> None:
+    """Gold-style stop floor=1.0 made FX SELL TP negative — must stay valid."""
+    snap = _snapshot()
+    object.__setattr__(snap, "symbol", "EURUSD")
+    account = _account(atr=None, mid_price=Decimal("1.13700"))
+    decision = _weak_decision(snap, account)
+    forced, ok = maybe_override_decision(
+        decision,
+        snapshot=snap,
+        account=account,
+        ite_config=ITEConfig(),
+        settings=_settings(force_first_trade_direction="SELL"),
+        execution_enabled=True,
+        gateway_connected=True,
+        broker_connected=True,
+        force_shadow=False,
+    )
+    assert ok is True
+    assert forced.action is DecisionAction.SELL
+    assert forced.stop_zone is not None
+    assert forced.target_zone is not None
+    assert forced.stop_zone.mid > 0
+    assert forced.target_zone.mid > 0
+    assert forced.target_zone.mid < account.mid_price
+
+
+@pytest.mark.unit
 def test_banner_when_enabled() -> None:
     cfg = ForceFirstTradeConfig.from_settings(_settings(force_first_trade=True))
     assert cfg.enabled is True
