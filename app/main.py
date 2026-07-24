@@ -348,6 +348,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         log_force_first_trade_startup(settings)
     except Exception:
         logger.exception("force_first_trade_startup_log_failed")
+    try:
+        from app.domain.institutional_trading.risk_lock_override import (
+            log_risk_lock_override_startup,
+        )
+
+        log_risk_lock_override_startup(settings)
+    except Exception:
+        logger.exception("risk_lock_override_startup_log_failed")
 
     database = DatabaseManager(settings)
     container = Container(settings=settings, database=database)

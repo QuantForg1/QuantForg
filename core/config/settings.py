@@ -428,6 +428,23 @@ class Settings(BaseSettings):
         ),
     ] = "AUTO"
 
+    # -- Risk lock override (TEST MODE: daily loss only; default off) --------
+    allow_risk_lock_override: Annotated[
+        bool,
+        Field(
+            description=(
+                "TEST MODE only: allow Auto Trading to continue past the daily "
+                "loss capital lock. Does not disable the Risk Engine. Never "
+                "bypasses margin, broker validation, market closed, invalid "
+                "volume/stops, or emergency stop. Default false in production."
+            ),
+            validation_alias=AliasChoices(
+                "ALLOW_RISK_LOCK_OVERRIDE",
+                "allow_risk_lock_override",
+            ),
+        ),
+    ] = False
+
     # -- Closed beta (server-side invite; never NEXT_PUBLIC) ------------------
     beta_mode: Annotated[
         bool,

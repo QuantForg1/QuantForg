@@ -670,6 +670,7 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "recent_execution_attempts": recent_attempts,
         "persistence": ops_state_diagnostics(),
         "force_first_trade": _force_first_trade_payload(snap, settings),
+        "risk_lock_override": _risk_lock_override_payload(settings),
         "ai_scalping": _ai_scalping_payload(),
         "institutional_alpha": _institutional_alpha_payload(),
     }
@@ -753,6 +754,14 @@ def _force_first_trade_payload(snap: Any, settings: Any) -> dict[str, Any]:
         execution_enabled=bool(snap.execution_state.get("execution_enabled")),
         open_positions=int(getattr(snap.facts, "open_positions", 0) or 0),
     )
+
+
+def _risk_lock_override_payload(settings: Any) -> dict[str, Any]:
+    from app.domain.institutional_trading.risk_lock_override import (
+        risk_lock_override_status,
+    )
+
+    return risk_lock_override_status(settings)
 
 
 @router.get("/witness-health")

@@ -859,9 +859,20 @@ class RiskEngine:
         reasons: list[str] = []
         warnings: list[str] = []
         if daily > self.config.max_daily_loss_pct:
-            reasons.append(
+            msg = (
                 f"daily loss {daily}% exceeds {self.config.max_daily_loss_pct}%"
             )
+            from app.domain.institutional_trading.risk_lock_override import (
+                risk_lock_override_enabled,
+            )
+
+            if risk_lock_override_enabled():
+                # TEST MODE: keep Risk Engine active; only waive daily-loss lock.
+                warnings.append(
+                    f"TEST MODE — daily loss lock overridden ({msg})"
+                )
+            else:
+                reasons.append(msg)
         if weekly > self.config.max_weekly_loss_pct:
             reasons.append(
                 f"weekly loss {weekly}% exceeds {self.config.max_weekly_loss_pct}%"

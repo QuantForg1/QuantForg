@@ -1064,6 +1064,8 @@ export function AutoTradingWorkspace() {
   const gateEnabled = gateStatus.toLowerCase() === "enabled";
   const forceFirst = asRecord(asRecord(autoQ.data).force_first_trade);
   const forceBanner = Boolean(forceFirst.banner);
+  const riskLockOverride = asRecord(asRecord(autoQ.data).risk_lock_override);
+  const riskLockBanner = Boolean(riskLockOverride.banner);
   return (
     <div className="space-y-3">
       {forceBanner ? (
@@ -1079,6 +1081,23 @@ export function AutoTradingWorkspace() {
           </p>
           <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
             This bypasses signal filters for ONE trade only.
+          </p>
+        </section>
+      ) : null}
+      {riskLockBanner ? (
+        <section
+          role="status"
+          className="border border-[var(--warning)] bg-[var(--warning)]/10 px-3 py-2.5"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--warning)]">
+            TEST MODE
+          </p>
+          <p className="mt-1 text-sm font-medium text-[var(--fg)]">
+            Daily loss lock overridden.
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
+            Risk Engine remains active. Margin, broker validation, market closed,
+            invalid volume/stops, and emergency stop are never bypassed.
           </p>
         </section>
       ) : null}

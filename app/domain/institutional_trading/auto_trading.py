@@ -351,11 +351,24 @@ def evaluate_auto_trade_safety(
         facts.no_broker_restrictions,
         "Broker restrictions block trading" if not facts.no_broker_restrictions else "",
     )
+    from app.domain.institutional_trading.risk_lock_override import (
+        risk_lock_override_enabled,
+    )
+
+    daily_override = bool(
+        facts.daily_loss_exceeded and risk_lock_override_enabled()
+    )
     add(
         "daily_loss",
         "Daily loss limit OK",
-        not facts.daily_loss_exceeded,
-        "Maximum daily loss exceeded" if facts.daily_loss_exceeded else "",
+        (not facts.daily_loss_exceeded) or daily_override,
+        (
+            "TEST MODE — daily loss lock overridden"
+            if daily_override
+            else (
+                "Maximum daily loss exceeded" if facts.daily_loss_exceeded else ""
+            )
+        ),
     )
     opens_ok = facts.open_positions < policy.max_open_positions
     add(

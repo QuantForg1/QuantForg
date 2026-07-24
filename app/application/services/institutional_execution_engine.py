@@ -612,10 +612,42 @@ class InstitutionalExecutionEngine:
                     peak_equity=peak if peak > 0 else None,
                     daily_pnl=daily_pnl,
                 )
+                # Log TEST MODE override on the live trade path only.
+                try:
+                    from app.domain.institutional_trading.risk_lock_override import (
+                        log_risk_lock_overridden,
+                        risk_lock_override_enabled,
+                    )
+
+                    warn_txt = " ".join(assessment.warnings or ())
+                    if (
+                        risk_lock_override_enabled()
+                        and "daily loss lock overridden" in warn_txt.lower()
+                    ):
+                        dd = assessment.drawdown or {}
+                        log_risk_lock_overridden(
+                            current_daily_loss_pct=dd.get("daily_loss_pct"),
+                        )
+                except Exception:
+                    pass
                 if assessment.decision is RiskDecision.REJECT:
                     risk_reject = list(assessment.reasons) or [
                         "Risk Engine REJECT"
                     ]
+                    # Belt-and-suspenders: strip daily-loss if still present.
+                    from app.domain.institutional_trading.risk_lock_override import (
+                        apply_daily_loss_lock_override,
+                    )
+
+                    remaining, did_override = apply_daily_loss_lock_override(
+                        risk_reject,
+                        current_daily_loss_pct=(
+                            (assessment.drawdown or {}).get("daily_loss_pct")
+                        ),
+                        log=True,
+                    )
+                    if did_override:
+                        risk_reject = remaining
                 elif assessment.decision is RiskDecision.REDUCE_SIZE:
                     approved = assessment.approved_lots
                     if approved is None or approved <= 0:

@@ -25,7 +25,15 @@ def launch_locks_pass(plane: Any, *, settings: Any | None = None) -> tuple[bool,
     if bool(getattr(plane, "kill_switch_armed", False)):
         return False, "kill_switch_armed=true required=false"
     if bool(getattr(plane, "daily_loss_exceeded", False)):
-        return False, "daily_loss_exceeded=true required=false"
+        try:
+            from app.domain.institutional_trading.risk_lock_override import (
+                risk_lock_override_enabled,
+            )
+
+            if not risk_lock_override_enabled(settings):
+                return False, "daily_loss_exceeded=true required=false"
+        except Exception:
+            return False, "daily_loss_exceeded=true required=false"
     exec_on = True
     if settings is not None:
         exec_on = bool(getattr(settings, "execution_enabled", False))
