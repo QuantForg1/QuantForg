@@ -113,6 +113,57 @@ def portfolio_intelligence_dashboard(_user: OperatorUser) -> dict[str, Any]:
     return build_portfolio_intelligence_dashboard()
 
 
+@router.get("/research-platform")
+def research_platform_dashboard(_user: OperatorUser) -> dict[str, Any]:
+    """v10 Research / Optimization / Continuous Improvement executive desk."""
+    from app.application.services.research_platform import (
+        build_research_platform_dashboard,
+    )
+
+    return build_research_platform_dashboard()
+
+
+@router.post("/research-platform/experiments")
+def create_research_experiment(body: dict[str, Any], _user: OperatorUser) -> dict[str, Any]:
+    from app.domain.institutional_trading.research_platform import get_experiment_store
+    from app.domain.institutional_trading.research_platform.audit import get_audit_trail
+
+    exp = get_experiment_store().create(
+        name=str(body.get("name") or "Untitled"),
+        description=str(body.get("description") or ""),
+        author=str(body.get("author") or _user.email or _user.id),
+        sample_size=int(body.get("sample_size") or 0),
+        success_criteria=str(body.get("success_criteria") or ""),
+        variant=dict(body.get("variant") or {}),
+        status=str(body.get("status") or "Draft"),
+    )
+    get_audit_trail().record(
+        user=str(getattr(_user, "email", None) or _user.id),
+        category="experiment",
+        key="create",
+        previous_value=None,
+        new_value=exp.id,
+        reason=str(body.get("reason") or "create experiment"),
+    )
+    return exp.to_dict()
+
+
+@router.post("/research-platform/reports/{period}")
+def generate_institutional_report(period: str, _user: OperatorUser) -> dict[str, Any]:
+    from app.domain.institutional_trading.research_platform import (
+        get_reporting_store,
+        report_to_csv,
+        report_to_pdf_text,
+    )
+
+    report = get_reporting_store().generate(period)
+    return {
+        **report,
+        "csv": report_to_csv(report),
+        "pdf_text": report_to_pdf_text(report),
+    }
+
+
 @router.get("/network")
 def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """DNS/network incidents, reconnect log, gateway/MT5 uptime."""

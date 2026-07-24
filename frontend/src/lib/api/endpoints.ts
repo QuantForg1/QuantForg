@@ -884,6 +884,20 @@ export const iteReliabilityApi = {
     apiFetch<Record<string, unknown>>(
       "/ite/reliability/portfolio-intelligence",
     ),
+  researchPlatform: () =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/reliability/research-platform",
+    ),
+  createResearchExperiment: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/ite/reliability/research-platform/experiments",
+      { method: "POST", body },
+    ),
+  generateInstitutionalReport: (period: "daily" | "weekly" | "monthly") =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/reliability/research-platform/reports/${period}`,
+      { method: "POST", body: {} },
+    ),
   network: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>

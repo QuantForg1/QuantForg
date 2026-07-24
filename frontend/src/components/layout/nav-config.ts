@@ -503,6 +503,12 @@ export const appNav: NavGroup[] = [
         hint: "AI portfolio manager · allocation · risk budget",
       },
       {
+        href: "/research-platform",
+        label: "Research Platform",
+        icon: FlaskConical,
+        hint: "Experiments · backtests · models · promotions",
+      },
+      {
         href: "/witness-health",
         label: "Witness Health",
         icon: HeartPulse,
