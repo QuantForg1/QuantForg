@@ -82,6 +82,27 @@ def ai_validation_dashboard(
     return build_ai_validation_dashboard(replay_day=replay_day)
 
 
+@router.get("/performance-lab")
+def performance_lab_dashboard(
+    _user: OperatorUser,
+    symbol: str | None = Query(default=None),
+    session: str | None = Query(default=None),
+    regime: str | None = Query(default=None),
+    replay_id: str | None = Query(default=None),
+    frame_index: int = Query(default=0),
+) -> dict[str, Any]:
+    """v8 Live Performance Lab — champion/challenger, calibration, replay, rankings."""
+    from app.application.services.performance_lab import build_performance_lab_dashboard
+
+    return build_performance_lab_dashboard(
+        symbol=symbol,
+        session=session,
+        regime=regime,
+        replay_id=replay_id,
+        frame_index=frame_index,
+    )
+
+
 @router.get("/network")
 def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """DNS/network incidents, reconnect log, gateway/MT5 uptime."""

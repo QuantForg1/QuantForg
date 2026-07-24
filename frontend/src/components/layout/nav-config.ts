@@ -491,6 +491,12 @@ export const appNav: NavGroup[] = [
         hint: "Shadow AI · strategy metrics · slippage · optimizer",
       },
       {
+        href: "/performance-lab",
+        label: "Performance Lab",
+        icon: FlaskConical,
+        hint: "Champion vs Challenger · calibration · replay",
+      },
+      {
         href: "/witness-health",
         label: "Witness Health",
         icon: HeartPulse,

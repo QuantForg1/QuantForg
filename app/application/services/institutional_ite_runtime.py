@@ -558,6 +558,48 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("shadow_ai_validation_failed")
 
+        # v8 Champion vs Challenger — challenger never executes
+        try:
+            from app.domain.institutional_trading.performance_lab import (
+                get_opportunity_outcome_store,
+                run_champion_challenger,
+            )
+
+            duel = run_champion_challenger(
+                decision=decision, snapshot=snapshot, trace_id=tid
+            )
+            action = str(getattr(decision.action, "value", decision.action))
+            traded_intent = action in {"BUY", "SELL"}
+            get_opportunity_outcome_store().record_evaluation(
+                symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")),
+                ai_confidence=int(getattr(decision, "confidence", 0) or 0),
+                opportunity_score=int(
+                    (duel.champion.get("opportunity_score") if duel else None)
+                    or getattr(decision, "confidence", 0)
+                    or 0
+                ),
+                traded=False,  # filled true after OMS success below
+                skip_reason=None if traded_intent else f"action={action}",
+                session=(duel.session if duel else None),
+                regime=(duel.regime if duel else None),
+                strategy=str(getattr(self.plane, "trading_mode", "swing") or "swing"),
+                direction=str(
+                    getattr(getattr(decision, "direction", None), "value", "") or ""
+                ),
+                expected_rr=(
+                    float(getattr(decision, "estimated_rr", 0) or 0)
+                    if getattr(decision, "estimated_rr", None) is not None
+                    else None
+                ),
+                spread=(
+                    float(snapshot.spread)
+                    if getattr(snapshot, "spread", None) is not None
+                    else None
+                ),
+            )
+        except Exception:
+            logger.exception("performance_lab_duel_failed")
+
         decision_reasons = tuple(getattr(decision, "reasons", ()) or ())
         if self._manual_execution or forced_override:
             logger.warning(
@@ -780,6 +822,47 @@ class InstitutionalIteRuntime:
                     risk_pct=str(risk_pct),
                     extras={"trace_id": tid, "forced": forced_override},
                 )
+                try:
+                    from app.domain.institutional_trading.performance_lab import (
+                        build_replay_from_decision,
+                        get_calibration_store,
+                        get_opportunity_outcome_store,
+                        get_trade_replay_store,
+                        store_lab_explanation,
+                    )
+
+                    store_lab_explanation(
+                        decision=decision,
+                        ticket=str(ticket) if ticket is not None else None,
+                        risk_pct=str(risk_pct),
+                        extras={"trace_id": tid},
+                    )
+                    replay = build_replay_from_decision(
+                        decision=decision,
+                        snapshot=snapshot,
+                        ticket=str(ticket) if ticket is not None else None,
+                        entry=float(account.mid_price)
+                        if getattr(account, "mid_price", None) is not None
+                        else None,
+                    )
+                    get_trade_replay_store().record(replay)
+                    get_opportunity_outcome_store().record_evaluation(
+                        symbol=str(getattr(decision, "symbol", "") or ""),
+                        ai_confidence=int(getattr(decision, "confidence", 0) or 0),
+                        opportunity_score=int(getattr(decision, "confidence", 0) or 0),
+                        traded=True,
+                        outcome=None,
+                        session=None,
+                        strategy=str(getattr(self.plane, "trading_mode", "swing") or "swing"),
+                        direction=str(
+                            getattr(getattr(decision, "direction", None), "value", "") or ""
+                        ),
+                        latency_ms=lat,
+                    )
+                    # Calibration updated when outcome known; seed sample as pending via confidence only later
+                    _ = get_calibration_store
+                except Exception:
+                    logger.exception("performance_lab_post_fill_failed")
         except Exception:
             logger.exception("hardening_post_bridge_observe_failed")
         if self._manual_execution:

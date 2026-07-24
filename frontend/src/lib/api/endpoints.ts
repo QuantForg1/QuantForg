@@ -862,6 +862,24 @@ export const iteReliabilityApi = {
       `/ite/reliability/ai-validation${q}`,
     );
   },
+  performanceLab: (params?: {
+    symbol?: string;
+    session?: string;
+    regime?: string;
+    replayId?: string;
+    frameIndex?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.symbol) sp.set("symbol", params.symbol);
+    if (params?.session) sp.set("session", params.session);
+    if (params?.regime) sp.set("regime", params.regime);
+    if (params?.replayId) sp.set("replay_id", params.replayId);
+    if (params?.frameIndex != null) sp.set("frame_index", String(params.frameIndex));
+    const q = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/ite/reliability/performance-lab${q ? `?${q}` : ""}`,
+    );
+  },
   network: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>
