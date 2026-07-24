@@ -1192,6 +1192,23 @@ class MT5GatewayRuntime:
                     payload["symbol_specs"] = self.symbol_specs(symbol)
                 except RuntimeError:
                     payload["symbol_specs"] = {}
+                logger.error(
+                    "MT5 order_send()\n"
+                    "Request:\n"
+                    f"- symbol: {symbol}\n"
+                    f"- side: {action}\n"
+                    f"- volume: {volume}\n"
+                    f"- price: {body.get('price') or request.get('price')}\n"
+                    f"- SL: {body.get('sl') or body.get('stop_loss') or request.get('sl')}\n"
+                    f"- TP: {body.get('tp') or body.get('take_profit') or request.get('tp')}\n"
+                    "Response:\n"
+                    f"- retcode: {check_retcode}\n"
+                    f"- comment: {payload['comment']}\n"
+                    f"- deal: 0\n"
+                    f"- order: 0\n"
+                    f"- ticket: 0\n"
+                    "ORDER REJECTED"
+                )
                 return payload
             request = apply_filling_mode(
                 request, int(request.get("type_filling") or 0)
@@ -1215,6 +1232,39 @@ class MT5GatewayRuntime:
                 f"order_send failed: {err}. "
                 "Enable AutoTrading in MT5 and allow algo trading for this EA/account."
             )
+        # Exact operator audit — never swallow MT5 retcode/comment.
+        try:
+            order_n = int(payload.get("order_ticket") or 0)
+            deal_n = int(payload.get("deal_ticket") or 0)
+            ticket_n = order_n or deal_n
+            ret = int(payload.get("retcode") or -1)
+            comment = str(payload.get("comment") or "")
+            logger.warning(
+                "MT5 order_send()\n"
+                "Request:\n"
+                f"- symbol: {symbol}\n"
+                f"- side: {action}\n"
+                f"- volume: {volume}\n"
+                f"- price: {body.get('price') or request.get('price')}\n"
+                f"- SL: {body.get('sl') or body.get('stop_loss') or request.get('sl')}\n"
+                f"- TP: {body.get('tp') or body.get('take_profit') or request.get('tp')}\n"
+                "Response:\n"
+                f"- retcode: {ret}\n"
+                f"- comment: {comment or '(empty)'}\n"
+                f"- deal: {deal_n}\n"
+                f"- order: {order_n}\n"
+                f"- ticket: {ticket_n}"
+            )
+            if ret in {0, 10008, 10009}:
+                logger.warning("ORDER ACCEPTED\nPosition Opened")
+            else:
+                logger.error(
+                    "ORDER REJECTED\n"
+                    f"retcode: {ret}\n"
+                    f"comment: {comment or '(empty)'}"
+                )
+        except Exception:
+            logger.exception("mt5_order_send_audit_log_failed")
         return payload
 
     def order_cancel(self, ticket: int) -> dict[str, Any]:

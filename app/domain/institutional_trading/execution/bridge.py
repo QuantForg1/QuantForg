@@ -515,31 +515,25 @@ class ExecutionBridge:
             symbol_txt = str(
                 getattr(intent, "symbol", None) or decision.symbol or ""
             )
+            side_txt = str(getattr(intent, "side", None) or decision.action or "")
             logger.warning(
-                "Broker ACCEPTED — Position opened\n"
-                f"Ticket: {ticket}\n"
-                f"Entry price: {price_txt}\n"
+                "ORDER ACCEPTED\n"
+                "Position Opened\n"
+                f"symbol: {symbol_txt}\n"
+                f"side: {side_txt}\n"
+                f"volume: {lot_txt}\n"
+                f"price: {price_txt}\n"
                 f"SL: {sl_txt}\n"
                 f"TP: {tp_txt}\n"
-                f"Lot: {lot_txt}\n"
-                f"Symbol: {symbol_txt}"
-            )
-            logger.warning(
-                "MT5 Accepted",
-                ticket=ticket,
-                price=price_txt,
-                volume=lot_txt,
-                retcode=oms_result.retcode,
-                comment=oms_result.message,
+                f"retcode: {oms_result.retcode}\n"
+                f"comment: {oms_result.message or '(empty)'}\n"
+                f"deal: {oms_result.deal_ticket or 0}\n"
+                f"order: {oms_result.order_ticket or 0}\n"
+                f"ticket: {ticket or 0}"
             )
         else:
             self.metrics.record_rejected(latency)
             # Never hide broker errors — print exact MT5 fields.
-            from app.domain.entities.execution_gateway import map_retcode_to_outcome
-
-            meaning = ""
-            if oms_result.retcode is not None:
-                _, _, meaning = map_retcode_to_outcome(int(oms_result.retcode))
             sl_txt = (
                 str(intent.stop_loss.value)
                 if getattr(intent, "stop_loss", None) is not None
@@ -558,17 +552,21 @@ class ExecutionBridge:
             symbol_txt = str(
                 getattr(intent, "symbol", None) or decision.symbol or ""
             )
+            side_txt = str(getattr(intent, "side", None) or decision.action or "")
             reject_block = (
-                "Broker REJECTED order\n"
+                "ORDER REJECTED\n"
                 f"retcode: {oms_result.retcode}\n"
                 f"comment: {oms_result.message or '(empty)'}\n"
-                f"meaning: {meaning or '(unknown)'}\n"
+                f"deal: {getattr(oms_result, 'deal_ticket', None) or 0}\n"
+                f"order: {getattr(oms_result, 'order_ticket', None) or 0}\n"
+                f"ticket: "
+                f"{oms_result.order_ticket or oms_result.deal_ticket or 0}\n"
                 f"symbol: {symbol_txt}\n"
+                f"side: {side_txt}\n"
                 f"volume: {vol_txt}\n"
                 f"price: {getattr(oms_result, 'price', None) or '(market)'}\n"
-                f"stop loss: {sl_txt}\n"
-                f"take profit: {tp_txt}\n"
-                f"Why: {meaning or oms_result.message or abort_reason.value}"
+                f"SL: {sl_txt}\n"
+                f"TP: {tp_txt}"
             )
             logger.error(reject_block)
             logger.warning(

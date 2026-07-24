@@ -79,17 +79,19 @@ class ExecutionGateway:
             return result
 
         raw = self.adapter.order_send(request)
+        # Exact broker fields — never replace comment with a soft paraphrase here.
         logger.warning(
-            "order_send result mapped",
-            retcode=raw.retcode,
-            comment=raw.comment or "",
-            symbol=intent.symbol,
-            volume=str(raw.volume if raw.volume is not None else request.volume),
-            price=str(raw.price if raw.price is not None else request.price),
-            stop_loss=str(request.stop_loss),
-            take_profit=str(request.take_profit),
-            order_ticket=raw.order_ticket or None,
-            deal_ticket=raw.deal_ticket or None,
+            "order_send result mapped\n"
+            f"retcode: {raw.retcode}\n"
+            f"comment: {raw.comment or '(empty)'}\n"
+            f"deal: {raw.deal_ticket or 0}\n"
+            f"order: {raw.order_ticket or 0}\n"
+            f"ticket: {raw.order_ticket or raw.deal_ticket or 0}\n"
+            f"symbol: {intent.symbol}\n"
+            f"volume: {raw.volume if raw.volume is not None else request.volume}\n"
+            f"price: {raw.price if raw.price is not None else request.price}\n"
+            f"SL: {request.stop_loss}\n"
+            f"TP: {request.take_profit}"
         )
         return self._map_send_result(
             raw,

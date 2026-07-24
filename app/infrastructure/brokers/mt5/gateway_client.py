@@ -1243,90 +1243,97 @@ class GatewayMT5Client:
     def order_send(self, request: TradeRequest) -> MT5OrderSendResult:
         """POST /trade/order_send → MetaTrader5.order_send — never invents fills."""
         self._require_connected()
-        logger.warning(
-            "MT5 order_send()",
-            symbol=request.symbol,
-            action=request.action,
-            volume=str(request.volume),
-            price=str(request.price),
-            stop_loss=str(request.stop_loss),
-            take_profit=str(request.take_profit),
-            deviation=int(request.deviation),
-            magic=int(request.magic),
-            comment=request.comment or "quantforg",
+        from app.infrastructure.brokers.mt5.order_send_log import (
+            log_mt5_order_send_exchange,
         )
-        data = self._request(
-            "POST",
-            "/trade/order_send",
-            json_body={
-                "symbol": request.symbol,
-                "action": request.action,
-                "volume": float(request.volume),
-                "price": float(request.price),
-                "sl": float(request.stop_loss),
-                "tp": float(request.take_profit),
-                "deviation": int(request.deviation),
-                "magic": int(request.magic),
-                "comment": request.comment or "quantforg",
-                "position": int(request.position or 0),
-                "order_ticket": int(request.order_ticket or 0),
-                "oms_kind": request.oms_kind or "",
-            },
-        )
+
+        try:
+            data = self._request(
+                "POST",
+                "/trade/order_send",
+                json_body={
+                    "symbol": request.symbol,
+                    "action": request.action,
+                    "volume": float(request.volume),
+                    "price": float(request.price),
+                    "sl": float(request.stop_loss),
+                    "tp": float(request.take_profit),
+                    "deviation": int(request.deviation),
+                    "magic": int(request.magic),
+                    "comment": request.comment or "quantforg",
+                    "position": int(request.position or 0),
+                    "order_ticket": int(request.order_ticket or 0),
+                    "oms_kind": request.oms_kind or "",
+                },
+            )
+        except Exception as exc:
+            # Never swallow — surface the transport failure as an explicit reject.
+            log_mt5_order_send_exchange(
+                symbol=request.symbol,
+                side=request.action,
+                volume=request.volume,
+                price=request.price,
+                stop_loss=request.stop_loss,
+                take_profit=request.take_profit,
+                retcode=-1,
+                comment=f"gateway/transport error before broker result: {exc}",
+                deal=0,
+                order=0,
+                ticket=0,
+            )
+            raise
         self._positions_cache = None
         self._positions_cache_at = 0.0
         self._account_cache = None
         self._account_cache_at = 0.0
+        # Prefer explicit keys; also accept raw MT5 aliases order/deal/ticket.
+        order_ticket = int(
+            data.get("order_ticket")
+            or data.get("order")
+            or data.get("ticket")
+            or 0
+        )
+        deal_ticket = int(data.get("deal_ticket") or data.get("deal") or 0)
+        # Exact broker comment — never replace with a humanized string.
+        broker_comment = str(
+            data.get("comment")
+            or data.get("broker_comment")
+            or data.get("retcode_description")
+            or ""
+        )
         result = MT5OrderSendResult(
             retcode=_mt5_retcode(data),
-            comment=str(data.get("comment") or ""),
-            order_ticket=int(data.get("order_ticket") or 0),
-            deal_ticket=int(data.get("deal_ticket") or 0),
+            comment=broker_comment,
+            order_ticket=order_ticket,
+            deal_ticket=deal_ticket,
             volume=_dec(data.get("volume"), str(request.volume)),
             price=_dec(data.get("price"), str(request.price)),
             request=request,
         )
-        from app.domain.entities.execution_gateway import map_retcode_to_outcome
-
-        _outcome, _retryable, meaning = map_retcode_to_outcome(result.retcode)
-        logger.warning(
-            "Broker response",
-            retcode=result.retcode,
-            comment=result.comment or "",
-            meaning=meaning,
+        log_mt5_order_send_exchange(
             symbol=request.symbol,
-            volume=str(result.volume),
-            price=str(result.price),
-            stop_loss=str(request.stop_loss),
-            take_profit=str(request.take_profit),
-            order_ticket=result.order_ticket or None,
-            deal_ticket=result.deal_ticket or None,
-            raw_keys=sorted(str(k) for k in data.keys()) if isinstance(data, dict) else [],
+            side=request.action,
+            volume=result.volume,
+            price=result.price,
+            stop_loss=request.stop_loss,
+            take_profit=request.take_profit,
+            retcode=result.retcode,
+            comment=result.comment,
+            deal=result.deal_ticket,
+            order=result.order_ticket,
+            ticket=result.order_ticket or result.deal_ticket,
         )
-        if result.retcode in {0, 10008, 10009}:
-            logger.warning(
-                "Position opened\n"
-                f"Ticket: {result.order_ticket or result.deal_ticket}\n"
-                f"Entry price: {result.price}\n"
-                f"SL: {request.stop_loss}\n"
-                f"TP: {request.take_profit}\n"
-                f"Lot: {result.volume}\n"
-                f"Symbol: {request.symbol}"
-            )
-        else:
-            logger.error(
-                "Broker REJECTED order\n"
-                f"retcode: {result.retcode}\n"
-                f"comment: {result.comment or '(empty)'}\n"
-                f"meaning: {meaning}\n"
-                f"symbol: {request.symbol}\n"
-                f"volume: {result.volume}\n"
-                f"price: {result.price}\n"
-                f"stop loss: {request.stop_loss}\n"
-                f"take profit: {request.take_profit}\n"
-                f"Why: {meaning}"
-                + (f" — broker said: {result.comment}" if result.comment else "")
-            )
+        # Preserve raw payload keys for ops forensics (never drop broker fields).
+        logger.warning(
+            "mt5_order_send_raw_response",
+            retcode=result.retcode,
+            comment=result.comment,
+            order_ticket=result.order_ticket,
+            deal_ticket=result.deal_ticket,
+            raw_keys=sorted(str(k) for k in data.keys())
+            if isinstance(data, dict)
+            else [],
+        )
         return result
 
     def order_cancel(self, ticket: int) -> MT5OrderSendResult:
