@@ -2027,6 +2027,18 @@ export const iepApi = {
     apiFetch<Record<string, unknown>>(`/iep/reports?limit=${limit}`),
 };
 
+/** Institutional Control Plane — executive operations (read-only) */
+export const icpApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/icp/dashboard"),
+  health: () => apiFetch<Record<string, unknown>>("/icp/health"),
+  alerts: () => apiFetch<Record<string, unknown>>("/icp/alerts"),
+  timeline: () => apiFetch<Record<string, unknown>>("/icp/timeline"),
+  dependencies: () => apiFetch<Record<string, unknown>>("/icp/dependencies"),
+  evidence: () => apiFetch<Record<string, unknown>>("/icp/evidence"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/icp/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

@@ -36,6 +36,7 @@ import {
   LineChart,
   ListOrdered,
   MessageSquareWarning,
+  Network,
   NotebookPen,
   PieChart,
   Radar,
@@ -218,6 +219,12 @@ export const appNav: NavGroup[] = [
         label: "Experimentation",
         icon: Beaker,
         hint: "IEP · hypothesis · compare · evidence · decision",
+      },
+      {
+        href: "/institutional-control-plane",
+        label: "Control Plane",
+        icon: Network,
+        hint: "ICP · executive health · timeline · dependencies",
       },
       {
         href: "/strategy-lab",
