@@ -321,6 +321,18 @@ class Settings(BaseSettings):
             ),
         ),
     ] = False
+    institutional_alpha_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Enable Institutional Alpha Engine (multi-symbol scanner). "
+                "When true, gold-only mandate is lifted for ranked execution."
+            ),
+            validation_alias=AliasChoices(
+                "INSTITUTIONAL_ALPHA_ENABLED", "institutional_alpha_enabled"
+            ),
+        ),
+    ] = False
     default_trading_symbol: Annotated[
         str,
         Field(
@@ -593,10 +605,14 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "reload", False)
             if self.debug:
                 object.__setattr__(self, "debug", False)
-            # XAUUSD-only platform — never enable multi-asset trading in production.
-            object.__setattr__(self, "gold_only_mode", True)
-            object.__setattr__(self, "multi_symbol_enabled", False)
-            object.__setattr__(self, "default_trading_symbol", "XAUUSD")
+            # XAUUSD-only unless Institutional Alpha / multi-symbol is explicitly on.
+            if not bool(getattr(self, "institutional_alpha_enabled", False)):
+                object.__setattr__(self, "gold_only_mode", True)
+                object.__setattr__(self, "multi_symbol_enabled", False)
+                object.__setattr__(self, "default_trading_symbol", "XAUUSD")
+            else:
+                object.__setattr__(self, "multi_symbol_enabled", True)
+                object.__setattr__(self, "gold_only_mode", False)
             # Live trading requires an explicit flag AND a configured gateway.
             # Do not silently invent fills via MockMT5Client in production.
             has_gateway = bool((self.mt5_gateway_base_url or "").strip())

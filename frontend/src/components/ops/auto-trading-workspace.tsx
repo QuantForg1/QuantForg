@@ -477,16 +477,23 @@ export function AutoTradingWorkspace() {
   });
 
   const setModeMut = useMutation({
-    mutationFn: (mode: "swing" | "scalping") =>
+    mutationFn: (mode: "swing" | "scalping" | "alpha") =>
       iteOpsApi.updateAutoTrading({
         reason: `operator set trading_mode=${mode}`,
         confirmed: true,
         trading_mode: mode,
-        max_open_positions: mode === "scalping" ? Math.max(maxOpen || 1, 3) : maxOpen || 1,
+        alpha_engine_enabled: mode === "alpha",
+        max_open_positions:
+          mode === "scalping" || mode === "alpha"
+            ? Math.max(maxOpen || 1, 3)
+            : maxOpen || 1,
         risk_per_trade_pct: String(riskPerTradePct || 1),
         max_daily_loss_pct: String(maxDailyLossPct || 3),
         max_spread: str(policy.max_spread, "2.00"),
-        allowed_symbols: ["XAUUSD"],
+        allowed_symbols:
+          mode === "alpha"
+            ? ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "NAS100", "US30", "BTCUSD"]
+            : ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
           ? asList(policy.allowed_sessions).map(String)
           : ["london", "new_york", "london_ny_overlap"],
@@ -497,7 +504,11 @@ export function AutoTradingWorkspace() {
       }),
     onSuccess: (_data, mode) => {
       toast.success(
-        mode === "scalping" ? "AI Scalping Mode enabled" : "Swing Mode enabled",
+        mode === "alpha"
+          ? "Institutional Alpha enabled"
+          : mode === "scalping"
+            ? "AI Scalping Mode enabled"
+            : "Swing Mode enabled",
       );
       invalidate();
     },
@@ -1194,6 +1205,14 @@ export function AutoTradingWorkspace() {
           </Button>
           <Button
             size="sm"
+            variant={tradingMode === "alpha" ? "default" : "outline"}
+            disabled={setModeMut.isPending}
+            onClick={() => setModeMut.mutate("alpha")}
+          >
+            Institutional Alpha
+          </Button>
+          <Button
+            size="sm"
             variant={tradingMode === "swing" ? "default" : "outline"}
             disabled={setModeMut.isPending}
             onClick={() => setModeMut.mutate("swing")}
@@ -1210,7 +1229,11 @@ export function AutoTradingWorkspace() {
           </Button>
           <span className="font-mono text-[10px] text-[var(--fg-muted)]">
             Max open {maxOpen} · Risk {riskPerTradePct}%
-            {tradingMode === "scalping" ? " · H1→M1 (no H4)" : " · H4→M5"}
+            {tradingMode === "alpha"
+              ? " · Multi-symbol Alpha"
+              : tradingMode === "scalping"
+                ? " · H1→M1 (no H4)"
+                : " · H4→M5"}
           </span>
         </div>
         {busyLabel ? (
@@ -1331,8 +1354,18 @@ export function AutoTradingWorkspace() {
         <OpsPanel
           title="AI strategy"
           action={
-            <Badge tone={tradingMode === "scalping" ? "success" : "neutral"}>
-              {tradingMode === "scalping" ? "SCALPING" : "SWING"}
+            <Badge
+              tone={
+                tradingMode === "alpha" || tradingMode === "scalping"
+                  ? "success"
+                  : "neutral"
+              }
+            >
+              {tradingMode === "alpha"
+                ? "ALPHA"
+                : tradingMode === "scalping"
+                  ? "SCALPING"
+                  : "SWING"}
             </Badge>
           }
         >

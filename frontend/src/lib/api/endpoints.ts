@@ -793,6 +793,8 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>("/ite/ops/auto-trading/execute-now", {
       method: "POST",
     }),
+  institutionalAlpha: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/institutional-alpha"),
   emergencyStop: (reason: string, confirmed: boolean) =>
     apiFetch<Record<string, unknown>>("/ite/ops/auto-trading/emergency-stop", {
       method: "POST",

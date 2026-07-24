@@ -42,21 +42,37 @@ def apply_trading_mode_to_runtime(
     mode: str,
     scalp: AiScalpingConfig | None = None,
 ) -> dict[str, Any]:
-    """Switch ITE decision + PME knobs between swing and scalping."""
+    """Switch ITE decision + PME knobs between swing, scalping, and alpha."""
     mode_l = (mode or "swing").strip().lower()
-    if mode_l not in {"swing", "scalping"}:
-        raise ValueError("trading_mode must be 'swing' or 'scalping'")
+    if mode_l not in {"swing", "scalping", "alpha"}:
+        raise ValueError("trading_mode must be 'swing', 'scalping', or 'alpha'")
+
+    from app.application.services.institutional_alpha_engine import set_alpha_enabled
 
     if mode_l == "scalping":
         ite = scalping_ite_config(DEFAULT_ITE_CONFIG, scalp=scalp)
         pme = pme_config_for_scalping(scalp)
+        set_alpha_enabled(False)
+    elif mode_l == "alpha":
+        # Alpha uses scalping-style MTF for speed + multi-symbol scanner
+        ite = scalping_ite_config(DEFAULT_ITE_CONFIG, scalp=scalp)
+        from dataclasses import replace as _replace
+
+        ite = _replace(
+            ite,
+            trading_mode="alpha",
+            config_version=f"{ite.config_version}+alpha",
+            max_open_trades=max(3, ite.max_open_trades),
+        )
+        pme = pme_config_for_scalping(scalp)
+        set_alpha_enabled(True)
     else:
         ite = DEFAULT_ITE_CONFIG
         pme = DEFAULT_PME_CONFIG
+        set_alpha_enabled(False)
 
     if runtime is not None:
         runtime.decision_pipeline.config = ite
-        # Rebuild risk engine against new ITE limits
         from app.application.services.institutional_decision_pipeline import (
             risk_config_from_ite,
         )
@@ -74,7 +90,7 @@ def apply_trading_mode_to_runtime(
             mode=mode_l,
             ite_version=ite.config_version,
             max_open=ite.max_open_trades,
-            tfs=list(ite.analysis_timeframes()),
+            tfs=[t.value for t in ite.analysis_timeframes()],
         )
 
     return {
@@ -82,8 +98,9 @@ def apply_trading_mode_to_runtime(
         "ite": ite.to_dict(),
         "pme": pme.to_dict(),
         "ai_scalping": (scalp or DEFAULT_AI_SCALPING_CONFIG).to_dict()
-        if mode_l == "scalping"
+        if mode_l in {"scalping", "alpha"}
         else None,
+        "alpha_enabled": mode_l == "alpha",
     }
 
 

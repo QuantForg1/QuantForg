@@ -1058,6 +1058,48 @@ class InstitutionalIteRuntime:
             "message": reason,
         }
 
+    def _alpha_preferred_symbol(self) -> str | None:
+        """When Institutional Alpha is on, return highest-ranked executable symbol."""
+        try:
+            from app.application.services.institutional_alpha_engine import (
+                get_alpha_config,
+                run_alpha_scan,
+            )
+            from app.domain.trading.gold_only import GOLD_SYMBOL
+
+            cfg = get_alpha_config()
+            if not cfg.enabled and not getattr(self.plane, "alpha_engine_enabled", False):
+                mode = str(getattr(self.plane, "trading_mode", "") or "")
+                if mode != "alpha":
+                    return None
+            open_symbols: list[str] = []
+            try:
+                open_symbols = [
+                    str(getattr(p, "symbol", "") or "")
+                    for p in self.position_management.engine._positions.values()
+                ]
+            except Exception:
+                open_symbols = []
+            scan = run_alpha_scan(
+                mt5_adapter=self.mt5_adapter,
+                open_symbols=open_symbols,
+            )
+            selected = scan.get("selected") or []
+            if selected:
+                sym = str(selected[0].get("symbol") or "").upper()
+                logger.warning(
+                    "alpha_opportunity_selected",
+                    symbol=sym,
+                    score=selected[0].get("opportunity_score"),
+                    rank=selected[0].get("rank"),
+                )
+                return sym or GOLD_SYMBOL
+            logger.warning("alpha_scan_no_executable_opportunity")
+            return None
+        except Exception:
+            logger.exception("alpha_preferred_symbol_failed")
+            return None
+
     async def execute_now(self) -> dict[str, Any]:
         """Run one complete Auto Trading cycle immediately (manual trigger).
 
@@ -1074,11 +1116,14 @@ class InstitutionalIteRuntime:
             from app.application.services.ite_cycle_market_context import (
                 build_ite_cycle_market_context,
             )
+            from app.domain.trading.gold_only import GOLD_SYMBOL
 
             logger.warning("Force Sync Positions")
             enrich = _enrich_from_adapter(self.probes)
+            symbol = self._alpha_preferred_symbol() or GOLD_SYMBOL
             ctx = await build_ite_cycle_market_context(
                 self.mt5_adapter,
+                symbol=symbol,
                 position_engine=self.position_management.engine,
             )
             if not ctx.ok or ctx.snapshot is None or ctx.account is None:
@@ -1216,8 +1261,12 @@ class InstitutionalIteRuntime:
                 )
 
                 enrich = _enrich_from_adapter(self.probes)
+                from app.domain.trading.gold_only import GOLD_SYMBOL
+
+                symbol = self._alpha_preferred_symbol() or GOLD_SYMBOL
                 ctx = await build_ite_cycle_market_context(
                     self.mt5_adapter,
+                    symbol=symbol,
                     position_engine=self.position_management.engine,
                 )
                 if not ctx.ok or ctx.snapshot is None or ctx.account is None:

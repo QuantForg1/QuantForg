@@ -43,19 +43,26 @@ class AutoTradePolicy:
     allowed_symbols: tuple[str, ...] = ("XAUUSD",)
     max_spread: Decimal = Decimal("2.00")
     news_filter_enabled: bool = False
-    trading_mode: str = "swing"  # swing | scalping
+    trading_mode: str = "swing"  # swing | scalping | alpha
     compounding_enabled: bool = False
+    alpha_engine_enabled: bool = False
 
     def __post_init__(self) -> None:
-        from app.domain.trading.gold_only import GOLD_SYMBOL
+        from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
         from app.domain.trading.xauusd_specs import coerce_max_spread
 
         object.__setattr__(self, "max_spread", coerce_max_spread(self.max_spread))
-        object.__setattr__(self, "allowed_symbols", (GOLD_SYMBOL,))
         mode = (self.trading_mode or "swing").strip().lower()
-        if mode not in {"swing", "scalping"}:
+        if mode not in {"swing", "scalping", "alpha"}:
             mode = "swing"
         object.__setattr__(self, "trading_mode", mode)
+        if gold_only_enabled() and mode != "alpha":
+            object.__setattr__(self, "allowed_symbols", (GOLD_SYMBOL,))
+        else:
+            cleaned = tuple(
+                s.strip().upper() for s in self.allowed_symbols if s and str(s).strip()
+            ) or (GOLD_SYMBOL,)
+            object.__setattr__(self, "allowed_symbols", cleaned)
 
     def to_dict(self) -> dict[str, Any]:
         state = normalize_run_state(self.run_state, enabled=self.enabled)
@@ -71,6 +78,8 @@ class AutoTradePolicy:
             "news_filter_enabled": self.news_filter_enabled,
             "trading_mode": self.trading_mode,
             "compounding_enabled": self.compounding_enabled,
+            "alpha_engine_enabled": self.alpha_engine_enabled
+            or self.trading_mode == "alpha",
             "may_open_new_trades": state == "running",
             "may_manage_positions": state in {"running", "paused"},
         }

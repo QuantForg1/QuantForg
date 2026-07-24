@@ -401,6 +401,12 @@ export const appNav: NavGroup[] = [
         hint: "Autonomous command center",
       },
       {
+        href: "/institutional-alpha",
+        label: "Institutional Alpha",
+        icon: ScanSearch,
+        hint: "Multi-symbol ranking · correlation · adaptive risk",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,

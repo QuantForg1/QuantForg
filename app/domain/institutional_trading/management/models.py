@@ -150,6 +150,13 @@ class PositionManageContext:
     request_id: str | None = None
     connected: bool = True
     login: int | None = None
+    # Institutional Alpha — optional AI re-evaluation hints
+    ai_entry_confidence: int | None = None
+    ai_current_confidence: int | None = None
+    ai_momentum: int | None = None
+    ai_volatility: int | None = None
+    ai_liquidity: int | None = None
+    ai_trend_strength: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

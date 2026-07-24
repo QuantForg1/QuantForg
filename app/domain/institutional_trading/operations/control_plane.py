@@ -75,6 +75,7 @@ class OperationsControlPlane:
     news_filter_enabled: bool = False
     trading_mode: str = "swing"
     compounding_enabled: bool = False
+    alpha_engine_enabled: bool = False
 
     _lock: RLock = field(default_factory=RLock, repr=False)
     _initialized: bool = field(default=False, repr=False)
@@ -371,6 +372,7 @@ class OperationsControlPlane:
                 news_filter_enabled=self.news_filter_enabled,
                 trading_mode=self.trading_mode,
                 compounding_enabled=self.compounding_enabled,
+                alpha_engine_enabled=self.alpha_engine_enabled,
             )
 
     def update_auto_trade_controls(
@@ -388,6 +390,7 @@ class OperationsControlPlane:
         news_filter_enabled: bool | None = None,
         trading_mode: str | None = None,
         compounding_enabled: bool | None = None,
+        alpha_engine_enabled: bool | None = None,
         reason: str,
         now: datetime | None = None,
     ) -> AutoTradePolicy:
@@ -427,8 +430,12 @@ class OperationsControlPlane:
                 )
                 if not cleaned_sym:
                     raise ValueError("allowed_symbols must not be empty")
-                # Platform mandate: XAUUSD only — ignore multi-asset operator input.
-                self.allowed_symbols = (GOLD_SYMBOL,)
+                from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+
+                if gold_only_enabled() and self.trading_mode != "alpha":
+                    self.allowed_symbols = (GOLD_SYMBOL,)
+                else:
+                    self.allowed_symbols = cleaned_sym
             if max_spread is not None:
                 from app.domain.trading.xauusd_specs import (
                     MAX_SPREAD,
@@ -447,15 +454,29 @@ class OperationsControlPlane:
                 self.news_filter_enabled = news_filter_enabled
             if trading_mode is not None:
                 mode = trading_mode.strip().lower()
-                if mode not in {"swing", "scalping"}:
-                    raise ValueError("trading_mode must be 'swing' or 'scalping'")
+                if mode not in {"swing", "scalping", "alpha"}:
+                    raise ValueError(
+                        "trading_mode must be 'swing', 'scalping', or 'alpha'"
+                    )
                 self.trading_mode = mode
                 if mode == "scalping" and max_open_positions is None:
-                    # Default Max Open Trades = 3 when enabling Scalping Mode
                     if self.max_open_trades < 3:
+                        self.max_open_trades = 3
+                if mode == "alpha":
+                    self.alpha_engine_enabled = True
+                    from app.domain.institutional_trading.alpha_engine.config import (
+                        DEFAULT_ALPHA_UNIVERSE,
+                    )
+
+                    self.allowed_symbols = DEFAULT_ALPHA_UNIVERSE
+                    if max_open_positions is None and self.max_open_trades < 3:
                         self.max_open_trades = 3
             if compounding_enabled is not None:
                 self.compounding_enabled = bool(compounding_enabled)
+            if alpha_engine_enabled is not None:
+                self.alpha_engine_enabled = bool(alpha_engine_enabled)
+                if self.alpha_engine_enabled and self.trading_mode == "swing":
+                    self.trading_mode = "alpha"
             state = normalize_run_state(
                 self.auto_trading_run_state,
                 enabled=self.auto_trading_enabled,
@@ -473,6 +494,7 @@ class OperationsControlPlane:
                 news_filter_enabled=self.news_filter_enabled,
                 trading_mode=self.trading_mode,
                 compounding_enabled=self.compounding_enabled,
+                alpha_engine_enabled=self.alpha_engine_enabled,
             )
         self.audit.record(
             operator=operator,
@@ -519,6 +541,7 @@ class OperationsControlPlane:
                 news_filter_enabled=self.news_filter_enabled,
                 trading_mode=self.trading_mode,
                 compounding_enabled=self.compounding_enabled,
+                alpha_engine_enabled=self.alpha_engine_enabled,
             )
             merged = AutoTradeLiveFacts(
                 gateway_connected=facts.gateway_connected,

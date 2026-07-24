@@ -108,6 +108,7 @@ class AutoTradeControlsBody(ConfirmBody):
     news_filter_enabled: bool | None = None
     trading_mode: str | None = None
     compounding_enabled: bool | None = None
+    alpha_engine_enabled: bool | None = None
 
 
 class AutoTradeEvaluateBody(BaseModel):
@@ -652,7 +653,52 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "persistence": ops_state_diagnostics(),
         "force_first_trade": _force_first_trade_payload(snap, settings),
         "ai_scalping": _ai_scalping_payload(),
+        "institutional_alpha": _institutional_alpha_payload(),
     }
+
+
+def _institutional_alpha_payload() -> dict[str, Any]:
+    from app.application.services.institutional_alpha_engine import (
+        build_alpha_dashboard,
+        get_alpha_config,
+    )
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+    plane = get_control_plane()
+    runtime = None
+    try:
+        runtime = get_ite_runtime()
+    except Exception:
+        runtime = None
+    mt5 = getattr(runtime, "mt5_adapter", None) if runtime is not None else None
+    open_symbols: list[str] = []
+    try:
+        if runtime is not None and hasattr(runtime.position_management, "engine"):
+            open_symbols = [
+                str(getattr(p, "symbol", "") or "")
+                for p in getattr(runtime.position_management.engine, "_positions", {}).values()
+            ]
+    except Exception:
+        open_symbols = []
+    try:
+        dash = build_alpha_dashboard(
+            mt5_adapter=mt5,
+            open_symbols=open_symbols,
+            session=str(getattr(plane, "allowed_sessions", ("london",))[0]),
+        )
+    except Exception as exc:
+        dash = {
+            "enabled": bool(getattr(plane, "alpha_engine_enabled", False)),
+            "error": str(exc),
+            "config": get_alpha_config().to_dict(),
+            "opportunity_ranking": [],
+            "analytics": {},
+            "performance": {},
+            "correlation_matrix": {},
+        }
+    dash["plane_enabled"] = bool(getattr(plane, "alpha_engine_enabled", False))
+    dash["trading_mode"] = getattr(plane, "trading_mode", "swing")
+    return dash
 
 
 def _ai_scalping_payload() -> dict[str, Any]:
@@ -1205,6 +1251,7 @@ def update_auto_trading(
             news_filter_enabled=body.news_filter_enabled,
             trading_mode=body.trading_mode,
             compounding_enabled=body.compounding_enabled,
+            alpha_engine_enabled=body.alpha_engine_enabled,
             reason=body.reason,
         )
     except PermissionDenied as exc:
@@ -1223,9 +1270,14 @@ def update_auto_trading(
         scalp = DEFAULT_AI_SCALPING_CONFIG
         if policy.compounding_enabled:
             scalp = replace(scalp, compounding_enabled=True)
+        apply_mode = (
+            "alpha"
+            if (policy.trading_mode == "alpha" or policy.alpha_engine_enabled)
+            else policy.trading_mode
+        )
         mode_payload = apply_trading_mode_to_runtime(
             get_ite_runtime(),
-            mode=policy.trading_mode,
+            mode=apply_mode,
             scalp=scalp,
         )
     except Exception:
@@ -1276,6 +1328,12 @@ async def execute_now_auto_trading(_user: OperatorUser) -> dict[str, Any]:
     if runtime is None:
         raise HTTPException(status_code=503, detail="ITE runtime not available")
     return await runtime.execute_now()
+
+
+@router.get("/institutional-alpha")
+def get_institutional_alpha(_user: OperatorUser) -> dict[str, Any]:
+    """Institutional Alpha Engine — opportunity ranking + portfolio desk."""
+    return _institutional_alpha_payload()
 
 
 @router.post("/auto-trading/emergency-stop")

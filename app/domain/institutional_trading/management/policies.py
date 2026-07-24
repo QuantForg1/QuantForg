@@ -119,6 +119,35 @@ def plan_action(
             target_state=PositionLifecycleState.EXITED,
         )
 
+    # --- Institutional Alpha AI position management (configurable) ---
+    if (
+        context.ai_entry_confidence is not None
+        and context.ai_current_confidence is not None
+    ):
+        try:
+            from app.domain.institutional_trading.alpha_engine.position_ai import (
+                AiManageHints,
+                plan_ai_position_action,
+            )
+
+            ai_action = plan_ai_position_action(
+                position,
+                context,
+                hints=AiManageHints(
+                    entry_confidence=int(context.ai_entry_confidence),
+                    current_confidence=int(context.ai_current_confidence),
+                    momentum=int(context.ai_momentum or 50),
+                    volatility=int(context.ai_volatility or 50),
+                    liquidity=int(context.ai_liquidity or 50),
+                    trend_strength=int(context.ai_trend_strength or 50),
+                ),
+                pme_config=config,
+            )
+            if ai_action is not None:
+                return ai_action
+        except Exception:
+            pass
+
     # --- Time stop ---
     hold_minutes = (context.now - position.opened_at).total_seconds() / 60.0
     if (

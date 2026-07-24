@@ -91,7 +91,7 @@ class ITEConfig:
         )
 
     def is_scalping(self) -> bool:
-        return str(self.trading_mode).lower() == "scalping"
+        return str(self.trading_mode).lower() in {"scalping", "alpha"}
 
     def to_dict(self) -> dict[str, object]:
         return {
