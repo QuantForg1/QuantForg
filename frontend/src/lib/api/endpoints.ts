@@ -2131,6 +2131,52 @@ export const aocApi = {
     apiFetch<Record<string, unknown>>(`/aoc/reports?limit=${limit}`),
 };
 
+/** QuantForg Event Mesh — read-only immutable event distribution */
+export const qemApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qem/dashboard"),
+  events: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/qem/events?limit=${limit}`),
+  stream: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/qem/stream?limit=${limit}`),
+  timeline: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/qem/timeline?limit=${limit}`),
+  search: (params?: {
+    strategy_id?: string;
+    release_id?: string;
+    experiment_id?: string;
+    correlation_id?: string;
+    category?: string;
+    event_type?: string;
+    q?: string;
+    limit?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.strategy_id) sp.set("strategy_id", params.strategy_id);
+    if (params?.release_id) sp.set("release_id", params.release_id);
+    if (params?.experiment_id) sp.set("experiment_id", params.experiment_id);
+    if (params?.correlation_id) sp.set("correlation_id", params.correlation_id);
+    if (params?.category) sp.set("category", params.category);
+    if (params?.event_type) sp.set("event_type", params.event_type);
+    if (params?.q) sp.set("q", params.q);
+    sp.set("limit", String(params?.limit ?? 100));
+    return apiFetch<Record<string, unknown>>(`/qem/search?${sp}`);
+  },
+  replay: (params?: { from_ts?: string; to_ts?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.from_ts) sp.set("from_ts", params.from_ts);
+    if (params?.to_ts) sp.set("to_ts", params.to_ts);
+    sp.set("limit", String(params?.limit ?? 200));
+    return apiFetch<Record<string, unknown>>(`/qem/replay?${sp}`);
+  },
+  correlation: (correlationId?: string) =>
+    correlationId
+      ? apiFetch<Record<string, unknown>>(
+          `/qem/correlation/${encodeURIComponent(correlationId)}`,
+        )
+      : apiFetch<Record<string, unknown>>("/qem/correlation"),
+  subscribers: () => apiFetch<Record<string, unknown>>("/qem/subscribers"),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

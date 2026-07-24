@@ -252,6 +252,12 @@ export const appNav: NavGroup[] = [
         hint: "AOC · queue · recommendations · readiness",
       },
       {
+        href: "/quantforg-event-mesh",
+        label: "Event Mesh",
+        icon: Cable,
+        hint: "QEM · stream · timeline · correlation",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

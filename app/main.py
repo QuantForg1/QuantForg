@@ -209,6 +209,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "quantforg_autonomous_operations",
         "app.presentation.routers.quantforg_autonomous_operations",
     ),
+    (
+        "quantforg_event_mesh",
+        "app.presentation.routers.quantforg_event_mesh",
+    ),
 )
 
 
