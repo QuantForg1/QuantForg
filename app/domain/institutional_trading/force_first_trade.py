@@ -290,6 +290,12 @@ def maybe_override_decision(
         if not gateway_connected or not broker_connected:
             return decision, False
         if account.open_positions > 0 or account.already_in_trade:
+            logger.error(
+                "FORCE_FIRST_TRADE REJECTED before OMS: open position already exists "
+                "(open_positions=%s already_in_trade=%s)",
+                account.open_positions,
+                account.already_in_trade,
+            )
             return decision, False
 
         direction = resolve_force_direction(
