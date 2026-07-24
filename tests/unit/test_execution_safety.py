@@ -69,7 +69,11 @@ async def _connect(
 
 @pytest.mark.unit
 class TestExecutionPolicy:
-    def test_policy_validation_fields(self) -> None:
+    def test_policy_validation_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "app.domain.trading.gold_only.gold_only_enabled",
+            lambda: True,
+        )
         policy = ExecutionPolicy(
             max_spread=Decimal("0.00030"),  # FX-scale — coerced to XAUUSD 2.00
             max_slippage=10,
@@ -91,6 +95,18 @@ class TestExecutionPolicy:
         night = datetime(2026, 7, 12, 22, 0, tzinfo=UTC)
         assert policy.within_trading_hours(noon)
         assert not policy.within_trading_hours(night)
+
+    def test_multi_symbol_whitelist_allows_eurusd(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.trading.gold_only.gold_only_enabled",
+            lambda: False,
+        )
+        policy = ExecutionPolicy()
+        assert policy.allows_symbol("EURUSD")
+        assert policy.allows_symbol("XAUUSD")
+
 
 
 @pytest.mark.unit

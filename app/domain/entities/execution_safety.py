@@ -53,12 +53,41 @@ class ExecutionPolicy:
         cleaned = frozenset(
             s.strip().upper() for s in self.symbol_whitelist if s.strip()
         )
-        # Platform is XAUUSD-only — never widen beyond gold.
-        object.__setattr__(
-            self,
-            "symbol_whitelist",
-            cleaned & SYMBOL_WHITELIST if cleaned else SYMBOL_WHITELIST,
-        )
+        # Gold-only mode: never widen beyond XAUUSD.
+        # Multi-symbol / Alpha: expand the default gold-only set so close-only
+        # rotation (e.g. EURUSD) can pass the execution policy gate.
+        from app.domain.trading.gold_only import gold_only_enabled
+
+        if gold_only_enabled():
+            resolved = cleaned & SYMBOL_WHITELIST if cleaned else SYMBOL_WHITELIST
+        else:
+            try:
+                from app.domain.institutional_trading.alpha_engine.config import (
+                    DEFAULT_ALPHA_UNIVERSE,
+                )
+
+                universe = frozenset(
+                    str(s).strip().upper() for s in DEFAULT_ALPHA_UNIVERSE if s
+                ) | SYMBOL_WHITELIST
+            except Exception:
+                universe = SYMBOL_WHITELIST | frozenset(
+                    {
+                        "EURUSD",
+                        "GBPUSD",
+                        "USDJPY",
+                        "AUDUSD",
+                        "USDCAD",
+                        "USDCHF",
+                        "NZDUSD",
+                    }
+                )
+            # Default factory still stamps SYMBOL_WHITELIST — treat that as
+            # "use full multi-symbol universe", not gold-only.
+            if not cleaned or cleaned <= SYMBOL_WHITELIST:
+                resolved = universe
+            else:
+                resolved = cleaned | SYMBOL_WHITELIST
+        object.__setattr__(self, "symbol_whitelist", resolved)
 
     def allows_symbol(self, symbol: str) -> bool:
         if not self.symbol_whitelist:
