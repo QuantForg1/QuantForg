@@ -187,3 +187,68 @@ class TestITEPhaseAPipeline:
         assert trend.primary == TrendDirection.UP
         assert trend.aligned is True
         assert trend.alignment_score >= 70
+
+
+def _make_fx_series(
+    *,
+    symbol: str,
+    tf: Timeframe,
+    n: int = 40,
+    base: float = 1.0800,
+) -> list[Candle]:
+    base_t = datetime(2026, 3, 10, 14, 0, tzinfo=UTC)
+    minutes = {
+        Timeframe.M5: 5,
+        Timeframe.M15: 15,
+        Timeframe.H1: 60,
+        Timeframe.H4: 240,
+    }[tf]
+    out: list[Candle] = []
+    price = base
+    for i in range(n):
+        open_time = base_t + timedelta(minutes=minutes * i)
+        close_time = open_time + timedelta(minutes=minutes)
+        drift = ((i % 7) - 3) * 0.0001
+        o = price
+        h = price + 0.0008 + abs(drift)
+        low = price - 0.0007 - abs(drift)
+        c = price + drift
+        out.append(
+            Candle.create(
+                symbol_code=symbol,
+                timeframe=tf,
+                open_time=open_time,
+                close_time=close_time,
+                open=f"{o:.5f}",
+                high=f"{h:.5f}",
+                low=f"{low:.5f}",
+                close=f"{c:.5f}",
+                volume="100",
+                tick_count=10,
+            )
+        )
+        price = c
+    return out
+
+
+@pytest.mark.unit
+class TestITEMultiSymbolPipeline:
+    @pytest.mark.asyncio
+    async def test_eurusd_bars_do_not_rewrite_to_xauusd(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.domain.institutional_trading.pipeline.gold_only_enabled",
+            lambda: False,
+        )
+        store = MultiTimeframeBarStore()
+        for tf in (Timeframe.H4, Timeframe.H1, Timeframe.M15, Timeframe.M5):
+            store.set_bars(tf, _make_fx_series(symbol="EURUSD", tf=tf))
+        as_of = datetime(2026, 3, 10, 14, 30, tzinfo=UTC)
+        # Config still defaults to XAUUSD — bars must win when multi-symbol.
+        snap = await InstitutionalAnalysisPipeline(
+            bars=store, config=ITEConfig(symbol="XAUUSD")
+        ).analyze(as_of=as_of, spread=Decimal("0.00012"), symbol="EURUSD")
+        assert snap.symbol == "EURUSD"
+        assert snap.primary_structure is not None
+        assert str(snap.primary_structure.symbol_code) == "EURUSD"

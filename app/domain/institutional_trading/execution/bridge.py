@@ -494,12 +494,83 @@ class ExecutionBridge:
 
         if status is ExecutionAttemptStatus.OMS_SUCCESS:
             self.metrics.record_executed(latency)
+            ticket = oms_result.order_ticket or oms_result.deal_ticket
+            sl_txt = (
+                str(intent.stop_loss.value)
+                if getattr(intent, "stop_loss", None) is not None
+                else ""
+            )
+            tp_txt = (
+                str(intent.take_profit.value)
+                if getattr(intent, "take_profit", None) is not None
+                else ""
+            )
+            lot_txt = str(
+                getattr(oms_result, "volume", None)
+                or getattr(getattr(intent, "volume", None), "value", None)
+                or getattr(intent, "volume", "")
+                or ""
+            )
+            price_txt = str(getattr(oms_result, "price", "") or "")
+            symbol_txt = str(
+                getattr(intent, "symbol", None) or decision.symbol or ""
+            )
+            logger.warning(
+                "Broker ACCEPTED — Position opened\n"
+                f"Ticket: {ticket}\n"
+                f"Entry price: {price_txt}\n"
+                f"SL: {sl_txt}\n"
+                f"TP: {tp_txt}\n"
+                f"Lot: {lot_txt}\n"
+                f"Symbol: {symbol_txt}"
+            )
             logger.warning(
                 "MT5 Accepted",
-                ticket=oms_result.order_ticket or oms_result.deal_ticket,
+                ticket=ticket,
+                price=price_txt,
+                volume=lot_txt,
+                retcode=oms_result.retcode,
+                comment=oms_result.message,
             )
         else:
             self.metrics.record_rejected(latency)
+            # Never hide broker errors — print exact MT5 fields.
+            from app.domain.entities.execution_gateway import map_retcode_to_outcome
+
+            meaning = ""
+            if oms_result.retcode is not None:
+                _, _, meaning = map_retcode_to_outcome(int(oms_result.retcode))
+            sl_txt = (
+                str(intent.stop_loss.value)
+                if getattr(intent, "stop_loss", None) is not None
+                else ""
+            )
+            tp_txt = (
+                str(intent.take_profit.value)
+                if getattr(intent, "take_profit", None) is not None
+                else ""
+            )
+            vol_txt = str(
+                getattr(getattr(intent, "volume", None), "value", None)
+                or getattr(intent, "volume", "")
+                or ""
+            )
+            symbol_txt = str(
+                getattr(intent, "symbol", None) or decision.symbol or ""
+            )
+            reject_block = (
+                "Broker REJECTED order\n"
+                f"retcode: {oms_result.retcode}\n"
+                f"comment: {oms_result.message or '(empty)'}\n"
+                f"meaning: {meaning or '(unknown)'}\n"
+                f"symbol: {symbol_txt}\n"
+                f"volume: {vol_txt}\n"
+                f"price: {getattr(oms_result, 'price', None) or '(market)'}\n"
+                f"stop loss: {sl_txt}\n"
+                f"take profit: {tp_txt}\n"
+                f"Why: {meaning or oms_result.message or abort_reason.value}"
+            )
+            logger.error(reject_block)
             logger.warning(
                 "Rejected because: %s",
                 oms_result.message or exec_result or abort_reason.value,
@@ -511,6 +582,10 @@ class ExecutionBridge:
                 abort_reason=abort_reason.value,
                 retcode=oms_result.retcode,
                 reason=oms_result.message or exec_result,
+                symbol=symbol_txt,
+                volume=vol_txt,
+                stop_loss=sl_txt,
+                take_profit=tp_txt,
             )
             # Canary: immediate stop after abnormal execution
             if (

@@ -283,6 +283,17 @@ class MT5Adapter:
                 volume=request.volume,
                 price=request.price,
             )
+        from core.logging import get_logger
+
+        get_logger(__name__).warning(
+            "MT5Adapter → order_send()",
+            symbol=request.symbol,
+            action=request.action,
+            volume=str(request.volume),
+            price=str(request.price),
+            stop_loss=str(request.stop_loss),
+            take_profit=str(request.take_profit),
+        )
         return self._client.order_send(request)
 
     def order_cancel(self, ticket: int) -> MT5OrderSendResult:

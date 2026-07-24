@@ -246,6 +246,7 @@ async def build_ite_cycle_market_context(
             bars_by_tf,
             as_of=datetime.now(UTC),
             spread=spread,
+            symbol=symbol,
         )
         diag["snapshot"] = "OK"
         try:

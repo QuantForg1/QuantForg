@@ -29,9 +29,22 @@ class InstitutionalTradingAnalysisService:
         *,
         as_of: datetime | None = None,
         spread: Decimal | None = None,
+        symbol: str | None = None,
     ) -> MarketAnalysisSnapshot:
         store = MultiTimeframeBarStore()
         for tf, candles in bars_by_tf.items():
             store.set_bars(tf, candles)
+        inferred: str | None = None
+        for candles in bars_by_tf.values():
+            if candles:
+                raw = getattr(candles[0].symbol_code, "value", None) or str(
+                    candles[0].symbol_code
+                )
+                inferred = str(raw or "").strip().upper() or None
+                break
         pipeline = InstitutionalAnalysisPipeline(bars=store, config=self.config)
-        return await pipeline.analyze(as_of=as_of, spread=spread)
+        return await pipeline.analyze(
+            as_of=as_of,
+            spread=spread,
+            symbol=(symbol or inferred),
+        )

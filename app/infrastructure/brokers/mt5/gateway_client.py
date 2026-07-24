@@ -1243,6 +1243,18 @@ class GatewayMT5Client:
     def order_send(self, request: TradeRequest) -> MT5OrderSendResult:
         """POST /trade/order_send → MetaTrader5.order_send — never invents fills."""
         self._require_connected()
+        logger.warning(
+            "MT5 order_send()",
+            symbol=request.symbol,
+            action=request.action,
+            volume=str(request.volume),
+            price=str(request.price),
+            stop_loss=str(request.stop_loss),
+            take_profit=str(request.take_profit),
+            deviation=int(request.deviation),
+            magic=int(request.magic),
+            comment=request.comment or "quantforg",
+        )
         data = self._request(
             "POST",
             "/trade/order_send",
@@ -1265,7 +1277,7 @@ class GatewayMT5Client:
         self._positions_cache_at = 0.0
         self._account_cache = None
         self._account_cache_at = 0.0
-        return MT5OrderSendResult(
+        result = MT5OrderSendResult(
             retcode=_mt5_retcode(data),
             comment=str(data.get("comment") or ""),
             order_ticket=int(data.get("order_ticket") or 0),
@@ -1274,6 +1286,48 @@ class GatewayMT5Client:
             price=_dec(data.get("price"), str(request.price)),
             request=request,
         )
+        from app.domain.entities.execution_gateway import map_retcode_to_outcome
+
+        _outcome, _retryable, meaning = map_retcode_to_outcome(result.retcode)
+        logger.warning(
+            "Broker response",
+            retcode=result.retcode,
+            comment=result.comment or "",
+            meaning=meaning,
+            symbol=request.symbol,
+            volume=str(result.volume),
+            price=str(result.price),
+            stop_loss=str(request.stop_loss),
+            take_profit=str(request.take_profit),
+            order_ticket=result.order_ticket or None,
+            deal_ticket=result.deal_ticket or None,
+            raw_keys=sorted(str(k) for k in data.keys()) if isinstance(data, dict) else [],
+        )
+        if result.retcode in {0, 10008, 10009}:
+            logger.warning(
+                "Position opened\n"
+                f"Ticket: {result.order_ticket or result.deal_ticket}\n"
+                f"Entry price: {result.price}\n"
+                f"SL: {request.stop_loss}\n"
+                f"TP: {request.take_profit}\n"
+                f"Lot: {result.volume}\n"
+                f"Symbol: {request.symbol}"
+            )
+        else:
+            logger.error(
+                "Broker REJECTED order\n"
+                f"retcode: {result.retcode}\n"
+                f"comment: {result.comment or '(empty)'}\n"
+                f"meaning: {meaning}\n"
+                f"symbol: {request.symbol}\n"
+                f"volume: {result.volume}\n"
+                f"price: {result.price}\n"
+                f"stop loss: {request.stop_loss}\n"
+                f"take profit: {request.take_profit}\n"
+                f"Why: {meaning}"
+                + (f" — broker said: {result.comment}" if result.comment else "")
+            )
+        return result
 
     def order_cancel(self, ticket: int) -> MT5OrderSendResult:
         self._require_connected()

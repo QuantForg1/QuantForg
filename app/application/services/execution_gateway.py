@@ -22,6 +22,9 @@ from app.domain.events.execution import (
 from app.domain.execution_engine.reasons import humanize_reason
 from app.domain.interfaces.mt5_order import MT5OrderSendResult
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -76,6 +79,18 @@ class ExecutionGateway:
             return result
 
         raw = self.adapter.order_send(request)
+        logger.warning(
+            "order_send result mapped",
+            retcode=raw.retcode,
+            comment=raw.comment or "",
+            symbol=intent.symbol,
+            volume=str(raw.volume if raw.volume is not None else request.volume),
+            price=str(raw.price if raw.price is not None else request.price),
+            stop_loss=str(request.stop_loss),
+            take_profit=str(request.take_profit),
+            order_ticket=raw.order_ticket or None,
+            deal_ticket=raw.deal_ticket or None,
+        )
         return self._map_send_result(
             raw,
             user_id=user_id,
@@ -127,11 +142,18 @@ class ExecutionGateway:
         symbol: str,
     ) -> ExecutionResult:
         outcome, retryable, default_msg = map_retcode_to_outcome(raw.retcode)
-        # Prefer broker comment; fall back to mapped human message
+        # Prefer exact broker comment; never hide retcode on failures.
         raw_msg = (raw.comment or "").strip()
-        message = humanize_reason(raw_msg) if raw_msg else default_msg
-        if not raw_msg:
-            message = default_msg
+        if outcome is ExecutionOutcome.SUCCESS:
+            message = humanize_reason(raw_msg) if raw_msg else default_msg
+            if not raw_msg:
+                message = default_msg
+        else:
+            # Exact broker fields first — operators must see retcode + comment.
+            if raw_msg:
+                message = f"MT5 retcode {raw.retcode}: {raw_msg} ({default_msg})"
+            else:
+                message = f"MT5 retcode {raw.retcode}: {default_msg}"
         result = ExecutionResult(
             outcome=outcome,
             retcode=raw.retcode,

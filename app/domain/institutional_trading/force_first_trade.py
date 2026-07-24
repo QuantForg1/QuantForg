@@ -462,6 +462,23 @@ def record_forced_trade_success(
         state.last_detail = "FORCED TEST TRADE EXECUTED"
         _save_state(state)
 
+    # Process-local disable so Auto Trading immediately returns to AI gates.
+    os.environ["FORCE_FIRST_TRADE"] = "false"
+    try:
+        from core.config.settings import get_settings
+
+        settings = get_settings()
+        if hasattr(settings, "force_first_trade"):
+            try:
+                object.__setattr__(settings, "force_first_trade", False)
+            except Exception:
+                try:
+                    settings.force_first_trade = False  # type: ignore[misc]
+                except Exception:
+                    pass
+    except Exception:
+        logger.exception("force_first_trade_settings_disarm_failed")
+
     ticket_txt = str(ticket) if ticket is not None else "PENDING"
     price_txt = str(price) if price is not None else "N/A"
     msg = (
@@ -472,6 +489,9 @@ def record_forced_trade_success(
         f"Price: {price_txt}"
     )
     logger.warning(msg)
+    logger.warning(
+        "FORCE_FIRST_TRADE DISARMED — Auto Trading returned to normal AI execution"
+    )
     return state
 
 

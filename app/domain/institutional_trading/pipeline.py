@@ -33,7 +33,11 @@ from app.domain.market_structure.structure_analyzer import StructureAnalyzer
 from app.domain.market_structure.swing_detector import SwingDetector
 from app.domain.market_structure.trend_classifier import TrendClassifier
 from app.domain.order_block.engine import OrderBlockEngine
-from app.domain.trading.gold_only import GOLD_SYMBOL, resolve_trading_symbol
+from app.domain.trading.gold_only import (
+    GOLD_SYMBOL,
+    gold_only_enabled,
+    resolve_trading_symbol,
+)
 from app.domain.value_objects.identity import SymbolCode
 
 
@@ -71,6 +75,19 @@ class InstitutionalAnalysisPipeline:
     context_engine: MarketContextEngine | None = None
     news: NewsProtection | None = None
 
+    def _infer_symbol_from_bars(self) -> str | None:
+        """Use the symbol stamped on loaded candles (multi-symbol safe)."""
+        for candles in self.bars.as_mapping().values():
+            if not candles:
+                continue
+            raw = getattr(candles[0].symbol_code, "value", None) or str(
+                candles[0].symbol_code
+            )
+            code = str(raw or "").strip().upper()
+            if code:
+                return code
+        return None
+
     async def analyze(
         self,
         *,
@@ -79,10 +96,15 @@ class InstitutionalAnalysisPipeline:
         symbol: str | None = None,
     ) -> MarketAnalysisSnapshot:
         cfg = self.config
-        code_str = resolve_trading_symbol(symbol or cfg.symbol)
-        if code_str != GOLD_SYMBOL and cfg.symbol == GOLD_SYMBOL:
-            # Engine is gold-only by policy unless multi-symbol is enabled upstream
-            code_str = resolve_trading_symbol(None)
+        # Prefer caller symbol → bars in the store → config. Never rewrite a
+        # non-gold bar series back to XAUUSD when multi-symbol is enabled
+        # (that mismatch triggers "swing must match snapshot symbol/timeframe").
+        inferred = self._infer_symbol_from_bars()
+        raw = (symbol or inferred or cfg.symbol or GOLD_SYMBOL).strip().upper()
+        if gold_only_enabled():
+            code_str = GOLD_SYMBOL
+        else:
+            code_str = resolve_trading_symbol(raw)
         code = SymbolCode(value=code_str)
         moment = as_of or datetime.now(UTC)
         if moment.tzinfo is None:
