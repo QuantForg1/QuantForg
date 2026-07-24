@@ -31,6 +31,7 @@ import {
   Keyboard,
   Layers3,
   LayoutTemplate,
+  Library,
   LineChart,
   ListOrdered,
   MessageSquareWarning,
@@ -204,6 +205,12 @@ export const appNav: NavGroup[] = [
         label: "Risk Analytics",
         icon: Scale,
         hint: "IRAP · exposure · drawdown · VaR · stress",
+      },
+      {
+        href: "/institutional-strategy-lifecycle",
+        label: "Strategy Lifecycle",
+        icon: Library,
+        hint: "ISLM · registry · health · evidence · approval",
       },
       {
         href: "/strategy-lab",

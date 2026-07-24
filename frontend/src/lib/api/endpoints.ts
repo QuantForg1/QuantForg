@@ -1953,6 +1953,52 @@ export const irapApi = {
     apiFetch<Record<string, unknown>>(`/irap/reports?limit=${limit}`),
 };
 
+/** Institutional Strategy Lifecycle Manager — governance layer (human approval only) */
+export const islmApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/islm/dashboard"),
+  registry: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/islm/registry?limit=${limit}`),
+  strategy: (strategyId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/islm/strategies/${encodeURIComponent(strategyId)}`,
+    ),
+  timeline: (strategyId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      strategyId
+        ? `/islm/timeline?strategy_id=${encodeURIComponent(strategyId)}`
+        : "/islm/timeline",
+    ),
+  versions: (strategyId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      strategyId
+        ? `/islm/versions?strategy_id=${encodeURIComponent(strategyId)}`
+        : "/islm/versions",
+    ),
+  health: () => apiFetch<Record<string, unknown>>("/islm/health"),
+  evidence: (strategyId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      strategyId
+        ? `/islm/evidence?strategy_id=${encodeURIComponent(strategyId)}`
+        : "/islm/evidence",
+    ),
+  alerts: () => apiFetch<Record<string, unknown>>("/islm/alerts"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/islm/reports?limit=${limit}`),
+  approvals: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/islm/approvals?limit=${limit}`),
+  approve: (body: {
+    strategy_id: string;
+    to_state: string;
+    decision: "approved" | "rejected";
+    comment?: string;
+    approver?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/islm/lifecycle/approve", {
+      method: "POST",
+      body,
+    }),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),
