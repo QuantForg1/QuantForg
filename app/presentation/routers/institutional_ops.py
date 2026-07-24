@@ -613,11 +613,19 @@ def execute_runbook(
 @router.get("/auto-trading")
 def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
     """Auto Trading status — live gateway probes (same source as Broker/Monitoring)."""
+    from app.application.services.auto_trading_continuity import (
+        ensure_auto_trading_running,
+    )
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.ops_state_persistence import ops_state_diagnostics
 
     plane = get_control_plane()
     settings = get_settings()
+    ensure_auto_trading_running(
+        plane,
+        settings=settings,
+        reason="api_get_auto_trading_resume",
+    )
     snap = build_auto_trading_status(plane, settings=settings)
     safety = snap.safety
     orchestrator = None

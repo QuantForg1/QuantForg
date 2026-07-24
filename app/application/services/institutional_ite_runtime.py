@@ -1712,13 +1712,58 @@ class InstitutionalIteRuntime:
 
     async def run_forever(self) -> None:
         """Background loop — live market context → Decision→Risk→Safety→OMS."""
+        import os
+
+        # Continuous production cadence (default 5s). Override via ITE_CYCLE_INTERVAL_SECONDS.
+        try:
+            env_iv = float(os.environ.get("ITE_CYCLE_INTERVAL_SECONDS") or "")
+            if env_iv > 0:
+                self.interval_seconds = max(1.0, env_iv)
+        except Exception:
+            pass
+        if self.interval_seconds > 15:
+            # Prefer continuous scanning; 60s legacy default is too slow for AUTO RUNNING.
+            self.interval_seconds = 5.0
+
+        from app.application.services.auto_trading_continuity import (
+            ensure_auto_trading_running,
+        )
+        from core.config.settings import get_settings as _gs
+
+        ensure_auto_trading_running(
+            self.plane,
+            settings=_gs(),
+            reason="orchestrator_start_auto_resume",
+        )
+        logger.warning(
+            "Scheduler Tick",
+            interval_seconds=self.interval_seconds,
+            mode=self.plane.mode.value,
+            run_state=self.plane.auto_trading_run_state,
+        )
         logger.info(
             "ite_orchestrator_started",
             interval_seconds=self.interval_seconds,
             mode=self.plane.mode.value,
+            run_state=self.plane.auto_trading_run_state,
         )
         while not self._stop.is_set():
+            cycle_t0 = time.perf_counter()
             try:
+                ensure_auto_trading_running(
+                    self.plane,
+                    settings=_gs(),
+                    reason="orchestrator_cycle_auto_resume",
+                )
+                logger.warning(
+                    "Scheduler Tick",
+                    run_state=self.plane.auto_trading_run_state,
+                    mode=self.plane.mode.value,
+                    execution_enabled=bool(
+                        getattr(_gs(), "execution_enabled", False)
+                    ),
+                )
+                logger.warning("Cycle Started")
                 from app.application.services.auto_trading_status import (
                     _enrich_from_adapter,
                 )
@@ -1730,6 +1775,7 @@ class InstitutionalIteRuntime:
                 from app.domain.trading.gold_only import GOLD_SYMBOL
 
                 symbol = self._alpha_preferred_symbol() or GOLD_SYMBOL
+                logger.warning("Scanning Symbols", symbol=symbol)
                 ctx = await build_ite_cycle_market_context(
                     self.mt5_adapter,
                     symbol=symbol,
@@ -1774,6 +1820,16 @@ class InstitutionalIteRuntime:
                         )
                     except Exception:
                         logger.exception("strategy_diagnostics_record_failed")
+                    logger.warning(
+                        "AI Decision",
+                        action="NO_TRADE",
+                        reason=ctx.reason or "NO_MARKET_CONTEXT",
+                    )
+                    logger.warning(
+                        "Execution State",
+                        run_state=self.plane.auto_trading_run_state,
+                        outcome="no_snapshot",
+                    )
                     logger.info(
                         "ite_cycle_outcome",
                         outcome="no_snapshot",
@@ -1835,6 +1891,31 @@ class InstitutionalIteRuntime:
                             )
                             self._last_cycle.market_context_reason = ctx.reason
                             self._last_cycle.snapshot_present = True
+                        last = self._last_cycle
+                        last_decision = self._last_decision
+                    action = (
+                        str(
+                            getattr(
+                                getattr(last_decision, "action", None),
+                                "value",
+                                None,
+                            )
+                            or getattr(last, "decision_action", None)
+                            or "NO_TRADE"
+                        )
+                        if last_decision is not None or last is not None
+                        else "NO_TRADE"
+                    )
+                    logger.warning("AI Decision", action=action)
+                    logger.warning(
+                        "Execution State",
+                        run_state=self.plane.auto_trading_run_state,
+                        outcome=getattr(last, "cycle_outcome", None),
+                        abort=getattr(last, "abort_reason", None),
+                        forwarded_to_oms=getattr(last, "forwarded_to_oms", False),
+                    )
+                    if getattr(last, "forwarded_to_oms", False):
+                        logger.warning("Submitting Order")
             except Exception as exc:
                 logger.exception("ite_orchestrator_cycle_failed", error=str(exc))
                 with self._lock:
@@ -1847,6 +1928,11 @@ class InstitutionalIteRuntime:
                         abort_reason="CYCLE_EXCEPTION",
                     )
                     self._cycles += 1
+            logger.warning(
+                "Waiting Next Cycle",
+                interval_seconds=self.interval_seconds,
+                cycle_ms=round((time.perf_counter() - cycle_t0) * 1000.0, 1),
+            )
             for _ in range(int(max(1, self.interval_seconds))):
                 if self._stop.is_set():
                     break
@@ -1862,7 +1948,7 @@ def build_ite_runtime(
     execution_safety: Any,
     mt5_order_validation: Any,
     supabase: Any | None,
-    interval_seconds: float = 60.0,
+    interval_seconds: float = 5.0,
 ) -> InstitutionalIteRuntime:
     """Wire Guarded OMS ports + shared kill + reliability into one runtime."""
     from app.application.services.execution_intelligence import (

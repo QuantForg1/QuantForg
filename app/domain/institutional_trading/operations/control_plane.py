@@ -849,12 +849,33 @@ def get_control_plane() -> OperationsControlPlane:
                     str(raw_run),
                     enabled=plane.auto_trading_enabled,
                 )
+            # Railway restart continuity: never strand the desk in PAUSED when
+            # launch locks already pass — auto-promote to RUNNING.
+            try:
+                from app.application.services.auto_trading_continuity import (
+                    ensure_auto_trading_running,
+                )
+                from core.config.settings import get_settings
+
+                ensure_auto_trading_running(
+                    plane,
+                    settings=get_settings(),
+                    reason="hydrate_auto_resume",
+                )
+            except Exception as resume_exc:
+                from core.logging import get_logger as _get_logger
+
+                _get_logger(__name__).warning(
+                    "hydrate_auto_resume_failed",
+                    error=str(resume_exc),
+                )
             diag = ops_state_diagnostics()
             from core.logging import get_logger
 
             get_logger(__name__).info(
                 "ops_state_hydrated",
                 ops_mode=plane.mode.value,
+                auto_trading_run_state=plane.auto_trading_run_state,
                 hydrate_source=diag.get("hydrate_source"),
                 durable=diag.get("durable"),
                 postgres_has_state=diag.get("postgres_has_state"),

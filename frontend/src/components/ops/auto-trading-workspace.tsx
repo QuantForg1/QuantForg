@@ -78,7 +78,7 @@ export function AutoTradingWorkspace() {
   const [confirmCloseAll, setConfirmCloseAll] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
-  const [autoPausedNote, setAutoPausedNote] = useState<string | null>(null);
+  const [autoPausedNote] = useState<string | null>(null);
   const [executeResult, setExecuteResult] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -277,8 +277,10 @@ export function AutoTradingWorkspace() {
   const accountSnap = asRecord(asRecord(healthQ.data).account);
   const equity = num(session.equity, num(accountSnap.equity));
   const balance = num(session.balance, num(accountSnap.balance, equity));
+  // Only compute DD when both equity and balance are live (>0). Treating
+  // equity=0 as valid previously produced a false 100% DD and auto-paused.
   const dailyDdPct =
-    balance > 0 ? ((balance - (equity || balance)) / balance) * 100 : 0;
+    balance > 0 && equity > 0 ? Math.max(0, ((balance - equity) / balance) * 100) : 0;
   const dailyLossPct = todayPl < 0 && balance > 0 ? (Math.abs(todayPl) / balance) * 100 : 0;
   const dailyRiskUsed = Math.max(dailyDdPct, dailyLossPct);
   const remainingCapacity = Math.max(0, maxDailyLossPct - dailyRiskUsed);
@@ -646,17 +648,9 @@ export function AutoTradingWorkspace() {
     },
   });
 
-  // Auto-pause when daily risk limit reached (operator policy — still goes through ITE API)
-  useEffect(() => {
-    if (runState !== "running") return;
-    if (!(dailyRiskUsed >= maxDailyLossPct && maxDailyLossPct > 0)) return;
-    if (setRunMut.isPending) return;
-    setAutoPausedNote(
-      `Daily risk ${formatNumber(dailyRiskUsed, 2)}% reached limit ${formatNumber(maxDailyLossPct, 2)}% — auto paused.`,
-    );
-    setRunMut.mutate("paused");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per breach while running
-  }, [runState, dailyRiskUsed, maxDailyLossPct]);
+  // Never auto-mutate run_state to PAUSED from the browser.
+  // Daily-loss / kill locks are enforced by the ITE safety gate on the server.
+  // False equity=0 DD previously forced PAUSED and required a manual Resume.
 
   const toggleStrategy = (id: StrategyModuleId) => {
     setToggles((prev) => {
@@ -1100,7 +1094,7 @@ export function AutoTradingWorkspace() {
             <StatusPill label="Broker" ok={brokerLive || mt5Connected} />
             <StatusPill label="MT5" ok={mt5Connected} />
             <StatusPill
-              label={`Auto ${runState}`}
+              label={`AUTO ${String(runState || "off").toUpperCase()}`}
               ok={runState === "running"}
               warn={runState === "paused"}
             />

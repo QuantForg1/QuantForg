@@ -403,12 +403,43 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             )
             runtime = getattr(container, "ite_runtime", None)
             if runtime is not None:
+
+                async def _ite_watchdog() -> None:
+                    """Restart ITE loop if it exits unexpectedly (never leave AUTO dead)."""
+                    while True:
+                        try:
+                            logger.warning(
+                                "ite_watchdog_starting_orchestrator",
+                                run_state=getattr(
+                                    getattr(runtime, "plane", None),
+                                    "auto_trading_run_state",
+                                    None,
+                                ),
+                            )
+                            await runtime.run_forever()
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            logger.exception(
+                                "ite_watchdog_orchestrator_crashed",
+                                error=str(exc),
+                            )
+                        if getattr(runtime, "_stop", None) is not None and runtime._stop.is_set():
+                            logger.info("ite_watchdog_stop_requested")
+                            break
+                        logger.error(
+                            "ite_watchdog_restarting",
+                            detail="scheduler stopped unexpectedly — restarting in 2s",
+                        )
+                        await asyncio.sleep(2.0)
+
                 shadow_task = asyncio.create_task(
-                    runtime.run_forever(), name="ite-orchestrator"
+                    _ite_watchdog(), name="ite-orchestrator-watchdog"
                 )
                 logger.info(
                     "ite_orchestrator_task_started",
                     execution_enabled=bool(settings.execution_enabled),
+                    watchdog=True,
                 )
             total_ms = round((time.perf_counter() - t0) * 1000.0, 1)
             logger.info("startup_complete", startup_total_ms=total_ms)

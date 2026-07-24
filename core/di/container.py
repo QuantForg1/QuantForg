@@ -296,8 +296,18 @@ class Container:
             )
 
             interval = float(
-                getattr(self.settings, "shadow_orchestrator_interval_seconds", 60) or 60
+                getattr(self.settings, "shadow_orchestrator_interval_seconds", 0) or 0
             )
+            if interval <= 0:
+                import os
+
+                try:
+                    interval = float(
+                        os.environ.get("ITE_CYCLE_INTERVAL_SECONDS") or "5"
+                    )
+                except Exception:
+                    interval = 5.0
+            interval = max(1.0, min(interval, 60.0))
             self.ite_runtime = build_ite_runtime(
                 settings=self.settings,
                 mt5_adapter=self.mt5_adapter,
