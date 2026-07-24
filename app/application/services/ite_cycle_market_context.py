@@ -28,6 +28,7 @@ _TF_COUNTS: tuple[tuple[Timeframe, int], ...] = (
     (Timeframe.H1, 300),
     (Timeframe.M15, 300),
     (Timeframe.M5, 400),
+    (Timeframe.M1, 500),
 )
 
 

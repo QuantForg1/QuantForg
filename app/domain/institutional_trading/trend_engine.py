@@ -1,4 +1,4 @@
-"""MTF Trend Engine — H4 macro · H1 primary · M15 entry · M5 execution."""
+"""MTF Trend Engine — hierarchical bias from configured timeframes."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class TrendEngine:
             "execution_management": execution,
         }
 
-        # Choose bias from H4; require H1 agreement for alignment
+        # Swing: bias from H4. Scalping: bias from H1 (macro remapped) — never require H4.
         bias = macro
         if bias in {TrendDirection.UNKNOWN, TrendDirection.RANGE}:
             bias = primary
@@ -70,7 +70,7 @@ class TrendEngine:
                     score += w // 4
                 # opposite direction → 0 for that weight
 
-        # Conflict penalty: H4 vs H1 opposite
+        # Conflict penalty: macro vs primary opposite
         if (
             macro in {TrendDirection.UP, TrendDirection.DOWN}
             and primary in {TrendDirection.UP, TrendDirection.DOWN}
@@ -78,17 +78,33 @@ class TrendEngine:
         ):
             score = max(0, score - 25)
 
-        aligned = (
-            bias in {TrendDirection.UP, TrendDirection.DOWN}
-            and macro == primary
-            and macro in {TrendDirection.UP, TrendDirection.DOWN}
-            and score >= 70
-        )
+        if cfg.is_scalping():
+            # Scalping: direction filter (H1) may stand without perfect structure lock.
+            aligned = (
+                bias in {TrendDirection.UP, TrendDirection.DOWN}
+                and score >= 55
+                and (
+                    macro == primary
+                    or primary in {TrendDirection.RANGE, TrendDirection.UNKNOWN}
+                    or macro == entry
+                )
+            )
+        else:
+            aligned = (
+                bias in {TrendDirection.UP, TrendDirection.DOWN}
+                and macro == primary
+                and macro in {TrendDirection.UP, TrendDirection.DOWN}
+                and score >= 70
+            )
 
         why = (
-            f"MTF {bias.value}: H4={macro.value} H1={primary.value} "
-            f"M15={entry.value} M5={execution.value} score={score}"
+            f"MTF {bias.value}: {cfg.macro_bias_tf.value}={macro.value} "
+            f"{cfg.primary_structure_tf.value}={primary.value} "
+            f"{cfg.entry_confirmation_tf.value}={entry.value} "
+            f"{cfg.execution_management_tf.value}={execution.value} "
+            f"score={score}"
             + (" aligned" if aligned else " not aligned")
+            + (" [scalping]" if cfg.is_scalping() else "")
         )
 
         return TrendSnapshot(

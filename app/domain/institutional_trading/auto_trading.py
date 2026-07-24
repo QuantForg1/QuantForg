@@ -43,6 +43,8 @@ class AutoTradePolicy:
     allowed_symbols: tuple[str, ...] = ("XAUUSD",)
     max_spread: Decimal = Decimal("2.00")
     news_filter_enabled: bool = False
+    trading_mode: str = "swing"  # swing | scalping
+    compounding_enabled: bool = False
 
     def __post_init__(self) -> None:
         from app.domain.trading.gold_only import GOLD_SYMBOL
@@ -50,6 +52,10 @@ class AutoTradePolicy:
 
         object.__setattr__(self, "max_spread", coerce_max_spread(self.max_spread))
         object.__setattr__(self, "allowed_symbols", (GOLD_SYMBOL,))
+        mode = (self.trading_mode or "swing").strip().lower()
+        if mode not in {"swing", "scalping"}:
+            mode = "swing"
+        object.__setattr__(self, "trading_mode", mode)
 
     def to_dict(self) -> dict[str, Any]:
         state = normalize_run_state(self.run_state, enabled=self.enabled)
@@ -63,6 +69,8 @@ class AutoTradePolicy:
             "allowed_symbols": list(self.allowed_symbols),
             "max_spread": str(self.max_spread),
             "news_filter_enabled": self.news_filter_enabled,
+            "trading_mode": self.trading_mode,
+            "compounding_enabled": self.compounding_enabled,
             "may_open_new_trades": state == "running",
             "may_manage_positions": state in {"running", "paused"},
         }

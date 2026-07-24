@@ -17,6 +17,9 @@ class ITEConfig:
     symbol: str = GOLD_SYMBOL
     config_version: str = "ite-v1.0.0"
 
+    # Trading mode: swing (H4 stack) | scalping (H1→M1, no H4 required)
+    trading_mode: str = "swing"
+
     # MTF hierarchy
     macro_bias_tf: Timeframe = Timeframe.H4
     primary_structure_tf: Timeframe = Timeframe.H1
@@ -87,10 +90,14 @@ class ITEConfig:
             self.execution_management_tf,
         )
 
+    def is_scalping(self) -> bool:
+        return str(self.trading_mode).lower() == "scalping"
+
     def to_dict(self) -> dict[str, object]:
         return {
             "symbol": self.symbol,
             "config_version": self.config_version,
+            "trading_mode": self.trading_mode,
             "macro_bias_tf": self.macro_bias_tf.value,
             "primary_structure_tf": self.primary_structure_tf.value,
             "entry_confirmation_tf": self.entry_confirmation_tf.value,

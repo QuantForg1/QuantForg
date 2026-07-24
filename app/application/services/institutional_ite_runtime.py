@@ -125,6 +125,9 @@ class InstitutionalIteRuntime:
     _stop: Event = field(default_factory=Event, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
     _last_cycle: ShadowCycleResult | None = field(default=None, repr=False)
+    _last_decision: Any | None = field(default=None, repr=False)
+    _last_bridge_result: Any | None = field(default=None, repr=False)
+    _manual_execution: bool = field(default=False, repr=False)
     _cycles: int = 0
     user_id: UUID = field(default_factory=uuid4)
 
@@ -526,7 +529,21 @@ class InstitutionalIteRuntime:
             logger.exception("force_first_trade_override_failed")
             forced_override = False
 
+        with self._lock:
+            self._last_decision = decision
+
         decision_reasons = tuple(getattr(decision, "reasons", ()) or ())
+        if self._manual_execution or forced_override:
+            logger.warning(
+                "AI Decision Complete",
+                action=str(getattr(decision.action, "value", decision.action)),
+                forced=forced_override,
+            )
+        else:
+            logger.info(
+                "AI Decision Complete",
+                action=str(getattr(decision.action, "value", decision.action)),
+            )
 
         # Enrich diagnostics with live ATR sizing facts (observational only).
         sizing_diag: dict[str, Any] = dict(market_context_diagnostics or {})
@@ -618,7 +635,37 @@ class InstitutionalIteRuntime:
             symbol_tradable=True if force_shadow else symbol_tradable,
             no_broker_restrictions=True if force_shadow else no_broker_restrictions,
         )
+        if self._manual_execution:
+            logger.warning(
+                "Submitting Order",
+                action=str(getattr(decision.action, "value", decision.action)),
+                direction=str(getattr(decision.direction, "value", decision.direction)),
+                lots=str(getattr(decision, "approved_lots", None) or ""),
+            )
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
+        with self._lock:
+            self._last_bridge_result = bridge_result
+        if self._manual_execution:
+            oms = getattr(bridge_result, "oms_result", None)
+            logger.warning(
+                "Broker Response",
+                forwarded=bool(getattr(bridge_result, "forwarded_to_oms", False)),
+                abort=str(
+                    getattr(
+                        getattr(bridge_result, "abort_reason", None),
+                        "value",
+                        getattr(bridge_result, "abort_reason", ""),
+                    )
+                ),
+                message=str(
+                    getattr(oms, "message", None)
+                    or getattr(getattr(bridge_result, "journal_entry", None), "comment", None)
+                    or ""
+                ),
+                retcode=getattr(oms, "retcode", None),
+                ticket=getattr(oms, "order_ticket", None)
+                or getattr(oms, "deal_ticket", None),
+            )
 
         if forced_override:
             oms = getattr(bridge_result, "oms_result", None)
@@ -846,6 +893,12 @@ class InstitutionalIteRuntime:
             "last_cycle": last.to_dict() if last else None,
             "interval_seconds": self.interval_seconds,
             "running": not self._stop.is_set(),
+            "trading_mode": getattr(self.decision_pipeline.config, "trading_mode", "swing"),
+            "ai_score": (
+                self.decision_pipeline.last_ai_score()
+                if hasattr(self.decision_pipeline, "last_ai_score")
+                else None
+            ),
         }
 
     def strategy_diagnostics(self, *, limit: int = 100) -> dict[str, Any]:
@@ -855,6 +908,293 @@ class InstitutionalIteRuntime:
         )
 
         return get_strategy_diagnostics_store().snapshot(limit=limit)
+
+    @staticmethod
+    def _zone_price(zone: Any, *, prefer: str = "mid") -> float | None:
+        if zone is None:
+            return None
+        mid = getattr(zone, "mid", None)
+        low = getattr(zone, "low", None)
+        high = getattr(zone, "high", None)
+        if prefer == "mid" and mid is not None:
+            return float(mid)
+        if prefer == "low" and low is not None:
+            return float(low)
+        if prefer == "high" and high is not None:
+            return float(high)
+        for candidate in (mid, low, high):
+            if candidate is not None:
+                return float(candidate)
+        return None
+
+    def build_execute_now_payload(
+        self,
+        cycle: ShadowCycleResult,
+        *,
+        execution_ms: float,
+    ) -> dict[str, Any]:
+        """Map one Auto Trading cycle into the Execute Now API response."""
+        with self._lock:
+            decision = self._last_decision
+            bridge = self._last_bridge_result
+
+        market = None
+        direction = None
+        lot: float | None = None
+        entry: float | None = None
+        sl: float | None = None
+        tp: float | None = None
+        if decision is not None:
+            market = str(getattr(decision, "symbol", "") or "") or None
+            direction = str(
+                getattr(getattr(decision, "direction", None), "value", None)
+                or getattr(decision, "direction", None)
+                or ""
+            ) or None
+            lots = getattr(decision, "approved_lots", None)
+            if lots is not None:
+                lot = float(lots)
+            entry = self._zone_price(getattr(decision, "entry_zone", None), prefer="mid")
+            stop = getattr(decision, "stop_zone", None)
+            target = getattr(decision, "target_zone", None)
+            dir_u = (direction or "").upper()
+            if dir_u == "BUY":
+                sl = self._zone_price(stop, prefer="low")
+                tp = self._zone_price(target, prefer="high")
+            elif dir_u == "SELL":
+                sl = self._zone_price(stop, prefer="high")
+                tp = self._zone_price(target, prefer="low")
+            else:
+                sl = self._zone_price(stop, prefer="mid")
+                tp = self._zone_price(target, prefer="mid")
+
+        ticket: str | None = None
+        if cycle.mt5_ticket is not None:
+            ticket = str(cycle.mt5_ticket)
+        oms = getattr(bridge, "oms_result", None) if bridge is not None else None
+        if ticket is None and oms is not None:
+            raw_ticket = getattr(oms, "order_ticket", None) or getattr(
+                oms, "deal_ticket", None
+            )
+            if raw_ticket is not None:
+                ticket = str(raw_ticket)
+        if entry is None and oms is not None:
+            fill = getattr(oms, "fill_price", None) or getattr(oms, "price", None)
+            if fill is not None:
+                entry = float(fill)
+
+        outcome = str(getattr(oms, "outcome", "") or "").lower() if oms else ""
+        oms_success = bool(cycle.forwarded_to_oms) and outcome in {
+            "success",
+            "filled",
+            "done",
+        }
+        # Some adapters mark success via journal status without outcome string.
+        if not oms_success and cycle.forwarded_to_oms and ticket and not cycle.oms_message:
+            if (cycle.abort_reason or "").upper() in {"NONE", "", "OK", "SUCCESS"}:
+                oms_success = True
+
+        exact_reason_parts: list[str] = []
+        if cycle.oms_message:
+            exact_reason_parts.append(str(cycle.oms_message))
+        if oms is not None:
+            msg = getattr(oms, "message", None)
+            if msg and str(msg) not in exact_reason_parts:
+                exact_reason_parts.append(str(msg))
+        if cycle.safety_failed_reasons:
+            for reason in cycle.safety_failed_reasons:
+                if reason and reason not in exact_reason_parts:
+                    exact_reason_parts.append(str(reason))
+        if cycle.decision_reasons:
+            for reason in cycle.decision_reasons:
+                if reason and reason not in exact_reason_parts:
+                    exact_reason_parts.append(str(reason))
+        if cycle.detail and cycle.detail not in exact_reason_parts:
+            # Prefer broker/OMS text; keep detail when nothing else exists.
+            if not exact_reason_parts:
+                exact_reason_parts.append(str(cycle.detail))
+        if cycle.abort_reason and cycle.abort_reason.upper() not in {
+            "NONE",
+            "OK",
+            "SUCCESS",
+        }:
+            abort = str(cycle.abort_reason)
+            if abort not in exact_reason_parts:
+                exact_reason_parts.append(abort)
+        if cycle.broker_retcode is not None:
+            ret = f"retcode={cycle.broker_retcode}"
+            if ret not in exact_reason_parts:
+                exact_reason_parts.append(ret)
+
+        reason = "; ".join(exact_reason_parts) if exact_reason_parts else (
+            cycle.detail or cycle.abort_reason or "Execution rejected"
+        )
+
+        base = {
+            "market": market,
+            "direction": direction,
+            "lot": lot,
+            "entry": entry,
+            "sl": sl,
+            "tp": tp,
+            "ticket": ticket,
+            "execution_ms": int(round(execution_ms)),
+            "cycle_outcome": cycle.cycle_outcome,
+            "abort_reason": cycle.abort_reason,
+            "trace_id": cycle.trace_id,
+        }
+        if oms_success:
+            return {
+                **base,
+                "success": True,
+                "status": "SUCCESS",
+                "message": "Order executed successfully.",
+            }
+        return {
+            **base,
+            "success": False,
+            "status": "REJECTED",
+            "reason": reason,
+            "message": reason,
+        }
+
+    async def execute_now(self) -> dict[str, Any]:
+        """Run one complete Auto Trading cycle immediately (manual trigger).
+
+        Reuses the same market-context + run_auto_cycle / run_shadow_cycle path
+        as the background scheduler — does not duplicate trading logic.
+        """
+        t0 = time.perf_counter()
+        self._manual_execution = True
+        logger.warning("MANUAL EXECUTION STARTED")
+        try:
+            from app.application.services.auto_trading_status import (
+                _enrich_from_adapter,
+            )
+            from app.application.services.ite_cycle_market_context import (
+                build_ite_cycle_market_context,
+            )
+
+            logger.warning("Force Sync Positions")
+            enrich = _enrich_from_adapter(self.probes)
+            ctx = await build_ite_cycle_market_context(
+                self.mt5_adapter,
+                position_engine=self.position_management.engine,
+            )
+            if not ctx.ok or ctx.snapshot is None or ctx.account is None:
+                health = self.tick_health()
+                result = ShadowCycleResult(
+                    ok=True,
+                    trace_id=None,
+                    mode=self.plane.mode.value,
+                    detail=ctx.reason or "market context unavailable",
+                    health=(
+                        health.get("health") if isinstance(health, dict) else None
+                    ),
+                    cycle_outcome="no_snapshot",
+                    abort_reason="NO_MARKET_CONTEXT",
+                    snapshot_present=False,
+                    market_context_reason=ctx.reason,
+                    market_context_diagnostics=dict(ctx.diagnostics),
+                    latency_ms=ctx.latency_ms,
+                )
+                with self._lock:
+                    self._last_cycle = result
+                    self._cycles += 1
+                payload = self.build_execute_now_payload(
+                    result,
+                    execution_ms=(time.perf_counter() - t0) * 1000.0,
+                )
+                logger.warning(
+                    "Execution Finished",
+                    success=payload.get("success"),
+                    status=payload.get("status"),
+                )
+                return payload
+
+            mt5_at = (
+                bool(enrich["mt5_autotrading_enabled"])
+                if enrich.get("mt5_autotrading_enabled") is not None
+                else True
+            )
+            acct_ok = (
+                bool(enrich["account_trading_enabled"])
+                if enrich.get("account_trading_enabled") is not None
+                else ctx.account_trading_enabled
+            )
+            sym_ok = (
+                bool(enrich["symbol_tradable"])
+                if enrich.get("symbol_tradable") is not None
+                else ctx.symbol_tradable
+            )
+            mkt_ok = (
+                bool(enrich["market_data_live"])
+                if enrich.get("market_data_live") is not None
+                else ctx.market_data_live
+            )
+            no_restr = (
+                bool(enrich["no_broker_restrictions"])
+                if enrich.get("no_broker_restrictions") is not None
+                else True
+            )
+            if self.plane.mode is OpsExecutionMode.SHADOW:
+                cycle = self.run_shadow_cycle(
+                    snapshot=ctx.snapshot,
+                    account=ctx.account,
+                    market_context_diagnostics=dict(ctx.diagnostics),
+                )
+            else:
+                cycle = self.run_auto_cycle(
+                    snapshot=ctx.snapshot,
+                    account=ctx.account,
+                    gateway_connected=True,
+                    broker_connected=True,
+                    market_data_live=mkt_ok,
+                    account_trading_enabled=acct_ok,
+                    mt5_autotrading_enabled=mt5_at,
+                    symbol_tradable=sym_ok,
+                    no_broker_restrictions=no_restr,
+                    risk_allowed=True,
+                    market_context_diagnostics=dict(ctx.diagnostics),
+                )
+            with self._lock:
+                if self._last_cycle is not None:
+                    self._last_cycle.market_context_diagnostics = dict(ctx.diagnostics)
+                    self._last_cycle.market_context_reason = ctx.reason
+                    self._last_cycle.snapshot_present = True
+                    cycle = self._last_cycle
+            payload = self.build_execute_now_payload(
+                cycle,
+                execution_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+            logger.warning(
+                "Execution Finished",
+                success=payload.get("success"),
+                status=payload.get("status"),
+                ticket=payload.get("ticket"),
+            )
+            return payload
+        except Exception as exc:
+            logger.exception("manual_execute_now_failed", error=str(exc))
+            ms = (time.perf_counter() - t0) * 1000.0
+            reason = f"cycle exception: {exc}"
+            logger.warning("Execution Finished", success=False, status="REJECTED")
+            return {
+                "success": False,
+                "status": "REJECTED",
+                "reason": reason,
+                "message": reason,
+                "execution_ms": int(round(ms)),
+                "market": None,
+                "direction": None,
+                "lot": None,
+                "entry": None,
+                "sl": None,
+                "tp": None,
+                "ticket": None,
+            }
+        finally:
+            self._manual_execution = False
 
     def stop(self) -> None:
         self._stop.set()

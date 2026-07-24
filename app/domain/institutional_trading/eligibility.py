@@ -41,9 +41,13 @@ class PositionEligibilityEngine:
         checks: dict[str, bool] = {}
         rejects: list[str] = []
 
-        checks["already_in_trade"] = not account.already_in_trade
-        if account.already_in_trade:
-            rejects.append("Already in trade")
+        if cfg.max_open_trades <= 1:
+            checks["already_in_trade"] = not account.already_in_trade
+            if account.already_in_trade:
+                rejects.append("Already in trade")
+        else:
+            # Multi-trade mode — max_open_trades is authoritative
+            checks["already_in_trade"] = True
 
         checks["max_open_trades"] = account.open_positions < cfg.max_open_trades
         if not checks["max_open_trades"]:

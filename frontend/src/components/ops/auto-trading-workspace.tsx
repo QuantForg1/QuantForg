@@ -10,6 +10,7 @@ import {
   ShieldAlert,
   Square,
   XCircle,
+  Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,9 @@ export function AutoTradingWorkspace() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [autoPausedNote, setAutoPausedNote] = useState<string | null>(null);
+  const [executeResult, setExecuteResult] = useState<Record<string, unknown> | null>(
+    null,
+  );
 
   const autoQ = useQuery({
     queryKey: ["ite-ops-auto-trading"],
@@ -195,6 +199,10 @@ export function AutoTradingWorkspace() {
   const maxDailyLossPct = num(policy.max_daily_loss_pct, 3);
   const riskPerTradePct = num(policy.risk_per_trade_pct, 1);
   const maxOpen = num(policy.max_open_positions, 1);
+  const tradingMode = str(policy.trading_mode, "swing").toLowerCase();
+  const compoundingEnabled = Boolean(policy.compounding_enabled);
+  const aiScalping = asRecord(asRecord(autoQ.data).ai_scalping);
+  const aiScore = asRecord(aiScalping.ai_score);
   const gateStatus = str(asRecord(autoQ.data).status, "—");
   const failedReasons = asList(asRecord(autoQ.data).failed_reasons).map(String);
   const reasonGroups = asRecord(asRecord(autoQ.data).reason_groups);
@@ -457,6 +465,8 @@ export function AutoTradingWorkspace() {
           ? asList(policy.allowed_sessions).map(String)
           : ["london", "new_york", "london_ny_overlap"],
         news_filter_enabled: Boolean(policy.news_filter_enabled),
+        trading_mode: tradingMode,
+        compounding_enabled: compoundingEnabled,
       }),
     onSuccess: () => {
       toast.success("Auto Trading state updated");
@@ -466,6 +476,59 @@ export function AutoTradingWorkspace() {
       toast.error(e instanceof ApiError ? e.message : "Failed to update Auto Trading"),
   });
 
+  const setModeMut = useMutation({
+    mutationFn: (mode: "swing" | "scalping") =>
+      iteOpsApi.updateAutoTrading({
+        reason: `operator set trading_mode=${mode}`,
+        confirmed: true,
+        trading_mode: mode,
+        max_open_positions: mode === "scalping" ? Math.max(maxOpen || 1, 3) : maxOpen || 1,
+        risk_per_trade_pct: String(riskPerTradePct || 1),
+        max_daily_loss_pct: String(maxDailyLossPct || 3),
+        max_spread: str(policy.max_spread, "2.00"),
+        allowed_symbols: ["XAUUSD"],
+        allowed_sessions: asList(policy.allowed_sessions).map(String).length
+          ? asList(policy.allowed_sessions).map(String)
+          : ["london", "new_york", "london_ny_overlap"],
+        news_filter_enabled: Boolean(policy.news_filter_enabled),
+        compounding_enabled: compoundingEnabled,
+        run_state: runState === "off" ? undefined : runState,
+        enabled: runState === "running" || runState === "paused" ? true : undefined,
+      }),
+    onSuccess: (_data, mode) => {
+      toast.success(
+        mode === "scalping" ? "AI Scalping Mode enabled" : "Swing Mode enabled",
+      );
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Failed to set trading mode"),
+  });
+
+  const setCompoundMut = useMutation({
+    mutationFn: (on: boolean) =>
+      iteOpsApi.updateAutoTrading({
+        reason: `operator set compounding_enabled=${on}`,
+        confirmed: true,
+        compounding_enabled: on,
+        trading_mode: tradingMode,
+        max_open_positions: maxOpen || 1,
+        risk_per_trade_pct: String(riskPerTradePct || 1),
+        max_daily_loss_pct: String(maxDailyLossPct || 3),
+        max_spread: str(policy.max_spread, "2.00"),
+        allowed_symbols: ["XAUUSD"],
+        allowed_sessions: asList(policy.allowed_sessions).map(String).length
+          ? asList(policy.allowed_sessions).map(String)
+          : ["london", "new_york", "london_ny_overlap"],
+        news_filter_enabled: Boolean(policy.news_filter_enabled),
+      }),
+    onSuccess: (_d, on) => {
+      toast.success(on ? "Compounding Mode on" : "Compounding Mode off");
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Failed to update compounding"),
+  });
   const emergencyMut = useMutation({
     mutationFn: () =>
       iteOpsApi.emergencyStop("workspace emergency stop", true),
@@ -481,6 +544,36 @@ export function AutoTradingWorkspace() {
     },
     onError: (e) =>
       toast.error(e instanceof ApiError ? e.message : "Emergency stop failed"),
+  });
+
+  const executeNowMut = useMutation({
+    mutationFn: () => iteOpsApi.executeNow(),
+    onMutate: () => {
+      setBusyLabel("Execute Now running…");
+      setExecuteResult(null);
+    },
+    onSuccess: (data) => {
+      const payload = asRecord(data);
+      setExecuteResult(payload);
+      setBusyLabel(null);
+      invalidate();
+      if (payload.success === true) {
+        toast.success(str(payload.message, "Order executed successfully."));
+      } else {
+        toast.error(str(payload.reason || payload.message, "Execution rejected"));
+      }
+    },
+    onError: (e) => {
+      setBusyLabel(null);
+      const message =
+        e instanceof ApiError ? e.message : "Execute Now failed";
+      setExecuteResult({
+        success: false,
+        status: "REJECTED",
+        reason: message,
+      });
+      toast.error(message);
+    },
   });
 
   const closeAllMut = useMutation({
@@ -690,11 +783,13 @@ export function AutoTradingWorkspace() {
     "—",
   );
   const marketRegime = str(
-    diag.market_regime || diag.regime || tradingSession,
+    aiScore.market_regime || diag.market_regime || diag.regime || tradingSession,
     "—",
   );
   const liquidity = str(
-    diag.liquidity_level || diag.liquidity,
+    aiScore.liquidity != null
+      ? String(aiScore.liquidity)
+      : diag.liquidity_level || diag.liquidity,
     "—",
   );
 
@@ -702,17 +797,40 @@ export function AutoTradingWorkspace() {
     decisionReasons.find((r) => /Trade quality/i.test(r)) ??
     str(last.detail, "");
   const qualityScore =
-    qualityMatch.match(/Trade quality\s+(\d+)/i)?.[1] ??
-    (str(diag.trade_quality, "") !== "" ? str(diag.trade_quality) : "—");
+    aiScore.trade_quality != null
+      ? String(aiScore.trade_quality)
+      : (qualityMatch.match(/Trade quality\s+(\d+)/i)?.[1] ??
+        (str(diag.trade_quality, "") !== "" ? str(diag.trade_quality) : "—"));
   const confluenceMatch =
     decisionReasons.find((r) => /Confluence/i.test(r)) ?? "";
   const confluenceScore =
-    confluenceMatch.match(/Confluence\s+(\d+)/i)?.[1] ??
-    (str(diag.confluence, "") !== "" ? str(diag.confluence) : "—");
+    aiScore.confluence != null
+      ? String(aiScore.confluence)
+      : (confluenceMatch.match(/Confluence\s+(\d+)/i)?.[1] ??
+        (str(diag.confluence, "") !== "" ? str(diag.confluence) : "—"));
   const confidence =
-    confluenceScore !== "—"
-      ? confluenceScore
-      : str(last.confidence ?? diag.confidence, "—");
+    aiScore.ai_confidence != null
+      ? String(aiScore.ai_confidence)
+      : (str(diag.confidence, "") !== ""
+          ? str(diag.confidence)
+          : str(last.confidence, "—"));
+  const expectedRr = str(aiScore.expected_rr, str(diag.expected_rr, "—"));
+  const expectedHold = str(aiScore.expected_hold_time, "—");
+  const momentum = str(
+    aiScore.momentum != null ? String(aiScore.momentum) : diag.momentum,
+    "—",
+  );
+  const learning = asRecord(aiScalping.learning);
+  const winRate =
+    learning.win_rate != null ? `${String(learning.win_rate)}%` : "—";
+  const lastLatency =
+    Number.isFinite(num(last.latency_ms))
+      ? `${formatNumber(num(last.latency_ms), 0)} ms`
+      : "—";
+  const profitProjection =
+    expectedRr !== "—" && Number.isFinite(num(diag.risk_budget))
+      ? formatNumber(num(diag.risk_budget) * num(expectedRr), 2)
+      : "—";
 
   const decisionAction = str(last.decision_action, "").toUpperCase();
   const bias: "BUY" | "SELL" | "WAIT" =
@@ -720,8 +838,9 @@ export function AutoTradingWorkspace() {
       ? "BUY"
       : decisionAction === "SELL" || decisionAction === "SHORT"
         ? "SELL"
-        : "WAIT";
-
+        : aiScore.direction === "BUY" || aiScore.direction === "SELL"
+          ? (aiScore.direction as "BUY" | "SELL")
+          : "WAIT";
   const cycleOutcome = str(last.cycle_outcome, "").toLowerCase();
   const forwarded = Boolean(last.forwarded_to_oms);
   const hasTicket = last.mt5_ticket != null && str(last.mt5_ticket) !== "";
@@ -1041,6 +1160,14 @@ export function AutoTradingWorkspace() {
             <Square className="h-4 w-4" />
             Stop
           </Button>
+          <Button
+            variant="outline"
+            disabled={executeNowMut.isPending}
+            onClick={() => executeNowMut.mutate()}
+          >
+            <Zap className="h-4 w-4" />
+            {executeNowMut.isPending ? "Executing…" : "Execute Now"}
+          </Button>
           <Button variant="outline" onClick={() => setConfirmCloseAll(true)}>
             <XCircle className="h-4 w-4" />
             Close All
@@ -1053,8 +1180,125 @@ export function AutoTradingWorkspace() {
             Emergency Stop
           </Button>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Engine mode
+          </span>
+          <Button
+            size="sm"
+            variant={tradingMode === "scalping" ? "default" : "outline"}
+            disabled={setModeMut.isPending}
+            onClick={() => setModeMut.mutate("scalping")}
+          >
+            AI Scalping
+          </Button>
+          <Button
+            size="sm"
+            variant={tradingMode === "swing" ? "default" : "outline"}
+            disabled={setModeMut.isPending}
+            onClick={() => setModeMut.mutate("swing")}
+          >
+            Swing
+          </Button>
+          <Button
+            size="sm"
+            variant={compoundingEnabled ? "default" : "outline"}
+            disabled={setCompoundMut.isPending}
+            onClick={() => setCompoundMut.mutate(!compoundingEnabled)}
+          >
+            Compounding {compoundingEnabled ? "ON" : "OFF"}
+          </Button>
+          <span className="font-mono text-[10px] text-[var(--fg-muted)]">
+            Max open {maxOpen} · Risk {riskPerTradePct}%
+            {tradingMode === "scalping" ? " · H1→M1 (no H4)" : " · H4→M5"}
+          </span>
+        </div>
         {busyLabel ? (
           <p className="mt-2 text-xs text-[var(--accent)]">{busyLabel}</p>
+        ) : null}
+        {executeResult ? (
+          <div className="mt-3 border border-[var(--border)] bg-[var(--bg)]/60 px-3 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+              Execution Result
+            </p>
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
+              <div>
+                <dt className="text-[var(--fg-subtle)]">Market</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {str(executeResult.market, TRADING_SYMBOL)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">Direction</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {str(executeResult.direction, "—")}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">Lot</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {executeResult.lot == null ? "—" : String(executeResult.lot)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">Entry</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {executeResult.entry == null ? "—" : String(executeResult.entry)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">SL</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {executeResult.sl == null ? "—" : String(executeResult.sl)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">TP</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {executeResult.tp == null ? "—" : String(executeResult.tp)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">Ticket</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {str(executeResult.ticket, "—")}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">Execution Time</dt>
+                <dd className="font-mono text-[var(--fg)]">
+                  {executeResult.execution_ms == null
+                    ? "—"
+                    : `${String(executeResult.execution_ms)} ms`}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--fg-subtle)]">Status</dt>
+                <dd
+                  className={cn(
+                    "font-mono font-medium",
+                    executeResult.success === true
+                      ? "text-[var(--success)]"
+                      : "text-[var(--danger)]",
+                  )}
+                >
+                  {str(executeResult.status, executeResult.success === true ? "SUCCESS" : "REJECTED")}
+                </dd>
+              </div>
+            </dl>
+            {executeResult.success !== true ? (
+              <p className="mt-2 text-xs text-[var(--danger)]">
+                Reason:{" "}
+                <span className="font-mono text-[var(--fg)]">
+                  {str(executeResult.reason || executeResult.message, "—")}
+                </span>
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-[var(--fg-muted)]">
+                {str(executeResult.message, "Order executed successfully.")}
+              </p>
+            )}
+          </div>
         ) : null}
         <p className="mt-2 text-[10px] text-[var(--fg-subtle)]">
           Closes and cancels use the production execution pipeline — never a direct MT5 bypass.
@@ -1084,14 +1328,31 @@ export function AutoTradingWorkspace() {
 
       <div className="grid gap-3 xl:grid-cols-2">
         {/* AI strategy */}
-        <OpsPanel title="AI strategy">
+        <OpsPanel
+          title="AI strategy"
+          action={
+            <Badge tone={tradingMode === "scalping" ? "success" : "neutral"}>
+              {tradingMode === "scalping" ? "SCALPING" : "SWING"}
+            </Badge>
+          }
+        >
           <BiasMeter bias={bias} />
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <MetricCard label="Quality" value={String(qualityScore)} tone="accent" />
+            <MetricCard label="AI Confidence" value={String(confidence)} tone="accent" />
+            <MetricCard label="Trade Quality" value={String(qualityScore)} tone="accent" />
             <MetricCard label="Confluence" value={String(confluenceScore)} tone="accent" />
-            <MetricCard label="Confidence" value={String(confidence)} />
+            <MetricCard label="Market Regime" value={marketRegime} />
+            <MetricCard label="Momentum" value={momentum} />
+            <MetricCard label="Liquidity" value={liquidity} />
+            <MetricCard label="Expected RR" value={expectedRr} />
+            <MetricCard label="Hold Time" value={expectedHold} />
             <MetricCard label="Session" value={tradingSession} />
-            <MetricCard label="Signal ID" value={str(last.signal_id, "—")} />
+            <MetricCard label="Current Risk %" value={`${formatNumber(riskPerTradePct, 2)}%`} />
+            <MetricCard label="Current Lot" value={calculatedLots} />
+            <MetricCard label="Execution Time" value={lastLatency} />
+            <MetricCard label="Profit Projection" value={profitProjection} />
+            <MetricCard label="Open Positions" value={String(positions.length)} />
+            <MetricCard label="Win Rate" value={winRate} />
             <MetricCard
               label="Decision"
               value={str(last.decision_action || last.cycle_outcome, "—")}
@@ -1100,7 +1361,10 @@ export function AutoTradingWorkspace() {
           <p className="mt-3 text-[12px] text-[var(--fg-muted)]">
             Reason:{" "}
             <span className="text-[var(--fg)]">
-              {decisionReasons[0] || exactSafetyReason || "—"}
+              {str(aiScore.reject_reason, "") ||
+                decisionReasons[0] ||
+                exactSafetyReason ||
+                "—"}
             </span>
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">

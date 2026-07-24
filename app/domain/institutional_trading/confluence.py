@@ -59,16 +59,43 @@ class ConfluenceEngine:
         news = snapshot.news
         structure = snapshot.primary_structure
 
-        # --- Direction from hierarchy (H4 macro must agree with H1) ---
+        # --- Direction from configured MTF hierarchy ---
+        # Scalping: H1 direction filter (never require H4). Swing: H4/H1 alignment.
         direction = TradeDirection.NONE
-        if (
+        if cfg.is_scalping():
+            if trend.aligned and trend.macro_bias in {
+                TrendDirection.UP,
+                TrendDirection.DOWN,
+            }:
+                direction = _dir_to_trade(trend.macro_bias)
+                reasons.append(
+                    f"Scalping MTF aligned {trend.macro_bias.value} "
+                    f"({cfg.macro_bias_tf.value}/{cfg.primary_structure_tf.value}; "
+                    f"{cfg.entry_confirmation_tf.value}={trend.entry.value} "
+                    f"{cfg.execution_management_tf.value}={trend.execution.value})"
+                )
+                factors["mtf"] = trend.alignment_score
+            elif trend.macro_bias in {TrendDirection.UP, TrendDirection.DOWN}:
+                direction = _dir_to_trade(trend.macro_bias)
+                factors["mtf"] = max(40, trend.alignment_score)
+                reasons.append(
+                    f"Scalping direction {cfg.macro_bias_tf.value}="
+                    f"{trend.macro_bias.value} (soft structure)"
+                )
+            else:
+                rejected.append("mtf_not_aligned")
+                factors["mtf"] = max(0, trend.alignment_score // 2)
+                reasons.append(trend.why or "Scalping MTF not aligned")
+        elif (
             trend.macro_bias in {TrendDirection.UP, TrendDirection.DOWN}
             and trend.macro_bias == trend.primary
         ):
             direction = _dir_to_trade(trend.macro_bias)
             reasons.append(
-                f"H4/H1 aligned {trend.macro_bias.value} "
-                f"(M15={trend.entry.value} M5={trend.execution.value})"
+                f"{cfg.macro_bias_tf.value}/{cfg.primary_structure_tf.value} "
+                f"aligned {trend.macro_bias.value} "
+                f"({cfg.entry_confirmation_tf.value}={trend.entry.value} "
+                f"{cfg.execution_management_tf.value}={trend.execution.value})"
             )
             factors["mtf"] = trend.alignment_score
         else:
@@ -76,26 +103,33 @@ class ConfluenceEngine:
             factors["mtf"] = max(0, trend.alignment_score // 2)
             reasons.append(trend.why or "MTF not aligned")
 
-        # M15 confirmation soft bonus / penalty
+        # Entry TF confirmation soft bonus / penalty
+        entry_key = cfg.entry_confirmation_tf.value.lower()
         if direction is TradeDirection.BUY and trend.entry is TrendDirection.UP:
-            factors["m15"] = 100
-            reasons.append("M15 confirms bullish")
+            factors[entry_key] = 100
+            factors["m15"] = 100  # legacy factor key for weights
+            reasons.append(f"{cfg.entry_confirmation_tf.value} confirms bullish")
         elif direction is TradeDirection.SELL and trend.entry is TrendDirection.DOWN:
+            factors[entry_key] = 100
             factors["m15"] = 100
-            reasons.append("M15 confirms bearish")
+            reasons.append(f"{cfg.entry_confirmation_tf.value} confirms bearish")
         elif direction is not TradeDirection.NONE:
+            factors[entry_key] = 40
             factors["m15"] = 40
-            rejected.append("m15_not_confirming")
+            rejected.append("entry_tf_not_confirming")
         else:
+            factors[entry_key] = 0
             factors["m15"] = 0
 
-        # Structure events on H1
+        # Structure events on primary structure TF
         bos = len(structure.breaks_of_structure) if structure else 0
         choch = len(structure.changes_of_character) if structure else 0
         if structure and (bos or choch):
             factors["structure"] = 90 if (bos and choch) else 75
-            reasons.append(f"H1 structure events bos={bos} choch={choch}")
-            # Directional structure bias
+            reasons.append(
+                f"{cfg.primary_structure_tf.value} structure events "
+                f"bos={bos} choch={choch}"
+            )
             if structure.breaks_of_structure:
                 last = structure.breaks_of_structure[-1]
                 if last.kind is StructureBreakKind.BOS:
@@ -103,7 +137,6 @@ class ConfluenceEngine:
         else:
             factors["structure"] = 25
             rejected.append("no_structure_event")
-
         # Liquidity
         liq = snapshot.liquidity
         if liq and (liq.sweeps or liq.pools or liq.equal_highs or liq.equal_lows):
@@ -166,18 +199,18 @@ class ConfluenceEngine:
             factors["news"] = 100
             reasons.append(news.reason)
 
-        # Spread
+        # Spread — soft score when elevated; hard reject only above ceiling
         spread = snapshot.spread
         if spread is None:
             factors["spread"] = 50
             reasons.append("Spread unavailable — neutral")
-        elif spread <= cfg.max_spread_for_full_score:
-            factors["spread"] = 100
-            reasons.append(f"Spread {spread} tight")
         elif spread > cfg.max_spread_reject:
             factors["spread"] = 0
             rejected.append("spread_too_wide")
             reasons.append(f"Spread {spread} exceeds reject {cfg.max_spread_reject}")
+        elif spread <= cfg.max_spread_for_full_score:
+            factors["spread"] = 100
+            reasons.append(f"Spread {spread} tight")
         else:
             span = cfg.max_spread_reject - cfg.max_spread_for_full_score
             factors["spread"] = int(
@@ -186,7 +219,10 @@ class ConfluenceEngine:
                     float(100 * (1 - (spread - cfg.max_spread_for_full_score) / span)),
                 )
             )
-            reasons.append(f"Spread {spread} elevated")
+            reasons.append(
+                f"Spread {spread} elevated — soft score {factors['spread']} "
+                f"(reject only above {cfg.max_spread_reject})"
+            )
 
         # ATR volatility (optional)
         if atr is not None and atr > 0:

@@ -73,6 +73,8 @@ class OperationsControlPlane:
     allowed_symbols: tuple[str, ...] = (GOLD_SYMBOL,)
     max_spread: Decimal = Decimal("2.00")
     news_filter_enabled: bool = False
+    trading_mode: str = "swing"
+    compounding_enabled: bool = False
 
     _lock: RLock = field(default_factory=RLock, repr=False)
     _initialized: bool = field(default=False, repr=False)
@@ -367,6 +369,8 @@ class OperationsControlPlane:
                 allowed_symbols=self.allowed_symbols,
                 max_spread=self.max_spread,
                 news_filter_enabled=self.news_filter_enabled,
+                trading_mode=self.trading_mode,
+                compounding_enabled=self.compounding_enabled,
             )
 
     def update_auto_trade_controls(
@@ -382,6 +386,8 @@ class OperationsControlPlane:
         allowed_symbols: tuple[str, ...] | None = None,
         max_spread: Decimal | None = None,
         news_filter_enabled: bool | None = None,
+        trading_mode: str | None = None,
+        compounding_enabled: bool | None = None,
         reason: str,
         now: datetime | None = None,
     ) -> AutoTradePolicy:
@@ -439,6 +445,17 @@ class OperationsControlPlane:
                     self.max_spread = coerce_max_spread(max_spread)
             if news_filter_enabled is not None:
                 self.news_filter_enabled = news_filter_enabled
+            if trading_mode is not None:
+                mode = trading_mode.strip().lower()
+                if mode not in {"swing", "scalping"}:
+                    raise ValueError("trading_mode must be 'swing' or 'scalping'")
+                self.trading_mode = mode
+                if mode == "scalping" and max_open_positions is None:
+                    # Default Max Open Trades = 3 when enabling Scalping Mode
+                    if self.max_open_trades < 3:
+                        self.max_open_trades = 3
+            if compounding_enabled is not None:
+                self.compounding_enabled = bool(compounding_enabled)
             state = normalize_run_state(
                 self.auto_trading_run_state,
                 enabled=self.auto_trading_enabled,
@@ -454,6 +471,8 @@ class OperationsControlPlane:
                 allowed_symbols=self.allowed_symbols,
                 max_spread=self.max_spread,
                 news_filter_enabled=self.news_filter_enabled,
+                trading_mode=self.trading_mode,
+                compounding_enabled=self.compounding_enabled,
             )
         self.audit.record(
             operator=operator,
@@ -498,6 +517,8 @@ class OperationsControlPlane:
                 allowed_symbols=self.allowed_symbols,
                 max_spread=self.max_spread,
                 news_filter_enabled=self.news_filter_enabled,
+                trading_mode=self.trading_mode,
+                compounding_enabled=self.compounding_enabled,
             )
             merged = AutoTradeLiveFacts(
                 gateway_connected=facts.gateway_connected,

@@ -789,6 +789,10 @@ export const iteOpsApi = {
       method: "POST",
       body,
     }),
+  executeNow: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/auto-trading/execute-now", {
+      method: "POST",
+    }),
   emergencyStop: (reason: string, confirmed: boolean) =>
     apiFetch<Record<string, unknown>>("/ite/ops/auto-trading/emergency-stop", {
       method: "POST",

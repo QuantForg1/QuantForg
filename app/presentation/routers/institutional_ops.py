@@ -106,6 +106,8 @@ class AutoTradeControlsBody(ConfirmBody):
     allowed_symbols: list[str] | None = None
     max_spread: str | None = None
     news_filter_enabled: bool | None = None
+    trading_mode: str | None = None
+    compounding_enabled: bool | None = None
 
 
 class AutoTradeEvaluateBody(BaseModel):
@@ -649,7 +651,30 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "recent_execution_attempts": recent_attempts,
         "persistence": ops_state_diagnostics(),
         "force_first_trade": _force_first_trade_payload(snap, settings),
+        "ai_scalping": _ai_scalping_payload(),
     }
+
+
+def _ai_scalping_payload() -> dict[str, Any]:
+    from app.application.services.ai_scalping_mode import current_mode_snapshot
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_AI_SCALPING_CONFIG,
+    )
+
+    plane = get_control_plane()
+    try:
+        snap = current_mode_snapshot(get_ite_runtime())
+    except Exception:
+        snap = {
+            "trading_mode": getattr(plane, "trading_mode", "swing"),
+            "ite": {},
+            "ai_score": None,
+            "learning": None,
+        }
+    snap["compounding_enabled"] = bool(getattr(plane, "compounding_enabled", False))
+    snap["config"] = DEFAULT_AI_SCALPING_CONFIG.to_dict()
+    return snap
 
 
 def _force_first_trade_payload(snap: Any, settings: Any) -> dict[str, Any]:
@@ -1178,14 +1203,34 @@ def update_auto_trading(
                 Decimal(body.max_spread) if body.max_spread is not None else None
             ),
             news_filter_enabled=body.news_filter_enabled,
+            trading_mode=body.trading_mode,
+            compounding_enabled=body.compounding_enabled,
             reason=body.reason,
         )
     except PermissionDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"policy": policy.to_dict()}
+    # Apply Scalping / Swing mode to live ITE runtime (same pipeline, different knobs)
+    try:
+        from app.application.services.ai_scalping_mode import apply_trading_mode_to_runtime
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+        from app.domain.institutional_trading.ai_scalping.config import (
+            DEFAULT_AI_SCALPING_CONFIG,
+        )
+        from dataclasses import replace
 
+        scalp = DEFAULT_AI_SCALPING_CONFIG
+        if policy.compounding_enabled:
+            scalp = replace(scalp, compounding_enabled=True)
+        mode_payload = apply_trading_mode_to_runtime(
+            get_ite_runtime(),
+            mode=policy.trading_mode,
+            scalp=scalp,
+        )
+    except Exception:
+        mode_payload = None
+    return {"policy": policy.to_dict(), "trading_mode_applied": mode_payload}
 
 @router.post("/auto-trading/evaluate")
 def evaluate_auto_trading(
@@ -1220,6 +1265,17 @@ def evaluate_auto_trading(
         )
     )
     return safety.to_dict()
+
+
+@router.post("/auto-trading/execute-now")
+async def execute_now_auto_trading(_user: OperatorUser) -> dict[str, Any]:
+    """Manually run one complete Auto Trading cycle (same pipeline as scheduler)."""
+    from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+    runtime = get_ite_runtime()
+    if runtime is None:
+        raise HTTPException(status_code=503, detail="ITE runtime not available")
+    return await runtime.execute_now()
 
 
 @router.post("/auto-trading/emergency-stop")
