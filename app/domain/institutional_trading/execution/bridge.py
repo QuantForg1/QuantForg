@@ -40,6 +40,9 @@ from app.domain.institutional_trading.execution.models import (
 )
 from app.domain.institutional_trading.execution.oms_port import OmsSubmitPort
 from app.domain.institutional_trading.operations.models import OpsExecutionMode
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from app.domain.institutional_trading.operations.control_plane import (
@@ -180,14 +183,24 @@ class ExecutionBridge:
 
         # 3. Session still valid
         if not context.session_valid:
-            return self._abort(
-                decision=decision,
-                context=context,
-                decision_hash=d_hash,
-                reason=BridgeAbortReason.SESSION_INVALID,
-                comment=context.snapshot.session.reason or "Session invalid",
-                t0=t0,
+            from app.domain.institutional_trading.force_first_trade import (
+                is_forced_test_decision,
             )
+
+            if is_forced_test_decision(decision):
+                logger.warning(
+                    "FORCE_FIRST_TRADE continuing with session invalid: %s",
+                    context.snapshot.session.reason or "Session invalid",
+                )
+            else:
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.SESSION_INVALID,
+                    comment=context.snapshot.session.reason or "Session invalid",
+                    t0=t0,
+                )
 
         # 4. Market still open
         if not context.market_open:
@@ -292,15 +305,25 @@ class ExecutionBridge:
                 self._auto_trade_facts(context)
             )
             if not safety.allowed:
-                return self._abort(
-                    decision=decision,
-                    context=context,
-                    decision_hash=d_hash,
-                    reason=BridgeAbortReason.AUTO_TRADING_BLOCKED,
-                    comment="; ".join(safety.failed_reasons)
-                    or "Auto Trading safety gate blocked",
-                    t0=t0,
+                from app.domain.institutional_trading.force_first_trade import (
+                    is_forced_test_decision,
                 )
+
+                if is_forced_test_decision(decision):
+                    logger.warning(
+                        "FORCE_FIRST_TRADE continuing past safety gate: %s",
+                        "; ".join(safety.failed_reasons) or "Auto Trading blocked",
+                    )
+                else:
+                    return self._abort(
+                        decision=decision,
+                        context=context,
+                        decision_hash=d_hash,
+                        reason=BridgeAbortReason.AUTO_TRADING_BLOCKED,
+                        comment="; ".join(safety.failed_reasons)
+                        or "Auto Trading safety gate blocked",
+                        t0=t0,
+                    )
 
         # 8. Kill switch
         if self.kill_switch.enabled:
@@ -389,6 +412,12 @@ class ExecutionBridge:
             )
 
         # Build intent and forward exactly once
+        from app.domain.institutional_trading.force_first_trade import (
+            is_forced_test_decision,
+        )
+
+        if is_forced_test_decision(decision):
+            logger.warning("Submitting order...")
         intent = self._build_intent(decision, context)
         request_id = context.request_id or f"ite_{d_hash[:16]}"
 

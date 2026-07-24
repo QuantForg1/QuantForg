@@ -29,12 +29,13 @@ class PositionEligibilityEngine:
         risk_allowed: bool,
         risk_reasons: tuple[str, ...] = (),
         waive_signal_gates: bool = False,
+        force_test_mode: bool = False,
     ) -> EligibilityResult:
         """Evaluate pre-OMS checklist.
 
-        ``waive_signal_gates`` is reserved for Force First Trade test mode:
-        skips Quality / Confluence thresholds only. Never waives market,
-        margin, session, news, spread, or risk checks.
+        ``waive_signal_gates`` / ``force_test_mode`` are reserved for Force First
+        Trade: skip Quality / Confluence (/ session+news in force_test_mode).
+        Never waives market-open, margin, or spread checks.
         """
         cfg = self.config
         checks: dict[str, bool] = {}
@@ -63,15 +64,19 @@ class PositionEligibilityEngine:
         if not checks["spread_acceptable"]:
             rejects.append(f"Spread {spread} not acceptable")
 
-        checks["session_valid"] = snapshot.session.allowed
-        if not snapshot.session.allowed:
-            rejects.append(snapshot.session.reason)
+        if force_test_mode:
+            checks["session_valid"] = True
+            checks["news_clear"] = True
+        else:
+            checks["session_valid"] = snapshot.session.allowed
+            if not snapshot.session.allowed:
+                rejects.append(snapshot.session.reason)
 
-        checks["news_clear"] = not snapshot.news.blocked
-        if snapshot.news.blocked:
-            rejects.append(snapshot.news.reason)
+            checks["news_clear"] = not snapshot.news.blocked
+            if snapshot.news.blocked:
+                rejects.append(snapshot.news.reason)
 
-        if waive_signal_gates:
+        if waive_signal_gates or force_test_mode:
             # Force First Trade — require a concrete side only.
             checks["confluence_ok"] = confluence.direction is not TradeDirection.NONE
             if not checks["confluence_ok"]:

@@ -301,27 +301,45 @@ class InstitutionalIteRuntime:
             )
         )
         if not safety.allowed:
-            result = ShadowCycleResult(
-                ok=True,
-                trace_id=None,
-                mode=self.plane.mode.value,
-                detail="; ".join(safety.failed_reasons) or "Auto Trading Disabled",
-                health=health.get("health") if isinstance(health, dict) else None,
-                cycle_outcome="safety_blocked",
-                abort_reason="SAFETY_BLOCKED",
-                safety_failed_reasons=tuple(safety.failed_reasons),
-                snapshot_present=True,
+            from app.domain.institutional_trading.force_first_trade import (
+                is_force_first_trade_armed,
             )
-            with self._lock:
-                self._last_cycle = result
-                self._cycles += 1
-            logger.info(
-                "ite_cycle_outcome",
-                outcome=result.cycle_outcome,
-                reasons=list(result.safety_failed_reasons),
-                mode=result.mode,
+
+            force_armed = is_force_first_trade_armed(settings)
+            can_force = (
+                force_armed
+                and execution_on
+                and gw
+                and mt5
+                and account.open_positions <= 0
+                and not account.already_in_trade
             )
-            return result
+            if not can_force:
+                result = ShadowCycleResult(
+                    ok=True,
+                    trace_id=None,
+                    mode=self.plane.mode.value,
+                    detail="; ".join(safety.failed_reasons) or "Auto Trading Disabled",
+                    health=health.get("health") if isinstance(health, dict) else None,
+                    cycle_outcome="safety_blocked",
+                    abort_reason="SAFETY_BLOCKED",
+                    safety_failed_reasons=tuple(safety.failed_reasons),
+                    snapshot_present=True,
+                )
+                with self._lock:
+                    self._last_cycle = result
+                    self._cycles += 1
+                logger.info(
+                    "ite_cycle_outcome",
+                    outcome=result.cycle_outcome,
+                    reasons=list(result.safety_failed_reasons),
+                    mode=result.mode,
+                )
+                return result
+            logger.warning(
+                "FORCE_FIRST_TRADE proceeding despite safety blockers: %s",
+                "; ".join(safety.failed_reasons) or "unknown",
+            )
 
         return self._run_cycle(
             snapshot=snapshot,
@@ -519,25 +537,75 @@ class InstitutionalIteRuntime:
         )
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
 
-        if forced_override and bridge_result.forwarded_to_oms:
-            try:
-                from app.domain.institutional_trading.force_first_trade import (
-                    record_forced_trade_success,
-                )
-
-                entry = getattr(bridge_result, "journal_entry", None)
-                ticket = None
-                if entry is not None:
-                    ticket = getattr(entry, "ticket", None) or getattr(
-                        entry, "order_ticket", None
+        if forced_override:
+            oms = getattr(bridge_result, "oms_result", None)
+            if oms is not None:
+                outcome = str(getattr(oms, "outcome", "") or "").lower()
+            else:
+                outcome = ""
+            oms_success = bridge_result.forwarded_to_oms and outcome in {
+                "success",
+                "filled",
+                "done",
+            }
+            if oms_success:
+                try:
+                    from app.domain.institutional_trading.force_first_trade import (
+                        record_forced_trade_success,
                     )
-                record_forced_trade_success(
-                    direction=str(decision.direction.value),
-                    lot=decision.approved_lots or Decimal("0.01"),
-                    ticket=int(ticket) if ticket is not None else None,
-                )
-            except Exception:
-                logger.exception("force_first_trade_record_failed")
+
+                    entry = getattr(bridge_result, "journal_entry", None)
+                    ticket = None
+                    price = None
+                    if entry is not None:
+                        ticket = getattr(entry, "ticket", None) or getattr(
+                            entry, "order_ticket", None
+                        )
+                        price = getattr(entry, "price", None) or getattr(
+                            entry, "fill_price", None
+                        )
+                    if price is None and account.mid_price is not None:
+                        price = account.mid_price
+                    if oms is not None and ticket is None:
+                        ticket = getattr(oms, "order_ticket", None) or getattr(
+                            oms, "deal_ticket", None
+                        )
+                    record_forced_trade_success(
+                        direction=str(decision.direction.value),
+                        lot=decision.approved_lots or Decimal("0.01"),
+                        ticket=int(ticket) if ticket is not None else None,
+                        price=price,
+                    )
+                except Exception:
+                    logger.exception("force_first_trade_record_failed")
+            else:
+                try:
+                    from app.domain.institutional_trading.force_first_trade import (
+                        log_force_first_trade_rejection,
+                    )
+
+                    entry = getattr(bridge_result, "journal_entry", None)
+                    comment = None
+                    if entry is not None:
+                        comment = getattr(entry, "comment", None)
+                    oms_msg = None
+                    retcode = None
+                    if oms is not None:
+                        oms_msg = getattr(oms, "message", None)
+                        retcode = getattr(oms, "retcode", None)
+                    log_force_first_trade_rejection(
+                        stage=(
+                            "OMS/MT5"
+                            if bridge_result.forwarded_to_oms
+                            else "pre-OMS bridge"
+                        ),
+                        reason=str(bridge_result.abort_reason.value),
+                        retcode=int(retcode) if retcode is not None else None,
+                        oms_message=str(oms_msg or comment or "") or None,
+                        detail="; ".join(decision_reasons) or None,
+                    )
+                except Exception:
+                    logger.exception("force_first_trade_reject_log_failed")
 
         for ticket in list(self.position_management.engine._positions.keys()):
             pos = self.position_management.engine.get(ticket)

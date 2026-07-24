@@ -163,6 +163,38 @@ def get_force_first_trade_state() -> ForceFirstTradeState:
         return _load_state()
 
 
+def is_force_first_trade_armed(settings: Any) -> bool:
+    """True when env enables force mode and local disarm counter still allows it."""
+    cfg = ForceFirstTradeConfig.from_settings(settings)
+    if not cfg.enabled:
+        return False
+    state = get_force_first_trade_state()
+    return bool(state.armed and state.executed_count < cfg.max_trades)
+
+
+def log_force_first_trade_startup(settings: Any) -> None:
+    """Emit required startup banners when FORCE_FIRST_TRADE is loaded."""
+    cfg = ForceFirstTradeConfig.from_settings(settings)
+    enabled = bool(cfg.enabled)
+    logger.warning("FORCE_FIRST_TRADE = %s", "TRUE" if enabled else "FALSE")
+    if enabled and is_force_first_trade_armed(settings):
+        logger.warning("FORCE_FIRST_TRADE armed")
+        logger.warning(
+            "force_first_trade_startup_config",
+            max=cfg.max_trades,
+            lot=str(cfg.lot),
+            direction=cfg.direction,
+        )
+    elif enabled:
+        state = get_force_first_trade_state()
+        logger.warning(
+            "FORCE_FIRST_TRADE enabled but DISARMED",
+            executed_count=state.executed_count,
+            max=cfg.max_trades,
+            armed=state.armed,
+        )
+
+
 def is_forced_test_decision(decision: TradeDecision) -> bool:
     return FORCED_REASON in (decision.reasons or ())
 
@@ -267,21 +299,18 @@ def maybe_override_decision(
             confluence=decision.confluence,
         )
         if direction is None:
-            logger.info(
-                "force_first_trade_skipped",
-                reason="no_direction",
+            logger.warning(
+                "force_first_trade_no_bias_defaulting_BUY",
                 configured=cfg.direction,
             )
-            return decision, False
+            direction = TradeDirection.BUY
 
-        # Risk must still allow — do not override Risk REJECT.
-        if not bool(decision.eligibility.checks.get("risk_available", True)):
-            logger.info(
-                "force_first_trade_skipped",
-                reason="risk_rejected",
-                risk_reasons=list(decision.risk_reasons),
-            )
-            return decision, False
+        # Force First Trade continues past signal/risk soft blocks to OMS.
+        # Margin / market-open / spread remain enforced in eligibility below.
+        logger.warning("Force First Trade detected")
+        logger.warning(
+            "Bypassing:\n- Quality\n- Confluence\n- MTF"
+        )
 
         forced_confluence = ConfluenceResult(
             confidence=decision.confluence.confidence,
@@ -309,12 +338,13 @@ def maybe_override_decision(
             risk_allowed=True,
             risk_reasons=decision.risk_reasons,
             waive_signal_gates=True,
+            force_test_mode=True,
         )
         if not eligibility.eligible:
-            logger.info(
-                "force_first_trade_skipped",
-                reason="eligibility_failed",
-                rejects=list(eligibility.rejection_reasons),
+            exact = "; ".join(eligibility.rejection_reasons) or "eligibility_failed"
+            logger.error(
+                "FORCE_FIRST_TRADE REJECTED before OMS: %s",
+                exact,
             )
             return decision, False
 
@@ -323,7 +353,9 @@ def maybe_override_decision(
             snapshot, direction, account
         )
         if entry_zone is None or stop_zone is None or target_zone is None:
-            logger.info("force_first_trade_skipped", reason="missing_geometry")
+            logger.error(
+                "FORCE_FIRST_TRADE REJECTED before OMS: missing entry/stop/target zones"
+            )
             return decision, False
 
         action = (
@@ -371,12 +403,14 @@ def maybe_override_decision(
             approved_lots=cfg.lot,
             risk_reasons=decision.risk_reasons,
         )
-        logger.info(
-            "force_first_trade_armed",
+        logger.warning("Submitting order...")
+        logger.warning(
+            "force_first_trade_submitting",
             direction=direction.value,
             lot=str(cfg.lot),
             quality=decision.quality,
             confluence=decision.confidence,
+            mid=str(account.mid_price) if account.mid_price is not None else None,
         )
         return forced, True
 
@@ -386,6 +420,7 @@ def record_forced_trade_success(
     direction: str,
     lot: Decimal | str,
     ticket: int | None,
+    price: Decimal | str | None = None,
 ) -> ForceFirstTradeState:
     """Increment counter, disarm, and emit the required audit log line."""
     now = datetime.now(UTC).isoformat()
@@ -401,16 +436,38 @@ def record_forced_trade_success(
         _save_state(state)
 
     ticket_txt = str(ticket) if ticket is not None else "PENDING"
+    price_txt = str(price) if price is not None else "N/A"
     msg = (
         "FORCED TEST TRADE EXECUTED\n"
-        f"Reason: Manual Test\n"
+        f"Ticket: {ticket_txt}\n"
         f"Direction: {direction}\n"
         f"Lot: {lot}\n"
-        f"Ticket: {ticket_txt}\n"
-        f"Time: {now}"
+        f"Price: {price_txt}"
     )
     logger.warning(msg)
     return state
+
+
+def log_force_first_trade_rejection(
+    *,
+    stage: str,
+    reason: str,
+    retcode: int | None = None,
+    oms_message: str | None = None,
+    detail: str | None = None,
+) -> None:
+    """Print the exact broker/OMS rejection for operators."""
+    parts = [
+        f"FORCE_FIRST_TRADE REJECTED at {stage}",
+        f"Reason: {reason}",
+    ]
+    if retcode is not None:
+        parts.append(f"Retcode: {retcode}")
+    if oms_message:
+        parts.append(f"OMS/MT5: {oms_message}")
+    if detail:
+        parts.append(f"Detail: {detail}")
+    logger.error("\n".join(parts))
 
 
 def reset_force_first_trade_state_for_tests() -> None:

@@ -324,7 +324,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         mt5_gateway_caller_token_configured=bool(
             (settings.mt5_gateway_caller_token or "").strip()
         ),
+        force_first_trade=bool(getattr(settings, "force_first_trade", False)),
     )
+    try:
+        from app.domain.institutional_trading.force_first_trade import (
+            log_force_first_trade_startup,
+        )
+
+        log_force_first_trade_startup(settings)
+    except Exception:
+        logger.exception("force_first_trade_startup_log_failed")
 
     database = DatabaseManager(settings)
     container = Container(settings=settings, database=database)
