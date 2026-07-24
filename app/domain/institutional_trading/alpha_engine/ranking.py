@@ -85,6 +85,15 @@ def score_opportunity(
         "expected_rr": cfg.w_expected_rr,
         "session": cfg.w_session,
     }
+    # Continuous learning — gradual multipliers only; never overwrite base rules.
+    try:
+        from app.domain.institutional_trading.production_hardening.learning import (
+            get_learning_weight_store,
+        )
+
+        weights = get_learning_weight_store().apply_to_weights(weights)
+    except Exception:
+        pass
     factors = {
         "confidence": _clamp(ai_confidence),
         "trend": _clamp(trend_strength),

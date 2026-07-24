@@ -257,6 +257,16 @@ def readiness(_user: OperatorUser) -> dict[str, Any]:
     return get_control_plane().readiness_dashboard()
 
 
+@router.get("/production-reliability")
+def production_reliability(_user: OperatorUser) -> dict[str, Any]:
+    """Production Hardening v6 dashboard (alias of /ite/reliability/production-hardening)."""
+    from app.application.services.production_reliability import (
+        build_production_reliability_dashboard,
+    )
+
+    return build_production_reliability_dashboard()
+
+
 @router.get("/services-health")
 def services_health(_user: OperatorUser) -> dict[str, Any]:
     """Per-service status / uptime / latency / last error for operator desks."""

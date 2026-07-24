@@ -113,7 +113,7 @@ class InstitutionalIteRuntime:
     plane: OperationsControlPlane
     reliability: ReliabilityPlatform
     probes: LiveProbeCollector
-    guarded_submit: GuardedOmsSubmitPort
+    guarded_submit: Any  # GuardedOmsSubmitPort or RetryingOmsSubmitPort wrapper
     guarded_manage: GuardedOmsManagePort
     execution: InstitutionalExecutionIntegration
     position_management: InstitutionalPositionManagement
@@ -504,6 +504,20 @@ class InstitutionalIteRuntime:
         self.reliability.traces.start(
             trace_id=tid, decision_id=None, symbol=getattr(snapshot, "symbol", "XAUUSD")
         )
+        try:
+            from app.domain.institutional_trading.production_hardening.observe import (
+                record_lifecycle,
+            )
+
+            record_lifecycle(
+                stage="SIGNAL",
+                status="ok",
+                detail=f"symbol={getattr(snapshot, 'symbol', '')}",
+                trace_id=tid,
+                symbol=str(getattr(snapshot, "symbol", "") or ""),
+            )
+        except Exception:
+            logger.exception("hardening_signal_lifecycle_failed")
 
         decision = self.decision_pipeline.run(snapshot, account)
         # Temporary Force First Trade override — before signal rejection only.
@@ -544,6 +558,28 @@ class InstitutionalIteRuntime:
                 "AI Decision Complete",
                 action=str(getattr(decision.action, "value", decision.action)),
             )
+
+        try:
+            from app.domain.institutional_trading.production_hardening.observe import (
+                record_lifecycle,
+            )
+
+            record_lifecycle(
+                stage="AI_DECISION",
+                status="ok",
+                detail=f"action={decision.action.value} conf={getattr(decision, 'confidence', '')}",
+                trace_id=tid,
+                symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")),
+            )
+            record_lifecycle(
+                stage="RISK_VALIDATION",
+                status="ok" if decision.eligibility.eligible else "failed",
+                detail=";".join(decision.eligibility.rejection_reasons) or "eligible",
+                trace_id=tid,
+                symbol=str(getattr(decision, "symbol", "") or ""),
+            )
+        except Exception:
+            logger.exception("hardening_decision_lifecycle_failed")
 
         # Enrich diagnostics with live ATR sizing facts (observational only).
         sizing_diag: dict[str, Any] = dict(market_context_diagnostics or {})
@@ -645,6 +681,52 @@ class InstitutionalIteRuntime:
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
         with self._lock:
             self._last_bridge_result = bridge_result
+
+        try:
+            from app.domain.institutional_trading.production_hardening.observe import (
+                observe_oms_outcome,
+                store_trade_explanation,
+            )
+
+            oms = getattr(bridge_result, "oms_result", None)
+            success = (
+                not getattr(bridge_result, "aborted", True)
+                and getattr(bridge_result, "forwarded_to_oms", False)
+            )
+            if oms is not None:
+                outcome = str(getattr(oms, "outcome", "") or "").lower()
+                success = outcome in {"success", "filled", "done"}
+            ticket = None
+            if oms is not None:
+                ticket = getattr(oms, "order_ticket", None) or getattr(
+                    oms, "deal_ticket", None
+                )
+            lat = (time.perf_counter() - t0) * 1000.0
+            retries = 0
+            inner = getattr(self.guarded_submit, "retry_count", None)
+            if isinstance(inner, int):
+                retries = inner
+            observe_oms_outcome(
+                trace_id=tid,
+                symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")),
+                forwarded=bool(getattr(bridge_result, "forwarded_to_oms", False)),
+                success=bool(success),
+                latency_ms=lat,
+                retcode=getattr(oms, "retcode", None) if oms is not None else None,
+                message=str(getattr(oms, "message", "") or "") if oms is not None else None,
+                ticket=ticket,
+                spread=float(snapshot.spread) if getattr(snapshot, "spread", None) is not None else None,
+                retries=retries,
+            )
+            if success and getattr(bridge_result, "forwarded_to_oms", False):
+                store_trade_explanation(
+                    decision=decision,
+                    ticket=str(ticket) if ticket is not None else None,
+                    risk_pct=str(risk_pct),
+                    extras={"trace_id": tid, "forced": forced_override},
+                )
+        except Exception:
+            logger.exception("hardening_post_bridge_observe_failed")
         if self._manual_execution:
             oms = getattr(bridge_result, "oms_result", None)
             logger.warning(
@@ -753,6 +835,26 @@ class InstitutionalIteRuntime:
                 user_id=self.user_id,
             )
             self.position_management.evaluate(ticket, pctx)
+
+        try:
+            from app.domain.institutional_trading.production_hardening.position_recovery import (
+                persist_pme_state,
+            )
+
+            persist_pme_state(self.position_management.engine)
+            from app.domain.institutional_trading.production_hardening.observe import (
+                record_lifecycle,
+            )
+
+            if self.position_management.engine._positions:
+                record_lifecycle(
+                    stage="POSITION_MONITOR",
+                    status="ok",
+                    detail=f"managed={len(self.position_management.engine._positions)}",
+                    trace_id=tid,
+                )
+        except Exception:
+            logger.exception("hardening_pme_persist_failed")
 
         reason_detail = (
             f"action={decision.action.value} "
@@ -1432,8 +1534,25 @@ def build_ite_runtime(
     guarded_submit = GuardedOmsSubmitPort(inner=raw_submit, plane=plane)
     guarded_manage = GuardedOmsManagePort(inner=raw_manage, plane=plane)
 
+    # Production hardening v6 — retry only transient MT5 rejects (never permanent).
+    from app.domain.institutional_trading.production_hardening import (
+        RetryingOmsSubmitPort,
+    )
+
+    def _on_oms_retry(attempt: int, decision: Any, _last: Any) -> None:
+        logger.warning(
+            "oms_transient_retry",
+            attempt=attempt,
+            reason=getattr(decision, "reason", ""),
+            backoff_ms=getattr(decision, "backoff_ms", 0),
+        )
+
+    submit_port: Any = RetryingOmsSubmitPort(
+        guarded_submit, on_retry=_on_oms_retry
+    )
+
     config = ExecutionBridgeConfig(mode=ExecutionMode.SHADOW)
-    execution = InstitutionalExecutionIntegration.create(guarded_submit, config=config)
+    execution = InstitutionalExecutionIntegration.create(submit_port, config=config)
     execution.bridge.bind_ops(plane, reliability=reliability)
 
     pme = InstitutionalPositionManagement.create(guarded_manage, ops_plane=plane)
@@ -1445,7 +1564,7 @@ def build_ite_runtime(
         plane=plane,
         reliability=reliability,
         probes=probes,
-        guarded_submit=guarded_submit,
+        guarded_submit=submit_port,
         guarded_manage=guarded_manage,
         execution=execution,
         position_management=pme,

@@ -61,6 +61,16 @@ def dashboard(_user: OperatorUser) -> dict[str, Any]:
     return get_reliability_platform().operational_dashboard()
 
 
+@router.get("/production-hardening")
+def production_hardening_dashboard(_user: OperatorUser) -> dict[str, Any]:
+    """v6 Production Hardening — health, performance, lifecycle, learning, secrets audit."""
+    from app.application.services.production_reliability import (
+        build_production_reliability_dashboard,
+    )
+
+    return build_production_reliability_dashboard()
+
+
 @router.get("/network")
 def network_dashboard(_user: OperatorUser) -> dict[str, Any]:
     """DNS/network incidents, reconnect log, gateway/MT5 uptime."""

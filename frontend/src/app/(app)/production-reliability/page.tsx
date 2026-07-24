@@ -11,7 +11,7 @@ export default function ProductionReliabilityPage() {
     <div>
       <PageHeader
         title="Production Reliability"
-        description="DNS and network incident ledger — gateway/MT5 uptime, reconnects, severity classification. Observation only; does not change Strategy, Risk, Safety, OMS, or MT5 execution."
+        description="Production hardening v6 — system health, live execution metrics, lifecycle timeline, explainability, incidents, learning, and secrets audit (names only). Observation + reliability; does not add experimental trading features."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">

@@ -854,6 +854,8 @@ export const aiRobotApi = {
 export const iteReliabilityApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/dashboard"),
+  productionHardening: () =>
+    apiFetch<Record<string, unknown>>("/ite/reliability/production-hardening"),
   network: () =>
     apiFetch<Record<string, unknown>>("/ite/reliability/network"),
   tick: (body: Record<string, unknown>) =>

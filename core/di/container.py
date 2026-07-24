@@ -315,6 +315,24 @@ class Container:
                 execution_enabled=bool(self.settings.execution_enabled),
                 oms_orders_allowed=self.ite_runtime.plane.oms_orders_allowed(),
             )
+            # Production hardening v6 — restore open MT5 positions after Railway restart
+            try:
+                from app.domain.institutional_trading.production_hardening import (
+                    DEFAULT_HARDENING_CONFIG,
+                    recover_positions_from_mt5,
+                )
+
+                if (
+                    DEFAULT_HARDENING_CONFIG.recovery_on_startup
+                    and self.mt5_adapter is not None
+                ):
+                    recovery = recover_positions_from_mt5(
+                        mt5_adapter=self.mt5_adapter,
+                        engine=self.ite_runtime.position_management.engine,
+                    )
+                    logger.info("position_recovery_on_startup", **recovery)
+            except Exception as rec_exc:
+                logger.warning("position_recovery_on_startup_failed", error=str(rec_exc))
         except Exception as exc:
             logger.warning("ite_runtime_wire_failed", error=str(exc))
 
