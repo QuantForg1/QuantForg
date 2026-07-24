@@ -1832,6 +1832,20 @@ export const resApi = {
     apiFetch<Record<string, unknown>>(`/res/reports?limit=${limit}`),
 };
 
+/** Continuous Validation Framework — read-only evidence / never promotes */
+export const cvfApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/cvf/dashboard"),
+  replayVsLive: () => apiFetch<Record<string, unknown>>("/cvf/replay-vs-live"),
+  drift: () => apiFetch<Record<string, unknown>>("/cvf/drift"),
+  regimes: () => apiFetch<Record<string, unknown>>("/cvf/regimes"),
+  parameters: () => apiFetch<Record<string, unknown>>("/cvf/parameters"),
+  confidence: () => apiFetch<Record<string, unknown>>("/cvf/confidence"),
+  alerts: () => apiFetch<Record<string, unknown>>("/cvf/alerts"),
+  evidence: () => apiFetch<Record<string, unknown>>("/cvf/evidence"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/cvf/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

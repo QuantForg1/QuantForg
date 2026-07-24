@@ -182,6 +182,12 @@ export const appNav: NavGroup[] = [
         hint: "RES · health · recovery · failures",
       },
       {
+        href: "/continuous-validation",
+        label: "Continuous Validation",
+        icon: ClipboardCheck,
+        hint: "CVF · drift · replay vs live · evidence",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
