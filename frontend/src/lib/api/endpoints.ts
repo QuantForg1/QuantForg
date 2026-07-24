@@ -2200,6 +2200,21 @@ export const qcdmApi = {
   },
 };
 
+/** QuantForg Decision Intelligence Engine — advisory recommendations only */
+export const qdieApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qdie/dashboard"),
+  recommendations: () =>
+    apiFetch<Record<string, unknown>>("/qdie/recommendations"),
+  scores: () => apiFetch<Record<string, unknown>>("/qdie/scores"),
+  evidence: () => apiFetch<Record<string, unknown>>("/qdie/evidence"),
+  tradeoffs: () => apiFetch<Record<string, unknown>>("/qdie/tradeoffs"),
+  brief: () => apiFetch<Record<string, unknown>>("/qdie/brief"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/qdie/reports?limit=${limit}`),
+  history: (limit = 50) =>
+    apiFetch<Record<string, unknown>>(`/qdie/history?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

@@ -264,6 +264,12 @@ export const appNav: NavGroup[] = [
         hint: "QCDM · schema · models · relationships",
       },
       {
+        href: "/quantforg-decision-intelligence",
+        label: "Decision Intelligence",
+        icon: Scale,
+        hint: "QDIE · recommendations · evidence · trade-offs",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
