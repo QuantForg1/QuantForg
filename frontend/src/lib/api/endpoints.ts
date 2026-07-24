@@ -2118,6 +2118,19 @@ export const qpmApi = {
     apiFetch<Record<string, unknown>>(`/qpm/reports?limit=${limit}`),
 };
 
+/** QuantForg Autonomous Operations Center — read-only operational orchestration */
+export const aocApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/aoc/dashboard"),
+  recommendations: () =>
+    apiFetch<Record<string, unknown>>("/aoc/recommendations"),
+  queue: () => apiFetch<Record<string, unknown>>("/aoc/queue"),
+  scores: () => apiFetch<Record<string, unknown>>("/aoc/scores"),
+  evidence: () => apiFetch<Record<string, unknown>>("/aoc/evidence"),
+  brief: () => apiFetch<Record<string, unknown>>("/aoc/brief"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/aoc/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

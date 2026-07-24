@@ -246,6 +246,12 @@ export const appNav: NavGroup[] = [
         hint: "QPM · allocation · ranking · diversification",
       },
       {
+        href: "/quantforg-operations-center",
+        label: "Operations Center",
+        icon: Radar,
+        hint: "AOC · queue · recommendations · readiness",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,
