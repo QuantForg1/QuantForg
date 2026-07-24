@@ -240,6 +240,12 @@ export const appNav: NavGroup[] = [
         hint: "QSMR · discovery · compare · evidence",
       },
       {
+        href: "/quantforg-portfolio-manager",
+        label: "Portfolio Manager",
+        icon: PieChart,
+        hint: "QPM · allocation · ranking · diversification",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

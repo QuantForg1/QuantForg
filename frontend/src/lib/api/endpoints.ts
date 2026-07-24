@@ -2104,6 +2104,20 @@ export const qsmrApi = {
     apiFetch<Record<string, unknown>>(`/qsmr/reports?limit=${limit}`),
 };
 
+/** QuantForg Portfolio Manager — read-only portfolio orchestration */
+export const qpmApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qpm/dashboard"),
+  allocation: () => apiFetch<Record<string, unknown>>("/qpm/allocation"),
+  ranking: () => apiFetch<Record<string, unknown>>("/qpm/ranking"),
+  diversification: () =>
+    apiFetch<Record<string, unknown>>("/qpm/diversification"),
+  metrics: () => apiFetch<Record<string, unknown>>("/qpm/metrics"),
+  recommendations: () =>
+    apiFetch<Record<string, unknown>>("/qpm/recommendations"),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/qpm/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),
