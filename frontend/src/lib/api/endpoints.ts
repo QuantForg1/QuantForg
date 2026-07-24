@@ -2177,6 +2177,29 @@ export const qemApi = {
   subscribers: () => apiFetch<Record<string, unknown>>("/qem/subscribers"),
 };
 
+/** QuantForg Canonical Data Model — read-only enterprise schema contract */
+export const qcdmApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qcdm/dashboard"),
+  models: () => apiFetch<Record<string, unknown>>("/qcdm/models"),
+  model: (model: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qcdm/models/${encodeURIComponent(model)}`,
+    ),
+  relationships: () =>
+    apiFetch<Record<string, unknown>>("/qcdm/relationships"),
+  governance: () => apiFetch<Record<string, unknown>>("/qcdm/governance"),
+  timeline: () => apiFetch<Record<string, unknown>>("/qcdm/timeline"),
+  validate: () => apiFetch<Record<string, unknown>>("/qcdm/validate"),
+  schema: (model?: string) => {
+    const sp = new URLSearchParams();
+    if (model) sp.set("model", model);
+    const q = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      q ? `/qcdm/schema?${q}` : "/qcdm/schema",
+    );
+  },
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

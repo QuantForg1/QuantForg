@@ -258,6 +258,12 @@ export const appNav: NavGroup[] = [
         hint: "QEM · stream · timeline · correlation",
       },
       {
+        href: "/quantforg-canonical-data",
+        label: "Canonical Data",
+        icon: Database,
+        hint: "QCDM · schema · models · relationships",
+      },
+      {
         href: "/strategy-lab",
         label: "Strategy Lab",
         icon: Layers3,

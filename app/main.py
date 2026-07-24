@@ -213,6 +213,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "quantforg_event_mesh",
         "app.presentation.routers.quantforg_event_mesh",
     ),
+    (
+        "quantforg_canonical_data_model",
+        "app.presentation.routers.quantforg_canonical_data_model",
+    ),
 )
 
 
