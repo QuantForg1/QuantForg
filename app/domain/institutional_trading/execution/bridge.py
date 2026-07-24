@@ -247,13 +247,22 @@ class ExecutionBridge:
                 )
 
         # 6. PositionEligibility still passes
-        eligibility = PositionEligibilityEngine(self.ite_config).evaluate(
-            snapshot=context.snapshot,
-            confluence=decision.confluence,
-            account=context.account,
-            risk_allowed=context.risk_allowed,
-            risk_reasons=context.risk_reasons,
+        from app.domain.institutional_trading.force_first_trade import (
+            is_forced_test_decision,
         )
+
+        if is_forced_test_decision(decision):
+            # Force First Trade: trust eligibility built with signal gates waived.
+            # Still enforces market/session/spread/margin via decision.eligibility.
+            eligibility = decision.eligibility
+        else:
+            eligibility = PositionEligibilityEngine(self.ite_config).evaluate(
+                snapshot=context.snapshot,
+                confluence=decision.confluence,
+                account=context.account,
+                risk_allowed=context.risk_allowed,
+                risk_reasons=context.risk_reasons,
+            )
         if not eligibility.eligible:
             return self._abort(
                 decision=decision,
@@ -544,6 +553,12 @@ class ExecutionBridge:
             sl = str(decision.stop_zone.high)
             tp = str(decision.target_zone.low)
         comment = f"{self.config.comment_prefix}:{decision.input_hash[:12]}"
+        from app.domain.institutional_trading.force_first_trade import (
+            is_forced_test_decision,
+        )
+
+        if is_forced_test_decision(decision):
+            comment = f"FORCE:{decision.input_hash[:12]}"
         return parse_order_intent(
             symbol=decision.symbol or self.config.symbol,
             side=side,

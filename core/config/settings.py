@@ -370,6 +370,52 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Force First Trade (temporary live pipeline test; auto-disarms) ------
+    force_first_trade: Annotated[
+        bool,
+        Field(
+            description=(
+                "Temporary test mode: waive Quality/Confluence/MTF gates for at "
+                "most FORCE_FIRST_TRADE_MAX successful market orders, then "
+                "auto-disarm. Never bypasses connectivity, margin, market open, "
+                "or spread protection."
+            ),
+            validation_alias=AliasChoices(
+                "FORCE_FIRST_TRADE", "force_first_trade"
+            ),
+        ),
+    ] = False
+    force_first_trade_max: Annotated[
+        int,
+        Field(
+            ge=1,
+            le=1,
+            description="Hard cap on forced test trades (always 1).",
+            validation_alias=AliasChoices(
+                "FORCE_FIRST_TRADE_MAX", "force_first_trade_max"
+            ),
+        ),
+    ] = 1
+    force_first_trade_lot: Annotated[
+        str,
+        Field(
+            description="Fixed lot size for forced test trade (default 0.01).",
+            validation_alias=AliasChoices(
+                "FORCE_FIRST_TRADE_LOT", "force_first_trade_lot"
+            ),
+        ),
+    ] = "0.01"
+    force_first_trade_direction: Annotated[
+        str,
+        Field(
+            description="BUY | SELL | AUTO (H4 bias, else strategy direction).",
+            validation_alias=AliasChoices(
+                "FORCE_FIRST_TRADE_DIRECTION",
+                "force_first_trade_direction",
+            ),
+        ),
+    ] = "AUTO"
+
     # -- Closed beta (server-side invite; never NEXT_PUBLIC) ------------------
     beta_mode: Annotated[
         bool,

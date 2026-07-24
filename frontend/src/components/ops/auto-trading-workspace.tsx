@@ -938,8 +938,26 @@ export function AutoTradingWorkspace() {
   const pnlToday = todayPl + floating;
   const mt5Connected = mt5HealthOk;
   const gateEnabled = gateStatus.toLowerCase() === "enabled";
+  const forceFirst = asRecord(asRecord(autoQ.data).force_first_trade);
+  const forceBanner = Boolean(forceFirst.banner);
   return (
     <div className="space-y-3">
+      {forceBanner ? (
+        <section
+          role="status"
+          className="border border-[var(--warning)] bg-[var(--warning)]/10 px-3 py-2.5"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--warning)]">
+            TEST MODE
+          </p>
+          <p className="mt-1 text-sm font-medium text-[var(--fg)]">
+            Forced Trade Enabled
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
+            This bypasses signal filters for ONE trade only.
+          </p>
+        </section>
+      ) : null}
       {/* Header */}
       <section className="border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-2.5 backdrop-blur-[2px]">
         <div className="flex flex-wrap items-center justify-between gap-2">

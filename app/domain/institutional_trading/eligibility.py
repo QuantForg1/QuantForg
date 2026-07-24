@@ -28,7 +28,14 @@ class PositionEligibilityEngine:
         account: AccountRiskState,
         risk_allowed: bool,
         risk_reasons: tuple[str, ...] = (),
+        waive_signal_gates: bool = False,
     ) -> EligibilityResult:
+        """Evaluate pre-OMS checklist.
+
+        ``waive_signal_gates`` is reserved for Force First Trade test mode:
+        skips Quality / Confluence thresholds only. Never waives market,
+        margin, session, news, spread, or risk checks.
+        """
         cfg = self.config
         checks: dict[str, bool] = {}
         rejects: list[str] = []
@@ -64,26 +71,33 @@ class PositionEligibilityEngine:
         if snapshot.news.blocked:
             rejects.append(snapshot.news.reason)
 
-        checks["confluence_ok"] = (
-            confluence.passed
-            and confluence.confidence >= cfg.min_confluence_score
-            and confluence.direction is not TradeDirection.NONE
-        )
-        if not checks["confluence_ok"]:
-            rejects.append(
-                f"Confluence {confluence.confidence} "
-                f"({confluence.direction.value}) below institutional gate"
+        if waive_signal_gates:
+            # Force First Trade — require a concrete side only.
+            checks["confluence_ok"] = confluence.direction is not TradeDirection.NONE
+            if not checks["confluence_ok"]:
+                rejects.append("Forced trade requires BUY or SELL direction")
+            checks["quality_ok"] = True
+        else:
+            checks["confluence_ok"] = (
+                confluence.passed
+                and confluence.confidence >= cfg.min_confluence_score
+                and confluence.direction is not TradeDirection.NONE
             )
+            if not checks["confluence_ok"]:
+                rejects.append(
+                    f"Confluence {confluence.confidence} "
+                    f"({confluence.direction.value}) below institutional gate"
+                )
 
-        checks["quality_ok"] = (
-            snapshot.trade_quality.passed
-            and snapshot.trade_quality.total >= cfg.min_trade_quality_score
-        )
-        if not checks["quality_ok"]:
-            rejects.append(
-                f"Trade quality {snapshot.trade_quality.total} below "
-                f"{cfg.min_trade_quality_score}"
+            checks["quality_ok"] = (
+                snapshot.trade_quality.passed
+                and snapshot.trade_quality.total >= cfg.min_trade_quality_score
             )
+            if not checks["quality_ok"]:
+                rejects.append(
+                    f"Trade quality {snapshot.trade_quality.total} below "
+                    f"{cfg.min_trade_quality_score}"
+                )
 
         if account.free_margin is not None and account.free_margin <= 0:
             checks["margin_available"] = False

@@ -402,6 +402,29 @@ class InstitutionalIteRuntime:
         )
 
         decision = self.decision_pipeline.run(snapshot, account)
+        # Temporary Force First Trade override — before signal rejection only.
+        forced_override = False
+        try:
+            from app.domain.institutional_trading.force_first_trade import (
+                maybe_override_decision,
+            )
+            from core.config.settings import get_settings as _get_settings
+
+            decision, forced_override = maybe_override_decision(
+                decision,
+                snapshot=snapshot,
+                account=account,
+                ite_config=self.decision_pipeline.config,
+                settings=_get_settings(),
+                execution_enabled=False if force_shadow else execution_enabled,
+                gateway_connected=gateway_connected,
+                broker_connected=broker_connected,
+                force_shadow=force_shadow,
+            )
+        except Exception:
+            logger.exception("force_first_trade_override_failed")
+            forced_override = False
+
         decision_reasons = tuple(getattr(decision, "reasons", ()) or ())
 
         # Enrich diagnostics with live ATR sizing facts (observational only).
@@ -446,6 +469,7 @@ class InstitutionalIteRuntime:
                     if decision.approved_lots is not None
                     else None
                 ),
+                "force_first_trade": forced_override,
             }
         )
         market_context_diagnostics = sizing_diag
@@ -472,7 +496,11 @@ class InstitutionalIteRuntime:
             now=decision.as_of,
             user_id=self.user_id,
             execution_enabled=False if force_shadow else execution_enabled,
-            risk_allowed=risk_allowed,
+            risk_allowed=(
+                True
+                if forced_override
+                else risk_allowed
+            ),
             risk_reasons=risk_reasons,
             connected=broker_connected or force_shadow,
             login=None,
@@ -490,6 +518,26 @@ class InstitutionalIteRuntime:
             no_broker_restrictions=True if force_shadow else no_broker_restrictions,
         )
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
+
+        if forced_override and bridge_result.forwarded_to_oms:
+            try:
+                from app.domain.institutional_trading.force_first_trade import (
+                    record_forced_trade_success,
+                )
+
+                entry = getattr(bridge_result, "journal_entry", None)
+                ticket = None
+                if entry is not None:
+                    ticket = getattr(entry, "ticket", None) or getattr(
+                        entry, "order_ticket", None
+                    )
+                record_forced_trade_success(
+                    direction=str(decision.direction.value),
+                    lot=decision.approved_lots or Decimal("0.01"),
+                    ticket=int(ticket) if ticket is not None else None,
+                )
+            except Exception:
+                logger.exception("force_first_trade_record_failed")
 
         for ticket in list(self.position_management.engine._positions.keys()):
             pos = self.position_management.engine.get(ticket)

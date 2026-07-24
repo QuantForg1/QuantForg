@@ -648,7 +648,22 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "orchestrator": orchestrator,
         "recent_execution_attempts": recent_attempts,
         "persistence": ops_state_diagnostics(),
+        "force_first_trade": _force_first_trade_payload(snap, settings),
     }
+
+
+def _force_first_trade_payload(snap: Any, settings: Any) -> dict[str, Any]:
+    from app.domain.institutional_trading.force_first_trade import (
+        force_first_trade_status,
+    )
+
+    return force_first_trade_status(
+        settings,
+        gateway_connected=bool(snap.facts.gateway_connected),
+        broker_connected=bool(snap.facts.broker_connected),
+        execution_enabled=bool(snap.execution_state.get("execution_enabled")),
+        open_positions=int(getattr(snap.facts, "open_positions", 0) or 0),
+    )
 
 
 @router.get("/witness-health")
