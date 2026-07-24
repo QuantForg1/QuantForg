@@ -1753,6 +1753,68 @@ class InstitutionalIteRuntime:
             logger.exception("alpha_preferred_symbol_failed")
             return None
 
+    def _alpha_ranking_rows(self) -> list[dict[str, Any]]:
+        try:
+            from app.application.services.institutional_alpha_engine import (
+                get_alpha_config,
+                run_alpha_scan,
+            )
+
+            cfg = get_alpha_config()
+            if not (
+                cfg.enabled
+                or getattr(self.plane, "alpha_engine_enabled", False)
+                or str(getattr(self.plane, "trading_mode", "") or "") == "alpha"
+            ):
+                return []
+            open_symbols: list[str] = []
+            try:
+                open_symbols = [
+                    str(getattr(p, "symbol", "") or "")
+                    for p in self.position_management.engine._positions.values()
+                ]
+            except Exception:
+                open_symbols = []
+            scan = run_alpha_scan(
+                mt5_adapter=self.mt5_adapter,
+                open_symbols=open_symbols,
+            )
+            rows = list(scan.get("opportunity_ranking") or scan.get("ranking") or [])
+            return [r for r in rows if isinstance(r, dict)]
+        except Exception:
+            logger.exception("alpha_ranking_rows_failed")
+            return []
+
+    def _pick_executable_symbol(self) -> str | None:
+        """Highest-ranked symbol with trade_mode=full (skip close-only)."""
+        from app.application.services.closeonly_symbol_router import (
+            resolve_executable_symbol,
+        )
+        from app.domain.trading.gold_only import GOLD_SYMBOL
+
+        preferred = self._alpha_preferred_symbol() or GOLD_SYMBOL
+        symbol, skipped = resolve_executable_symbol(
+            self.mt5_adapter,
+            preferred=preferred,
+            plane=self.plane,
+            alpha_ranking=self._alpha_ranking_rows(),
+        )
+        if skipped:
+            logger.warning(
+                "closeonly_symbols_removed_from_scanner",
+                skipped=skipped,
+                next_opportunity=symbol,
+            )
+        if symbol is None:
+            logger.warning(
+                "no_full_mode_symbol_available",
+                preferred=preferred,
+                skipped=skipped,
+            )
+        else:
+            logger.warning("Submitting Order...", symbol=symbol)
+        return symbol
+
     async def execute_now(self) -> dict[str, Any]:
         """Run one complete Auto Trading cycle immediately (manual trigger).
 
@@ -1773,7 +1835,15 @@ class InstitutionalIteRuntime:
 
             logger.warning("Force Sync Positions")
             enrich = _enrich_from_adapter(self.probes)
-            symbol = self._alpha_preferred_symbol() or GOLD_SYMBOL
+            symbol = self._pick_executable_symbol()
+            if not symbol:
+                from app.domain.trading.gold_only import GOLD_SYMBOL
+
+                symbol = GOLD_SYMBOL
+                logger.warning(
+                    "closeonly_failover_exhausted_using_preferred",
+                    symbol=symbol,
+                )
             ctx = await build_ite_cycle_market_context(
                 self.mt5_adapter,
                 symbol=symbol,
@@ -1961,7 +2031,7 @@ class InstitutionalIteRuntime:
                 enrich = _enrich_from_adapter(self.probes)
                 from app.domain.trading.gold_only import GOLD_SYMBOL
 
-                symbol = self._alpha_preferred_symbol() or GOLD_SYMBOL
+                symbol = self._pick_executable_symbol() or GOLD_SYMBOL
                 logger.warning("Scanning Symbols", symbol=symbol)
                 ctx = await build_ite_cycle_market_context(
                     self.mt5_adapter,

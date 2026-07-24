@@ -605,14 +605,18 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "reload", False)
             if self.debug:
                 object.__setattr__(self, "debug", False)
-            # XAUUSD-only unless Institutional Alpha / multi-symbol is explicitly on.
-            if not bool(getattr(self, "institutional_alpha_enabled", False)):
+            # Multi-symbol / Alpha explicitly lifts the XAUUSD-only mandate.
+            # Do not overwrite MULTI_SYMBOL_ENABLED=true from the environment.
+            multi = bool(getattr(self, "multi_symbol_enabled", False)) or bool(
+                getattr(self, "institutional_alpha_enabled", False)
+            )
+            if multi:
+                object.__setattr__(self, "multi_symbol_enabled", True)
+                object.__setattr__(self, "gold_only_mode", False)
+            else:
                 object.__setattr__(self, "gold_only_mode", True)
                 object.__setattr__(self, "multi_symbol_enabled", False)
                 object.__setattr__(self, "default_trading_symbol", "XAUUSD")
-            else:
-                object.__setattr__(self, "multi_symbol_enabled", True)
-                object.__setattr__(self, "gold_only_mode", False)
             # Live trading requires an explicit flag AND a configured gateway.
             # Do not silently invent fills via MockMT5Client in production.
             has_gateway = bool((self.mt5_gateway_base_url or "").strip())
