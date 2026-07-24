@@ -197,6 +197,10 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
         "quantforg_certification_suite",
         "app.presentation.routers.quantforg_certification_suite",
     ),
+    (
+        "quantforg_strategy_marketplace",
+        "app.presentation.routers.quantforg_strategy_marketplace",
+    ),
 )
 
 

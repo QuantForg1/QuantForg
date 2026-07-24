@@ -2052,6 +2052,58 @@ export const qcsApi = {
     apiFetch<Record<string, unknown>>(`/qcs/reports?limit=${limit}`),
 };
 
+/** QuantForg Strategy Marketplace & Registry — read-only strategy catalog */
+export const qsmrApi = {
+  dashboard: () => apiFetch<Record<string, unknown>>("/qsmr/dashboard"),
+  registry: (limit = 100) =>
+    apiFetch<Record<string, unknown>>(`/qsmr/registry?limit=${limit}`),
+  strategy: (strategyId: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/qsmr/strategies/${encodeURIComponent(strategyId)}`,
+    ),
+  search: (params?: {
+    q?: string;
+    status?: string;
+    lifecycle?: string;
+    owner?: string;
+    certification_status?: string;
+    sort_by?: string;
+    sort_dir?: string;
+    group_by?: string;
+    limit?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set("q", params.q);
+    if (params?.status) sp.set("status", params.status);
+    if (params?.lifecycle) sp.set("lifecycle", params.lifecycle);
+    if (params?.owner) sp.set("owner", params.owner);
+    if (params?.certification_status)
+      sp.set("certification_status", params.certification_status);
+    if (params?.sort_by) sp.set("sort_by", params.sort_by);
+    if (params?.sort_dir) sp.set("sort_dir", params.sort_dir);
+    if (params?.group_by) sp.set("group_by", params.group_by);
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    const qs = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      qs ? `/qsmr/search?${qs}` : "/qsmr/search",
+    );
+  },
+  compare: (ids?: string[]) =>
+    apiFetch<Record<string, unknown>>(
+      ids?.length
+        ? `/qsmr/compare?ids=${encodeURIComponent(ids.join(","))}`
+        : "/qsmr/compare",
+    ),
+  evidence: (strategyId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      strategyId
+        ? `/qsmr/evidence?strategy_id=${encodeURIComponent(strategyId)}`
+        : "/qsmr/evidence",
+    ),
+  reports: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(`/qsmr/reports?limit=${limit}`),
+};
+
 /** Quant Knowledge Graph — read-only institutional knowledge layer */
 export const qkgApi = {
   dashboard: () => apiFetch<Record<string, unknown>>("/qkg/dashboard"),

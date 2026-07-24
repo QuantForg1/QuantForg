@@ -46,6 +46,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Store,
   Target,
   Timer,
   Workflow,
@@ -231,6 +232,12 @@ export const appNav: NavGroup[] = [
         label: "Certification",
         icon: BadgeCheck,
         hint: "QCS · readiness · blockers · institutional gate",
+      },
+      {
+        href: "/quantforg-strategy-marketplace",
+        label: "Strategy Registry",
+        icon: Store,
+        hint: "QSMR · discovery · compare · evidence",
       },
       {
         href: "/strategy-lab",
