@@ -41,6 +41,17 @@ def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
+    except ValueError as exc:
+        # Invalid request fields / symbol trade constraints — never 500.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        # Surface exact failure to callers (Railway OMS) instead of opaque 500.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.get("/health")

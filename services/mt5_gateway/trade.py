@@ -398,7 +398,10 @@ def build_mt5_trade_request(
             code,
             violations,
         )
-        hard = [v for v in violations if "blocked" in v or "disabled" in v]
+        # Only fully disabled symbols hard-stop request build. closeonly / longonly /
+        # shortonly must reach MetaTrader5.order_check so the broker retcode
+        # (e.g. 10044) is returned to OMS — never crash the HTTP handler with 500.
+        hard = [v for v in violations if "trade_mode=disabled" in v]
         if hard:
             raise ValueError("; ".join(hard))
 

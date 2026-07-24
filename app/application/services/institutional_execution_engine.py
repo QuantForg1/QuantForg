@@ -300,29 +300,50 @@ class InstitutionalExecutionEngine:
             ok_stops, msg_stops = self.order_validation.validate_stops(
                 intent, constraints, entry_price=request.price
             )
-            check_res = self.order_validation.adapter.order_check(request)
-            ok_check = check_res.ok
-            validation_ok = ok_vol and ok_stops and ok_check
             val_reasons: list[str] = list(norm_notes)
+            manage_kinds = {"sltp", "modify_sltp", "close", "partial_close"}
+            is_manage = intent.oms_kind in manage_kinds or int(intent.position or 0) > 0
+            # Fail closed BEFORE order_check when broker only allows closes.
+            # Prevents gateway HTTP 500 (ValueError) from masking MT5 retcode 10044.
+            trade_mode = str(constraints.trade_mode or "").strip().lower()
+            if trade_mode in {"closeonly", "close_only"} and not is_manage:
+                validation_ok = False
+                ok_check = False
+                check_res = None
+                val_reasons.append(
+                    f"Broker {intent.symbol} trade_mode={trade_mode} "
+                    f"(current={trade_mode}, required=full). "
+                    "MT5 rejects new entries with retcode 10044: "
+                    "Only position closing is allowed."
+                )
+            else:
+                check_res = self.order_validation.adapter.order_check(request)
+                ok_check = check_res.ok
+                validation_ok = ok_vol and ok_stops and ok_check
+                if not ok_check:
+                    val_reasons.append(
+                        check_res.comment
+                        or f"MT5 order_check retcode {check_res.retcode}"
+                    )
             if not ok_vol:
+                validation_ok = False
                 val_reasons.append(msg_vol)
             if not ok_stops:
+                validation_ok = False
                 val_reasons.append(msg_stops)
-            if not ok_check:
-                val_reasons.append(
-                    check_res.comment or f"MT5 order_check retcode {check_res.retcode}"
-                )
             if not connected:
                 validation_ok = False
                 val_reasons.append("broker connection not active")
-            if not constraints.trade_allowed and intent.oms_kind not in {
-                "sltp",
-                "modify_sltp",
-                "close",
-                "partial_close",
-            }:
+            if (
+                not constraints.trade_allowed
+                and not is_manage
+                and not any("retcode 10044" in r for r in val_reasons)
+            ):
                 validation_ok = False
-                val_reasons.append("symbol not tradable")
+                val_reasons.append(
+                    f"symbol not tradable (trade_mode={trade_mode or 'unknown'}, "
+                    f"trade_allowed={constraints.trade_allowed})"
+                )
             if (
                 not constraints.market_open
                 and intent.order_type is OrderType.MARKET

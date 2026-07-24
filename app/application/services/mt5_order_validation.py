@@ -72,10 +72,17 @@ class MT5OrderValidationService:
             max_vol = min_vol
         if step <= 0:
             step = Decimal("0.01")
-        trade_mode = str(getattr(info, "trade_mode", "full") or "full")
+        trade_mode = str(getattr(info, "trade_mode", "full") or "full").strip().lower()
         trade_allowed = bool(
-            getattr(info, "trade_allowed", trade_mode not in {"disabled", "0"})
+            getattr(
+                info,
+                "trade_allowed",
+                trade_mode not in {"disabled", "0", "closeonly", "close_only"},
+            )
         )
+        # New entries require full (or long/short only). closeonly = closes only.
+        if trade_mode in {"disabled", "closeonly", "close_only"}:
+            trade_allowed = False
         market_open = bool(getattr(info, "market_open", True))
         return OrderConstraints(
             symbol=info.code,

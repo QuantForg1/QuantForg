@@ -1174,7 +1174,137 @@ class InstitutionalIteRuntime:
             latency_ms=result.latency_ms,
             mode=result.mode,
         )
+        # Explicit PASS/FAIL chain for live ops (current vs required, no generic labels).
+        try:
+            self._log_execution_path_pass_fail(
+                decision=decision,
+                bridge_result=bridge_result,
+                result=result,
+                execution_enabled=False if force_shadow else execution_enabled,
+                gateway_connected=gateway_connected,
+                broker_connected=broker_connected,
+                force_shadow=force_shadow,
+            )
+        except Exception:
+            logger.exception("execution_path_pass_fail_log_failed")
         return result
+
+    def _log_execution_path_pass_fail(
+        self,
+        *,
+        decision: Any,
+        bridge_result: Any,
+        result: ShadowCycleResult,
+        execution_enabled: bool,
+        gateway_connected: bool,
+        broker_connected: bool,
+        force_shadow: bool,
+    ) -> None:
+        """Print PASS/FAIL for Scheduler→…→Broker with exact condition values."""
+        settings = get_settings()
+        exec_setting = bool(getattr(settings, "execution_enabled", False))
+        mode = self.plane.mode.value
+        run_state = str(getattr(self.plane, "auto_trading_run_state", "off") or "off")
+        action = str(getattr(getattr(decision, "action", None), "value", None) or "")
+        oms = getattr(bridge_result, "oms_result", None)
+        ticket = None
+        oms_msg = ""
+        oms_ret = None
+        if oms is not None:
+            ticket = getattr(oms, "order_ticket", None) or getattr(
+                oms, "deal_ticket", None
+            )
+            oms_msg = str(getattr(oms, "message", "") or "")
+            oms_ret = getattr(oms, "retcode", None)
+        abort = str(result.abort_reason or "")
+        forwarded = bool(result.forwarded_to_oms)
+        forced = bool(
+            getattr(decision, "reasons", None)
+            and any("FORCED_TEST_TRADE" in str(r) for r in (decision.reasons or ()))
+        )
+
+        steps: list[tuple[str, bool, str]] = []
+        steps.append(
+            (
+                "Scheduler Tick",
+                True,
+                f"interval_s={self.interval_seconds} force_shadow={force_shadow}",
+            )
+        )
+        steps.append(
+            (
+                "Ops Mode",
+                mode != "SHADOW",
+                f"current={mode} required=CANARY|LIVE",
+            )
+        )
+        steps.append(
+            (
+                "Auto Trading Run State",
+                run_state == "running" or forced,
+                f"current={run_state} required=running forced={forced}",
+            )
+        )
+        steps.append(
+            (
+                "EXECUTION_ENABLED",
+                exec_setting and execution_enabled,
+                f"setting={exec_setting} context={execution_enabled} required=true",
+            )
+        )
+        steps.append(
+            (
+                "AI Decision",
+                action in {"BUY", "SELL"},
+                f"current={action or 'NO_TRADE'} required=BUY|SELL",
+            )
+        )
+        steps.append(
+            (
+                "Gate / Connectivity",
+                bool(gateway_connected and broker_connected),
+                f"gateway={gateway_connected} broker={broker_connected} required=both true",
+            )
+        )
+        steps.append(
+            (
+                "OMS Received Request",
+                forwarded,
+                f"forwarded_to_oms={forwarded} abort={abort or 'none'}",
+            )
+        )
+        # Broker reply (accept or reject) counts as MT5 round-trip completed.
+        mt5_reached = bool(ticket is not None) or (
+            forwarded and bool(oms_msg or oms_ret is not None or abort)
+        )
+        steps.append(
+            (
+                "MT5 Gateway / Broker Reply",
+                mt5_reached,
+                f"ticket={ticket} retcode={oms_ret} message={oms_msg or abort or 'none'}",
+            )
+        )
+        steps.append(
+            (
+                "MT5 Accepted (ticket)",
+                ticket is not None,
+                f"ticket={ticket} required=non-null broker ticket",
+            )
+        )
+
+        for name, ok, detail in steps:
+            logger.warning(
+                "execution_path_step",
+                step=name,
+                result="PASS" if ok else "FAIL",
+                detail=detail,
+            )
+        if ticket is not None:
+            logger.warning(
+                "execution_path_complete",
+                chain="Scheduler Tick → AI Decision → Submitting Order → MT5 Accepted → Ticket",
+                ticket=ticket,
+            )
 
     def status(self) -> dict[str, Any]:
         with self._lock:

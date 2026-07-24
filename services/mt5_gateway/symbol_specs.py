@@ -75,9 +75,11 @@ def serialize_symbol_specs(info: Any, *, tick: Any | None = None) -> dict[str, A
         "execution_mode_raw": exec_mode_raw,
         "margin_calc_mode": _MARGIN_CALC.get(calc_mode_raw, f"unknown:{calc_mode_raw}"),
         "margin_calc_mode_raw": calc_mode_raw,
+        # New market entries only when not disabled/closeonly (MT5 retcode 10044).
         "trade_allowed": trade_mode_raw
         not in {
             0,  # disabled
+            3,  # closeonly
         },
         "visible": visible,
         "selected": selected,
