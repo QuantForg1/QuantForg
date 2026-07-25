@@ -112,10 +112,19 @@ def select_full_mode_symbol(
     """Return (selected_full_symbol, skipped_closeonly_symbols).
 
     longonly/shortonly are allowed only when direction matches.
+    Symbols in market-closed cooldown (MT5 10018) are skipped.
     """
+    from app.application.services.market_closed_cooldown import (
+        filter_cooled_candidates,
+    )
+
     skipped: list[str] = []
     side = (direction or "").strip().upper()
-    for sym in candidates:
+    tradable, cooled = filter_cooled_candidates(candidates)
+    for sym in cooled:
+        logger.warning("%s skipped (market closed cooldown)", sym)
+        skipped.append(sym)
+    for sym in tradable:
         mode = read_trade_mode(mt5_adapter, sym)
         if mode == "closeonly":
             logger.warning("%s skipped (close-only)", sym)

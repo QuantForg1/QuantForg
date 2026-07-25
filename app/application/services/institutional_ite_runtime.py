@@ -916,6 +916,20 @@ class InstitutionalIteRuntime:
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
         with self._lock:
             self._last_bridge_result = bridge_result
+        try:
+            from app.application.services.market_closed_cooldown import (
+                note_oms_reject,
+            )
+
+            oms = getattr(bridge_result, "oms_result", None)
+            if oms is not None:
+                note_oms_reject(
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                    retcode=getattr(oms, "retcode", None),
+                    message=str(getattr(oms, "message", "") or ""),
+                )
+        except Exception:
+            logger.exception("market_closed_cooldown_note_failed")
         self._log_post_ai_execution_chain(
             decision=decision,
             bridge_result=bridge_result,
@@ -1930,13 +1944,36 @@ class InstitutionalIteRuntime:
             enrich = _enrich_from_adapter(self.probes)
             symbol = self._pick_executable_symbol()
             if not symbol:
-                from app.domain.trading.gold_only import GOLD_SYMBOL
-
-                symbol = GOLD_SYMBOL
                 logger.warning(
-                    "closeonly_failover_exhausted_using_preferred",
-                    symbol=symbol,
+                    "no_full_mode_symbol_available — manage-only execute-now"
                 )
+                open_syms = [
+                    str(getattr(p, "symbol", "") or "")
+                    for p in (
+                        getattr(self.position_management.engine, "_positions", {})
+                        or {}
+                    ).values()
+                ]
+                symbol = next((s for s in open_syms if s), GOLD_SYMBOL)
+                ctx = await build_ite_cycle_market_context(
+                    self.mt5_adapter,
+                    symbol=symbol,
+                    position_engine=self.position_management.engine,
+                )
+                if ctx.ok and ctx.snapshot is not None and ctx.account is not None:
+                    self._sync_and_manage_open_positions(
+                        snapshot=ctx.snapshot,
+                        account=ctx.account,
+                        reason="execute_now_manage_only",
+                    )
+                return {
+                    "success": False,
+                    "status": "REJECTED",
+                    "reason": "no_executable_symbol",
+                    "message": "No full-mode / open-market symbol available",
+                    "execution_ms": int(round((time.perf_counter() - t0) * 1000.0)),
+                }
+            logger.warning("Scanning Symbols", symbol=symbol)
             ctx = await build_ite_cycle_market_context(
                 self.mt5_adapter,
                 symbol=symbol,
@@ -2124,13 +2161,53 @@ class InstitutionalIteRuntime:
                 enrich = _enrich_from_adapter(self.probes)
                 from app.domain.trading.gold_only import GOLD_SYMBOL
 
-                symbol = self._pick_executable_symbol() or GOLD_SYMBOL
+                symbol = self._pick_executable_symbol()
+                manage_only = False
+                if not symbol:
+                    # Never force a close-only / market-closed symbol into OMS.
+                    # Still build context on gold (or any open PME symbol) for PME.
+                    manage_only = True
+                    open_syms = [
+                        str(getattr(p, "symbol", "") or "")
+                        for p in (
+                            getattr(
+                                self.position_management.engine, "_positions", {}
+                            )
+                            or {}
+                        ).values()
+                    ]
+                    symbol = next(
+                        (s for s in open_syms if s),
+                        GOLD_SYMBOL,
+                    )
+                    logger.warning(
+                        "no_executable_symbol_manage_only",
+                        context_symbol=symbol,
+                    )
                 logger.warning("Scanning Symbols", symbol=symbol)
                 ctx = await build_ite_cycle_market_context(
                     self.mt5_adapter,
                     symbol=symbol,
                     position_engine=self.position_management.engine,
                 )
+                if manage_only and ctx.ok and ctx.snapshot is not None and ctx.account is not None:
+                    try:
+                        self._sync_and_manage_open_positions(
+                            snapshot=ctx.snapshot,
+                            account=ctx.account,
+                            reason="manage_only_no_executable_symbol",
+                        )
+                    except Exception:
+                        logger.exception("manage_only_cycle_failed")
+                    logger.warning(
+                        "AI Decision",
+                        action="NO_TRADE",
+                        reason="no_executable_symbol",
+                    )
+                    logger.warning("Waiting Next Cycle", reason="no_executable_symbol")
+                    await asyncio.sleep(self.interval_seconds)
+                    continue
+
                 if not ctx.ok or ctx.snapshot is None or ctx.account is None:
                     health = self.tick_health()
                     result = ShadowCycleResult(
