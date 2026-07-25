@@ -18,8 +18,14 @@ async def sync_profile_from_identity(
     role: UserRole = UserRole.TRADER,
     activate_if_confirmed: bool = True,
 ) -> User:
-    """Upsert ``public.users`` from an Auth identity (no duplicate auth tables)."""
+    """Upsert ``public.users`` from an Auth identity (no duplicate auth tables).
+
+    Read path is cheap: only persist when the profile actually changed.
+    Unconditional upsert on every authenticated request caused PostgREST
+    statement timeouts and made OWNER appear unauthorized in the UI.
+    """
     existing = await uow.users.get_by_auth_user_id(identity.id)
+    dirty = False
     if existing is None:
         email = EmailAddress(value=identity.email)
         by_email = await uow.users.get_by_email(email)
@@ -36,9 +42,11 @@ async def sync_profile_from_identity(
                 password_hash="",
             )
             await uow.users.add(existing)
+            dirty = True
 
     if existing.auth_user_id is None:
         existing.link_auth_identity(identity.id)
+        dirty = True
     elif existing.auth_user_id != identity.id:
         raise AuthenticationError(
             "Profile is linked to a different identity provider account",
@@ -50,6 +58,7 @@ async def sync_profile_from_identity(
         and str(existing.display_name) != identity.display_name
     ):
         existing.rename(identity.display_name)
+        dirty = True
 
     if (
         activate_if_confirmed
@@ -57,8 +66,10 @@ async def sync_profile_from_identity(
         and existing.status == UserStatus.PENDING
     ):
         existing.activate()
+        dirty = True
 
-    await uow.users.update(existing)
+    if dirty:
+        await uow.users.update(existing)
     return existing
 
 

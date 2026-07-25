@@ -118,17 +118,39 @@ async def get_current_user(
 def require_roles(
     *roles: UserRole,
 ) -> Callable[..., Coroutine[Any, Any, AuthUserDTO]]:
-    """Dependency factory enforcing role-based authorization."""
+    """Dependency factory enforcing role-based authorization.
+
+    Permission source: ``public.users.role`` via AuthUserDTO (same values the
+    frontend reads from ``/auth/me`` / session.user.role).
+    """
 
     async def _dependency(
         user: Annotated[AuthUserDTO, Depends(get_current_user)],
     ) -> AuthUserDTO:
+        from core.logging import get_logger
+
         allowed = {role.value for role in roles}
-        if user.role not in allowed:
+        actual = str(getattr(user, "role", "") or "").strip().lower()
+        if actual not in allowed:
+            get_logger(__name__).warning(
+                "authorization_denied",
+                code="insufficient_role",
+                user_id=str(user.id),
+                email=user.email,
+                actual_role=actual,
+                required_roles=sorted(allowed),
+                deny_file="app/presentation/dependencies/auth.py",
+                deny_function="require_roles._dependency",
+            )
             raise AuthorizationError(
                 "Insufficient role for this operation",
                 code="insufficient_role",
-                details={"required_roles": sorted(allowed), "actual_role": user.role},
+                details={
+                    "required_roles": sorted(allowed),
+                    "actual_role": actual,
+                    "user_id": str(user.id),
+                    "deny_at": "app/presentation/dependencies/auth.py:require_roles",
+                },
             )
         return user
 

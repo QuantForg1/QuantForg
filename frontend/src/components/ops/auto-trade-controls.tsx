@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { iteOpsApi } from "@/lib/api/endpoints";
+import { iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-access";
+import { useAuth } from "@/providers/auth-provider";
 import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +57,7 @@ function toneForState(state: RunState): "success" | "warning" | "danger" | "neut
 }
 
 export function AutoTradeControls() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [reason, setReason] = useState("operator auto-trade update");
   const [confirm, setConfirm] = useState(false);
@@ -134,7 +137,13 @@ export function AutoTradeControls() {
   if (autoQ.isLoading) return <DeskSkeleton rows={3} />;
   if (autoQ.isError) {
     return (
-      <DeskError message="Auto Trading controls unavailable — OWNER/ADMIN required." />
+      <DeskError
+        message={iteOpsAccessDeniedMessage(
+          user,
+          autoQ.error,
+          "Auto Trading controls",
+        )}
+      />
     );
   }
 

@@ -26,6 +26,8 @@ import {
   platformApi,
   weltradeApi,
 } from "@/lib/api/endpoints";
+import { useAuth } from "@/providers/auth-provider";
+import { iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-access";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import {
@@ -71,6 +73,7 @@ function toneRun(state: RunState): "success" | "warning" | "danger" | "neutral" 
  * (Risk + Safety + gateway) — never direct MT5.
  */
 export function AutoTradingWorkspace() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const session = useTradingSession();
   const [toggles, setToggles] = useState<StrategyToggleState>(() => loadStrategyToggles());
@@ -726,7 +729,13 @@ export function AutoTradingWorkspace() {
   }
   if (autoQ.isError) {
     return (
-      <DeskError message="Auto Trading unavailable — OWNER/ADMIN required for ITE ops controls." />
+      <DeskError
+        message={iteOpsAccessDeniedMessage(
+          user,
+          autoQ.error,
+          "Auto Trading",
+        )}
+      />
     );
   }
 

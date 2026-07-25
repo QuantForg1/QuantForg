@@ -41,3 +41,17 @@ class TestRequireRoles:
         )
         with pytest.raises(AuthorizationError):
             await dep(user=user)
+
+    @pytest.mark.asyncio
+    async def test_normalizes_role_case(self) -> None:
+        dep = require_roles(UserRole.OWNER, UserRole.ADMIN)
+        user = AuthUserDTO(
+            id=uuid4(),
+            email="owner@quantforg.com",
+            display_name="Owner",
+            role="OWNER",
+            status="active",
+            auth_user_id=uuid4(),
+        )
+        result = await dep(user=user)
+        assert result is user

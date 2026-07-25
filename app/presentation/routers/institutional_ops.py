@@ -41,7 +41,7 @@ def _operator(
     ua = request.headers.get("user-agent")
     return OperatorIdentity(
         user_id=user.id,
-        role=str(user.role).lower(),
+        role=str(user.role).strip().lower(),
         display_name=user.display_name or user.email or str(user.id),
         ip=ip,
         user_agent=ua,
