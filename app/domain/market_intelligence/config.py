@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -48,7 +49,7 @@ class MarketIntelligenceConfig:
         object.__setattr__(self, "allow_grid", False)
         object.__setattr__(self, "allow_average_down", False)
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,
@@ -62,9 +63,7 @@ class MarketIntelligenceConfig:
             "min_entry_quality": str(self.min_entry_quality),
             "min_exit_quality": str(self.min_exit_quality),
             "min_timing_quality": str(self.min_timing_quality),
-            "min_overall_execution_quality": str(
-                self.min_overall_execution_quality
-            ),
+            "min_overall_execution_quality": str(self.min_overall_execution_quality),
             "daily_risk_budget_pct": str(self.daily_risk_budget_pct),
             "max_allocation_pct": str(self.max_allocation_pct),
             "min_decision_quality": str(self.min_decision_quality),

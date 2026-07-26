@@ -10,8 +10,8 @@ from app.domain.quantforg_strategy_factory.models import (
     DOSSIER_KINDS,
     PIPELINE_ORDER,
     PIPELINE_STAGES,
-    PipelineStage,
     WORK_ITEM_STATUSES,
+    PipelineStage,
 )
 
 
@@ -25,7 +25,7 @@ def _as_list(value: Any) -> list[Any]:
 
 def _stable_id(*parts: Any) -> str:
     raw = "|".join(str(p) for p in parts)
-    return "qsf-" + sha1(raw.encode("utf-8")).hexdigest()[:16]
+    return "qsf-" + sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -90,9 +90,9 @@ def derive_stage_for_strategy(strategy: dict[str, Any], ctx: dict[str, Any]) -> 
     sid = str(strategy.get("strategy_id") or "")
 
     cvf_conf = _num(
-        _as_dict(_as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")).get(
-            "confidence"
-        ),
+        _as_dict(
+            _as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")
+        ).get("confidence"),
         0.0,
     )
     qcs_score = _num(
@@ -127,17 +127,17 @@ def derive_stage_for_strategy(strategy: dict[str, Any], ctx: dict[str, Any]) -> 
         PipelineStage.CONTINUOUS_VALIDATION.value
     ):
         stage = PipelineStage.CONTINUOUS_VALIDATION.value
-    if (irap_alerts or cvf_conf >= 60) and PIPELINE_ORDER.index(stage) < PIPELINE_ORDER.index(
-        PipelineStage.RISK_REVIEW.value
-    ):
+    if (irap_alerts or cvf_conf >= 60) and PIPELINE_ORDER.index(
+        stage
+    ) < PIPELINE_ORDER.index(PipelineStage.RISK_REVIEW.value):
         stage = PipelineStage.RISK_REVIEW.value
     if qcs_score >= 50 and PIPELINE_ORDER.index(stage) < PIPELINE_ORDER.index(
         PipelineStage.CERTIFICATION.value
     ):
         stage = PipelineStage.CERTIFICATION.value
-    if _as_dict(sources.get("qdie")) and PIPELINE_ORDER.index(stage) < PIPELINE_ORDER.index(
-        PipelineStage.DECISION_INTELLIGENCE.value
-    ):
+    if _as_dict(sources.get("qdie")) and PIPELINE_ORDER.index(
+        stage
+    ) < PIPELINE_ORDER.index(PipelineStage.DECISION_INTELLIGENCE.value):
         stage = PipelineStage.DECISION_INTELLIGENCE.value
     return stage
 
@@ -255,20 +255,30 @@ def build_dossiers(
             "name": sd.get("name") or sid,
             "pipeline_stage": stage,
             "lifecycle_state": sd.get("lifecycle_state"),
-            "evidence_ids": [e.get("id") for e in _as_list((item or {}).get("evidence"))],
+            "evidence_ids": [
+                e.get("id") for e in _as_list((item or {}).get("evidence"))
+            ],
             "human_approval_required": True,
             "never_deploys": True,
             "read_only": True,
         }
         dossiers["strategy_dossier"].append(
-            {**base, "kind": "strategy_dossier", "sections": ["identity", "lifecycle", "owner"]}
+            {
+                **base,
+                "kind": "strategy_dossier",
+                "sections": ["identity", "lifecycle", "owner"],
+            }
         )
         dossiers["research_dossier"].append(
             {
                 **base,
                 "kind": "research_dossier",
-                "iep_count": len(_as_list(_as_dict(sources.get("iep")).get("registry"))),
-                "irl_count": len(_as_list(_as_dict(sources.get("irl")).get("experiments"))),
+                "iep_count": len(
+                    _as_list(_as_dict(sources.get("iep")).get("registry"))
+                ),
+                "irl_count": len(
+                    _as_list(_as_dict(sources.get("irl")).get("experiments"))
+                ),
             }
         )
         dossiers["validation_dossier"].append(
@@ -277,8 +287,12 @@ def build_dossiers(
                 "kind": "validation_dossier",
                 "cvf": _as_dict(sources.get("cvf")).get("confidence")
                 or _as_dict(sources.get("cvf")),
-                "simulations": len(_as_list(_as_dict(sources.get("ise")).get("simulations"))),
-                "replays": len(_as_list(_as_dict(sources.get("replay")).get("simulations"))),
+                "simulations": len(
+                    _as_list(_as_dict(sources.get("ise")).get("simulations"))
+                ),
+                "replays": len(
+                    _as_list(_as_dict(sources.get("replay")).get("simulations"))
+                ),
             }
         )
         dossiers["certification_dossier"].append(
@@ -289,7 +303,9 @@ def build_dossiers(
                     "level": _as_dict(sources.get("qcs")).get("level"),
                     "scores": _as_dict(sources.get("qcs")).get("scores"),
                 },
-                "risk_alerts": len(_as_list(_as_dict(sources.get("irap")).get("alerts"))),
+                "risk_alerts": len(
+                    _as_list(_as_dict(sources.get("irap")).get("alerts"))
+                ),
             }
         )
         ready = stage == PipelineStage.PAPER_TRADING_READY.value
@@ -299,9 +315,9 @@ def build_dossiers(
                 "kind": "paper_trading_dossier",
                 "paper_trading_ready": ready,
                 "qdie": bool(sources.get("qdie")),
-                "blocked_reason": None
-                if ready
-                else "Awaiting human-approved pipeline completion",
+                "blocked_reason": (
+                    None if ready else "Awaiting human-approved pipeline completion"
+                ),
                 "never_goes_live_automatically": True,
             }
         )
@@ -344,9 +360,7 @@ def build_approval_queue(
     for row in queue:
         sid = row.get("strategy_id")
         row["prior_approvals"] = [
-            a
-            for a in hist
-            if isinstance(a, dict) and a.get("strategy_id") == sid
+            a for a in hist if isinstance(a, dict) and a.get("strategy_id") == sid
         ][:5]
     return queue
 
@@ -403,7 +417,10 @@ def workflow_consistency_check(
             issues.append(f"invalid_status:{status}")
         if w.get("requires_human_approval") is not True:
             issues.append("missing_human_approval_flag")
-        if w.get("never_deploys") is not True and w.get("never_executes_trades") is not True:
+        if (  # noqa: SIM102
+            w.get("never_deploys") is not True
+            and w.get("never_executes_trades") is not True
+        ):
             # at least one safety flag
             if "never_deploys" not in w:
                 issues.append("missing_never_deploys")
@@ -415,10 +432,11 @@ def workflow_consistency_check(
             issues.append("queue_missing_human_flag")
         if q.get("never_auto_advances") is not True:
             issues.append("queue_may_auto_advance")
-        if not can_transition(str(q.get("from_stage")), str(q.get("to_stage"))):
+        if not can_transition(
+            str(q.get("from_stage")), str(q.get("to_stage"))
+        ) and next_stage(str(q.get("from_stage"))) != q.get("to_stage"):
             # next stage is always +1 which is valid
-            if next_stage(str(q.get("from_stage"))) != q.get("to_stage"):
-                issues.append(f"queue_bad_transition:{q.get('queue_id')}")
+            issues.append(f"queue_bad_transition:{q.get('queue_id')}")
     return {"ok": len(issues) == 0, "issues": issues, "read_only": True}
 
 

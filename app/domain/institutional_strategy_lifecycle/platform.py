@@ -40,9 +40,13 @@ class InstitutionalStrategyLifecycleManager:
     def run(self, *, persist: bool = True) -> dict[str, Any]:
         t0 = time.perf_counter()
         ctx = gather_lifecycle_sources()
-        strategies = self.sync_registry(ctx) if persist else merge_with_store(
-            build_registry_from_sources(ctx),
-            self.store.list_strategies(limit=200),
+        strategies = (
+            self.sync_registry(ctx)
+            if persist
+            else merge_with_store(
+                build_registry_from_sources(ctx),
+                self.store.list_strategies(limit=200),
+            )
         )
         alerts = build_alerts(strategies, ctx)
         reports = build_reports(strategies=strategies, alerts=alerts)
@@ -94,9 +98,11 @@ class InstitutionalStrategyLifecycleManager:
         primary = (pack.get("registry") or [None])[0] or {}
         pack["sections"] = {
             "strategy_registry": pack["registry"],
-            "lifecycle_timeline": build_timeline(primary)
-            if primary
-            else [{"stage": s, "status": "pending"} for s in LIFECYCLE_ORDER],
+            "lifecycle_timeline": (
+                build_timeline(primary)
+                if primary
+                else [{"stage": s, "status": "pending"} for s in LIFECYCLE_ORDER]
+            ),
             "version_explorer": [
                 {
                     "strategy_id": s.get("strategy_id"),

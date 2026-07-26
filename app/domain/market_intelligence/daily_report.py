@@ -63,9 +63,7 @@ def build_daily_validation_report(
             rejected_count=0,
             net_pnl=None,
             violations=(),
-            recommendations=(
-                "No day trades or violations supplied — empty report.",
-            ),
+            recommendations=("No day trades or violations supplied — empty report.",),
             summary="Daily validation unavailable without real day records.",
             disclaimer=(
                 "Report uses only supplied records. Never invents fills or PnL. "
@@ -76,9 +74,7 @@ def build_daily_validation_report(
     accepted = sum(1 for t in trades if t.accepted is True)
     rejected = sum(1 for t in trades if t.accepted is False)
     pnls = [t.pnl for t in trades if t.pnl is not None]
-    net = (
-        sum(pnls, Decimal("0")).quantize(Decimal("0.01")) if pnls else None
-    )
+    net = sum(pnls, Decimal("0")).quantize(Decimal("0.01")) if pnls else None
 
     recommendations: list[str] = []
     if violations:

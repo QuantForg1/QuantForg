@@ -35,7 +35,9 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
     try:
         from app.infrastructure.brokers.mt5 import gateway_client as gw
 
-        has_client = hasattr(gw, "Mt5GatewayClient") or hasattr(gw, "GatewayClient") or True
+        has_client = (
+            hasattr(gw, "Mt5GatewayClient") or hasattr(gw, "GatewayClient") or True
+        )
         checks.append(
             _check(
                 "gateway_connectivity",
@@ -49,7 +51,9 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
     # Live probes (read-only)
     if use_live_probes:
         try:
-            from app.application.services.institutional_ite_runtime import get_ite_runtime
+            from app.application.services.institutional_ite_runtime import (
+                get_ite_runtime,
+            )
 
             runtime = get_ite_runtime()
             if runtime is not None and hasattr(runtime, "tick_health"):
@@ -72,7 +76,12 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
             _check(
                 "broker_login",
                 "PASS" if ok else "WARNING",
-                "Probe snapshot present" + (" with login/account signals" if ok else " without clear login signal"),
+                "Probe snapshot present"
+                + (
+                    " with login/account signals"
+                    if ok
+                    else " without clear login signal"
+                ),
             )
         )
     else:
@@ -80,7 +89,7 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
             _check(
                 "broker_login",
                 "WARNING",
-                "No live probe snapshot (static gateway OK; run with ITE runtime for live)",
+                "No live probe snapshot (static gateway OK; run with ITE runtime for live)",  # noqa: E501
             )
         )
 
@@ -88,7 +97,7 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
     checks.append(
         _check(
             "symbol_availability",
-            "PASS" if probe_snap or True else "WARNING",
+            "PASS" if True else "WARNING",
             "Symbol check is read-only; live symbols require broker session",
         )
     )
@@ -98,22 +107,31 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
         _check(
             "margin_retrieval",
             "PASS" if _probe_ok("margin", "equity", "balance") else "WARNING",
-            "Margin/equity fields in probes" if _probe_ok("margin", "equity", "balance") else "Margin not in probe snapshot",
+            (
+                "Margin/equity fields in probes"
+                if _probe_ok("margin", "equity", "balance")
+                else "Margin not in probe snapshot"
+            ),
         )
     )
     checks.append(
         _check(
             "spread_retrieval",
             "PASS" if _probe_ok("spread", "bid", "ask", "quote") else "WARNING",
-            "Spread/quote signals" if _probe_ok("spread", "bid", "ask") else "Spread not in probe snapshot",
+            (
+                "Spread/quote signals"
+                if _probe_ok("spread", "bid", "ask")
+                else "Spread not in probe snapshot"
+            ),
         )
     )
 
     # Order validation — validate path only, never send
     try:
-        guards_ok = Path(
-            "app/application/services/institutional_ops_guards.py"
-        ).exists() or True
+        guards_ok = (
+            Path("app/application/services/institutional_ops_guards.py").exists()
+            or True
+        )
         checks.append(
             _check(
                 "order_validation",
@@ -140,7 +158,9 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
             )
         )
     except Exception as exc:
-        checks.append(_check("position_sync", "WARNING", f"Position recovery import: {exc}"))
+        checks.append(
+            _check("position_sync", "WARNING", f"Position recovery import: {exc}")
+        )
 
     # Ensure all smoke ids covered
     seen = {c["id"] for c in checks}
@@ -195,7 +215,9 @@ class SmokeStore:
         try:
             if self._path is not None:
                 self._path.parent.mkdir(parents=True, exist_ok=True)
-                self._path.write_text(json.dumps({"runs": payload}, indent=2), encoding="utf-8")
+                self._path.write_text(
+                    json.dumps({"runs": payload}, indent=2), encoding="utf-8"
+                )
         except Exception:
             logger.exception("smoke_store_persist_failed")
 

@@ -6,12 +6,14 @@ from datetime import UTC, datetime, timedelta
 
 from app.application.services.adaptive_opportunity_timeline import (
     build_opportunity_timeline,
-    predict_trajectory,
     cycle_to_timeline_point,
+    predict_trajectory,
 )
 
 
-def _cycle(i: int, *, mtf: int, quality: int = 60, confluence: int = 50, lots: str = "0.002"):
+def _cycle(
+    i: int, *, mtf: int, quality: int = 60, confluence: int = 50, lots: str = "0.002"
+):
     ts = datetime(2026, 7, 23, 12, 0, tzinfo=UTC) + timedelta(minutes=i * 5)
     return {
         "recorded_at": ts.isoformat(),
@@ -75,15 +77,15 @@ def test_setup_weakening():
 
 def test_stable_when_flat():
     cycles = [_cycle(i, mtf=55) for i in range(5)]
-    pred = predict_trajectory(
-        [cycle_to_timeline_point(c) for c in cycles]
-    )
+    pred = predict_trajectory([cycle_to_timeline_point(c) for c in cycles])
     assert pred["direction"] == "Stable"
     assert pred["label"] == "Stable"
 
 
 def test_timeline_stores_required_fields_and_series():
-    cycles = [_cycle(i, mtf=50 + i, quality=55 + i, confluence=40 + i) for i in range(8)]
+    cycles = [
+        _cycle(i, mtf=50 + i, quality=55 + i, confluence=40 + i) for i in range(8)
+    ]
     newest_first = list(reversed(cycles))
     payload = build_opportunity_timeline(newest_first, limit=100)
     assert payload["mode"] == "adaptive_opportunity_timeline"

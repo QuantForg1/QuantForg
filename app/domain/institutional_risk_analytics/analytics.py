@@ -108,9 +108,9 @@ def build_core_metrics(ctx: dict[str, Any]) -> dict[str, Any]:
             q = (1 - wr) / max(wr, 1e-9)
             # Classic ruin approx for unit bets
             if q >= 1:
-                risk_of_ruin = round(min(99.0, 100.0 * (q ** 10)), 2)
+                risk_of_ruin = round(min(99.0, 100.0 * (q**10)), 2)
             else:
-                risk_of_ruin = round(max(0.1, 100.0 * (q ** 20) * ratio), 2)
+                risk_of_ruin = round(max(0.1, 100.0 * (q**20) * ratio), 2)
 
     # Derive sharpe/sortino from pnls if missing
     if sharpe is None and len(pnls) >= 5:
@@ -175,7 +175,9 @@ def build_exposure(ctx: dict[str, Any]) -> dict[str, Any]:
         "by_symbol": symbols,
         "session_trade_total": total,
         "symbol_concentration_pct": concentration,
-        "avg_exposure_pct": _f(risk.get("avg_exposure_pct") or portfolio.get("exposure")),
+        "avg_exposure_pct": _f(
+            risk.get("avg_exposure_pct") or portfolio.get("exposure")
+        ),
         "never_modifies_production": True,
     }
 
@@ -192,14 +194,18 @@ def build_drawdown_analytics(ctx: dict[str, Any]) -> dict[str, Any]:
         "ulcer_index": ulcer,
         "drawdown_trend": (
             "increasing"
-            if current_dd is not None and max_dd is not None and current_dd >= max_dd * 0.7
+            if current_dd is not None
+            and max_dd is not None
+            and current_dd >= max_dd * 0.7
             else "stable"
         ),
         "never_modifies_production": True,
     }
 
 
-def build_concentration(ctx: dict[str, Any], exposure: dict[str, Any]) -> dict[str, Any]:
+def build_concentration(
+    _ctx: dict[str, Any], exposure: dict[str, Any]
+) -> dict[str, Any]:
     symbols = _as_dict(exposure.get("by_symbol"))
     sessions = _as_dict(exposure.get("by_session"))
     herfindahl = 0.0
@@ -217,7 +223,9 @@ def build_concentration(ctx: dict[str, Any], exposure: dict[str, Any]) -> dict[s
     }
 
 
-def build_capital_allocation(ctx: dict[str, Any], exposure: dict[str, Any]) -> dict[str, Any]:
+def build_capital_allocation(
+    _ctx: dict[str, Any], exposure: dict[str, Any]
+) -> dict[str, Any]:
     sessions = _as_dict(exposure.get("by_session"))
     rows = []
     for name, body in sessions.items():
@@ -258,9 +266,7 @@ def build_correlation(ctx: dict[str, Any]) -> dict[str, Any]:
             "session_performance"
         )
     )
-    labels = sorted({str(k) for k in sessions.keys()} | {"london", "tokyo", "new_york"})[
-        :6
-    ]
+    labels = sorted({str(k) for k in sessions} | {"london", "tokyo", "new_york"})[:6]
     # Build synthetic pairwise correlation from win-rate proximity when trade-level
     # session tags are sparse.
     rates = {}
@@ -324,7 +330,9 @@ def build_scenario_risk(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_stress_loss(ctx: dict[str, Any], scenario_risk: dict[str, Any]) -> dict[str, Any]:
+def build_stress_loss(
+    _ctx: dict[str, Any], scenario_risk: dict[str, Any]
+) -> dict[str, Any]:
     rows = [
         r
         for r in _as_list(scenario_risk.get("scenarios"))
@@ -345,7 +353,9 @@ def build_stress_loss(ctx: dict[str, Any], scenario_risk: dict[str, Any]) -> dic
     losses = [_f(r.get("drawdown")) for r in rows if _f(r.get("drawdown")) is not None]
     return {
         "stress_scenarios": rows,
-        "average_stress_drawdown": round(statistics.mean(losses), 2) if losses else None,
+        "average_stress_drawdown": (
+            round(statistics.mean(losses), 2) if losses else None
+        ),
         "max_stress_drawdown": round(max(losses), 2) if losses else None,
         "never_modifies_production": True,
     }
@@ -409,16 +419,19 @@ def build_alerts(
     metrics: dict[str, Any],
 ) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
-    if drawdown.get("drawdown_trend") == "increasing" or (
-        _f(drawdown.get("maximum_drawdown_pct")) or 0
-    ) >= 15:
+    if (
+        drawdown.get("drawdown_trend") == "increasing"
+        or (_f(drawdown.get("maximum_drawdown_pct")) or 0) >= 15
+    ):
         alerts.append(
             {
                 "kind": "Increasing drawdown",
-                "severity": "critical"
-                if (_f(drawdown.get("maximum_drawdown_pct")) or 0) >= 20
-                else "warning",
-                "detail": f"Max DD={drawdown.get('maximum_drawdown_pct')}% trend={drawdown.get('drawdown_trend')}",
+                "severity": (
+                    "critical"
+                    if (_f(drawdown.get("maximum_drawdown_pct")) or 0) >= 20
+                    else "warning"
+                ),
+                "detail": f"Max DD={drawdown.get('maximum_drawdown_pct')}% trend={drawdown.get('drawdown_trend')}",  # noqa: E501
                 "read_only": True,
             }
         )
@@ -427,7 +440,7 @@ def build_alerts(
             {
                 "kind": "Risk concentration",
                 "severity": "warning",
-                "detail": f"HHI={concentration.get('symbol_hhi')} concentration={concentration.get('symbol_concentration_pct')}%",
+                "detail": f"HHI={concentration.get('symbol_hhi')} concentration={concentration.get('symbol_concentration_pct')}%",  # noqa: E501
                 "read_only": True,
             }
         )
@@ -455,16 +468,19 @@ def build_alerts(
                     "read_only": True,
                 }
             )
-    if tail.get("tail_severity") == "elevated" or (
-        _f(metrics.get("risk_of_ruin")) or 0
-    ) > 30:
+    if (
+        tail.get("tail_severity") == "elevated"
+        or (_f(metrics.get("risk_of_ruin")) or 0) > 30
+    ):
         alerts.append(
             {
                 "kind": "Tail risk increase",
-                "severity": "critical"
-                if (_f(metrics.get("risk_of_ruin")) or 0) > 40
-                else "warning",
-                "detail": f"CVaR={tail.get('conditional_var')} RoR={metrics.get('risk_of_ruin')}",
+                "severity": (
+                    "critical"
+                    if (_f(metrics.get("risk_of_ruin")) or 0) > 40
+                    else "warning"
+                ),
+                "detail": f"CVaR={tail.get('conditional_var')} RoR={metrics.get('risk_of_ruin')}",  # noqa: E501
                 "read_only": True,
             }
         )
@@ -518,7 +534,12 @@ def build_reports(
         "stress_risk_report": {
             "title": "Stress Risk Report",
             "stress": stress,
-            "alerts": [a for a in alerts if "tail" in str(a.get("kind")).lower() or "drawdown" in str(a.get("kind")).lower()],
+            "alerts": [
+                a
+                for a in alerts
+                if "tail" in str(a.get("kind")).lower()
+                or "drawdown" in str(a.get("kind")).lower()
+            ],
         },
         "generated_at": datetime.now(UTC).isoformat(),
     }

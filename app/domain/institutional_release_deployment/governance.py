@@ -38,13 +38,13 @@ def _f(v: Any) -> float | None:
 def _git_commit() -> str | None:
     try:
         out = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607  # local git metadata only
             cwd=str(ROOT),
             stderr=subprocess.DEVNULL,
             timeout=5,
         )
         return out.decode().strip() or None
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -70,10 +70,18 @@ def build_checklist(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             "never_auto_approves": True,
         }
 
-    conf = _f(_as_dict(cvf.get("confidence")).get("confidence") if isinstance(cvf.get("confidence"), dict) else cvf.get("confidence"))
+    conf = _f(
+        _as_dict(cvf.get("confidence")).get("confidence")
+        if isinstance(cvf.get("confidence"), dict)
+        else cvf.get("confidence")
+    )
     # CVF snapshot may nest differently
     if conf is None:
-        conf = _f(_as_dict(cvf).get("confidence")) if not isinstance(cvf.get("confidence"), dict) else None
+        conf = (
+            _f(_as_dict(cvf).get("confidence"))
+            if not isinstance(cvf.get("confidence"), dict)
+            else None
+        )
         if isinstance(cvf.get("confidence"), (int, float)):
             conf = float(cvf["confidence"])
 
@@ -227,14 +235,20 @@ def build_post_release_monitoring(ctx: dict[str, Any]) -> dict[str, Any]:
     cvf = _as_dict(sources.get("cvf"))
     icc = _as_dict(sources.get("icc"))
 
-    eqs_score = _f(
-        _as_dict(eqs.get("execution_score")).get("overall_execution_score")
-        or eqs.get("overall_execution_score")
-    ) or 70.0
-    res_score = _f(
-        _as_dict(res.get("reliability_score")).get("overall_reliability_score")
-        or _as_dict(res.get("platform_health")).get("overall_health")
-    ) or 70.0
+    eqs_score = (
+        _f(
+            _as_dict(eqs.get("execution_score")).get("overall_execution_score")
+            or eqs.get("overall_execution_score")
+        )
+        or 70.0
+    )
+    res_score = (
+        _f(
+            _as_dict(res.get("reliability_score")).get("overall_reliability_score")
+            or _as_dict(res.get("platform_health")).get("overall_health")
+        )
+        or 70.0
+    )
     conf = 60.0
     if isinstance(cvf.get("confidence"), dict):
         conf = _f(cvf["confidence"].get("confidence")) or 60.0
@@ -270,7 +284,9 @@ def build_post_release_monitoring(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_audit_record(release: dict[str, Any], *, event: str, actor: str | None = None) -> dict[str, Any]:
+def build_audit_record(
+    release: dict[str, Any], *, event: str, actor: str | None = None
+) -> dict[str, Any]:
     return {
         "event": event,
         "release_id": release.get("release_id"),
@@ -315,7 +331,9 @@ def draft_release(
     return release
 
 
-def advance_stage(release: dict[str, Any], *, to_stage: str | None = None) -> dict[str, Any]:
+def advance_stage(
+    release: dict[str, Any], *, to_stage: str | None = None
+) -> dict[str, Any]:
     """Advance along pipeline — stops before Production without human approval."""
     current = str(release.get("stage") or ReleaseStage.DEVELOPMENT.value)
     try:
@@ -338,11 +356,16 @@ def advance_stage(release: dict[str, Any], *, to_stage: str | None = None) -> di
         ReleaseStage.PRODUCTION.value,
         ReleaseStage.POST_RELEASE_MONITORING.value,
     }
-    if target in blocked and status != ReleaseStatus.APPROVED.value and status not in {
-        ReleaseStatus.STAGED.value,
-        ReleaseStatus.DEPLOYED.value,
-        ReleaseStatus.MONITORING.value,
-    }:
+    if (
+        target in blocked
+        and status != ReleaseStatus.APPROVED.value
+        and status
+        not in {
+            ReleaseStatus.STAGED.value,
+            ReleaseStatus.DEPLOYED.value,
+            ReleaseStatus.MONITORING.value,
+        }
+    ):
         # Move to Human Approval instead
         release = {
             **release,

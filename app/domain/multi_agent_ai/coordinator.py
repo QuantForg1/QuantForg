@@ -57,29 +57,19 @@ def coordinate(
     # Hard fail-closed on Risk / Safety — coordinator never bypasses.
     if inp.risk_engine_passed is False:
         decision = "REJECT"
-        reasons.append(
-            "Coordinator enforces Risk Engine authority — no bypass"
-        )
+        reasons.append("Coordinator enforces Risk Engine authority — no bypass")
     elif inp.risk_engine_passed is None:
         decision = "HOLD"
-        reasons.append(
-            "Coordinator enforces Risk Engine authority — no bypass"
-        )
+        reasons.append("Coordinator enforces Risk Engine authority — no bypass")
 
     if inp.safety_engine_passed is False:
         decision = "REJECT"
-        reasons.append(
-            "Coordinator enforces Safety Engine authority — no bypass"
-        )
+        reasons.append("Coordinator enforces Safety Engine authority — no bypass")
     elif inp.safety_engine_passed is None and decision == "APPROVE":
         decision = "HOLD"
-        reasons.append(
-            "Coordinator enforces Safety Engine authority — no bypass"
-        )
+        reasons.append("Coordinator enforces Safety Engine authority — no bypass")
     elif inp.safety_engine_passed is None:
-        reasons.append(
-            "Coordinator enforces Safety Engine authority — no bypass"
-        )
+        reasons.append("Coordinator enforces Safety Engine authority — no bypass")
 
     # APPROVE is advisory only — never triggers execution pipeline.
     allow = decision == "APPROVE"

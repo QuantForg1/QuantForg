@@ -34,9 +34,7 @@ def build_performance_analytics(
             score=None,
             passed=None,
             recommendation="Await data",
-            reasons=(
-                "No analytics metrics supplied — never fabricates performance",
-            ),
+            reasons=("No analytics metrics supplied — never fabricates performance",),
         )
 
     panels: dict[str, Any] = {}

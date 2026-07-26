@@ -117,7 +117,7 @@ def _ctx() -> dict:
             "aqc": {"snapshot": {"sessions": 1}},
             "qkg": {"nodes": [{"id": "n1"}], "stats": {"node_count": 1}},
         },
-        "availability": {s: True for s in SUBSYSTEMS},
+        "availability": dict.fromkeys(SUBSYSTEMS, True),
         "source_count": len(SUBSYSTEMS),
         "read_only": True,
     }

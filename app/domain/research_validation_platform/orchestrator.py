@@ -30,9 +30,7 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 
 @dataclass
 class ResearchValidationPlatform:
-    config: ResearchValidationConfig = field(
-        default_factory=lambda: DEFAULT_RVP_CONFIG
-    )
+    config: ResearchValidationConfig = field(default_factory=lambda: DEFAULT_RVP_CONFIG)
     registry: StrategyRegistry = field(default_factory=StrategyRegistry)
     versions: VersionGovernance = field(default_factory=VersionGovernance)
     certifications: list[dict[str, Any]] = field(default_factory=list)
@@ -107,9 +105,7 @@ class ResearchValidationPlatform:
 
     def compare(self, payload: dict[str, Any]) -> dict[str, Any]:
         runs = payload.get("runs") if isinstance(payload.get("runs"), list) else []
-        return compare_strategies(
-            runs, max_comparisons=self.config.max_comparisons
-        )
+        return compare_strategies(runs, max_comparisons=self.config.max_comparisons)
 
     def certify(self, payload: dict[str, Any]) -> dict[str, Any]:
         result = run_certification_pipeline(payload, self.config)
@@ -117,12 +113,15 @@ class ResearchValidationPlatform:
             key = str(result.get("strategy_key") or "")
             if key:
                 self.registry.set_status(key, "certified")
-        self.certifications.insert(0, {
-            "certification_id": result.get("certification_id"),
-            "strategy_key": result.get("strategy_key"),
-            "version": result.get("version"),
-            "certified": result.get("certified"),
-        })
+        self.certifications.insert(
+            0,
+            {
+                "certification_id": result.get("certification_id"),
+                "strategy_key": result.get("strategy_key"),
+                "version": result.get("version"),
+                "certified": result.get("certified"),
+            },
+        )
         if len(self.certifications) > 100:
             self.certifications = self.certifications[:100]
         return result

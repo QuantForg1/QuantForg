@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -52,7 +53,7 @@ class RmipConfig:
         self.invent_macro_data = False
         self.invent_market_data = False
 
-    def update(self, updates: dict[str, object]) -> RmipConfig:
+    def update(self, updates: dict[str, Any]) -> RmipConfig:
         locked = {
             "allow_order_send",
             "allow_place_trades",
@@ -72,7 +73,10 @@ class RmipConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                existing_flags = data["feature_flags"]
+                flags: dict[str, bool] = (
+                    dict(existing_flags) if isinstance(existing_flags, dict) else {}
+                )
                 for fk, fv in value.items():
                     if isinstance(fv, bool):
                         flags[str(fk)] = fv
@@ -80,12 +84,16 @@ class RmipConfig:
             elif key in data:
                 data[key] = value
         return RmipConfig(
-            max_archive=int(data["max_archive"]),
-            max_timeline=int(data["max_timeline"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            max_archive=int(str(data["max_archive"])),
+            max_timeline=int(str(data["max_timeline"])),
+            feature_flags=(
+                dict(data["feature_flags"])
+                if isinstance(data["feature_flags"], dict)
+                else {}
+            ),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

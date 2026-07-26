@@ -39,7 +39,7 @@ def test_service_dashboard_flags(
         "app.domain.quantforg_event_mesh.platform.gather_event_sources",
         lambda: {
             "sources": {s: {} for s in EVENT_SOURCES},
-            "availability": {s: False for s in EVENT_SOURCES},
+            "availability": dict.fromkeys(EVENT_SOURCES, False),
             "source_count": 0,
             "read_only": True,
         },

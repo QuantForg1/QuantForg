@@ -8,7 +8,9 @@ import pytest
 
 from app.application.services import reliability_engineering_suite as svc
 from app.domain.reliability_engineering_suite.models import ISOLATION_FLAGS
-from app.domain.reliability_engineering_suite.platform import ReliabilityEngineeringSuite
+from app.domain.reliability_engineering_suite.platform import (
+    ReliabilityEngineeringSuite,
+)
 from app.domain.reliability_engineering_suite.store import ResStore
 from app.main import _ROUTER_SPECS
 
@@ -32,7 +34,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["triggers_automation"] is False
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     res = ReliabilityEngineeringSuite(store=ResStore(path=tmp_path / "res.json"))
     monkeypatch.setattr("app.domain.reliability_engineering_suite._RES", res)
     monkeypatch.setattr(svc, "get_res", lambda: res)

@@ -92,11 +92,10 @@ class IntegrationFeeds:
 
     def mt5_trade_feed(self) -> FeedSnapshot:
         name = "mt5_trade_feed"
-        if self.mt5 is None:
+        mt5 = self.mt5
+        if mt5 is None:
             h = _missing_health(name, "MT5 adapter unavailable")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         try:
 
             def _pull() -> list[dict[str, Any]]:
@@ -104,9 +103,7 @@ class IntegrationFeeds:
 
                 date_to = _now()
                 date_from = date_to - timedelta(days=30)
-                deals = self.mt5.history_deals(
-                    date_from=date_from, date_to=date_to
-                )
+                deals = mt5.history_deals(date_from=date_from, date_to=date_to)
                 rows = []
                 for d in list(deals or [])[: self.config.max_deals]:
                     rows.append(_safe_dict(d))
@@ -123,9 +120,7 @@ class IntegrationFeeds:
                     message=MISSING,
                     details={"deal_count": 0},
                 )
-                return FeedSnapshot(
-                    name, False, [], h, missing_reason=MISSING
-                )
+                return FeedSnapshot(name, False, [], h, missing_reason=MISSING)
             h = FeedHealth(
                 feed=name,
                 status="healthy",
@@ -146,24 +141,18 @@ class IntegrationFeeds:
                 message=str(exc) or MISSING,
                 details={"verdict": MISSING},
             )
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
 
     def mt5_position_feed(self) -> FeedSnapshot:
         name = "mt5_position_feed"
-        if self.mt5 is None:
+        mt5 = self.mt5
+        if mt5 is None:
             h = _missing_health(name, "MT5 adapter unavailable")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         try:
 
             def _pull() -> list[dict[str, Any]]:
-                return [
-                    _safe_dict(p)
-                    for p in list(self.mt5.list_positions() or [])
-                ]
+                return [_safe_dict(p) for p in list(mt5.list_positions() or [])]
 
             rows, latency = _timed(_pull)
             h = FeedHealth(
@@ -185,21 +174,18 @@ class IntegrationFeeds:
                 synchronized=False,
                 message=str(exc) or MISSING,
             )
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
 
     def mt5_market_data_feed(self) -> FeedSnapshot:
         name = "mt5_market_data_feed"
-        if self.mt5 is None:
+        mt5 = self.mt5
+        if mt5 is None:
             h = _missing_health(name, "MT5 adapter unavailable")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         try:
 
             def _pull() -> dict[str, Any]:
-                tick = self.mt5.latest_tick(GOLD_SYMBOL)
+                tick = mt5.latest_tick(GOLD_SYMBOL)
                 return {
                     "symbol": GOLD_SYMBOL,
                     "tick": _safe_dict(tick),
@@ -225,24 +211,21 @@ class IntegrationFeeds:
                 synchronized=False,
                 message=str(exc) or MISSING,
             )
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
 
     def broker_account_feed(self) -> FeedSnapshot:
         name = "broker_account_feed"
-        if self.mt5 is None:
+        mt5 = self.mt5
+        if mt5 is None:
             h = _missing_health(name, "MT5 adapter unavailable")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         try:
 
             def _pull() -> dict[str, Any]:
-                info = self.mt5.account_info()
+                info = mt5.account_info()
                 health: dict[str, Any] | None
                 try:
-                    health = _safe_dict(self.mt5.health())
+                    health = _safe_dict(mt5.health())
                 except Exception:
                     health = None
                 return {
@@ -270,25 +253,20 @@ class IntegrationFeeds:
                 synchronized=False,
                 message=str(exc) or MISSING,
             )
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
 
     def execution_journal_feed(self) -> FeedSnapshot:
         name = "execution_journal_feed"
-        if self.journal is None:
+        journal = self.journal
+        if journal is None:
             h = _missing_health(name, "Execution journal unavailable")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         try:
 
             def _pull() -> list[dict[str, Any]]:
-                if hasattr(self.journal, "all_recent"):
-                    items = self.journal.all_recent(
-                        limit=self.config.max_journal
-                    )
-                elif hasattr(self.journal, "list_for_user"):
+                if hasattr(journal, "all_recent"):
+                    items = journal.all_recent(limit=self.config.max_journal)
+                elif hasattr(journal, "list_for_user"):
                     items = []
                 else:
                     items = []
@@ -310,9 +288,7 @@ class IntegrationFeeds:
                     synchronized=True,
                     message=MISSING,
                 )
-                return FeedSnapshot(
-                    name, False, [], h, missing_reason=MISSING
-                )
+                return FeedSnapshot(name, False, [], h, missing_reason=MISSING)
             h = FeedHealth(
                 feed=name,
                 status="healthy",
@@ -331,9 +307,7 @@ class IntegrationFeeds:
                 synchronized=False,
                 message=str(exc) or MISSING,
             )
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
 
     def analytics_feed(self) -> FeedSnapshot:
         """Derived analytics from available trade/journal feeds — never invents."""
@@ -342,19 +316,13 @@ class IntegrationFeeds:
         journal = self.execution_journal_feed()
         if not trades.available and not journal.available:
             h = _missing_health(name, "No trade or journal evidence")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         payload = {
             "trade_count": (
-                len(trades.payload)
-                if isinstance(trades.payload, list)
-                else 0
+                len(trades.payload) if isinstance(trades.payload, list) else 0
             ),
             "journal_count": (
-                len(journal.payload)
-                if isinstance(journal.payload, list)
-                else 0
+                len(journal.payload) if isinstance(journal.payload, list) else 0
             ),
             "symbol": GOLD_SYMBOL,
             "as_of": _now().isoformat(),
@@ -410,13 +378,9 @@ class IntegrationFeeds:
                     synchronized=False,
                     message=f"warehouse MT5 backfill failed: {mt5_error}",
                 )
-                return FeedSnapshot(
-                    name, False, None, h, missing_reason="ERROR"
-                )
+                return FeedSnapshot(name, False, None, h, missing_reason="ERROR")
             h = _missing_health(name, "No historical bars warehoused")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         h = FeedHealth(
             feed=name,
             status="healthy",
@@ -426,31 +390,24 @@ class IntegrationFeeds:
             message=f"{len(bars)} bar(s)",
             details={"bar_count": len(bars)},
         )
-        return FeedSnapshot(
-            name, True, bars[: self.config.max_warehouse_bars], h
-        )
+        return FeedSnapshot(name, True, bars[: self.config.max_warehouse_bars], h)
 
     def ingest_warehouse_bars(self, bars: list[dict[str, Any]]) -> int:
         """Operator/MT5 ingest — never fabricates OHLC."""
         clean = [b for b in bars if isinstance(b, dict)]
-        self._warehouse = (clean + self._warehouse)[
-            : self.config.max_warehouse_bars
-        ]
+        self._warehouse = (clean + self._warehouse)[: self.config.max_warehouse_bars]
         return len(self._warehouse)
 
     def economic_calendar_provider(self) -> FeedSnapshot:
         name = "economic_calendar_provider"
-        if self.calendar is None:
+        calendar = self.calendar
+        if calendar is None:
             h = _missing_health(name, "Economic calendar feed not configured")
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
         try:
 
             def _pull() -> list[dict[str, Any]]:
-                events = self.calendar.list_events(
-                    limit=self.config.max_calendar_events
-                )
+                events = calendar.list_events(limit=self.config.max_calendar_events)
                 rows = []
                 for e in list(events or []):
                     if hasattr(e, "title"):
@@ -459,13 +416,9 @@ class IntegrationFeeds:
                                 "name": e.title,
                                 "currency": getattr(e, "country", None),
                                 "importance": getattr(e, "impact", None),
-                                "scheduled_time": getattr(
-                                    e, "scheduled_at", None
-                                ),
-                                "previous": getattr(e, "previous", None)
-                                or None,
-                                "forecast": getattr(e, "forecast", None)
-                                or None,
+                                "scheduled_time": getattr(e, "scheduled_at", None),
+                                "previous": getattr(e, "previous", None) or None,
+                                "forecast": getattr(e, "forecast", None) or None,
                                 "actual": getattr(e, "actual", None) or None,
                                 # empty strings → None (never invent)
                             }
@@ -487,9 +440,7 @@ class IntegrationFeeds:
                     synchronized=True,
                     message=MISSING,
                 )
-                return FeedSnapshot(
-                    name, False, [], h, missing_reason=MISSING
-                )
+                return FeedSnapshot(name, False, [], h, missing_reason=MISSING)
             h = FeedHealth(
                 feed=name,
                 status="healthy",
@@ -508,9 +459,7 @@ class IntegrationFeeds:
                 synchronized=False,
                 message=str(exc) or MISSING,
             )
-            return FeedSnapshot(
-                name, False, None, h, missing_reason=MISSING
-            )
+            return FeedSnapshot(name, False, None, h, missing_reason=MISSING)
 
     def durable_storage_feed(self) -> FeedSnapshot:
         name = "durable_storage"
@@ -548,11 +497,7 @@ class IntegrationFeeds:
 
         health_rows = [s.health.to_dict() for s in snapshots.values()]
         connected = [n for n, s in snapshots.items() if s.available]
-        missing = [
-            n
-            for n, s in snapshots.items()
-            if not s.available
-        ]
+        missing = [n for n, s in snapshots.items() if not s.available]
         return {
             "as_of": _now().isoformat(),
             "symbol": GOLD_SYMBOL,
@@ -561,18 +506,10 @@ class IntegrationFeeds:
             "connected_feeds": connected,
             "missing_feeds": missing,
             "health_summary": {
-                "healthy": sum(
-                    1 for h in health_rows if h["status"] == "healthy"
-                ),
-                "missing": sum(
-                    1 for h in health_rows if h["status"] == "missing"
-                ),
-                "error": sum(
-                    1 for h in health_rows if h["status"] == "error"
-                ),
-                "degraded": sum(
-                    1 for h in health_rows if h["status"] == "degraded"
-                ),
+                "healthy": sum(1 for h in health_rows if h["status"] == "healthy"),
+                "missing": sum(1 for h in health_rows if h["status"] == "missing"),
+                "error": sum(1 for h in health_rows if h["status"] == "error"),
+                "degraded": sum(1 for h in health_rows if h["status"] == "degraded"),
             },
             "read_only": True,
             "never_places_trades": True,

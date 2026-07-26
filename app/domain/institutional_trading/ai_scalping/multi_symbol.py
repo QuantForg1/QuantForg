@@ -29,7 +29,9 @@ def rank_scalping_opportunities(
             rejected.append(row)
             continue
         if str(row.get("direction") or "").upper() not in {"BUY", "SELL"}:
-            rejected.append({**row, "reject_reason": row.get("reject_reason") or "No direction"})
+            rejected.append(
+                {**row, "reject_reason": row.get("reject_reason") or "No direction"}
+            )
             continue
         eligible.append(row)
 

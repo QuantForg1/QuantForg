@@ -46,9 +46,7 @@ class ReadinessFeeds:
 
 @dataclass
 class ProductionReadinessCenter:
-    config: ProductionReadinessConfig = field(
-        default_factory=lambda: DEFAULT_PR_CONFIG
-    )
+    config: ProductionReadinessConfig = field(default_factory=lambda: DEFAULT_PR_CONFIG)
     audit: ReadinessAuditLog = field(default_factory=ReadinessAuditLog)
 
     def __post_init__(self) -> None:
@@ -201,9 +199,7 @@ class ProductionReadinessCenter:
             )
         risk = cc.get("risk") if isinstance(cc.get("risk"), dict) else {}
         auto = (
-            cc.get("auto_trading")
-            if isinstance(cc.get("auto_trading"), dict)
-            else {}
+            cc.get("auto_trading") if isinstance(cc.get("auto_trading"), dict) else {}
         )
         data = {
             "kill_switch": cc.get("kill_switch"),

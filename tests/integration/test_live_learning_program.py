@@ -44,17 +44,12 @@ def test_llp_router_registered(app) -> None:
     ) in _ROUTER_SPECS
     paths = _collect_paths(list(app.routes))
     assert any("live-learning-program" in p for p in paths)
-    assert any(
-        p.endswith("/evaluate") and "live-learning-program" in p for p in paths
-    )
+    assert any(p.endswith("/evaluate") and "live-learning-program" in p for p in paths)
 
 
 def test_llp_domain_no_order_send() -> None:
     root = (
-        Path(__file__).resolve().parents[2]
-        / "app"
-        / "domain"
-        / "live_learning_program"
+        Path(__file__).resolve().parents[2] / "app" / "domain" / "live_learning_program"
     )
     offenders = [
         p.name

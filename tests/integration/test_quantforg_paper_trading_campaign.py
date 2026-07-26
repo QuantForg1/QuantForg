@@ -59,7 +59,7 @@ def test_service_dashboard_and_approve(
                 },
                 "qcs": {"scores": {"overall_institutional_readiness_score": 40}},
             },
-            "availability": {s: False for s in DATA_SOURCES},
+            "availability": dict.fromkeys(DATA_SOURCES, False),
             "source_count": 0,
             "read_only": True,
         },

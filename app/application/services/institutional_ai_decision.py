@@ -91,23 +91,17 @@ class InstitutionalAiDecisionService:
             atr=(
                 _dec(layers_raw["atr"])
                 if layers_raw.get("atr") is not None
-                else (
-                    _dec(payload["atr"]) if payload.get("atr") is not None else None
-                )
+                else (_dec(payload["atr"]) if payload.get("atr") is not None else None)
             ),
             price=(
                 _dec(layers_raw["price"])
                 if layers_raw.get("price") is not None
                 else (
-                    _dec(payload["price"])
-                    if payload.get("price") is not None
-                    else None
+                    _dec(payload["price"]) if payload.get("price") is not None else None
                 )
             ),
             risk_engine_passed=_opt_bool(
-                layers_raw.get(
-                    "risk_engine_passed", payload.get("risk_engine_passed")
-                )
+                layers_raw.get("risk_engine_passed", payload.get("risk_engine_passed"))
             ),
             risk_reason=(
                 str(layers_raw["risk_reason"])
@@ -129,18 +123,14 @@ class InstitutionalAiDecisionService:
         inp = DecisionEvaluateInput(
             side=str(payload.get("side") or "buy"),
             strategy_id=str(payload.get("strategy_id") or "default"),
-            technique=(
-                str(payload["technique"]) if payload.get("technique") else None
-            ),
+            technique=(str(payload["technique"]) if payload.get("technique") else None),
             dry_run=bool(payload.get("dry_run", True)),
             equity=_dec(payload.get("equity"), "10000"),
             stop_distance=_dec(payload.get("stop_distance"), "5"),
             consecutive_losses=int(payload.get("consecutive_losses") or 0),
             daily_drawdown_pct=_dec(payload.get("daily_drawdown_pct")),
             closed_pnls=closed_pnls,
-            open_side=(
-                str(payload["open_side"]) if payload.get("open_side") else None
-            ),
+            open_side=(str(payload["open_side"]) if payload.get("open_side") else None),
             open_unrealized_pnl=(
                 _dec(payload["open_unrealized_pnl"])
                 if payload.get("open_unrealized_pnl") is not None

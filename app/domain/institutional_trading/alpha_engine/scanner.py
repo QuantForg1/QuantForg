@@ -7,6 +7,12 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.ai_scalping.session_intelligence import (
+    assess_session,
+)
+from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
+    assess_spread,
+)
 from app.domain.institutional_trading.alpha_engine.config import (
     DEFAULT_ALPHA_CONFIG,
     InstitutionalAlphaConfig,
@@ -26,12 +32,6 @@ from app.domain.institutional_trading.alpha_engine.risk_allocation import (
     allocate_risk_pct,
     get_smart_recovery,
     min_score_with_recovery,
-)
-from app.domain.institutional_trading.ai_scalping.session_intelligence import (
-    assess_session,
-)
-from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
-    assess_spread,
 )
 
 
@@ -94,7 +94,15 @@ def scan_universe(
         session = assess_session(f.session)
         spread_a = assess_spread(f.spread)
         # Soft-blend session / spread into provided confidence
-        conf = max(0, min(100, f.ai_confidence - session.confidence_penalty - spread_a.confidence_penalty))
+        conf = max(
+            0,
+            min(
+                100,
+                f.ai_confidence
+                - session.confidence_penalty
+                - spread_a.confidence_penalty,
+            ),
+        )
         opp = score_opportunity(
             symbol=f.symbol,
             ai_confidence=conf,
@@ -106,7 +114,7 @@ def scan_universe(
             expected_rr=f.expected_rr,
             session_score=session.stars * 20,
             direction=f.direction,
-            reasons=f.reasons + (session.reason, spread_a.reason),
+            reasons=(*f.reasons, session.reason, spread_a.reason),
             config=cfg,
         )
         scored.append(opp)
@@ -126,9 +134,7 @@ def scan_universe(
             config=cfg,
         )
         if not corr.allow:
-            correlation_blocks.append(
-                {"symbol": cand.symbol, **corr.to_dict()}
-            )
+            correlation_blocks.append({"symbol": cand.symbol, **corr.to_dict()})
             continue
         alloc: RiskAllocation = allocate_risk_pct(
             cand.opportunity_score,

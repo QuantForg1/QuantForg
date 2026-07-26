@@ -21,16 +21,12 @@ def integrate_dynamic_risk(
             score=None,
             passed=None,
             recommendation="No Trade",
-            reasons=(
-                "No risk facts — never bypasses existing Risk Engine",
-            ),
+            reasons=("No risk facts — never bypasses existing Risk Engine",),
         )
 
     risk_pct = config.base_risk_pct
     if inp.consecutive_losses:
-        risk_pct = risk_pct - (
-            Decimal(inp.consecutive_losses) * Decimal("0.10")
-        )
+        risk_pct = risk_pct - (Decimal(inp.consecutive_losses) * Decimal("0.10"))
     if inp.daily_loss_pct is not None and inp.daily_loss_pct > 0:
         risk_pct = risk_pct - (inp.daily_loss_pct * Decimal("0.05"))
     risk_pct = max(risk_pct, config.risk_floor_pct)
@@ -115,13 +111,9 @@ def integrate_dynamic_risk(
         "risk_engine_passed": True,
         "position_size": "deferred_to_risk_engine",
         "stop_loss": str(inp.atr) if inp.atr is not None else None,
-        "take_profit": (
-            str(inp.atr * Decimal("1.5")) if inp.atr is not None else None
-        ),
+        "take_profit": (str(inp.atr * Decimal("1.5")) if inp.atr is not None else None),
         "exposure": (
-            str(inp.open_exposure_pct)
-            if inp.open_exposure_pct is not None
-            else None
+            str(inp.open_exposure_pct) if inp.open_exposure_pct is not None else None
         ),
     }
     reasons.append("Position size / SL / TP deferred to existing Risk policies")
@@ -144,9 +136,7 @@ def monitor_execution_quality(
         "broker_connected": inp.broker_connected,
         "gateway_healthy": inp.gateway_healthy,
         "spread_acceptable": (
-            None
-            if inp.spread is None
-            else inp.spread <= config.max_spread
+            None if inp.spread is None else inp.spread <= config.max_spread
         ),
         "market_open": inp.market_open,
         "margin_available": inp.margin_available,
@@ -165,8 +155,7 @@ def monitor_execution_quality(
         "latency_acceptable": (
             None
             if inp.latency_ms is None
-            else inp.latency_ms
-            <= (inp.max_latency_ms or Decimal("500"))
+            else inp.latency_ms <= (inp.max_latency_ms or Decimal("500"))
         ),
     }
     if all(v is None for v in checks.values()):
@@ -197,11 +186,7 @@ def monitor_execution_quality(
     passed = len(failed) == 0
     reasons.append("Never creates alternate execution paths")
     reasons.append("Reject execution safely when any check fails")
-    score = (
-        Decimal("100")
-        if passed
-        else Decimal(max(0, 100 - 12 * len(failed)))
-    )
+    score = Decimal("100") if passed else Decimal(max(0, 100 - 12 * len(failed)))
     return ModuleResult(
         module="execution_quality_monitor",
         status="available",

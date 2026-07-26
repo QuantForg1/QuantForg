@@ -26,7 +26,9 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
-def normalize_score_rows(rows: list[dict[str, Any]] | list[Any]) -> list[dict[str, int]]:
+def normalize_score_rows(
+    rows: list[dict[str, Any]] | list[Any],
+) -> list[dict[str, int]]:
     """Extract {quality, confluence} ints from replay / diagnostics rows."""
     out: list[dict[str, int]] = []
     for raw in rows:
@@ -78,9 +80,7 @@ def sweep_quality_gates(
     """If Quality Gate = G (Confluence held at baseline) → Execution %."""
     results: list[dict[str, Any]] = []
     for g in gates:
-        row = _execution_stats(
-            rows, quality_gate=g, confluence_gate=confluence_held
-        )
+        row = _execution_stats(rows, quality_gate=g, confluence_gate=confluence_held)
         row["gate"] = g
         row["sweep"] = "quality"
         row["held_confluence_gate"] = confluence_held
@@ -97,9 +97,7 @@ def sweep_confluence_gates(
     """If Confluence Gate = G (Quality held at baseline) → Execution %."""
     results: list[dict[str, Any]] = []
     for g in gates:
-        row = _execution_stats(
-            rows, quality_gate=quality_held, confluence_gate=g
-        )
+        row = _execution_stats(rows, quality_gate=quality_held, confluence_gate=g)
         row["gate"] = g
         row["sweep"] = "confluence"
         row["held_quality_gate"] = quality_held
@@ -146,9 +144,7 @@ def build_threshold_sensitivity_report(
                 round(sum(qualities) / len(qualities), 2) if qualities else None
             ),
             "average_confluence": (
-                round(sum(confluences) / len(confluences), 2)
-                if confluences
-                else None
+                round(sum(confluences) / len(confluences), 2) if confluences else None
             ),
             "min_quality": min(qualities) if qualities else None,
             "max_quality": max(qualities) if qualities else None,

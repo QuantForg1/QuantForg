@@ -30,9 +30,7 @@ class _Adapter:
 @pytest.mark.unit
 def test_skips_closeonly_and_picks_next_full() -> None:
     adapter = _Adapter({"XAUUSD": "closeonly", "EURUSD": "full", "GBPUSD": "full"})
-    selected, skipped = select_full_mode_symbol(
-        adapter, ["XAUUSD", "EURUSD", "GBPUSD"]
-    )
+    selected, skipped = select_full_mode_symbol(adapter, ["XAUUSD", "EURUSD", "GBPUSD"])
     assert skipped == ["XAUUSD"]
     assert selected == "EURUSD"
 

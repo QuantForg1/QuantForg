@@ -49,8 +49,7 @@ class AlertService:
                         AlertSeverity.CRITICAL: 2,
                     }
                     escalates = (
-                        severity_rank[severity]
-                        > severity_rank[existing.severity]
+                        severity_rank[severity] > severity_rank[existing.severity]
                     )
                     within = moment - last <= self.cooldown
                     if within and not escalates:

@@ -26,24 +26,19 @@ def compare_backtest_vs_live(
     improves = 0
     for m in metrics:
         b = _f(backtest, m, m.replace("_", ""))
-        l = _f(live, m, m.replace("_", ""))
-        if b is None or l is None:
-            deltas[m] = {"backtest": b, "live": l, "improved": None}
+        live_v = _f(live, m, m.replace("_", ""))
+        if b is None or live_v is None:
+            deltas[m] = {"backtest": b, "live": live_v, "improved": None}
             continue
         # Lower drawdown is better; others higher is better
-        if m == "drawdown":
-            better = b < l  # candidate backtest better than live if lower DD
-            # For deploy decision: backtest should beat prior live baseline
-            improved = b <= l
-        else:
-            improved = b >= l
+        improved = b <= live_v if m == "drawdown" else b >= live_v
         if improved:
             improves += 1
         deltas[m] = {
             "backtest": b,
-            "live": l,
+            "live": live_v,
             "improved": improved,
-            "delta": round(b - l, 4),
+            "delta": round(b - live_v, 4),
         }
 
     deploy_ok = improves >= 3 and (

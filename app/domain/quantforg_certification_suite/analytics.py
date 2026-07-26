@@ -86,16 +86,25 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     checks.append(
         _check(
             name="Python unit tests",
-            status="pass" if availability.get("irl") or availability.get("icp") else "warn",
+            status=(
+                "pass" if availability.get("irl") or availability.get("icp") else "warn"
+            ),
             detail="Evidence of research/control surfaces present",
-            evidence={"irl": bool(availability.get("irl")), "icp": bool(availability.get("icp"))},
+            evidence={
+                "irl": bool(availability.get("irl")),
+                "icp": bool(availability.get("icp")),
+            },
             domain="Testing",
         )
     )
     checks.append(
         _check(
             name="Integration tests",
-            status="pass" if availability.get("irdp") and availability.get("islm") else "warn",
+            status=(
+                "pass"
+                if availability.get("irdp") and availability.get("islm")
+                else "warn"
+            ),
             detail="Governance surfaces available for integration evidence",
             evidence={
                 "irdp": bool(availability.get("irdp")),
@@ -115,7 +124,9 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     )
 
     replay = _as_dict(sources.get("replay"))
-    replay_n = len(_as_list(replay.get("simulations"))) + len(_as_list(replay.get("jobs")))
+    replay_n = len(_as_list(replay.get("simulations"))) + len(
+        _as_list(replay.get("jobs"))
+    )
     checks.append(
         _check(
             name="Replay consistency",
@@ -169,9 +180,11 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     checks.append(
         _check(
             name="Strategy health",
-            status="pass"
-            if (avg_health or 0) >= 55
-            else ("warn" if strategies else "fail"),
+            status=(
+                "pass"
+                if (avg_health or 0) >= 55
+                else ("warn" if strategies else "fail")
+            ),
             detail=f"avg_strategy_health={avg_health} n={len(strategies)}",
             evidence={"avg_health": avg_health, "count": len(strategies)},
             domain="Operational Readiness",
@@ -184,9 +197,7 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     risk_status = "pass"
     if dd is not None and dd >= 30:
         risk_status = "fail"
-    elif dd is not None and dd >= 20:
-        risk_status = "warn"
-    elif not irap:
+    elif (dd is not None and dd >= 20) or not irap:
         risk_status = "warn"
     checks.append(
         _check(
@@ -203,7 +214,9 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     checks.append(
         _check(
             name="Execution score",
-            status="pass" if (eq or 0) >= 60 else ("fail" if eq is not None else "warn"),
+            status=(
+                "pass" if (eq or 0) >= 60 else ("fail" if eq is not None else "warn")
+            ),
             detail=f"EQS overall={eq}",
             evidence={"execution_score": eq, "alerts": _as_list(eqs.get("alerts"))[:5]},
             domain="Execution",
@@ -217,11 +230,14 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     checks.append(
         _check(
             name="Reliability score",
-            status="pass"
-            if (rel or 0) >= 60
-            else ("fail" if rel is not None else "warn"),
+            status=(
+                "pass" if (rel or 0) >= 60 else ("fail" if rel is not None else "warn")
+            ),
             detail=f"RES overall={rel}",
-            evidence={"reliability_score": rel, "alerts": _as_list(res.get("alerts"))[:5]},
+            evidence={
+                "reliability_score": rel,
+                "alerts": _as_list(res.get("alerts"))[:5],
+            },
             domain="Reliability",
         )
     )
@@ -232,7 +248,7 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         _check(
             name="Release completeness",
             status="pass" if releases else "warn",
-            detail=f"releases={len(releases)} approvals={len(_as_list(irdp.get('approvals')))}",
+            detail=f"releases={len(releases)} approvals={len(_as_list(irdp.get('approvals')))}",  # noqa: E501
             evidence={"releases": releases[:5]},
             domain="Release Governance",
         )
@@ -302,19 +318,23 @@ def build_scores(ctx: dict[str, Any], checks: list[dict[str, Any]]) -> dict[str,
     )
     research = _score_or(
         40.0,
-        50.0 + min(30.0, len(_as_list(_as_dict(sources.get("irl")).get("experiments"))) * 3),
-        50.0 + min(25.0, len(_as_list(_as_dict(sources.get("aqs")).get("recommendations"))) * 3),
+        50.0
+        + min(30.0, len(_as_list(_as_dict(sources.get("irl")).get("experiments"))) * 3),
+        50.0
+        + min(
+            25.0, len(_as_list(_as_dict(sources.get("aqs")).get("recommendations"))) * 3
+        ),
     )
     validation = _score_or(
         45.0,
-        _as_dict(_as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")).get(
-            "confidence"
-        ),
+        _as_dict(
+            _as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")
+        ).get("confidence"),
     )
     dd = _f(
-        _as_dict(_as_dict(sources.get("irap")).get("metrics") or sources.get("irap")).get(
-            "maximum_drawdown"
-        )
+        _as_dict(
+            _as_dict(sources.get("irap")).get("metrics") or sources.get("irap")
+        ).get("maximum_drawdown")
     )
     risk = _clamp(100.0 - dd * 2.5) if dd is not None else 55.0
     execution = _score_or(
@@ -373,7 +393,10 @@ def build_scores(ctx: dict[str, Any], checks: list[dict[str, Any]]) -> dict[str,
             "total": total,
         },
     }
-    return {**{k: scores[k] for k in SCORE_KEYS}, "check_summary": scores["check_summary"]}
+    return {
+        **{k: scores[k] for k in SCORE_KEYS},
+        "check_summary": scores["check_summary"],
+    }
 
 
 def infer_certification_level(
@@ -383,7 +406,9 @@ def infer_certification_level(
 ) -> dict[str, Any]:
     overall = _f(scores.get("overall_institutional_readiness_score")) or 0.0
     critical_blockers = [
-        b for b in blockers if str(b.get("severity") or "").lower() in {"critical", "high"}
+        b
+        for b in blockers
+        if str(b.get("severity") or "").lower() in {"critical", "high"}
     ]
     fails = [c for c in checks if c.get("status") == "fail"]
 
@@ -468,9 +493,9 @@ def build_blockers(
         add(kind, sev, str(c.get("detail") or ""), _as_dict(c.get("evidence")))
 
     dd = _f(
-        _as_dict(_as_dict(sources.get("irap")).get("metrics") or sources.get("irap")).get(
-            "maximum_drawdown"
-        )
+        _as_dict(
+            _as_dict(sources.get("irap")).get("metrics") or sources.get("irap")
+        ).get("maximum_drawdown")
     )
     if dd is not None and dd >= 25:
         add(
@@ -492,7 +517,7 @@ def build_blockers(
 
 
 def build_domain_readiness(
-    checks: list[dict[str, Any]], scores: dict[str, Any]
+    checks: list[dict[str, Any]], _scores: dict[str, Any]
 ) -> list[dict[str, Any]]:
     by_domain: dict[str, list[dict[str, Any]]] = {d: [] for d in CERTIFICATION_DOMAINS}
     for c in checks:
@@ -524,9 +549,9 @@ def build_evidence_explorer(ctx: dict[str, Any]) -> dict[str, Any]:
             {
                 "source": sid,
                 "present": bool(blob),
-                "summary_keys": list(_as_dict(blob).keys())[:12]
-                if isinstance(blob, dict)
-                else [],
+                "summary_keys": (
+                    list(_as_dict(blob).keys())[:12] if isinstance(blob, dict) else []
+                ),
                 "evidence_ref": f"sources.{sid}",
             }
         )

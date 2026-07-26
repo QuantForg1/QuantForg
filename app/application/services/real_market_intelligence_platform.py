@@ -18,9 +18,7 @@ from app.domain.real_market_intelligence_platform.orchestrator import (
 
 class RealMarketIntelligencePlatformService:
     def __init__(self, config: RmipConfig | None = None) -> None:
-        self._system = RealMarketIntelligencePlatform(
-            config or DEFAULT_RMIP_CONFIG
-        )
+        self._system = RealMarketIntelligencePlatform(config or DEFAULT_RMIP_CONFIG)
 
     def status(self) -> dict[str, object]:
         return self._system.status()

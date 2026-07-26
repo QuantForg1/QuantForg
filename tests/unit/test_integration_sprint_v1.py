@@ -133,9 +133,7 @@ def test_connected_feeds_and_hydrate() -> None:
         economic_calendar=_FakeCalendar(),
         durable_store=DurableResearchStore(),
     )
-    system = IntegrationSprintV1(
-        config=IntegrationSprintConfig(), feeds=feeds
-    )
+    system = IntegrationSprintV1(config=IntegrationSprintConfig(), feeds=feeds)
     bus = system.bus_snapshot()
     assert "mt5_trade_feed" in bus["connected_feeds"]
     assert "mt5_position_feed" in bus["connected_feeds"]
@@ -152,9 +150,7 @@ def test_connected_feeds_and_hydrate() -> None:
     assert events[0]["actual"] is None  # never invent empty actual
     assert events[0]["forecast"] == "3.0"
 
-    store = system.storage_append(
-        "ivp", {"payload": {"score": 1}, "source": "test"}
-    )
+    store = system.storage_append("ivp", {"payload": {"score": 1}, "source": "test"})
     assert store["status"] == "available"
     listed = system.storage_list("ivp")
     assert listed["items"][0]["append_only"] is True
@@ -164,10 +160,7 @@ def test_no_order_send_in_domain() -> None:
     from pathlib import Path
 
     root = (
-        Path(__file__).resolve().parents[2]
-        / "app"
-        / "domain"
-        / "integration_sprint_v1"
+        Path(__file__).resolve().parents[2] / "app" / "domain" / "integration_sprint_v1"
     )
     offenders = [
         p.name

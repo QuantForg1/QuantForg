@@ -62,8 +62,12 @@ def build_production_reliability_dashboard() -> dict[str, Any]:
     health = {
         "mt5_gateway": _component_status(gateway_ok),
         "broker": _component_status(broker_ok),
-        "oms": _component_status(oms_ok, warn=not oms_ok and plane.mode.value == "SHADOW"),
-        "auto_trading": _component_status(auto_ok, warn=plane.auto_trading_run_state == "paused"),
+        "oms": _component_status(
+            oms_ok, warn=not oms_ok and plane.mode.value == "SHADOW"
+        ),
+        "auto_trading": _component_status(
+            auto_ok, warn=plane.auto_trading_run_state == "paused"
+        ),
         "ai_engine": _component_status(ai_ok),
         "market_data": _component_status(market_ok),
         "database": _component_status(db_ok),
@@ -84,15 +88,16 @@ def build_production_reliability_dashboard() -> dict[str, Any]:
             perf["daily_pnl"] = alpha_sum.get("daily_pnl")
             perf["weekly_pnl"] = alpha_sum.get("weekly_pnl")
             perf["monthly_pnl"] = alpha_sum.get("monthly_pnl")
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     open_positions: list[dict[str, Any]] = []
-    risk_exposure = None
     try:
         if runtime is not None and hasattr(runtime.position_management, "engine"):
             for pos in (runtime.position_management.engine._positions or {}).values():
-                open_positions.append(pos.to_dict() if hasattr(pos, "to_dict") else {"ticket": pos.ticket})
+                open_positions.append(
+                    pos.to_dict() if hasattr(pos, "to_dict") else {"ticket": pos.ticket}
+                )
     except Exception:
         logger.exception("open_positions_snapshot_failed")
 
@@ -130,7 +135,7 @@ def build_production_reliability_dashboard() -> dict[str, Any]:
             live_win_rate=perf.get("win_rate"),
         )
         compare = get_backtest_live_store().snapshot()
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     return {

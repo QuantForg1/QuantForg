@@ -12,9 +12,7 @@ from app.application.services.research_validation_platform import (
 )
 from app.presentation.dependencies.auth import CurrentUser
 
-router = APIRouter(
-    prefix="/research-validation", tags=["research-validation"]
-)
+router = APIRouter(prefix="/research-validation", tags=["research-validation"])
 
 _service = ResearchValidationService()
 
@@ -113,17 +111,13 @@ async def rvp_registry(user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/registry")
-async def rvp_register(
-    body: RegisterRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def rvp_register(body: RegisterRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.register(body.model_dump())
 
 
 @router.post("/replay/load")
-async def rvp_replay_load(
-    body: ReplayLoadRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def rvp_replay_load(body: ReplayLoadRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.replay_load(body.model_dump())
 
@@ -149,25 +143,19 @@ async def rvp_paper(body: PaperRequest, user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/compare")
-async def rvp_compare(
-    body: CompareRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def rvp_compare(body: CompareRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.compare(body.model_dump())
 
 
 @router.post("/certify")
-async def rvp_certify(
-    body: CertifyRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def rvp_certify(body: CertifyRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.certify(body.model_dump())
 
 
 @router.post("/versions")
-async def rvp_record_version(
-    body: VersionRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def rvp_record_version(body: VersionRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.record_version(body.model_dump())
 
@@ -183,9 +171,7 @@ async def rvp_list_versions(
 
 
 @router.post("/rollback")
-async def rvp_rollback(
-    body: RollbackRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def rvp_rollback(body: RollbackRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.rollback(body.model_dump())
 
@@ -208,9 +194,7 @@ async def rvp_observatory(
 
 
 @router.post("/release")
-async def rvp_release(
-    body: ReleaseRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def rvp_release(body: ReleaseRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.release(body.model_dump())
 

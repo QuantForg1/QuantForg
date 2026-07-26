@@ -53,7 +53,7 @@ def read_trade_mode(mt5_adapter: Any, symbol: str) -> str:
             return "longonly"
         if n == 2:
             return "shortonly"
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     return raw or "unknown"
 

@@ -26,8 +26,10 @@ def default_trading_symbol() -> str:
 
         settings = get_settings()
         if not gold_only_enabled():
-            return str(getattr(settings, "default_trading_symbol", GOLD_SYMBOL) or GOLD_SYMBOL)
-    except Exception:
+            return str(
+                getattr(settings, "default_trading_symbol", GOLD_SYMBOL) or GOLD_SYMBOL
+            )
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     return GOLD_SYMBOL
 

@@ -83,17 +83,13 @@ class AdaptiveScalpingIntelligence:
         modules: dict[str, ModuleResult] = {}
 
         if flags.get("market_personality", True):
-            modules["market_personality"] = detect_market_personality(
-                inp, self.config
-            )
+            modules["market_personality"] = detect_market_personality(inp, self.config)
         if flags.get("session_intelligence", True):
             modules["session_intelligence"] = evaluate_session_intelligence(
                 inp, self.config
             )
         if flags.get("time_intelligence", True):
-            modules["time_intelligence"] = evaluate_time_intelligence(
-                inp, self.config
-            )
+            modules["time_intelligence"] = evaluate_time_intelligence(inp, self.config)
         if flags.get("opportunity_database", True):
             modules["scalping_opportunity_database"] = build_opportunity_database(
                 inp, self.config
@@ -103,9 +99,7 @@ class AdaptiveScalpingIntelligence:
                 inp, self.config
             )
         if flags.get("confidence_calibration", True):
-            modules["confidence_calibration"] = calibrate_confidence(
-                inp, self.config
-            )
+            modules["confidence_calibration"] = calibrate_confidence(inp, self.config)
         if flags.get("opportunity_heat_map", True):
             modules["opportunity_heat_map"] = build_opportunity_heat_map(
                 inp, self.config
@@ -122,13 +116,9 @@ class AdaptiveScalpingIntelligence:
             modules["decision_explainability"] = explain_decision(inp, base)
 
         insufficient = [
-            k
-            for k, v in modules.items()
-            if v.status == "insufficient_history"
+            k for k, v in modules.items() if v.status == "insufficient_history"
         ]
-        available = [
-            k for k, v in modules.items() if v.status == "available"
-        ]
+        available = [k for k, v in modules.items() if v.status == "available"]
         summary = (
             "Adaptive insights available"
             if available
@@ -210,9 +200,7 @@ def input_from_dict(data: dict[str, Any]) -> AsiInput:
         volatility=str(data["volatility"]) if data.get("volatility") else None,
         spread=d(data.get("spread")),
         personality_hint=(
-            str(data["personality_hint"])
-            if data.get("personality_hint")
-            else None
+            str(data["personality_hint"]) if data.get("personality_hint") else None
         ),
         pattern_id=str(data["pattern_id"]) if data.get("pattern_id") else None,
         live_confidence=d(data.get("live_confidence")),

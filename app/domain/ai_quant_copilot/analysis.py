@@ -28,7 +28,9 @@ def _risk(portfolio: dict[str, Any]) -> dict[str, Any]:
 def build_investigations(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     """Build incident timelines from execution explain / diagnostics cycles."""
     explain = _as_dict(ctx.get("sources", {}).get("execution_explain"))
-    cycles = _as_list(explain.get("cycles") or explain.get("items") or explain.get("rows"))
+    cycles = _as_list(
+        explain.get("cycles") or explain.get("items") or explain.get("rows")
+    )
     if not cycles:
         diag = _as_dict(ctx.get("sources", {}).get("diagnostics"))
         cycles = _as_list(diag.get("cycles") or diag.get("recent") or diag.get("items"))
@@ -37,7 +39,9 @@ def build_investigations(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     for cycle in cycles[:25]:
         if not isinstance(cycle, dict):
             continue
-        lee = _as_dict(cycle.get("live_execution_explain") or cycle.get("explain") or {})
+        lee = _as_dict(
+            cycle.get("live_execution_explain") or cycle.get("explain") or {}
+        )
         if not lee and cycle.get("stages"):
             lee = cycle
         stages = _as_list(lee.get("stages") or [])
@@ -74,7 +78,7 @@ def build_investigations(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 built = build_execution_explain(cycle)
                 stages = _as_list(built.get("stages"))
                 lee = built
-            except Exception:  # noqa: BLE001
+            except Exception:
                 built = None
 
         timeline: list[dict[str, Any]] = []
@@ -104,10 +108,7 @@ def build_investigations(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             or ("BLOCKED" if first_fail else "UNKNOWN")
         )
         iid = str(
-            cycle.get("cycle_id")
-            or cycle.get("id")
-            or lee.get("cycle_id")
-            or uuid4()
+            cycle.get("cycle_id") or cycle.get("id") or lee.get("cycle_id") or uuid4()
         )
         out.append(
             {
@@ -162,7 +163,9 @@ def build_historical_comparison(ctx: dict[str, Any]) -> dict[str, Any]:
     current = {
         "label": "current_window",
         "profit_factor": perf.get("profit_factor") or kpis.get("profit_factor"),
-        "win_rate": perf.get("win_rate_pct") or perf.get("win_rate") or kpis.get("win_rate"),
+        "win_rate": perf.get("win_rate_pct")
+        or perf.get("win_rate")
+        or kpis.get("win_rate"),
         "trade_count": perf.get("trade_count")
         or portfolio.get("trade_count")
         or kpis.get("trade_count"),
@@ -307,7 +310,8 @@ def build_executive_summaries(ctx: dict[str, Any]) -> dict[str, Any]:
             "warehouse_quality": _as_dict(idw.get("quality")).get("integrity_score"),
             "inventory": idw.get("inventory"),
         },
-        "health": icc.get("health") or _as_dict(icc.get("executive_kpis")).get("health"),
+        "health": icc.get("health")
+        or _as_dict(icc.get("executive_kpis")).get("health"),
         "open_risks": alerts[:10]
         or (
             [{"kind": "drawdown", "detail": risk}]
@@ -362,7 +366,7 @@ def correlate_systems(ctx: dict[str, Any]) -> dict[str, Any]:
         {
             "from": "aqs",
             "to": "operations",
-            "finding": f"{len(aqs_recs)} AQS recommendations available for operator review",
+            "finding": f"{len(aqs_recs)} AQS recommendations available for operator review",  # noqa: E501
             "count": len(aqs_recs),
         },
         {

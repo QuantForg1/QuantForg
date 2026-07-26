@@ -39,7 +39,10 @@ def benchmark_against_production(
             diff_pct = _pct_diff(prod, cand)  # reduction vs production
             diff_abs = _abs_diff(cand, prod)
         else:
-            diff_pct = _pct_diff(cand if isinstance(cand, (int, float)) else None, prod if isinstance(prod, (int, float)) else None)
+            diff_pct = _pct_diff(
+                cand if isinstance(cand, (int, float)) else None,
+                prod if isinstance(prod, (int, float)) else None,
+            )
             diff_abs = _abs_diff(
                 float(cand) if isinstance(cand, (int, float)) else None,
                 float(prod) if isinstance(prod, (int, float)) else None,
@@ -68,7 +71,12 @@ def benchmark_against_production(
             (r["difference_abs"] for r in rows if r["metric"] == "win_rate"), None
         ),
         "drawdown_difference": next(
-            (r["difference_abs"] for r in rows if r["metric"] == "maximum_drawdown_pct"), None
+            (
+                r["difference_abs"]
+                for r in rows
+                if r["metric"] == "maximum_drawdown_pct"
+            ),
+            None,
         ),
         "trade_count_difference": next(
             (r["difference_abs"] for r in rows if r["metric"] == "total_trades"), None

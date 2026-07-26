@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.config import (
-    AiScalpingConfig,
     DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -35,7 +35,7 @@ class DirectionDecision:
         }
 
 
-def _side_of_break(kind: Any, break_dir: Any) -> TradeDirection | None:
+def _side_of_break(_kind: Any, break_dir: Any) -> TradeDirection | None:
     """Map BOS/CHOCH break direction to trade side."""
     raw = str(getattr(break_dir, "value", break_dir) or "").upper()
     if raw in {"UP", "BULLISH", "BUY", "LONG"}:
@@ -154,7 +154,8 @@ def decide_scalping_direction(
     gaps = list(getattr(fvg, "active_gaps", ()) or ()) if fvg else []
     for g in gaps[:3]:
         bias = str(
-            getattr(getattr(g, "bias", None), "value", getattr(g, "direction", "")) or ""
+            getattr(getattr(g, "bias", None), "value", getattr(g, "direction", ""))
+            or ""
         ).upper()
         if "UP" in bias or "BULL" in bias or "BUY" in bias:
             buy += 6
@@ -166,7 +167,9 @@ def decide_scalping_direction(
 
     # Momentum / volume from quality components
     q_components = getattr(snapshot.trade_quality, "components", None) or {}
-    mom = int(q_components.get("momentum", q_components.get("trend_strength", 50)) or 50)
+    mom = int(
+        q_components.get("momentum", q_components.get("trend_strength", 50)) or 50
+    )
     if mom >= 65:
         if buy > sell:
             buy += 8
@@ -184,7 +187,9 @@ def decide_scalping_direction(
     buy = max(0, min(100, buy))
     sell = max(0, min(100, sell))
     structure_score = max(
-        factors.get("bos", 0) + factors.get("choch", 0) + factors.get("m15_structure", 0),
+        factors.get("bos", 0)
+        + factors.get("choch", 0)
+        + factors.get("m15_structure", 0),
         int(trend.alignment_score),
     )
     structure_score = max(0, min(100, structure_score))

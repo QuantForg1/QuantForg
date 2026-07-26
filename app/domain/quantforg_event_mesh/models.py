@@ -59,10 +59,26 @@ EVENT_SOURCES: tuple[str, ...] = (
 
 # Declarative subscribers — routing catalog only, never tight coupling
 DEFAULT_SUBSCRIBERS: tuple[dict[str, Any], ...] = (
-    {"subscriber_id": "aoc", "categories": ["alert", "certification", "release"], "mode": "observe"},
+    {
+        "subscriber_id": "aoc",
+        "categories": ["alert", "certification", "release"],
+        "mode": "observe",
+    },
     {"subscriber_id": "icp", "categories": ["alert", "platform"], "mode": "observe"},
-    {"subscriber_id": "qcs", "categories": ["validation", "simulation", "replay"], "mode": "observe"},
-    {"subscriber_id": "qpm", "categories": ["portfolio", "strategy", "risk"], "mode": "observe"},
-    {"subscriber_id": "islm", "categories": ["strategy", "experiment", "certification"], "mode": "observe"},
+    {
+        "subscriber_id": "qcs",
+        "categories": ["validation", "simulation", "replay"],
+        "mode": "observe",
+    },
+    {
+        "subscriber_id": "qpm",
+        "categories": ["portfolio", "strategy", "risk"],
+        "mode": "observe",
+    },
+    {
+        "subscriber_id": "islm",
+        "categories": ["strategy", "experiment", "certification"],
+        "mode": "observe",
+    },
     {"subscriber_id": "audit_ledger", "categories": ["*"], "mode": "immutable_audit"},
 )

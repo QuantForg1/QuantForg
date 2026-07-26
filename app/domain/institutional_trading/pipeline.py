@@ -101,10 +101,7 @@ class InstitutionalAnalysisPipeline:
         # (that mismatch triggers "swing must match snapshot symbol/timeframe").
         inferred = self._infer_symbol_from_bars()
         raw = (symbol or inferred or cfg.symbol or GOLD_SYMBOL).strip().upper()
-        if gold_only_enabled():
-            code_str = GOLD_SYMBOL
-        else:
-            code_str = resolve_trading_symbol(raw)
+        code_str = GOLD_SYMBOL if gold_only_enabled() else resolve_trading_symbol(raw)
         code = SymbolCode(value=code_str)
         moment = as_of or datetime.now(UTC)
         if moment.tzinfo is None:
@@ -197,9 +194,7 @@ class InstitutionalAnalysisPipeline:
         )
 
         # ATR on entry confirmation TF (M15) — sizing input only; not a strategy gate.
-        entry_bars = list(
-            self.bars.as_mapping().get(cfg.entry_confirmation_tf, [])
-        )
+        entry_bars = list(self.bars.as_mapping().get(cfg.entry_confirmation_tf, []))
         atr = compute_atr(entry_bars)
 
         return MarketAnalysisSnapshot(

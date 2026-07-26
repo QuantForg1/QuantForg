@@ -107,9 +107,7 @@ class TestGovernanceAndGraph:
 
 class TestPlatform:
     def test_dashboard(self, tmp_path: Path) -> None:
-        qcdm = QuantForgCanonicalDataModel(
-            store=QcdmStore(path=tmp_path / "qcdm.json")
-        )
+        qcdm = QuantForgCanonicalDataModel(store=QcdmStore(path=tmp_path / "qcdm.json"))
         t0 = time.perf_counter()
         pack = qcdm.dashboard()
         elapsed = (time.perf_counter() - t0) * 1000.0

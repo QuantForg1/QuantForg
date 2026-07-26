@@ -38,16 +38,14 @@ EXPERIMENTAL_CONFLUENCE = 75
 EVAL_TARGET = 100
 BADGE_LABEL = "Experimental Profile Active (Q75/C75)"
 
-_REPORT_DIR = (
-    Path(__file__).resolve().parents[3] / "docs" / "production" / "reports"
-)
+_REPORT_DIR = Path(__file__).resolve().parents[3] / "docs" / "production" / "reports"
 
 
 def _git_commit_hash() -> str | None:
     try:
         root = Path(__file__).resolve().parents[3]
         out = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607  # local git metadata only
             cwd=root,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -123,14 +121,10 @@ class ExperimentalThresholdStore:
                 payload.get("config_version") or self.config_version
             )
             self.activated_at = (
-                str(payload["activated_at"])
-                if payload.get("activated_at")
-                else None
+                str(payload["activated_at"]) if payload.get("activated_at") else None
             )
             self.activated_by = (
-                str(payload["activated_by"])
-                if payload.get("activated_by")
-                else None
+                str(payload["activated_by"]) if payload.get("activated_by") else None
             )
             self.evaluations = int(payload.get("evaluations") or 0)
             self.report_generated = bool(payload.get("report_generated", False))
@@ -189,7 +183,7 @@ def get_experimental_threshold_store() -> ExperimentalThresholdStore:
                 payload = state.get("experimental_threshold_profile")
                 if isinstance(payload, dict):
                     _STORE.hydrate(payload)
-            except Exception:
+            except Exception:  # noqa: S110  # best-effort optional path
                 pass
         return _STORE
 
@@ -204,7 +198,7 @@ def reset_experimental_threshold_store() -> None:
             from app.application.services.ops_state_persistence import save_ops_state
 
             save_ops_state({"experimental_threshold_profile": _STORE.to_persist()})
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
 
 
@@ -217,7 +211,7 @@ def _persist(store: ExperimentalThresholdStore) -> None:
         from app.application.services.ops_state_persistence import save_ops_state
 
         save_ops_state({"experimental_threshold_profile": store.to_persist()})
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
 
@@ -243,7 +237,7 @@ def _control_plane_audit(
             reason=reason,
             now=now,
         )
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
 
@@ -255,7 +249,9 @@ def activate_experimental_75(
 ) -> dict[str, Any]:
     """Operator-gated activation of EXPERIMENTAL_75 (Q75/C75)."""
     if not confirmed:
-        raise ValueError("operator confirmation required — experimental profile not activated")
+        raise ValueError(
+            "operator confirmation required — experimental profile not activated"
+        )
     reason_clean = (reason or "").strip()
     if len(reason_clean) < 8:
         raise ValueError("reason required (min 8 characters)")
@@ -277,7 +273,7 @@ def activate_experimental_75(
             )
     except ValueError:
         raise
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     store = get_experimental_threshold_store()
@@ -448,12 +444,12 @@ def _is_eligible_cycle(cycle: dict[str, Any]) -> bool:
     if q is None and c is None:
         return False
     session = cycle.get("session") if isinstance(cycle.get("session"), dict) else {}
-    if session.get("allowed") is False:
-        return False
-    return True
+    return session.get("allowed") is not False
 
 
-def _metrics_from_samples(samples: list[dict[str, Any]], *, label: str) -> dict[str, Any]:
+def _metrics_from_samples(
+    samples: list[dict[str, Any]], *, label: str
+) -> dict[str, Any]:
     n = len(samples)
     signals = sum(1 for s in samples if s.get("signal"))
     executed = sum(1 for s in samples if s.get("executed"))
@@ -528,7 +524,7 @@ def _build_recommendation(
     base_exec = int(baseline.get("trades_executed") or 0)
     execution_increased = exp_exec > base_exec or exp_signals > base_signals
 
-    # Performance: prefer expectancy / PF / win_rate when present; else signal lift alone is insufficient
+    # Performance: prefer expectancy / PF / win_rate when present; else signal lift alone is insufficient  # noqa: E501
     perf_scores: list[bool] = []
     for key, higher_better in (
         ("expectancy", True),
@@ -590,8 +586,12 @@ def generate_experimental_threshold_report(
 
     experimental_view = [_experimental_view(s) for s in samples]
     baseline_view = [_baseline_shadow_view(s) for s in samples]
-    exp_metrics = _metrics_from_samples(experimental_view, label="EXPERIMENTAL_75 (Q75/C75)")
-    base_metrics = _metrics_from_samples(baseline_view, label="Baseline shadow (Q80/C80)")
+    exp_metrics = _metrics_from_samples(
+        experimental_view, label="EXPERIMENTAL_75 (Q75/C75)"
+    )
+    base_metrics = _metrics_from_samples(
+        baseline_view, label="Baseline shadow (Q80/C80)"
+    )
     decision = _build_recommendation(exp_metrics, base_metrics)
 
     report = {
@@ -685,15 +685,15 @@ def report_to_markdown(report: dict[str, Any]) -> str:
         f"- Generated: `{report.get('generated_at')}`",
         f"- Profile: `{report.get('profile_id')}`",
         f"- Evaluations: **{report.get('evaluations')}** / {report.get('eval_target')}",
-        f"- DEFAULT_ITE_CONFIG unchanged: **{report.get('default_ite_config_unchanged')}**",
+        f"- DEFAULT_ITE_CONFIG unchanged: **{report.get('default_ite_config_unchanged')}**",  # noqa: E501
         f"- Auto-promoted: **{detail.get('auto_promoted', False)}**",
         "",
         "## Comparison vs 80/80",
         "",
         "| Metric | Experimental 75/75 | Baseline 80/80 |",
         "|---|---:|---:|",
-        f"| Signals generated | {exp.get('signals_generated')} | {base.get('signals_generated')} |",
-        f"| Trades executed | {exp.get('trades_executed')} | {base.get('trades_executed')} |",
+        f"| Signals generated | {exp.get('signals_generated')} | {base.get('signals_generated')} |",  # noqa: E501
+        f"| Trades executed | {exp.get('trades_executed')} | {base.get('trades_executed')} |",  # noqa: E501
         f"| Win rate | {exp.get('win_rate')} | {base.get('win_rate')} |",
         f"| Profit factor | {exp.get('profit_factor')} | {base.get('profit_factor')} |",
         f"| Expectancy | {exp.get('expectancy')} | {base.get('expectancy')} |",
@@ -740,9 +740,13 @@ def observe_experimental_cycle(cycle: dict[str, Any]) -> None:
         rejected = bool(cycle.get("rejected")) or action in {"NO_TRADE", "WATCH", ""}
 
         # Experimental path (live gates are 75/75 while active)
-        experimental_signal = trade_action and q >= EXPERIMENTAL_QUALITY and c >= EXPERIMENTAL_CONFLUENCE
+        experimental_signal = (
+            trade_action and q >= EXPERIMENTAL_QUALITY and c >= EXPERIMENTAL_CONFLUENCE
+        )
         # Shadow Institutional 80/80
-        baseline_signal = trade_action and q >= PRODUCTION_QUALITY and c >= PRODUCTION_CONFLUENCE
+        baseline_signal = (
+            trade_action and q >= PRODUCTION_QUALITY and c >= PRODUCTION_CONFLUENCE
+        )
         baseline_reject_reason = None
         if not baseline_signal:
             if q < PRODUCTION_QUALITY or c < PRODUCTION_CONFLUENCE:
@@ -782,9 +786,7 @@ def observe_experimental_cycle(cycle: dict[str, Any]) -> None:
 
         store._samples.append(sample)
         store.evaluations += 1
-        should_report = (
-            store.evaluations >= EVAL_TARGET and not store.report_generated
-        )
+        should_report = store.evaluations >= EVAL_TARGET and not store.report_generated
 
     if should_report:
         report = generate_experimental_threshold_report(store)
@@ -846,8 +848,8 @@ def status_payload() -> dict[str, Any]:
                 "quality": PRODUCTION_QUALITY,
                 "confluence": PRODUCTION_CONFLUENCE,
                 "frozen": True,
-                "default_ite_config_quality": DEFAULT_ITE_CONFIG.min_trade_quality_score,
-                "default_ite_config_confluence": DEFAULT_ITE_CONFIG.min_confluence_score,
+                "default_ite_config_quality": DEFAULT_ITE_CONFIG.min_trade_quality_score,  # noqa: E501
+                "default_ite_config_confluence": DEFAULT_ITE_CONFIG.min_confluence_score,  # noqa: E501
             },
             "config_version": store.config_version,
             "activated_at": store.activated_at,

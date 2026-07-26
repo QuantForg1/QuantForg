@@ -1,4 +1,4 @@
-"""Adaptive Opportunity Mode — read-only gap analysis (never mutates engines).
+"""Adaptive Opportunity Mode - read-only gap analysis (never mutates engines).
 
 When the live decision is NO_TRADE, compute exactly what is missing for each
 gate (MTF / Quality / Confluence / Risk) plus historical wait-time estimates
@@ -12,18 +12,16 @@ from __future__ import annotations
 
 import math
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN
 
 # Engine-aligned MTF score floor (trend_engine.aligned requires score >= 70).
-# Observational only — mirrors existing strategy; does not change it.
+# Observational only - mirrors existing strategy; does not change it.
 MTF_ALIGN_SCORE_NEED = 70
 
-_NY_SESSIONS = frozenset(
-    {"new_york", "london_ny_overlap", "ny", "london/ny overlap"}
-)
+_NY_SESSIONS = frozenset({"new_york", "london_ny_overlap", "ny", "london/ny overlap"})
 
 
 def _d(value: Any) -> Decimal | None:
@@ -72,7 +70,7 @@ def _is_execute(cycle: dict[str, Any]) -> bool:
 
 
 def _cycle_eligible_historical(cycle: dict[str, Any]) -> bool:
-    """Historical 'setup fired' proxy — executed or BUY/SELL only."""
+    """Historical 'setup fired' proxy - executed or BUY/SELL only."""
     return _is_execute(cycle)
 
 
@@ -90,7 +88,7 @@ def estimate_mtf_h1_candles(
         return 0
     h4 = str(trend.get("h4") or "").lower()
     h1 = str(trend.get("h1") or "").lower()
-    # H1 must agree with H4 for alignment — typically 1–3 H1 closes.
+    # H1 must agree with H4 for alignment - typically 1-3 H1 closes.
     if h4 in {"up", "down"} and h1 != h4:
         if missing <= 10:
             return 1
@@ -147,9 +145,7 @@ def build_quality_gap(cycle: dict[str, Any]) -> dict[str, Any]:
     need = _i(quality.get("required"))
     passed = quality.get("passed") is True
     missing = (
-        None
-        if current is None or need is None
-        else max(0, int(need) - int(current))
+        None if current is None or need is None else max(0, int(need) - int(current))
     )
     return {
         "key": "quality",
@@ -167,9 +163,7 @@ def build_confluence_gap(cycle: dict[str, Any]) -> dict[str, Any]:
     need = _i(confluence.get("required"))
     passed = confluence.get("passed") is True
     missing = (
-        None
-        if current is None or need is None
-        else max(0, int(need) - int(current))
+        None if current is None or need is None else max(0, int(need) - int(current))
     )
     return {
         "key": "confluence",
@@ -182,7 +176,7 @@ def build_confluence_gap(cycle: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_risk_gap(cycle: dict[str, Any]) -> dict[str, Any]:
-    """Capital / lot gap — observational only (never upsizes lots)."""
+    """Capital / lot gap - observational only (never upsizes lots)."""
     sizing = _as_dict(cycle.get("sizing"))
     raw = _d(sizing.get("raw_lots") or cycle.get("raw_lots"))
     approved = _d(
@@ -363,9 +357,7 @@ def estimate_wait_statistics(cycles: list[dict[str, Any]]) -> dict[str, Any]:
         executed = sum(1 for _, c in stamps if _cycle_eligible_historical(c))
         rate = (executed / n) if n else 0.0
         if n >= 2:
-            span_h = max(
-                (stamps[-1][0] - stamps[0][0]).total_seconds() / 3600.0, 0.01
-            )
+            span_h = max((stamps[-1][0] - stamps[0][0]).total_seconds() / 3600.0, 0.01)
             cycles_per_h = n / span_h
             lam = cycles_per_h * rate
             p_1h = round(100.0 * (1.0 - math.exp(-lam)), 0) if lam > 0 else 0.0
@@ -441,9 +433,9 @@ def build_adaptive_opportunity(
         or "NO_TRADE",
         "execute_trade": execute,
         "headline": (
-            "✅ EXECUTE TRADE — opportunity complete"
+            "✅ EXECUTE TRADE - opportunity complete"
             if execute
-            else "❌ NO TRADE — what is missing"
+            else "❌ NO TRADE - what is missing"
         ),
         "gaps": {
             "mtf": mtf,

@@ -1,4 +1,4 @@
-"""Research Platform executive dashboard — v10."""
+"""Research Platform executive dashboard - v10."""
 
 from __future__ import annotations
 
@@ -48,13 +48,13 @@ def build_research_platform_dashboard() -> dict[str, Any]:
         )
 
         symbol_rankings = build_symbol_rankings()
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     try:
         from app.domain.institutional_trading.ai_validation import get_weight_optimizer
 
         weight_mult = get_weight_optimizer().snapshot().get("multipliers") or {}
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     insights = get_continuous_improvement().generate(
@@ -84,9 +84,14 @@ def build_research_platform_dashboard() -> dict[str, Any]:
 
         by = get_strategy_performance_store().snapshot().get("by_strategy") or {}
         for name, m in by.items():
-            strategy_rankings.append({"strategy": name, **(m if isinstance(m, dict) else {})})
+            strategy_rankings.append(
+                {"strategy": name, **(m if isinstance(m, dict) else {})}
+            )
         strategy_rankings.sort(
-            key=lambda x: (x.get("profit_factor") is not None, x.get("profit_factor") or 0),
+            key=lambda x: (
+                x.get("profit_factor") is not None,
+                x.get("profit_factor") or 0,
+            ),
             reverse=True,
         )
     except Exception:
@@ -97,8 +102,8 @@ def build_research_platform_dashboard() -> dict[str, Any]:
         "config": DEFAULT_RESEARCH_CONFIG.to_dict(),
         "guidance": {
             "message": (
-                "Before Production promotion: run demo or low-risk live for 2–4 weeks and review "
-                "win rate, profit factor, drawdown, Sharpe, average RR, execution latency, "
+                "Before Production promotion: run demo or low-risk live for 2-4 weeks and review "  # noqa: E501
+                "win rate, profit factor, drawdown, Sharpe, average RR, execution latency, "  # noqa: E501
                 "slippage, and AI calibration."
             ),
             "min_days": DEFAULT_RESEARCH_CONFIG.min_recommended_live_days,
@@ -110,9 +115,7 @@ def build_research_platform_dashboard() -> dict[str, Any]:
         "approved_models": approved_models,
         "pending_models": models.list(approval="pending"),
         "pending_reviews": pending_reviews,
-        "research_results": [
-            e for e in experiments.list(status="Completed")[:20]
-        ],
+        "research_results": list(experiments.list(status="Completed")[:20]),
         "strategy_rankings": strategy_rankings,
         "optimization_queue": opt_queue,
         "release_history": promo.history(limit=30),

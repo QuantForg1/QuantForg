@@ -56,7 +56,7 @@ class PortfolioIntelligenceConfig:
             "capital_reallocation_auto": False,
             "martingale": False,
             "grid": False,
-            "note": "Advisory portfolio intelligence — no automatic capital reallocation",
+            "note": "Advisory portfolio intelligence — no automatic capital reallocation",  # noqa: E501
         }
 
 

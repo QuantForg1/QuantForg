@@ -36,7 +36,11 @@ def compute_statistics(
     net = sum(pnls)
     win_rate = (len(wins) / n) if n else None
     loss_rate = (len(losses) / n) if n else None
-    pf = _safe_div(gross_profit, gross_loss) if gross_loss > 0 else (None if n == 0 else 999.0)
+    pf = (
+        _safe_div(gross_profit, gross_loss)
+        if gross_loss > 0
+        else (None if n == 0 else 999.0)
+    )
     avg_win = statistics.mean(wins) if wins else None
     avg_loss = abs(statistics.mean(losses)) if losses else None
     expectancy = None
@@ -45,8 +49,8 @@ def compute_statistics(
         expectancy = win_rate * avg_win - (1.0 - win_rate) * al
 
     rrs = [_f(t.get("rr")) for t in trades if _f(t.get("rr")) is not None]
-    avg_rr = statistics.mean(rrs) if rrs else None  # type: ignore[arg-type]
-    median_rr = statistics.median(rrs) if rrs else None  # type: ignore[arg-type]
+    avg_rr = statistics.mean(rrs) if rrs else None
+    median_rr = statistics.median(rrs) if rrs else None
 
     equity = starting_equity
     peak = equity
@@ -82,8 +86,10 @@ def compute_statistics(
 
     recovery = _safe_div(net, max_dd * starting_equity / 100.0) if max_dd > 0 else None
 
-    holds = [_f(t.get("holding_sec")) for t in trades if _f(t.get("holding_sec")) is not None]
-    avg_hold = statistics.mean(holds) if holds else None  # type: ignore[arg-type]
+    holds = [
+        _f(t.get("holding_sec")) for t in trades if _f(t.get("holding_sec")) is not None
+    ]
+    avg_hold = statistics.mean(holds) if holds else None
 
     # Exposure ≈ fraction of time in market (sum hold / window estimate)
     total_hold = sum(holds) if holds else 0.0
@@ -107,8 +113,12 @@ def compute_statistics(
         "calmar": calmar,
         "maximum_drawdown_pct": round(max_dd, 4),
         "recovery_factor": round(recovery, 4) if recovery is not None else None,
-        "average_holding_time_sec": round(avg_hold, 1) if avg_hold is not None else None,
-        "trade_frequency": round(n / max(window_sec / 86400.0, 1e-6), 4) if window_sec else n,
+        "average_holding_time_sec": (
+            round(avg_hold, 1) if avg_hold is not None else None
+        ),
+        "trade_frequency": (
+            round(n / max(window_sec / 86400.0, 1e-6), 4) if window_sec else n
+        ),
         "exposure": round(exposure, 4) if exposure is not None else None,
         "net_profit": round(net, 2),
         "equity_curve": [round(x, 2) for x in curve],

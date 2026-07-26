@@ -62,7 +62,7 @@ def document_optimization(run: dict[str, Any]) -> str:
             f"- Best score: {run.get('best_score')}",
             f"- Best params: {run.get('best_params')}",
             f"- Metrics: {run.get('metrics')}",
-            f"- Applied: false",
+            "- Applied: false",
             f"- Notes: {run.get('notes')}",
         ]
     )

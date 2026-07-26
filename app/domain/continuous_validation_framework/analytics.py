@@ -51,14 +51,18 @@ def _live_metrics(ctx: dict[str, Any]) -> dict[str, Any]:
         "win_rate": _f(perf.get("win_rate_pct") or perf.get("win_rate")),
         "profit_factor": _f(perf.get("profit_factor")),
         "expectancy": _f(perf.get("expectancy")),
-        "average_rr": _f(perf.get("average_rr") or perf.get("avg_rr") or perf.get("reward_risk")),
+        "average_rr": _f(
+            perf.get("average_rr") or perf.get("avg_rr") or perf.get("reward_risk")
+        ),
         "drawdown": _f(risk.get("max_drawdown_pct")),
         "trade_frequency": _f(perf.get("trade_count") or portfolio.get("trade_count")),
         "holding_time": _f(
             behavior.get("average_holding_time_sec")
             or behavior.get("avg_holding_time_sec")
         ),
-        "sample_size": int(perf.get("trade_count") or portfolio.get("trade_count") or 0),
+        "sample_size": int(
+            perf.get("trade_count") or portfolio.get("trade_count") or 0
+        ),
     }
 
 
@@ -69,20 +73,28 @@ def _replay_baseline(ctx: dict[str, Any]) -> dict[str, Any]:
     board = _as_dict(irl.get("leaderboard"))
     rows = _as_list(board.get("rows"))
     best = rows[0] if rows and isinstance(rows[0], dict) else {}
-    # Prefer research leaderboard as replay expectation; fall back to production baseline
+    # Prefer research leaderboard as replay expectation; fall back to production baseline  # noqa: E501
     src = best if best else prod
     jobs = _as_list(irl.get("jobs"))
     return {
-        "win_rate": _f(src.get("win_rate") or src.get("win_rate_pct") or prod.get("win_rate")),
+        "win_rate": _f(
+            src.get("win_rate") or src.get("win_rate_pct") or prod.get("win_rate")
+        ),
         "profit_factor": _f(src.get("profit_factor") or prod.get("profit_factor")),
         "expectancy": _f(src.get("expectancy") or prod.get("expectancy")),
-        "average_rr": _f(src.get("average_rr") or src.get("avg_rr") or prod.get("average_rr")),
+        "average_rr": _f(
+            src.get("average_rr") or src.get("avg_rr") or prod.get("average_rr")
+        ),
         "drawdown": _f(
             src.get("maximum_drawdown_pct")
             or src.get("max_drawdown_pct")
             or prod.get("maximum_drawdown_pct")
         ),
-        "trade_frequency": _f(src.get("total_trades") or src.get("trade_count") or prod.get("total_trades")),
+        "trade_frequency": _f(
+            src.get("total_trades")
+            or src.get("trade_count")
+            or prod.get("total_trades")
+        ),
         "holding_time": _f(src.get("avg_holding_time_sec") or prod.get("holding_time")),
         "sample_size": int(
             src.get("total_trades")
@@ -135,13 +147,19 @@ def build_replay_vs_live(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_strategy_drift(ctx: dict[str, Any], replay_vs_live: dict[str, Any]) -> dict[str, Any]:
+def build_strategy_drift(
+    ctx: dict[str, Any], replay_vs_live: dict[str, Any]
+) -> dict[str, Any]:
     drifts: list[dict[str, Any]] = []
     by_metric = {
-        r["metric"]: r for r in _as_list(replay_vs_live.get("comparison")) if isinstance(r, dict)
+        r["metric"]: r
+        for r in _as_list(replay_vs_live.get("comparison"))
+        if isinstance(r, dict)
     }
 
-    def _add(kind: str, metric: str, threshold: float, severity: str = "warning") -> None:
+    def _add(
+        kind: str, metric: str, threshold: float, severity: str = "warning"
+    ) -> None:
         row = by_metric.get(metric) or {}
         delta = _f(row.get("delta_pct"))
         if delta is None:
@@ -152,7 +170,9 @@ def build_strategy_drift(ctx: dict[str, Any], replay_vs_live: dict[str, Any]) ->
                     "kind": kind,
                     "metric": metric,
                     "delta_pct": delta,
-                    "severity": severity if abs(delta) >= threshold * 1.5 else "warning",
+                    "severity": (
+                        severity if abs(delta) >= threshold * 1.5 else "warning"
+                    ),
                     "replay": row.get("replay"),
                     "live": row.get("live"),
                     "read_only": True,
@@ -184,7 +204,7 @@ def build_strategy_drift(ctx: dict[str, Any], replay_vs_live: dict[str, Any]) ->
                         "metric": "session",
                         "delta_pct": round(spread, 2),
                         "severity": "warning",
-                        "detail": {n: wr for n, wr in rates},
+                        "detail": dict(rates),
                         "read_only": True,
                     }
                 )
@@ -210,7 +230,10 @@ def build_strategy_drift(ctx: dict[str, Any], replay_vs_live: dict[str, Any]) ->
             )
 
     risk = _risk(portfolio)
-    if _f(risk.get("max_drawdown_pct")) is not None and _f(risk.get("ulcer_index")) is not None:
+    if (
+        _f(risk.get("max_drawdown_pct")) is not None
+        and _f(risk.get("ulcer_index")) is not None
+    ):
         # risk profile drift proxy: elevated ulcer vs drawdown ratio
         dd = _f(risk.get("max_drawdown_pct")) or 0
         ulcer = _f(risk.get("ulcer_index")) or 0
@@ -262,8 +285,11 @@ def build_regime_validation(ctx: dict[str, Any]) -> dict[str, Any]:
     live = _live_metrics(ctx)
     rows = []
     for name in REGIMES:
-        # expected from history when matching; else neutral research placeholders labeled as such
-        match = name.lower().replace(" ", "_") in current_name.lower().replace(" ", "_") or name.lower() in current_name.lower()
+        # expected from history when matching; else neutral research placeholders labeled as such  # noqa: E501
+        match = (
+            name.lower().replace(" ", "_") in current_name.lower().replace(" ", "_")
+            or name.lower() in current_name.lower()
+        )
         expected_wr = _f(hist.get("win_rate")) if match else None
         expected_pf = _f(hist.get("profit_factor")) if match else None
         # IDW regime rows
@@ -271,8 +297,12 @@ def build_regime_validation(ctx: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(r, dict):
                 continue
             if name.lower() in str(r.get("regime") or r.get("name") or "").lower():
-                expected_wr = expected_wr or _f(r.get("win_rate") or r.get("expected_win_rate"))
-                expected_pf = expected_pf or _f(r.get("profit_factor") or r.get("expected_pf"))
+                expected_wr = expected_wr or _f(
+                    r.get("win_rate") or r.get("expected_win_rate")
+                )
+                expected_pf = expected_pf or _f(
+                    r.get("profit_factor") or r.get("expected_pf")
+                )
         actual_wr = live.get("win_rate") if match else None
         actual_pf = live.get("profit_factor") if match else None
         rows.append(
@@ -293,7 +323,10 @@ def build_regime_validation(ctx: dict[str, Any]) -> dict[str, Any]:
         if r.get("is_current")
         and (
             (r.get("pf_delta_pct") is not None and abs(float(r["pf_delta_pct"])) >= 20)
-            or (r.get("wr_delta_pct") is not None and abs(float(r["wr_delta_pct"])) >= 15)
+            or (
+                r.get("wr_delta_pct") is not None
+                and abs(float(r["wr_delta_pct"])) >= 15
+            )
         )
     ]
     return {
@@ -313,7 +346,10 @@ def build_parameter_stability(ctx: dict[str, Any]) -> dict[str, Any]:
         "quality": {"tracked_bands": [70, 75, 80, 85, 90], "stability_score": 70.0},
         "confluence": {"tracked_bands": [2, 3, 4, 5], "stability_score": 68.0},
         "atr": {"tracked_bands": ["low", "mid", "high"], "stability_score": 65.0},
-        "spread": {"tracked_bands": ["tight", "normal", "wide"], "stability_score": 72.0},
+        "spread": {
+            "tracked_bands": ["tight", "normal", "wide"],
+            "stability_score": 72.0,
+        },
         "sessions": {
             "tracked_bands": ["tokyo", "london", "new_york", "overlap"],
             "stability_score": 66.0,
@@ -328,7 +364,10 @@ def build_parameter_stability(ctx: dict[str, Any]) -> dict[str, Any]:
     for r in recs:
         if not isinstance(r, dict):
             continue
-        c = _f(_as_dict(r.get("scores")).get("research_confidence_score") or r.get("confidence"))
+        c = _f(
+            _as_dict(r.get("scores")).get("research_confidence_score")
+            or r.get("confidence")
+        )
         if c is not None:
             confs.append(c)
     if confs:
@@ -363,21 +402,29 @@ def build_statistical_confidence(
         for r in _as_list(replay_vs_live.get("comparison"))
         if isinstance(r, dict) and r.get("delta_pct") is not None
     ]
-    variance = round(statistics.pstdev(deltas), 3) if len(deltas) >= 2 else (round(deltas[0], 3) if deltas else 0.0)
+    variance = (
+        round(statistics.pstdev(deltas), 3)
+        if len(deltas) >= 2
+        else (round(deltas[0], 3) if deltas else 0.0)
+    )
 
     # Confidence grows with sample size, shrinks with variance and hard drifts
     sample_factor = min(100.0, math.sqrt(max(sample_size, 1)) * 8.0)
     variance_penalty = min(40.0, variance * 0.8)
     drift_penalty = min(30.0, int(drift.get("drift_count") or 0) * 6.0)
-    confidence = round(max(0.0, min(100.0, sample_factor - variance_penalty - drift_penalty + 20)), 1)
+    confidence = round(
+        max(0.0, min(100.0, sample_factor - variance_penalty - drift_penalty + 20)), 1
+    )
 
     stab_vals = [
         _f(_as_dict(v).get("stability_score"))
         for v in _as_dict(parameter_stability.get("parameters")).values()
     ]
-    stability_score = round(
-        statistics.mean([v for v in stab_vals if v is not None]), 1
-    ) if any(v is not None for v in stab_vals) else 60.0
+    stability_score = (
+        round(statistics.mean([v for v in stab_vals if v is not None]), 1)
+        if any(v is not None for v in stab_vals)
+        else 60.0
+    )
 
     reliability = round(
         max(
@@ -458,7 +505,9 @@ def build_validation_alerts(
 
     eqs = _as_dict(ctx.get("sources", {}).get("eqs"))
     score = _as_dict(eqs.get("execution_score") or eqs)
-    lat = _f(score.get("latency") or _as_dict(eqs.get("execution_score")).get("latency"))
+    lat = _f(
+        score.get("latency") or _as_dict(eqs.get("execution_score")).get("latency")
+    )
     overall_eq = _f(score.get("overall_execution_score"))
     if lat is not None and lat < 55:
         alerts.append(
@@ -533,7 +582,9 @@ def build_evidence_chains(
                 "supporting_statistics": confidence,
                 "related_replay": {
                     "jobs": _as_list(irl.get("jobs"))[:5],
-                    "leaderboard": _as_list(_as_dict(irl.get("leaderboard")).get("rows"))[:3],
+                    "leaderboard": _as_list(
+                        _as_dict(irl.get("leaderboard")).get("rows")
+                    )[:3],
                 },
                 "related_research": {
                     "recommendations": _as_list(aqs.get("recommendations"))[:5],
@@ -573,7 +624,11 @@ def build_executive_reports(
     alerts: list[dict[str, Any]],
     evidence_chains: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    findings = [d.get("kind") for d in _as_list(drift.get("drifts")) if d.get("severity") != "info"]
+    findings = [
+        d.get("kind")
+        for d in _as_list(drift.get("drifts"))
+        if d.get("severity") != "info"
+    ]
     findings += [a.get("kind") for a in alerts]
     recommendations = [
         "Human review required — CVF never approves promotions or changes thresholds.",

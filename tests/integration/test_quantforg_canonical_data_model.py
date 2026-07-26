@@ -31,7 +31,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["schema_contract_read_only"] is True
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     qcdm = QuantForgCanonicalDataModel(store=QcdmStore(path=tmp_path / "qcdm.json"))
     monkeypatch.setattr("app.domain.quantforg_canonical_data_model._QCDM", qcdm)
     monkeypatch.setattr(svc, "get_qcdm", lambda: qcdm)

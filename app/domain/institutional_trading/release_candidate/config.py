@@ -41,7 +41,7 @@ class ReleaseCandidateConfig:
             "min_consecutive_trading_days": self.min_consecutive_trading_days,
             "recommended_evidence_days": self.recommended_evidence_days,
             "note": (
-                "RC1 proves profitability, stability, and safety with measurable evidence. "
+                "RC1 proves profitability, stability, and safety with measurable evidence. "  # noqa: E501
                 "Never auto-scale capital. Never place real trades in smoke tests."
             ),
         }

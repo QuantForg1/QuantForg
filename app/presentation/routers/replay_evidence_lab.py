@@ -90,7 +90,7 @@ async def evidence_lane(
             "never_mix_evidence_lanes": True,
         }
     typed = lane  # narrowed by membership check
-    rows = get_evidence_database().list(typed)  # type: ignore[arg-type]
+    rows = get_evidence_database().list(typed)
     return {
         "status": "available",
         "lane": lane,

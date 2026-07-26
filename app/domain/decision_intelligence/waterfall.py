@@ -59,9 +59,11 @@ def evaluate_waterfall(
                 "signal",
                 not config.require_signal,
                 config.require_signal,
-                "Signal not assessed — fail closed"
-                if config.require_signal
-                else "Signal optional/not supplied",
+                (
+                    "Signal not assessed — fail closed"
+                    if config.require_signal
+                    else "Signal optional/not supplied"
+                ),
             )
         )
     else:
@@ -81,9 +83,11 @@ def evaluate_waterfall(
                 "strategy_consensus",
                 not config.require_strategy_consensus,
                 config.require_strategy_consensus,
-                "Consensus not assessed — fail closed"
-                if config.require_strategy_consensus
-                else "Consensus optional/not supplied",
+                (
+                    "Consensus not assessed — fail closed"
+                    if config.require_strategy_consensus
+                    else "Consensus optional/not supplied"
+                ),
             )
         )
     else:
@@ -107,9 +111,11 @@ def evaluate_waterfall(
                 "market_regime",
                 not config.require_market_regime_ok,
                 config.require_market_regime_ok,
-                "Regime not assessed — fail closed"
-                if config.require_market_regime_ok
-                else "Regime optional/not supplied",
+                (
+                    "Regime not assessed — fail closed"
+                    if config.require_market_regime_ok
+                    else "Regime optional/not supplied"
+                ),
             )
         )
     else:
@@ -127,9 +133,7 @@ def evaluate_waterfall(
         )
 
     # Confidence
-    conf_ok = (
-        inp.confidence is not None and inp.confidence >= config.min_confidence
-    )
+    conf_ok = inp.confidence is not None and inp.confidence >= config.min_confidence
     stages.append(
         WaterfallStage(
             "confidence",

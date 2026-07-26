@@ -33,10 +33,10 @@ from app.application.services.institutional_trading_analysis import (
     InstitutionalTradingAnalysisService,
 )
 from app.application.services.production_replay_validation import (
-    ALLOWED_SESSIONS,
     _CANDLE_BUFFER,
     _MIN_HISTORY_PER_TF,
     _REQUIRED_TIMEFRAMES,
+    ALLOWED_SESSIONS,
     _compute_atr,
     _normalize_bars_by_tf,
     _select_walk_points,
@@ -260,9 +260,7 @@ def _replay_full_pipeline(
             "oms_calls": 0,
             "latency_ms": round((perf_counter() - started) * 1000.0, 3),
         }
-    stages.append(
-        StageResult("Safety", "PASS", f"status={safety.status}")
-    )
+    stages.append(StageResult("Safety", "PASS", f"status={safety.status}"))
     stages.append(
         StageResult(
             "Execution Decision",
@@ -325,7 +323,7 @@ def _replay_full_pipeline(
             StageResult(
                 "OMS",
                 "FAIL",
-                f"abort={bridge_result.abort_reason} comment={bridge_result.journal_entry.comment}",
+                f"abort={bridge_result.abort_reason} comment={bridge_result.journal_entry.comment}",  # noqa: E501
             )
         )
         return {
@@ -386,9 +384,7 @@ async def run_institutional_execution_validation(
     """Search for production-quality setups and replay the full execution stack."""
     generated_at = datetime.now(UTC)
     normalized = (
-        _normalize_bars_by_tf(bars_by_tf)
-        if bars_by_tf
-        else build_synthetic_bars(days)
+        _normalize_bars_by_tf(bars_by_tf) if bars_by_tf else build_synthetic_bars(days)
     )
     source_label = bar_source if bars_by_tf else "synthetic_deterministic"
 

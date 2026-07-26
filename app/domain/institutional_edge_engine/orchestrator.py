@@ -96,9 +96,7 @@ class InstitutionalEdgeEngine:
         if flags.get("exit_quality", True):
             modules["exit_quality"] = evaluate_exit_quality(inp, self.config)
         if flags.get("risk_discipline", True):
-            modules["risk_discipline"] = evaluate_risk_discipline(
-                inp, self.config
-            )
+            modules["risk_discipline"] = evaluate_risk_discipline(inp, self.config)
         if flags.get("edge_decay", True):
             modules["edge_decay"] = detect_edge_decay(
                 inp,
@@ -115,13 +113,9 @@ class InstitutionalEdgeEngine:
                 ),
             )
         if flags.get("explainable_edge_report", True):
-            modules["explainable_edge_report"] = explainable_edge_report(
-                dict(modules)
-            )
+            modules["explainable_edge_report"] = explainable_edge_report(dict(modules))
         if flags.get("institutional_scorecard", True):
-            modules["institutional_scorecard"] = institutional_scorecard(
-                dict(modules)
-            )
+            modules["institutional_scorecard"] = institutional_scorecard(dict(modules))
         if flags.get("monthly_research_package", True):
             modules["monthly_research_package"] = monthly_research_package(
                 inp, self.config, dict(modules)
@@ -139,9 +133,7 @@ class InstitutionalEdgeEngine:
             "modules": {k: v.to_dict() for k, v in modules.items()},
             "edge_report_summary": {
                 "edge_score": (
-                    str(edge.score)
-                    if edge and edge.score is not None
-                    else None
+                    str(edge.score) if edge and edge.score is not None else None
                 ),
                 "edge_status": edge.status if edge else "empty",
                 "edge_recommendation": (
@@ -150,9 +142,7 @@ class InstitutionalEdgeEngine:
                 "edge_warning": bool(
                     decay and (decay.details or {}).get("edge_warning")
                 ),
-                "explainability": (
-                    list(report.reasons) if report else []
-                ),
+                "explainability": (list(report.reasons) if report else []),
             },
             "institutional_score": {
                 "overall_score": (
@@ -166,9 +156,7 @@ class InstitutionalEdgeEngine:
                     else None
                 ),
                 "panels": (
-                    (scorecard.details or {}).get("panels")
-                    if scorecard
-                    else {}
+                    (scorecard.details or {}).get("panels") if scorecard else {}
                 ),
                 "status": scorecard.status if scorecard else "empty",
             },

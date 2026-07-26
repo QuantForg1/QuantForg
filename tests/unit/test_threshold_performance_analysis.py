@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -20,7 +21,6 @@ from app.domain.market_data.candle import Candle
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
 from app.domain.value_objects.identity import SymbolCode
-from datetime import UTC, datetime, timedelta
 
 
 def _bar(i: int, *, low: float, high: float, close: float) -> Candle:

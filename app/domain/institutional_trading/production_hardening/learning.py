@@ -34,7 +34,7 @@ FACTOR_KEYS = (
 @dataclass
 class LearningWeightStore:
     multipliers: dict[str, float] = field(
-        default_factory=lambda: {k: 1.0 for k in FACTOR_KEYS}
+        default_factory=lambda: dict.fromkeys(FACTOR_KEYS, 1.0)
     )
     updates: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -113,7 +113,7 @@ class LearningWeightStore:
             out: dict[str, int] = {}
             for k, w in base_weights.items():
                 m = self.multipliers.get(k, 1.0)
-                out[k] = max(1, int(round(w * m)))
+                out[k] = max(1, round(w * m))
             return out
 
     def snapshot(self) -> dict[str, Any]:

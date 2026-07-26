@@ -41,9 +41,7 @@ class InstitutionalExperimentationPlatform:
         t0 = time.perf_counter()
         ctx = gather_experiment_sources()
         experiments = (
-            self.sync_registry(ctx)
-            if persist
-            else build_registry_from_sources(ctx)
+            self.sync_registry(ctx) if persist else build_registry_from_sources(ctx)
         )
         comparison = build_comparison_workspace(experiments)
         decisions = build_decision_dashboard(experiments)

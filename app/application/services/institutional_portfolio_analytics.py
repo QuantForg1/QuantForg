@@ -12,14 +12,14 @@ import math
 import statistics
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from app.application.services.strategy_intelligence_center import (
-    GOLD_SYMBOL,
     enrich_trade,
     pair_deals_into_closed_trades,
 )
 from app.domain.institutional_trading.session_filter import classify_session_utc
+from app.domain.trading.gold_only import GOLD_SYMBOL
 
 DEFAULT_STARTING_EQUITY = 10_000.0
 MIN_BUCKET = 2
@@ -29,9 +29,9 @@ ReportPeriod = Literal["daily", "weekly", "monthly", "quarterly", "yearly"]
 __all__ = [
     "DEFAULT_STARTING_EQUITY",
     "ReportPeriod",
-    "analyze_portfolio",
     "analytics_to_csv",
     "analytics_to_pdf_bytes",
+    "analyze_portfolio",
     "build_institutional_portfolio_analytics",
     "build_report",
 ]
@@ -65,7 +65,9 @@ def _parse_ts(value: Any) -> datetime | None:
         return None
 
 
-def _safe_div(num: float | None, den: float | None, *, default: float | None = None) -> float | None:
+def _safe_div(
+    num: float | None, den: float | None, *, default: float | None = None
+) -> float | None:
     if num is None or den is None or abs(den) < 1e-12:
         return default
     return num / den
@@ -87,7 +89,7 @@ def _normalize_rows(rows: list[Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for r in rows:
         if hasattr(r, "to_dict"):
-            out.append(dict(r.to_dict()))  # type: ignore[arg-type]
+            out.append(dict(r.to_dict()))
         elif isinstance(r, dict):
             out.append(r)
     return out
@@ -127,10 +129,10 @@ def _load_deals_and_account(
             try:
                 account = _account_to_dict(adapter.account_info())
                 meta["account_loaded"] = bool(account)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 meta["account_error"] = str(exc)[:200]
             return deals, account, meta
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         meta["di_error"] = str(exc)[:200]
 
     try:
@@ -151,7 +153,11 @@ def _load_deals_and_account(
 
             client = GatewayMT5Client(base_url=base, token=token)
             if client.adopt_existing_session():
-                raw = client.history_deals(days=days)
+                date_to = datetime.now(UTC)
+                raw = client.history_deals(
+                    date_from=date_to - timedelta(days=days),
+                    date_to=date_to,
+                )
                 deals = _normalize_rows(list(raw or []))
                 meta["ok"] = True
                 meta["via"] = "local_gateway"
@@ -159,11 +165,11 @@ def _load_deals_and_account(
                 try:
                     account = _account_to_dict(client.account_info())
                     meta["account_loaded"] = bool(account)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     meta["account_error"] = str(exc)[:200]
                 return deals, account, meta
             meta["adopt_failed"] = True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         meta["gateway_error"] = str(exc)[:200]
 
     return deals, account, meta
@@ -195,7 +201,6 @@ def _equity_path(
     dd_samples: list[float] = []
     recovery_bars = 0
     max_recovery_bars = 0
-    in_recovery = False
 
     for idx, pnl in enumerate(pnls):
         prev_equity = equity
@@ -213,14 +218,16 @@ def _equity_path(
         dd_samples.append(dd_p * 100.0)
 
         if dd_a > 1e-9:
-            in_recovery = True
             recovery_bars += 1
             max_recovery_bars = max(max_recovery_bars, recovery_bars)
         else:
-            in_recovery = False
             recovery_bars = 0
 
-        rec = _safe_div(equity - trough, peak - trough, default=1.0) if peak > trough else 1.0
+        rec = (
+            _safe_div(equity - trough, peak - trough, default=1.0)
+            if peak > trough
+            else 1.0
+        )
         exit_ts = ordered[idx].get("exit_time")
         equity_points.append(round(equity, 2))
         balance_points.append(round(equity, 2))
@@ -272,7 +279,9 @@ def _pnls(trades: list[dict[str, Any]]) -> list[float]:
     return [_f(t.get("profit_loss")) or 0.0 for t in trades]
 
 
-def _wins_losses(trades: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _wins_losses(
+    trades: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     wins = [t for t in trades if (_f(t.get("profit_loss")) or 0.0) > 0]
     losses = [t for t in trades if (_f(t.get("profit_loss")) or 0.0) < 0]
     return wins, losses
@@ -339,7 +348,13 @@ def _risk_of_ruin(
 
 def _bucket_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
-        return {"count": 0, "wins": 0, "win_rate": None, "total_pnl": 0.0, "avg_pnl": 0.0}
+        return {
+            "count": 0,
+            "wins": 0,
+            "win_rate": None,
+            "total_pnl": 0.0,
+            "avg_pnl": 0.0,
+        }
     wins = sum(1 for r in rows if (_f(r.get("profit_loss")) or 0.0) > 0)
     pnls = _pnls(rows)
     return {
@@ -351,12 +366,20 @@ def _bucket_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _best_worst_bucket(buckets: dict[str, dict[str, Any]]) -> tuple[str | None, str | None]:
+def _best_worst_bucket(
+    buckets: dict[str, dict[str, Any]],
+) -> tuple[str | None, str | None]:
     eligible = {k: v for k, v in buckets.items() if v.get("count", 0) >= MIN_BUCKET}
     if not eligible:
         return None, None
-    best = max(eligible.items(), key=lambda kv: (kv[1].get("total_pnl", 0.0), kv[1].get("win_rate") or 0))[0]
-    worst = min(eligible.items(), key=lambda kv: (kv[1].get("total_pnl", 0.0), kv[1].get("win_rate") or 0))[0]
+    best = max(
+        eligible.items(),
+        key=lambda kv: (kv[1].get("total_pnl", 0.0), kv[1].get("win_rate") or 0),
+    )[0]
+    worst = min(
+        eligible.items(),
+        key=lambda kv: (kv[1].get("total_pnl", 0.0), kv[1].get("win_rate") or 0),
+    )[0]
     return best, worst
 
 
@@ -394,10 +417,22 @@ def section_dashboard(
         "gross_profit": round(gross_profit, 2),
         "gross_loss": round(gross_loss, 2),
         "net_profit": round(net_profit, 2),
-        "return_today_pct": _return_pct(_period_pnl(trades, since=now.replace(hour=0, minute=0, second=0, microsecond=0)), base or starting_equity),
-        "return_week_pct": _return_pct(_period_pnl(trades, since=now - timedelta(days=7)), base or starting_equity),
-        "return_month_pct": _return_pct(_period_pnl(trades, since=now - timedelta(days=30)), base or starting_equity),
-        "return_year_pct": _return_pct(_period_pnl(trades, since=now - timedelta(days=365)), base or starting_equity),
+        "return_today_pct": _return_pct(
+            _period_pnl(
+                trades, since=now.replace(hour=0, minute=0, second=0, microsecond=0)
+            ),
+            base or starting_equity,
+        ),
+        "return_week_pct": _return_pct(
+            _period_pnl(trades, since=now - timedelta(days=7)), base or starting_equity
+        ),
+        "return_month_pct": _return_pct(
+            _period_pnl(trades, since=now - timedelta(days=30)), base or starting_equity
+        ),
+        "return_year_pct": _return_pct(
+            _period_pnl(trades, since=now - timedelta(days=365)),
+            base or starting_equity,
+        ),
         "trade_count": len(trades),
     }
 
@@ -414,7 +449,7 @@ def section_risk(
     avg_loss = _safe_div(abs(sum(_pnls(losses))), len(losses))
     payoff = _safe_div(avg_win, avg_loss)
     net = equity_path.get("net_profit") or 0.0
-    max_dd_pct = equity_path.get("max_drawdown_pct") or 0.0
+    equity_path.get("max_drawdown_pct") or 0.0
     capital_efficiency = _safe_div(net, starting_equity)
     if capital_efficiency is not None:
         capital_efficiency = round(capital_efficiency * 100.0, 4)
@@ -461,7 +496,7 @@ def section_performance(
     elif win_rate is not None and avg_win is not None and not losses:
         expectancy = win_rate * avg_win
     payoff = _safe_div(avg_win, avg_loss)
-    rs = [_f(t.get("risk_reward")) for t in trades if _f(t.get("risk_reward")) is not None]
+    rs = [value for t in trades if (value := _f(t.get("risk_reward"))) is not None]
     avg_r = round(statistics.mean(rs), 4) if rs else None
     returns = equity_path.get("per_trade_returns") or []
     sharpe = _sharpe(returns)
@@ -501,9 +536,11 @@ def section_performance(
 
 
 def section_behavior(trades: list[dict[str, Any]]) -> dict[str, Any]:
-    holds = [_f(t.get("holding_time_sec")) for t in trades if _f(t.get("holding_time_sec")) is not None]
-    spreads = [_f(t.get("spread")) for t in trades if _f(t.get("spread")) is not None]
-    atrs = [_f(t.get("atr")) for t in trades if _f(t.get("atr")) is not None]
+    holds = [
+        value for t in trades if (value := _f(t.get("holding_time_sec"))) is not None
+    ]
+    spreads = [value for t in trades if (value := _f(t.get("spread"))) is not None]
+    atrs = [value for t in trades if (value := _f(t.get("atr"))) is not None]
 
     session_buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for t in trades:
@@ -541,7 +578,9 @@ def section_behavior(trades: list[dict[str, Any]]) -> dict[str, Any]:
 
     return {
         "average_holding_time_sec": round(statistics.mean(holds), 1) if holds else None,
-        "median_holding_time_sec": round(statistics.median(holds), 1) if holds else None,
+        "median_holding_time_sec": (
+            round(statistics.median(holds), 1) if holds else None
+        ),
         "best_holding_time_sec": round(min(holds), 1) if holds else None,
         "worst_holding_time_sec": round(max(holds), 1) if holds else None,
         "trades_per_day": tpd,
@@ -553,7 +592,9 @@ def section_behavior(trades: list[dict[str, Any]]) -> dict[str, Any]:
         "active_weeks": len(weeks),
         "session_performance": session_stats,
         "average_session_performance": session_stats,
-        "average_spread_at_entry": round(statistics.mean(spreads), 4) if spreads else None,
+        "average_spread_at_entry": (
+            round(statistics.mean(spreads), 4) if spreads else None
+        ),
         "average_atr_at_entry": round(statistics.mean(atrs), 4) if atrs else None,
     }
 
@@ -642,12 +683,18 @@ def section_equity_analytics(
         "timestamps": equity_path.get("timestamps"),
         "rolling_window": window,
         "rolling_win_rate": _rolling_metric(trades, window=window, metric="win_rate"),
-        "rolling_profit_factor": _rolling_metric(trades, window=window, metric="profit_factor"),
-        "rolling_expectancy": _rolling_metric(trades, window=window, metric="expectancy"),
+        "rolling_profit_factor": _rolling_metric(
+            trades, window=window, metric="profit_factor"
+        ),
+        "rolling_expectancy": _rolling_metric(
+            trades, window=window, metric="expectancy"
+        ),
     }
 
 
-def _score_component(value: float | None, *, good: float, warn: float, higher_is_better: bool = True) -> float:
+def _score_component(
+    value: float | None, *, good: float, warn: float, higher_is_better: bool = True
+) -> float:
     if value is None:
         return 50.0
     if higher_is_better:
@@ -700,16 +747,28 @@ def section_health_score(
             good=5.0,
             warn=0.0,
         ),
-        "analytics_integrity": 100.0 if equity_path.get("trade_count", 0) >= MIN_BUCKET else 60.0,
+        "analytics_integrity": (
+            100.0 if equity_path.get("trade_count", 0) >= MIN_BUCKET else 60.0
+        ),
     }
     if behavior.get("session_performance"):
         sessions = behavior["session_performance"]
         if isinstance(sessions, dict) and sessions:
-            avg_wr = statistics.mean(
-                s.get("win_rate") or 0.0 for s in sessions.values() if s.get("count", 0) >= MIN_BUCKET
-            ) if any(s.get("count", 0) >= MIN_BUCKET for s in sessions.values()) else 50.0
+            avg_wr = (
+                statistics.mean(
+                    s.get("win_rate") or 0.0
+                    for s in sessions.values()
+                    if s.get("count", 0) >= MIN_BUCKET
+                )
+                if any(s.get("count", 0) >= MIN_BUCKET for s in sessions.values())
+                else 50.0
+            )
             components["market_adaptation"] = round(
-                (components["market_adaptation"] + _score_component(avg_wr, good=55.0, warn=45.0)) / 2.0,
+                (
+                    components["market_adaptation"]
+                    + _score_component(avg_wr, good=55.0, warn=45.0)
+                )
+                / 2.0,
                 1,
             )
 
@@ -750,7 +809,10 @@ def _infer_starting_equity(
     if balance is not None:
         inferred = balance - net
         if inferred > 0:
-            return round(inferred, 2), {"method": "balance_minus_closed_pnl", "notes": notes}
+            return round(inferred, 2), {
+                "method": "balance_minus_closed_pnl",
+                "notes": notes,
+            }
 
     notes.append(f"starting_equity_seeded_{DEFAULT_STARTING_EQUITY}")
     return DEFAULT_STARTING_EQUITY, {"method": "default_seed", "notes": notes}
@@ -774,7 +836,9 @@ def analyze_portfolio(
         explicit=starting_equity,
     )
     eq_path = _equity_path(trades, starting_equity=seed)
-    dashboard = section_dashboard(trades, account=account, equity_path=eq_path, starting_equity=seed)
+    dashboard = section_dashboard(
+        trades, account=account, equity_path=eq_path, starting_equity=seed
+    )
     risk = section_risk(trades, equity_path=eq_path, starting_equity=seed)
     performance = section_performance(trades, equity_path=eq_path, starting_equity=seed)
     behavior = section_behavior(trades)
@@ -800,8 +864,11 @@ def analyze_portfolio(
     reports: dict[str, Any] = {}
     if include_reports:
         reports = {
-            period: build_report(report_seed, period=period)  # type: ignore[arg-type]
-            for period in ("daily", "weekly", "monthly", "quarterly", "yearly")
+            period: build_report(report_seed, period=period)
+            for period in cast(
+                "tuple[ReportPeriod, ...]",
+                ("daily", "weekly", "monthly", "quarterly", "yearly"),
+            )
         }
 
     return {
@@ -811,7 +878,7 @@ def analyze_portfolio(
         "symbol": GOLD_SYMBOL,
         "mutates_engines": False,
         "analytics_only": True,
-        "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds": True,
+        "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds": True,  # noqa: E501
         "observed_at": datetime.now(UTC).isoformat(),
         "starting_equity": seed,
         "starting_equity_inference": seed_info,
@@ -832,7 +899,9 @@ def analyze_portfolio(
     }
 
 
-def _filter_trades_since(trades: list[dict[str, Any]], since: datetime) -> list[dict[str, Any]]:
+def _filter_trades_since(
+    trades: list[dict[str, Any]], since: datetime
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for t in trades:
         ts = _parse_ts(t.get("exit_time") or t.get("entry_time"))
@@ -860,46 +929,79 @@ def build_report(
     if not all_trades and payload.get("trade_count"):
         all_trades = payload.get("closed_trades") or []
     subset = _filter_trades_since(all_trades, since)
-    account = payload.get("account") if isinstance(payload.get("account"), dict) else None
+    account = (
+        payload.get("account") if isinstance(payload.get("account"), dict) else None
+    )
     starting = payload.get("starting_equity")
     seed = float(starting) if starting is not None else None
     analysis = analyze_portfolio(
         subset,
         account=account,
         starting_equity=seed,
-        source_meta=payload.get("source") if isinstance(payload.get("source"), dict) else {},
+        source_meta=(
+            payload.get("source") if isinstance(payload.get("source"), dict) else {}
+        ),
         strategy_id=str(payload.get("strategy_id") or "production"),
         include_reports=False,
     )
-    sections = analysis.get("sections") if isinstance(analysis.get("sections"), dict) else {}
-    health = sections.get("health_score") if isinstance(sections.get("health_score"), dict) else {}
-    perf = sections.get("performance") if isinstance(sections.get("performance"), dict) else {}
-    dash = sections.get("dashboard") if isinstance(sections.get("dashboard"), dict) else {}
+    sections_value = analysis.get("sections")
+    sections: dict[str, Any] = (
+        sections_value if isinstance(sections_value, dict) else {}
+    )
+    health_value = sections.get("health_score")
+    health: dict[str, Any] = health_value if isinstance(health_value, dict) else {}
+    perf_value = sections.get("performance")
+    perf: dict[str, Any] = perf_value if isinstance(perf_value, dict) else {}
+    dash_value = sections.get("dashboard")
+    dash: dict[str, Any] = dash_value if isinstance(dash_value, dict) else {}
     net = perf.get("net_profit", dash.get("net_profit", 0))
     wr = perf.get("win_rate_pct")
     wr_text = f"{wr}%" if wr is not None else "—"
-    risk = sections.get("risk") if isinstance(sections.get("risk"), dict) else {}
-    behavior = sections.get("behavior") if isinstance(sections.get("behavior"), dict) else {}
-    time_sec = sections.get("time") if isinstance(sections.get("time"), dict) else {}
+    risk_value = sections.get("risk")
+    risk: dict[str, Any] = risk_value if isinstance(risk_value, dict) else {}
+    behavior_value = sections.get("behavior")
+    behavior: dict[str, Any] = (
+        behavior_value if isinstance(behavior_value, dict) else {}
+    )
+    time_value = sections.get("time")
+    time_sec: dict[str, Any] = time_value if isinstance(time_value, dict) else {}
     executive_summary = (
-        f"{health.get('label', 'Portfolio')} — {len(subset)} trades in {period} window; "
+        f"{health.get('label', 'Portfolio')} — {len(subset)} trades in {period} window; "  # noqa: E501
         f"net P/L {net}; win rate {wr_text}."
     )
     recommendations: list[str] = []
     status = str(health.get("status") or "YELLOW")
     if status == "RED":
-        recommendations.append("Attention required — review drawdown, expectancy, and session concentration.")
+        recommendations.append(
+            "Attention required — review drawdown, expectancy, and session concentration."  # noqa: E501
+        )
     elif status == "YELLOW":
-        recommendations.append("Monitor — track recovery factor and rolling win rate before expanding risk.")
+        recommendations.append(
+            "Monitor — track recovery factor and rolling win rate before expanding risk."  # noqa: E501
+        )
     else:
-        recommendations.append("Healthy — maintain current risk discipline; continue read-only surveillance.")
+        recommendations.append(
+            "Healthy — maintain current risk discipline; continue read-only surveillance."  # noqa: E501
+        )
     if (risk.get("max_drawdown_pct") or 0) > 15:
-        recommendations.append("Max drawdown elevated — keep position sizing conservative.")
+        recommendations.append(
+            "Max drawdown elevated — keep position sizing conservative."
+        )
     if (perf.get("profit_factor") or 0) < 1.0 and len(subset) >= 5:
-        recommendations.append("Profit factor below 1.0 in window — investigate losing clusters by hour/weekday.")
+        recommendations.append(
+            "Profit factor below 1.0 in window — investigate losing clusters by hour/weekday."  # noqa: E501
+        )
 
-    best_hour = (time_sec.get("hour") or {}).get("best") if isinstance(time_sec.get("hour"), dict) else None
-    worst_hour = (time_sec.get("hour") or {}).get("worst") if isinstance(time_sec.get("hour"), dict) else None
+    best_hour = (
+        (time_sec.get("hour") or {}).get("best")
+        if isinstance(time_sec.get("hour"), dict)
+        else None
+    )
+    worst_hour = (
+        (time_sec.get("hour") or {}).get("worst")
+        if isinstance(time_sec.get("hour"), dict)
+        else None
+    )
 
     return {
         "period": period,
@@ -941,7 +1043,7 @@ def build_report(
         },
         "recommendations": recommendations,
         "operational_notes": [
-            "Read-only portfolio analytics — does not modify strategy, risk, safety, OMS, execution, auto trading, or thresholds.",
+            "Read-only portfolio analytics — does not modify strategy, risk, safety, OMS, execution, auto trading, or thresholds.",  # noqa: E501
             f"Deal window trades analyzed: {len(subset)}.",
             f"Health: {health.get('summary') or status}.",
         ],
@@ -960,7 +1062,9 @@ def build_institutional_portfolio_analytics(
 
     cycles: list[dict[str, Any]] = []
     try:
-        from app.application.services.strategy_diagnostics import get_strategy_diagnostics_store
+        from app.application.services.strategy_diagnostics import (
+            get_strategy_diagnostics_store,
+        )
 
         snap = get_strategy_diagnostics_store().snapshot(limit=100)
         cycles = list(snap.get("cycles") or [])
@@ -994,29 +1098,29 @@ def report_to_markdown(payload: dict[str, Any]) -> str:
         "# Institutional Portfolio Analytics",
         "",
         f"- Observed: `{payload.get('observed_at')}`",
-        f"- Strategy: `{payload.get('strategy_id')}` · Symbol: `{payload.get('symbol')}`",
+        f"- Strategy: `{payload.get('strategy_id')}` · Symbol: `{payload.get('symbol')}`",  # noqa: E501
         "- Read-only analytics — engines unchanged",
         f"- Trades: **{payload.get('trade_count', 0)}**",
         "",
         "## Dashboard",
         "",
         f"- Balance: **{dash.get('balance')}** · Equity: **{dash.get('equity')}**",
-        f"- HWM: **{dash.get('high_water_mark')}** · LWM: **{dash.get('low_water_mark')}**",
-        f"- Net P/L: **{dash.get('net_profit')}** (closed **{dash.get('closed_pnl')}**)",
+        f"- HWM: **{dash.get('high_water_mark')}** · LWM: **{dash.get('low_water_mark')}**",  # noqa: E501
+        f"- Net P/L: **{dash.get('net_profit')}** (closed **{dash.get('closed_pnl')}**)",  # noqa: E501
         "",
         "## Risk",
         "",
-        f"- Max DD: **{risk.get('max_drawdown_pct')}%** · Current DD: **{risk.get('current_drawdown_pct')}%**",
-        f"- Recovery factor: **{risk.get('recovery_factor')}** · Ulcer: **{risk.get('ulcer_index')}**",
+        f"- Max DD: **{risk.get('max_drawdown_pct')}%** · Current DD: **{risk.get('current_drawdown_pct')}%**",  # noqa: E501
+        f"- Recovery factor: **{risk.get('recovery_factor')}** · Ulcer: **{risk.get('ulcer_index')}**",  # noqa: E501
         "",
         "## Performance",
         "",
-        f"- Win rate: **{perf.get('win_rate_pct')}%** · PF: **{perf.get('profit_factor')}**",
-        f"- Expectancy: **{perf.get('expectancy')}** · Sharpe: **{perf.get('sharpe_ratio')}**",
+        f"- Win rate: **{perf.get('win_rate_pct')}%** · PF: **{perf.get('profit_factor')}**",  # noqa: E501
+        f"- Expectancy: **{perf.get('expectancy')}** · Sharpe: **{perf.get('sharpe_ratio')}**",  # noqa: E501
         "",
         "## Health",
         "",
-        f"- Score: **{health.get('score')}** · Status: **{health.get('status')}** ({health.get('label')})",
+        f"- Score: **{health.get('score')}** · Status: **{health.get('status')}** ({health.get('label')})",  # noqa: E501
         "",
     ]
     return "\n".join(lines)
@@ -1072,7 +1176,17 @@ def analytics_to_csv(payload: dict[str, Any]) -> str:
                     }
                 )
 
-    fields = ["section", "bucket_kind", "bucket", "metric", "value", "status", "count", "win_rate", "total_pnl"]
+    fields = [
+        "section",
+        "bucket_kind",
+        "bucket",
+        "metric",
+        "value",
+        "status",
+        "count",
+        "win_rate",
+        "total_pnl",
+    ]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()

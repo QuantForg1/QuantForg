@@ -72,9 +72,9 @@ def review_execution_quality(
     if inp.sample_note:
         reasons.append(inp.sample_note)
 
-    overall = (
-        sum(present, Decimal("0")) / Decimal(len(present))
-    ).quantize(Decimal("0.01"))
+    overall = (sum(present, Decimal("0")) / Decimal(len(present))).quantize(
+        Decimal("0.01")
+    )
 
     checks = [
         ("entry", inp.entry_quality, config.min_entry_quality),

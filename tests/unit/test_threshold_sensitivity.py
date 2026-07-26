@@ -50,9 +50,7 @@ class TestThresholdSensitivity:
         assert by_gate[60]["would_execute_count"] == 3
 
     def test_report_locks(self) -> None:
-        report = build_threshold_sensitivity_report(
-            [{"quality": 70, "confluence": 70}]
-        )
+        report = build_threshold_sensitivity_report([{"quality": 70, "confluence": 70}])
         assert report["never_modifies_thresholds"] is True
         assert report["never_modifies_live_engine"] is True
         assert report["statistics_only"] is True

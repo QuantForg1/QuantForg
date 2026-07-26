@@ -16,8 +16,8 @@ from app.domain.institutional_trading.production_hardening.learning import (
     LearningWeightStore,
 )
 from app.domain.institutional_trading.production_hardening.lifecycle import (
-    ExecutionLifecycleStore,
     LIFECYCLE_STAGES,
+    ExecutionLifecycleStore,
 )
 from app.domain.institutional_trading.production_hardening.position_recovery import (
     recover_positions_from_mt5,
@@ -134,7 +134,7 @@ def test_retrying_oms_never_retries_permanent() -> None:
 def test_learning_weights_gradual_and_bounded(tmp_path) -> None:
     store = LearningWeightStore()
     store._path = tmp_path / "weights.json"
-    store.multipliers = {k: 1.0 for k in store.multipliers}
+    store.multipliers = dict.fromkeys(store.multipliers, 1.0)
     store.observe_trade(win=True, factor_scores={"confidence": 80, "trend": 70})
     assert store.multipliers["confidence"] > 1.0
     base = {"confidence": 20, "trend": 15, "momentum": 10}
@@ -169,12 +169,13 @@ def test_secrets_audit_never_exposes_values(monkeypatch) -> None:
 
 @pytest.mark.unit
 def test_position_recovery_skips_duplicate_tickets(tmp_path, monkeypatch) -> None:
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
     from app.domain.institutional_trading.management.models import (
         ManagedPosition,
         PositionLifecycleState,
     )
-    from decimal import Decimal
-    from datetime import UTC, datetime
 
     existing = ManagedPosition(
         ticket=42,
@@ -190,7 +191,7 @@ def test_position_recovery_skips_duplicate_tickets(tmp_path, monkeypatch) -> Non
         be_moved=True,
         trailing_active=True,
     )
-    engine = SimpleNamespace(_positions={42: existing}, get=lambda t: existing)
+    engine = SimpleNamespace(_positions={42: existing}, get=lambda _t: existing)
 
     class Pos:
         ticket = 42
@@ -207,7 +208,7 @@ def test_position_recovery_skips_duplicate_tickets(tmp_path, monkeypatch) -> Non
 
     monkeypatch.setattr(
         "app.application.services.mt5_position_truth.force_sync_positions",
-        lambda *a, **k: Sync(),
+        lambda *_a, **_k: Sync(),
     )
     monkeypatch.setattr(
         "app.domain.institutional_trading.production_hardening.position_recovery._state_path",

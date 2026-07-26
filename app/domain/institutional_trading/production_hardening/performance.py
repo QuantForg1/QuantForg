@@ -29,7 +29,9 @@ class LivePerformanceMonitor:
         with self._lock:
             self.orders_submitted += 1
 
-    def record_fill(self, *, latency_ms: float | None = None, slippage: float | None = None) -> None:
+    def record_fill(
+        self, *, latency_ms: float | None = None, slippage: float | None = None
+    ) -> None:
         with self._lock:
             self.orders_filled += 1
             if latency_ms is not None:
@@ -95,7 +97,9 @@ class LivePerformanceMonitor:
                 "orders_filled": self.orders_filled,
                 "orders_rejected": self.orders_rejected,
                 "retry_count": self.retry_count,
-                "avg_execution_latency_ms": round(avg_lat, 3) if avg_lat is not None else None,
+                "avg_execution_latency_ms": (
+                    round(avg_lat, 3) if avg_lat is not None else None
+                ),
                 "avg_slippage": round(avg_slip, 4) if avg_slip is not None else None,
                 "avg_spread": round(avg_spread, 4) if avg_spread is not None else None,
                 "win_rate": win_rate,

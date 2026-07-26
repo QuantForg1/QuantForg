@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -55,7 +56,7 @@ class AsiConfig:
         self.invent_statistics = False
         self.promise_profitability = False
 
-    def update(self, updates: dict[str, object]) -> AsiConfig:
+    def update(self, updates: dict[str, Any]) -> AsiConfig:
         locked = {
             "allow_order_send",
             "allow_bypass_risk",
@@ -73,7 +74,7 @@ class AsiConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                flags = dict(data["feature_flags"])
                 for fk, fv in value.items():
                     if isinstance(fv, bool):
                         flags[str(fk)] = fv
@@ -89,10 +90,10 @@ class AsiConfig:
             coach_lookback_days=int(data["coach_lookback_days"]),
             max_history=int(data["max_history"]),
             max_opportunity_db=int(data["max_opportunity_db"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=dict(data["feature_flags"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

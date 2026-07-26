@@ -1,4 +1,4 @@
-"""Institutional Research Platform v10 — config."""
+"""Institutional Research Platform v10 - config."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class ResearchPlatformConfig:
             "recommended_live_days": self.recommended_live_days,
             "note": (
                 "Research never modifies live trading automatically. "
-                "Prefer demo/low-risk live for 2–4 weeks before promotions."
+                "Prefer demo/low-risk live for 2-4 weeks before promotions."
             ),
         }
 

@@ -27,7 +27,7 @@ from app.domain.institutional_trading.risk_lock_override import (
 def override_on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.domain.institutional_trading.risk_lock_override.risk_lock_override_enabled",
-        lambda settings=None: True,
+        lambda _settings=None: True,
     )
 
 
@@ -35,7 +35,7 @@ def override_on(monkeypatch: pytest.MonkeyPatch) -> None:
 def override_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.domain.institutional_trading.risk_lock_override.risk_lock_override_enabled",
-        lambda settings=None: False,
+        lambda _settings=None: False,
     )
 
 

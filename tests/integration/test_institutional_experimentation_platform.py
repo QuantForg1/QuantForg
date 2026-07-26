@@ -37,9 +37,7 @@ def test_service_dashboard_flags(
     iep = InstitutionalExperimentationPlatform(
         store=IepStore(path=tmp_path / "iep.json")
     )
-    monkeypatch.setattr(
-        "app.domain.institutional_experimentation_platform._IEP", iep
-    )
+    monkeypatch.setattr("app.domain.institutional_experimentation_platform._IEP", iep)
     monkeypatch.setattr(svc, "get_iep", lambda: iep)
     monkeypatch.setattr(
         "app.domain.institutional_experimentation_platform.platform.gather_experiment_sources",

@@ -81,9 +81,7 @@ class NetworkIncident:
             "severity": self.severity.value,
             "kind": self.kind,
             "component": self.component,
-            "resolved_at": (
-                self.resolved_at.isoformat() if self.resolved_at else None
-            ),
+            "resolved_at": (self.resolved_at.isoformat() if self.resolved_at else None),
             "reconnect_attempts_logged": self.reconnect_attempts_logged,
         }
 
@@ -295,8 +293,8 @@ class NetworkIncidentTracker:
                 if inc.id != open_id:
                     continue
                 duration = (
-                    (moment - (started or inc.timestamp)).total_seconds() * 1000.0
-                )
+                    moment - (started or inc.timestamp)
+                ).total_seconds() * 1000.0
                 recent = self._count_recent_failures(component=component, now=moment)
                 # recovered single → INFO even if kind is dns
                 severity = self.classify_severity(
@@ -379,8 +377,7 @@ class NetworkIncidentTracker:
                             duration_ms=inc.duration_ms,
                             id=inc.id,
                             resolved_at=inc.resolved_at,
-                            reconnect_attempts_logged=inc.reconnect_attempts_logged
-                            + 1,
+                            reconnect_attempts_logged=inc.reconnect_attempts_logged + 1,
                         )
                         break
         logger.info(
@@ -462,7 +459,7 @@ class NetworkIncidentTracker:
                 retry_count=retries,
                 latency_ms=latency,
             )
-        except Exception as exc:  # noqa: BLE001 — observability must not break path
+        except Exception as exc:
             logger.debug("network_observe_upstream_failed: %s", exc)
             return None
 
@@ -483,9 +480,7 @@ class NetworkIncidentTracker:
             now = datetime.now(UTC)
             cutoff = now - timedelta(hours=24)
             dns_24h = sum(
-                1
-                for i in self._incidents
-                if i.kind == "dns" and i.timestamp >= cutoff
+                1 for i in self._incidents if i.kind == "dns" and i.timestamp >= cutoff
             )
             network_24h = sum(1 for i in self._incidents if i.timestamp >= cutoff)
             gw_total = self._gateway_up_seconds + self._gateway_down_seconds

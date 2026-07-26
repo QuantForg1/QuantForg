@@ -48,12 +48,8 @@ def _full_input(**overrides: object) -> MarketIntelligenceInput:
             StrategySignal("b", True, "buy", Decimal("70")),
         ),
         opportunities=(
-            OpportunityCandidate(
-                "s1", "a", "buy", Decimal("80"), Decimal("82")
-            ),
-            OpportunityCandidate(
-                "s2", "b", "buy", Decimal("70"), Decimal("74")
-            ),
+            OpportunityCandidate("s1", "a", "buy", Decimal("80"), Decimal("82")),
+            OpportunityCandidate("s2", "b", "buy", Decimal("70"), Decimal("74")),
         ),
         execution_quality=ExecutionQualityInput(
             entry_quality=Decimal("70"),
@@ -107,9 +103,7 @@ def test_regime_detection_types() -> None:
     )
     assert "high_volatility" in [r.value for r in high.regimes]
 
-    news = detect_market_regime(
-        cfg, RegimeInput(trend="down", news_driven=True)
-    )
+    news = detect_market_regime(cfg, RegimeInput(trend="down", news_driven=True))
     assert "news_driven" in [r.value for r in news.regimes]
 
     empty = detect_market_regime(cfg, RegimeInput())

@@ -79,7 +79,9 @@ class QuantKnowledgeGraph:
             "edges": g.get("edges"),
         }
 
-    def search(self, *, q: str | None = None, node_type: str | None = None, limit: int = 50) -> dict[str, Any]:
+    def search(
+        self, *, q: str | None = None, node_type: str | None = None, limit: int = 50
+    ) -> dict[str, Any]:
         g = self.graph()
         hits = search_knowledge(g, q=q, node_type=node_type, limit=limit)
         return {"matches": hits, "count": len(hits), "isolation": self.isolation}
@@ -88,7 +90,10 @@ class QuantKnowledgeGraph:
         return {**relationships_for(self.graph(), node_id), "isolation": self.isolation}
 
     def dependencies(self, node_id: str, *, depth: int = 3) -> dict[str, Any]:
-        return {**dependency_viewer(self.graph(), node_id, depth=depth), "isolation": self.isolation}
+        return {
+            **dependency_viewer(self.graph(), node_id, depth=depth),
+            "isolation": self.isolation,
+        }
 
     def evidence(self, node_id: str) -> dict[str, Any]:
         return {**evidence_chain(self.graph(), node_id), "isolation": self.isolation}
@@ -100,7 +105,10 @@ class QuantKnowledgeGraph:
         }
 
     def lineage(self, node_id: str) -> dict[str, Any]:
-        return {**historical_lineage(self.graph(), node_id), "isolation": self.isolation}
+        return {
+            **historical_lineage(self.graph(), node_id),
+            "isolation": self.isolation,
+        }
 
     def impact(self, node_id: str) -> dict[str, Any]:
         return {**impact_analysis(self.graph(), node_id), "isolation": self.isolation}
@@ -108,7 +116,9 @@ class QuantKnowledgeGraph:
     def root_cause(self, node_id: str) -> dict[str, Any]:
         return {**root_cause_graph(self.graph(), node_id), "isolation": self.isolation}
 
-    def query_for_ai(self, question: str, *, node_id: str | None = None) -> dict[str, Any]:
+    def query_for_ai(
+        self, question: str, *, node_id: str | None = None
+    ) -> dict[str, Any]:
         """Public entry for AQS / AQC — read-only graph answers."""
         return {
             **ai_query(self.graph(), question, node_id=node_id),

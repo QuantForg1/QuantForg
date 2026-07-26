@@ -52,7 +52,7 @@ def test_service_dashboard_and_approve(
                     "approvals": [],
                 },
             },
-            "availability": {s: False for s in INTEGRATIONS},
+            "availability": dict.fromkeys(INTEGRATIONS, False),
             "source_count": 0,
             "read_only": True,
         },

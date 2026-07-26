@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 PANEL_IDS: tuple[str, ...] = (
     "replay_studio",
@@ -52,7 +53,7 @@ class IntelligencePlatformConfig:
         )
     )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "product": self.product,
             "version": self.version,

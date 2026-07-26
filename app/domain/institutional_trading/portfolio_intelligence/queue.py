@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -65,12 +66,12 @@ class OpportunityQueue:
             if isinstance(row, dict) and state.open_symbols:
                 vals = []
                 for peer in state.open_symbols:
-                    try:
+                    with contextlib.suppress(Exception):
                         vals.append(abs(float(row.get(peer, 0))))
-                    except Exception:
-                        pass
                 corr = max(vals) if vals else 0.0
-            impact = round((score / 100.0) * (risk_budget_pct / 100.0) * (1.0 - corr), 4)
+            impact = round(
+                (score / 100.0) * (risk_budget_pct / 100.0) * (1.0 - corr), 4
+            )
             est_profit = round(rr * conf / 100.0 * risk_budget_pct, 3)
             items.append(
                 QueueItem(

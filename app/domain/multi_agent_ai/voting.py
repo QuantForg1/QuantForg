@@ -34,9 +34,7 @@ class VoteTally:
         }
 
 
-def tally_votes(
-    outputs: list[AgentOutput], config: MultiAgentConfig
-) -> VoteTally:
+def tally_votes(outputs: list[AgentOutput], config: MultiAgentConfig) -> VoteTally:
     approve = Decimal("0")
     hold = Decimal("0")
     reject = Decimal("0")
@@ -93,9 +91,7 @@ def tally_votes(
             )
 
     if not quorum_met:
-        reasons.append(
-            f"Quorum not met ({active}/{config.quorum_agents}) — HOLD"
-        )
+        reasons.append(f"Quorum not met ({active}/{config.quorum_agents}) — HOLD")
         decision: Vote = "HOLD"
     elif reject >= approve and reject >= hold and reject > 0:
         decision = "REJECT"

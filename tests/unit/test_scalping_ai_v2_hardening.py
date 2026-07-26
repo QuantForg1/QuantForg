@@ -148,18 +148,22 @@ def test_audit_contains_correlation() -> None:
 def test_restart_recovery_plan() -> None:
     system = ScalpingAiV2()
     result = system.run_cycle(
-        _rich(execution_identity="restart_1", restart=True, health={
-            "execution_loop": True,
-            "broker_connection": True,
-            "gateway": True,
-            "database": True,
-            "analytics": True,
-            "risk_engine": True,
-            "safety_engine": True,
-            "decision_engine": True,
-            "restart": True,
-            "analytics_metrics": {"win_rate": 50},
-        })
+        _rich(
+            execution_identity="restart_1",
+            restart=True,
+            health={
+                "execution_loop": True,
+                "broker_connection": True,
+                "gateway": True,
+                "database": True,
+                "analytics": True,
+                "risk_engine": True,
+                "safety_engine": True,
+                "decision_engine": True,
+                "restart": True,
+                "analytics_metrics": {"win_rate": 50},
+            },
+        )
     )
     rr = result["modules"]["restart_recovery"]
     assert rr["recommendation"] == "Recover"

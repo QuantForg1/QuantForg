@@ -40,13 +40,9 @@ class AiTradingRobotService:
                         symbol=str(row.get("symbol") or "XAUUSD"),
                         side=str(row.get("side") or "buy"),
                         pnl=_dec(row.get("pnl") or row.get("profit")),
-                        session=(
-                            str(row["session"]) if row.get("session") else None
-                        ),
+                        session=(str(row["session"]) if row.get("session") else None),
                         strategy_id=(
-                            str(row["strategy_id"])
-                            if row.get("strategy_id")
-                            else None
+                            str(row["strategy_id"]) if row.get("strategy_id") else None
                         ),
                         r_multiple=(
                             _dec(row["r_multiple"])
@@ -54,9 +50,7 @@ class AiTradingRobotService:
                             else None
                         ),
                         exit_reason=(
-                            str(row["exit_reason"])
-                            if row.get("exit_reason")
-                            else None
+                            str(row["exit_reason"]) if row.get("exit_reason") else None
                         ),
                     )
                 )
@@ -80,21 +74,15 @@ class AiTradingRobotService:
             signal_present=bool(payload.get("signal_present", True)),
             strategy_id=str(payload.get("strategy_id") or "default"),
             strategy_valid=bool(payload.get("strategy_valid", True)),
-            technique=(
-                str(payload["technique"]) if payload.get("technique") else None
-            ),
+            technique=(str(payload["technique"]) if payload.get("technique") else None),
             equity=_dec(payload.get("equity"), "10000"),
             stop_distance=_dec(payload.get("stop_distance"), "5"),
             spread=(
-                _dec(payload["spread"])
-                if payload.get("spread") is not None
-                else None
+                _dec(payload["spread"]) if payload.get("spread") is not None else None
             ),
             atr=_dec(payload["atr"]) if payload.get("atr") is not None else None,
             price=(
-                _dec(payload["price"])
-                if payload.get("price") is not None
-                else None
+                _dec(payload["price"]) if payload.get("price") is not None else None
             ),
             daily_drawdown_pct=_dec(payload.get("daily_drawdown_pct")),
             consecutive_losses=int(payload.get("consecutive_losses") or 0),
@@ -117,9 +105,7 @@ class AiTradingRobotService:
             closed_pnls=closed_pnls,
             r_multiples=r_multiples,
             journal_trades=tuple(journal),
-            open_side=(
-                str(payload["open_side"]) if payload.get("open_side") else None
-            ),
+            open_side=(str(payload["open_side"]) if payload.get("open_side") else None),
             open_unrealized_pnl=(
                 _dec(payload["open_unrealized_pnl"])
                 if payload.get("open_unrealized_pnl") is not None
@@ -143,13 +129,9 @@ class AiTradingRobotService:
                         symbol=str(row.get("symbol") or "XAUUSD"),
                         side=str(row.get("side") or "buy"),
                         pnl=_dec(row.get("pnl") or row.get("profit")),
-                        session=(
-                            str(row["session"]) if row.get("session") else None
-                        ),
+                        session=(str(row["session"]) if row.get("session") else None),
                         strategy_id=(
-                            str(row["strategy_id"])
-                            if row.get("strategy_id")
-                            else None
+                            str(row["strategy_id"]) if row.get("strategy_id") else None
                         ),
                     )
                 )

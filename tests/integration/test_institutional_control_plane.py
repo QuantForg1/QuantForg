@@ -40,7 +40,7 @@ def test_service_dashboard_flags(
         "app.domain.institutional_control_plane.platform.gather_control_plane_sources",
         lambda: {
             "sources": {s: {} for s in SUBSYSTEMS},
-            "availability": {s: False for s in SUBSYSTEMS},
+            "availability": dict.fromkeys(SUBSYSTEMS, False),
             "source_count": 0,
             "read_only": True,
         },

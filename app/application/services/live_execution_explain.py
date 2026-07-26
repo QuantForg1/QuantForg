@@ -233,11 +233,11 @@ def _evaluate_stages(cycle: dict[str, Any]) -> list[dict[str, Any]]:
         "EXECUTION_DISABLED",
         "SAFETY_BLOCKED",
     }
-    safety_blocked = any(c in all_codes for c in ("news_blackout",)) or any(
-        token.lower() in abort.lower()
-        for token in safety_fail_codes
-        if abort
-    ) or outcome in {"aborted"} and "safety" in abort.lower()
+    safety_blocked = (
+        any(c in all_codes for c in ("news_blackout",))
+        or any(token.lower() in abort.lower() for token in safety_fail_codes if abort)
+        or (outcome in {"aborted"} and "safety" in abort.lower())
+    )
     if safety_blocked:
         detail = abort or "Safety FAILED"
         if "news_blackout" in all_codes:
@@ -287,11 +287,7 @@ def build_execution_explain(cycle: dict[str, Any]) -> dict[str, Any]:
 
     if execute:
         # On execute, surface PASS reasons (and note any unexpected FAIL).
-        reasons = [
-            s["detail"]
-            for s in stages
-            if s["status"] == "PASS"
-        ]
+        reasons = [s["detail"] for s in stages if s["status"] == "PASS"]
         verdict = "EXECUTE_TRADE"
         headline = "✅ EXECUTE TRADE"
         primary_rejection = None
@@ -306,10 +302,10 @@ def build_execution_explain(cycle: dict[str, Any]) -> dict[str, Any]:
             if first_block["key"] == "mtf":
                 primary_rejection = "MTF Alignment FAILED"
                 primary_rejection_detail = "MTF Alignment FAILED"
-            elif first_block["key"] == "risk":
-                primary_rejection = first_block["detail"]
-                primary_rejection_detail = first_block["detail"]
-            elif first_block["key"] in {"quality", "confluence"}:
+            elif first_block["key"] == "risk" or first_block["key"] in {
+                "quality",
+                "confluence",
+            }:
                 primary_rejection = first_block["detail"]
                 primary_rejection_detail = first_block["detail"]
             else:

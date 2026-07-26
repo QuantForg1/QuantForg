@@ -11,7 +11,9 @@ AutoTradeRunState = Literal["off", "running", "paused", "stopped"]
 _VALID_RUN_STATES: frozenset[str] = frozenset({"off", "running", "paused", "stopped"})
 
 
-def normalize_run_state(value: str | None, *, enabled: bool | None = None) -> AutoTradeRunState:
+def normalize_run_state(
+    value: str | None, *, enabled: bool | None = None
+) -> AutoTradeRunState:
     """Normalize operator run state. Unknown values fail closed to off."""
     raw = (value or "").strip().lower()
     if raw in _VALID_RUN_STATES:
@@ -172,8 +174,10 @@ def evaluate_auto_trade_safety(
         "auto_trading_toggle",
         "Auto Trading ON",
         run_state in {"running", "paused"},
-        "Operator Auto Trading is OFF" if run_state == "off" else (
-            "Auto Trading is STOPPED" if run_state == "stopped" else ""
+        (
+            "Operator Auto Trading is OFF"
+            if run_state == "off"
+            else ("Auto Trading is STOPPED" if run_state == "stopped" else "")
         ),
     )
     add(
@@ -181,20 +185,22 @@ def evaluate_auto_trade_safety(
         "Auto Trading RUNNING",
         run_state == "running",
         (
-            "Auto Trading is PAUSED — no new trades; existing positions still managed"
-            if run_state == "paused"
-            else (
-                "Auto Trading is STOPPED — automation fully disabled"
-                if run_state == "stopped"
+            (
+                "Auto Trading is PAUSED — no new trades; existing positions still managed"  # noqa: E501
+                if run_state == "paused"
                 else (
-                    "Auto Trading is OFF — no automatic trades"
-                    if run_state == "off"
-                    else f"Auto Trading state is {run_state}"
+                    "Auto Trading is STOPPED — automation fully disabled"
+                    if run_state == "stopped"
+                    else (
+                        "Auto Trading is OFF — no automatic trades"
+                        if run_state == "off"
+                        else f"Auto Trading state is {run_state}"
+                    )
                 )
             )
-        )
-        if run_state != "running"
-        else "",
+            if run_state != "running"
+            else ""
+        ),
     )
     add(
         "emergency_stop",
@@ -213,9 +219,11 @@ def evaluate_auto_trade_safety(
         "execution_enabled",
         "Account execution enabled (EXECUTION_ENABLED)",
         facts.execution_enabled,
-        "EXECUTION_ENABLED=false — OMS not permitted"
-        if not facts.execution_enabled
-        else "",
+        (
+            "EXECUTION_ENABLED=false — OMS not permitted"
+            if not facts.execution_enabled
+            else ""
+        ),
     )
     add(
         "gateway_connected",
@@ -238,26 +246,30 @@ def evaluate_auto_trade_safety(
     add(
         "risk_engine",
         "Risk Engine PASS",
-        True
-        if (facts.status_snapshot and not facts.risk_engine_evaluated)
-        else facts.risk_engine_pass,
         (
-            "; ".join(facts.risk_engine_reasons)
-            if facts.risk_engine_reasons
-            else (
-                "Risk Engine not evaluated — no pending auto-trade decision"
-                if facts.status_snapshot and not facts.risk_engine_evaluated
-                else "Risk Engine did not PASS"
+            True
+            if (facts.status_snapshot and not facts.risk_engine_evaluated)
+            else facts.risk_engine_pass
+        ),
+        (
+            (
+                "; ".join(facts.risk_engine_reasons)
+                if facts.risk_engine_reasons
+                else (
+                    "Risk Engine not evaluated — no pending auto-trade decision"
+                    if facts.status_snapshot and not facts.risk_engine_evaluated
+                    else "Risk Engine did not PASS"
+                )
             )
-        )
-        if not (
-            facts.risk_engine_pass
-            or (facts.status_snapshot and not facts.risk_engine_evaluated)
-        )
-        else (
-            "; ".join(facts.risk_engine_reasons)
-            if facts.status_snapshot and facts.risk_engine_reasons
-            else ""
+            if not (
+                facts.risk_engine_pass
+                or (facts.status_snapshot and not facts.risk_engine_evaluated)
+            )
+            else (
+                "; ".join(facts.risk_engine_reasons)
+                if facts.status_snapshot and facts.risk_engine_reasons
+                else ""
+            )
         ),
     )
     account_ok = (
@@ -270,17 +282,19 @@ def evaluate_auto_trade_safety(
         "Account trading enabled",
         account_ok,
         (
-            "Account trading flags not reported by gateway — not blocking status"
-            if facts.status_snapshot and not facts.account_flags_evaluated
-            else (
-                "Account trading is disabled"
-                if not facts.account_trading_enabled
-                else ""
+            (
+                "Account trading flags not reported by gateway — not blocking status"
+                if facts.status_snapshot and not facts.account_flags_evaluated
+                else (
+                    "Account trading is disabled"
+                    if not facts.account_trading_enabled
+                    else ""
+                )
             )
-        )
-        if not account_ok
-        or (facts.status_snapshot and not facts.account_flags_evaluated)
-        else "",
+            if not account_ok
+            or (facts.status_snapshot and not facts.account_flags_evaluated)
+            else ""
+        ),
     )
     mt5_at_ok = (
         True
@@ -292,17 +306,19 @@ def evaluate_auto_trade_safety(
         "AutoTrading enabled in MT5 terminal",
         mt5_at_ok,
         (
-            "MT5 AutoTrading flag not reported by gateway — not blocking status"
-            if facts.status_snapshot and not facts.account_flags_evaluated
-            else (
-                "AutoTrading is disabled in MetaTrader 5"
-                if not facts.mt5_autotrading_enabled
-                else ""
+            (
+                "MT5 AutoTrading flag not reported by gateway — not blocking status"
+                if facts.status_snapshot and not facts.account_flags_evaluated
+                else (
+                    "AutoTrading is disabled in MetaTrader 5"
+                    if not facts.mt5_autotrading_enabled
+                    else ""
+                )
             )
-        )
-        if not mt5_at_ok
-        or (facts.status_snapshot and not facts.account_flags_evaluated)
-        else "",
+            if not mt5_at_ok
+            or (facts.status_snapshot and not facts.account_flags_evaluated)
+            else ""
+        ),
     )
     symbol_u = (facts.symbol or "").strip().upper()
     allowed_syms = {s.strip().upper() for s in policy.allowed_symbols if s.strip()}
@@ -311,11 +327,7 @@ def evaluate_auto_trade_safety(
         "symbol_allowed",
         "Symbol allowed",
         symbol_allowed,
-        (
-            f"Symbol {symbol_u or '—'} not in allowed list"
-            if not symbol_allowed
-            else ""
-        ),
+        (f"Symbol {symbol_u or '—'} not in allowed list" if not symbol_allowed else ""),
     )
     add(
         "symbol_tradable",
@@ -337,13 +349,14 @@ def evaluate_auto_trade_safety(
         "Margin available",
         margin_ok,
         (
-            "Free margin not sampled — not blocking status"
-            if facts.status_snapshot and not facts.margin_evaluated
-            else ("Insufficient free margin" if not facts.margin_available else "")
-        )
-        if not margin_ok
-        or (facts.status_snapshot and not facts.margin_evaluated)
-        else "",
+            (
+                "Free margin not sampled — not blocking status"
+                if facts.status_snapshot and not facts.margin_evaluated
+                else ("Insufficient free margin" if not facts.margin_available else "")
+            )
+            if not margin_ok or (facts.status_snapshot and not facts.margin_evaluated)
+            else ""
+        ),
     )
     add(
         "broker_restrictions",
@@ -355,9 +368,7 @@ def evaluate_auto_trade_safety(
         risk_lock_override_enabled,
     )
 
-    daily_override = bool(
-        facts.daily_loss_exceeded and risk_lock_override_enabled()
-    )
+    daily_override = bool(facts.daily_loss_exceeded and risk_lock_override_enabled())
     add(
         "daily_loss",
         "Daily loss limit OK",
@@ -365,9 +376,7 @@ def evaluate_auto_trade_safety(
         (
             "TEST MODE — daily loss lock overridden"
             if daily_override
-            else (
-                "Maximum daily loss exceeded" if facts.daily_loss_exceeded else ""
-            )
+            else ("Maximum daily loss exceeded" if facts.daily_loss_exceeded else "")
         ),
     )
     opens_ok = facts.open_positions < policy.max_open_positions

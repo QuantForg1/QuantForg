@@ -65,9 +65,7 @@ async def mission_control_notes(
 
 
 @router.post("/notes")
-async def mission_control_add_note(
-    body: NoteBody, user: CurrentUser
-) -> dict[str, Any]:
+async def mission_control_add_note(body: NoteBody, user: CurrentUser) -> dict[str, Any]:
     operator = str(
         getattr(user, "email", None) or getattr(user, "id", "") or "operator"
     )

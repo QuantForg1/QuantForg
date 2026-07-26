@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -81,9 +82,9 @@ def gather_control_plane_sources() -> dict[str, Any]:
         ).get_iep()
         return {
             "registry": iep.store.list_experiments(limit=20),
-            "snapshot": iep.store.get_snapshot()
-            if hasattr(iep.store, "get_snapshot")
-            else {},
+            "snapshot": (
+                iep.store.get_snapshot() if hasattr(iep.store, "get_snapshot") else {}
+            ),
         }
 
     sources["iep"] = _safe(_iep, {"registry": [], "snapshot": {}})
@@ -106,9 +107,7 @@ def gather_control_plane_sources() -> dict[str, Any]:
     )
     availability["irap"] = bool(sources["irap"])
 
-    sources["eqs"] = _store_snapshot(
-        "app.domain.execution_quality_suite", "get_eqs"
-    )
+    sources["eqs"] = _store_snapshot("app.domain.execution_quality_suite", "get_eqs")
     availability["eqs"] = bool(sources["eqs"])
 
     sources["res"] = _store_snapshot(
@@ -148,9 +147,7 @@ def gather_control_plane_sources() -> dict[str, Any]:
     availability["aqc"] = bool(sources["aqc"].get("snapshot")) or True
 
     sources["qkg"] = _safe(
-        lambda: __import__(
-            "app.domain.quant_knowledge_graph", fromlist=["get_qkg"]
-        )
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
         .get_qkg()
         .store.get_snapshot(),
         {},

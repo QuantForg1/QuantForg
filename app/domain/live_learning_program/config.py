@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -76,7 +77,7 @@ class LlpConfig:
         self.allow_auto_promote_strategies = False
         self.invent_evidence = False
 
-    def update(self, updates: dict[str, object]) -> LlpConfig:
+    def update(self, updates: dict[str, Any]) -> LlpConfig:
         locked = {
             "allow_order_send",
             "allow_place_trades",
@@ -96,7 +97,7 @@ class LlpConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                flags = dict(data["feature_flags"])
                 for fk, fv in value.items():
                     if isinstance(fv, bool):
                         flags[str(fk)] = fv
@@ -115,20 +116,16 @@ class LlpConfig:
             max_feedback=int(data["max_feedback"]),
             max_journal=int(data["max_journal"]),
             max_history=int(data["max_history"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=dict(data["feature_flags"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,
             "min_observations_for_edge": self.min_observations_for_edge,
-            "min_observations_for_calibration": (
-                self.min_observations_for_calibration
-            ),
-            "min_evidence_for_live_change_rec": (
-                self.min_evidence_for_live_change_rec
-            ),
+            "min_observations_for_calibration": (self.min_observations_for_calibration),
+            "min_evidence_for_live_change_rec": (self.min_evidence_for_live_change_rec),
             "max_observations": self.max_observations,
             "max_feedback": self.max_feedback,
             "max_journal": self.max_journal,

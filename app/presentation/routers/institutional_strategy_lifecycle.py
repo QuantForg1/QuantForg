@@ -166,9 +166,12 @@ def islm_approve(
         islm_approve_transition,
     )
 
-    approver = body.approver or getattr(user, "email", None) or getattr(
-        user, "sub", None
-    ) or "human-operator"
+    approver = (
+        body.approver
+        or getattr(user, "email", None)
+        or getattr(user, "sub", None)
+        or "human-operator"
+    )
     try:
         payload = islm_approve_transition(
             strategy_id=body.strategy_id,

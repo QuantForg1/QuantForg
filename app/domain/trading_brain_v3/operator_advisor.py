@@ -21,9 +21,7 @@ def advise_operator(
         advice.append(
             "Proceed only through existing Decision Center → Execution Pipeline"
         )
-        advice.append(
-            "Brain does not place orders — operator remains accountable"
-        )
+        advice.append("Brain does not place orders — operator remains accountable")
 
     if inp.news_blackout is True:
         advice.append("Respect news blackout — do not override")
@@ -31,9 +29,7 @@ def advise_operator(
         advice.append("Kill switch active — no trading activity")
     soft = config.max_open_positions_soft
     if inp.open_positions is not None and inp.open_positions >= soft:
-        advice.append(
-            f"Open positions ({inp.open_positions}) at soft limit {soft}"
-        )
+        advice.append(f"Open positions ({inp.open_positions}) at soft limit {soft}")
     if inp.operator_notes:
         for note in inp.operator_notes[:5]:
             advice.append(f"Operator note: {note}")

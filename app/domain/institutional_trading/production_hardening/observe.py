@@ -130,7 +130,7 @@ def store_trade_explanation(
     extras: dict[str, Any] | None = None,
 ) -> None:
     try:
-        from app.domain.institutional_trading.production_hardening.explainability import (
+        from app.domain.institutional_trading.production_hardening.explainability import (  # noqa: E501
             build_explanation,
             get_explainability_store,
         )

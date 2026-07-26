@@ -62,7 +62,11 @@ class ResStore:
     def save_report(self, report: dict[str, Any]) -> dict[str, Any]:
         rid = str(report.get("report_id") or uuid4())
         now = datetime.now(UTC).isoformat()
-        row = {**report, "report_id": rid, "created_at": report.get("created_at") or now}
+        row = {
+            **report,
+            "report_id": rid,
+            "created_at": report.get("created_at") or now,
+        }
         with self._lock:
             self._reports[rid] = row
             if len(self._reports) > 80:

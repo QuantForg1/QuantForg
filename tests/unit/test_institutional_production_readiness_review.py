@@ -21,9 +21,12 @@ class TestInstitutionalPrr:
         assert payload["mutates_engines"] is False
         assert payload["analytics_only"] is True
         assert payload["advisory_only"] is True
-        assert payload[
-            "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"
-        ] is True
+        assert (
+            payload[
+                "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"
+            ]
+            is True
+        )
         sections = payload["sections"]
         for key in (
             "architecture",

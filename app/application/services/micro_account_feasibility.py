@@ -16,13 +16,12 @@ from app.domain.institutional_trading.micro_account_mode import (
     MicroAccountProfile,
     MicroTradability,
     build_recommended_policy,
+    dollar_risk_at_lots,
     equity_floor_for_risk,
     evaluate_balance,
     stop_distance_from_atr,
-    dollar_risk_at_lots,
 )
 from app.domain.trading.gold_only import GOLD_SYMBOL
-
 
 _ATR_SENSITIVITY: tuple[Decimal, ...] = (
     Decimal("8"),
@@ -57,9 +56,7 @@ def run_micro_account_feasibility(
         str(b.equity) for b in balances if b.tradability is MicroTradability.SAFE
     ]
     conditional_balances = [
-        str(b.equity)
-        for b in balances
-        if b.tradability is MicroTradability.CONDITIONAL
+        str(b.equity) for b in balances if b.tradability is MicroTradability.CONDITIONAL
     ]
     not_tradable = [
         str(b.equity)
@@ -172,10 +169,10 @@ def run_micro_account_feasibility(
             "broker_min_lot": str(profile.broker_min_lot),
             "contract_size": str(profile.contract_size),
             "dollar_risk_at_min_lot": str(min_loss),
-            "formula": "dollar_risk = lots × stop_distance × contract_size",
+            "formula": "dollar_risk = lots x stop_distance x contract_size",
             "lot_formula": (
-                "lots = floor((equity × risk_pct/100) / (stop × contract_size) "
-                "/ lot_step) × lot_step; reject if lots < min_lot"
+                "lots = floor((equity x risk_pct/100) / (stop x contract_size) "
+                "/ lot_step) x lot_step; reject if lots < min_lot"
             ),
         },
         "profile": profile.to_dict(),
@@ -208,9 +205,9 @@ def report_to_markdown(report: dict[str, Any]) -> str:
     profile = report.get("profile") or {}
     inst = report.get("institutional_unchanged") or {}
 
-    lines.append("# Micro Account Mode — Feasibility Report")
+    lines.append("# Micro Account Mode - Feasibility Report")
     lines.append("")
-    lines.append(f"- Generated at: `{report.get('generated_at', '—')}`")
+    lines.append(f"- Generated at: `{report.get('generated_at', '-')}`")
     lines.append(f"- Mode: `{report.get('mode_id')}`")
     lines.append(f"- Symbol: `{report.get('symbol')}`")
     lines.append(
@@ -245,12 +242,12 @@ def report_to_markdown(report: dict[str, Any]) -> str:
     lines.append("")
     lines.append(
         "| Equity | Min usable risk % | Smallest executable lot | "
-        "Max loss / trade | Losses → 20% DD | Tradability |"
+        "Max loss / trade | Losses -> 20% DD | Tradability |"
     )
     lines.append("|---:|---:|---:|---:|---:|---|")
     for b in report.get("balances") or []:
         lot = b.get("smallest_executable_lot")
-        lot_txt = lot if lot is not None else "— (reject)"
+        lot_txt = lot if lot is not None else "- (reject)"
         lines.append(
             f"| ${b.get('equity')} | {b.get('min_usable_risk_pct')}% | "
             f"{lot_txt} | ${b.get('max_loss_per_trade')} | "
@@ -269,11 +266,11 @@ def report_to_markdown(report: dict[str, Any]) -> str:
     lines.append("## Exact balances where XAUUSD becomes safely tradable")
     lines.append("")
     lines.append(
-        f"- Exact equity floor for ≤{profile.get('recommended_max_risk_pct')}% "
+        f"- Exact equity floor for <={profile.get('recommended_max_risk_pct')}% "
         f"(safe): **${summary.get('exact_equity_floor_safe')}**"
     )
     lines.append(
-        f"- Exact equity floor for ≤{profile.get('hard_max_risk_pct')}% "
+        f"- Exact equity floor for <={profile.get('hard_max_risk_pct')}% "
         f"(hard max / conditional): **${summary.get('exact_equity_floor_hard_max')}**"
     )
     lines.append(
@@ -286,7 +283,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
     )
     lines.append(
         f"- Conditional among supported ladder: "
-        f"**{summary.get('xauusd_conditionally_tradable_at_supported_balances') or 'none'}**"
+        f"**{summary.get('xauusd_conditionally_tradable_at_supported_balances') or 'none'}**"  # noqa: E501
     )
     lines.append("")
     lines.append("## Recommended micro-account policy")
@@ -302,7 +299,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
         f"Hard max: {micro.get('hard_max_risk_pct')}%"
     )
     lines.append(
-        f"- If calculated lots < min_lot: **{micro.get('if_calculated_lots_below_min_lot')}**"
+        f"- If calculated lots < min_lot: **{micro.get('if_calculated_lots_below_min_lot')}**"  # noqa: E501
     )
     lines.append(
         f"- Never fake lots / bypass broker min / exceed hard max: "

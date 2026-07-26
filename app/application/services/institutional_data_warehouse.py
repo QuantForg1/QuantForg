@@ -35,7 +35,7 @@ def ingest_domain(
         }
     wh = warehouse or get_warehouse()
     n = wh.ingest(
-        domain,  # type: ignore[arg-type]
+        domain,
         rows,
         environment=environment,
         replace=replace,
@@ -60,9 +60,7 @@ def snapshot_read_only_sources(
 
     if journal_rows:
         ingested["trades"] = wh.ingest("trades", journal_rows, environment="live")
-        ingested["execution"] = wh.ingest(
-            "execution", journal_rows, environment="live"
-        )
+        ingested["execution"] = wh.ingest("execution", journal_rows, environment="live")
 
     try:
         from app.domain.replay_evidence_lab.evidence_store import get_evidence_database
@@ -359,42 +357,78 @@ def seed_demo_warehouse() -> dict[str, Any]:
     )
     wh.ingest(
         "oms",
-        [{"timestamp": "2026-07-20T08:00:01Z", "correlation_id": corr, "oms_status": "filled"}],
+        [
+            {
+                "timestamp": "2026-07-20T08:00:01Z",
+                "correlation_id": corr,
+                "oms_status": "filled",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
     )
     wh.ingest(
         "gateway",
-        [{"timestamp": "2026-07-20T08:00:02Z", "correlation_id": corr, "action": "health_ok"}],
+        [
+            {
+                "timestamp": "2026-07-20T08:00:02Z",
+                "correlation_id": corr,
+                "action": "health_ok",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
     )
     wh.ingest(
         "broker",
-        [{"timestamp": "2026-07-20T08:00:03Z", "correlation_id": corr, "action": "deal"}],
+        [
+            {
+                "timestamp": "2026-07-20T08:00:03Z",
+                "correlation_id": corr,
+                "action": "deal",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
     )
     wh.ingest(
         "research",
-        [{"timestamp": "2026-07-21T10:00:00Z", "correlation_id": corr, "verdict": "Research Passed"}],
+        [
+            {
+                "timestamp": "2026-07-21T10:00:00Z",
+                "correlation_id": corr,
+                "verdict": "Research Passed",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
     )
     wh.ingest(
         "portfolio",
-        [{"timestamp": "2026-07-21T11:00:00Z", "correlation_id": corr, "net_profit": 16}],
+        [
+            {
+                "timestamp": "2026-07-21T11:00:00Z",
+                "correlation_id": corr,
+                "net_profit": 16,
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
     )
     wh.ingest(
         "regimes",
-        [{"timestamp": "2026-07-21T11:05:00Z", "correlation_id": corr, "regime": "trend"}],
+        [
+            {
+                "timestamp": "2026-07-21T11:05:00Z",
+                "correlation_id": corr,
+                "regime": "trend",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
@@ -408,21 +442,39 @@ def seed_demo_warehouse() -> dict[str, Any]:
     )
     wh.ingest(
         "diagnostics",
-        [{"timestamp": "2026-07-21T11:07:00Z", "correlation_id": corr, "cycle_id": "c-1"}],
+        [
+            {
+                "timestamp": "2026-07-21T11:07:00Z",
+                "correlation_id": corr,
+                "cycle_id": "c-1",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
     )
     wh.ingest(
         "audit",
-        [{"timestamp": "2026-07-22T09:05:00Z", "correlation_id": corr, "action": "ops_promotion"}],
+        [
+            {
+                "timestamp": "2026-07-22T09:05:00Z",
+                "correlation_id": corr,
+                "action": "ops_promotion",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
     )
     wh.ingest(
         "strategy_decisions",
-        [{"timestamp": "2026-07-20T07:59:00Z", "correlation_id": corr, "decision": "BUY"}],
+        [
+            {
+                "timestamp": "2026-07-20T07:59:00Z",
+                "correlation_id": corr,
+                "decision": "BUY",
+            }
+        ],
         environment="demo",
         replace=True,
         source="idw:demo",
@@ -432,8 +484,8 @@ def seed_demo_warehouse() -> dict[str, Any]:
     process.clear()
     for domain in DATA_DOMAINS:
         process.ingest(
-            domain,  # type: ignore[arg-type]
-            [r["payload"] for r in wh.list(domain, limit=10_000)],  # type: ignore[arg-type]
+            domain,
+            [r["payload"] for r in wh.list(domain, limit=10_000)],
             environment="demo",
             replace=True,
             source="idw:demo",

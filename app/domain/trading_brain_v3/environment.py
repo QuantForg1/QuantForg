@@ -8,9 +8,7 @@ from app.domain.trading_brain_v3.config import TradingBrainConfig
 from app.domain.trading_brain_v3.types import BrainInput, ModuleResult
 
 
-def evaluate_environment(
-    inp: BrainInput, config: TradingBrainConfig
-) -> ModuleResult:
+def evaluate_environment(inp: BrainInput, config: TradingBrainConfig) -> ModuleResult:
     reasons: list[str] = []
     score = Decimal("0")
     parts = 0
@@ -26,9 +24,7 @@ def evaluate_environment(
             score=None,
             passed=None,
             recommendation="No Trade",
-            reasons=(
-                "No environment facts supplied — never invents market data",
-            ),
+            reasons=("No environment facts supplied — never invents market data",),
             details={},
         )
 
@@ -36,9 +32,7 @@ def evaluate_environment(
         parts += 1
         if inp.spread > config.max_spread:
             score += Decimal("20")
-            reasons.append(
-                f"Spread {inp.spread} exceeds max {config.max_spread}"
-            )
+            reasons.append(f"Spread {inp.spread} exceeds max {config.max_spread}")
         elif inp.spread > config.max_spread / 2:
             score += Decimal("55")
             reasons.append(f"Spread {inp.spread} elevated but usable")

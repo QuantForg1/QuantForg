@@ -73,7 +73,9 @@ def score_regime(
         score += Decimal("5")
         reasons.append("Not news-driven")
     return scored(
-        "market_regime", title, score,
+        "market_regime",
+        title,
+        score,
         threshold=config.min_regime_score,
         reasons=reasons or ["Regime scored from supplied facts"],
         factors={"trend": trend or None, "atr_pct": str(atr_pct) if atr_pct else None},
@@ -86,7 +88,9 @@ def score_liquidity(
     title = "Liquidity Mapping"
     if facts is None:
         return unavailable(
-            "liquidity", title, "Liquidity/spread facts not supplied",
+            "liquidity",
+            title,
+            "Liquidity/spread facts not supplied",
             threshold=config.min_liquidity_score,
         )
     spread = _dec(facts.get("spread"))
@@ -94,7 +98,9 @@ def score_liquidity(
     sweeps = facts.get("sweep_count")
     if spread is None and pools is None and sweeps is None:
         return empty(
-            "liquidity", title, "No liquidity fields — never invents pools",
+            "liquidity",
+            title,
+            "No liquidity fields — never invents pools",
             threshold=config.min_liquidity_score,
         )
     reasons: list[str] = []
@@ -121,7 +127,9 @@ def score_liquidity(
         except (TypeError, ValueError):
             reasons.append("sweep_count unreadable")
     return scored(
-        "liquidity", title, score,
+        "liquidity",
+        title,
+        score,
         threshold=config.min_liquidity_score,
         reasons=reasons,
         factors={"spread": str(spread) if spread is not None else None},
@@ -134,7 +142,9 @@ def score_structure(
     title = "Market Structure Engine"
     if facts is None:
         return unavailable(
-            "market_structure", title, "Structure facts not supplied",
+            "market_structure",
+            title,
+            "Structure facts not supplied",
             threshold=config.min_structure_score,
         )
     bias = str(facts.get("bias") or facts.get("structure_bias") or "").lower()
@@ -143,7 +153,9 @@ def score_structure(
     swings = facts.get("swing_count")
     if not bias and bos is None and choch is None and swings is None:
         return empty(
-            "market_structure", title, "No structure fields — never invents BOS/CHoCH",
+            "market_structure",
+            title,
+            "No structure fields — never invents BOS/CHoCH",
             threshold=config.min_structure_score,
         )
     reasons: list[str] = []
@@ -172,7 +184,9 @@ def score_structure(
         except (TypeError, ValueError):
             reasons.append("swing_count unreadable")
     return scored(
-        "market_structure", title, score,
+        "market_structure",
+        title,
+        score,
         threshold=config.min_structure_score,
         reasons=reasons or ["Structure scored from supplied facts"],
         factors={"bias": bias or None, "bos": bos, "choch": choch},
@@ -185,7 +199,9 @@ def score_order_flow(
     title = "Order Flow Analysis"
     if facts is None:
         return unavailable(
-            "order_flow", title, "Order-flow / tick facts not supplied",
+            "order_flow",
+            title,
+            "Order-flow / tick facts not supplied",
             threshold=config.min_order_flow_score,
         )
     imbalance = _dec(facts.get("imbalance") or facts.get("bid_ask_imbalance"))
@@ -193,7 +209,9 @@ def score_order_flow(
     volume_burst = facts.get("volume_burst")
     if imbalance is None and delta is None and volume_burst is None:
         return empty(
-            "order_flow", title, "No tick imbalance/delta — never invents flow",
+            "order_flow",
+            title,
+            "No tick imbalance/delta — never invents flow",
             threshold=config.min_order_flow_score,
         )
     reasons: list[str] = []
@@ -211,7 +229,9 @@ def score_order_flow(
     elif volume_burst is False:
         reasons.append("No volume burst")
     return scored(
-        "order_flow", title, score,
+        "order_flow",
+        title,
+        score,
         threshold=config.min_order_flow_score,
         reasons=reasons,
         factors={
@@ -226,22 +246,23 @@ def score_confluence(
 ) -> EngineScore:
     title = "Confluence Engine"
     usable = [
-        e for e in engines.values()
-        if e.status == "available" and e.score is not None
+        e for e in engines.values() if e.status == "available" and e.score is not None
     ]
     if not usable:
         return unavailable(
-            "confluence", title, "No available engine scores to confluence",
+            "confluence",
+            title,
+            "No available engine scores to confluence",
             threshold=config.min_confluence_score,
         )
     total = sum((e.score for e in usable), Decimal("0"))
     avg = (total / Decimal(str(len(usable)))).quantize(Decimal("0.01"))
-    reasons = [
-        f"{e.engine_id}={e.score} (pass={e.passed})" for e in usable
-    ]
+    reasons = [f"{e.engine_id}={e.score} (pass={e.passed})" for e in usable]
     reasons.append(f"Average of {len(usable)} available engines")
     return scored(
-        "confluence", title, avg,
+        "confluence",
+        title,
+        avg,
         threshold=config.min_confluence_score,
         reasons=reasons,
         factors={"engine_count": len(usable)},
@@ -254,12 +275,16 @@ def score_opportunity(
     title = "Opportunity Ranking"
     if candidates is None:
         return unavailable(
-            "opportunity", title, "Opportunity candidates not supplied",
+            "opportunity",
+            title,
+            "Opportunity candidates not supplied",
             threshold=config.min_opportunity_score,
         )
     if not candidates:
         return empty(
-            "opportunity", title, "Empty candidate list",
+            "opportunity",
+            title,
+            "Empty candidate list",
             threshold=config.min_opportunity_score,
         )
     ranked: list[dict[str, Any]] = []
@@ -288,7 +313,9 @@ def score_opportunity(
     top = Decimal(ranked[0]["score"])
     eligible = sum(1 for r in ranked if r["eligible"])
     return scored(
-        "opportunity", title, top,
+        "opportunity",
+        title,
+        top,
         threshold=config.min_opportunity_score,
         reasons=[
             f"Ranked {len(ranked)} candidates with supplied scores",
@@ -305,7 +332,9 @@ def score_execution_optimizer(
     title = "Execution Optimizer"
     if facts is None:
         return unavailable(
-            "execution_optimizer", title, "Execution timing/spread facts not supplied",
+            "execution_optimizer",
+            title,
+            "Execution timing/spread facts not supplied",
             threshold=config.min_execution_score,
         )
     spread = _dec(facts.get("spread"))
@@ -314,7 +343,9 @@ def score_execution_optimizer(
     slippage = _dec(facts.get("expected_slippage") or facts.get("slippage"))
     if spread is None and not session and timing is None and slippage is None:
         return empty(
-            "execution_optimizer", title, "No execution fields — advisory only",
+            "execution_optimizer",
+            title,
+            "No execution fields — advisory only",
             threshold=config.min_execution_score,
         )
     reasons: list[str] = ["Advisory only — never places orders"]
@@ -343,20 +374,22 @@ def score_execution_optimizer(
             score -= Decimal("15")
         reasons.append(f"Expected slippage={slippage}")
     return scored(
-        "execution_optimizer", title, score,
+        "execution_optimizer",
+        title,
+        score,
         threshold=config.min_execution_score,
         reasons=reasons,
         factors={"session": session or None, "spread": str(spread) if spread else None},
     )
 
 
-def score_exit(
-    config: AlphaEngineConfig, facts: dict[str, Any] | None
-) -> EngineScore:
+def score_exit(config: AlphaEngineConfig, facts: dict[str, Any] | None) -> EngineScore:
     title = "Exit Intelligence"
     if facts is None:
         return unavailable(
-            "exit_intelligence", title, "Open-trade exit facts not supplied",
+            "exit_intelligence",
+            title,
+            "Open-trade exit facts not supplied",
             threshold=config.min_exit_score,
         )
     mfe = _dec(facts.get("mfe"))
@@ -365,7 +398,9 @@ def score_exit(
     time_in_trade = facts.get("time_in_trade_minutes")
     if mfe is None and mae is None and invalidation is None and time_in_trade is None:
         return empty(
-            "exit_intelligence", title, "No exit metrics — never invents MFE/MAE",
+            "exit_intelligence",
+            title,
+            "No exit metrics — never invents MFE/MAE",
             threshold=config.min_exit_score,
         )
     reasons: list[str] = ["Advisory hold/exit quality — not a profit promise"]
@@ -391,20 +426,22 @@ def score_exit(
         except (TypeError, ValueError):
             reasons.append("time_in_trade unreadable")
     return scored(
-        "exit_intelligence", title, score,
+        "exit_intelligence",
+        title,
+        score,
         threshold=config.min_exit_score,
         reasons=reasons,
         factors={"mfe": str(mfe) if mfe is not None else None},
     )
 
 
-def score_trade(
-    config: AlphaEngineConfig, facts: dict[str, Any] | None
-) -> EngineScore:
+def score_trade(config: AlphaEngineConfig, facts: dict[str, Any] | None) -> EngineScore:
     title = "Institutional Trade Scoring"
     if facts is None:
         return unavailable(
-            "trade_scoring", title, "Trade scoring factors not supplied",
+            "trade_scoring",
+            title,
+            "Trade scoring factors not supplied",
             threshold=config.min_trade_score,
         )
     keys = (
@@ -418,7 +455,9 @@ def score_trade(
     available = {k: v for k, v in present.items() if v is not None}
     if not available:
         return empty(
-            "trade_scoring", title, "No factor scores — never invents trade quality",
+            "trade_scoring",
+            title,
+            "No factor scores — never invents trade quality",
             threshold=config.min_trade_score,
         )
     avg = (
@@ -427,7 +466,9 @@ def score_trade(
     reasons = [f"{k}={v}" for k, v in available.items()]
     reasons.append("Weighted equal average of supplied factors only")
     return scored(
-        "trade_scoring", title, avg,
+        "trade_scoring",
+        title,
+        avg,
         threshold=config.min_trade_score,
         reasons=reasons,
         factors={k: str(v) for k, v in available.items()},
@@ -440,12 +481,16 @@ def score_continuous(
     title = "Continuous Trade Evaluation"
     if trades is None:
         return unavailable(
-            "continuous_evaluation", title, "Closed-trade rows not supplied",
+            "continuous_evaluation",
+            title,
+            "Closed-trade rows not supplied",
             threshold=config.min_continuous_score,
         )
     if not trades:
         return empty(
-            "continuous_evaluation", title, "No recorded trades to evaluate",
+            "continuous_evaluation",
+            title,
+            "No recorded trades to evaluate",
             threshold=config.min_continuous_score,
         )
     qualities: list[Decimal] = []
@@ -469,14 +514,16 @@ def score_continuous(
             "Trades missing quality/slippage fields — never invents metrics",
             threshold=config.min_continuous_score,
         )
-    avg = (
-        sum(qualities, Decimal("0")) / Decimal(str(len(qualities)))
-    ).quantize(Decimal("0.01"))
+    avg = (sum(qualities, Decimal("0")) / Decimal(str(len(qualities)))).quantize(
+        Decimal("0.01")
+    )
     reasons.append(f"Evaluated {len(qualities)} recorded trades")
     reasons.append(f"Average observed quality={avg}")
     reasons.append("No profitability promise")
     return scored(
-        "continuous_evaluation", title, avg,
+        "continuous_evaluation",
+        title,
+        avg,
         threshold=config.min_continuous_score,
         reasons=reasons,
         factors={"sample_size": len(qualities)},

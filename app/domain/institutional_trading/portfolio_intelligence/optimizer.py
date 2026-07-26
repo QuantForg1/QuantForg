@@ -1,4 +1,4 @@
-"""Portfolio optimizer — continuous rebalance *recommendations* only."""
+"""Portfolio optimizer - continuous rebalance *recommendations* only."""
 
 from __future__ import annotations
 
@@ -34,8 +34,10 @@ def optimize_portfolio(
     if state.equity > 0:
         margin_usage = state.used_margin / state.equity
 
-    exec_q = float(execution_quality_score) if execution_quality_score is not None else 0.7
-    # Higher is better composite 0–100
+    exec_q = (
+        float(execution_quality_score) if execution_quality_score is not None else 0.7
+    )
+    # Higher is better composite 0-100
     score = (
         25 * min(1.0, expected_return / 2.0)
         + 20 * (1.0 - min(1.0, state.current_drawdown_pct / 10.0))
@@ -46,13 +48,15 @@ def optimize_portfolio(
     )
     recommendations: list[str] = []
     if corr_heat >= 0.6:
-        recommendations.append("Current portfolio correlation is high — diversify.")
+        recommendations.append("Current portfolio correlation is high - diversify.")
     if state.current_drawdown_pct >= 3:
         recommendations.append("Reduce risk until drawdown recovers.")
     if margin_usage >= 0.5:
-        recommendations.append("Margin usage elevated — prefer fewer concurrent legs.")
+        recommendations.append("Margin usage elevated - prefer fewer concurrent legs.")
     if expected_return < 0.3:
-        recommendations.append("Expected return weak relative to risk — wait for higher-quality queue.")
+        recommendations.append(
+            "Expected return weak relative to risk - wait for higher-quality queue."
+        )
 
     return {
         "portfolio_score": round(score, 2),

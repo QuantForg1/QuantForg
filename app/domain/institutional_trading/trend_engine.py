@@ -55,7 +55,7 @@ class TrendEngine:
             "execution_management": execution,
         }
 
-        # Swing: bias from H4. Scalping: bias from H1 (macro remapped) — never require H4.
+        # Swing: bias from H4. Scalping: bias from H1 (macro remapped) — never require H4.  # noqa: E501
         bias = macro
         if bias in {TrendDirection.UNKNOWN, TrendDirection.RANGE}:
             bias = primary
@@ -84,9 +84,8 @@ class TrendEngine:
                 bias in {TrendDirection.UP, TrendDirection.DOWN}
                 and score >= 55
                 and (
-                    macro == primary
+                    macro in (primary, entry)
                     or primary in {TrendDirection.RANGE, TrendDirection.UNKNOWN}
-                    or macro == entry
                 )
             )
         else:

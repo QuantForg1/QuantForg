@@ -11,8 +11,8 @@ from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
 from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
     DEFAULT_SCALPING_UNIVERSE,
-    AiScalpingConfig,
     AdaptiveThresholdBand,
+    AiScalpingConfig,
     scalping_ite_config,
 )
 from app.domain.institutional_trading.ai_scalping.diagnostics import (

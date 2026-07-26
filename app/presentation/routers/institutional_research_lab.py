@@ -55,7 +55,7 @@ def _flags() -> dict[str, Any]:
         "writes_production_tables": False,
         "influences_production_decisions": False,
         "never_auto_promotes": True,
-        "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds": True,
+        "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds": True,  # noqa: E501
     }
 
 
@@ -85,7 +85,9 @@ def irl_create_experiment(
     body: ExperimentCreateBody,
     user: CurrentUser,
 ) -> dict[str, Any]:
-    from app.application.services.institutional_research_lab import irl_create_experiment as create
+    from app.application.services.institutional_research_lab import (
+        irl_create_experiment as create,
+    )
 
     author = body.author or getattr(user, "email", None) or "researcher"
     exp = create(
@@ -99,7 +101,9 @@ def irl_create_experiment(
 
 @router.get("/experiments/{experiment_id}")
 def irl_get_experiment(experiment_id: str, _user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_research_lab import irl_get_experiment as get_exp
+    from app.application.services.institutional_research_lab import (
+        irl_get_experiment as get_exp,
+    )
 
     exp = get_exp(experiment_id)
     if not exp:
@@ -113,7 +117,9 @@ def irl_patch_experiment(
     body: ExperimentUpdateBody,
     _user: CurrentUser,
 ) -> dict[str, Any]:
-    from app.application.services.institutional_research_lab import irl_update_experiment
+    from app.application.services.institutional_research_lab import (
+        irl_update_experiment,
+    )
 
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     exp = irl_update_experiment(experiment_id, updates)
@@ -165,7 +171,9 @@ def irl_leaderboard(
     rank_by: str = Query(default="composite"),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, Any]:
-    from app.application.services.institutional_research_lab import irl_leaderboard as board
+    from app.application.services.institutional_research_lab import (
+        irl_leaderboard as board,
+    )
 
     payload = board(rank_by=rank_by, limit=limit)
     payload.update(_flags())
@@ -238,6 +246,6 @@ def irl_verdict(
         raise HTTPException(status_code=404, detail="experiment_not_found")
     return {
         "experiment": exp,
-        "note": "Research verdict only — governance workflow required for any promotion",
+        "note": "Research verdict only — governance workflow required for any promotion",  # noqa: E501
         **_flags(),
     }

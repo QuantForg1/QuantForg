@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 from app.domain.trading.xauusd_specs import MAX_SPREAD, coerce_max_spread
@@ -119,7 +120,7 @@ class ScalpingAiV2Config:
         self.allow_average_losers = False
         self.prefer_no_trade = True
 
-    def update(self, updates: dict[str, object]) -> ScalpingAiV2Config:
+    def update(self, updates: dict[str, Any]) -> ScalpingAiV2Config:
         locked = {
             "allow_order_send",
             "allow_bypass_risk",
@@ -139,7 +140,7 @@ class ScalpingAiV2Config:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                flags = dict(data["feature_flags"])
                 for fk, fv in value.items():
                     if isinstance(fv, bool) and fk not in {
                         "order_send",
@@ -158,7 +159,7 @@ class ScalpingAiV2Config:
             max_spread=Decimal(str(data["max_spread"])),
             min_atr_pct=Decimal(str(data["min_atr_pct"])),
             max_atr_pct=Decimal(str(data["max_atr_pct"])),
-            allowed_sessions=tuple(data["allowed_sessions"]),  # type: ignore[arg-type]
+            allowed_sessions=tuple(data["allowed_sessions"]),
             min_quality_score=Decimal(str(data["min_quality_score"])),
             min_execution_score=Decimal(str(data["min_execution_score"])),
             max_risk_score=Decimal(str(data["max_risk_score"])),
@@ -178,19 +179,17 @@ class ScalpingAiV2Config:
             retry_backoff_ms=int(data["retry_backoff_ms"]),
             max_retry_backoff_ms=int(data["max_retry_backoff_ms"]),
             watchdog_interval_sec=int(data["watchdog_interval_sec"]),
-            controller_scan_interval_sec=int(
-                data["controller_scan_interval_sec"]
-            ),
+            controller_scan_interval_sec=int(data["controller_scan_interval_sec"]),
             max_events=int(data["max_events"]),
             max_history=int(data["max_history"]),
             retry_jitter_ratio=float(data.get("retry_jitter_ratio", 0.2)),
             max_clock_drift_ms=int(data.get("max_clock_drift_ms", 5000)),
             max_loop_latency_ms=int(data.get("max_loop_latency_ms", 5000)),
             state_persist_enabled=bool(data.get("state_persist_enabled", True)),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=dict(data["feature_flags"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

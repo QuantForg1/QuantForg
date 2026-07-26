@@ -76,14 +76,10 @@ def detect_market_regime(
         evidence.append(f"ATR%={atr_pct}")
         if atr_pct >= config.high_vol_atr_pct:
             regimes.append(MarketRegime.HIGH_VOLATILITY)
-            evidence.append(
-                f"High volatility (>= {config.high_vol_atr_pct}% ATR)"
-            )
+            evidence.append(f"High volatility (>= {config.high_vol_atr_pct}% ATR)")
         elif atr_pct <= config.low_vol_atr_pct:
             regimes.append(MarketRegime.LOW_VOLATILITY)
-            evidence.append(
-                f"Low volatility (<= {config.low_vol_atr_pct}% ATR)"
-            )
+            evidence.append(f"Low volatility (<= {config.low_vol_atr_pct}% ATR)")
 
     if inp.news_driven is True:
         regimes.append(MarketRegime.NEWS_DRIVEN)

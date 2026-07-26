@@ -76,9 +76,7 @@ def _rr(t: dict[str, Any]) -> Decimal | None:
 
 def _hold_minutes(t: dict[str, Any]) -> Decimal | None:
     return _dec(
-        t.get("hold_minutes")
-        or t.get("avg_hold_minutes")
-        or t.get("duration_minutes")
+        t.get("hold_minutes") or t.get("avg_hold_minutes") or t.get("duration_minutes")
     )
 
 
@@ -121,31 +119,17 @@ def _compute_stats(trades: list[dict[str, Any]]) -> dict[str, Any] | None:
     if n == 0:
         return None
 
-    win_rate = (Decimal(wins) / Decimal(n) * Decimal(100)).quantize(
-        Decimal("0.01")
-    )
+    win_rate = (Decimal(wins) / Decimal(n) * Decimal(100)).quantize(Decimal("0.01"))
     expectancy = (pnl_sum / Decimal(n)).quantize(Decimal("0.01"))
     gross_win = sum(win_pnls) if win_pnls else Decimal("0")
     gross_loss = sum(loss_pnls) if loss_pnls else Decimal("0")
     profit_factor = (
-        (gross_win / gross_loss).quantize(Decimal("0.01"))
-        if gross_loss > 0
-        else None
+        (gross_win / gross_loss).quantize(Decimal("0.01")) if gross_loss > 0 else None
     )
-    recovery = (
-        (pnl_sum / max_dd).quantize(Decimal("0.01"))
-        if max_dd > 0
-        else None
-    )
-    avg_r = (
-        (sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01"))
-        if rrs
-        else None
-    )
+    recovery = (pnl_sum / max_dd).quantize(Decimal("0.01")) if max_dd > 0 else None
+    avg_r = (sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01")) if rrs else None
     avg_hold = (
-        (sum(holds) / Decimal(len(holds))).quantize(Decimal("0.01"))
-        if holds
-        else None
+        (sum(holds) / Decimal(len(holds))).quantize(Decimal("0.01")) if holds else None
     )
     return {
         "trade_count": n,
@@ -155,23 +139,17 @@ def _compute_stats(trades: list[dict[str, Any]]) -> dict[str, Any] | None:
         "recovery_factor": str(recovery) if recovery is not None else None,
         "maximum_drawdown": str(max_dd.quantize(Decimal("0.01"))),
         "average_r": str(avg_r) if avg_r is not None else None,
-        "average_hold_time_minutes": (
-            str(avg_hold) if avg_hold is not None else None
-        ),
+        "average_hold_time_minutes": (str(avg_hold) if avg_hold is not None else None),
         "net_pnl": str(pnl_sum.quantize(Decimal("0.01"))),
         "wins": wins,
         "losses": losses,
         "_expectancy_num": expectancy,
         "_win_rate_frac": Decimal(wins) / Decimal(n),
-        "_pnls": [
-            float(_dec(t.get("pnl") or t.get("net_pnl")) or 0) for t in trades
-        ],
+        "_pnls": [float(_dec(t.get("pnl") or t.get("net_pnl")) or 0) for t in trades],
     }
 
 
-def statistical_validation(
-    inp: IvpInput, config: IvpConfig
-) -> ModuleResult:
+def statistical_validation(inp: IvpInput, config: IvpConfig) -> ModuleResult:
     trades = _trades(inp)
     if len(trades) < config.min_trades_for_evidence:
         return _insufficient(
@@ -333,9 +311,7 @@ def regime_validation(inp: IvpInput, config: IvpConfig) -> ModuleResult:
         status="available" if available else "insufficient_evidence",
         score=Decimal(str(available)) if available else None,
         recommendation=(
-            f"Strongest sample: {strongest}"
-            if strongest
-            else INSUFFICIENT
+            f"Strongest sample: {strongest}" if strongest else INSUFFICIENT
         ),
         reasons=(
             "Evaluated Trend/Range/HV/LV/London/NY/Asia/News separately",
@@ -350,9 +326,7 @@ def regime_validation(inp: IvpInput, config: IvpConfig) -> ModuleResult:
     )
 
 
-def configuration_comparison(
-    inp: IvpInput, config: IvpConfig
-) -> ModuleResult:
+def configuration_comparison(inp: IvpInput, config: IvpConfig) -> ModuleResult:
     configs = list(inp.configurations or [])
     configs = [c for c in configs if isinstance(c, dict)]
     if not configs:
@@ -414,9 +388,7 @@ def configuration_comparison(
                 {
                     "id": cid,
                     "status": (
-                        "available"
-                        if exp is not None
-                        else "insufficient_evidence"
+                        "available" if exp is not None else "insufficient_evidence"
                     ),
                     "trade_count": tc or len(trades),
                     "expectancy": str(exp) if exp is not None else None,
@@ -430,9 +402,7 @@ def configuration_comparison(
                         if _dec(c.get("profit_factor")) is not None
                         else None
                     ),
-                    "_sort_expectancy": (
-                        float(exp) if exp is not None else None
-                    ),
+                    "_sort_expectancy": (float(exp) if exp is not None else None),
                     "verdict": None if exp is not None else INSUFFICIENT,
                 }
             )
@@ -526,9 +496,7 @@ def stability_analysis(inp: IvpInput, config: IvpConfig) -> ModuleResult:
             "Degradation or instability signals detected"
             if degradation or instability
             else (
-                "Rolling windows evaluated"
-                if status == "available"
-                else INSUFFICIENT
+                "Rolling windows evaluated" if status == "available" else INSUFFICIENT
             )
         ),
         reasons=(
@@ -552,9 +520,7 @@ def risk_validation(inp: IvpInput, config: IvpConfig) -> ModuleResult:
 
     capital = facts.get("capital_preservation")
     dd_behavior = facts.get("drawdown_behavior") or (
-        {"maximum_drawdown": stats["maximum_drawdown"]}
-        if stats
-        else None
+        {"maximum_drawdown": stats["maximum_drawdown"]} if stats else None
     )
     sizing = facts.get("position_sizing_consistency")
     compliance = facts.get("risk_rule_compliance")
@@ -655,9 +621,7 @@ def evidence_dashboard(modules: dict[str, ModuleResult]) -> ModuleResult:
     statuses = {k: v.status for k, v in modules.items()}
     available = sum(1 for s in statuses.values() if s == "available")
     insufficient = sum(
-        1
-        for s in statuses.values()
-        if s in ("insufficient_evidence", "empty")
+        1 for s in statuses.values() if s in ("insufficient_evidence", "empty")
     )
     total = max(len(statuses), 1)
     strength = (Decimal(available) / Decimal(total) * Decimal(100)).quantize(
@@ -670,9 +634,7 @@ def evidence_dashboard(modules: dict[str, ModuleResult]) -> ModuleResult:
         d = modules["statistical_validation"].details or {}
         sample = d.get("trade_count")
     if "confidence_analysis" in modules:
-        conf = (modules["confidence_analysis"].details or {}).get(
-            "win_rate_ci_pct"
-        )
+        conf = (modules["confidence_analysis"].details or {}).get("win_rate_ci_pct")
 
     strengths: list[str] = []
     weaknesses: list[str] = []
@@ -727,12 +689,8 @@ def human_decision_package(
     dash = modules.get("evidence_dashboard")
     stats = modules.get("statistical_validation")
     conf = modules.get("confidence_analysis")
-    strength = (
-        (dash.details or {}).get("evidence_strength_pct") if dash else None
-    )
-    sample = (
-        (stats.details or {}).get("trade_count") if stats else None
-    )
+    strength = (dash.details or {}).get("evidence_strength_pct") if dash else None
+    sample = (stats.details or {}).get("trade_count") if stats else None
 
     deployment_ok = False
     if (
@@ -797,9 +755,7 @@ def human_decision_package(
             "evidence_quality": {
                 "strength_pct": strength,
                 "sample_size": sample,
-                "confidence": (
-                    (conf.details or {}) if conf else None
-                ),
+                "confidence": ((conf.details or {}) if conf else None),
             },
             "open_questions": open_q,
             "recommended_next_tests": next_tests,
@@ -832,9 +788,7 @@ def validation_history(
         "snapshot": {
             "evidence_strength_pct": snapshot.get("evidence_strength_pct"),
             "sample_size": snapshot.get("sample_size"),
-            "deployment_recommendation": snapshot.get(
-                "deployment_recommendation"
-            ),
+            "deployment_recommendation": snapshot.get("deployment_recommendation"),
         },
         "comments": str(event.get("comments") or ""),
         "append_only": True,

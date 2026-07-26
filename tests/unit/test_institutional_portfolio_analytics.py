@@ -7,9 +7,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.application.services.institutional_portfolio_analytics import (
-    analyze_portfolio,
     analytics_to_csv,
     analytics_to_pdf_bytes,
+    analyze_portfolio,
     build_report,
     section_health_score,
 )
@@ -46,11 +46,26 @@ def _trade(
 def _synthetic_trades(*, bullish: bool = True) -> list[dict]:
     """Wins and losses spread across several days."""
     pnls = (
-        [12.0, 8.0, 15.0, 10.0, 9.0, 11.0, 14.0, 7.0, 13.0, 6.0, 5.0, 4.0]
-        + [-4.0, -3.0, -5.0, -2.0]
+        [
+            12.0,
+            8.0,
+            15.0,
+            10.0,
+            9.0,
+            11.0,
+            14.0,
+            7.0,
+            13.0,
+            6.0,
+            5.0,
+            4.0,
+            -4.0,
+            -3.0,
+            -5.0,
+            -2.0,
+        ]
         if bullish
-        else [-12.0, -10.0, -8.0, -15.0, -6.0, -9.0, -4.0, -11.0]
-        + [3.0, 2.0]
+        else [-12.0, -10.0, -8.0, -15.0, -6.0, -9.0, -4.0, -11.0, 3.0, 2.0]
     )
     trades: list[dict] = []
     for i, pnl in enumerate(pnls):
@@ -80,7 +95,9 @@ class TestAnalyzePortfolio:
         risk = payload["sections"]["risk"]
         health = payload["sections"]["health_score"]
 
-        assert dashboard["net_profit"] == pytest.approx(sum(t["profit_loss"] for t in trades), abs=0.01)
+        assert dashboard["net_profit"] == pytest.approx(
+            sum(t["profit_loss"] for t in trades), abs=0.01
+        )
         assert performance["win_rate_pct"] == pytest.approx(
             sum(1 for t in trades if t["profit_loss"] > 0) / len(trades) * 100.0,
             abs=0.01,
@@ -91,7 +108,12 @@ class TestAnalyzePortfolio:
 
         assert payload["mutates_engines"] is False
         assert payload["analytics_only"] is True
-        assert payload["never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"] is True
+        assert (
+            payload[
+                "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"
+            ]
+            is True
+        )
 
         for period in ("daily", "weekly", "monthly", "quarterly", "yearly"):
             assert period in payload["reports"]
@@ -117,7 +139,9 @@ class TestAnalyzePortfolio:
             dashboard={"balance": 10_500, "equity": 10_500},
             risk={"max_drawdown_pct": 5.0, "ulcer_index": 2.0},
             performance={"win_rate_pct": 62.0, "profit_factor": 2.0, "expectancy": 8.0},
-            behavior={"session_performance": {"london": {"count": 5, "win_rate": 60.0}}},
+            behavior={
+                "session_performance": {"london": {"count": 5, "win_rate": 60.0}}
+            },
             equity_path={"trade_count": 20},
             source_meta={"ok": True},
         )
@@ -126,7 +150,11 @@ class TestAnalyzePortfolio:
         yellow = section_health_score(
             dashboard={"balance": 9_800, "equity": 9_800},
             risk={"max_drawdown_pct": 22.0, "ulcer_index": 40.0},
-            performance={"win_rate_pct": 38.0, "profit_factor": 0.7, "expectancy": -3.0},
+            performance={
+                "win_rate_pct": 38.0,
+                "profit_factor": 0.7,
+                "expectancy": -3.0,
+            },
             behavior={"session_performance": {}},
             equity_path={"trade_count": 8},
             source_meta={"ok": False},
@@ -136,7 +164,11 @@ class TestAnalyzePortfolio:
         red = section_health_score(
             dashboard={"balance": 7_500, "equity": 7_500},
             risk={"max_drawdown_pct": 50.0, "ulcer_index": 70.0},
-            performance={"win_rate_pct": 18.0, "profit_factor": 0.2, "expectancy": -15.0},
+            performance={
+                "win_rate_pct": 18.0,
+                "profit_factor": 0.2,
+                "expectancy": -15.0,
+            },
             behavior={"session_performance": {}},
             equity_path={"trade_count": 3},
             source_meta={"ok": False},

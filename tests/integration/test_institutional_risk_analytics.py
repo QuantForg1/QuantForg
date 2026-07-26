@@ -28,7 +28,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["approves_releases"] is False
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     irap = InstitutionalRiskAnalytics(store=IrapStore(path=tmp_path / "irap.json"))
     monkeypatch.setattr("app.domain.institutional_risk_analytics._IRAP", irap)
     monkeypatch.setattr(svc, "get_irap", lambda: irap)

@@ -59,7 +59,9 @@ def _normalize_severity(raw: Any) -> str:
 def build_health_scores(ctx: dict[str, Any]) -> dict[str, Any]:
     sources = _as_dict(ctx.get("sources"))
     icc = _as_dict(sources.get("icc"))
-    icc_kpis = _as_dict(icc.get("executive_kpis") or _as_dict(icc.get("sections")).get("executive_kpis"))
+    icc_kpis = _as_dict(
+        icc.get("executive_kpis") or _as_dict(icc.get("sections")).get("executive_kpis")
+    )
     eqs = _as_dict(sources.get("eqs"))
     eqs_score = _as_dict(eqs.get("execution_score") or eqs)
     res = _as_dict(sources.get("res"))
@@ -86,10 +88,16 @@ def build_health_scores(ctx: dict[str, Any]) -> dict[str, Any]:
         icc_kpis.get("trading_health"),
         icc_kpis.get("live_trading_score"),
         _as_dict(icc.get("system_overall")).get("score"),
-        icc.get("system_overall") if isinstance(icc.get("system_overall"), (int, float)) else None,
+        (
+            icc.get("system_overall")
+            if isinstance(icc.get("system_overall"), (int, float))
+            else None
+        ),
     )
     execution = _score_or(
-        50.0, eqs_score.get("overall_execution_score"), eqs.get("overall_execution_score")
+        50.0,
+        eqs_score.get("overall_execution_score"),
+        eqs.get("overall_execution_score"),
     )
     reliability = _score_or(
         50.0,
@@ -110,9 +118,7 @@ def build_health_scores(ctx: dict[str, Any]) -> dict[str, Any]:
     # Experiment health from primary IEP stats generalization / count
     exp_gen = None
     if iep_reg:
-        exp_gen = _f(
-            _as_dict(iep_reg[0].get("statistics")).get("generalization_score")
-        )
+        exp_gen = _f(_as_dict(iep_reg[0].get("statistics")).get("generalization_score"))
     experiment = _score_or(
         45.0 if iep_reg else 35.0,
         exp_gen,
@@ -125,13 +131,16 @@ def build_health_scores(ctx: dict[str, Any]) -> dict[str, Any]:
         risk = _clamp(100.0 - dd * 2.5)
     risk = _score_or(
         risk,
-        irap_metrics.get("sharpe_ratio") and min(100.0, (_f(irap_metrics.get("sharpe_ratio")) or 0) * 40),
+        irap_metrics.get("sharpe_ratio")
+        and min(100.0, (_f(irap_metrics.get("sharpe_ratio")) or 0) * 40),
     )
     # Release health
     release = 50.0
     if releases:
         statuses = [str(_as_dict(r).get("status") or "").lower() for r in releases]
-        approved = sum(1 for s in statuses if "approv" in s or "prod" in s or "staged" in s)
+        approved = sum(
+            1 for s in statuses if "approv" in s or "prod" in s or "staged" in s
+        )
         release = _clamp(45.0 + approved * 10.0 + min(20.0, len(releases) * 3))
 
     overall = _clamp(
@@ -198,7 +207,9 @@ def _alert(
     }
 
 
-def build_executive_alerts(ctx: dict[str, Any], health: dict[str, Any]) -> list[dict[str, Any]]:
+def build_executive_alerts(
+    ctx: dict[str, Any], health: dict[str, Any]
+) -> list[dict[str, Any]]:
     sources = _as_dict(ctx.get("sources"))
     alerts: list[dict[str, Any]] = []
 
@@ -315,7 +326,10 @@ def build_global_timeline(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 "title": f"Release {rd.get('version') or rd.get('release_id')}",
                 "status": rd.get("status"),
                 "at": rd.get("updated_at") or rd.get("created_at"),
-                "evidence": {"release_id": rd.get("release_id"), "stage": rd.get("stage")},
+                "evidence": {
+                    "release_id": rd.get("release_id"),
+                    "stage": rd.get("stage"),
+                },
                 "source_subsystem": "irdp",
             }
         )
@@ -365,12 +379,21 @@ def build_global_timeline(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
 
-    for src, label in (("cvf", "validation"), ("irap", "risk"), ("res", "reliability"), ("eqs", "execution")):
+    for src, label in (
+        ("cvf", "validation"),
+        ("irap", "risk"),
+        ("res", "reliability"),
+        ("eqs", "execution"),
+    ):
         for raw in _as_list(_as_dict(sources.get(src)).get("alerts"))[:5]:
             ad = _as_dict(raw)
             events.append(
                 {
-                    "kind": f"{label}_alert" if label != "execution" else "execution_anomaly",
+                    "kind": (
+                        f"{label}_alert"
+                        if label != "execution"
+                        else "execution_anomaly"
+                    ),
                     "title": str(ad.get("kind") or f"{src} alert"),
                     "status": ad.get("severity"),
                     "at": ad.get("observed_at") or ad.get("created_at"),
@@ -381,11 +404,15 @@ def build_global_timeline(ctx: dict[str, Any]) -> list[dict[str, Any]]:
 
     # ICC timeline if present
     icc_tl = _as_list(
-        _as_dict(_as_dict(sources.get("icc")).get("sections")).get("operational_timeline")
+        _as_dict(_as_dict(sources.get("icc")).get("sections")).get(
+            "operational_timeline"
+        )
         or _as_dict(sources.get("icc")).get("operational_timeline")
     )
     if isinstance(
-        _as_dict(_as_dict(sources.get("icc")).get("sections")).get("operational_timeline"),
+        _as_dict(_as_dict(sources.get("icc")).get("sections")).get(
+            "operational_timeline"
+        ),
         dict,
     ):
         icc_tl = _as_list(
@@ -557,4 +584,9 @@ def aggregation_consistency_check(
         issues.append("evidence_subsystems_incomplete")
     if not integrity.get("unique_subsystem_ids"):
         issues.append("evidence_duplicate_ids")
-    return {"ok": len(issues) == 0, "issues": issues, "research_only": False, "read_only": True}
+    return {
+        "ok": len(issues) == 0,
+        "issues": issues,
+        "research_only": False,
+        "read_only": True,
+    }

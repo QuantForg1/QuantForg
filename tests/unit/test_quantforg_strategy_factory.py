@@ -63,7 +63,7 @@ def _ctx() -> dict:
             "qem": {},
             "qcdm": {"schema_version": "1.0.0"},
         },
-        "availability": {s: True for s in INTEGRATIONS},
+        "availability": dict.fromkeys(INTEGRATIONS, True),
         "source_count": len(INTEGRATIONS),
         "read_only": True,
     }
@@ -122,7 +122,10 @@ class TestHumanApproval:
         assert result["never_executes_trades"] is True
         assert result["approval"]["decision"] == "approved"
         assert result["work_item"]["pipeline_stage"] == to_stage
-        assert result["work_item"]["pipeline_stage"] != from_stage or to_stage == from_stage
+        assert (
+            result["work_item"]["pipeline_stage"] != from_stage
+            or to_stage == from_stage
+        )
 
 
 class TestPlatform:

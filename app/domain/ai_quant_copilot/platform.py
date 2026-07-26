@@ -92,7 +92,9 @@ class AiQuantCopilot:
         pack.pop("_ctx", None)
         return pack
 
-    def ask(self, question: str, *, persist_conversation: bool = True) -> dict[str, Any]:
+    def ask(
+        self, question: str, *, persist_conversation: bool = True
+    ) -> dict[str, Any]:
         pack = self.run_ops(persist=False)
         ctx = pack.pop("_ctx", {}) or gather_ops_context()
         result = answer_question(question, ctx=ctx, pack=pack)
@@ -106,9 +108,11 @@ class AiQuantCopilot:
                     "answer": result.get("answer"),
                     "source_subsystem": result.get("source_subsystem"),
                     "confidence": result.get("confidence"),
-                    "evidence_count": len(result.get("evidence") or [])
-                    if isinstance(result.get("evidence"), list)
-                    else 1,
+                    "evidence_count": (
+                        len(result.get("evidence") or [])
+                        if isinstance(result.get("evidence"), list)
+                        else 1
+                    ),
                 }
             )
         result["conversation_history"] = self.store.list_conversations(limit=20)

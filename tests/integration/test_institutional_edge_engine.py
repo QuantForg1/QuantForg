@@ -46,8 +46,7 @@ def test_iee_router_registered(app) -> None:
     paths = _collect_paths(list(app.routes))
     assert any("institutional-edge-engine" in p for p in paths)
     assert any(
-        p.endswith("/evaluate") and "institutional-edge-engine" in p
-        for p in paths
+        p.endswith("/evaluate") and "institutional-edge-engine" in p for p in paths
     )
 
 

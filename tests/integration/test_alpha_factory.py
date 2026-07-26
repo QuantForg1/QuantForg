@@ -46,9 +46,7 @@ def test_alpha_factory_router_registered(app) -> None:
 
 
 def test_alpha_factory_domain_no_order_send() -> None:
-    root = (
-        Path(__file__).resolve().parents[2] / "app" / "domain" / "alpha_factory"
-    )
+    root = Path(__file__).resolve().parents[2] / "app" / "domain" / "alpha_factory"
     offenders = [
         p.name
         for p in root.glob("*.py")

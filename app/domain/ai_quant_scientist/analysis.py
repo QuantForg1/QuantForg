@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import statistics
-from collections import defaultdict
 from typing import Any
 from uuid import uuid4
 
@@ -51,9 +49,7 @@ def _score_pack(
     evidence_n: int,
 ) -> dict[str, Any]:
     evidence_strength = min(100.0, evidence_n * 18.0 + min(sample_size, 50))
-    statistical_reliability = min(
-        100.0, 20.0 + sample_size * 1.5 + (confidence * 0.4)
-    )
+    statistical_reliability = min(100.0, 20.0 + sample_size * 1.5 + (confidence * 0.4))
     recommendation_strength = round(
         (confidence * 0.45 + evidence_strength * 0.3 + statistical_reliability * 0.25),
         1,
@@ -78,9 +74,11 @@ def discover_patterns(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     time_sec = (sections or {}).get("time") or {}
     perf = (sections or {}).get("performance") or {}
 
-    session_perf = behavior.get("session_performance") or behavior.get(
-        "average_session_performance"
-    ) or {}
+    session_perf = (
+        behavior.get("session_performance")
+        or behavior.get("average_session_performance")
+        or {}
+    )
     if isinstance(session_perf, dict) and session_perf:
         best = None
         best_wr = -1.0
@@ -119,7 +117,7 @@ def discover_patterns(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                     "id": _rec_id("pattern", grain, bucket.get("best")),
                     "kind": grain,
                     "title": f"Best {label} · {bucket.get('best')}",
-                    "summary": f"Time analytics highlight {bucket.get('best')} as strongest {label.lower()} bucket",
+                    "summary": f"Time analytics highlight {bucket.get('best')} as strongest {label.lower()} bucket",  # noqa: E501
                     "stats": {
                         "best": bucket.get("best"),
                         "worst": bucket.get("worst"),
@@ -138,7 +136,8 @@ def discover_patterns(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                     "profit_factor": perf.get("profit_factor"),
                     "expectancy": perf.get("expectancy"),
                     "win_rate_pct": perf.get("win_rate_pct"),
-                    "average_r": perf.get("average_r") or perf.get("average_r_multiple"),
+                    "average_r": perf.get("average_r")
+                    or perf.get("average_r_multiple"),
                 },
             }
         )
@@ -147,12 +146,16 @@ def discover_patterns(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     if behavior.get("average_holding_time_sec") is not None:
         patterns.append(
             {
-                "id": _rec_id("pattern", "hold", behavior.get("average_holding_time_sec")),
+                "id": _rec_id(
+                    "pattern", "hold", behavior.get("average_holding_time_sec")
+                ),
                 "kind": "holding_time",
                 "title": "Average holding time",
                 "summary": "Typical research holding duration from closed trades",
                 "stats": {
-                    "average_holding_time_sec": behavior.get("average_holding_time_sec"),
+                    "average_holding_time_sec": behavior.get(
+                        "average_holding_time_sec"
+                    ),
                     "best_holding_time_sec": behavior.get("best_holding_time_sec"),
                     "worst_holding_time_sec": behavior.get("worst_holding_time_sec"),
                 },
@@ -197,7 +200,10 @@ def detect_weaknesses(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 "kind": "high_drawdown",
                 "title": "Elevated maximum drawdown",
                 "summary": f"Max drawdown {dd}% exceeds soft research attention band",
-                "stats": {"max_drawdown_pct": dd, "ulcer_index": risk.get("ulcer_index")},
+                "stats": {
+                    "max_drawdown_pct": dd,
+                    "ulcer_index": risk.get("ulcer_index"),
+                },
             }
         )
 
@@ -226,8 +232,11 @@ def detect_weaknesses(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
 
-    idw_q = ((sources.get("idw") or {}).get("quality") or {})
-    if _f(idw_q.get("integrity_score")) is not None and float(idw_q["integrity_score"]) < 60:
+    idw_q = (sources.get("idw") or {}).get("quality") or {}
+    if (
+        _f(idw_q.get("integrity_score")) is not None
+        and float(idw_q["integrity_score"]) < 60
+    ):
         weaknesses.append(
             {
                 "id": _rec_id("weak", "idw", idw_q.get("integrity_score")),
@@ -250,7 +259,9 @@ def compare_strategies(ctx: dict[str, Any]) -> dict[str, Any]:
     irl = sources.get("irl") or {}
     board = (irl.get("leaderboard") or {}).get("rows") or []
     bench = irl.get("benchmark") or {}
-    production = (bench.get("production_baseline") if isinstance(bench, dict) else None) or {
+    production = (
+        bench.get("production_baseline") if isinstance(bench, dict) else None
+    ) or {
         "label": "Production baseline",
         "profit_factor": 2.31,
         "expectancy": 4.2,
@@ -287,7 +298,11 @@ def compare_strategies(ctx: dict[str, Any]) -> dict[str, Any]:
 
     best = candidates[0] if candidates else None
     delta_pf = None
-    if best and production.get("profit_factor") is not None and best.get("profit_factor") is not None:
+    if (
+        best
+        and production.get("profit_factor") is not None
+        and best.get("profit_factor") is not None
+    ):
         try:
             prod_pf = float(production["profit_factor"])
             cand_pf = float(best["profit_factor"])
@@ -323,7 +338,7 @@ def regime_research(ctx: dict[str, Any]) -> dict[str, Any]:
         "LIQUIDITY_SWEEP",
     ]
     table: list[dict[str, Any]] = []
-    # Use historical performance from current if present; else placeholders as research estimates
+    # Use historical performance from current if present; else placeholders as research estimates  # noqa: E501
     perf = {}
     if isinstance(current, dict):
         perf = current.get("historical_performance") or {}
@@ -350,7 +365,9 @@ def regime_research(ctx: dict[str, Any]) -> dict[str, Any]:
             }
         )
     return {
-        "current_regime": current.get("current_regime") if isinstance(current, dict) else None,
+        "current_regime": (
+            current.get("current_regime") if isinstance(current, dict) else None
+        ),
         "history_count": len(hist) if isinstance(hist, list) else 0,
         "regime_expectations": table,
         "read_only": True,
@@ -479,7 +496,7 @@ def build_recommendations(
                     "type": RecommendationType.OPPORTUNITY.value,
                     "title": f"Candidate leads production PF by {delta}%",
                     "summary": (
-                        f"Research candidate '{best.get('name')}' shows higher PF vs production baseline"
+                        f"Research candidate '{best.get('name')}' shows higher PF vs production baseline"  # noqa: E501
                     ),
                     "status": "Open",
                     "explainability": _explain(
@@ -494,10 +511,11 @@ def build_recommendations(
                         },
                         confidence=min(88.0, 50.0 + abs(delta)),
                         sample_size=int(
-                            (comparison.get("production") or {}).get("total_trades") or 30
+                            (comparison.get("production") or {}).get("total_trades")
+                            or 30
                         ),
                         counter_arguments=[
-                            "Leaderboard sample may be small or synthetic research replay",
+                            "Leaderboard sample may be small or synthetic research replay",  # noqa: E501
                         ],
                         risks=[
                             "Never promote automatically — governance required",
@@ -516,17 +534,21 @@ def build_recommendations(
                     "id": _rec_id("rej", best.get("uuid"), delta),
                     "type": RecommendationType.REJECTED_HYPOTHESIS.value,
                     "title": "Candidate does not beat production PF",
-                    "summary": "Top research candidate is not superior on PF differential",
+                    "summary": "Top research candidate is not superior on PF differential",  # noqa: E501
                     "status": "Open",
                     "explainability": _explain(
                         evidence=[f"delta_pct={delta}"],
                         stats={"candidate": best, "delta": delta},
                         confidence=65.0,
                         sample_size=20,
-                        counter_arguments=["Other metrics (DD, consistency) may still favor candidate"],
+                        counter_arguments=[
+                            "Other metrics (DD, consistency) may still favor candidate"
+                        ],
                         risks=["Rejecting too early without multi-metric review"],
                     ),
-                    "scores": _score_pack(confidence=65.0, sample_size=20, evidence_n=2),
+                    "scores": _score_pack(
+                        confidence=65.0, sample_size=20, evidence_n=2
+                    ),
                 }
             )
 
@@ -534,13 +556,15 @@ def build_recommendations(
     if stable:
         recs.append(
             {
-                "id": _rec_id("improve", stable.get("quality"), stable.get("confluence")),
+                "id": _rec_id(
+                    "improve", stable.get("quality"), stable.get("confluence")
+                ),
                 "type": RecommendationType.CANDIDATE_IMPROVEMENT.value,
                 "title": (
                     f"Research-stable gate band Q={stable.get('quality')} "
                     f"C={stable.get('confluence')}"
                 ),
-                "summary": "Sensitivity grid highlights a relatively stable research parameter band",
+                "summary": "Sensitivity grid highlights a relatively stable research parameter band",  # noqa: E501
                 "status": "Open",
                 "explainability": _explain(
                     evidence=["parameter_sensitivity.most_stable"],
@@ -610,7 +634,7 @@ def build_executive_report(
         "title": "AQS Executive Research Report",
         "executive_summary": (
             f"AQS reviewed {len(patterns)} patterns and {len(weaknesses)} weaknesses; "
-            f"{len(recommendations)} recommendations issued. Humans remain decision owners."
+            f"{len(recommendations)} recommendations issued. Humans remain decision owners."  # noqa: E501
         ),
         "findings": findings,
         "statistics": {
@@ -625,7 +649,8 @@ def build_executive_report(
             "sensitivity_stable": None,
         },
         "recommendations": [
-            {"id": r["id"], "type": r["type"], "title": r["title"]} for r in recommendations[:12]
+            {"id": r["id"], "type": r["type"], "title": r["title"]}
+            for r in recommendations[:12]
         ],
         "confidence": scores_avg.get("research_confidence_score"),
         "never_modifies_production": True,

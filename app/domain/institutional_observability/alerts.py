@@ -34,11 +34,7 @@ def detect_alerts(
             }
         )
 
-    high = (
-        (latencies.get("high_latency") or {})
-        if isinstance(latencies, dict)
-        else {}
-    )
+    high = (latencies.get("high_latency") or {}) if isinstance(latencies, dict) else {}
     for key, ms in high.items():
         alerts.append(
             {

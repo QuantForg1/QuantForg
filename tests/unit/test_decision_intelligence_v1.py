@@ -112,9 +112,7 @@ def test_force_approve_blocked() -> None:
 
 def test_veto_on_spread_and_losses() -> None:
     center = DecisionIntelligenceCenter()
-    result = center.evaluate(
-        _approve_input(spread=Decimal("9"), consecutive_losses=5)
-    )
+    result = center.evaluate(_approve_input(spread=Decimal("9"), consecutive_losses=5))
     assert result.decision == "REJECT"
     assert result.veto.clear is False
 

@@ -1,4 +1,4 @@
-"""IRL replay engine — historical / synthetic research bars ONLY.
+"""IRL replay engine - historical / synthetic research bars ONLY.
 
 Never calls OMS, gateway order_send, or live execution.
 """
@@ -41,7 +41,7 @@ def _seed_int(experiment_id: str, window: str) -> int:
 
 
 def _param_bias(params: dict[str, Any]) -> float:
-    """Map candidate research params to a mild expectancy bias (0.4–0.7)."""
+    """Map candidate research params to a mild expectancy bias (0.4-0.7)."""
     score = 0.5
     text = " ".join(str(params.get(k) or "") for k in params).lower()
     if "strict" in text or "conservative" in text:
@@ -71,7 +71,7 @@ def replay_historical(
     """Replay research-only path.
 
     If ``bars`` provided, use them as historical OHLC (read-only input).
-    Otherwise generate deterministic synthetic research bars — never live ticks.
+    Otherwise generate deterministic synthetic research bars - never live ticks.
     """
     days = resolve_window_days(window, custom_start=custom_start, custom_end=custom_end)
     seed = _seed_int(experiment_id, window)
@@ -100,8 +100,10 @@ def replay_historical(
     }
 
 
-def _trades_from_synthetic(*, days: int, seed: int, bias: float) -> list[dict[str, Any]]:
-    # ~0.4–1.2 trades/day depending on bias
+def _trades_from_synthetic(
+    *, days: int, seed: int, bias: float
+) -> list[dict[str, Any]]:
+    # ~0.4-1.2 trades/day depending on bias
     n = max(5, int(days * (0.35 + bias)))
     trades: list[dict[str, Any]] = []
     rng = seed
@@ -134,7 +136,7 @@ def _trades_from_bars(
     seed: int,
     bias: float,
 ) -> list[dict[str, Any]]:
-    """Simple research signal on historical OHLC — not production strategy."""
+    """Simple research signal on historical OHLC - not production strategy."""
     trades: list[dict[str, Any]] = []
     rng = seed
     step = max(1, len(bars) // max(8, int(len(bars) * 0.02)))
@@ -177,12 +179,14 @@ def _trades_from_bars(
             )
         i += step
     if len(trades) < 5:
-        return _trades_from_synthetic(days=max(30, len(bars) // 24), seed=seed, bias=bias)
+        return _trades_from_synthetic(
+            days=max(30, len(bars) // 24), seed=seed, bias=bias
+        )
     return trades
 
 
 def production_baseline_metrics() -> dict[str, Any]:
-    """Static research baseline placeholder — not live production mutation.
+    """Static research baseline placeholder - not live production mutation.
 
     Callers may override with a read-only snapshot from analytics.
     """

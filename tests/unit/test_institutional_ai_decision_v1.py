@@ -149,9 +149,7 @@ def test_evaluate_wait_without_risk_safety() -> None:
     result = engine.evaluate(
         DecisionEvaluateInput(
             dry_run=True,
-            layers=_passing_hints(
-                risk_engine_passed=None, safety_engine_passed=None
-            ),
+            layers=_passing_hints(risk_engine_passed=None, safety_engine_passed=None),
         )
     )
     assert result.decision == "WAIT"

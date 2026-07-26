@@ -21,7 +21,9 @@ def test_router_registered() -> None:
     assert mod == "app.presentation.routers.institutional_research_lab"
 
 
-def test_service_isolation_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_isolation_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     lab = InstitutionalResearchLab(store=IrlStore(path=tmp_path / "irl.json"))
     monkeypatch.setattr(
         "app.domain.institutional_research_lab._LAB",
@@ -31,7 +33,12 @@ def test_service_isolation_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     dash = svc.build_irl_dashboard()
     assert dash["mutates_engines"] is False
-    assert dash["never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"] is True
+    assert (
+        dash[
+            "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"
+        ]
+        is True
+    )
     assert dash["isolation"]["executes_live_trades"] is False
     assert dash["isolation"]["writes_production_tables"] is False
 

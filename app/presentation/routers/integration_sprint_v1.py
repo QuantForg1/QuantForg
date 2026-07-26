@@ -25,9 +25,7 @@ class PoliciesRequest(BaseModel):
     max_journal: int | None = Field(default=None, ge=1, le=10_000)
     max_calendar_events: int | None = Field(default=None, ge=1, le=500)
     max_warehouse_bars: int | None = Field(default=None, ge=10, le=50_000)
-    max_durable_per_namespace: int | None = Field(
-        default=None, ge=10, le=50_000
-    )
+    max_durable_per_namespace: int | None = Field(default=None, ge=10, le=50_000)
     stale_after_seconds: float | None = Field(default=None, ge=1, le=86_400)
     feature_flags: dict[str, bool] | None = None
 
@@ -61,9 +59,7 @@ async def integration_bus(user: CurrentUser) -> dict[str, Any]:
 
 
 @router.get("/feeds/{feed_name}")
-async def integration_feed(
-    feed_name: str, user: CurrentUser
-) -> dict[str, Any]:
+async def integration_feed(feed_name: str, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.feed(feed_name)
 

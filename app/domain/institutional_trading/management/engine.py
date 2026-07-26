@@ -209,13 +209,14 @@ class PositionManagementEngine:
         t0 = time.perf_counter()
         # Min-lot positions cannot partial-close — advance lifecycle locally so
         # trail / time-stop remain reachable (objectively broken otherwise).
-        if (
-            plan.kind is ManageActionKind.PARTIAL_CLOSE
-            and (plan.volume is None or plan.volume <= 0)
+        if plan.kind is ManageActionKind.PARTIAL_CLOSE and (
+            plan.volume is None or plan.volume <= 0
         ):
             position.partial_done = True
             if plan.target_state is not None:
-                PositionStateMachine.assert_transition(position.state, plan.target_state)
+                PositionStateMachine.assert_transition(
+                    position.state, plan.target_state
+                )
                 position.state = plan.target_state
             latency = (time.perf_counter() - t0) * 1000.0
             self.metrics.record_partial(success=True)

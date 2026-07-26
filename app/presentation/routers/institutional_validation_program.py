@@ -48,9 +48,7 @@ async def ivp_status(user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/evaluate")
-async def ivp_evaluate(
-    body: EvaluateRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def ivp_evaluate(body: EvaluateRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.evaluate(body.model_dump())
 

@@ -33,12 +33,8 @@ def test_policies_cannot_unlock() -> None:
 
 
 def test_insufficient_alpha_score() -> None:
-    out = AlphaFactory().evaluate(
-        AlphaFactoryInput(score_inputs={"consistency": 70})
-    )
-    assert out["modules"]["alpha_score"]["recommendation"] == (
-        "Insufficient Data"
-    )
+    out = AlphaFactory().evaluate(AlphaFactoryInput(score_inputs={"consistency": 70}))
+    assert out["modules"]["alpha_score"]["recommendation"] == ("Insufficient Data")
     assert out["automatic_promotion"] is False
 
 
@@ -53,9 +49,7 @@ def test_full_research_cycle() -> None:
                 "description": "test",
             },
             strategy={"family": "Breakout", "name": "BO1", "certified": False},
-            strategies=[
-                {"id": "c1", "family": "SMC", "name": "S1", "certified": True}
-            ],
+            strategies=[{"id": "c1", "family": "SMC", "name": "S1", "certified": True}],
             replay={
                 "timeframe": "5m",
                 "trades": [{"pnl": 1}] * 22,
@@ -108,21 +102,17 @@ def test_full_research_cycle() -> None:
     assert out["modifies_auto_trading"] is False
     assert out["research_summary"]["active_experiments"] >= 1
     assert out["certified_strategies"]["count"] == 1
-    assert out["modules"]["promotion_workflow"]["details"][
-        "never_auto_promotes"
-    ] is True
-    assert out["modules"]["promotion_report"]["details"][
-        "never_auto_promotes"
-    ] is True
+    assert (
+        out["modules"]["promotion_workflow"]["details"]["never_auto_promotes"] is True
+    )
+    assert out["modules"]["promotion_report"]["details"]["never_auto_promotes"] is True
     assert out["modules"]["replay_engine"]["status"] == "available"
     assert out["modules"]["benchmark_engine"]["status"] == "available"
 
 
 def test_promotion_never_auto() -> None:
     out = AlphaFactory().evaluate(
-        AlphaFactoryInput(
-            promotion={"stage": "Production", "auto_promote": True}
-        )
+        AlphaFactoryInput(promotion={"stage": "Production", "auto_promote": True})
     )
     promo = out["modules"]["promotion_workflow"]
     assert promo["details"]["automatic_promotion"] is False

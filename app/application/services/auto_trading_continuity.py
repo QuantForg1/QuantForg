@@ -81,7 +81,7 @@ def ensure_auto_trading_running(
             "reason": "already_running",
         }
 
-    with plane._lock:  # noqa: SLF001 — same lock used by control plane mutators
+    with plane._lock:
         plane.auto_trading_run_state = "running"
         plane.auto_trading_enabled = True
     after = "running"

@@ -18,7 +18,10 @@ from app.domain.institutional_simulation_engine.engine import (
     simulate_walk_forward,
 )
 from app.domain.institutional_simulation_engine.gather import gather_simulation_context
-from app.domain.institutional_simulation_engine.models import ISOLATION_FLAGS, SimulationMode
+from app.domain.institutional_simulation_engine.models import (
+    ISOLATION_FLAGS,
+    SimulationMode,
+)
 from app.domain.institutional_simulation_engine.store import IseStore
 
 
@@ -69,7 +72,9 @@ class InstitutionalSimulationEngine:
                 "source_count": ctx.get("source_count"),
             },
             "catalog": catalog(),
-            "simulations": self.store.list_simulations(limit=40) if persist else results,
+            "simulations": (
+                self.store.list_simulations(limit=40) if persist else results
+            ),
             "comparison": compare_scenarios(results),
             "reports": reports,
             "knowledge_nodes": self.store.knowledge_nodes(limit=40),
@@ -85,7 +90,9 @@ class InstitutionalSimulationEngine:
                 "count": len(pack.get("simulations") or []),
                 "catalog": pack.get("catalog"),
             },
-            "scenario_builder": {"scenarios": (pack.get("catalog") or {}).get("scenarios")},
+            "scenario_builder": {
+                "scenarios": (pack.get("catalog") or {}).get("scenarios")
+            },
             "scenario_explorer": pack.get("simulations"),
             "stress_testing": [
                 s
@@ -127,7 +134,9 @@ class InstitutionalSimulationEngine:
             row = simulate_replay(ctx)
         else:
             row = simulate_scenario(
-                ctx, scenario=scenario or "higher_spread", mode=SimulationMode.SCENARIO_BUILDER.value
+                ctx,
+                scenario=scenario or "higher_spread",
+                mode=SimulationMode.SCENARIO_BUILDER.value,
             )
         if persist:
             row = self.store.upsert_simulation(row)

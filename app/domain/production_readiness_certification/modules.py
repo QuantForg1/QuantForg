@@ -43,9 +43,7 @@ def _bool(value: Any) -> bool | None:
     return None
 
 
-def _verdict_from_score(
-    score: Decimal, config: PrcConfig
-) -> str:
+def _verdict_from_score(score: Decimal, config: PrcConfig) -> str:
     if score >= config.pass_threshold:
         return VERDICT_PASS
     if score >= config.watch_threshold:
@@ -71,9 +69,7 @@ def _score_checks(
         raw = facts.get(key)
         if raw is None:
             missing.append(key)
-            results.append(
-                {"metric": key, "value": None, "result": INSUFFICIENT}
-            )
+            results.append({"metric": key, "value": None, "result": INSUFFICIENT})
             continue
 
         ok: bool | None = None
@@ -84,18 +80,14 @@ def _score_checks(
             ok = b is True
             if b is None:
                 missing.append(key)
-                results.append(
-                    {"metric": key, "value": raw, "result": INSUFFICIENT}
-                )
+                results.append({"metric": key, "value": raw, "result": INSUFFICIENT})
                 continue
         elif kind == "higher_better":
             v = _dec(raw)
             t = _dec(threshold)
             if v is None or t is None:
                 missing.append(key)
-                results.append(
-                    {"metric": key, "value": raw, "result": INSUFFICIENT}
-                )
+                results.append({"metric": key, "value": raw, "result": INSUFFICIENT})
                 continue
             ok = v >= t
         elif kind == "lower_better":
@@ -103,9 +95,7 @@ def _score_checks(
             t = _dec(threshold)
             if v is None or t is None:
                 missing.append(key)
-                results.append(
-                    {"metric": key, "value": raw, "result": INSUFFICIENT}
-                )
+                results.append({"metric": key, "value": raw, "result": INSUFFICIENT})
                 continue
             ok = v <= t
         else:
@@ -126,12 +116,10 @@ def _score_checks(
             score = Decimal("0")
         else:
             # points already only counted passes among available
-            scored_passes = sum(
-                1 for r in results if r["result"] == VERDICT_PASS
+            scored_passes = sum(1 for r in results if r["result"] == VERDICT_PASS)
+            score = (Decimal(scored_passes) / available * Decimal("100")).quantize(
+                Decimal("0.01")
             )
-            score = (
-                Decimal(scored_passes) / available * Decimal("100")
-            ).quantize(Decimal("0.01"))
 
     return score, results, missing
 
@@ -198,9 +186,7 @@ def _domain_result(
     )
 
 
-def reliability_certification(
-    inp: PrcInput, config: PrcConfig
-) -> ModuleResult:
+def reliability_certification(inp: PrcInput, config: PrcConfig) -> ModuleResult:
     specs: list[tuple[str, str, Any]] = [
         ("service_uptime_pct", "higher_better", 99.0),
         ("recovery_success_rate_pct", "higher_better", 95.0),
@@ -236,9 +222,7 @@ def risk_certification(inp: PrcInput, config: PrcConfig) -> ModuleResult:
     )
 
 
-def execution_certification(
-    inp: PrcInput, config: PrcConfig
-) -> ModuleResult:
+def execution_certification(inp: PrcInput, config: PrcConfig) -> ModuleResult:
     specs: list[tuple[str, str, Any]] = [
         ("fill_reliability_pct", "higher_better", 97.0),
         ("execution_latency_ms_p95", "lower_better", 250.0),
@@ -255,9 +239,7 @@ def execution_certification(
     )
 
 
-def decision_certification(
-    inp: PrcInput, config: PrcConfig
-) -> ModuleResult:
+def decision_certification(inp: PrcInput, config: PrcConfig) -> ModuleResult:
     specs: list[tuple[str, str, Any]] = [
         ("decision_explainability_ok", "bool_true", True),
         ("decision_consistency_pct", "higher_better", 90.0),
@@ -290,9 +272,7 @@ def data_certification(inp: PrcInput, config: PrcConfig) -> ModuleResult:
     )
 
 
-def research_certification(
-    inp: PrcInput, config: PrcConfig
-) -> ModuleResult:
+def research_certification(inp: PrcInput, config: PrcConfig) -> ModuleResult:
     facts = inp.research if isinstance(inp.research, dict) else None
     specs: list[tuple[str, str, Any]] = [
         ("replay_evidence_ok", "bool_true", True),
@@ -310,9 +290,7 @@ def research_certification(
     )
 
 
-def operational_certification(
-    inp: PrcInput, config: PrcConfig
-) -> ModuleResult:
+def operational_certification(inp: PrcInput, config: PrcConfig) -> ModuleResult:
     specs: list[tuple[str, str, Any]] = [
         ("health_ok", "bool_true", True),
         ("monitoring_ok", "bool_true", True),
@@ -364,9 +342,7 @@ def readiness_dashboard(
         overall = None
         status = INSUFFICIENT
     else:
-        overall = (sum(scores) / Decimal(len(scores))).quantize(
-            Decimal("0.01")
-        )
+        overall = (sum(scores) / Decimal(len(scores))).quantize(Decimal("0.01"))
         status = _verdict_from_score(overall, config)
         # Any FAIL domain blocks PASS
         if (
@@ -374,9 +350,7 @@ def readiness_dashboard(
             and status == VERDICT_PASS
         ):
             status = VERDICT_WATCH
-        if sum(
-            1 for v in board.values() if v.get("verdict") == VERDICT_FAIL
-        ) >= 2:
+        if sum(1 for v in board.values() if v.get("verdict") == VERDICT_FAIL) >= 2:
             status = VERDICT_FAIL
         if (
             any(v.get("verdict") == INSUFFICIENT for v in board.values())
@@ -413,9 +387,7 @@ def readiness_dashboard(
             },
             "operations": board.get("operational"),
             "domains": board,
-            "certification_status": (
-                status if overall is not None else INSUFFICIENT
-            ),
+            "certification_status": (status if overall is not None else INSUFFICIENT),
         },
     )
 
@@ -452,23 +424,13 @@ def human_signoff_package(
             open_issues.append(f"Supply evidence for {name}")
 
     if status != VERDICT_PASS:
-        restrictions.append(
-            "Do not deploy live capital without human approval"
-        )
-    restrictions.append(
-        "PRC never changes configuration automatically"
-    )
+        restrictions.append("Do not deploy live capital without human approval")
+    restrictions.append("PRC never changes configuration automatically")
 
     decision = {
-        VERDICT_PASS: (
-            "CERTIFIED — human approval still required before live capital"
-        ),
-        VERDICT_WATCH: (
-            "CONDITIONAL — human approval required; restrictions apply"
-        ),
-        VERDICT_FAIL: (
-            "NOT CERTIFIED — live capital deployment blocked by evidence"
-        ),
+        VERDICT_PASS: ("CERTIFIED — human approval still required before live capital"),
+        VERDICT_WATCH: ("CONDITIONAL — human approval required; restrictions apply"),
+        VERDICT_FAIL: ("NOT CERTIFIED — live capital deployment blocked by evidence"),
         INSUFFICIENT: "NOT CERTIFIED — insufficient evidence",
     }.get(str(status), "NOT CERTIFIED")
 
@@ -508,10 +470,7 @@ def continuous_certification(
     audit_id: str,
     snapshot: dict[str, Any],
 ) -> ModuleResult:
-    status_changed = (
-        prior_status is not None
-        and prior_status != current_status
-    )
+    status_changed = prior_status is not None and prior_status != current_status
     entry = {
         "id": f"prc_{uuid4().hex[:10]}",
         "audit_id": audit_id,

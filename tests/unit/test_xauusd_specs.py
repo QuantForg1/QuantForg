@@ -22,9 +22,11 @@ from app.domain.trading.xauusd_specs import (
 @pytest.mark.unit
 class TestXauusdSpecs:
     def test_contract_size_is_100(self) -> None:
-        assert CONTRACT_SIZE == Decimal("100")
+        assert Decimal("100") == CONTRACT_SIZE
         assert contract_size_for_symbol("XAUUSD") == Decimal("100")
-        assert contract_size_for_symbol("EURUSD") == Decimal("100")  # platform gold-only
+        assert contract_size_for_symbol("EURUSD") == Decimal(
+            "100"
+        )  # platform gold-only
 
     def test_fx_spread_ceiling_coerced(self) -> None:
         assert coerce_max_spread(Decimal("0.00050")) == MAX_SPREAD
@@ -62,7 +64,7 @@ class TestXauusdSpecs:
         assert margin == Decimal("4.02")
         assert pct == Decimal("4.05")
         assert notional_value(volume=volume, price=price) == Decimal("4017.00")
-        assert MAX_LEVERAGE == Decimal("1000")
+        assert Decimal("1000") == MAX_LEVERAGE
 
     def test_risk_engine_exposure_uses_margin_not_fx_notional(self) -> None:
         engine = RiskEngine(config=RiskEngineConfig())

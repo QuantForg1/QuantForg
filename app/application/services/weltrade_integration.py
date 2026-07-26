@@ -234,11 +234,8 @@ class WeltradeIntegrationService:
         elif gateway_reachable and diagnostic == "ok":
             diagnostic = "Gateway Online"
 
-        mt5_block = (
-            gateway_payload.get("mt5")
-            if isinstance(gateway_payload.get("mt5"), dict)
-            else {}
-        )
+        gateway_mt5 = gateway_payload.get("mt5")
+        mt5_block: dict[str, Any] = gateway_mt5 if isinstance(gateway_mt5, dict) else {}
         # Prefer nested mt5 capabilities; fall back to top-level if present.
         auto_raw = mt5_block.get("mt5_autotrading_enabled")
         if auto_raw is None:
@@ -250,9 +247,10 @@ class WeltradeIntegrationService:
             dll_raw = mt5_block.get("dll_allowed")
         if dll_raw is None:
             dll_raw = gateway_payload.get("dlls_allowed")
+        nested_support = mt5_block.get("capability_support")
         support = (
-            mt5_block.get("capability_support")
-            if isinstance(mt5_block.get("capability_support"), dict)
+            nested_support
+            if isinstance(nested_support, dict)
             else gateway_payload.get("capability_support")
         )
         if not isinstance(support, dict):
@@ -291,11 +289,7 @@ class WeltradeIntegrationService:
             "dlls_allowed": bool(dll_raw) if dll_raw is not None else None,
             "autotrading_support": str(
                 support.get("autotrading")
-                or (
-                    "SUPPORTED"
-                    if auto_raw is not None
-                    else "NOT_SUPPORTED"
-                )
+                or ("SUPPORTED" if auto_raw is not None else "NOT_SUPPORTED")
             ),
             "dll_support": str(
                 support.get("dll")

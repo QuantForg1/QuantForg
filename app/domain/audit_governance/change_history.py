@@ -26,18 +26,20 @@ class ConfigurationChangeHistory:
         entry = {
             "change_id": str(raw.get("change_id") or uuid4()),
             "timestamp": str(raw.get("timestamp") or _iso()),
-            "scope": str(
-                raw.get("scope") or raw.get("component") or "configuration"
-            )
+            "scope": str(raw.get("scope") or raw.get("component") or "configuration")
             .strip()
             .lower(),
             "key": str(raw.get("key") or raw.get("name") or ""),
-            "previous_value": raw.get("previous_value")
-            if raw.get("previous_value") is not None
-            else raw.get("old_value"),
-            "new_value": raw.get("new_value")
-            if raw.get("new_value") is not None
-            else raw.get("value"),
+            "previous_value": (
+                raw.get("previous_value")
+                if raw.get("previous_value") is not None
+                else raw.get("old_value")
+            ),
+            "new_value": (
+                raw.get("new_value")
+                if raw.get("new_value") is not None
+                else raw.get("value")
+            ),
             "environment": str(raw.get("environment") or "unknown"),
             "version": str(raw.get("version") or ""),
             "actor": str(raw.get("actor") or raw.get("operator") or "system"),

@@ -59,12 +59,16 @@ def normalize_event(raw: dict[str, Any]) -> dict[str, Any]:
         "severity": severity,
         "component": str(raw.get("component") or raw.get("source_component") or ""),
         "action": str(raw.get("action") or raw.get("event") or "").strip().lower(),
-        "previous_state": raw.get("previous_state")
-        if raw.get("previous_state") is not None
-        else raw.get("old_value"),
-        "new_state": raw.get("new_state")
-        if raw.get("new_state") is not None
-        else raw.get("new_value"),
+        "previous_state": (
+            raw.get("previous_state")
+            if raw.get("previous_state") is not None
+            else raw.get("old_value")
+        ),
+        "new_state": (
+            raw.get("new_state")
+            if raw.get("new_state") is not None
+            else raw.get("new_value")
+        ),
         "actor": str(
             raw.get("actor")
             or raw.get("operator")
@@ -79,9 +83,9 @@ def normalize_event(raw: dict[str, Any]) -> dict[str, Any]:
         "result": str(raw.get("result") or raw.get("outcome") or "recorded"),
         "notes": str(raw.get("notes") or raw.get("message") or ""),
         "approval": raw.get("approval"),
-        "versions": raw.get("versions")
-        if isinstance(raw.get("versions"), dict)
-        else {},
+        "versions": (
+            raw.get("versions") if isinstance(raw.get("versions"), dict) else {}
+        ),
         "immutable": True,
         "append_only": True,
     }

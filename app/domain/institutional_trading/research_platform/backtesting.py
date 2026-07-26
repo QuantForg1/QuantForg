@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,7 +17,9 @@ class TradeBar:
     win: bool = False
 
 
-def compute_metrics(trades: Sequence[TradeBar] | Sequence[dict[str, Any]]) -> dict[str, Any]:
+def compute_metrics(
+    trades: Sequence[TradeBar] | Sequence[dict[str, Any]],
+) -> dict[str, Any]:
     samples: list[TradeBar] = []
     for t in trades:
         if isinstance(t, TradeBar):
@@ -118,13 +121,13 @@ def run_backtest_suite(
     strategy_id: str = "research",
     sync_live_compare: bool = True,
 ) -> dict[str, Any]:
-    """Research-only suite; optionally updates existing backtest_vs_live store (metrics only)."""
+    """Research-only suite; optionally updates existing backtest_vs_live store (metrics only)."""  # noqa: E501
     historical = compute_metrics(trades)
     wf = walk_forward(trades)
     oos = out_of_sample(trades)
     if sync_live_compare:
         try:
-            from app.domain.institutional_trading.production_hardening.backtest_live import (
+            from app.domain.institutional_trading.production_hardening.backtest_live import (  # noqa: E501
                 get_backtest_live_store,
             )
 
@@ -134,7 +137,7 @@ def run_backtest_suite(
                 backtest_avg_rr=historical.get("avg_rr"),
                 backtest_expectancy=historical.get("expectancy"),
             )
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
     return {
         "historical": historical,

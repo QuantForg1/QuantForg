@@ -1,4 +1,4 @@
-"""Experiment Manager — controlled research experiments (never auto-modify production)."""
+"""Experiment Manager — controlled research experiments (never auto-modify production)."""  # noqa: E501
 
 from __future__ import annotations
 
@@ -137,7 +137,9 @@ class ExperimentStore:
             if len(self._rows) > DEFAULT_RESEARCH_CONFIG.max_experiments:
                 self._rows = self._rows[-DEFAULT_RESEARCH_CONFIG.max_experiments :]
         self._persist()
-        logger.info("research_experiment_created", id=exp.id, status=exp.status, auto_prod=False)
+        logger.info(
+            "research_experiment_created", id=exp.id, status=exp.status, auto_prod=False
+        )
         return exp
 
     def set_status(self, experiment_id: str, status: str) -> Experiment | None:
@@ -160,7 +162,9 @@ class ExperimentStore:
             self._persist()
         return updated
 
-    def attach_results(self, experiment_id: str, results: dict[str, Any]) -> Experiment | None:
+    def attach_results(
+        self, experiment_id: str, results: dict[str, Any]
+    ) -> Experiment | None:
         updated: Experiment | None = None
         with self._lock:
             for i, e in enumerate(self._rows):
@@ -187,7 +191,7 @@ class ExperimentStore:
 
     def summary(self) -> dict[str, Any]:
         with self._lock:
-            by = {s: 0 for s in EXPERIMENT_STATUSES}
+            by = dict.fromkeys(EXPERIMENT_STATUSES, 0)
             for e in self._rows:
                 by[e.status] = by.get(e.status, 0) + 1
             return {"total": len(self._rows), "by_status": by}

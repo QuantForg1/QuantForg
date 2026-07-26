@@ -475,10 +475,7 @@ class IntelligencePlatformCenter:
                 message="Registry feed unavailable",
             )
         strategies = (
-            reg.get("strategies")
-            or reg.get("items")
-            or reg.get("entries")
-            or []
+            reg.get("strategies") or reg.get("items") or reg.get("entries") or []
         )
         if not isinstance(strategies, list):
             strategies = []

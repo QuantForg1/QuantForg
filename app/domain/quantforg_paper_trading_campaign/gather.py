@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from app.domain.quantforg_paper_trading_campaign.models import DATA_SOURCES
 
@@ -10,7 +11,7 @@ from app.domain.quantforg_paper_trading_campaign.models import DATA_SOURCES
 def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -33,9 +34,7 @@ def gather_campaign_sources() -> dict[str, Any]:
     sources: dict[str, Any] = {}
     availability: dict[str, bool] = {}
 
-    sources["qsf"] = _store_snapshot(
-        "app.domain.quantforg_strategy_factory", "get_qsf"
-    )
+    sources["qsf"] = _store_snapshot("app.domain.quantforg_strategy_factory", "get_qsf")
     availability["qsf"] = bool(sources["qsf"])
 
     def _islm() -> dict[str, Any]:
@@ -70,9 +69,7 @@ def gather_campaign_sources() -> dict[str, Any]:
     )
     availability["irap"] = bool(sources["irap"])
 
-    sources["eqs"] = _store_snapshot(
-        "app.domain.execution_quality_suite", "get_eqs"
-    )
+    sources["eqs"] = _store_snapshot("app.domain.execution_quality_suite", "get_eqs")
     availability["eqs"] = bool(sources["eqs"])
 
     sources["res"] = _store_snapshot(
@@ -85,9 +82,7 @@ def gather_campaign_sources() -> dict[str, Any]:
     )
     availability["cvf"] = bool(sources["cvf"])
 
-    sources["qem"] = _store_snapshot(
-        "app.domain.quantforg_event_mesh", "get_qem"
-    )
+    sources["qem"] = _store_snapshot("app.domain.quantforg_event_mesh", "get_qem")
     availability["qem"] = bool(sources["qem"])
 
     sources["qcdm"] = _store_snapshot(

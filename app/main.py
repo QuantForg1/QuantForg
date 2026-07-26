@@ -378,7 +378,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 mount_unprefixed_health=False,
             )
             print(
-                f"AI: deferred routers {round((time.perf_counter() - t_routes) * 1000.0, 1)}ms",
+                f"AI: deferred routers {round((time.perf_counter() - t_routes) * 1000.0, 1)}ms",  # noqa: E501
                 flush=True,
             )
             _app.state.pending_router_specs = ()
@@ -413,7 +413,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             if runtime is not None:
 
                 async def _ite_watchdog() -> None:
-                    """Restart ITE loop if it exits unexpectedly (never leave AUTO dead)."""
+                    """Restart ITE loop if it exits unexpectedly (never leave AUTO dead)."""  # noqa: E501
                     while True:
                         try:
                             logger.warning(
@@ -432,7 +432,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                                 "ite_watchdog_orchestrator_crashed",
                                 error=str(exc),
                             )
-                        if getattr(runtime, "_stop", None) is not None and runtime._stop.is_set():
+                        if (
+                            getattr(runtime, "_stop", None) is not None
+                            and runtime._stop.is_set()
+                        ):
                             logger.info("ite_watchdog_stop_requested")
                             break
                         logger.error(
@@ -730,9 +733,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         _register_routers(application, settings, specs=_ROUTER_SPECS)
         application.state.pending_router_specs = ()
     else:
-        core_specs = tuple(
-            s for s in _ROUTER_SPECS if s[0] in _CORE_ROUTER_NAMES
-        )
+        core_specs = tuple(s for s in _ROUTER_SPECS if s[0] in _CORE_ROUTER_NAMES)
         _register_routers(application, settings, specs=core_specs)
         application.state.pending_router_specs = tuple(
             s for s in _ROUTER_SPECS if s[0] not in _CORE_ROUTER_NAMES

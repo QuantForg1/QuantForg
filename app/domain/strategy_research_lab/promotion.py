@@ -135,17 +135,14 @@ class PromotionWorkflow:
         if decision_l == "approve":
             case.state = PromotionState.PROMOTED
             case.notes = (
-                (case.notes + " | " if case.notes else "")
-                + "Promoted to Decision Engine eligibility only — not live."
-            )
+                case.notes + " | " if case.notes else ""
+            ) + "Promoted to Decision Engine eligibility only — not live."
         elif decision_l == "reject":
             case.state = PromotionState.REJECTED
         return case.to_dict()
 
     def list_cases(self) -> list[dict[str, object]]:
-        rows = sorted(
-            self._cases.values(), key=lambda c: c.updated_at, reverse=True
-        )
+        rows = sorted(self._cases.values(), key=lambda c: c.updated_at, reverse=True)
         return [c.to_dict() for c in rows]
 
     def dashboard(self) -> dict[str, Any]:

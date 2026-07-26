@@ -38,7 +38,9 @@ def build_live_statistics() -> dict[str, Any]:
             stats["daily_pnl"] = port.get("daily_pnl", port.get("pnl_today"))
             stats["weekly_pnl"] = port.get("weekly_pnl", port.get("pnl_week"))
             stats["monthly_pnl"] = port.get("monthly_pnl", port.get("pnl_month"))
-            stats["current_drawdown"] = port.get("drawdown", port.get("current_drawdown"))
+            stats["current_drawdown"] = port.get(
+                "drawdown", port.get("current_drawdown")
+            )
             stats["profit_factor"] = port.get("profit_factor")
             stats["win_rate"] = port.get("win_rate")
             stats["todays_trades"] = port.get("trades_today", port.get("todays_trades"))
@@ -52,12 +54,16 @@ def build_live_statistics() -> dict[str, Any]:
                 first = next(iter(by.values()))
                 if isinstance(first, dict):
                     stats["win_rate"] = stats["win_rate"] or first.get("win_rate")
-                    stats["profit_factor"] = stats["profit_factor"] or first.get("profit_factor")
+                    stats["profit_factor"] = stats["profit_factor"] or first.get(
+                        "profit_factor"
+                    )
                     stats["average_rr"] = stats["average_rr"] or first.get("average_rr")
 
         eq = get_execution_quality_monitor().snapshot()
         if isinstance(eq, dict):
-            stats["execution_latency_ms"] = eq.get("avg_latency_ms", eq.get("latency_ms"))
+            stats["execution_latency_ms"] = eq.get(
+                "avg_latency_ms", eq.get("latency_ms")
+            )
             stats["slippage"] = eq.get("avg_slippage", eq.get("slippage"))
     except Exception:
         logger.exception("live_stats_ai_validation_failed")
@@ -68,7 +74,7 @@ def build_live_statistics() -> dict[str, Any]:
         )
 
         stats["ai_calibration"] = get_calibration_store().chart()
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     try:
@@ -77,7 +83,7 @@ def build_live_statistics() -> dict[str, Any]:
         )
 
         stats["current_portfolio_risk"] = get_dynamic_risk_budget().snapshot()
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     try:
@@ -97,7 +103,7 @@ def build_live_statistics() -> dict[str, Any]:
             ):
                 if stats.get(k_dst) is None and mon.get(k_src) is not None:
                     stats[k_dst] = mon[k_src]
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     return {"live_statistics": stats, "source": "composed", "affects_production": False}

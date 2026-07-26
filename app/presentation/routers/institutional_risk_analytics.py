@@ -30,7 +30,9 @@ def _flags() -> dict[str, Any]:
 
 @router.get("/dashboard")
 def irap_dashboard(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     payload = build_irap_dashboard()
     payload.update(_flags())
@@ -39,7 +41,9 @@ def irap_dashboard(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/metrics")
 def irap_metrics(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     pack = build_irap_dashboard()
     return {"metrics": pack.get("metrics"), **_flags()}
@@ -47,7 +51,9 @@ def irap_metrics(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/exposure")
 def irap_exposure(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     pack = build_irap_dashboard()
     return {
@@ -60,7 +66,9 @@ def irap_exposure(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/drawdown")
 def irap_drawdown(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     pack = build_irap_dashboard()
     return {"drawdown": pack.get("drawdown"), **_flags()}
@@ -68,7 +76,9 @@ def irap_drawdown(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/correlation")
 def irap_correlation(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     pack = build_irap_dashboard()
     return {"correlation": pack.get("correlation"), **_flags()}
@@ -76,7 +86,9 @@ def irap_correlation(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/stress")
 def irap_stress(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     pack = build_irap_dashboard()
     return {
@@ -89,7 +101,9 @@ def irap_stress(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/alerts")
 def irap_alerts(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     pack = build_irap_dashboard()
     return {"alerts": pack.get("alerts"), **_flags()}
@@ -97,7 +111,9 @@ def irap_alerts(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/trends")
 def irap_trends(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_risk_analytics import build_irap_dashboard
+    from app.application.services.institutional_risk_analytics import (
+        build_irap_dashboard,
+    )
 
     pack = build_irap_dashboard()
     return {"trends": pack.get("trends"), **_flags()}

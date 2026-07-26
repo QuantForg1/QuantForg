@@ -106,7 +106,7 @@ def evaluate_capital_protection(
             )
             if not corr.allow:
                 return ProtectionDecision(False, 0.0, (corr.reason,), limits)
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
 
     if not reasons:

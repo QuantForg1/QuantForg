@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping import (
@@ -32,10 +33,8 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
 
     diagnostics = get_scalping_diagnostics_store()
     learning = None
-    try:
+    with contextlib.suppress(Exception):
         learning = get_scalping_learning_store().summary()
-    except Exception:
-        pass
 
     # Live vs backtest validation stub from learning / performance stores
     live_metrics: dict[str, Any] = {}
@@ -46,17 +45,17 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         )
 
         live_metrics = get_live_performance_monitor().snapshot() or {}
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     try:
-        from app.domain.institutional_trading.production_hardening.backtest_live import (
+        from app.domain.institutional_trading.production_hardening.backtest_live import (  # noqa: E501
             get_backtest_live_store,
         )
 
         bt = get_backtest_live_store().snapshot()
         if isinstance(bt, dict):
             backtest_metrics = bt.get("backtest") or bt.get("latest_backtest") or {}
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     validation = compare_backtest_vs_live(

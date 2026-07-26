@@ -51,9 +51,7 @@ class DecisionIntelligenceService:
         inp = DecisionCenterInput(
             side=str(payload.get("side") or "buy"),
             strategy_id=str(payload.get("strategy_id") or "default"),
-            technique=(
-                str(payload["technique"]) if payload.get("technique") else None
-            ),
+            technique=(str(payload["technique"]) if payload.get("technique") else None),
             signal_present=_opt_bool(payload.get("signal_present")),
             strategy_consensus_ok=_opt_bool(payload.get("strategy_consensus_ok")),
             market_regime_ok=_opt_bool(payload.get("market_regime_ok")),
@@ -65,8 +63,7 @@ class DecisionIntelligenceService:
                 execution_quality=_dec(cf_raw.get("execution_quality")),
             ),
             spread=_dec(payload.get("spread")),
-            daily_drawdown_pct=_dec(payload.get("daily_drawdown_pct"))
-            or Decimal("0"),
+            daily_drawdown_pct=_dec(payload.get("daily_drawdown_pct")) or Decimal("0"),
             consecutive_losses=int(payload.get("consecutive_losses") or 0),
             risk_engine_passed=_opt_bool(payload.get("risk_engine_passed")),
             safety_engine_passed=_opt_bool(payload.get("safety_engine_passed")),
@@ -88,6 +85,18 @@ class DecisionIntelligenceService:
         if payload.get("_alpha_audit"):
             result["alpha_integration"] = payload["_alpha_audit"]
         return result
+
+    def history(self, *, limit: int = 50) -> dict[str, object]:
+        return {"decisions": self._center.list_history(limit=limit)}
+
+    def replay(self, audit_id: str) -> dict[str, object]:
+        return self._center.replay(audit_id)
+
+    def policies(self) -> dict[str, object]:
+        return self._center.config.to_dict()
+
+    def update_policies(self, updates: dict[str, Any]) -> dict[str, object]:
+        return self._center.update_policies(updates)
 
 
 def _merge_alpha_advisory(payload: dict[str, Any]) -> dict[str, Any]:
@@ -114,28 +123,13 @@ def _merge_alpha_advisory(payload: dict[str, Any]) -> dict[str, Any]:
     payload["confidence_factors"] = cf
 
     if not payload.get("strategy_id") or payload.get("strategy_id") == "default":
-        payload["strategy_id"] = str(
-            alpha.get("strategy_id") or "alpha-engine-v1"
-        )
+        payload["strategy_id"] = str(alpha.get("strategy_id") or "alpha-engine-v1")
 
     payload["_alpha_audit"] = {
         "integrated": True,
         "alpha_composite_score": alpha.get("alpha_composite_score"),
         "alpha_market_quality_band": alpha.get("alpha_market_quality_band"),
         "never_sets_risk_or_safety": True,
-        "note": alpha.get("note")
-        or "Alpha advisory mapped — Risk/Safety unchanged",
+        "note": alpha.get("note") or "Alpha advisory mapped — Risk/Safety unchanged",
     }
     return payload
-
-    def history(self, *, limit: int = 50) -> dict[str, object]:
-        return {"decisions": self._center.list_history(limit=limit)}
-
-    def replay(self, audit_id: str) -> dict[str, object]:
-        return self._center.replay(audit_id)
-
-    def policies(self) -> dict[str, object]:
-        return self._center.config.to_dict()
-
-    def update_policies(self, updates: dict[str, Any]) -> dict[str, object]:
-        return self._center.update_policies(updates)

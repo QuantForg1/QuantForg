@@ -42,9 +42,7 @@ def evaluate_session_manager(
     if filt.passed:
         reason = f"Entries allowed in {name}."
     elif config.manage_positions_off_session:
-        reason = (
-            f"New entries blocked in {name}; open positions may still be managed."
-        )
+        reason = f"New entries blocked in {name}; open positions may still be managed."
     else:
         reason = f"Session {name} — entries and management blocked by policy."
     return SessionManagerState(

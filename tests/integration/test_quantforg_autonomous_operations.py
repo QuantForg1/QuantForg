@@ -50,7 +50,7 @@ def test_service_dashboard_flags(
         "app.domain.quantforg_autonomous_operations.platform.gather_operations_sources",
         lambda: {
             "sources": {s: {} for s in DATA_SOURCES},
-            "availability": {s: False for s in DATA_SOURCES},
+            "availability": dict.fromkeys(DATA_SOURCES, False),
             "source_count": 0,
             "read_only": True,
         },

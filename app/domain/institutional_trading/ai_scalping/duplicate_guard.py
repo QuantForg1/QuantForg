@@ -46,14 +46,14 @@ def may_add_scalping_trade(
                 if abs(existing - entry) < min_entry_distance:
                     return AddTradeDecision(
                         False,
-                        f"Duplicate entry near {existing} (min distance {min_entry_distance})",
+                        f"Duplicate entry near {existing} (min distance {min_entry_distance})",  # noqa: E501
                     )
         elif entry is not None and open_entries:
             for existing in open_entries:
                 if existing == entry:
                     return AddTradeDecision(False, f"Identical entry {entry}")
 
-    if require_improvement and best_open_confidence is not None:
+    if require_improvement and best_open_confidence is not None:  # noqa: SIM102
         if new_confidence < best_open_confidence + min_confidence_delta:
             return AddTradeDecision(
                 False,

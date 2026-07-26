@@ -118,9 +118,7 @@ class MarketIntelligenceService:
 
         inp = MarketIntelligenceInput(
             regime=RegimeInput(
-                trend=(
-                    str(regime_raw["trend"]) if regime_raw.get("trend") else None
-                ),
+                trend=(str(regime_raw["trend"]) if regime_raw.get("trend") else None),
                 atr=_dec(regime_raw.get("atr")),
                 price=_dec(regime_raw.get("price")),
                 news_driven=_opt_bool(regime_raw.get("news_driven")),
@@ -137,9 +135,7 @@ class MarketIntelligenceService:
                 exit_quality=_dec(eq_raw.get("exit_quality")),
                 timing_quality=_dec(eq_raw.get("timing_quality")),
                 sample_note=(
-                    str(eq_raw["sample_note"])
-                    if eq_raw.get("sample_note")
-                    else None
+                    str(eq_raw["sample_note"]) if eq_raw.get("sample_note") else None
                 ),
             ),
             portfolio_risk=PortfolioRiskInput(
@@ -155,9 +151,7 @@ class MarketIntelligenceService:
             ),
             day_trades=tuple(trades),
             violations=tuple(violations),
-            technique=(
-                str(payload["technique"]) if payload.get("technique") else None
-            ),
+            technique=(str(payload["technique"]) if payload.get("technique") else None),
             risk_engine_passed=_opt_bool(payload.get("risk_engine_passed")),
             safety_engine_passed=_opt_bool(payload.get("safety_engine_passed")),
         )

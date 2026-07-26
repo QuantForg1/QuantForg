@@ -53,16 +53,14 @@ def build_quality_dashboard(
             score=None,
             passed=None,
             recommendation="Await data",
-            reasons=(
-                "No quality inputs — never fabricates dashboard metrics",
-            ),
+            reasons=("No quality inputs — never fabricates dashboard metrics",),
             details={"panels": panels},
         )
 
     if available_scores:
-        avg = (
-            sum(available_scores) / Decimal(len(available_scores))
-        ).quantize(Decimal("0.01"))
+        avg = (sum(available_scores) / Decimal(len(available_scores))).quantize(
+            Decimal("0.01")
+        )
     else:
         avg = Decimal("50")
 

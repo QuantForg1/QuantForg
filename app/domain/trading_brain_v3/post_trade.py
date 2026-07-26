@@ -16,9 +16,7 @@ def _try_dec(value: Any) -> Decimal | None:
         return None
 
 
-def evaluate_post_trade(
-    inp: BrainInput, config: TradingBrainConfig
-) -> ModuleResult:
+def evaluate_post_trade(inp: BrainInput, config: TradingBrainConfig) -> ModuleResult:
     _ = config
     trades = inp.closed_trades
     if trades is None:
@@ -28,9 +26,7 @@ def evaluate_post_trade(
             score=None,
             passed=None,
             recommendation="Await data",
-            reasons=(
-                "No closed trades supplied — never fabricates trade history",
-            ),
+            reasons=("No closed trades supplied — never fabricates trade history",),
             details={},
         )
     if len(trades) == 0:
@@ -73,8 +69,7 @@ def evaluate_post_trade(
         avg = (sum(pnls) / Decimal(len(pnls))).quantize(Decimal("0.01"))
         details["avg_pnl"] = str(avg)
         reasons.append(
-            f"{len(pnls)} PnL samples — win_rate "
-            f"{details['win_rate']}% (supplied)"
+            f"{len(pnls)} PnL samples — win_rate " f"{details['win_rate']}% (supplied)"
         )
         if avg >= 0:
             score += Decimal("15")
@@ -92,9 +87,7 @@ def evaluate_post_trade(
             score -= Decimal("10")
             reasons.append("Elevated slippage — execution quality concern")
 
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     reasons.append("Post-trade insights are descriptive — not a profit promise")
     return ModuleResult(
         module="post_trade_intelligence",

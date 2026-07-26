@@ -1,12 +1,12 @@
-"""Session intelligence — aggressive only in top-star sessions."""
+"""Session intelligence - aggressive only in top-star sessions."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from app.domain.institutional_trading.ai_scalping.config import (
-    AiScalpingConfig,
     DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
 )
 
 
@@ -39,9 +39,9 @@ def assess_session(
     aggressive = stars >= cfg.aggressive_session_min_stars
     penalty = 0 if aggressive else int(cfg.weak_session_confidence_penalty)
     reason = (
-        f"Session {key} ★{stars} — aggressive"
+        f"Session {key} ★{stars} - aggressive"
         if aggressive
-        else f"Session {key} ★{stars} — reduced activity (−{penalty} conf)"
+        else f"Session {key} ★{stars} - reduced activity (-{penalty} conf)"
     )
     return SessionAssessment(
         session=key,

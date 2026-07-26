@@ -80,7 +80,8 @@ class InstitutionalReleaseDeploymentPlatform:
                     **rel,
                     "checklist": evidence["checklist"],
                     "timeline": build_pipeline_timeline(rel),
-                    "rollback_plan": rel.get("rollback_plan") or build_rollback_plan(rel),
+                    "rollback_plan": rel.get("rollback_plan")
+                    or build_rollback_plan(rel),
                 }
                 self.store.upsert_release(rel)
         releases = self.store.list_releases(limit=40)
@@ -104,7 +105,9 @@ class InstitutionalReleaseDeploymentPlatform:
             )
         elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         awaiting = [
-            r for r in releases if r.get("status") == ReleaseStatus.AWAITING_APPROVAL.value
+            r
+            for r in releases
+            if r.get("status") == ReleaseStatus.AWAITING_APPROVAL.value
         ]
         return {
             "schema_version": "1.0.0",
@@ -154,7 +157,9 @@ class InstitutionalReleaseDeploymentPlatform:
         }
         return self.store.upsert_release(row)
 
-    def advance(self, release_id: str, *, to_stage: str | None = None) -> dict[str, Any] | None:
+    def advance(
+        self, release_id: str, *, to_stage: str | None = None
+    ) -> dict[str, Any] | None:
         row = self.store.get_release(release_id)
         if not row:
             return None

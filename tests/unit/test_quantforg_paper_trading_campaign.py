@@ -17,9 +17,9 @@ from app.domain.quantforg_paper_trading_campaign.analytics import (
 )
 from app.domain.quantforg_paper_trading_campaign.models import (
     CAMPAIGN_LIFECYCLE,
-    CampaignLifecycle,
     DATA_SOURCES,
     ISOLATION_FLAGS,
+    CampaignLifecycle,
 )
 from app.domain.quantforg_paper_trading_campaign.platform import (
     QuantForgPaperTradingCampaignManager,
@@ -58,7 +58,7 @@ def _ctx() -> dict:
             "qem": {},
             "qcdm": {},
         },
-        "availability": {s: True for s in DATA_SOURCES},
+        "availability": dict.fromkeys(DATA_SOURCES, True),
         "source_count": len(DATA_SOURCES),
         "read_only": True,
     }
@@ -86,14 +86,15 @@ class TestWorkflow:
         assert workflow_consistency_check(campaigns)["ok"] is True
         assert evidence_integrity_check(campaigns)["ok"] is True
         assert build_daily_timeline(campaigns)
-        assert next_lifecycle(CampaignLifecycle.DRAFT.value) == CampaignLifecycle.CONFIGURED.value
+        assert (
+            next_lifecycle(CampaignLifecycle.DRAFT.value)
+            == CampaignLifecycle.CONFIGURED.value
+        )
         assert next_lifecycle(CampaignLifecycle.GRADUATION_CANDIDATE.value) is None
 
 
 class TestHumanApproval:
-    def test_approve(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_approve(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         mgr = QuantForgPaperTradingCampaignManager(
             store=QptcmStore(path=tmp_path / "qptcm.json")
         )

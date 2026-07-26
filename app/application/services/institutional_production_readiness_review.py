@@ -122,9 +122,11 @@ def audit_architecture() -> dict[str, Any]:
             "service_boundaries",
             "PASS" if not missing_layers else "FAIL",
             f"Layer module counts: {counts}",
-            evidence="ADR-0001 clean architecture roots present"
-            if not missing_layers
-            else f"missing={missing_layers}",
+            evidence=(
+                "ADR-0001 clean architecture roots present"
+                if not missing_layers
+                else f"missing={missing_layers}"
+            ),
         )
     )
 
@@ -154,7 +156,7 @@ def audit_architecture() -> dict[str, Any]:
             _check(
                 "circular_dependencies_domain",
                 "WARNING",
-                f"{len(domain_infra)} domain import(s) into infra/presentation (layer leak)",
+                f"{len(domain_infra)} domain import(s) into infra/presentation (layer leak)",  # noqa: E501
                 evidence="; ".join(domain_infra[:5]),
             )
         )
@@ -164,9 +166,11 @@ def audit_architecture() -> dict[str, Any]:
         _check(
             "dependency_graph_domain_presentation",
             "PASS" if not domain_presentation else "FAIL",
-            "Domain must not import presentation"
-            if not domain_presentation
-            else f"{len(domain_presentation)} domain→presentation import(s)",
+            (
+                "Domain must not import presentation"
+                if not domain_presentation
+                else f"{len(domain_presentation)} domain→presentation import(s)"
+            ),
             evidence="; ".join(domain_presentation[:3]) or None,
         )
     )
@@ -196,7 +200,7 @@ def audit_security() -> dict[str, Any]:
         from core.config.settings import get_settings
 
         settings = get_settings()
-    except Exception as exc:  # noqa: BLE001 — advisory audit
+    except Exception as exc:
         checks.append(
             _check("settings_load", "FAIL", f"Unable to load settings: {exc}")
         )
@@ -215,9 +219,11 @@ def audit_security() -> dict[str, Any]:
             _check(
                 "secrets_handling",
                 "FAIL" if weak else "PASS",
-                "Production SECRET_KEY strength"
-                if not weak
-                else "SECRET_KEY appears default/weak in production",
+                (
+                    "Production SECRET_KEY strength"
+                    if not weak
+                    else "SECRET_KEY appears default/weak in production"
+                ),
             )
         )
     else:
@@ -233,7 +239,9 @@ def audit_security() -> dict[str, Any]:
     # Never echo secret values — only presence flags.
     env_flags = {
         "SECRET_KEY_set": bool(os.getenv("SECRET_KEY")),
-        "DATABASE_URL_set": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_PASSWORD")),
+        "DATABASE_URL_set": bool(
+            os.getenv("DATABASE_URL") or os.getenv("POSTGRES_PASSWORD")
+        ),
         "MT5_GATEWAY_CALLER_TOKEN_set": bool(os.getenv("MT5_GATEWAY_CALLER_TOKEN")),
         "EXECUTION_ENABLED": bool(getattr(settings, "execution_enabled", False)),
     }
@@ -275,9 +283,11 @@ def audit_security() -> dict[str, Any]:
         _check(
             "audit_logging",
             "PASS" if audit_gov else "WARNING",
-            "Audit governance service present"
-            if audit_gov
-            else "Audit governance service not found",
+            (
+                "Audit governance service present"
+                if audit_gov
+                else "Audit governance service not found"
+            ),
         )
     )
     checks.append(
@@ -344,7 +354,7 @@ def audit_reliability() -> dict[str, Any]:
                     "ITE runtime present but snapshot() unavailable",
                 )
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         checks.append(
             _check(
                 "scheduler_runtime_live",
@@ -359,25 +369,35 @@ def audit_reliability() -> dict[str, Any]:
         _check(
             "circuit_breakers_panel",
             "PASS" if pr_orch else "WARNING",
-            "Production readiness orchestrator (includes breaker panel)"
-            if pr_orch
-            else "PR orchestrator missing",
+            (
+                "Production readiness orchestrator (includes breaker panel)"
+                if pr_orch
+                else "PR orchestrator missing"
+            ),
         )
     )
     checks.append(
         _check(
             "retries_timeouts",
-            "PASS" if _path_exists("app/infrastructure/brokers/mt5/gateway_client.py") else "FAIL",
+            (
+                "PASS"
+                if _path_exists("app/infrastructure/brokers/mt5/gateway_client.py")
+                else "FAIL"
+            ),
             "Gateway client hosts transport retries/timeouts",
         )
     )
     checks.append(
         _check(
             "watchdogs",
-            "PASS"
-            if _path_exists("app/domain/scalping_ai_v2/reliability.py")
-            or _path_exists("app/domain/institutional_trading/reliability/health.py")
-            else "WARNING",
+            (
+                "PASS"
+                if _path_exists("app/domain/scalping_ai_v2/reliability.py")
+                or _path_exists(
+                    "app/domain/institutional_trading/reliability/health.py"
+                )
+                else "WARNING"
+            ),
             "Reliability/watchdog modules present",
         )
     )
@@ -410,9 +430,11 @@ def audit_trading() -> dict[str, Any]:
         _check(
             "no_bypass_oms_guards",
             "PASS" if bypass_ok else "FAIL",
-            "Guarded OMS blocks submit when kill armed / SHADOW"
-            if bypass_ok
-            else "OMS guard markers not found",
+            (
+                "Guarded OMS blocks submit when kill armed / SHADOW"
+                if bypass_ok
+                else "OMS guard markers not found"
+            ),
         )
     )
 
@@ -421,9 +443,11 @@ def audit_trading() -> dict[str, Any]:
         _check(
             "state_transitions",
             "PASS" if launch else "WARNING",
-            "Launch readiness SHADOW→CANARY→LIVE state machine present"
-            if launch
-            else "Launch readiness missing",
+            (
+                "Launch readiness SHADOW→CANARY→LIVE state machine present"
+                if launch
+                else "Launch readiness missing"
+            ),
         )
     )
 
@@ -436,7 +460,9 @@ def audit_trading() -> dict[str, Any]:
         )
 
         plane = get_control_plane()
-        plane_mode = getattr(getattr(plane, "mode", None), "value", str(getattr(plane, "mode", None)))
+        plane_mode = getattr(
+            getattr(plane, "mode", None), "value", str(getattr(plane, "mode", None))
+        )
         kill = bool(getattr(plane, "kill_switch_armed", False))
         checks.append(
             _check(
@@ -445,7 +471,7 @@ def audit_trading() -> dict[str, Any]:
                 f"mode={plane_mode} kill_switch_armed={kill}",
             )
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         checks.append(
             _check("control_plane_live", "WARNING", f"Control plane unread: {exc}")
         )
@@ -464,9 +490,9 @@ def audit_data_integrity() -> dict[str, Any]:
     surfaces = {
         "replay_data": "app/application/services/production_replay.py",
         "witness_observability": "app/application/services/witness_observability.py",
-        "portfolio_analytics": "app/application/services/institutional_portfolio_analytics.py",
+        "portfolio_analytics": "app/application/services/institutional_portfolio_analytics.py",  # noqa: E501
         "data_warehouse": "app/application/services/institutional_data_warehouse.py",
-        "strategy_intelligence": "app/application/services/strategy_intelligence_center.py",
+        "strategy_intelligence": "app/application/services/strategy_intelligence_center.py",  # noqa: E501
     }
     # production_replay may not exist — soft-check alternate names
     alt_replay = [
@@ -506,9 +532,11 @@ def audit_data_integrity() -> dict[str, Any]:
         _check(
             "live_snapshots",
             "PASS" if witness.is_file() else "WARNING",
-            "Witness latest snapshot present"
-            if witness.is_file()
-            else "No live_execution_witness_latest.json",
+            (
+                "Witness latest snapshot present"
+                if witness.is_file()
+                else "No live_execution_witness_latest.json"
+            ),
         )
     )
 
@@ -530,7 +558,7 @@ def audit_performance() -> dict[str, Any]:
 
         analyze_portfolio([], starting_equity=10_000.0, include_reports=False)
         analytics_ms = round((time.perf_counter() - t1) * 1000.0, 2)
-    except Exception:  # noqa: BLE001
+    except Exception:
         analytics_ms = None
 
     checks.append(
@@ -559,19 +587,23 @@ def audit_performance() -> dict[str, Any]:
 
         mem_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 2)
         # Linux ru_maxrss is KB; on Windows resource may be absent.
-    except Exception:  # noqa: BLE001
+    except Exception:
         try:
             import psutil  # type: ignore[import-untyped]
 
             mem_mb = round(psutil.Process().memory_info().rss / (1024 * 1024), 2)
-        except Exception:  # noqa: BLE001
+        except Exception:
             mem_mb = None
 
     checks.append(
         _check(
             "memory_usage",
             "PASS" if mem_mb is None or mem_mb < 1024 else "WARNING",
-            f"Process RSS ≈ {mem_mb} MB" if mem_mb is not None else "Memory probe unavailable",
+            (
+                f"Process RSS ≈ {mem_mb} MB"
+                if mem_mb is not None
+                else "Memory probe unavailable"
+            ),
         )
     )
     checks.append(
@@ -592,7 +624,7 @@ def audit_performance() -> dict[str, Any]:
         _check(
             "dashboard_latency",
             "PASS",
-            "Ops dashboards are React Query client-side; budget governed by Design Bible",
+            "Ops dashboards are React Query client-side; budget governed by Design Bible",  # noqa: E501
         )
     )
 
@@ -608,8 +640,12 @@ def audit_performance() -> dict[str, Any]:
 def audit_operations() -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     surfaces = {
-        "logging": "core/logging" if (ROOT / "core/logging").exists() else "app/presentation/middleware",
-        "monitoring_alerts": "app/domain/institutional_trading/operations/production_alerts.py",
+        "logging": (
+            "core/logging"
+            if (ROOT / "core/logging").exists()
+            else "app/presentation/middleware"
+        ),
+        "monitoring_alerts": "app/domain/institutional_trading/operations/production_alerts.py",  # noqa: E501
         "metrics_health": "app/presentation/routers/health.py",
         "runbooks": "docs/production/OPERATIONS_GUIDE.md",
         "backup_script": "scripts/backup_production_state.py",
@@ -631,7 +667,11 @@ def audit_operations() -> dict[str, Any]:
         if name == "recovery_docs" and not ok:
             ok = _path_exists("docs/production/DEPLOYMENT_GUIDE.md")
         if name == "backup_script" and not ok:
-            ok = any((ROOT / "scripts").glob("*backup*")) if (ROOT / "scripts").is_dir() else False
+            ok = (
+                any((ROOT / "scripts").glob("*backup*"))
+                if (ROOT / "scripts").is_dir()
+                else False
+            )
         status: CheckStatus = "PASS" if ok else "WARNING"
         checks.append(_check(name, status, f"{rel} {'present' if ok else 'missing'}"))
 
@@ -657,7 +697,9 @@ def _flatten_checks(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def build_production_checklist(all_checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_production_checklist(
+    all_checks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """PASS / WARNING / FAIL for every subsystem check."""
     return [
         {
@@ -708,7 +750,7 @@ def build_risk_register(
                 "title": "EXECUTION_ENABLED outside production env",
                 "impact": "Orders may send from non-production configuration",
                 "likelihood": "Medium",
-                "mitigation": "Keep EXECUTION_ENABLED=false until production env + launch locks PASS",
+                "mitigation": "Keep EXECUTION_ENABLED=false until production env + launch locks PASS",  # noqa: E501
             }
         )
 
@@ -719,7 +761,7 @@ def build_risk_register(
                 "title": "LIVE mode with kill switch armed",
                 "impact": "Trading halted while mode says LIVE — operator confusion",
                 "likelihood": "Observed if both true",
-                "mitigation": "Disarm kill only after OWNER confirmation, or demote mode",
+                "mitigation": "Disarm kill only after OWNER confirmation, or demote mode",  # noqa: E501
             }
         )
 
@@ -749,7 +791,9 @@ def build_risk_register(
     return risks
 
 
-def score_readiness(all_checks: list[dict[str, Any]]) -> tuple[float, Recommendation, str]:
+def score_readiness(
+    all_checks: list[dict[str, Any]],
+) -> tuple[float, Recommendation, str]:
     if not all_checks:
         return 0.0, "NOT READY", "No checks executed"
 
@@ -803,13 +847,13 @@ def _cap_recommendation_for_environment(
 
         s = get_settings()
         gateway = bool(getattr(s, "mt5_gateway_base_url", None))
-    except Exception:  # noqa: BLE001
+    except Exception:
         gateway = False
-    if not gateway:
+    if not gateway:  # noqa: SIM102
         # Without a gateway URL, controlled live is the ceiling.
         if order.index(cap) > order.index("CONDITIONALLY READY"):
             cap = "CONDITIONALLY READY"
-    if trading.get("ops_mode") == "SHADOW":
+    if trading.get("ops_mode") == "SHADOW":  # noqa: SIM102
         if order.index(cap) > order.index("READY FOR CONTROLLED LIVE"):
             cap = "READY FOR CONTROLLED LIVE"
     if order.index(recommendation) <= order.index(cap):
@@ -853,7 +897,7 @@ def build_institutional_production_readiness_review(
         f"Score {score}/100 · "
         f"{sum(1 for c in all_checks if c['status'] == 'FAIL')} FAIL · "
         f"{sum(1 for c in all_checks if c['status'] == 'WARNING')} WARNING · "
-        f"{sum(1 for c in all_checks if c['status'] == 'PASS')} PASS -> {recommendation}"
+        f"{sum(1 for c in all_checks if c['status'] == 'PASS')} PASS -> {recommendation}"  # noqa: E501
     )
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
 
@@ -863,7 +907,7 @@ def build_institutional_production_readiness_review(
         "mutates_engines": False,
         "analytics_only": True,
         "advisory_only": True,
-        "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds": True,
+        "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds": True,  # noqa: E501
         "observed_at": _now(),
         "elapsed_ms": elapsed_ms,
         "sections": {
@@ -935,7 +979,7 @@ def prr_to_markdown(payload: dict[str, Any]) -> str:
     ]
     for row in sections.get("production_checklist") or []:
         lines.append(
-            f"- [{row.get('status')}] `{row.get('section')}/{row.get('subsystem')}` — {row.get('detail')}"
+            f"- [{row.get('status')}] `{row.get('section')}/{row.get('subsystem')}` — {row.get('detail')}"  # noqa: E501
         )
     lines.extend(["", "## Risk Register", ""])
     risks = sections.get("risk_register") or {}

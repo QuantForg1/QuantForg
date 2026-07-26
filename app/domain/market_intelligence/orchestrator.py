@@ -168,9 +168,7 @@ class MarketIntelligenceEngine:
         if not execution.passed:
             blocked.extend(execution.reasons[:2])
 
-        portfolio = build_portfolio_risk_dashboard(
-            self.config, inp.portfolio_risk
-        )
+        portfolio = build_portfolio_risk_dashboard(self.config, inp.portfolio_risk)
         if not portfolio.within_budget:
             blocked.extend(portfolio.reasons[:2])
 
@@ -185,9 +183,7 @@ class MarketIntelligenceEngine:
         risk_ok = inp.risk_engine_passed is True
         safety_ok = inp.safety_engine_passed is True
         if inp.risk_engine_passed is None:
-            blocked.append(
-                "Risk Engine not assessed — fail closed before any submit."
-            )
+            blocked.append("Risk Engine not assessed — fail closed before any submit.")
         elif not risk_ok:
             blocked.append("Risk Engine did not ALLOW.")
         if inp.safety_engine_passed is None:

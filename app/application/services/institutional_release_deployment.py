@@ -31,7 +31,9 @@ def irdp_create_release(
     return get_irdp().create_release(version=version, component=component, notes=notes)
 
 
-def irdp_advance(release_id: str, *, to_stage: str | None = None) -> dict[str, Any] | None:
+def irdp_advance(
+    release_id: str, *, to_stage: str | None = None
+) -> dict[str, Any] | None:
     return get_irdp().advance(release_id, to_stage=to_stage)
 
 

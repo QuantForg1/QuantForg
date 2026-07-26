@@ -15,9 +15,7 @@ class InstitutionalDataWarehouse:
     """In-process analytics warehouse with logical datasets per domain."""
 
     def __init__(self) -> None:
-        self._datasets: dict[str, list[dict[str, Any]]] = {
-            d: [] for d in DATA_DOMAINS
-        }
+        self._datasets: dict[str, list[dict[str, Any]]] = {d: [] for d in DATA_DOMAINS}
         self._lock = Lock()
         self._ingest_batches = 0
         self._ingest_history: list[dict[str, Any]] = []

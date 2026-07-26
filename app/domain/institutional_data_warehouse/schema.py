@@ -70,10 +70,7 @@ def normalize_warehouse_record(
         "warehouse_id": event_uuid,  # backward compatible
         "domain": domain,
         "timestamp": _iso(ts) if ts else None,
-        "source": source
-        or raw.get("source")
-        or raw.get("emitter")
-        or f"idw:{domain}",
+        "source": source or raw.get("source") or raw.get("emitter") or f"idw:{domain}",
         "correlation_id": (
             str(raw["correlation_id"])
             if raw.get("correlation_id") is not None

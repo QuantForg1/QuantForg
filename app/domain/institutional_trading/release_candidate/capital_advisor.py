@@ -26,18 +26,22 @@ def advise_capital_scale(
 
     if win_rate is not None:
         if win_rate >= cfg.min_win_rate_for_scale:
-            reasons.append(f"Stable win rate ({win_rate:.1f}% ≥ {cfg.min_win_rate_for_scale}%)")
+            reasons.append(
+                f"Stable win rate ({win_rate:.1f}% ≥ {cfg.min_win_rate_for_scale}%)"
+            )
         else:
-            blockers.append(f"Win rate {win_rate:.1f}% below {cfg.min_win_rate_for_scale}%")
+            blockers.append(
+                f"Win rate {win_rate:.1f}% below {cfg.min_win_rate_for_scale}%"
+            )
 
     if drawdown_pct is not None:
         if abs(drawdown_pct) <= cfg.max_drawdown_pct_for_scale:
             reasons.append(
-                f"Drawdown {abs(drawdown_pct):.1f}% within {cfg.max_drawdown_pct_for_scale}% threshold"
+                f"Drawdown {abs(drawdown_pct):.1f}% within {cfg.max_drawdown_pct_for_scale}% threshold"  # noqa: E501
             )
         else:
             blockers.append(
-                f"Drawdown {abs(drawdown_pct):.1f}% exceeds {cfg.max_drawdown_pct_for_scale}%"
+                f"Drawdown {abs(drawdown_pct):.1f}% exceeds {cfg.max_drawdown_pct_for_scale}%"  # noqa: E501
             )
 
     if sharpe is not None:
@@ -49,7 +53,7 @@ def advise_capital_scale(
     if go_live_score is not None:
         if go_live_score >= cfg.go_live_score_threshold:
             reasons.append(
-                f"Go Live Score {go_live_score:.1f} ≥ threshold {cfg.go_live_score_threshold}"
+                f"Go Live Score {go_live_score:.1f} ≥ threshold {cfg.go_live_score_threshold}"  # noqa: E501
             )
         else:
             blockers.append(
@@ -58,7 +62,11 @@ def advise_capital_scale(
 
     eligible = len(blockers) == 0 and len(reasons) > 0
     factor = min(cfg.capital_scale_factor, cfg.max_suggested_scale_factor)
-    suggested = round(float(current_capital) * factor, 2) if eligible else float(current_capital)
+    suggested = (
+        round(float(current_capital) * factor, 2)
+        if eligible
+        else float(current_capital)
+    )
 
     return {
         "current_capital": float(current_capital),
@@ -71,6 +79,6 @@ def advise_capital_scale(
         "message": (
             f"Suggested next capital: ${suggested:,.2f}"
             if eligible
-            else "Do not increase capital yet — resolve blockers and continue evidence collection."
+            else "Do not increase capital yet — resolve blockers and continue evidence collection."  # noqa: E501
         ),
     }

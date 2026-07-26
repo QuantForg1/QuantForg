@@ -132,7 +132,9 @@ class BacktestLiveCompareStore:
         live_expectancy: float | None = None,
     ) -> StrategyPerfSnapshot:
         with self._lock:
-            cur = self._rows.get(strategy_id) or StrategyPerfSnapshot(strategy_id=strategy_id)
+            cur = self._rows.get(strategy_id) or StrategyPerfSnapshot(
+                strategy_id=strategy_id
+            )
             snap = StrategyPerfSnapshot(
                 strategy_id=strategy_id,
                 backtest_win_rate=(
@@ -144,7 +146,9 @@ class BacktestLiveCompareStore:
                     live_win_rate if live_win_rate is not None else cur.live_win_rate
                 ),
                 backtest_avg_rr=(
-                    backtest_avg_rr if backtest_avg_rr is not None else cur.backtest_avg_rr
+                    backtest_avg_rr
+                    if backtest_avg_rr is not None
+                    else cur.backtest_avg_rr
                 ),
                 live_avg_rr=live_avg_rr if live_avg_rr is not None else cur.live_avg_rr,
                 backtest_expectancy=(
@@ -166,7 +170,9 @@ class BacktestLiveCompareStore:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             rows = [r.to_dict() for r in self._rows.values()]
-        material = [r for r in rows if r.get("deviations", {}).get("material_deviation")]
+        material = [
+            r for r in rows if r.get("deviations", {}).get("material_deviation")
+        ]
         return {
             "strategies": rows,
             "material_deviations": material,

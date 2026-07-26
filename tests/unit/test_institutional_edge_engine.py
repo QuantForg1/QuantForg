@@ -64,9 +64,7 @@ def test_policies_locked() -> None:
 
 def test_insufficient_data() -> None:
     out = InstitutionalEdgeEngine().evaluate(IeeInput(completed_trades=[]))
-    assert out["edge_report_summary"]["edge_recommendation"] == (
-        "Insufficient Data"
-    )
+    assert out["edge_report_summary"]["edge_recommendation"] == ("Insufficient Data")
     assert out["never_disables_trading"] is True
     assert out["modifies_asi"] is False
 
@@ -90,12 +88,13 @@ def test_full_edge_evaluation() -> None:
     assert out["edge_report_summary"]["edge_score"] is not None
     assert out["institutional_score"]["overall_grade"] in {"A", "B", "C", "D"}
     assert out["modules"]["edge_decay"]["details"]["never_disables_trading"]
-    assert out["modules"]["monthly_research_package"]["details"][
-        "auto_modifies_strategy_rules"
-    ] is False
-    assert out["modules"]["explainable_edge_report"]["details"][
-        "speculation"
-    ] is False
+    assert (
+        out["modules"]["monthly_research_package"]["details"][
+            "auto_modifies_strategy_rules"
+        ]
+        is False
+    )
+    assert out["modules"]["explainable_edge_report"]["details"]["speculation"] is False
 
 
 def test_edge_warning_on_low_score() -> None:

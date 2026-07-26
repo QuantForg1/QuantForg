@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -51,7 +52,7 @@ class TradingBrainConfig:
         self.promise_profitability = False
         self.invent_market_data = False
 
-    def update(self, updates: dict[str, object]) -> TradingBrainConfig:
+    def update(self, updates: dict[str, Any]) -> TradingBrainConfig:
         locked = {
             "allow_bypass_risk",
             "allow_bypass_safety",
@@ -66,7 +67,10 @@ class TradingBrainConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                existing_flags = data["feature_flags"]
+                flags: dict[str, bool] = (
+                    dict(existing_flags) if isinstance(existing_flags, dict) else {}
+                )
                 for fk, fv in value.items():
                     if isinstance(fv, bool) and fk not in {
                         "bypass_risk",
@@ -82,20 +86,20 @@ class TradingBrainConfig:
             min_environment_score=Decimal(str(data["min_environment_score"])),
             min_opportunity_score=Decimal(str(data["min_opportunity_score"])),
             min_rank_score=Decimal(str(data["min_rank_score"])),
-            min_challenge_pass_score=Decimal(
-                str(data["min_challenge_pass_score"])
-            ),
-            min_execution_readiness=Decimal(
-                str(data["min_execution_readiness"])
-            ),
+            min_challenge_pass_score=Decimal(str(data["min_challenge_pass_score"])),
+            min_execution_readiness=Decimal(str(data["min_execution_readiness"])),
             min_discipline_score=Decimal(str(data["min_discipline_score"])),
             max_spread=Decimal(str(data["max_spread"])),
-            max_open_positions_soft=int(data["max_open_positions_soft"]),
-            max_history=int(data["max_history"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            max_open_positions_soft=int(str(data["max_open_positions_soft"])),
+            max_history=int(str(data["max_history"])),
+            feature_flags=(
+                dict(data["feature_flags"])
+                if isinstance(data["feature_flags"], dict)
+                else {}
+            ),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

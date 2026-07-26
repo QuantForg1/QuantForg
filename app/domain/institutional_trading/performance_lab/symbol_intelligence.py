@@ -11,9 +11,7 @@ from app.domain.institutional_trading.performance_lab.opportunity_db import (
 
 
 def build_symbol_rankings() -> dict[str, Any]:
-    rows = [
-        r.to_dict() for r in get_opportunity_outcome_store().filtered()
-    ]
+    rows = [r.to_dict() for r in get_opportunity_outcome_store().filtered()]
 
     by_sym: dict[str, list[dict[str, Any]]] = defaultdict(list)
     by_session: dict[str, list[float]] = defaultdict(list)
@@ -27,15 +25,25 @@ def build_symbol_rankings() -> dict[str, Any]:
             by_session[sess].append(float(r["pnl"]))
 
     def pf(samples: list[dict[str, Any]]) -> float | None:
-        traded = [s for s in samples if s.get("traded") and s.get("outcome") in {"win", "loss"}]
+        traded = [
+            s
+            for s in samples
+            if s.get("traded") and s.get("outcome") in {"win", "loss"}
+        ]
         if not traded:
             return None
         gw = sum(float(s.get("pnl") or 1) for s in traded if s.get("outcome") == "win")
-        gl = sum(abs(float(s.get("pnl") or 1)) for s in traded if s.get("outcome") == "loss")
+        gl = sum(
+            abs(float(s.get("pnl") or 1)) for s in traded if s.get("outcome") == "loss"
+        )
         return round(gw / gl, 3) if gl > 0 else None
 
     def wr(samples: list[dict[str, Any]]) -> float | None:
-        traded = [s for s in samples if s.get("traded") and s.get("outcome") in {"win", "loss"}]
+        traded = [
+            s
+            for s in samples
+            if s.get("traded") and s.get("outcome") in {"win", "loss"}
+        ]
         if not traded:
             return None
         wins = sum(1 for s in traded if s.get("outcome") == "win")
@@ -45,7 +53,7 @@ def build_symbol_rankings() -> dict[str, Any]:
         vals = [float(s[key]) for s in samples if s.get(key) is not None]
         return round(sum(vals) / len(vals), 6) if vals else None
 
-    symbol_rows = []
+    symbol_rows: list[dict[str, Any]] = []
     for sym, samples in by_sym.items():
         symbol_rows.append(
             {
@@ -61,31 +69,31 @@ def build_symbol_rankings() -> dict[str, Any]:
 
     best = sorted(
         [s for s in symbol_rows if s["profit_factor"] is not None],
-        key=lambda x: x["profit_factor"],
+        key=lambda x: float(x["profit_factor"] or 0.0),
         reverse=True,
     )
     worst = list(reversed(best))
     slip = sorted(
         [s for s in symbol_rows if s["avg_slippage"] is not None],
-        key=lambda x: x["avg_slippage"],
+        key=lambda x: float(x["avg_slippage"] or 0.0),
         reverse=True,
     )
     lat = sorted(
         [s for s in symbol_rows if s["avg_latency_ms"] is not None],
-        key=lambda x: x["avg_latency_ms"],
+        key=lambda x: float(x["avg_latency_ms"] or 0.0),
         reverse=True,
     )
     spread = sorted(
         [s for s in symbol_rows if s["avg_spread"] is not None],
-        key=lambda x: x["avg_spread"],
+        key=lambda x: float(x["avg_spread"] or 0.0),
         reverse=True,
     )
 
-    session_pnl = [
+    session_pnl: list[dict[str, Any]] = [
         {"session": k, "total_pnl": round(sum(v), 2), "samples": len(v)}
         for k, v in by_session.items()
     ]
-    session_pnl.sort(key=lambda x: x["total_pnl"], reverse=True)
+    session_pnl.sort(key=lambda x: float(x["total_pnl"]), reverse=True)
 
     return {
         "best_symbols": best[:10],
@@ -96,7 +104,7 @@ def build_symbol_rankings() -> dict[str, Any]:
         "highest_spread": spread[:5],
         "lowest_drawdown_proxy": sorted(
             [s for s in symbol_rows if s["win_rate"] is not None],
-            key=lambda x: x["win_rate"],
+            key=lambda x: float(x["win_rate"] or 0.0),
             reverse=True,
         )[:5],
         "sessions": session_pnl,

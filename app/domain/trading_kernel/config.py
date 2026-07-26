@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -46,7 +47,7 @@ class KernelConfig:
         self.require_risk_engine = True
         self.require_safety_engine = True
 
-    def update(self, updates: dict[str, object]) -> KernelConfig:
+    def update(self, updates: dict[str, Any]) -> KernelConfig:
         locked = {
             "allow_bypass_risk",
             "allow_bypass_safety",
@@ -62,7 +63,10 @@ class KernelConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                existing_flags = data["feature_flags"]
+                flags: dict[str, bool] = (
+                    dict(existing_flags) if isinstance(existing_flags, dict) else {}
+                )
                 for fk, fv in value.items():
                     if isinstance(fv, bool):
                         # Never allow flags that imply bypass/execution.
@@ -77,15 +81,19 @@ class KernelConfig:
             elif key in data:
                 data[key] = value
         return KernelConfig(
-            max_events=int(data["max_events"]),
-            max_cycles=int(data["max_cycles"]),
+            max_events=int(str(data["max_events"])),
+            max_cycles=int(str(data["max_cycles"])),
             max_spread=Decimal(str(data["max_spread"])),
             min_confidence=Decimal(str(data["min_confidence"])),
             deterministic_replay=bool(data["deterministic_replay"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=(
+                dict(data["feature_flags"])
+                if isinstance(data["feature_flags"], dict)
+                else {}
+            ),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

@@ -64,7 +64,10 @@ def plan_ai_position_action(
     r = signed_r(position, context.current_price)
 
     # Significant confidence collapse → exit
-    if drop >= cfg.confidence_drop_exit and hints.current_confidence < cfg.let_profits_run_min_confidence:
+    if (
+        drop >= cfg.confidence_drop_exit
+        and hints.current_confidence < cfg.let_profits_run_min_confidence
+    ):
         return PlannedAction(
             ManageActionKind.EMERGENCY_EXIT,
             (

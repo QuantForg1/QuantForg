@@ -44,7 +44,7 @@ def build_ai_validation_dashboard(*, replay_day: str | None = None) -> dict[str,
         bench = get_benchmark_store()
         if portfolio.get("monthly_return_pct") is not None:
             bench.update(quantforg=float(portfolio["monthly_return_pct"]))
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     return {

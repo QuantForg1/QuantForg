@@ -21,7 +21,9 @@ def build_qkg_dashboard() -> dict[str, Any]:
     return payload
 
 
-def qkg_search(*, q: str | None = None, node_type: str | None = None, limit: int = 50) -> dict[str, Any]:
+def qkg_search(
+    *, q: str | None = None, node_type: str | None = None, limit: int = 50
+) -> dict[str, Any]:
     return get_qkg().search(q=q, node_type=node_type, limit=limit)
 
 

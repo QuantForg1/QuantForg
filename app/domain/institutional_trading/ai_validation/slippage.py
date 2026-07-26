@@ -94,8 +94,10 @@ class SlippageAnalyticsStore:
             )
 
             if abs(entry_slip) >= DEFAULT_AI_VALIDATION_CONFIG.alert_slippage_spike:
-                get_validation_alerter().on_slippage_spike(slippage=entry_slip, symbol=symbol)
-        except Exception:
+                get_validation_alerter().on_slippage_spike(
+                    slippage=entry_slip, symbol=symbol
+                )
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
         return sample
 

@@ -49,9 +49,7 @@ def test_registry_and_replay_reproducible() -> None:
     platform = ResearchValidationPlatform()
     reg = platform.list_registry()
     assert reg["count"] >= 4
-    bars = [
-        {"time": "t1", "open": "1", "high": "2", "low": "0.5", "close": "1.5"}
-    ]
+    bars = [{"time": "t1", "open": "1", "high": "2", "low": "0.5", "close": "1.5"}]
     a = platform.replay_load(
         {"strategy_key": "trend_following", "version": "v1", "bars": bars}
     )

@@ -30,8 +30,7 @@ def aggregate_errors(
         action = str(raw.get("action") or raw.get("type") or "").lower()
         result = str(raw.get("result") or raw.get("outcome") or "").lower()
         text = (
-            f"{action} {result} {raw.get('notes') or ''} "
-            f"{raw.get('reason') or ''}"
+            f"{action} {result} {raw.get('notes') or ''} " f"{raw.get('reason') or ''}"
         ).lower()
 
         if severity == "warning" or "warn" in text:

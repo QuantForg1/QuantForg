@@ -195,9 +195,7 @@ def run_walk_forward(
 
     avg = (sum(scores) / Decimal(len(scores))).quantize(Decimal("0.01"))
     passed = avg >= config.min_walkforward_score
-    reasons.append(
-        f"Avg fold score {avg} vs min {config.min_walkforward_score}"
-    )
+    reasons.append(f"Avg fold score {avg} vs min {config.min_walkforward_score}")
     reasons.append(f"{len(scores)} scored folds (supplied)")
     reasons.append("Result reproducible via input_hash")
     return {
@@ -247,44 +245,28 @@ def run_paper_environment(
     if pf is not None:
         if pf >= config.min_profit_factor:
             score += Decimal("15")
-            reasons.append(
-                f"Paper PF {pf} meets min {config.min_profit_factor}"
-            )
+            reasons.append(f"Paper PF {pf} meets min {config.min_profit_factor}")
         else:
             score -= Decimal("10")
-            reasons.append(
-                f"Paper PF {pf} below min {config.min_profit_factor}"
-            )
+            reasons.append(f"Paper PF {pf} below min {config.min_profit_factor}")
     if dd is not None:
         if dd <= config.max_drawdown_pct:
             score += Decimal("10")
-            reasons.append(
-                f"Paper DD {dd}% within max {config.max_drawdown_pct}"
-            )
+            reasons.append(f"Paper DD {dd}% within max {config.max_drawdown_pct}")
         else:
             score -= Decimal("15")
-            reasons.append(
-                f"Paper DD {dd}% exceeds max {config.max_drawdown_pct}"
-            )
+            reasons.append(f"Paper DD {dd}% exceeds max {config.max_drawdown_pct}")
     if trades is not None:
         if trades >= config.min_trades:
             score += Decimal("10")
-            reasons.append(
-                f"Paper trades {trades} >= min {config.min_trades}"
-            )
+            reasons.append(f"Paper trades {trades} >= min {config.min_trades}")
         else:
             score -= Decimal("5")
-            reasons.append(
-                f"Paper trades {trades} below min {config.min_trades}"
-            )
+            reasons.append(f"Paper trades {trades} below min {config.min_trades}")
     if win_rate is not None:
-        reasons.append(
-            f"Paper win_rate {win_rate}% (supplied, not invented)"
-        )
+        reasons.append(f"Paper win_rate {win_rate}% (supplied, not invented)")
 
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     passed = score >= config.min_paper_score
     inputs = {
         "strategy_key": strategy_key,
@@ -294,9 +276,7 @@ def run_paper_environment(
         "max_drawdown_pct": str(dd) if dd is not None else None,
         "win_rate": str(win_rate) if win_rate is not None else None,
     }
-    reasons.append(
-        "Paper environment isolated from live execution pipeline"
-    )
+    reasons.append("Paper environment isolated from live execution pipeline")
     return {
         "status": "available",
         "strategy_key": strategy_key,

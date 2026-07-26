@@ -72,9 +72,11 @@ def persist_pme_state(engine: Any) -> None:
                     remaining_volume=str(pos.remaining_volume),
                     initial_stop=str(pos.initial_stop),
                     risk_distance=str(pos.risk_distance),
-                    opened_at=pos.opened_at.isoformat()
-                    if hasattr(pos.opened_at, "isoformat")
-                    else str(pos.opened_at),
+                    opened_at=(
+                        pos.opened_at.isoformat()
+                        if hasattr(pos.opened_at, "isoformat")
+                        else str(pos.opened_at)
+                    ),
                     state=str(getattr(pos.state, "value", pos.state)),
                     current_stop=str(pos.current_stop),
                     current_tp=str(pos.current_tp),
@@ -161,7 +163,9 @@ def recover_positions_from_mt5(
                 if pos is not None:
                     try:
                         pos.be_moved = bool(snap.get("be_moved", pos.be_moved))
-                        pos.partial_done = bool(snap.get("partial_done", pos.partial_done))
+                        pos.partial_done = bool(
+                            snap.get("partial_done", pos.partial_done)
+                        )
                         pos.trailing_active = bool(
                             snap.get("trailing_active", pos.trailing_active)
                         )
@@ -197,7 +201,9 @@ def recover_positions_from_mt5(
             opened = datetime.now(UTC)
             opened_raw = getattr(row, "opened_at", None)
             if isinstance(opened_raw, datetime):
-                opened = opened_raw if opened_raw.tzinfo else opened_raw.replace(tzinfo=UTC)
+                opened = (
+                    opened_raw if opened_raw.tzinfo else opened_raw.replace(tzinfo=UTC)
+                )
             state = PositionLifecycleState.OPEN
             state_raw = str(snap.get("state") or "")
             if state_raw in {s.value for s in PositionLifecycleState}:

@@ -6,6 +6,7 @@ Does not modify Phase A/B or the OMS.
 
 from __future__ import annotations
 
+import contextlib
 import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -123,9 +124,7 @@ class ExecutionBridge:
                 context=context,
                 decision_hash=d_hash,
                 reason=BridgeAbortReason.IGNORED_ACTION,
-                comment=(
-                    f"Ignored action {decision.action.value}: {reason_txt}"
-                ),
+                comment=(f"Ignored action {decision.action.value}: {reason_txt}"),
                 t0=t0,
                 status=ExecutionAttemptStatus.ABORTED,
             )
@@ -242,10 +241,7 @@ class ExecutionBridge:
                     ),
                     t0=t0,
                 )
-            if (
-                context.account.open_positions
-                >= self.config.canary_max_open_positions
-            ):
+            if context.account.open_positions >= self.config.canary_max_open_positions:
                 return self._abort(
                     decision=decision,
                     context=context,
@@ -468,10 +464,8 @@ class ExecutionBridge:
         }:
             with self._lock:
                 self._executed_hashes.discard(d_hash)
-                try:
+                with contextlib.suppress(ValueError):
                     self._executed_hash_order.remove(d_hash)
-                except ValueError:
-                    pass
 
         if (
             mode is ExecutionMode.CANARY_LIVE
@@ -520,9 +514,7 @@ class ExecutionBridge:
                 or ""
             )
             price_txt = str(getattr(oms_result, "price", "") or "")
-            symbol_txt = str(
-                getattr(intent, "symbol", None) or decision.symbol or ""
-            )
+            symbol_txt = str(getattr(intent, "symbol", None) or decision.symbol or "")
             side_txt = str(getattr(intent, "side", None) or decision.action or "")
             logger.warning(
                 "ORDER ACCEPTED\n"
@@ -557,9 +549,7 @@ class ExecutionBridge:
                 or getattr(intent, "volume", "")
                 or ""
             )
-            symbol_txt = str(
-                getattr(intent, "symbol", None) or decision.symbol or ""
-            )
+            symbol_txt = str(getattr(intent, "symbol", None) or decision.symbol or "")
             side_txt = str(getattr(intent, "side", None) or decision.action or "")
             reject_block = (
                 "ORDER REJECTED\n"

@@ -115,9 +115,7 @@ class ProductionReadinessService:
         except Exception:
             incidents = None
         try:
-            recovery_events = [
-                e.to_dict() for e in reliability.recovery.list(limit=30)
-            ]
+            recovery_events = [e.to_dict() for e in reliability.recovery.list(limit=30)]
         except Exception:
             recovery_events = None
         try:
@@ -129,9 +127,7 @@ class ProductionReadinessService:
         except Exception:
             ops_audit = None
         try:
-            timeline = [
-                e.to_dict() for e in reliability.timeline.search(limit=30)
-            ]
+            timeline = [e.to_dict() for e in reliability.timeline.search(limit=30)]
         except Exception:
             timeline = None
 

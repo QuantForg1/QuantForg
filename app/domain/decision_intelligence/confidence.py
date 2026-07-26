@@ -32,8 +32,7 @@ class ConfidenceBreakdown:
             "band": self.band,
             "passed": self.passed,
             "factors": {
-                k: (str(v) if v is not None else None)
-                for k, v in self.factors.items()
+                k: (str(v) if v is not None else None) for k, v in self.factors.items()
             },
             "reasons": list(self.reasons),
             "status": self.status,
@@ -67,9 +66,9 @@ def breakdown_confidence(
             status="unavailable",
         )
 
-    score = (
-        sum(present, Decimal("0")) / Decimal(len(present))
-    ).quantize(Decimal("0.01"))
+    score = (sum(present, Decimal("0")) / Decimal(len(present))).quantize(
+        Decimal("0.01")
+    )
     reasons = [f"Averaged {len(present)} supplied confidence factors."]
     if score >= config.high_confidence:
         band = "high"
@@ -81,9 +80,7 @@ def breakdown_confidence(
         band = "blocked"
     passed = score >= config.min_confidence
     if not passed:
-        reasons.append(
-            f"Score {score} below policy minimum {config.min_confidence}."
-        )
+        reasons.append(f"Score {score} below policy minimum {config.min_confidence}.")
     return ConfidenceBreakdown(
         score=score,
         band=band,

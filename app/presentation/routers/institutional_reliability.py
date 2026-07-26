@@ -63,7 +63,7 @@ def dashboard(_user: OperatorUser) -> dict[str, Any]:
 
 @router.get("/production-hardening")
 def production_hardening_dashboard(_user: OperatorUser) -> dict[str, Any]:
-    """v6 Production Hardening — health, performance, lifecycle, learning, secrets audit."""
+    """v6 Production Hardening — health, performance, lifecycle, learning, secrets audit."""  # noqa: E501
     from app.application.services.production_reliability import (
         build_production_reliability_dashboard,
     )
@@ -105,7 +105,7 @@ def performance_lab_dashboard(
 
 @router.get("/portfolio-intelligence")
 def portfolio_intelligence_dashboard(_user: OperatorUser) -> dict[str, Any]:
-    """v9 Institutional Portfolio Intelligence — allocation, risk budget, queue, stress."""
+    """v9 Institutional Portfolio Intelligence — allocation, risk budget, queue, stress."""  # noqa: E501
     from app.application.services.portfolio_intelligence import (
         build_portfolio_intelligence_dashboard,
     )
@@ -124,7 +124,9 @@ def research_platform_dashboard(_user: OperatorUser) -> dict[str, Any]:
 
 
 @router.post("/research-platform/experiments")
-def create_research_experiment(body: dict[str, Any], _user: OperatorUser) -> dict[str, Any]:
+def create_research_experiment(
+    body: dict[str, Any], _user: OperatorUser
+) -> dict[str, Any]:
     from app.domain.institutional_trading.research_platform import get_experiment_store
     from app.domain.institutional_trading.research_platform.audit import get_audit_trail
 
@@ -169,7 +171,7 @@ def rc1_dashboard(
     _user: OperatorUser,
     current_capital: float = 200.0,
 ) -> dict[str, Any]:
-    """RC1 Production Readiness — checklist, live stats, go-live score (validation only)."""
+    """RC1 Production Readiness — checklist, live stats, go-live score (validation only)."""  # noqa: E501
     from app.application.services.release_candidate import build_rc1_dashboard
 
     return build_rc1_dashboard(current_capital=current_capital)

@@ -1,7 +1,8 @@
-"""Go Live Score 0–100 — recommend scale-up only above threshold."""
+"""Go Live Score 0-100 - recommend scale-up only above threshold."""
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from app.domain.institutional_trading.release_candidate.config import (
@@ -45,30 +46,29 @@ def compute_go_live_score(
         total = sum(int(sc.get(k, 0)) for k in ("PASS", "WARNING", "FAIL")) or 1
         components["health"] = _clamp(
             0.5 * components["health"]
-            + 0.5 * (100.0 * int(sc.get("PASS", 0)) / total - 20.0 * int(sc.get("FAIL", 0)))
+            + 0.5
+            * (100.0 * int(sc.get("PASS", 0)) / total - 20.0 * int(sc.get("FAIL", 0)))
         )
 
     if validation:
         m = validation.get("metrics") or {}
         days = float(m.get("consecutive_successful_trading_days") or 0)
         day_score = _clamp(100.0 * days / max(1, cfg.recommended_evidence_days))
-        components["reliability"] = _clamp(0.6 * components["reliability"] + 0.4 * day_score)
+        components["reliability"] = _clamp(
+            0.6 * components["reliability"] + 0.4 * day_score
+        )
 
         lat = m.get("average_latency_ms")
         if lat is not None:
-            # Lower latency → higher score (cap at 500ms = ~0)
-            try:
+            # Lower latency -> higher score (cap at 500ms = ~0)
+            with contextlib.suppress(TypeError, ValueError):
                 components["execution"] = _clamp(100.0 - float(lat) / 5.0)
-            except (TypeError, ValueError):
-                pass
         err = m.get("error_rate")
         if err is not None:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 components["execution"] = _clamp(
                     0.5 * components["execution"] + 0.5 * (100.0 - float(err) * 100.0)
                 )
-            except (TypeError, ValueError):
-                pass
 
     stats = (live_stats or {}).get("live_statistics") or {}
     wr = stats.get("win_rate")
@@ -81,16 +81,16 @@ def compute_go_live_score(
         except (TypeError, ValueError):
             pass
     if pf is not None:
-        try:
-            # PF 1.0 → 50, PF 2.0 → 100
+        try:  # noqa: SIM105
+            # PF 1.0 -> 50, PF 2.0 -> 100
             components["profitability"] = _clamp(
                 0.5 * components["profitability"] + 0.5 * (float(pf) * 50.0)
             )
         except (TypeError, ValueError):
             pass
     if dd is not None:
-        try:
-            # Lower drawdown better; 0% → 100, 20% → 0
+        try:  # noqa: SIM105
+            # Lower drawdown better; 0% -> 100, 20% -> 0
             components["risk"] = _clamp(100.0 - abs(float(dd)) * 5.0)
         except (TypeError, ValueError):
             pass
@@ -124,7 +124,7 @@ def compute_go_live_score(
         "recommendation": (
             "Scale-up eligible (manual approval still required)"
             if recommend_scale
-            else "Do not scale capital — continue evidence collection"
+            else "Do not scale capital - continue evidence collection"
         ),
         "components": {k: round(v, 1) for k, v in components.items()},
         "auto_scale_capital": False,

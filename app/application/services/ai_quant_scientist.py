@@ -30,7 +30,9 @@ def aqs_set_status(recommendation_id: str, status: str) -> dict[str, Any] | None
     return get_aqs().set_recommendation_status(recommendation_id, status)
 
 
-def aqs_list_recommendations(*, status: str | None = None, limit: int = 100) -> dict[str, Any]:
+def aqs_list_recommendations(
+    *, status: str | None = None, limit: int = 100
+) -> dict[str, Any]:
     rows = get_aqs().store.list_recommendations(status=status, limit=limit)
     return {
         "recommendations": rows,

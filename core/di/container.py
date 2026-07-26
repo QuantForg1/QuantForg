@@ -326,7 +326,10 @@ class Container:
 
                 plane = self.ite_runtime.plane
                 mode = str(getattr(plane, "trading_mode", "swing") or "swing")
-                if bool(getattr(plane, "alpha_engine_enabled", False)) and mode == "swing":
+                if (
+                    bool(getattr(plane, "alpha_engine_enabled", False))
+                    and mode == "swing"
+                ):
                     mode = "alpha"
                 applied = apply_trading_mode_to_runtime(self.ite_runtime, mode=mode)
                 logger.info(
@@ -407,7 +410,9 @@ class Container:
                             error=last_err or "exhausted_retries",
                         )
 
-                    asyncio.create_task(_recover_bg(), name="mt5-position-recovery")
+                    asyncio.create_task(  # noqa: RUF006
+                        _recover_bg(), name="mt5-position-recovery"
+                    )
                     logger.info("position_recovery_scheduled_background")
             except Exception as rec_exc:
                 logger.warning("position_recovery_schedule_failed", error=str(rec_exc))

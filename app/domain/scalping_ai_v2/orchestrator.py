@@ -71,17 +71,13 @@ FORBIDDEN = frozenset(
 
 @dataclass
 class ScalpingAiV2:
-    config: ScalpingAiV2Config = field(
-        default_factory=lambda: DEFAULT_SCALPING_CONFIG
-    )
+    config: ScalpingAiV2Config = field(default_factory=lambda: DEFAULT_SCALPING_CONFIG)
     bus: ScalpEventBus = field(default_factory=ScalpEventBus)
     duplicates: DuplicateProtection = field(default_factory=DuplicateProtection)
     recovery_log: RecoveryLog = field(default_factory=RecoveryLog)
     history: list[dict[str, Any]] = field(default_factory=list)
     # V2.1 hardening (additive — does not replace V2 modules)
-    state_store: OperationalStateStore = field(
-        default_factory=OperationalStateStore
-    )
+    state_store: OperationalStateStore = field(default_factory=OperationalStateStore)
     stability: StabilityMonitor = field(default_factory=StabilityMonitor)
     latency_monitor: LatencyMonitor = field(default_factory=LatencyMonitor)
     emergency: EmergencyStop = field(default_factory=EmergencyStop)
@@ -187,9 +183,7 @@ class ScalpingAiV2:
 
     def arm_emergency_stop(self, reason: str = "operator") -> dict[str, Any]:
         row = self.emergency.arm(reason)
-        self.state_store.update(
-            {"emergency_stop": True, "emergency_reason": reason}
-        )
+        self.state_store.update({"emergency_stop": True, "emergency_reason": reason})
         self.bus.publish(
             event_type="EmergencyStopArmed",
             payload=row,
@@ -205,13 +199,9 @@ class ScalpingAiV2:
         )
         return row
 
-    def clear_emergency_stop(
-        self, reason: str = "operator_clear"
-    ) -> dict[str, Any]:
+    def clear_emergency_stop(self, reason: str = "operator_clear") -> dict[str, Any]:
         row = self.emergency.disarm(reason)
-        self.state_store.update(
-            {"emergency_stop": False, "emergency_reason": reason}
-        )
+        self.state_store.update({"emergency_stop": False, "emergency_reason": reason})
         self.bus.publish(
             event_type="EmergencyStopCleared",
             payload=row,
@@ -272,9 +262,7 @@ class ScalpingAiV2:
     def list_events(
         self, *, limit: int = 100, cycle_id: str | None = None
     ) -> dict[str, Any]:
-        rows = [
-            e.to_dict() for e in self.bus.list(limit=limit, cycle_id=cycle_id)
-        ]
+        rows = [e.to_dict() for e in self.bus.list(limit=limit, cycle_id=cycle_id)]
         return {"status": "available" if rows else "empty", "events": rows}
 
     def list_history(self, *, limit: int = 50) -> dict[str, Any]:
@@ -550,9 +538,7 @@ class ScalpingAiV2:
             gate_reasons.append("Safety Engine not passed — never bypass")
         if not decision_ok:
             no_trade = True
-            gate_reasons.append(
-                "Decision Center not approved — never bypass"
-            )
+            gate_reasons.append("Decision Center not approved — never bypass")
         if inp.kill_switch is True or inp.news_blackout is True:
             no_trade = True
             gate_reasons.append("Kill switch / news blackout — No Trade")
@@ -607,9 +593,7 @@ class ScalpingAiV2:
                 "status": stability.get("status"),
                 "score": None,
                 "passed": not bool(stability.get("alerts")),
-                "recommendation": (
-                    "Alert" if stability.get("alerts") else "Stable"
-                ),
+                "recommendation": ("Alert" if stability.get("alerts") else "Stable"),
                 "reasons": stability.get("alerts") or ["Stability sample ok"],
                 "details": stability,
                 "explainable": True,
@@ -633,9 +617,7 @@ class ScalpingAiV2:
                 "status": "available",
                 "score": None,
                 "passed": True,
-                "recommendation": (
-                    "Retry" if retry_info.get("retry") else "No retry"
-                ),
+                "recommendation": ("Retry" if retry_info.get("retry") else "No retry"),
                 "reasons": [str(retry_info.get("reason"))],
                 "details": {
                     **retry_info,
@@ -650,9 +632,7 @@ class ScalpingAiV2:
                 "status": "available",
                 "score": None,
                 "passed": not bool(safe.get("safe_mode")),
-                "recommendation": (
-                    "Safe mode" if safe.get("safe_mode") else "Normal"
-                ),
+                "recommendation": ("Safe mode" if safe.get("safe_mode") else "Normal"),
                 "reasons": list(safe.get("reasons") or []),
                 "details": safe,
                 "explainable": True,
@@ -664,9 +644,7 @@ class ScalpingAiV2:
                 "status": "available",
                 "score": None,
                 "passed": not self.emergency.armed,
-                "recommendation": (
-                    "Armed" if self.emergency.armed else "Clear"
-                ),
+                "recommendation": ("Armed" if self.emergency.armed else "Clear"),
                 "reasons": [str(self.emergency.status().get("reason") or "ok")],
                 "details": self.emergency.status(),
                 "explainable": True,
@@ -901,18 +879,14 @@ def input_from_dict(data: dict[str, Any]) -> ScalpCycleInput:
         confidence=d(data.get("confidence")),
         htf_bias=str(data["htf_bias"]) if data.get("htf_bias") else None,
         ltf_confirmation=(
-            str(data["ltf_confirmation"])
-            if data.get("ltf_confirmation")
-            else None
+            str(data["ltf_confirmation"]) if data.get("ltf_confirmation") else None
         ),
         trend_strength=d(data.get("trend_strength")),
         trend_consistency=d(data.get("trend_consistency")),
         sweep_detected=b(data.get("sweep_detected")),
         equal_highs_lows=b(data.get("equal_highs_lows")),
         session_liquidity=(
-            str(data["session_liquidity"])
-            if data.get("session_liquidity")
-            else None
+            str(data["session_liquidity"]) if data.get("session_liquidity") else None
         ),
         liquidity_side=(
             str(data["liquidity_side"]) if data.get("liquidity_side") else None
@@ -959,17 +933,13 @@ def input_from_dict(data: dict[str, Any]) -> ScalpCycleInput:
             if isinstance(data.get("closed_trade"), dict)
             else None
         ),
-        health=(
-            data.get("health") if isinstance(data.get("health"), dict) else None
-        ),
+        health=(data.get("health") if isinstance(data.get("health"), dict) else None),
         run_state=str(data["run_state"]) if data.get("run_state") else None,
         kill_switch=b(data.get("kill_switch")),
         news_blackout=b(data.get("news_blackout")),
         technique=str(data["technique"]) if data.get("technique") else None,
         execution_identity=(
-            str(data["execution_identity"])
-            if data.get("execution_identity")
-            else None
+            str(data["execution_identity"]) if data.get("execution_identity") else None
         ),
         market_data=(
             data.get("market_data")
@@ -977,24 +947,16 @@ def input_from_dict(data: dict[str, Any]) -> ScalpCycleInput:
             else None
         ),
         mt5_sync=(
-            data.get("mt5_sync")
-            if isinstance(data.get("mt5_sync"), dict)
-            else None
+            data.get("mt5_sync") if isinstance(data.get("mt5_sync"), dict) else None
         ),
         restart=b(data.get("restart")),
         resources=(
-            data.get("resources")
-            if isinstance(data.get("resources"), dict)
-            else None
+            data.get("resources") if isinstance(data.get("resources"), dict) else None
         ),
         latencies=(
-            data.get("latencies")
-            if isinstance(data.get("latencies"), dict)
-            else None
+            data.get("latencies") if isinstance(data.get("latencies"), dict) else None
         ),
-        failure_code=(
-            str(data["failure_code"]) if data.get("failure_code") else None
-        ),
+        failure_code=(str(data["failure_code"]) if data.get("failure_code") else None),
         emergency_stop=b(data.get("emergency_stop")),
         correlation_id=(
             str(data["correlation_id"]) if data.get("correlation_id") else None

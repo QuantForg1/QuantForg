@@ -94,24 +94,16 @@ class RealMarketIntelligencePlatform:
         if flags.get("economic_calendar", True):
             modules["economic_calendar"] = economic_calendar(inp, self.config)
         if flags.get("session_intelligence", True):
-            modules["session_intelligence"] = session_intelligence(
-                inp, self.config
-            )
+            modules["session_intelligence"] = session_intelligence(inp, self.config)
         if flags.get("volatility_observatory", True):
-            modules["volatility_observatory"] = volatility_observatory(
-                inp, self.config
-            )
+            modules["volatility_observatory"] = volatility_observatory(inp, self.config)
         if flags.get("liquidity_observatory", True):
-            modules["liquidity_observatory"] = liquidity_observatory(
-                inp, self.config
-            )
+            modules["liquidity_observatory"] = liquidity_observatory(inp, self.config)
         if flags.get("market_context_timeline", True):
             modules["market_context_timeline"] = market_context_timeline(
                 inp, dict(modules), self.config
             )
-            entry = (modules["market_context_timeline"].details or {}).get(
-                "entry"
-            )
+            entry = (modules["market_context_timeline"].details or {}).get("entry")
             if isinstance(entry, dict):
                 self.timeline.insert(0, entry)
                 if len(self.timeline) > self.config.max_timeline:
@@ -119,8 +111,8 @@ class RealMarketIntelligencePlatform:
         if flags.get("context_scoring", True):
             modules["context_scoring"] = context_scoring(inp, dict(modules))
         if flags.get("operator_intelligence_feed", True):
-            modules["operator_intelligence_feed"] = (
-                operator_intelligence_feed(dict(modules))
+            modules["operator_intelligence_feed"] = operator_intelligence_feed(
+                dict(modules)
             )
         if flags.get("explainability", True):
             modules["explainability"] = explainability(dict(modules))
@@ -132,32 +124,22 @@ class RealMarketIntelligencePlatform:
         liq = modules.get("liquidity_observatory")
         snapshot = {
             "market_context": (
-                (score.details or {}).get("market_context")
-                if score
-                else MISSING
+                (score.details or {}).get("market_context") if score else MISSING
             ),
             "economic_events": (
                 (econ.details or {}).get("event_count") if econ else MISSING
             ),
             "economic_risk": (
-                (econ.details or {}).get("market_risk_level")
-                if econ
-                else MISSING
+                (econ.details or {}).get("market_risk_level") if econ else MISSING
             ),
             "volatility": (
-                (vol.details or {}).get("volatility_level")
-                if vol
-                else MISSING
+                (vol.details or {}).get("volatility_level") if vol else MISSING
             ),
             "session": (
-                (sess.details or {}).get("primary_session")
-                if sess
-                else MISSING
+                (sess.details or {}).get("primary_session") if sess else MISSING
             ),
             "liquidity": (
-                (liq.details or {}).get("liquidity_quality")
-                if liq
-                else MISSING
+                (liq.details or {}).get("liquidity_quality") if liq else MISSING
             ),
             "regime": inp.regime or MISSING,
         }
@@ -170,9 +152,7 @@ class RealMarketIntelligencePlatform:
                 archive_event=inp.archive_event,
                 config=self.config,
             )
-            arch = (modules["historical_context_archive"].details or {}).get(
-                "entry"
-            )
+            arch = (modules["historical_context_archive"].details or {}).get("entry")
             if isinstance(arch, dict):
                 self.archive.insert(0, arch)
                 if len(self.archive) > self.config.max_archive:
@@ -221,9 +201,7 @@ def input_from_dict(data: dict[str, Any]) -> RmipInput:
             else None
         ),
         clock_utc=str(data["clock_utc"]) if data.get("clock_utc") else None,
-        session_hint=(
-            str(data["session_hint"]) if data.get("session_hint") else None
-        ),
+        session_hint=(str(data["session_hint"]) if data.get("session_hint") else None),
         volatility_observations=(
             data.get("volatility_observations")
             if isinstance(data.get("volatility_observations"), dict)

@@ -71,16 +71,11 @@ class HealthPolicies:
         gw_lat = health.get("gateway_latency_ms")
         if gw_lat is not None and float(gw_lat) > self.max_gateway_latency_ms:
             violations.append("gateway_latency_exceeded")
-        order_lat = health.get("order_latency_ms") or health.get(
-            "execution_latency_ms"
-        )
+        order_lat = health.get("order_latency_ms") or health.get("execution_latency_ms")
         if order_lat is not None and float(order_lat) > self.max_order_latency_ms:
             violations.append("order_latency_exceeded")
         journal_lat = health.get("journal_latency_ms")
-        if (
-            journal_lat is not None
-            and float(journal_lat) > self.max_journal_latency_ms
-        ):
+        if journal_lat is not None and float(journal_lat) > self.max_journal_latency_ms:
             violations.append("journal_latency_exceeded")
         score = health.get("health_score")
         if score is not None and float(score) < self.min_health_score:
@@ -143,9 +138,7 @@ class ProductionReadinessConfig:
     never_bypasses_safety: bool = True
     fabricates_metrics: bool = False
     max_audit: int = 500
-    health_policies: HealthPolicies = field(
-        default_factory=HealthPolicies
-    )
+    health_policies: HealthPolicies = field(default_factory=HealthPolicies)
     panel_ids: tuple[str, ...] = (
         "pre_trade_validation",
         "post_trade_validation",
@@ -159,7 +152,7 @@ class ProductionReadinessConfig:
         "disaster_recovery",
     )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "product": self.product,
             "version": self.version,

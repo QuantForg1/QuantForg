@@ -33,7 +33,9 @@ class QemStore:
             return
         self._events = list(raw.get("events") or [])
         self._event_ids = {
-            str(e.get("id")) for e in self._events if isinstance(e, dict) and e.get("id")
+            str(e.get("id"))
+            for e in self._events
+            if isinstance(e, dict) and e.get("id")
         }
         self._subscribers = list(raw.get("subscribers") or [])
         self._snapshot = dict(raw.get("snapshot") or {})

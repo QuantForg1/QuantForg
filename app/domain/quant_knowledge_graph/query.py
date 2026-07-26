@@ -10,8 +10,14 @@ def _as_list(v: Any) -> list[Any]:
     return v if isinstance(v, list) else []
 
 
-def _index(graph: dict[str, Any]) -> tuple[dict[str, dict], list[dict], dict[str, list], dict[str, list]]:
-    nodes = {n["id"]: n for n in _as_list(graph.get("nodes")) if isinstance(n, dict) and n.get("id")}
+def _index(
+    graph: dict[str, Any],
+) -> tuple[dict[str, dict], list[dict], dict[str, list], dict[str, list]]:
+    nodes = {
+        n["id"]: n
+        for n in _as_list(graph.get("nodes"))
+        if isinstance(n, dict) and n.get("id")
+    }
     edges = [e for e in _as_list(graph.get("edges")) if isinstance(e, dict)]
     out_adj: dict[str, list[dict]] = defaultdict(list)
     in_adj: dict[str, list[dict]] = defaultdict(list)
@@ -32,7 +38,11 @@ def search_knowledge(
     ql = (q or "").strip().lower()
     out: list[dict[str, Any]] = []
     for n in nodes.values():
-        if node_type and str(n.get("type")) != node_type and node_type not in str(n.get("type")):
+        if (  # noqa: SIM102
+            node_type
+            and str(n.get("type")) != node_type
+            and node_type not in str(n.get("type"))
+        ):
             # allow partial type match (e.g. "Trade" vs "Trades")
             if node_type.lower() not in str(n.get("type")).lower():
                 continue
@@ -136,8 +146,10 @@ def evidence_chain(
             if str(e.get("relation")) not in preferred:
                 continue
             other = e.get("target") if e.get("source") == cur else e.get("source")
-            if other in nodes and other != cur and all(
-                step["node"]["id"] != other for step in chain
+            if (
+                other in nodes
+                and other != cur
+                and all(step["node"]["id"] != other for step in chain)
             ):
                 nxt = (other, e)
                 break
@@ -155,7 +167,9 @@ def evidence_chain(
     }
 
 
-def recommendation_trace(graph: dict[str, Any], recommendation_id: str) -> dict[str, Any]:
+def recommendation_trace(
+    graph: dict[str, Any], recommendation_id: str
+) -> dict[str, Any]:
     nodes, _, _, _ = _index(graph)
     # accept raw id or recommendation:id
     candidates = [
@@ -198,7 +212,11 @@ def historical_lineage(
         if d >= depth:
             continue
         for e in in_adj.get(cur, []):
-            if str(e.get("relation")) not in {"derived_from", "generated_by", "validated_by"}:
+            if str(e.get("relation")) not in {
+                "derived_from",
+                "generated_by",
+                "validated_by",
+            }:
                 continue
             src = str(e.get("source"))
             if src in seen or src not in nodes:
@@ -258,9 +276,16 @@ def root_cause_graph(
             n = nodes[src]
             score = 0
             blob = f"{n.get('type')} {n.get('label')} {n.get('properties')}".lower()
-            if any(k in blob for k in ("fail", "risk", "safety", "alert", "block", "reject")):
+            if any(
+                k in blob
+                for k in ("fail", "risk", "safety", "alert", "block", "reject")
+            ):
                 score += 2
-            if str(e.get("relation")) in {"affected_by", "contradicted_by", "generated_by"}:
+            if str(e.get("relation")) in {
+                "affected_by",
+                "contradicted_by",
+                "generated_by",
+            }:
                 score += 1
             causes.append({"depth": d + 1, "score": score, "node": n, "via": e})
             frontier.append((src, d + 1))
@@ -325,7 +350,9 @@ def ai_query(
         if t.lower().rstrip("s") in q or t.lower() in q:
             node_type = t
             break
-    hits = search_knowledge(graph, q=question if len(question) < 80 else None, node_type=node_type, limit=20)
+    hits = search_knowledge(
+        graph, q=question if len(question) < 80 else None, node_type=node_type, limit=20
+    )
     if not hits and q:
         # extract keyword
         for token in q.replace("?", "").split():

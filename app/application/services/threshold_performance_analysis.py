@@ -25,10 +25,10 @@ from app.application.services.institutional_trading_analysis import (
     InstitutionalTradingAnalysisService,
 )
 from app.application.services.production_replay_validation import (
-    ALLOWED_SESSIONS,
     _CANDLE_BUFFER,
     _MIN_HISTORY_PER_TF,
     _REQUIRED_TIMEFRAMES,
+    ALLOWED_SESSIONS,
     _compute_atr,
     _normalize_bars_by_tf,
     _select_walk_points,
@@ -214,7 +214,8 @@ def compute_cell_metrics(
     closed = [
         t
         for t in executed_trades
-        if t.get("net_pnl") is not None and t.get("result") in {"win", "loss", "timeout"}
+        if t.get("net_pnl") is not None
+        and t.get("result") in {"win", "loss", "timeout"}
     ]
     n = len(closed)
     wins = [t for t in closed if float(t["net_pnl"]) > 0]
@@ -238,8 +239,12 @@ def compute_cell_metrics(
     # If only winners and no losses, leave profit_factor null (undefined / infinite).
     rs = [float(t["r_multiple"]) for t in closed if t.get("r_multiple") is not None]
     holds = [float(t["hold_sec"]) for t in closed if t.get("hold_sec") is not None]
-    spreads = [float(t["spread"]) for t in executed_trades if t.get("spread") is not None]
-    slips = [float(t["slippage"]) for t in executed_trades if t.get("slippage") is not None]
+    spreads = [
+        float(t["spread"]) for t in executed_trades if t.get("spread") is not None
+    ]
+    slips = [
+        float(t["slippage"]) for t in executed_trades if t.get("slippage") is not None
+    ]
     max_dd, sharpe = _equity_curve_metrics(pnls)
     recovery = None
     if max_dd is not None and max_dd > 0 and abs(net) > 0:
@@ -252,7 +257,9 @@ def compute_cell_metrics(
         "win_rate": round(win_rate, 4) if win_rate is not None else None,
         "loss_rate": round(loss_rate, 4) if loss_rate is not None else None,
         "average_rr": round(sum(rs) / len(rs), 4) if rs else None,
-        "average_holding_time_sec": round(sum(holds) / len(holds), 1) if holds else None,
+        "average_holding_time_sec": (
+            round(sum(holds) / len(holds), 1) if holds else None
+        ),
         "profit_factor": round(pf, 4) if pf is not None else None,
         "gross_profit": round(gross_profit, 4),
         "gross_loss": round(gross_loss, 4),
@@ -293,9 +300,7 @@ async def run_threshold_performance_analysis(
     t0 = perf_counter()
     generated_at = datetime.now(UTC)
     normalized = (
-        _normalize_bars_by_tf(bars_by_tf)
-        if bars_by_tf
-        else build_synthetic_bars(days)
+        _normalize_bars_by_tf(bars_by_tf) if bars_by_tf else build_synthetic_bars(days)
     )
     m15 = normalized.get(Timeframe.M15, [])
     close_times_by_tf: dict[Timeframe, list[datetime]] = {
@@ -460,11 +465,7 @@ def _safe_float(v: Any) -> float | None:
 
 def _build_rankings(matrix: list[dict[str, Any]]) -> dict[str, Any]:
     def top(key: str, *, reverse: bool = True, n: int = 5) -> list[dict[str, Any]]:
-        scored = [
-            m
-            for m in matrix
-            if _safe_float(m.get(key)) is not None
-        ]
+        scored = [m for m in matrix if _safe_float(m.get(key)) is not None]
         scored.sort(key=lambda m: float(m[key]), reverse=reverse)
         return [
             {
@@ -625,7 +626,7 @@ def _build_recommendation(matrix: list[dict[str, Any]]) -> dict[str, Any]:
         "summary": (
             f"Research candidate Q{best['quality_gate']}/C{best['confluence_gate']} "
             "met improve-profit + acceptable-DD + positive-expectancy tests. "
-            "Production thresholds remain unchanged until an operator explicitly promotes."
+            "Production thresholds remain unchanged until an operator explicitly promotes."  # noqa: E501
         ),
         "reasons": [
             "Profit improved vs baseline.",
@@ -676,7 +677,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
         "# Threshold Performance Analysis",
         "",
         f"- Generated: `{report.get('generated_at')}`",
-        f"- Symbol: `{report.get('symbol')}` · days={report.get('params', {}).get('days')}",
+        f"- Symbol: `{report.get('symbol')}` · days={report.get('params', {}).get('days')}",  # noqa: E501
         "- Offline research only — live thresholds / engines unchanged",
         f"- Evaluations: **{report.get('evaluations')}**",
         "",
@@ -705,9 +706,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
         lines.append("")
     lines.append("## Matrix (summary)")
     lines.append("")
-    lines.append(
-        "| Q | C | Exec | WR | PF | Net | Exp | DD% | Sharpe |"
-    )
+    lines.append("| Q | C | Exec | WR | PF | Net | Exp | DD% | Sharpe |")
     lines.append("|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for m in report.get("matrix") or []:
         lines.append(

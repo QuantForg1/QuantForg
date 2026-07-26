@@ -143,7 +143,7 @@ class TestHealthAndAlerts:
         assert "Validation drift" in kinds
         assert "Execution degradation" in kinds
         assert "Repeated incidents" in kinds
-        assert all(a.get("read_only") for a in alerts if "source" not in a or True)
+        assert all(a.get("read_only") for a in alerts if True)
 
 
 class TestEvidenceIntegrity:
@@ -175,7 +175,10 @@ class TestPlatformHumanApproval:
         assert pack["never_executes_trades"] is True
         assert pack["never_approves_promotions_automatically"] is True
         sid = pack["registry"][0]["strategy_id"]
-        nxt = pack["registry"][0].get("recommended_next_state") or LifecycleState.RESEARCH.value
+        nxt = (
+            pack["registry"][0].get("recommended_next_state")
+            or LifecycleState.RESEARCH.value
+        )
         result = islm.approve_transition(
             strategy_id=sid,
             to_state=nxt,

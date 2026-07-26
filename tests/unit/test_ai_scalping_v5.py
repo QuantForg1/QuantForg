@@ -153,7 +153,12 @@ def test_validation_requires_measurable_improvement() -> None:
     assert ok["recommend_deploy"] is True
 
     bad = compare_backtest_vs_live(
-        backtest={"win_rate": 40, "profit_factor": 0.9, "drawdown": 12, "average_rr": 0.8},
+        backtest={
+            "win_rate": 40,
+            "profit_factor": 0.9,
+            "drawdown": 12,
+            "average_rr": 0.8,
+        },
         live={"win_rate": 50, "profit_factor": 1.2, "drawdown": 6, "average_rr": 1.2},
     )
     assert bad["recommend_deploy"] is False

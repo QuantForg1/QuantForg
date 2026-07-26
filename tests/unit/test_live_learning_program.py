@@ -114,15 +114,12 @@ def test_full_learning_cycle() -> None:
     assert out["evidence_only"] is True
     assert out["modifies_execution_pipeline"] is False
     assert out["auto_promote_strategies"] is False
-    assert out["modules"]["live_observation_collector"]["details"][
-        "immutable"
-    ] is True
-    assert out["modules"]["operator_feedback"]["details"][
-        "changes_production"
-    ] is False
-    assert out["modules"]["research_recommendations"]["details"][
-        "recommends_live_changes"
-    ] is False
+    assert out["modules"]["live_observation_collector"]["details"]["immutable"] is True
+    assert out["modules"]["operator_feedback"]["details"]["changes_production"] is False
+    assert (
+        out["modules"]["research_recommendations"]["details"]["recommends_live_changes"]
+        is False
+    )
     assert out["modules"]["learning_dashboard"]["status"] == "available"
     assert out["learning_summary"]["observation_count"] == 40
     assert isinstance(out["learning_summary"]["research_backlog"], list)

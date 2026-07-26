@@ -61,14 +61,19 @@ class PortfolioRecommendationEngine:
                 auto_applied=False,
             )
             out.append(rec)
-            logger.info("portfolio_recommendation", kind=kind, message=message, auto_applied=False)
+            logger.info(
+                "portfolio_recommendation",
+                kind=kind,
+                message=message,
+                auto_applied=False,
+            )
 
         emit(
             "risk_budget",
             f"Today's optimal risk budget is {risk_budget_pct}%.",
         )
         for a in (allocation.get("allocations") or [])[:1]:
-            if str(a.get("symbol") or "").upper() in {"XAUUSD", "GOLD"}:
+            if str(a.get("symbol") or "").upper() in {"XAUUSD", "GOLD"}:  # noqa: SIM102
                 if float(a.get("share_pct") or 0) >= 35:
                     emit("reduce_gold", "Reduce Gold exposure — share is elevated.")
         for msg in optimization.get("rebalance_recommendations") or []:
@@ -76,7 +81,7 @@ class PortfolioRecommendationEngine:
         if protection.get("new_exposure_scale", 1) < 1:
             emit(
                 "protection",
-                f"New exposure scaled to {protection.get('new_exposure_scale')} by capital protection.",
+                f"New exposure scaled to {protection.get('new_exposure_scale')} by capital protection.",  # noqa: E501
             )
         if regime.get("regime") == "GLOBAL_RISK_OFF":
             emit("regime", "Increase USD diversification / reduce risk-on book.")

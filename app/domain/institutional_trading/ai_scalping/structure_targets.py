@@ -7,8 +7,8 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.config import (
-    AiScalpingConfig,
     DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -27,13 +27,15 @@ class StructureTargets:
         return {
             "entry": str(self.entry) if self.entry is not None else None,
             "stop_loss": str(self.stop_loss) if self.stop_loss is not None else None,
-            "take_profit": str(self.take_profit) if self.take_profit is not None else None,
-            "stop_distance": str(self.stop_distance)
-            if self.stop_distance is not None
-            else None,
-            "expected_rr": str(self.expected_rr)
-            if self.expected_rr is not None
-            else None,
+            "take_profit": (
+                str(self.take_profit) if self.take_profit is not None else None
+            ),
+            "stop_distance": (
+                str(self.stop_distance) if self.stop_distance is not None else None
+            ),
+            "expected_rr": (
+                str(self.expected_rr) if self.expected_rr is not None else None
+            ),
             "reason": self.reason,
             "fixed_stop": False,
         }
@@ -115,14 +117,21 @@ def compute_structure_targets(
     if direction is TradeDirection.BUY:
         # SL behind structure low
         if swing_low is not None and swing_low < entry:
-            sl = swing_low - (atr_d * Decimal("0.15") if atr_d else entry * Decimal("0.0001"))
+            sl = swing_low - (
+                atr_d * Decimal("0.15") if atr_d else entry * Decimal("0.0001")
+            )
             reason_parts.append("SL behind swing low")
         elif fallback_dist:
             sl = entry - fallback_dist
             reason_parts.append("SL ATR fallback (no swing low)")
         else:
             return StructureTargets(
-                entry, None, None, None, None, "Cannot place BUY SL without structure/ATR"
+                entry,
+                None,
+                None,
+                None,
+                None,
+                "Cannot place BUY SL without structure/ATR",
             )
         stop_distance = entry - sl
         # TP: liquidity high → swing high → ATR expansion
@@ -140,14 +149,21 @@ def compute_structure_targets(
             reason_parts.append("TP 1.5R structure distance")
     else:
         if swing_high is not None and swing_high > entry:
-            sl = swing_high + (atr_d * Decimal("0.15") if atr_d else entry * Decimal("0.0001"))
+            sl = swing_high + (
+                atr_d * Decimal("0.15") if atr_d else entry * Decimal("0.0001")
+            )
             reason_parts.append("SL behind swing high")
         elif fallback_dist:
             sl = entry + fallback_dist
             reason_parts.append("SL ATR fallback (no swing high)")
         else:
             return StructureTargets(
-                entry, None, None, None, None, "Cannot place SELL SL without structure/ATR"
+                entry,
+                None,
+                None,
+                None,
+                None,
+                "Cannot place SELL SL without structure/ATR",
             )
         stop_distance = sl - entry
         if liq_low is not None and liq_low < entry:

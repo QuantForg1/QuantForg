@@ -13,9 +13,7 @@ from app.domain.research_validation_platform.config import (
 
 class ResearchValidationService:
     def __init__(self, config: ResearchValidationConfig | None = None) -> None:
-        self._platform = ResearchValidationPlatform(
-            config or DEFAULT_RVP_CONFIG
-        )
+        self._platform = ResearchValidationPlatform(config or DEFAULT_RVP_CONFIG)
 
     def status(self) -> dict[str, object]:
         return self._platform.status()
@@ -56,9 +54,7 @@ class ResearchValidationService:
     def versions(
         self, *, strategy_key: str | None = None, limit: int = 50
     ) -> dict[str, Any]:
-        return self._platform.list_versions(
-            strategy_key=strategy_key, limit=limit
-        )
+        return self._platform.list_versions(strategy_key=strategy_key, limit=limit)
 
     def rollback(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._platform.rollback(payload)

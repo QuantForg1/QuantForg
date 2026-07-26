@@ -1,4 +1,4 @@
-"""Adaptive Opportunity Timeline — read-only evaluation history (never mutates).
+"""Adaptive Opportunity Timeline - read-only evaluation history (never mutates).
 
 Projects the last N Strategy Diagnostics cycles into a timeline of:
 MTF · Quality · Confluence · Risk Lots · Opportunity Meter
@@ -38,6 +38,7 @@ def _is_execute(cycle: dict[str, Any]) -> bool:
         return action not in {"NO_TRADE", "WATCH"}
     return False
 
+
 TIMELINE_MAX = 100
 _PREDICT_WINDOW = 5  # recent points for slope (chronological)
 
@@ -55,7 +56,7 @@ def _readiness_score(
     q_need: int | None,
     c_need: int | None,
 ) -> float | None:
-    """0–100 composite readiness for Opportunity Trend chart (observational)."""
+    """0-100 composite readiness for Opportunity Trend chart (observational)."""
     parts: list[float] = []
     if mtf is not None:
         parts.append(min(100.0, 100.0 * float(mtf) / float(MTF_ALIGN_SCORE_NEED)))
@@ -79,7 +80,9 @@ def cycle_to_timeline_point(cycle: dict[str, Any]) -> dict[str, Any]:
     r_g = build_risk_gap(cycle)
     meter = opp["opportunity_meter"]
 
-    lots_raw = r_g.get("current_lots") or r_g.get("raw_lots") or r_g.get("approved_lots")
+    lots_raw = (
+        r_g.get("current_lots") or r_g.get("raw_lots") or r_g.get("approved_lots")
+    )
     lots_f = float(lots_raw) if lots_raw is not None else None
     mtf_s = mtf_g.get("current")
     q_s = q_g.get("current")
@@ -189,7 +192,7 @@ def predict_trajectory(
         direction = "Stable"
         label = "Stable"
 
-    arrow_path = " → ".join(str(v) for v in mtf_seq) if mtf_seq else None
+    arrow_path = " -> ".join(str(v) for v in mtf_seq) if mtf_seq else None
 
     return {
         "direction": direction,
@@ -208,7 +211,7 @@ def predict_trajectory(
 
 
 def build_series(points_chrono: list[dict[str, Any]]) -> dict[str, Any]:
-    """Chart-ready series (oldest → newest)."""
+    """Chart-ready series (oldest -> newest)."""
 
     def _series(key: str, num_key: str | None = None) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []

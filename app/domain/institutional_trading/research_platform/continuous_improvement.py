@@ -1,4 +1,4 @@
-"""Continuous Improvement Engine — advisory insights only."""
+"""Continuous Improvement Engine - advisory insights only."""
 
 from __future__ import annotations
 
@@ -36,7 +36,9 @@ class ContinuousImprovementEngine:
     _insights: list[ImprovementInsight] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    def generate(self, context: dict[str, Any] | None = None) -> list[ImprovementInsight]:
+    def generate(
+        self, context: dict[str, Any] | None = None
+    ) -> list[ImprovementInsight]:
         ctx = context or {}
         out: list[ImprovementInsight] = []
 
@@ -53,34 +55,50 @@ class ContinuousImprovementEngine:
 
         experiments = ctx.get("experiments_by_status") or {}
         if int(experiments.get("Completed", 0) or 0) > 0:
-            emit("strategy_testing", "Completed experiments deserve further out-of-sample validation.")
+            emit(
+                "strategy_testing",
+                "Completed experiments deserve further out-of-sample validation.",
+            )
         if int(experiments.get("Running", 0) or 0) == 0:
-            emit("strategy_testing", "No running experiments — consider drafting a controlled research trial.")
+            emit(
+                "strategy_testing",
+                "No running experiments - consider drafting a controlled research trial.",  # noqa: E501
+            )
 
         rankings = ctx.get("symbol_rankings") or {}
         worst = (rankings.get("worst_symbols") or [])[:1]
         if worst:
             emit(
                 "symbols",
-                f"{worst[0].get('symbol')} requires more data / caution (weak profit factor).",
+                f"{worst[0].get('symbol')} requires more data / caution (weak profit factor).",  # noqa: E501
             )
         sess = rankings.get("most_profitable_session")
         if sess and str(sess.get("session", "")).lower() in {"asian", "asia"}:
-            emit("sessions", "Asian session historically underperforms — investigate filters.")
+            emit(
+                "sessions",
+                "Asian session historically underperforms - investigate filters.",
+            )
 
         opt_queue = ctx.get("optimization_queue") or []
         if opt_queue:
             emit(
                 "optimization",
-                f"Optimization queue has {len(opt_queue)} run(s) worth investigating (do not auto-apply).",
+                f"Optimization queue has {len(opt_queue)} run(s) worth investigating (do not auto-apply).",  # noqa: E501
             )
 
         models_pending = ctx.get("models_pending") or 0
         if models_pending:
-            emit("models", f"{models_pending} model(s) pending review before any promotion.")
+            emit(
+                "models",
+                f"{models_pending} model(s) pending review before any promotion.",
+            )
 
         weights = ctx.get("weight_multipliers") or {}
-        unstable = [k for k, v in weights.items() if isinstance(v, (int, float)) and (v < 0.7 or v > 1.3)]
+        unstable = [
+            k
+            for k, v in weights.items()
+            if isinstance(v, (int, float)) and (v < 0.7 or v > 1.3)
+        ]
         if unstable:
             emit(
                 "ai_weights",
@@ -89,7 +107,7 @@ class ContinuousImprovementEngine:
 
         emit(
             "evidence",
-            "Collect 2–4 weeks of demo/low-risk live data (win rate, PF, DD, Sharpe, RR, latency, slippage, calibration) before Production promotion.",
+            "Collect 2-4 weeks of demo/low-risk live data (win rate, PF, DD, Sharpe, RR, latency, slippage, calibration) before Production promotion.",  # noqa: E501
         )
 
         with self._lock:

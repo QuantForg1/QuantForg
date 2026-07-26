@@ -91,9 +91,7 @@ class RecoveryOrchestrator:
             now=moment,
         )
         if ok and self.network is not None:
-            self.network.mark_recovered(
-                component="gateway", now=moment, detail=detail
-            )
+            self.network.mark_recovered(component="gateway", now=moment, detail=detail)
         return self._record(RecoveryAction.GATEWAY_RECONNECT, ok, detail, now=moment)
 
     def recover_mt5(self, *, now: datetime | None = None) -> RecoveryEvent:

@@ -101,7 +101,10 @@ class PromotionWorkflow:
         reason: str,
     ) -> PromotionRecord:
         to_stage = next_stage(from_stage) or from_stage
-        if to_stage == "Production" and DEFAULT_RESEARCH_CONFIG.auto_promote_to_production:
+        if (
+            to_stage == "Production"
+            and DEFAULT_RESEARCH_CONFIG.auto_promote_to_production
+        ):
             raise RuntimeError("Auto-promote to production is forbidden")
         rec = PromotionRecord(
             id=str(uuid4()),

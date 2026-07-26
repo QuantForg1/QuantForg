@@ -77,7 +77,7 @@ def _factor_map(decision: Any, snapshot: Any | None = None) -> dict[str, int]:
         for k, v in raw.items():
             try:
                 factors[str(k).lower()] = _clamp(int(v))
-            except Exception:
+            except Exception:  # noqa: S112  # best-effort continue
                 continue
     # Fallbacks from decision quality / confidence
     conf = int(getattr(decision, "confidence", 50) or 50)
@@ -136,7 +136,11 @@ def evaluate_shadow(
         direction = "NONE"
     elif abs(momentum - structure) > 35 and structure < 50:
         # Independent disagreement signal
-        direction = "SELL" if primary_dir == "BUY" else ("BUY" if primary_dir == "SELL" else "NONE")
+        direction = (
+            "SELL"
+            if primary_dir == "BUY"
+            else ("BUY" if primary_dir == "SELL" else "NONE")
+        )
     else:
         direction = primary_dir if primary_dir in {"BUY", "SELL"} else "NONE"
 
@@ -204,7 +208,9 @@ def compare_primary_shadow(
         "confidence": primary_conf,
         "risk_score": primary_risk,
         "expected_rr": primary_rr,
-        "action": str(getattr(getattr(decision, "action", None), "value", decision.action)),
+        "action": str(
+            getattr(getattr(decision, "action", None), "value", decision.action)
+        ),
     }
     used = "primary"
     if significant and cfg.shadow_veto_enabled:

@@ -64,9 +64,7 @@ def evaluate_execution_readiness(
         score = min(score, Decimal("30"))
         reasons.append("Safety Engine not passed — readiness fail-closed")
 
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     passed = (
         score >= config.min_execution_readiness
         and inp.risk_engine_passed is True

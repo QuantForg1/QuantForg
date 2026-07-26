@@ -52,9 +52,7 @@ async def trading_kernel_status(user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/cycle")
-async def trading_kernel_cycle(
-    body: CycleRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def trading_kernel_cycle(body: CycleRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.run_cycle(body.model_dump())
 

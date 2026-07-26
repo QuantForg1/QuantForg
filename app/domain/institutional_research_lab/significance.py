@@ -7,14 +7,18 @@ import statistics
 from typing import Any
 
 
-def compute_significance(trades: list[dict[str, Any]], stats: dict[str, Any]) -> dict[str, Any]:
+def compute_significance(
+    trades: list[dict[str, Any]], stats: dict[str, Any]
+) -> dict[str, Any]:
     n = len(trades)
     pnls = [float(t.get("pnl") or 0.0) for t in trades]
     variance = statistics.pvariance(pnls) if n >= 2 else 0.0
     # Rough Wilson-ish confidence proxy from sample size + win rate
     wr = (stats.get("win_rate") or 0.0) / 100.0
     se = math.sqrt(wr * (1.0 - wr) / n) if n > 0 else 1.0
-    confidence = max(0.0, min(99.0, (1.0 - 1.96 * se) * 100.0)) if n >= 5 else max(0.0, n * 8.0)
+    confidence = (
+        max(0.0, min(99.0, (1.0 - 1.96 * se) * 100.0)) if n >= 5 else max(0.0, n * 8.0)
+    )
 
     # Stability: inverse of return volatility scaled
     rets = []

@@ -83,9 +83,7 @@ class MarketIntelligenceEvaluateRequest(BaseModel):
     execution_quality: ExecutionQualityRequest = Field(
         default_factory=ExecutionQualityRequest
     )
-    portfolio_risk: PortfolioRiskRequest = Field(
-        default_factory=PortfolioRiskRequest
-    )
+    portfolio_risk: PortfolioRiskRequest = Field(default_factory=PortfolioRiskRequest)
     ai_health: AiHealthRequest = Field(default_factory=AiHealthRequest)
     day_trades: list[DayTradeRequest] = Field(default_factory=list)
     violations: list[ViolationRequest] = Field(default_factory=list)

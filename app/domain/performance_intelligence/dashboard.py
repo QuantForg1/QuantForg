@@ -79,15 +79,16 @@ def normalize_trade_rows(rows: list[dict[str, Any]] | None) -> list[dict[str, An
                 or raw.get("holding_time_sec")
                 or raw.get("duration_seconds"),
                 "signals": raw.get("signals") or raw.get("signal_tags") or [],
-                "confluence": raw.get("confluence")
-                if isinstance(raw.get("confluence"), dict)
-                else {},
+                "confluence": (
+                    raw.get("confluence")
+                    if isinstance(raw.get("confluence"), dict)
+                    else {}
+                ),
                 "confluence_score": raw.get("confluence_score")
                 or raw.get("confidence"),
                 "bos": raw.get("bos"),
                 "choch": raw.get("choch"),
-                "liquidity_sweep": raw.get("liquidity_sweep")
-                or raw.get("sweep"),
+                "liquidity_sweep": raw.get("liquidity_sweep") or raw.get("sweep"),
                 "order_block": raw.get("order_block"),
                 "fair_value_gap": raw.get("fair_value_gap") or raw.get("fvg"),
                 "time_to_tp_sec": raw.get("time_to_tp_sec"),
@@ -113,9 +114,11 @@ def normalize_decision_rows(
                 or raw.get("why")
                 or raw.get("rejected")
                 or raw.get("abort_reason"),
-                "confluence": raw.get("confluence")
-                if isinstance(raw.get("confluence"), dict)
-                else {},
+                "confluence": (
+                    raw.get("confluence")
+                    if isinstance(raw.get("confluence"), dict)
+                    else {}
+                ),
                 "timestamp": raw.get("timestamp")
                 or raw.get("created_at")
                 or raw.get("submitted_at"),
@@ -211,9 +214,7 @@ def enrich_session_analytics(trades: list[dict[str, Any]]) -> dict[str, Any]:
             )
             if ts:
                 raw = classify_session_utc(ts).value
-                label = (
-                    "overlap" if raw == "london_ny_overlap" else raw
-                )
+                label = "overlap" if raw == "london_ny_overlap" else raw
             else:
                 label = "off_hours"
         if label not in buckets:
@@ -246,9 +247,7 @@ def enrich_regime_analytics(trades: list[dict[str, Any]]) -> dict[str, Any]:
         bucket = [
             t
             for t in trades
-            if str(t.get("regime") or t.get("market_regime") or "")
-            .lower()
-            .strip()
+            if str(t.get("regime") or t.get("market_regime") or "").lower().strip()
             in {
                 key,
                 key.replace("_", " "),
@@ -304,9 +303,12 @@ def _signal_flags(t: dict[str, Any]) -> set[str]:
     for key in ("bos", "choch", "liquidity_sweep", "order_block", "fair_value_gap"):
         if t.get(key) is True:
             flags.add(key)
-    conf = t.get("confluence") if isinstance(t.get("confluence"), dict) else {}
-    factors = conf.get("factors") if isinstance(conf.get("factors"), dict) else {}
-    reasons = conf.get("reasons") if isinstance(conf.get("reasons"), list) else []
+    confluence = t.get("confluence")
+    conf: dict[str, Any] = confluence if isinstance(confluence, dict) else {}
+    conf_factors = conf.get("factors")
+    factors: dict[str, Any] = conf_factors if isinstance(conf_factors, dict) else {}
+    conf_reasons = conf.get("reasons")
+    reasons: list[Any] = conf_reasons if isinstance(conf_reasons, list) else []
     reason_text = " ".join(str(r) for r in reasons).lower()
     if "bos" in reason_text:
         flags.add("bos")
@@ -358,7 +360,8 @@ def compute_signal_analytics(trades: list[dict[str, Any]]) -> dict[str, Any]:
         "confluence_below_80": [],
     }
     for t in trades:
-        conf = t.get("confluence") if isinstance(t.get("confluence"), dict) else {}
+        confluence = t.get("confluence")
+        conf: dict[str, Any] = confluence if isinstance(confluence, dict) else {}
         score = t.get("confluence_score")
         if score is None:
             score = conf.get("score") or conf.get("confidence")
@@ -416,9 +419,7 @@ def compute_no_trade_analytics(
     hist: dict[str, int] = defaultdict(int)
     for d in decisions or []:
         action = (
-            str(d.get("decision") or d.get("action") or "")
-            .upper()
-            .replace(" ", "_")
+            str(d.get("decision") or d.get("action") or "").upper().replace(" ", "_")
         )
         if action not in {"NO_TRADE", "REJECT", "WATCH", "BLOCKED"}:
             continue
@@ -483,9 +484,11 @@ def compute_time_analytics(trades: list[dict[str, Any]]) -> dict[str, Any]:
             end = _parse_ts(t.get("closed_at"))
             if start and end:
                 to_tp.append((end - start).total_seconds())
-        if durations and ("sl" in cause or "stop" in cause) and t.get(
-            "time_to_sl_sec"
-        ) is None:
+        if (
+            durations
+            and ("sl" in cause or "stop" in cause)
+            and t.get("time_to_sl_sec") is None
+        ):
             start = _parse_ts(t.get("opened_at"))
             end = _parse_ts(t.get("closed_at"))
             if start and end:
@@ -648,9 +651,7 @@ def build_performance_intelligence(
     signals = compute_signal_analytics(normalized)
     no_trade = compute_no_trade_analytics(decs)
     time_a = compute_time_analytics(normalized)
-    report = build_period_report(
-        normalized, period=period, decisions=decs
-    )
+    report = build_period_report(normalized, period=period, decisions=decs)
     recs = build_recommendations(
         performance=performance,
         sessions=sessions,

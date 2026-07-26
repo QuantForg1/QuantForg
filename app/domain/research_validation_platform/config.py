@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -50,7 +51,7 @@ class ResearchValidationConfig:
         self.allow_order_send = False
         self.require_certification_for_production = True
 
-    def update(self, updates: dict[str, object]) -> ResearchValidationConfig:
+    def update(self, updates: dict[str, Any]) -> ResearchValidationConfig:
         locked = {
             "allow_live_execution",
             "allow_order_send",
@@ -63,7 +64,10 @@ class ResearchValidationConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                existing_flags = data["feature_flags"]
+                flags: dict[str, bool] = (
+                    dict(existing_flags) if isinstance(existing_flags, dict) else {}
+                )
                 for fk, fv in value.items():
                     if isinstance(fv, bool) and fk not in {
                         "live_execution",
@@ -77,23 +81,25 @@ class ResearchValidationConfig:
             min_profit_factor=Decimal(str(data["min_profit_factor"])),
             min_sharpe=Decimal(str(data["min_sharpe"])),
             max_drawdown_pct=Decimal(str(data["max_drawdown_pct"])),
-            min_trades=int(data["min_trades"]),
+            min_trades=int(str(data["min_trades"])),
             min_walkforward_score=Decimal(str(data["min_walkforward_score"])),
             min_paper_score=Decimal(str(data["min_paper_score"])),
-            min_certification_score=Decimal(
-                str(data["min_certification_score"])
-            ),
+            min_certification_score=Decimal(str(data["min_certification_score"])),
             require_operator_release_approval=bool(
                 data["require_operator_release_approval"]
             ),
-            max_replay_bars=int(data["max_replay_bars"]),
-            max_versions=int(data["max_versions"]),
-            max_audit=int(data["max_audit"]),
-            max_comparisons=int(data["max_comparisons"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            max_replay_bars=int(str(data["max_replay_bars"])),
+            max_versions=int(str(data["max_versions"])),
+            max_audit=int(str(data["max_audit"])),
+            max_comparisons=int(str(data["max_comparisons"])),
+            feature_flags=(
+                dict(data["feature_flags"])
+                if isinstance(data["feature_flags"], dict)
+                else {}
+            ),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

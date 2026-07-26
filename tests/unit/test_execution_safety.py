@@ -108,7 +108,6 @@ class TestExecutionPolicy:
         assert policy.allows_symbol("XAUUSD")
 
 
-
 @pytest.mark.unit
 class TestExecutionSafetyService:
     def test_allow_happy_path(self) -> None:

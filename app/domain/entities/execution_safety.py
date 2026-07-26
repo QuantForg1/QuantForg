@@ -66,9 +66,12 @@ class ExecutionPolicy:
                     DEFAULT_ALPHA_UNIVERSE,
                 )
 
-                universe = frozenset(
-                    str(s).strip().upper() for s in DEFAULT_ALPHA_UNIVERSE if s
-                ) | SYMBOL_WHITELIST
+                universe = (
+                    frozenset(
+                        str(s).strip().upper() for s in DEFAULT_ALPHA_UNIVERSE if s
+                    )
+                    | SYMBOL_WHITELIST
+                )
             except Exception:
                 universe = SYMBOL_WHITELIST | frozenset(
                     {

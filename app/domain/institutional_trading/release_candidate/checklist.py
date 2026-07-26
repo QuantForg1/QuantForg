@@ -16,7 +16,9 @@ CheckStatus = Literal["PASS", "WARNING", "FAIL"]
 ROOT = Path(__file__).resolve().parents[4]
 
 
-def _item(id: str, status: CheckStatus, detail: str, *, evidence: str | None = None) -> dict[str, Any]:
+def _item(
+    id: str, status: CheckStatus, detail: str, *, evidence: str | None = None
+) -> dict[str, Any]:
     return {"id": id, "status": status, "detail": detail, "evidence": evidence}
 
 
@@ -25,7 +27,7 @@ def _exists(rel: str) -> bool:
 
 
 def run_production_checklist() -> dict[str, Any]:
-    """Compose filesystem + live probes into a scored checklist. Never mutates trading."""
+    """Compose filesystem + live probes into a scored checklist. Never mutates trading."""  # noqa: E501
     items: list[dict[str, Any]] = []
 
     # MT5 Gateway
@@ -62,9 +64,9 @@ def run_production_checklist() -> dict[str, Any]:
     )
 
     # AI Engine
-    ai_ok = _exists("app/domain/institutional_trading/ai_validation/__init__.py") or _exists(
-        "app/domain/institutional_trading/pipeline.py"
-    )
+    ai_ok = _exists(
+        "app/domain/institutional_trading/ai_validation/__init__.py"
+    ) or _exists("app/domain/institutional_trading/pipeline.py")
     items.append(
         _item(
             "ai_engine",
@@ -112,9 +114,7 @@ def run_production_checklist() -> dict[str, Any]:
     )
 
     # Retry Engine
-    retry_ok = _exists(
-        "app/domain/institutional_trading/production_hardening/retry.py"
-    )
+    retry_ok = _exists("app/domain/institutional_trading/production_hardening/retry.py")
     items.append(
         _item(
             "retry_engine",
@@ -125,9 +125,7 @@ def run_production_checklist() -> dict[str, Any]:
     )
 
     # Dashboard
-    dash_ok = _exists(
-        "app/presentation/routers/institutional_reliability.py"
-    )
+    dash_ok = _exists("app/presentation/routers/institutional_reliability.py")
     items.append(
         _item(
             "dashboard",
@@ -138,12 +136,18 @@ def run_production_checklist() -> dict[str, Any]:
     )
 
     # Railway Environment
-    railway = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID"))
+    railway = bool(
+        os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID")
+    )
     items.append(
         _item(
             "railway_environment",
             "PASS" if railway else "WARNING",
-            "Railway env detected" if railway else "Railway env vars not set (local/dev OK)",
+            (
+                "Railway env detected"
+                if railway
+                else "Railway env vars not set (local/dev OK)"
+            ),
             evidence="RAILWAY_ENVIRONMENT|RAILWAY_PROJECT_ID",
         )
     )
@@ -160,7 +164,9 @@ def run_production_checklist() -> dict[str, Any]:
         sec_detail = f"Partial secrets: missing {', '.join(missing)}"
     else:
         sec_status = "WARNING"
-        sec_detail = "Critical secret names not set in this process (may be injected at deploy)"
+        sec_detail = (
+            "Critical secret names not set in this process (may be injected at deploy)"
+        )
     items.append(
         _item("secrets", sec_status, sec_detail, evidence="env name presence only")
     )
@@ -171,7 +177,11 @@ def run_production_checklist() -> dict[str, Any]:
         _item(
             "database",
             "PASS" if db_url else "WARNING",
-            "Database URL / Supabase URL configured" if db_url else "No DATABASE_URL/SUPABASE_URL in process",
+            (
+                "Database URL / Supabase URL configured"
+                if db_url
+                else "No DATABASE_URL/SUPABASE_URL in process"
+            ),
             evidence="DATABASE_URL|SUPABASE_URL",
         )
     )

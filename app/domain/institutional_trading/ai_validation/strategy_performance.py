@@ -43,7 +43,7 @@ def _normalize_strategy(raw: str | None) -> str:
     if s in {"intraday", "day", "daytrade"}:
         return "intraday"
     if s in {"alpha", "swing"}:
-        return "swing" if s == "swing" else "swing"
+        return "swing"
     if s not in STRATEGIES:
         return "swing"
     return s

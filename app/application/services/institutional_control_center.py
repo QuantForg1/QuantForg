@@ -8,6 +8,7 @@ Thresholds, Research Lab, or Data Warehouse. NEVER influences trading.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -121,14 +122,16 @@ def _status(ok: bool | None, *, warn: bool = False) -> HealthStatus:
     return "FAIL"
 
 
-def _safe(fn, default: Any = None) -> Any:
+def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001 — advisory aggregation
+    except Exception:
         return default
 
 
-def _subsystem(name: str, status: HealthStatus, detail: str, *, href: str | None = None) -> dict[str, Any]:
+def _subsystem(
+    name: str, status: HealthStatus, detail: str, *, href: str | None = None
+) -> dict[str, Any]:
     return {
         "name": name,
         "status": status,
@@ -141,12 +144,16 @@ def section_system_status() -> dict[str, Any]:
     subs: list[dict[str, Any]] = []
 
     # Trading / control plane
-    plane = _safe(lambda: __import__(
-        "app.domain.institutional_trading.operations.control_plane",
-        fromlist=["get_control_plane"],
-    ).get_control_plane())
+    plane = _safe(
+        lambda: __import__(
+            "app.domain.institutional_trading.operations.control_plane",
+            fromlist=["get_control_plane"],
+        ).get_control_plane()
+    )
     if plane is not None:
-        mode = getattr(getattr(plane, "mode", None), "value", str(getattr(plane, "mode", "?")))
+        mode = getattr(
+            getattr(plane, "mode", None), "value", str(getattr(plane, "mode", "?"))
+        )
         kill = bool(getattr(plane, "kill_switch_armed", False))
         subs.append(
             _subsystem(
@@ -203,8 +210,15 @@ def section_system_status() -> dict[str, Any]:
     if isinstance(facts_pack, tuple) and facts_pack:
         live_facts = facts_pack[0]
         gw = bool(getattr(live_facts, "gateway_connected", False))
-        br = bool(getattr(live_facts, "broker_connected", False) or getattr(live_facts, "mt5_connected", False))
-        meta = facts_pack[1] if len(facts_pack) > 1 and isinstance(facts_pack[1], dict) else {}
+        br = bool(
+            getattr(live_facts, "broker_connected", False)
+            or getattr(live_facts, "mt5_connected", False)
+        )
+        meta = (
+            facts_pack[1]
+            if len(facts_pack) > 1 and isinstance(facts_pack[1], dict)
+            else {}
+        )
         gw = gw or bool(meta.get("gateway_connected") or meta.get("gateway_ok"))
         br = br or bool(meta.get("broker_connected") or meta.get("mt5_connected"))
     elif isinstance(facts_pack, dict):
@@ -229,9 +243,13 @@ def section_system_status() -> dict[str, Any]:
         )
     else:
         settings = _safe(
-            lambda: __import__("core.config.settings", fromlist=["get_settings"]).get_settings()
+            lambda: __import__(
+                "core.config.settings", fromlist=["get_settings"]
+            ).get_settings()
         )
-        has_url = bool(getattr(settings, "mt5_gateway_base_url", None)) if settings else False
+        has_url = (
+            bool(getattr(settings, "mt5_gateway_base_url", None)) if settings else False
+        )
         subs.append(
             _subsystem(
                 "Gateway",
@@ -261,7 +279,11 @@ def section_system_status() -> dict[str, Any]:
             )
         )
     else:
-        subs.append(_subsystem("Scheduler", "WARNING", "ITE runtime not observable", href="/ops"))
+        subs.append(
+            _subsystem(
+                "Scheduler", "WARNING", "ITE runtime not observable", href="/ops"
+            )
+        )
 
     # Replay
     replay_ok = _safe(
@@ -285,7 +307,9 @@ def section_system_status() -> dict[str, Any]:
         lambda: __import__(
             "app.domain.institutional_research_lab",
             fromlist=["get_irl"],
-        ).get_irl().dashboard()
+        )
+        .get_irl()
+        .dashboard()
     )
     if isinstance(irl, dict):
         counts = irl.get("counts") or {}
@@ -299,7 +323,12 @@ def section_system_status() -> dict[str, Any]:
         )
     else:
         subs.append(
-            _subsystem("Research Lab", "WARNING", "IRL unread", href="/institutional-research-lab")
+            _subsystem(
+                "Research Lab",
+                "WARNING",
+                "IRL unread",
+                href="/institutional-research-lab",
+            )
         )
 
     # Data Warehouse
@@ -307,7 +336,9 @@ def section_system_status() -> dict[str, Any]:
         lambda: __import__(
             "app.domain.institutional_data_warehouse.store",
             fromlist=["get_warehouse"],
-        ).get_warehouse().inventory()
+        )
+        .get_warehouse()
+        .inventory()
     )
     if isinstance(inv, dict):
         total = int(inv.get("total_records") or 0)
@@ -340,7 +371,12 @@ def section_system_status() -> dict[str, Any]:
 
     return {
         "subsystems": subs,
-        "counts": {"pass": pass_n, "warning": warn_n, "fail": fail_n, "total": len(subs)},
+        "counts": {
+            "pass": pass_n,
+            "warning": warn_n,
+            "fail": fail_n,
+            "total": len(subs),
+        },
         "overall": overall,
     }
 
@@ -365,7 +401,9 @@ def section_live_trading() -> dict[str, Any]:
         lambda: __import__(
             "app.domain.institutional_trading.session_filter",
             fromlist=["classify_session_utc"],
-        ).classify_session_utc(datetime.now(UTC)).value
+        )
+        .classify_session_utc(datetime.now(UTC))
+        .value
     )
 
     regime = _safe(
@@ -375,7 +413,8 @@ def section_live_trading() -> dict[str, Any]:
         ).build_market_regime_intelligence(limit=20)
     )
     if isinstance(regime, dict):
-        current = regime.get("current") if isinstance(regime.get("current"), dict) else {}
+        current_raw = regime.get("current")
+        current = current_raw if isinstance(current_raw, dict) else {}
         out["market_regime"] = current.get("current_regime") or current.get("regime")
 
     # Diagnostics latest cycle
@@ -383,24 +422,36 @@ def section_live_trading() -> dict[str, Any]:
         lambda: __import__(
             "app.application.services.strategy_diagnostics",
             fromlist=["get_strategy_diagnostics_store"],
-        ).get_strategy_diagnostics_store().snapshot(limit=5)
+        )
+        .get_strategy_diagnostics_store()
+        .snapshot(limit=5)
     )
     if isinstance(diag, dict):
         cycles = list(diag.get("cycles") or [])
         if cycles:
             c = cycles[0] if isinstance(cycles[0], dict) else {}
-            out["last_evaluation"] = c.get("observed_at") or c.get("timestamp") or c.get("at")
+            out["last_evaluation"] = (
+                c.get("observed_at") or c.get("timestamp") or c.get("at")
+            )
             out["mtf_score"] = c.get("mtf_score") or (c.get("mtf") or {}).get("score")
-            out["quality"] = c.get("quality_score") or (c.get("quality") or {}).get("score")
-            out["confluence"] = c.get("confluence_score") or (c.get("confluence") or {}).get("score")
+            out["quality"] = c.get("quality_score") or (c.get("quality") or {}).get(
+                "score"
+            )
+            out["confluence"] = c.get("confluence_score") or (
+                c.get("confluence") or {}
+            ).get("score")
             out["execution_decision"] = (
                 c.get("decision")
                 or c.get("execution_decision")
                 or c.get("action")
                 or c.get("outcome")
             )
-            out["risk_status"] = c.get("risk_status") or (c.get("risk") or {}).get("status")
-            out["safety_status"] = c.get("safety_status") or (c.get("safety") or {}).get("status")
+            out["risk_status"] = c.get("risk_status") or (c.get("risk") or {}).get(
+                "status"
+            )
+            out["safety_status"] = c.get("safety_status") or (
+                c.get("safety") or {}
+            ).get("status")
 
     plane = _safe(
         lambda: __import__(
@@ -455,10 +506,14 @@ def section_portfolio() -> dict[str, Any]:
             "health_score": None,
             "available": False,
         }
-    sections = pa.get("sections") if isinstance(pa.get("sections"), dict) else {}
-    dash = sections.get("dashboard") if isinstance(sections.get("dashboard"), dict) else {}
-    risk = sections.get("risk") if isinstance(sections.get("risk"), dict) else {}
-    health = sections.get("health_score") if isinstance(sections.get("health_score"), dict) else {}
+    sections_raw = pa.get("sections")
+    sections = sections_raw if isinstance(sections_raw, dict) else {}
+    dash_raw = sections.get("dashboard")
+    dash = dash_raw if isinstance(dash_raw, dict) else {}
+    risk_raw = sections.get("risk")
+    risk = risk_raw if isinstance(risk_raw, dict) else {}
+    health_raw = sections.get("health_score")
+    health = health_raw if isinstance(health_raw, dict) else {}
     return {
         "balance": dash.get("balance"),
         "equity": dash.get("equity"),
@@ -590,13 +645,16 @@ def section_data_warehouse() -> dict[str, Any]:
     inv = _safe(wh.inventory, {}) or {}
     storage = _safe(wh.storage_stats, {}) or {}
     flow = _safe(lambda: wh.event_flow(limit=20), []) or []
-    dq = _safe(
-        lambda: __import__(
-            "app.domain.institutional_data_warehouse.quality_monitor",
-            fromlist=["run_data_quality_monitor"],
-        ).run_data_quality_monitor(wh),
-        {},
-    ) or {}
+    dq = (
+        _safe(
+            lambda: __import__(
+                "app.domain.institutional_data_warehouse.quality_monitor",
+                fromlist=["run_data_quality_monitor"],
+            ).run_data_quality_monitor(wh),
+            {},
+        )
+        or {}
+    )
     recent = flow[-5:] if flow else []
     event_rate = None
     if len(recent) >= 2:
@@ -605,7 +663,9 @@ def section_data_warehouse() -> dict[str, Any]:
         "available": True,
         "event_rate": event_rate,
         "events_stored": inv.get("total_records"),
-        "storage_health": "PASS" if (storage.get("approx_mb") or 0) < 512 else "WARNING",
+        "storage_health": (
+            "PASS" if (storage.get("approx_mb") or 0) < 512 else "WARNING"
+        ),
         "integrity_score": dq.get("integrity_score"),
         "latency": dq.get("latency_seconds_avg"),
         "missing_events": dq.get("missing_events"),
@@ -646,7 +706,11 @@ def section_alerts() -> dict[str, Any]:
             )
 
     dq = section_data_warehouse()
-    if dq.get("available") and (dq.get("integrity_score") is not None) and float(dq["integrity_score"]) < 55:
+    if (
+        dq.get("available")
+        and (dq.get("integrity_score") is not None)
+        and float(dq["integrity_score"]) < 55
+    ):
         alerts.append(
             {
                 "id": "idw-integrity",
@@ -674,13 +738,19 @@ def section_alerts() -> dict[str, Any]:
                 "id": "research-running",
                 "category": "Research",
                 "severity": "Low",
-                "message": f"{research['running_experiments']} research experiment(s) running",
+                "message": f"{research['running_experiments']} research experiment(s) running",  # noqa: E501
                 "active": True,
             }
         )
 
     # Optional plane alerts list
-    plane_alerts = _safe(lambda: plane.list_alerts(active_only=True) if plane and hasattr(plane, "list_alerts") else None)
+    plane_alerts = _safe(
+        lambda: (
+            plane.list_alerts(active_only=True)
+            if plane and hasattr(plane, "list_alerts")
+            else None
+        )
+    )
     if isinstance(plane_alerts, list):
         for a in plane_alerts[:20]:
             if isinstance(a, dict):
@@ -706,7 +776,9 @@ def section_operational_timeline() -> dict[str, Any]:
         lambda: __import__(
             "app.application.services.strategy_diagnostics",
             fromlist=["get_strategy_diagnostics_store"],
-        ).get_strategy_diagnostics_store().snapshot(limit=15)
+        )
+        .get_strategy_diagnostics_store()
+        .snapshot(limit=15)
     )
     if isinstance(diag, dict):
         for c in list(diag.get("cycles") or [])[:10]:
@@ -721,22 +793,35 @@ def section_operational_timeline() -> dict[str, Any]:
                 }
             )
             if c.get("signal") or c.get("signal_generated"):
-                events.append({"timestamp": ts, "kind": "Signal Generated", "detail": "signal"})
-            risk = str(c.get("risk_status") or (c.get("risk") or {}).get("status") or "")
+                events.append(
+                    {"timestamp": ts, "kind": "Signal Generated", "detail": "signal"}
+                )
+            risk = str(
+                c.get("risk_status") or (c.get("risk") or {}).get("status") or ""
+            )
             if risk.upper() in {"PASS", "OK", "APPROVED"}:
                 events.append({"timestamp": ts, "kind": "Risk PASS", "detail": risk})
-            safety = str(c.get("safety_status") or (c.get("safety") or {}).get("status") or "")
+            safety = str(
+                c.get("safety_status") or (c.get("safety") or {}).get("status") or ""
+            )
             if safety.upper() in {"PASS", "OK", "APPROVED"}:
-                events.append({"timestamp": ts, "kind": "Safety PASS", "detail": safety})
+                events.append(
+                    {"timestamp": ts, "kind": "Safety PASS", "detail": safety}
+                )
 
     # Warehouse ingest flow
-    flow = _safe(
-        lambda: __import__(
-            "app.domain.institutional_data_warehouse.store",
-            fromlist=["get_warehouse"],
-        ).get_warehouse().event_flow(limit=10),
-        [],
-    ) or []
+    flow = (
+        _safe(
+            lambda: __import__(
+                "app.domain.institutional_data_warehouse.store",
+                fromlist=["get_warehouse"],
+            )
+            .get_warehouse()
+            .event_flow(limit=10),
+            [],
+        )
+        or []
+    )
     for row in flow:
         events.append(
             {
@@ -747,15 +832,22 @@ def section_operational_timeline() -> dict[str, Any]:
         )
 
     # Research jobs
-    jobs = _safe(
-        lambda: __import__(
-            "app.domain.institutional_research_lab",
-            fromlist=["get_irl"],
-        ).get_irl().list_jobs(limit=5),
-        [],
-    ) or []
+    jobs = (
+        _safe(
+            lambda: __import__(
+                "app.domain.institutional_research_lab",
+                fromlist=["get_irl"],
+            )
+            .get_irl()
+            .list_jobs(limit=5),
+            [],
+        )
+        or []
+    )
     for j in jobs:
-        kind = "Research Completed" if j.get("status") == "Completed" else "Research Job"
+        kind = (
+            "Research Completed" if j.get("status") == "Completed" else "Research Job"
+        )
         events.append(
             {
                 "timestamp": j.get("completed_at") or j.get("created_at"),
@@ -792,12 +884,15 @@ def section_executive_kpis(
     research_progress = 40.0
     if research.get("available"):
         completed = int(research.get("completed_experiments") or 0)
-        research_progress = min(100.0, 30.0 + completed * 10.0 + len(research.get("leaderboard_top5") or []) * 5.0)
+        research_progress = min(
+            100.0,
+            30.0 + completed * 10.0 + len(research.get("leaderboard_top5") or []) * 5.0,
+        )
 
     data_integrity = float(warehouse.get("integrity_score") or 50.0)
     availability = 90.0 if system.get("overall") != "FAIL" else 55.0
 
-    prr = (analytics.get("production_readiness") or {})
+    prr = analytics.get("production_readiness") or {}
     if prr.get("score") is not None:
         trading_readiness = round((trading_readiness + float(prr["score"])) / 2.0, 1)
 
@@ -855,7 +950,7 @@ def build_institutional_control_center() -> dict[str, Any]:
         "influences_trading": False,
         "analytics_only": True,
         "advisory_only": True,
-        "never_modifies_strategy_risk_safety_oms_gateway_auto_trading_thresholds_research_warehouse": True,
+        "never_modifies_strategy_risk_safety_oms_gateway_auto_trading_thresholds_research_warehouse": True,  # noqa: E501
         "observed_at": _now(),
         "elapsed_ms": elapsed_ms,
         "symbol": GOLD,

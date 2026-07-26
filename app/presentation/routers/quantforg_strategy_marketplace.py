@@ -97,9 +97,7 @@ def qsmr_search(
 @router.get("/compare")
 def qsmr_compare(
     _user: CurrentUser,
-    ids: str | None = Query(
-        default=None, description="Comma-separated strategy IDs"
-    ),
+    ids: str | None = Query(default=None, description="Comma-separated strategy IDs"),
 ) -> dict[str, Any]:
     from app.application.services.quantforg_strategy_marketplace import qsmr_compare
 

@@ -97,11 +97,13 @@ class VenueStatsStore:
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
-            venues = {v: dict(self._by_venue.get(v) or {"venue": v}) for v in TRADING_VENUES}
+            venues = {
+                v: dict(self._by_venue.get(v) or {"venue": v}) for v in TRADING_VENUES
+            }
         return {
             "venues": venues,
             "never_mix": True,
-            "note": "Paper, Demo, and Live statistics are stored separately and never mixed.",
+            "note": "Paper, Demo, and Live statistics are stored separately and never mixed.",  # noqa: E501
         }
 
 

@@ -36,7 +36,9 @@ class AllocationSlice:
         }
 
 
-def _corr_penalty(symbol: str, open_symbols: list[str], matrix: dict[str, Any]) -> float:
+def _corr_penalty(
+    symbol: str, open_symbols: list[str], matrix: dict[str, Any]
+) -> float:
     row = matrix.get(symbol) if isinstance(matrix.get(symbol), dict) else {}
     if not isinstance(row, dict):
         # fallback: alpha group conflict → heavy penalty
@@ -45,7 +47,9 @@ def _corr_penalty(symbol: str, open_symbols: list[str], matrix: dict[str, Any]) 
                 may_open_with_correlation,
             )
 
-            d = may_open_with_correlation(candidate_symbol=symbol, open_symbols=open_symbols)
+            d = may_open_with_correlation(
+                candidate_symbol=symbol, open_symbols=open_symbols
+            )
             return 0.85 if not d.allow else 0.0
         except Exception:
             return 0.0
@@ -55,7 +59,7 @@ def _corr_penalty(symbol: str, open_symbols: list[str], matrix: dict[str, Any]) 
             continue
         try:
             vals.append(abs(float(row.get(peer, 0))))
-        except Exception:
+        except Exception:  # noqa: S112  # best-effort continue
             continue
     return min(0.9, max(vals) if vals else 0.0)
 
@@ -91,7 +95,9 @@ def allocate_capital(
         conf = int(o.get("ai_confidence") or o.get("confidence") or 0)
         rr = float(o.get("expected_rr") or 0)
         penalty = _corr_penalty(sym, state.open_symbols, state.correlation_matrix)
-        raw = max(0.01, (score / 100.0) * (0.5 + conf / 200.0) * (0.7 + min(rr, 3) / 5.0))
+        raw = max(
+            0.01, (score / 100.0) * (0.5 + conf / 200.0) * (0.7 + min(rr, 3) / 5.0)
+        )
         raw *= max(0.1, 1.0 - penalty)
         weights.append(raw)
         meta.append(

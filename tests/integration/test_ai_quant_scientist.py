@@ -27,7 +27,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["triggers_automation"] is False
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     aqs = AiQuantScientist(store=AqsStore(path=tmp_path / "aqs.json"))
     monkeypatch.setattr("app.domain.ai_quant_scientist._AQS", aqs)
     monkeypatch.setattr(svc, "get_aqs", lambda: aqs)

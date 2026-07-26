@@ -56,14 +56,28 @@ def _baseline_metrics(ctx: dict[str, Any]) -> dict[str, float]:
     board = _as_list(_as_dict(irl.get("leaderboard")).get("rows"))
     best = board[0] if board and isinstance(board[0], dict) else {}
 
-    win_rate = _f(perf.get("win_rate_pct") or perf.get("win_rate") or bench.get("win_rate"), 52.0)
+    win_rate = _f(
+        perf.get("win_rate_pct") or perf.get("win_rate") or bench.get("win_rate"), 52.0
+    )
     if win_rate <= 1.0:
         win_rate *= 100.0
-    pf = _f(perf.get("profit_factor") or best.get("profit_factor") or bench.get("profit_factor"), 1.6)
+    pf = _f(
+        perf.get("profit_factor")
+        or best.get("profit_factor")
+        or bench.get("profit_factor"),
+        1.6,
+    )
     expectancy = _f(perf.get("expectancy") or best.get("expectancy"), 2.5)
     dd = _f(risk.get("max_drawdown_pct") or best.get("maximum_drawdown_pct"), 10.0)
     rr = _f(perf.get("average_rr") or perf.get("avg_rr") or best.get("average_rr"), 1.3)
-    trades = int(_f(perf.get("trade_count") or portfolio.get("trade_count") or bench.get("total_trades"), 80))
+    trades = int(
+        _f(
+            perf.get("trade_count")
+            or portfolio.get("trade_count")
+            or bench.get("total_trades"),
+            80,
+        )
+    )
     holding = _f(behavior.get("average_holding_time_sec"), 1800.0)
     exposure = _f(perf.get("exposure_pct") or risk.get("avg_exposure_pct"), 35.0)
 
@@ -80,7 +94,9 @@ def _baseline_metrics(ctx: dict[str, Any]) -> dict[str, float]:
 
 
 # Scenario multipliers: (wr, pf, exp, dd, rr, trades, exposure, holding)
-_SCENARIO_FX: dict[str, tuple[float, float, float, float, float, float, float, float]] = {
+_SCENARIO_FX: dict[
+    str, tuple[float, float, float, float, float, float, float, float]
+] = {
     "higher_spread": (0.96, 0.92, 0.90, 1.08, 0.95, 0.95, 1.0, 1.05),
     "lower_spread": (1.03, 1.06, 1.05, 0.95, 1.03, 1.02, 1.0, 0.98),
     "broker_delay": (0.94, 0.90, 0.88, 1.12, 0.92, 0.90, 1.0, 1.15),
@@ -107,7 +123,8 @@ _STRESS_FX: dict[str, tuple[float, float, float, float, float, float, float, flo
 
 
 def _apply_fx(
-    base: dict[str, float], fx: tuple[float, float, float, float, float, float, float, float]
+    base: dict[str, float],
+    fx: tuple[float, float, float, float, float, float, float, float],
 ) -> dict[str, float]:
     keys = (
         "win_rate",
@@ -136,15 +153,26 @@ def _pipeline_trace(scenario: str | None, seed: int) -> list[dict[str, Any]]:
     for i, name in enumerate(PIPELINE_STAGES):
         r = _rng(seed + i * 97)
         status = "PASS"
-        if scenario in {"london_disabled", "ny_disabled"} and name == "Signal" and r < 0.15:
+        if (
+            scenario in {"london_disabled", "ny_disabled"}
+            and name == "Signal"
+            and r < 0.15
+        ):
             status = "SKIP"
-        if scenario in {"broker_delay", "execution_delay", "extreme_spread"} and name in {
+        if scenario in {
+            "broker_delay",
+            "execution_delay",
+            "extreme_spread",
+        } and name in {
             "OMS",
             "Gateway",
             "Execution",
         }:
             status = "DEGRADED" if r < 0.35 else "PASS"
-        if scenario in {"liquidity_reduction", "low_liquidity", "gap"} and name == "Execution":
+        if (
+            scenario in {"liquidity_reduction", "low_liquidity", "gap"}
+            and name == "Execution"
+        ):
             status = "STRESSED" if r < 0.5 else "PASS"
         stages.append(
             {
@@ -274,9 +302,15 @@ def simulate_monte_carlo(
         return round(finals_sorted[idx], 4)
 
     metrics = dict(center)
-    metrics["profit_factor"] = round(statistics.median(
-        [max(0.1, center["profit_factor"] * f) for f in finals_sorted[n // 4 : 3 * n // 4]]
-    ), 3)
+    metrics["profit_factor"] = round(
+        statistics.median(
+            [
+                max(0.1, center["profit_factor"] * f)
+                for f in finals_sorted[n // 4 : 3 * n // 4]
+            ]
+        ),
+        3,
+    )
 
     return {
         "simulation_id": str(uuid4()),
@@ -331,7 +365,9 @@ def simulate_walk_forward(ctx: dict[str, Any]) -> dict[str, Any]:
     te_wr = test["metrics"]["win_rate"]
     pf_ratio = min(t_pf, te_pf) / max(t_pf, te_pf) if max(t_pf, te_pf) else 0
     wr_ratio = min(t_wr, te_wr) / max(t_wr, te_wr) if max(t_wr, te_wr) else 0
-    generalization = round(max(0.0, min(100.0, (pf_ratio * 0.6 + wr_ratio * 0.4) * 100.0)), 1)
+    generalization = round(
+        max(0.0, min(100.0, (pf_ratio * 0.6 + wr_ratio * 0.4) * 100.0)), 1
+    )
 
     return {
         "simulation_id": str(uuid4()),
@@ -405,22 +441,39 @@ def build_reports(simulations: list[dict[str, Any]]) -> dict[str, Any]:
         "simulation_report": _pack("Simulation Report", simulations[:30]),
         "scenario_comparison": {
             **compare_scenarios(
-                [s for s in simulations if "Scenario" in str(s.get("mode")) or s.get("mode") == SimulationMode.SCENARIO_BUILDER.value]
+                [
+                    s
+                    for s in simulations
+                    if "Scenario" in str(s.get("mode"))
+                    or s.get("mode") == SimulationMode.SCENARIO_BUILDER.value
+                ]
                 or simulations[:10]
             ),
             "title": "Scenario Comparison",
         },
         "stress_report": _pack(
             "Stress Report",
-            [s for s in simulations if s.get("mode") == SimulationMode.STRESS_TEST.value],
+            [
+                s
+                for s in simulations
+                if s.get("mode") == SimulationMode.STRESS_TEST.value
+            ],
         ),
         "walk_forward_report": _pack(
             "Walk Forward Report",
-            [s for s in simulations if s.get("mode") == SimulationMode.WALK_FORWARD.value],
+            [
+                s
+                for s in simulations
+                if s.get("mode") == SimulationMode.WALK_FORWARD.value
+            ],
         ),
         "monte_carlo_report": _pack(
             "Monte Carlo Report",
-            [s for s in simulations if s.get("mode") == SimulationMode.MONTE_CARLO.value],
+            [
+                s
+                for s in simulations
+                if s.get("mode") == SimulationMode.MONTE_CARLO.value
+            ],
         ),
         "generated_at": datetime.now(UTC).isoformat(),
     }

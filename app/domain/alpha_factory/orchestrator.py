@@ -81,37 +81,25 @@ class AlphaFactory:
         modules: dict[str, ModuleResult] = {}
 
         if flags.get("research_workspace", True):
-            modules["research_workspace"] = research_workspace(
-                inp, self.config
-            )
+            modules["research_workspace"] = research_workspace(inp, self.config)
         if flags.get("strategy_laboratory", True):
-            modules["strategy_laboratory"] = strategy_laboratory(
-                inp, self.config
-            )
+            modules["strategy_laboratory"] = strategy_laboratory(inp, self.config)
         if flags.get("replay_engine", True):
             modules["replay_engine"] = replay_engine(inp, self.config)
         if flags.get("paper_trading_pipeline", True):
-            modules["paper_trading_pipeline"] = paper_trading_pipeline(
-                inp, self.config
-            )
+            modules["paper_trading_pipeline"] = paper_trading_pipeline(inp, self.config)
         if flags.get("benchmark_engine", True):
             modules["benchmark_engine"] = benchmark_engine(inp, self.config)
         if flags.get("promotion_workflow", True):
-            modules["promotion_workflow"] = promotion_workflow(
-                inp, self.config
-            )
+            modules["promotion_workflow"] = promotion_workflow(inp, self.config)
         if flags.get("experiment_history", True):
-            modules["experiment_history"] = experiment_history(
-                inp, self.config
-            )
+            modules["experiment_history"] = experiment_history(inp, self.config)
         if flags.get("alpha_score", True):
             modules["alpha_score"] = alpha_score(inp, self.config)
         if flags.get("research_dashboard", True):
             modules["research_dashboard"] = research_dashboard(dict(modules))
         if flags.get("promotion_report", True):
-            modules["promotion_report"] = promotion_report(
-                inp, dict(modules)
-            )
+            modules["promotion_report"] = promotion_report(inp, dict(modules))
 
         lab = modules.get("strategy_laboratory")
         dash = modules.get("research_dashboard")
@@ -119,9 +107,7 @@ class AlphaFactory:
         certified_list = []
         if lab and isinstance((lab.details or {}).get("strategies"), list):
             certified_list = [
-                s
-                for s in lab.details["strategies"]
-                if s.get("certified") is True
+                s for s in lab.details["strategies"] if s.get("certified") is True
             ]
 
         result = {
@@ -136,9 +122,7 @@ class AlphaFactory:
                     else 0
                 ),
                 "promotion_stage": (
-                    (dash.details or {}).get("promotion_stage")
-                    if dash
-                    else None
+                    (dash.details or {}).get("promotion_stage") if dash else None
                 ),
                 "alpha_score": (
                     str(modules["alpha_score"].score)
@@ -185,9 +169,7 @@ def input_from_dict(data: dict[str, Any]) -> AlphaFactoryInput:
     return AlphaFactoryInput(
         action=str(data.get("action") or "evaluate"),
         experiment=(
-            data.get("experiment")
-            if isinstance(data.get("experiment"), dict)
-            else None
+            data.get("experiment") if isinstance(data.get("experiment"), dict) else None
         ),
         experiments=(
             data.get("experiments")
@@ -195,30 +177,18 @@ def input_from_dict(data: dict[str, Any]) -> AlphaFactoryInput:
             else None
         ),
         strategy=(
-            data.get("strategy")
-            if isinstance(data.get("strategy"), dict)
-            else None
+            data.get("strategy") if isinstance(data.get("strategy"), dict) else None
         ),
         strategies=(
-            data.get("strategies")
-            if isinstance(data.get("strategies"), list)
-            else None
+            data.get("strategies") if isinstance(data.get("strategies"), list) else None
         ),
-        replay=(
-            data.get("replay") if isinstance(data.get("replay"), dict) else None
-        ),
-        paper=(
-            data.get("paper") if isinstance(data.get("paper"), dict) else None
-        ),
+        replay=(data.get("replay") if isinstance(data.get("replay"), dict) else None),
+        paper=(data.get("paper") if isinstance(data.get("paper"), dict) else None),
         benchmarks=(
-            data.get("benchmarks")
-            if isinstance(data.get("benchmarks"), list)
-            else None
+            data.get("benchmarks") if isinstance(data.get("benchmarks"), list) else None
         ),
         promotion=(
-            data.get("promotion")
-            if isinstance(data.get("promotion"), dict)
-            else None
+            data.get("promotion") if isinstance(data.get("promotion"), dict) else None
         ),
         history_event=(
             data.get("history_event")

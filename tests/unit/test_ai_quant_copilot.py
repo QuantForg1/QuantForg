@@ -160,11 +160,15 @@ class TestAqcNli:
     def test_no_trade_and_quality_have_evidence(self) -> None:
         ctx = _ctx()
         invs = build_investigations(ctx)
-        r1 = answer_question("Why was no trade opened today?", ctx=ctx, pack={"investigations": invs})
+        r1 = answer_question(
+            "Why was no trade opened today?", ctx=ctx, pack={"investigations": invs}
+        )
         assert r1["evidence"]
         assert r1["source_subsystem"]
         assert r1["confidence"] > 0
-        r2 = answer_question("Why did Quality fail?", ctx=ctx, pack={"investigations": invs})
+        r2 = answer_question(
+            "Why did Quality fail?", ctx=ctx, pack={"investigations": invs}
+        )
         assert "Quality" in r2["answer"] or "quality" in r2["answer"].lower()
         assert r2["evidence"]
 

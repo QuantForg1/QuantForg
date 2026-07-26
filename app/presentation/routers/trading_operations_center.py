@@ -149,34 +149,52 @@ async def itoc_analyze(
 ) -> dict[str, Any]:
     """Offline analysis from supplied facts (demo / research ingest)."""
     return run_trading_operations_center(
-        ops_facts=payload.get("ops_facts")
-        if isinstance(payload.get("ops_facts"), dict)
-        else None,
-        expected_sessions=payload.get("expected_sessions")
-        if isinstance(payload.get("expected_sessions"), list)
-        else None,
-        high_impact_news=payload.get("high_impact_news")
-        if isinstance(payload.get("high_impact_news"), list)
-        else None,
-        calendar_available=payload.get("calendar_available")
-        if isinstance(payload.get("calendar_available"), bool)
-        else None,
-        trades=payload.get("trades")
-        if isinstance(payload.get("trades"), list)
-        else None,
-        decisions=payload.get("decisions")
-        if isinstance(payload.get("decisions"), list)
-        else None,
-        previous_week_trades=payload.get("previous_week_trades")
-        if isinstance(payload.get("previous_week_trades"), list)
-        else None,
-        evidence_pack=payload.get("evidence_pack")
-        if isinstance(payload.get("evidence_pack"), dict)
-        else None,
-        performance_pack=payload.get("performance_pack")
-        if isinstance(payload.get("performance_pack"), dict)
-        else None,
-        execution_quality=payload.get("execution_quality")
-        if isinstance(payload.get("execution_quality"), dict)
-        else None,
+        ops_facts=(
+            payload.get("ops_facts")
+            if isinstance(payload.get("ops_facts"), dict)
+            else None
+        ),
+        expected_sessions=(
+            payload.get("expected_sessions")
+            if isinstance(payload.get("expected_sessions"), list)
+            else None
+        ),
+        high_impact_news=(
+            payload.get("high_impact_news")
+            if isinstance(payload.get("high_impact_news"), list)
+            else None
+        ),
+        calendar_available=(
+            payload.get("calendar_available")
+            if isinstance(payload.get("calendar_available"), bool)
+            else None
+        ),
+        trades=(
+            payload.get("trades") if isinstance(payload.get("trades"), list) else None
+        ),
+        decisions=(
+            payload.get("decisions")
+            if isinstance(payload.get("decisions"), list)
+            else None
+        ),
+        previous_week_trades=(
+            payload.get("previous_week_trades")
+            if isinstance(payload.get("previous_week_trades"), list)
+            else None
+        ),
+        evidence_pack=(
+            payload.get("evidence_pack")
+            if isinstance(payload.get("evidence_pack"), dict)
+            else None
+        ),
+        performance_pack=(
+            payload.get("performance_pack")
+            if isinstance(payload.get("performance_pack"), dict)
+            else None
+        ),
+        execution_quality=(
+            payload.get("execution_quality")
+            if isinstance(payload.get("execution_quality"), dict)
+            else None
+        ),
     )

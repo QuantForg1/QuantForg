@@ -72,9 +72,7 @@ async def export_pdf(_user: CurrentUser) -> Response:
             "production": {"quality_gate": 80, "confluence_gate": 80},
             "candidate": {"quality_gate": 70, "confluence_gate": 75},
             "comparison": [],
-            "decision": {
-                "summary": "Recommend keeping Q80/C80. No run yet."
-            },
+            "decision": {"summary": "Recommend keeping Q80/C80. No run yet."},
         }
     )
     return Response(

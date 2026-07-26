@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -148,9 +149,7 @@ def gather_event_sources() -> dict[str, Any]:
             "rollbacks": rollbacks,
         }
 
-    sources["irdp"] = _safe(
-        _irdp, {"releases": [], "approvals": [], "rollbacks": []}
-    )
+    sources["irdp"] = _safe(_irdp, {"releases": [], "approvals": [], "rollbacks": []})
     availability["irdp"] = isinstance(sources["irdp"], dict)
 
     sources["aoc"] = _store_snapshot(
@@ -165,17 +164,13 @@ def gather_event_sources() -> dict[str, Any]:
 
     # EQS / RES feed execution & reliability alerts (not listed as mesh sources,
     # but enrich alert categories used by gateway/OMS consumers).
-    sources["eqs"] = _store_snapshot(
-        "app.domain.execution_quality_suite", "get_eqs"
-    )
+    sources["eqs"] = _store_snapshot("app.domain.execution_quality_suite", "get_eqs")
     sources["res"] = _store_snapshot(
         "app.domain.reliability_engineering_suite", "get_res"
     )
 
     sources["knowledge_graph"] = _safe(
-        lambda: __import__(
-            "app.domain.quant_knowledge_graph", fromlist=["get_qkg"]
-        )
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
         .get_qkg()
         .store.get_snapshot(),
         {},

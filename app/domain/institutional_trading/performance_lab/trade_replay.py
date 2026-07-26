@@ -74,7 +74,12 @@ def build_replay_from_decision(
     sl = float(getattr(stop, "mid", None) or getattr(stop, "low", 0) or 0) or None
     tp = float(getattr(target, "mid", None) or getattr(target, "high", 0) or 0) or None
     if entry is None and entry_zone is not None:
-        entry = float(getattr(entry_zone, "mid", None) or getattr(entry_zone, "low", 0) or 0) or None
+        entry = (
+            float(
+                getattr(entry_zone, "mid", None) or getattr(entry_zone, "low", 0) or 0
+            )
+            or None
+        )
 
     structure: dict[str, Any] = {}
     liquidity: dict[str, Any] = {}
@@ -85,7 +90,9 @@ def build_replay_from_decision(
         market_snapshot = {
             "symbol": getattr(snapshot, "symbol", None),
             "spread": str(getattr(snapshot, "spread", None)),
-            "session": str(getattr(getattr(snapshot, "session", None), "session", None)),
+            "session": str(
+                getattr(getattr(snapshot, "session", None), "session", None)
+            ),
         }
         mtf = getattr(snapshot, "mtf", None)
         if mtf is not None:
@@ -110,9 +117,24 @@ def build_replay_from_decision(
             order_blocks.append(str(r))
 
     frames: list[ReplayFrame] = [
-        ReplayFrame(0, "SIGNAL", datetime.now(UTC).isoformat(), "Opportunity identified"),
-        ReplayFrame(1, "AI", datetime.now(UTC).isoformat(), explanation or "; ".join(reasons[:6]) or "AI decision"),
-        ReplayFrame(2, "ENTRY", datetime.now(UTC).isoformat(), f"entry={entry}", price=entry, stop=sl, tp=tp),
+        ReplayFrame(
+            0, "SIGNAL", datetime.now(UTC).isoformat(), "Opportunity identified"
+        ),
+        ReplayFrame(
+            1,
+            "AI",
+            datetime.now(UTC).isoformat(),
+            explanation or "; ".join(reasons[:6]) or "AI decision",
+        ),
+        ReplayFrame(
+            2,
+            "ENTRY",
+            datetime.now(UTC).isoformat(),
+            f"entry={entry}",
+            price=entry,
+            stop=sl,
+            tp=tp,
+        ),
     ]
     for i, ev in enumerate(trail_events or [], start=3):
         frames.append(

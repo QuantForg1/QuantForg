@@ -36,9 +36,7 @@ def build_period_report(
         "generated_at": datetime.now(UTC).isoformat(),
         "title": f"QuantForg {period_key.title()} Report",
         "sections": {
-            "performance": performance
-            or journal_stats
-            or {"status": "unavailable"},
+            "performance": performance or journal_stats or {"status": "unavailable"},
             "risk": risk or {"status": "unavailable"},
             "execution": execution or {"status": "unavailable"},
             "reliability": reliability or {"status": "unavailable"},

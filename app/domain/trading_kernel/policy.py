@@ -140,6 +140,4 @@ class RuleEngine:
                 reasons.append("Spread unreadable")
         if not fired:
             reasons.append("No blocking rules fired")
-        return RuleResult(
-            passed=passed, fired=tuple(fired), reasons=tuple(reasons)
-        )
+        return RuleResult(passed=passed, fired=tuple(fired), reasons=tuple(reasons))

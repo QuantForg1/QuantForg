@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 _SENSITIVE_NAME_TOKENS = (
     "SECRET",
     "PASSWORD",

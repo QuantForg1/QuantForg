@@ -8,7 +8,7 @@ from typing import Any
 def _safe(fn, default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -40,7 +40,9 @@ def gather_execution_sources() -> dict[str, Any]:
         lambda: __import__(
             "app.presentation.dependencies.execution",
             fromlist=["get_execution_journal"],
-        ).get_execution_journal().all_recent(limit=150),
+        )
+        .get_execution_journal()
+        .all_recent(limit=150),
         [],
     )
     availability["journal"] = isinstance(sources["journal"], list)
@@ -78,15 +80,15 @@ def gather_execution_sources() -> dict[str, Any]:
         lambda: __import__(
             "app.domain.audit_governance.store",
             fromlist=["get_audit_store"],
-        ).get_audit_store().list(limit=50),
+        )
+        .get_audit_store()
+        .list(limit=50),
         [],
     )
     availability["audit"] = isinstance(sources["audit"], list)
 
     sources["qkg"] = _safe(
-        lambda: __import__(
-            "app.domain.quant_knowledge_graph", fromlist=["get_qkg"]
-        )
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
         .get_qkg()
         .store.get_snapshot(),
         {},
@@ -97,7 +99,9 @@ def gather_execution_sources() -> dict[str, Any]:
         lambda: __import__(
             "app.domain.institutional_trading.reliability.live_metrics",
             fromlist=["LiveMetricsRegistry"],
-        ).LiveMetricsRegistry().snapshot(),
+        )
+        .LiveMetricsRegistry()
+        .snapshot(),
         {},
     )
     availability["live_metrics"] = isinstance(sources["live_metrics"], dict)
@@ -106,7 +110,9 @@ def gather_execution_sources() -> dict[str, Any]:
         lambda: __import__(
             "app.application.services.rc1_ops_telemetry",
             fromlist=["Rc1OpsTelemetryService"],
-        ).Rc1OpsTelemetryService().collect(),
+        )
+        .Rc1OpsTelemetryService()
+        .collect(),
         {},
     )
     availability["rc1"] = bool(sources["rc1"])

@@ -82,8 +82,24 @@ def test_optimization_never_applied(tmp_path) -> None:
         target="confidence_threshold",
         search_space={"confidence_threshold": [70, 75, 80]},
         candidates=[
-            {"params": {"confidence_threshold": 70}, "metrics": {"win_rate": 50, "profit_factor": 1.1, "drawdown": 5, "sharpe": 0.5}},
-            {"params": {"confidence_threshold": 80}, "metrics": {"win_rate": 58, "profit_factor": 1.4, "drawdown": 4, "sharpe": 0.8}},
+            {
+                "params": {"confidence_threshold": 70},
+                "metrics": {
+                    "win_rate": 50,
+                    "profit_factor": 1.1,
+                    "drawdown": 5,
+                    "sharpe": 0.5,
+                },
+            },
+            {
+                "params": {"confidence_threshold": 80},
+                "metrics": {
+                    "win_rate": 58,
+                    "profit_factor": 1.4,
+                    "drawdown": 4,
+                    "sharpe": 0.8,
+                },
+            },
         ],
     )
     assert run.applied is False

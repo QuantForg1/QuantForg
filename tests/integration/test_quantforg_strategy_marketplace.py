@@ -33,9 +33,7 @@ def test_isolation_flags() -> None:
 def test_service_dashboard_flags(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    qsmr = QuantForgStrategyMarketplace(
-        store=QsmrStore(path=tmp_path / "qsmr.json")
-    )
+    qsmr = QuantForgStrategyMarketplace(store=QsmrStore(path=tmp_path / "qsmr.json"))
     monkeypatch.setattr("app.domain.quantforg_strategy_marketplace._QSMR", qsmr)
     monkeypatch.setattr(svc, "get_qsmr", lambda: qsmr)
     monkeypatch.setattr(

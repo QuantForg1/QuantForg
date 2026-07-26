@@ -64,9 +64,11 @@ class IteCycleMarketContext:
             "bars_loaded": self.bars_loaded or {},
             "snapshot_present": self.snapshot is not None,
             "account_present": self.account is not None,
-            "symbol": getattr(self.snapshot, "symbol", None)
-            if self.snapshot is not None
-            else None,
+            "symbol": (
+                getattr(self.snapshot, "symbol", None)
+                if self.snapshot is not None
+                else None
+            ),
             "diagnostics": dict(self.diagnostics),
         }
 
@@ -88,9 +90,7 @@ def _rate_to_candle(rate: Any) -> Candle:
 
 
 def _client_of(mt5_adapter: Any) -> Any:
-    return getattr(mt5_adapter, "client", None) or getattr(
-        mt5_adapter, "_client", None
-    )
+    return getattr(mt5_adapter, "client", None) or getattr(mt5_adapter, "_client", None)
 
 
 def _ensure_gateway_session(mt5_adapter: Any, diag: dict[str, Any]) -> str | None:
@@ -169,9 +169,7 @@ async def build_ite_cycle_market_context(
             diagnostics=diag,
             market_data_live=bool(diag.get("ticks") == "LIVE"),
             spread=(
-                Decimal(str(diag["spread"]))
-                if diag.get("spread") is not None
-                else None
+                Decimal(str(diag["spread"])) if diag.get("spread") is not None else None
             ),
         )
 
@@ -389,9 +387,10 @@ async def build_ite_cycle_market_context(
     )
 
     # Sizing diagnostics (observational) — same formulas as decision → risk path.
+    from decimal import ROUND_DOWN
+
     from app.domain.institutional_trading.atr import stop_distance_from_atr
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
-    from decimal import ROUND_DOWN
 
     stop_dist = stop_distance_from_atr(atr_dec)
     risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct

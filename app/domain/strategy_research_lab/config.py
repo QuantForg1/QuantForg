@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -35,7 +36,7 @@ class StrategyLabConfig:
         object.__setattr__(self, "allows_broker_orders", False)
         object.__setattr__(self, "affects_production_positions", False)
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

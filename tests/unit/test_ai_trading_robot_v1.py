@@ -95,9 +95,7 @@ def test_dynamic_sizing_reduces_after_losses() -> None:
 
 def test_daily_dd_and_loss_streak_filters() -> None:
     cfg = RobotV1Config(max_daily_drawdown_pct=Decimal("3"), max_consecutive_losses=3)
-    assert not evaluate_daily_drawdown(
-        cfg, daily_drawdown_pct=Decimal("3.5")
-    ).passed
+    assert not evaluate_daily_drawdown(cfg, daily_drawdown_pct=Decimal("3.5")).passed
     assert not evaluate_consecutive_losses(
         cfg, consecutive_losses=3, cooldown_active=False
     ).passed

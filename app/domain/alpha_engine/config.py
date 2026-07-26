@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -55,7 +56,7 @@ class AlphaEngineConfig:
         object.__setattr__(self, "allow_order_send", False)
         object.__setattr__(self, "promise_profitability", False)
 
-    def update(self, updates: dict[str, object]) -> AlphaEngineConfig:
+    def update(self, updates: dict[str, Any]) -> AlphaEngineConfig:
         locked = {
             "allow_bypass_risk",
             "allow_bypass_safety",
@@ -94,16 +95,14 @@ class AlphaEngineConfig:
             max_history=int(data["max_history"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,
             "high_vol_atr_pct": str(self.high_vol_atr_pct),
             "low_vol_atr_pct": str(self.low_vol_atr_pct),
             "min_regime_score": str(self.min_regime_score),
-            "max_spread_for_high_liquidity": str(
-                self.max_spread_for_high_liquidity
-            ),
+            "max_spread_for_high_liquidity": str(self.max_spread_for_high_liquidity),
             "max_spread_acceptable": str(self.max_spread_acceptable),
             "min_liquidity_score": str(self.min_liquidity_score),
             "min_structure_score": str(self.min_structure_score),
@@ -115,9 +114,7 @@ class AlphaEngineConfig:
             "min_exit_score": str(self.min_exit_score),
             "min_trade_score": str(self.min_trade_score),
             "min_continuous_score": str(self.min_continuous_score),
-            "min_composite_for_quality_ok": str(
-                self.min_composite_for_quality_ok
-            ),
+            "min_composite_for_quality_ok": str(self.min_composite_for_quality_ok),
             "max_history": self.max_history,
             "allow_bypass_risk": False,
             "allow_bypass_safety": False,

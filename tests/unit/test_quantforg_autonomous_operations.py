@@ -52,7 +52,10 @@ def _ctx() -> dict:
                 "metrics": {"maximum_drawdown": 26},
                 "alerts": [{"kind": "High drawdown"}],
             },
-            "islm": {"registry": [{"strategy_id": "x1", "lifecycle_state": "Research"}], "approvals": []},
+            "islm": {
+                "registry": [{"strategy_id": "x1", "lifecycle_state": "Research"}],
+                "approvals": [],
+            },
             "iep": {
                 "registry": [
                     {
@@ -116,15 +119,16 @@ class TestRecommendationConsistency:
             assert key in scores
             assert 0.0 <= scores[key] <= 100.0
         evidence = build_evidence_explorer(ctx)
-        assert evidence_integrity_check(
-            evidence=evidence, scores=scores, queue=queue
-        )["ok"] is True
+        assert (
+            evidence_integrity_check(evidence=evidence, scores=scores, queue=queue)[
+                "ok"
+            ]
+            is True
+        )
 
 
 class TestPlatformPerformance:
-    def test_dashboard(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dashboard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         aoc = QuantForgAutonomousOperationsCenter(
             store=AocStore(path=tmp_path / "aoc.json")
         )

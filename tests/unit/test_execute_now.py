@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -12,7 +13,6 @@ from app.application.services.institutional_ite_runtime import (
     ShadowCycleResult,
 )
 from app.domain.institutional_trading.decision_models import PriceZone
-from decimal import Decimal
 
 
 @pytest.mark.unit
@@ -23,9 +23,15 @@ def test_build_execute_now_payload_success() -> None:
         symbol="EURUSD",
         direction=SimpleNamespace(value="BUY"),
         approved_lots=Decimal("0.01"),
-        entry_zone=PriceZone(low=Decimal("1.10"), high=Decimal("1.11"), mid=Decimal("1.105")),
-        stop_zone=PriceZone(low=Decimal("1.09"), high=Decimal("1.095"), mid=Decimal("1.092")),
-        target_zone=PriceZone(low=Decimal("1.12"), high=Decimal("1.13"), mid=Decimal("1.125")),
+        entry_zone=PriceZone(
+            low=Decimal("1.10"), high=Decimal("1.11"), mid=Decimal("1.105")
+        ),
+        stop_zone=PriceZone(
+            low=Decimal("1.09"), high=Decimal("1.095"), mid=Decimal("1.092")
+        ),
+        target_zone=PriceZone(
+            low=Decimal("1.12"), high=Decimal("1.13"), mid=Decimal("1.125")
+        ),
     )
     oms = SimpleNamespace(
         outcome="filled",

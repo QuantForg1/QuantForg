@@ -51,9 +51,7 @@ def _insufficient(module: str, detail: str) -> ModuleResult:
     )
 
 
-def live_observation_collector(
-    inp: LlpInput, config: LlpConfig
-) -> ModuleResult:
+def live_observation_collector(inp: LlpInput, config: LlpConfig) -> ModuleResult:
     trades = [t for t in (inp.completed_trades or []) if isinstance(t, dict)]
     if not trades:
         return ModuleResult(
@@ -74,9 +72,7 @@ def live_observation_collector(
         obs: dict[str, Any] = {
             "id": str(t.get("id") or f"obs_{uuid4().hex[:10]}"),
             "immutable": True,
-            "recorded_at": str(
-                t.get("recorded_at") or datetime.now(UTC).isoformat()
-            ),
+            "recorded_at": str(t.get("recorded_at") or datetime.now(UTC).isoformat()),
             "source": str(t.get("source") or "live"),
         }
         for field in OBS_FIELDS:
@@ -165,12 +161,9 @@ def replay_comparison(inp: LlpInput, config: LlpConfig) -> ModuleResult:
             if (
                 "live" in vals
                 and "replay" in vals
-                and abs(vals["live"] - vals["replay"])
-                > abs(avg) * Decimal("0.5")
+                and abs(vals["live"] - vals["replay"]) > abs(avg) * Decimal("0.5")
             ):
-                unexpected.append(
-                    f"{key}: live diverges sharply from replay"
-                )
+                unexpected.append(f"{key}: live diverges sharply from replay")
 
     # Structural unexpected: live latency much worse than paper if both present
     if paper and live:
@@ -261,21 +254,15 @@ def operator_feedback(inp: LlpInput, config: LlpConfig) -> ModuleResult:
 
 
 def edge_evolution(inp: LlpInput, config: LlpConfig) -> ModuleResult:
-    series = [
-        s for s in (inp.edge_score_series or []) if isinstance(s, dict)
-    ]
+    series = [s for s in (inp.edge_score_series or []) if isinstance(s, dict)]
     # Also derive crude points from completed trades if series thin
     if len(series) < 2:
-        trades = [
-            t for t in (inp.completed_trades or []) if isinstance(t, dict)
-        ]
+        trades = [t for t in (inp.completed_trades or []) if isinstance(t, dict)]
         if len(trades) >= config.min_observations_for_edge:
             # Bucket by supplied period labels on trades if present
             buckets: dict[str, list[Decimal]] = defaultdict(list)
             for t in trades:
-                period = str(
-                    t.get("period") or t.get("bucket") or "unspecified"
-                )
+                period = str(t.get("period") or t.get("bucket") or "unspecified")
                 pnl = _dec(t.get("result") or t.get("pnl") or t.get("net_pnl"))
                 if pnl is not None:
                     buckets[period].append(pnl)
@@ -316,9 +303,7 @@ def edge_evolution(inp: LlpInput, config: LlpConfig) -> ModuleResult:
         points.append(row)
         by_horizon[horizon].append(row)
 
-    scores = [
-        float(_dec(p["edge_score"]) or 0) for p in points if p.get("edge_score")
-    ]
+    scores = [float(_dec(p["edge_score"]) or 0) for p in points if p.get("edge_score")]
     trend = "insufficient"
     if len(scores) >= 2:
         if scores[-1] > scores[0] * 1.05:
@@ -347,12 +332,8 @@ def edge_evolution(inp: LlpInput, config: LlpConfig) -> ModuleResult:
     )
 
 
-def market_behaviour_journal(
-    inp: LlpInput, config: LlpConfig
-) -> ModuleResult:
-    entries = [
-        e for e in (inp.journal_entries or []) if isinstance(e, dict)
-    ]
+def market_behaviour_journal(inp: LlpInput, config: LlpConfig) -> ModuleResult:
+    entries = [e for e in (inp.journal_entries or []) if isinstance(e, dict)]
     # Also harvest from observations
     for t in inp.completed_trades or []:
         if not isinstance(t, dict):
@@ -382,9 +363,7 @@ def market_behaviour_journal(
         )
 
     normalized: list[dict[str, Any]] = []
-    by_type: dict[str, list[dict[str, Any]]] = {
-        k: [] for k in JOURNAL_DAY_TYPES
-    }
+    by_type: dict[str, list[dict[str, Any]]] = {k: [] for k in JOURNAL_DAY_TYPES}
     for e in entries[: config.max_journal]:
         raw = str(e.get("day_type") or e.get("type") or "").strip().lower()
         raw = raw.replace(" ", "_").replace("-", "_")
@@ -436,17 +415,13 @@ def market_behaviour_journal(
 
 
 def confidence_tracking(inp: LlpInput, config: LlpConfig) -> ModuleResult:
-    pairs = [
-        p for p in (inp.confidence_pairs or []) if isinstance(p, dict)
-    ]
+    pairs = [p for p in (inp.confidence_pairs or []) if isinstance(p, dict)]
     if not pairs:
         # Derive from trades with predicted_confidence + result
         for t in inp.completed_trades or []:
             if not isinstance(t, dict):
                 continue
-            pred = _dec(
-                t.get("predicted_confidence") or t.get("confidence")
-            )
+            pred = _dec(t.get("predicted_confidence") or t.get("confidence"))
             if pred is None:
                 continue
             win = t.get("win")
@@ -470,9 +445,7 @@ def confidence_tracking(inp: LlpInput, config: LlpConfig) -> ModuleResult:
         )
 
     # Simple calibration: bucket by predicted confidence decade
-    buckets: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"n": 0, "wins": 0}
-    )
+    buckets: dict[str, dict[str, int]] = defaultdict(lambda: {"n": 0, "wins": 0})
     for p in pairs:
         pred = _dec(p.get("predicted_confidence") or p.get("predicted"))
         if pred is None:
@@ -537,9 +510,7 @@ def confidence_tracking(inp: LlpInput, config: LlpConfig) -> ModuleResult:
     )
 
 
-def weekly_review(
-    inp: LlpInput, modules: dict[str, ModuleResult]
-) -> ModuleResult:
+def weekly_review(inp: LlpInput, modules: dict[str, ModuleResult]) -> ModuleResult:
     _ = inp
     obs = modules.get("live_observation_collector")
     cmp_ = modules.get("replay_comparison")
@@ -561,9 +532,7 @@ def weekly_review(
 
     unexpected: list[str] = []
     if cmp_:
-        unexpected.extend(
-            (cmp_.details or {}).get("unexpected_behaviour") or []
-        )
+        unexpected.extend((cmp_.details or {}).get("unexpected_behaviour") or [])
 
     strongest: list[str] = []
     weakest: list[str] = []
@@ -636,9 +605,7 @@ def monthly_research_review(
                 "Tracked via results in observations — advisory only"
             ),
             "execution_quality": (
-                (cmp_.details or {}).get("unexpected_behaviour")
-                if cmp_
-                else []
+                (cmp_.details or {}).get("unexpected_behaviour") if cmp_ else []
             ),
             "validation_status": (
                 (conf.details or {}).get("calibration_quality")
@@ -664,16 +631,14 @@ def learning_dashboard(modules: dict[str, ModuleResult]) -> ModuleResult:
     available = sum(
         1
         for k, v in modules.items()
-        if k
-        not in ("learning_dashboard", "research_recommendations")
+        if k not in ("learning_dashboard", "research_recommendations")
         and v.status == "available"
     )
     total = max(
         sum(
             1
             for k in modules
-            if k
-            not in ("learning_dashboard", "research_recommendations")
+            if k not in ("learning_dashboard", "research_recommendations")
         ),
         1,
     )
@@ -690,9 +655,9 @@ def learning_dashboard(modules: dict[str, ModuleResult]) -> ModuleResult:
         coverage_bits += 1
     if fb and fb.status == "available":
         coverage_bits += 1
-    coverage = (
-        Decimal(coverage_bits) / Decimal(coverage_max) * Decimal(100)
-    ).quantize(Decimal("0.01"))
+    coverage = (Decimal(coverage_bits) / Decimal(coverage_max) * Decimal(100)).quantize(
+        Decimal("0.01")
+    )
 
     queue = []
     if rec and isinstance((rec.details or {}).get("recommendations"), list):
@@ -719,13 +684,9 @@ def learning_dashboard(modules: dict[str, ModuleResult]) -> ModuleResult:
             "evidence_strength_pct": str(strength),
             "coverage_pct": str(coverage),
             "research_queue": queue,
-            "edge_trend": (
-                (edge.details or {}).get("trend") if edge else None
-            ),
+            "edge_trend": ((edge.details or {}).get("trend") if edge else None),
             "calibration_quality": (
-                (conf.details or {}).get("calibration_quality")
-                if conf
-                else None
+                (conf.details or {}).get("calibration_quality") if conf else None
             ),
         },
     )
@@ -764,9 +725,7 @@ def research_recommendations(
         recs.append("Populate market behaviour journal with day-type labels.")
 
     if obs_count < config.min_evidence_for_live_change_rec:
-        recs.append(
-            "Need more evidence before changing spread policy."
-        )
+        recs.append("Need more evidence before changing spread policy.")
         recs.append(
             "Do not recommend live parameter changes — "
             f"need ≥{config.min_evidence_for_live_change_rec} observations."
@@ -777,9 +736,7 @@ def research_recommendations(
     if edge and edge.status == "insufficient_evidence":
         recs.append("Supply edge_score_series (daily/weekly/monthly/quarterly).")
     if cmp_ and (cmp_.details or {}).get("unexpected_behaviour"):
-        recs.append(
-            "Investigate replay vs live divergences before any policy change."
-        )
+        recs.append("Investigate replay vs live divergences before any policy change.")
 
     # Deduplicate while preserving order
     seen: set[str] = set()

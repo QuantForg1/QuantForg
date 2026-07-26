@@ -62,9 +62,9 @@ def build_strategy_ranking(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         _as_dict(eqs.get("execution_score") or eqs).get("overall_execution_score")
     )
     cvf_conf = _f(
-        _as_dict(_as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")).get(
-            "confidence"
-        )
+        _as_dict(
+            _as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")
+        ).get("confidence")
     )
     res_overall = _f(
         _as_dict(
@@ -135,7 +135,9 @@ def build_capital_allocation(ranked: list[dict[str, Any]]) -> dict[str, Any]:
     if not active:
         active = list(ranked)
     # Softmax-ish on composite
-    temps = [max(0.01, (_f(r.get("composite_rank_score")) or 1.0) / 20.0) for r in active]
+    temps = [
+        max(0.01, (_f(r.get("composite_rank_score")) or 1.0) / 20.0) for r in active
+    ]
     exps = [math.exp(t) for t in temps]
     total = sum(exps) or 1.0
     allocations = []
@@ -201,8 +203,12 @@ def build_portfolio_exposure(
     }
 
 
-def build_capacity_analysis(ranked: list[dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any]:
-    sims = _as_list(_as_dict(_as_dict(ctx.get("sources")).get("ise")).get("simulations"))
+def build_capacity_analysis(
+    ranked: list[dict[str, Any]], ctx: dict[str, Any]
+) -> dict[str, Any]:
+    sims = _as_list(
+        _as_dict(_as_dict(ctx.get("sources")).get("ise")).get("simulations")
+    )
     # Capacity proxy: higher rank + more sim evidence → higher capacity headroom
     rows = []
     for r in ranked:
@@ -219,7 +225,9 @@ def build_capacity_analysis(ranked: list[dict[str, Any]], ctx: dict[str, Any]) -
             }
         )
     avg_util = (
-        round(sum(_f(x.get("implied_utilization_pct")) or 0 for x in rows) / len(rows), 2)
+        round(
+            sum(_f(x.get("implied_utilization_pct")) or 0 for x in rows) / len(rows), 2
+        )
         if rows
         else 0.0
     )
@@ -272,7 +280,9 @@ def build_diversification_analysis(
     corr_risk = _f(correlation.get("correlation_risk_score")) or 50.0
     # Higher n, lower concentration, lower corr → better diversification
     score = _clamp(
-        min(40.0, n * 8.0) + max(0.0, 40.0 - concentration * 0.6) + max(0.0, 40.0 - corr_risk * 0.3)
+        min(40.0, n * 8.0)
+        + max(0.0, 40.0 - concentration * 0.6)
+        + max(0.0, 40.0 - corr_risk * 0.3)
     )
     return {
         "diversification_score": score,
@@ -300,9 +310,9 @@ def build_metrics(
     icp = _as_dict(sources.get("icp"))
     icp_health = _as_dict(icp.get("health") or icp)
     cvf_conf = _f(
-        _as_dict(_as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")).get(
-            "confidence"
-        )
+        _as_dict(
+            _as_dict(sources.get("cvf")).get("confidence") or sources.get("cvf")
+        ).get("confidence")
     )
     eqs = _f(
         _as_dict(
@@ -328,7 +338,9 @@ def build_metrics(
         sharpe = round(sharpe_raw, 3)
 
     sortino_raw = _f(metrics_src.get("sortino_ratio"))
-    sortino = round(sortino_raw, 3) if sortino_raw is not None else round(sharpe * 1.15, 3)
+    sortino = (
+        round(sortino_raw, 3) if sortino_raw is not None else round(sharpe * 1.15, 3)
+    )
 
     drawdown = _f(metrics_src.get("maximum_drawdown"))
     if drawdown is None:
@@ -357,13 +369,18 @@ def build_metrics(
     return {k: metrics[k] for k in METRIC_KEYS}
 
 
-def build_portfolio_health(metrics: dict[str, Any], ranked: list[dict[str, Any]]) -> dict[str, Any]:
+def build_portfolio_health(
+    metrics: dict[str, Any], ranked: list[dict[str, Any]]
+) -> dict[str, Any]:
     conf = _f(metrics.get("portfolio_confidence_score")) or 0.0
     div = _f(metrics.get("diversification_score")) or 0.0
     dd = _f(metrics.get("portfolio_drawdown")) or 0.0
     corr = _f(metrics.get("correlation_risk")) or 0.0
     overall = _clamp(
-        conf * 0.35 + div * 0.25 + max(0.0, 100.0 - dd * 2.5) * 0.25 + max(0.0, 100.0 - corr) * 0.15
+        conf * 0.35
+        + div * 0.25
+        + max(0.0, 100.0 - dd * 2.5) * 0.25
+        + max(0.0, 100.0 - corr) * 0.15
     )
     return {
         "overall_portfolio_health": overall,
@@ -439,11 +456,15 @@ def build_recommendations(
         elif dd >= 25 or score < 55:
             kind = "Reduce allocation"
             detail = f"{sid} weight={weight}% drawdown={dd}"
-        elif score >= 75 and weight < 25 and (
-            "ready" in cert
-            or "staging" in cert
-            or "certified" in cert
-            or "production" in cert
+        elif (
+            score >= 75
+            and weight < 25
+            and (
+                "ready" in cert
+                or "staging" in cert
+                or "certified" in cert
+                or "production" in cert
+            )
         ):
             kind = "Increase allocation"
             detail = f"{sid} score={score} weight={weight}%"

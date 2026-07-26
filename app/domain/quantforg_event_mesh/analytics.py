@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from datetime import UTC, datetime
 from hashlib import sha1
 from typing import Any
@@ -25,7 +26,7 @@ def _as_list(value: Any) -> list[Any]:
 
 def _stable_id(*parts: Any) -> str:
     raw = "|".join(str(p) for p in parts)
-    return sha1(raw.encode("utf-8")).hexdigest()[:24]
+    return sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:24]
 
 
 def _event(
@@ -43,7 +44,9 @@ def _event(
     experiment_id: str | None = None,
 ) -> dict[str, Any]:
     ts = timestamp or datetime.now(UTC).isoformat()
-    eid = _stable_id(event_type, producer, strategy_id, release_id, experiment_id, ts, metadata)
+    eid = _stable_id(
+        event_type, producer, strategy_id, release_id, experiment_id, ts, metadata
+    )
     return {
         "id": eid,
         "timestamp": ts,
@@ -248,7 +251,9 @@ def derive_events(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 severity="warning",
                 timestamp=str(rbd.get("created_at") or rbd.get("recorded_at") or ""),
                 release_id=str(rbd.get("release_id") or "") or None,
-                evidence_ids=[str(rbd.get("rollback_id") or rbd.get("release_id") or "")],
+                evidence_ids=[
+                    str(rbd.get("rollback_id") or rbd.get("release_id") or "")
+                ],
                 metadata=rbd,
             )
         )
@@ -411,14 +416,16 @@ def search_events(
     if experiment_id:
         rows = [e for e in rows if str(e.get("experiment_id") or "") == experiment_id]
     if correlation_id:
-        rows = [
-            e for e in rows if str(e.get("correlation_id") or "") == correlation_id
-        ]
+        rows = [e for e in rows if str(e.get("correlation_id") or "") == correlation_id]
     if category:
-        rows = [e for e in rows if str(e.get("category") or "").lower() == category.lower()]
+        rows = [
+            e for e in rows if str(e.get("category") or "").lower() == category.lower()
+        ]
     if event_type:
         rows = [
-            e for e in rows if str(e.get("event_type") or "").lower() == event_type.lower()
+            e
+            for e in rows
+            if str(e.get("event_type") or "").lower() == event_type.lower()
         ]
     if q:
         needle = q.lower()
@@ -426,7 +433,7 @@ def search_events(
             e
             for e in rows
             if needle
-            in f"{e.get('event_type')} {e.get('producer')} {e.get('strategy_id')} {e.get('release_id')} {e.get('experiment_id')} {e.get('correlation_id')}".lower()
+            in f"{e.get('event_type')} {e.get('producer')} {e.get('strategy_id')} {e.get('release_id')} {e.get('experiment_id')} {e.get('correlation_id')}".lower()  # noqa: E501
         ]
     rows = sorted(rows, key=lambda e: str(e.get("timestamp") or ""))
     return {
@@ -446,7 +453,9 @@ def search_events(
     }
 
 
-def build_timeline(events: list[dict[str, Any]], *, limit: int = 100) -> list[dict[str, Any]]:
+def build_timeline(
+    events: list[dict[str, Any]], *, limit: int = 100
+) -> list[dict[str, Any]]:
     ordered = sorted(events, key=lambda e: str(e.get("timestamp") or ""))
     return [
         {
@@ -555,7 +564,7 @@ def ordering_consistency_check(events: list[dict[str, Any]]) -> dict[str, Any]:
             pass
     # Timeline monotonic when sorted
     ordered = sorted(events, key=lambda e: str(e.get("timestamp") or ""))
-    for a, b in zip(ordered, ordered[1:], strict=False):
+    for a, b in itertools.pairwise(ordered):
         if str(a.get("timestamp") or "") > str(b.get("timestamp") or ""):
             issues.append("ordering_violation")
             break
@@ -566,7 +575,10 @@ def replay_consistency_check(
     original: list[dict[str, Any]], replayed: list[dict[str, Any]]
 ) -> dict[str, Any]:
     issues: list[str] = []
-    o_ids = [e.get("id") for e in sorted(original, key=lambda e: str(e.get("timestamp") or ""))]
+    o_ids = [
+        e.get("id")
+        for e in sorted(original, key=lambda e: str(e.get("timestamp") or ""))
+    ]
     r_ids = [e.get("id") for e in replayed]
     # Replayed should be subsequence preserving order
     oi = 0

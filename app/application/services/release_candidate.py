@@ -67,7 +67,7 @@ def build_rc1_dashboard(*, current_capital: float = 200.0) -> dict[str, Any]:
         "config": DEFAULT_RC1_CONFIG.to_dict(),
         "mission": (
             "Prove profitability, stability, and safety with measurable evidence "
-            "before increasing capital. No new strategies. No experimental production logic."
+            "before increasing capital. No new strategies. No experimental production logic."  # noqa: E501
         ),
         "checklist": checklist,
         "smoke_recent": smoke_recent,

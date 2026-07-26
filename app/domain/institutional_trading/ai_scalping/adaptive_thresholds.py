@@ -6,9 +6,9 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from app.domain.institutional_trading.ai_scalping.config import (
+    DEFAULT_AI_SCALPING_CONFIG,
     AdaptiveThresholdBand,
     AiScalpingConfig,
-    DEFAULT_AI_SCALPING_CONFIG,
     VolatilityBand,
 )
 from app.domain.institutional_trading.config import ITEConfig

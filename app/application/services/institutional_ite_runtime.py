@@ -346,9 +346,7 @@ class InstitutionalIteRuntime:
                     prior_internal = int(account.open_positions)
                     sync = force_sync_positions(
                         self.mt5_adapter,
-                        symbol=str(
-                            getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD"
-                        ),
+                        symbol=str(getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD"),
                         internal_positions=prior_internal,
                         position_engine=self.position_management.engine,
                     )
@@ -473,7 +471,7 @@ class InstitutionalIteRuntime:
         symbol = str(getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD")
         engine = self.position_management.engine
         try:
-            from app.domain.institutional_trading.production_hardening.position_recovery import (
+            from app.domain.institutional_trading.production_hardening.position_recovery import (  # noqa: E501
                 recover_positions_from_mt5,
             )
 
@@ -525,13 +523,9 @@ class InstitutionalIteRuntime:
                         action=str(action_v),
                         reason=reason,
                     )
-                to_state = getattr(
-                    getattr(result, "record", None), "to_state", None
-                )
+                to_state = getattr(getattr(result, "record", None), "to_state", None)
                 to_v = getattr(to_state, "value", to_state)
-                pos_state = getattr(
-                    getattr(result, "position", None), "state", None
-                )
+                pos_state = getattr(getattr(result, "position", None), "state", None)
                 pos_v = getattr(pos_state, "value", pos_state)
                 if str(to_v or pos_v or "").lower() in {"exited", "closed"}:
                     logger.warning(
@@ -546,7 +540,7 @@ class InstitutionalIteRuntime:
                 logger.exception("pme_manage_log_failed", ticket=ticket)
 
         try:
-            from app.domain.institutional_trading.production_hardening.position_recovery import (
+            from app.domain.institutional_trading.production_hardening.position_recovery import (  # noqa: E501
                 persist_pme_state,
             )
 
@@ -672,9 +666,7 @@ class InstitutionalIteRuntime:
                 run_shadow_validation,
             )
 
-            run_shadow_validation(
-                decision=decision, snapshot=snapshot, trace_id=tid
-            )
+            run_shadow_validation(decision=decision, snapshot=snapshot, trace_id=tid)
         except Exception:
             logger.exception("shadow_ai_validation_failed")
 
@@ -691,7 +683,9 @@ class InstitutionalIteRuntime:
             action = str(getattr(decision.action, "value", decision.action))
             traded_intent = action in {"BUY", "SELL"}
             get_opportunity_outcome_store().record_evaluation(
-                symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")),
+                symbol=str(
+                    getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")
+                ),
                 ai_confidence=int(getattr(decision, "confidence", 0) or 0),
                 opportunity_score=int(
                     (duel.champion.get("opportunity_score") if duel else None)
@@ -720,13 +714,13 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("performance_lab_duel_failed")
 
-        # v9 Portfolio Intelligence — portfolio-aware queue/protection (no auto-reallocate)
+        # v9 Portfolio Intelligence — portfolio-aware queue/protection (no auto-reallocate)  # noqa: E501
         try:
             from app.domain.institutional_trading.portfolio_intelligence import (
-                evaluate_capital_protection,
                 build_portfolio_state,
-                get_opportunity_queue,
+                evaluate_capital_protection,
                 get_dynamic_risk_budget,
+                get_opportunity_queue,
             )
 
             open_syms = [
@@ -735,9 +729,11 @@ class InstitutionalIteRuntime:
             ]
             st = build_portfolio_state(
                 equity=float(account.equity or 0),
-                free_margin=float(account.free_margin or 0)
-                if getattr(account, "free_margin", None) is not None
-                else None,
+                free_margin=(
+                    float(account.free_margin or 0)
+                    if getattr(account, "free_margin", None) is not None
+                    else None
+                ),
                 open_symbols=open_syms,
                 daily_pnl=float(account.daily_pnl or 0),
                 weekly_pnl=float(account.weekly_pnl or 0),
@@ -758,7 +754,9 @@ class InstitutionalIteRuntime:
                         "direction": str(
                             getattr(getattr(decision, "direction", None), "value", "")
                         ),
-                        "opportunity_score": int(getattr(decision, "confidence", 0) or 0),
+                        "opportunity_score": int(
+                            getattr(decision, "confidence", 0) or 0
+                        ),
                         "ai_confidence": int(getattr(decision, "confidence", 0) or 0),
                         "expected_rr": float(getattr(decision, "estimated_rr", 0) or 0),
                     }
@@ -802,9 +800,11 @@ class InstitutionalIteRuntime:
             record_lifecycle(
                 stage="AI_DECISION",
                 status="ok",
-                detail=f"action={decision.action.value} conf={getattr(decision, 'confidence', '')}",
+                detail=f"action={decision.action.value} conf={getattr(decision, 'confidence', '')}",  # noqa: E501
                 trace_id=tid,
-                symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")),
+                symbol=str(
+                    getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")
+                ),
             )
             record_lifecycle(
                 stage="RISK_VALIDATION",
@@ -885,11 +885,7 @@ class InstitutionalIteRuntime:
             now=decision.as_of,
             user_id=self.user_id,
             execution_enabled=False if force_shadow else execution_enabled,
-            risk_allowed=(
-                True
-                if forced_override
-                else risk_allowed
-            ),
+            risk_allowed=(True if forced_override else risk_allowed),
             risk_reasons=risk_reasons,
             connected=broker_connected or force_shadow,
             login=None,
@@ -897,12 +893,8 @@ class InstitutionalIteRuntime:
             gateway_connected=True if force_shadow else gateway_connected,
             broker_connected=True if force_shadow else broker_connected,
             market_data_live=True if force_shadow else market_data_live,
-            account_trading_enabled=(
-                True if force_shadow else account_trading_enabled
-            ),
-            mt5_autotrading_enabled=(
-                True if force_shadow else mt5_autotrading_enabled
-            ),
+            account_trading_enabled=(True if force_shadow else account_trading_enabled),
+            mt5_autotrading_enabled=(True if force_shadow else mt5_autotrading_enabled),
             symbol_tradable=True if force_shadow else symbol_tradable,
             no_broker_restrictions=True if force_shadow else no_broker_restrictions,
         )
@@ -944,9 +936,8 @@ class InstitutionalIteRuntime:
             )
 
             oms = getattr(bridge_result, "oms_result", None)
-            success = (
-                not getattr(bridge_result, "aborted", True)
-                and getattr(bridge_result, "forwarded_to_oms", False)
+            success = not getattr(bridge_result, "aborted", True) and getattr(
+                bridge_result, "forwarded_to_oms", False
             )
             if oms is not None:
                 outcome = str(getattr(oms, "outcome", "") or "").lower()
@@ -963,14 +954,22 @@ class InstitutionalIteRuntime:
                 retries = inner
             observe_oms_outcome(
                 trace_id=tid,
-                symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")),
+                symbol=str(
+                    getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")
+                ),
                 forwarded=bool(getattr(bridge_result, "forwarded_to_oms", False)),
                 success=bool(success),
                 latency_ms=lat,
                 retcode=getattr(oms, "retcode", None) if oms is not None else None,
-                message=str(getattr(oms, "message", "") or "") if oms is not None else None,
+                message=(
+                    str(getattr(oms, "message", "") or "") if oms is not None else None
+                ),
                 ticket=ticket,
-                spread=float(snapshot.spread) if getattr(snapshot, "spread", None) is not None else None,
+                spread=(
+                    float(snapshot.spread)
+                    if getattr(snapshot, "spread", None) is not None
+                    else None
+                ),
                 retries=retries,
             )
             # v7 execution quality + slippage (observational)
@@ -986,10 +985,26 @@ class InstitutionalIteRuntime:
                     {
                         "signal_generation": max(0.0, t_ai * 0.15),
                         "ai_decision": max(0.0, t_ai * 0.35),
-                        "oms": max(0.0, t_ai * 0.20) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
-                        "gateway": max(0.0, t_ai * 0.10) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
-                        "mt5": max(0.0, t_ai * 0.10) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
-                        "broker": max(0.0, t_ai * 0.10) if getattr(bridge_result, "forwarded_to_oms", False) else 0.0,
+                        "oms": (
+                            max(0.0, t_ai * 0.20)
+                            if getattr(bridge_result, "forwarded_to_oms", False)
+                            else 0.0
+                        ),
+                        "gateway": (
+                            max(0.0, t_ai * 0.10)
+                            if getattr(bridge_result, "forwarded_to_oms", False)
+                            else 0.0
+                        ),
+                        "mt5": (
+                            max(0.0, t_ai * 0.10)
+                            if getattr(bridge_result, "forwarded_to_oms", False)
+                            else 0.0
+                        ),
+                        "broker": (
+                            max(0.0, t_ai * 0.10)
+                            if getattr(bridge_result, "forwarded_to_oms", False)
+                            else 0.0
+                        ),
                         "total": lat,
                     }
                 )
@@ -1008,7 +1023,9 @@ class InstitutionalIteRuntime:
                         get_slippage_store().record_fill(
                             symbol=str(getattr(decision, "symbol", "") or ""),
                             side=str(
-                                getattr(getattr(decision, "direction", None), "value", "buy")
+                                getattr(
+                                    getattr(decision, "direction", None), "value", "buy"
+                                )
                                 or "buy"
                             ),
                             expected_entry=expected,
@@ -1042,9 +1059,11 @@ class InstitutionalIteRuntime:
                         decision=decision,
                         snapshot=snapshot,
                         ticket=str(ticket) if ticket is not None else None,
-                        entry=float(account.mid_price)
-                        if getattr(account, "mid_price", None) is not None
-                        else None,
+                        entry=(
+                            float(account.mid_price)
+                            if getattr(account, "mid_price", None) is not None
+                            else None
+                        ),
                     )
                     get_trade_replay_store().record(replay)
                     get_opportunity_outcome_store().record_evaluation(
@@ -1054,13 +1073,16 @@ class InstitutionalIteRuntime:
                         traded=True,
                         outcome=None,
                         session=None,
-                        strategy=str(getattr(self.plane, "trading_mode", "swing") or "swing"),
+                        strategy=str(
+                            getattr(self.plane, "trading_mode", "swing") or "swing"
+                        ),
                         direction=str(
-                            getattr(getattr(decision, "direction", None), "value", "") or ""
+                            getattr(getattr(decision, "direction", None), "value", "")
+                            or ""
                         ),
                         latency_ms=lat,
                     )
-                    # Calibration updated when outcome known; seed sample as pending via confidence only later
+                    # Calibration updated when outcome known; seed sample as pending via confidence only later  # noqa: E501
                     _ = get_calibration_store
                 except Exception:
                     logger.exception("performance_lab_post_fill_failed")
@@ -1080,7 +1102,9 @@ class InstitutionalIteRuntime:
                 ),
                 message=str(
                     getattr(oms, "message", None)
-                    or getattr(getattr(bridge_result, "journal_entry", None), "comment", None)
+                    or getattr(
+                        getattr(bridge_result, "journal_entry", None), "comment", None
+                    )
                     or ""
                 ),
                 retcode=getattr(oms, "retcode", None),
@@ -1224,9 +1248,7 @@ class InstitutionalIteRuntime:
             ok=(not bridge_result.forwarded_to_oms) if force_shadow else True,
             trace_id=tid,
             mode=(
-                OpsExecutionMode.SHADOW.value
-                if force_shadow
-                else self.plane.mode.value
+                OpsExecutionMode.SHADOW.value if force_shadow else self.plane.mode.value
             ),
             decision_action=decision.action.value,
             forwarded_to_oms=bridge_result.forwarded_to_oms,
@@ -1237,9 +1259,7 @@ class InstitutionalIteRuntime:
             decision_reasons=decision_reasons,
             snapshot_present=True,
             market_context_diagnostics=(
-                dict(market_context_diagnostics)
-                if market_context_diagnostics
-                else None
+                dict(market_context_diagnostics) if market_context_diagnostics else None
             ),
             signal_id=str(getattr(decision, "id", "") or "") or None,
             oms_message=str(oms_message) if oms_message else None,
@@ -1287,7 +1307,7 @@ class InstitutionalIteRuntime:
             latency_ms=result.latency_ms,
             mode=result.mode,
         )
-        # Explicit PASS/FAIL chain for live ops (current vs required, no generic labels).
+        # Explicit PASS/FAIL chain for live ops (current vs required, no generic labels).  # noqa: E501
         try:
             self._log_execution_path_pass_fail(
                 decision=decision,
@@ -1339,10 +1359,15 @@ class InstitutionalIteRuntime:
         )
 
         # Execution Gate = bridge reached live path (not shadow force, EXEC on)
-        gate_ok = (not force_shadow) and bool(execution_enabled) and action in {
-            "BUY",
-            "SELL",
-        }
+        gate_ok = (
+            (not force_shadow)
+            and bool(execution_enabled)
+            and action
+            in {
+                "BUY",
+                "SELL",
+            }
+        )
         if abort_val in {
             "execution_disabled",
             "auto_trading_blocked",
@@ -1354,25 +1379,22 @@ class InstitutionalIteRuntime:
             gate_ok = False
         logger.warning(
             "Execution Gate",
-            result="PASS" if gate_ok and abort_val not in {
-                "execution_disabled",
-                "auto_trading_blocked",
-                "kill_switch",
-            } else ("FAIL" if abort_val else ("PASS" if gate_ok else "FAIL")),
+            result=(
+                "PASS"
+                if gate_ok
+                and abort_val
+                not in {
+                    "execution_disabled",
+                    "auto_trading_blocked",
+                    "kill_switch",
+                }
+                else ("FAIL" if abort_val else ("PASS" if gate_ok else "FAIL"))
+            ),
             execution_enabled=execution_enabled,
             force_shadow=force_shadow,
             abort=abort_val or "none",
         )
 
-        risk_ok = elig_ok or (
-            forwarded
-            or abort_val
-            not in {
-                "eligibility_failed",
-                "missing_lots",
-                "missing_geometry",
-            }
-        )
         # Prefer explicit eligibility for Risk Engine stage
         risk_pass = elig_ok if not forwarded else True
         if abort_val == "eligibility_failed":
@@ -1463,8 +1485,7 @@ class InstitutionalIteRuntime:
                     "execution_stop_detail",
                     function="InstitutionalExecutionEngine.run_submit",
                     file=(
-                        "app/application/services/"
-                        "institutional_execution_engine.py"
+                        "app/application/services/" "institutional_execution_engine.py"
                     ),
                     line=309,
                     condition=(
@@ -1557,7 +1578,7 @@ class InstitutionalIteRuntime:
             (
                 "Gate / Connectivity",
                 bool(gateway_connected and broker_connected),
-                f"gateway={gateway_connected} broker={broker_connected} required=both true",
+                f"gateway={gateway_connected} broker={broker_connected} required=both true",  # noqa: E501
             )
         )
         steps.append(
@@ -1575,7 +1596,7 @@ class InstitutionalIteRuntime:
             (
                 "MT5 Gateway / Broker Reply",
                 mt5_reached,
-                f"ticket={ticket} retcode={oms_ret} message={oms_msg or abort or 'none'}",
+                f"ticket={ticket} retcode={oms_ret} message={oms_msg or abort or 'none'}",  # noqa: E501
             )
         )
         steps.append(
@@ -1596,7 +1617,7 @@ class InstitutionalIteRuntime:
         if ticket is not None:
             logger.warning(
                 "execution_path_complete",
-                chain="Scheduler Tick → AI Decision → Submitting Order → MT5 Accepted → Ticket",
+                chain="Scheduler Tick → AI Decision → Submitting Order → MT5 Accepted → Ticket",  # noqa: E501
                 ticket=ticket,
             )
 
@@ -1618,7 +1639,9 @@ class InstitutionalIteRuntime:
             "last_cycle": last.to_dict() if last else None,
             "interval_seconds": self.interval_seconds,
             "running": not self._stop.is_set(),
-            "trading_mode": getattr(self.decision_pipeline.config, "trading_mode", "swing"),
+            "trading_mode": getattr(
+                self.decision_pipeline.config, "trading_mode", "swing"
+            ),
             "ai_score": (
                 self.decision_pipeline.last_ai_score()
                 if hasattr(self.decision_pipeline, "last_ai_score")
@@ -1671,15 +1694,20 @@ class InstitutionalIteRuntime:
         tp: float | None = None
         if decision is not None:
             market = str(getattr(decision, "symbol", "") or "") or None
-            direction = str(
-                getattr(getattr(decision, "direction", None), "value", None)
-                or getattr(decision, "direction", None)
-                or ""
-            ) or None
+            direction = (
+                str(
+                    getattr(getattr(decision, "direction", None), "value", None)
+                    or getattr(decision, "direction", None)
+                    or ""
+                )
+                or None
+            )
             lots = getattr(decision, "approved_lots", None)
             if lots is not None:
                 lot = float(lots)
-            entry = self._zone_price(getattr(decision, "entry_zone", None), prefer="mid")
+            entry = self._zone_price(
+                getattr(decision, "entry_zone", None), prefer="mid"
+            )
             stop = getattr(decision, "stop_zone", None)
             target = getattr(decision, "target_zone", None)
             dir_u = (direction or "").upper()
@@ -1715,9 +1743,13 @@ class InstitutionalIteRuntime:
             "done",
         }
         # Some adapters mark success via journal status without outcome string.
-        if not oms_success and cycle.forwarded_to_oms and ticket and not cycle.oms_message:
-            if (cycle.abort_reason or "").upper() in {"NONE", "", "OK", "SUCCESS"}:
-                oms_success = True
+        if (
+            not oms_success
+            and cycle.forwarded_to_oms
+            and ticket
+            and not cycle.oms_message
+        ) and (cycle.abort_reason or "").upper() in {"NONE", "", "OK", "SUCCESS"}:
+            oms_success = True
 
         exact_reason_parts: list[str] = []
         if cycle.oms_message:
@@ -1734,7 +1766,7 @@ class InstitutionalIteRuntime:
             for reason in cycle.decision_reasons:
                 if reason and reason not in exact_reason_parts:
                     exact_reason_parts.append(str(reason))
-        if cycle.detail and cycle.detail not in exact_reason_parts:
+        if cycle.detail and cycle.detail not in exact_reason_parts:  # noqa: SIM102
             # Prefer broker/OMS text; keep detail when nothing else exists.
             if not exact_reason_parts:
                 exact_reason_parts.append(str(cycle.detail))
@@ -1751,8 +1783,10 @@ class InstitutionalIteRuntime:
             if ret not in exact_reason_parts:
                 exact_reason_parts.append(ret)
 
-        reason = "; ".join(exact_reason_parts) if exact_reason_parts else (
-            cycle.detail or cycle.abort_reason or "Execution rejected"
+        reason = (
+            "; ".join(exact_reason_parts)
+            if exact_reason_parts
+            else (cycle.detail or cycle.abort_reason or "Execution rejected")
         )
 
         base = {
@@ -1763,7 +1797,7 @@ class InstitutionalIteRuntime:
             "sl": sl,
             "tp": tp,
             "ticket": ticket,
-            "execution_ms": int(round(execution_ms)),
+            "execution_ms": round(execution_ms),
             "cycle_outcome": cycle.cycle_outcome,
             "abort_reason": cycle.abort_reason,
             "trace_id": cycle.trace_id,
@@ -1793,7 +1827,9 @@ class InstitutionalIteRuntime:
             from app.domain.trading.gold_only import GOLD_SYMBOL
 
             cfg = get_alpha_config()
-            if not cfg.enabled and not getattr(self.plane, "alpha_engine_enabled", False):
+            if not cfg.enabled and not getattr(
+                self.plane, "alpha_engine_enabled", False
+            ):
                 mode = str(getattr(self.plane, "trading_mode", "") or "")
                 if mode != "alpha":
                     return None
@@ -1814,7 +1850,9 @@ class InstitutionalIteRuntime:
                     get_opportunity_history_store,
                 )
 
-                ranking = list(scan.get("opportunity_ranking") or scan.get("ranking") or [])
+                ranking = list(
+                    scan.get("opportunity_ranking") or scan.get("ranking") or []
+                )
                 top = []
                 for row in ranking[:10]:
                     if not isinstance(row, dict):
@@ -1824,19 +1862,23 @@ class InstitutionalIteRuntime:
                         s.upper() == sym.upper() for s in (open_symbols or [])
                     ) or (
                         bool(scan.get("selected"))
-                        and str((scan.get("selected") or [{}])[0].get("symbol") or "").upper()
+                        and str(
+                            (scan.get("selected") or [{}])[0].get("symbol") or ""
+                        ).upper()
                         == sym.upper()
                     )
                     top.append(
                         {
                             **row,
                             "traded": traded,
-                            "skip_reason": None
-                            if traded
-                            else (
-                                "below_execute_threshold"
-                                if not (scan.get("selected"))
-                                else "not_selected"
+                            "skip_reason": (
+                                None
+                                if traded
+                                else (
+                                    "below_execute_threshold"
+                                    if not (scan.get("selected"))
+                                    else "not_selected"
+                                )
                             ),
                         }
                     )
@@ -1950,8 +1992,7 @@ class InstitutionalIteRuntime:
                 open_syms = [
                     str(getattr(p, "symbol", "") or "")
                     for p in (
-                        getattr(self.position_management.engine, "_positions", {})
-                        or {}
+                        getattr(self.position_management.engine, "_positions", {}) or {}
                     ).values()
                 ]
                 symbol = next((s for s in open_syms if s), GOLD_SYMBOL)
@@ -1971,7 +2012,7 @@ class InstitutionalIteRuntime:
                     "status": "REJECTED",
                     "reason": "no_executable_symbol",
                     "message": "No full-mode / open-market symbol available",
-                    "execution_ms": int(round((time.perf_counter() - t0) * 1000.0)),
+                    "execution_ms": round((time.perf_counter() - t0) * 1000.0),
                 }
             logger.warning("Scanning Symbols", symbol=symbol)
             ctx = await build_ite_cycle_market_context(
@@ -1986,9 +2027,7 @@ class InstitutionalIteRuntime:
                     trace_id=None,
                     mode=self.plane.mode.value,
                     detail=ctx.reason or "market context unavailable",
-                    health=(
-                        health.get("health") if isinstance(health, dict) else None
-                    ),
+                    health=(health.get("health") if isinstance(health, dict) else None),
                     cycle_outcome="no_snapshot",
                     abort_reason="NO_MARKET_CONTEXT",
                     snapshot_present=False,
@@ -2082,7 +2121,7 @@ class InstitutionalIteRuntime:
                 "status": "REJECTED",
                 "reason": reason,
                 "message": reason,
-                "execution_ms": int(round(ms)),
+                "execution_ms": round(ms),
                 "market": None,
                 "direction": None,
                 "lot": None,
@@ -2101,15 +2140,15 @@ class InstitutionalIteRuntime:
         """Background loop — live market context → Decision→Risk→Safety→OMS."""
         import os
 
-        # Continuous production cadence (default 5s). Override via ITE_CYCLE_INTERVAL_SECONDS.
+        # Continuous production cadence (default 5s). Override via ITE_CYCLE_INTERVAL_SECONDS.  # noqa: E501
         try:
             env_iv = float(os.environ.get("ITE_CYCLE_INTERVAL_SECONDS") or "")
             if env_iv > 0:
                 self.interval_seconds = max(1.0, env_iv)
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
         if self.interval_seconds > 15:
-            # Prefer continuous scanning; 60s legacy default is too slow for AUTO RUNNING.
+            # Prefer continuous scanning; 60s legacy default is too slow for AUTO RUNNING.  # noqa: E501
             self.interval_seconds = 5.0
 
         from app.application.services.auto_trading_continuity import (
@@ -2146,9 +2185,7 @@ class InstitutionalIteRuntime:
                     "Scheduler Tick",
                     run_state=self.plane.auto_trading_run_state,
                     mode=self.plane.mode.value,
-                    execution_enabled=bool(
-                        getattr(_gs(), "execution_enabled", False)
-                    ),
+                    execution_enabled=bool(getattr(_gs(), "execution_enabled", False)),
                 )
                 logger.warning("Cycle Started")
                 from app.application.services.auto_trading_status import (
@@ -2170,9 +2207,7 @@ class InstitutionalIteRuntime:
                     open_syms = [
                         str(getattr(p, "symbol", "") or "")
                         for p in (
-                            getattr(
-                                self.position_management.engine, "_positions", {}
-                            )
+                            getattr(self.position_management.engine, "_positions", {})
                             or {}
                         ).values()
                     ]
@@ -2190,7 +2225,12 @@ class InstitutionalIteRuntime:
                     symbol=symbol,
                     position_engine=self.position_management.engine,
                 )
-                if manage_only and ctx.ok and ctx.snapshot is not None and ctx.account is not None:
+                if (
+                    manage_only
+                    and ctx.ok
+                    and ctx.snapshot is not None
+                    and ctx.account is not None
+                ):
                     try:
                         self._sync_and_manage_open_positions(
                             snapshot=ctx.snapshot,
@@ -2442,9 +2482,7 @@ def build_ite_runtime(
             backoff_ms=getattr(decision, "backoff_ms", 0),
         )
 
-    submit_port: Any = RetryingOmsSubmitPort(
-        guarded_submit, on_retry=_on_oms_retry
-    )
+    submit_port: Any = RetryingOmsSubmitPort(guarded_submit, on_retry=_on_oms_retry)
 
     config = ExecutionBridgeConfig(mode=ExecutionMode.SHADOW)
     execution = InstitutionalExecutionIntegration.create(submit_port, config=config)

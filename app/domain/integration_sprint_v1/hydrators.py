@@ -25,8 +25,7 @@ def _deal_to_trade(deal: dict[str, Any]) -> dict[str, Any]:
         "liquidity": deal.get("liquidity"),
         "risk_usage": deal.get("risk_usage"),
         "decision_explanation": deal.get("decision_explanation"),
-        "execution_latency": deal.get("execution_latency")
-        or deal.get("latency_ms"),
+        "execution_latency": deal.get("execution_latency") or deal.get("latency_ms"),
         "source": "mt5_trade_feed",
         "immutable": True,
     }
@@ -143,11 +142,11 @@ def hydrate_prc(
     if account.available and isinstance(account.payload, dict):
         mt5_h = account.payload.get("mt5_health") or {}
         reliability = {
-            "mt5_synchronization_ok": bool(
-                mt5_h.get("connected") or mt5_h.get("ok") or mt5_h.get("healthy")
-            )
-            if mt5_h
-            else None,
+            "mt5_synchronization_ok": (
+                bool(mt5_h.get("connected") or mt5_h.get("ok") or mt5_h.get("healthy"))
+                if mt5_h
+                else None
+            ),
             "source": "broker_account_feed",
         }
         # Drop Nones — never invent uptime numbers

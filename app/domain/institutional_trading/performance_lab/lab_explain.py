@@ -30,20 +30,22 @@ def store_lab_explanation(
     lots = getattr(decision, "approved_lots", None)
     stop = getattr(decision, "stop_zone", None)
     target = getattr(decision, "target_zone", None)
-    now_reason = why_now or ("; ".join(str(r) for r in reasons[:4]) or "setup met gates")
+    now_reason = why_now or (
+        "; ".join(str(r) for r in reasons[:4]) or "setup met gates"
+    )
 
     expl = build_explanation(
         symbol=symbol,
         direction=direction,
         ticket=ticket,
         why_entered=f"Why now: {now_reason}",
-        why_risk_pct=f"Why this risk: risk_per_trade={risk_pct or 'plane/default'}% aligned with account equity and ATR stop",
-        why_lot_size=f"Why this lot size: approved_lots={lots} from risk budget ÷ stop distance",
-        why_tp=f"Why this TP: target_zone={getattr(target, 'mid', target)} for estimated RR",
-        why_sl=f"Why this SL: stop_zone={getattr(stop, 'mid', stop)} beyond invalidation / ATR multiple",
+        why_risk_pct=f"Why this risk: risk_per_trade={risk_pct or 'plane/default'}% aligned with account equity and ATR stop",  # noqa: E501
+        why_lot_size=f"Why this lot size: approved_lots={lots} from risk budget ÷ stop distance",  # noqa: E501
+        why_tp=f"Why this TP: target_zone={getattr(target, 'mid', target)} for estimated RR",  # noqa: E501
+        why_sl=f"Why this SL: stop_zone={getattr(stop, 'mid', stop)} beyond invalidation / ATR multiple",  # noqa: E501
         why_confidence=f"Why this confidence: confluence score={conf}",
-        why_symbol=f"Why this symbol: selected {symbol} as highest-quality eligible opportunity",
-        why_session=f"Why this session: {getattr(decision, 'expected_duration', 'session window')}",
+        why_symbol=f"Why this symbol: selected {symbol} as highest-quality eligible opportunity",  # noqa: E501
+        why_session=f"Why this session: {getattr(decision, 'expected_duration', 'session window')}",  # noqa: E501
         why_regime=f"Why this regime: market structure supportive of {direction}",
         extras={**(extras or {}), "lab_version": "v8"},
     )

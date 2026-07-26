@@ -39,15 +39,12 @@ def percentile(values: list[float], p: float) -> float | None:
 
 
 def _trade_timeline(row: dict[str, Any]) -> dict[str, Any]:
-    snap = (
-        row.get("request_snapshot")
-        if isinstance(row.get("request_snapshot"), dict)
-        else {}
+    request_snapshot = row.get("request_snapshot")
+    snap: dict[str, Any] = (
+        request_snapshot if isinstance(request_snapshot, dict) else {}
     )
     decision_at = (
-        row.get("decision_at")
-        or snap.get("decision_at")
-        or row.get("created_at")
+        row.get("decision_at") or snap.get("decision_at") or row.get("created_at")
     )
     submitted_at = row.get("submitted_at") or snap.get("submitted_at")
     ack_at = (

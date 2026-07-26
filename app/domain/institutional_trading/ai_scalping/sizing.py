@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from decimal import ROUND_DOWN, Decimal
 
 from app.domain.institutional_trading.ai_scalping.config import (
-    AiScalpingConfig,
     DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
 )
 
 
@@ -31,7 +31,9 @@ class LotSizingResult:
         }
 
 
-def _quantize_lot(raw: Decimal, *, step: Decimal, min_lot: Decimal, max_lot: Decimal) -> Decimal:
+def _quantize_lot(
+    raw: Decimal, *, step: Decimal, min_lot: Decimal, max_lot: Decimal
+) -> Decimal:
     if step <= 0:
         step = Decimal("0.01")
     steps = (raw / step).to_integral_value(rounding=ROUND_DOWN)
@@ -135,8 +137,7 @@ def calculate_scalping_lots(
             stop_distance=dist,
             method="below_min_lot",
             reason=(
-                f"Calculated lot below broker min {cfg.broker_min_lot} "
-                f"(raw={raw})"
+                f"Calculated lot below broker min {cfg.broker_min_lot} " f"(raw={raw})"
             ),
             valid=False,
         )

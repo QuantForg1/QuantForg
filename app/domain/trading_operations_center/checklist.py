@@ -59,9 +59,7 @@ def build_operations_checklist(facts: dict[str, Any] | None) -> dict[str, Any]:
         elif key == "evidence_healthy":
             passed = _truthy(src.get("evidence_healthy"))
             value = str(
-                src.get("evidence_status")
-                or src.get("evidence_healthy")
-                or "unknown"
+                src.get("evidence_status") or src.get("evidence_healthy") or "unknown"
             )
         else:
             passed = _truthy(src.get(key))

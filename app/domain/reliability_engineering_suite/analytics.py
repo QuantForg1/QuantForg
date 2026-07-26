@@ -74,7 +74,7 @@ def _collect_events(ctx: dict[str, Any]) -> list[dict[str, Any]]:
 def classify_failure(row: dict[str, Any]) -> str | None:
     blob = _event_blob(row)
     domain = str(row.get("_domain") or "").lower()
-    if not any(
+    if not any(  # noqa: SIM102
         k in blob
         for k in ("fail", "error", "down", "timeout", "disconnect", "crash", "reject")
     ) and domain not in {"diagnostics"}:
@@ -87,7 +87,7 @@ def classify_failure(row: dict[str, Any]) -> str | None:
         return "Broker Failure"
     if "schedul" in blob:
         return "Scheduler Failure"
-    if "strateg" in blob or "signal" in blob or domain == "diagnostics":
+    if "strateg" in blob or "signal" in blob or domain == "diagnostics":  # noqa: SIM102
         if any(k in blob for k in ("fail", "reject", "block", "error")):
             return "Strategy Failure"
     if any(k in blob for k in ("infra", "host", "cpu", "memory", "disk")):
@@ -103,7 +103,9 @@ def build_service_reliability(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     sources = _as_dict(ctx.get("sources"))
     avail = _as_dict(ctx.get("availability"))
     live = _as_dict(sources.get("live_metrics"))
-    eqs = _as_dict(_as_dict(sources.get("eqs")).get("execution_score") or sources.get("eqs"))
+    eqs = _as_dict(
+        _as_dict(sources.get("eqs")).get("execution_score") or sources.get("eqs")
+    )
     idw = _as_dict(sources.get("idw"))
     events = _collect_events(ctx)
 
@@ -115,7 +117,11 @@ def build_service_reliability(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         restarts: int,
         failures: int,
     ) -> dict[str, Any]:
-        health = 100.0 if healthy and failures == 0 else max(0.0, 100.0 - failures * 8 - restarts * 5)
+        health = (
+            100.0
+            if healthy and failures == 0
+            else max(0.0, 100.0 - failures * 8 - restarts * 5)
+        )
         if latency is not None and latency > 200:
             health = max(0.0, health - min(30.0, latency / 20.0))
         return {
@@ -124,11 +130,15 @@ def build_service_reliability(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             "latency": latency,
             "restart_count": restarts,
             "failure_count": failures,
-            "status": "healthy" if health >= 75 else ("degraded" if health >= 45 else "critical"),
+            "status": (
+                "healthy"
+                if health >= 75
+                else ("degraded" if health >= 45 else "critical")
+            ),
         }
 
     gw_fail = sum(1 for e in events if classify_failure(e) == "Gateway Failure")
-    br_fail = sum(1 for e in events if classify_failure(e) == "Broker Failure")
+    sum(1 for e in events if classify_failure(e) == "Broker Failure")
     sch_fail = sum(1 for e in events if classify_failure(e) == "Scheduler Failure")
     strat_fail = sum(1 for e in events if classify_failure(e) == "Strategy Failure")
     data_fail = sum(1 for e in events if classify_failure(e) == "Data Failure")
@@ -168,9 +178,7 @@ def build_service_reliability(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             healthy=gw_fail < 5,
             latency=gw_lat,
             restarts=sum(
-                1
-                for e in _as_list(idw.get("gateway"))
-                if "reconnect" in _event_blob(e)
+                1 for e in _as_list(idw.get("gateway")) if "reconnect" in _event_blob(e)
             ),
             failures=gw_fail,
         ),
@@ -207,14 +215,12 @@ def build_service_reliability(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     have = {r["service"] for r in rows}
     for name in SERVICE_NAMES:
         if name not in have:
-            rows.append(
-                _svc(name, healthy=False, latency=None, restarts=0, failures=0)
-            )
+            rows.append(_svc(name, healthy=False, latency=None, restarts=0, failures=0))
     return rows
 
 
 def build_failure_analysis(ctx: dict[str, Any]) -> dict[str, Any]:
-    counts = {c: 0 for c in FAILURE_CLASSES}
+    counts = dict.fromkeys(FAILURE_CLASSES, 0)
     samples: list[dict[str, Any]] = []
     for e in _collect_events(ctx):
         klass = classify_failure(e)
@@ -252,8 +258,16 @@ def build_recovery_analytics(ctx: dict[str, Any]) -> dict[str, Any]:
     auto = manual = success = attempts = 0
     for e in events:
         blob = _event_blob(e)
-        mttd = _f(e.get("mttd_sec") or e.get("detection_latency_sec") or _as_dict(e.get("meta")).get("mttd_sec"))
-        mttr = _f(e.get("mttr_sec") or e.get("recovery_sec") or _as_dict(e.get("meta")).get("mttr_sec"))
+        mttd = _f(
+            e.get("mttd_sec")
+            or e.get("detection_latency_sec")
+            or _as_dict(e.get("meta")).get("mttd_sec")
+        )
+        mttr = _f(
+            e.get("mttr_sec")
+            or e.get("recovery_sec")
+            or _as_dict(e.get("meta")).get("mttr_sec")
+        )
         if mttd is not None:
             detect_times.append(mttd)
         if mttr is not None:
@@ -291,8 +305,14 @@ def build_recovery_analytics(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_availability(ctx: dict[str, Any], services: list[dict[str, Any]]) -> dict[str, Any]:
-    healths = [_f(s.get("health")) for s in services if _f(s.get("health")) is not None]
+def build_availability(
+    ctx: dict[str, Any], services: list[dict[str, Any]]
+) -> dict[str, Any]:
+    healths = [
+        health
+        for service in services
+        if (health := _f(service.get("health"))) is not None
+    ]
     base_uptime = round(statistics.mean(healths), 2) if healths else 95.0
     failures = build_failure_analysis(ctx)["total_failures"]
     interruptions = min(failures, 50)
@@ -318,7 +338,7 @@ def build_availability(ctx: dict[str, Any], services: list[dict[str, Any]]) -> d
 
 
 def build_reliability_trends(
-    ctx: dict[str, Any],
+    _ctx: dict[str, Any],
     *,
     availability: dict[str, Any],
     recovery: dict[str, Any],
@@ -333,14 +353,14 @@ def build_reliability_trends(
                 "period": period,
                 "failure_frequency": failures.get("total_failures"),
                 "recovery_time_sec": recovery.get("mttr_sec"),
-                "health_trend": round(
-                    statistics.mean(
-                        [_f(s.get("health")) or 0 for s in services]
-                    ),
-                    1,
-                )
-                if services
-                else None,
+                "health_trend": (
+                    round(
+                        statistics.mean([_f(s.get("health")) or 0 for s in services]),
+                        1,
+                    )
+                    if services
+                    else None
+                ),
                 "availability_trend": avail.get("uptime_pct"),
             }
         )
@@ -360,24 +380,34 @@ def build_reliability_score(
 
     mttr = _f(recovery.get("mttr_sec"))
     recovery_score = (
-        round(max(0.0, min(100.0, 100.0 - (mttr / 6.0))), 1) if mttr is not None else 70.0
+        round(max(0.0, min(100.0, 100.0 - (mttr / 6.0))), 1)
+        if mttr is not None
+        else 70.0
     )
     success = _f(recovery.get("recovery_success_rate"))
     if success is not None:
         recovery_score = round((recovery_score + success) / 2.0, 1)
 
-    healths = [_f(s.get("health")) for s in services if _f(s.get("health")) is not None]
+    healths = [
+        health
+        for service in services
+        if (health := _f(service.get("health"))) is not None
+    ]
     consistency = round(statistics.mean(healths), 1) if healths else 70.0
     if len(healths) >= 2:
-        spread = max(healths) - min(healths)  # type: ignore[operator]
+        spread = max(healths) - min(healths)
         consistency = round(max(0.0, consistency - spread * 0.15), 1)
 
     total_f = int(failures.get("total_failures") or 0)
     failure_rate_score = round(max(0.0, 100.0 - total_f * 3.5), 1)
 
-    latencies = [_f(s.get("latency")) for s in services if _f(s.get("latency")) is not None]
+    latencies = [
+        latency
+        for service in services
+        if (latency := _f(service.get("latency"))) is not None
+    ]
     if latencies:
-        avg_lat = statistics.mean(latencies)  # type: ignore[arg-type]
+        avg_lat = statistics.mean(latencies)
         latency_stability = round(max(0.0, min(100.0, 100.0 - avg_lat / 5.0)), 1)
     else:
         eqs_lat = _f(_as_dict(eqs_snapshot or {}).get("latency"))
@@ -417,7 +447,8 @@ def build_platform_health(
         "overall_health": overall,
         "availability": _as_dict(availability.get("daily")).get("uptime_pct"),
         "reliability_score": overall,
-        "active_incidents": len(critical) + min(3, int(failures.get("total_failures") or 0) // 5),
+        "active_incidents": len(critical)
+        + min(3, int(failures.get("total_failures") or 0) // 5),
         "open_warnings": len(degraded)
         + sum(
             1

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -40,7 +41,7 @@ class MultiAgentConfig:
         self.allow_order_send = False
         self.allow_memory_rewrite_rules = False
 
-    def update(self, updates: dict[str, object]) -> MultiAgentConfig:
+    def update(self, updates: dict[str, Any]) -> MultiAgentConfig:
         locked = {
             "allow_bypass_risk",
             "allow_bypass_safety",
@@ -54,7 +55,7 @@ class MultiAgentConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                flags = dict(data["feature_flags"])
                 for fk, fv in value.items():
                     if isinstance(fv, bool) and fk not in {
                         "bypass_risk",
@@ -72,10 +73,10 @@ class MultiAgentConfig:
             max_events=int(data["max_events"]),
             max_sessions=int(data["max_sessions"]),
             max_memory=int(data["max_memory"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=dict(data["feature_flags"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

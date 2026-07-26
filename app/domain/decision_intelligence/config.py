@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -44,7 +45,7 @@ class DecisionIntelligenceConfig:
         object.__setattr__(self, "require_risk_engine", True)
         object.__setattr__(self, "require_safety_engine", True)
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

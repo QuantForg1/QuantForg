@@ -37,7 +37,7 @@ def _git_commit_hash() -> str | None:
     try:
         root = Path(__file__).resolve().parents[3]
         out = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607  # local git metadata only
             cwd=root,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -60,7 +60,7 @@ def build_overlay(
         min_trade_quality_score=int(quality),
         min_confluence_score=int(confluence),
         config_version=version
-        or f"ite-gates-q{quality}-c{confluence}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
+        or f"ite-gates-q{quality}-c{confluence}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",  # noqa: E501
     )
 
 
@@ -121,9 +121,7 @@ class ThresholdPromotionStore:
         with self._lock:
             if self._hydrated:
                 return
-            self.active_quality = int(
-                payload.get("active_quality", PRODUCTION_QUALITY)
-            )
+            self.active_quality = int(payload.get("active_quality", PRODUCTION_QUALITY))
             self.active_confluence = int(
                 payload.get("active_confluence", PRODUCTION_CONFLUENCE)
             )
@@ -187,7 +185,7 @@ def get_threshold_promotion_store() -> ThresholdPromotionStore:
                 payload = state.get("threshold_promotion")
                 if isinstance(payload, dict):
                     _STORE.hydrate(payload)
-            except Exception:
+            except Exception:  # noqa: S110  # best-effort optional path
                 pass
         return _STORE
 
@@ -213,7 +211,7 @@ def apply_overlay_to_runtime(overlay: ITEConfig) -> dict[str, Any]:
             applied["runtime_present"] = True
             runtime.decision_pipeline.config = overlay
             applied["pipeline"] = True
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     try:
         from app.application.services.strategy_diagnostics import (
@@ -221,9 +219,9 @@ def apply_overlay_to_runtime(overlay: ITEConfig) -> dict[str, Any]:
         )
 
         store = get_strategy_diagnostics_store()
-        store._config = overlay  # noqa: SLF001 — intentional research/ops overlay
+        store._config = overlay
         applied["diagnostics"] = True
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     # Ensure DEFAULT remains untouched
     assert DEFAULT_ITE_CONFIG.min_trade_quality_score == PRODUCTION_QUALITY
@@ -236,7 +234,7 @@ def _persist(store: ThresholdPromotionStore) -> None:
         from app.application.services.ops_state_persistence import save_ops_state
 
         save_ops_state({"threshold_promotion": store.to_persist()})
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
 
@@ -270,8 +268,8 @@ def status_payload() -> dict[str, Any]:
     # Experimental profile owns the overlay when active (never fight over gates).
     try:
         from app.application.services.experimental_threshold_profile import (
-            is_experimental_active,
             get_experimental_threshold_store,
+            is_experimental_active,
         )
 
         if is_experimental_active():
@@ -295,7 +293,7 @@ def status_payload() -> dict[str, Any]:
 
             if is_experimental_active():
                 experimental_badge = BADGE_LABEL
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
         return {
             "schema_version": "1.0.0",
@@ -339,7 +337,7 @@ def status_payload() -> dict[str, Any]:
                 "2. Operator explicitly approves promotion (confirmed=true)",
                 "3. Persist new configuration version",
                 "4. Hot-swap Quality=70 / Confluence=75 without restart",
-                "5. Record UTC timestamp, operator, previous/new thresholds, reason, evidence, commit hash",
+                "5. Record UTC timestamp, operator, previous/new thresholds, reason, evidence, commit hash",  # noqa: E501
             ],
         }
 
@@ -370,7 +368,7 @@ def promote_candidate(
             )
     except ValueError:
         raise
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     store = get_threshold_promotion_store()
@@ -385,7 +383,6 @@ def promote_candidate(
     with store._lock:
         prev_q = store.active_quality
         prev_c = store.active_confluence
-        prev_v = store.config_version
         # Always freeze rollback point at production 80/80
         store.rollback_quality = PRODUCTION_QUALITY
         store.rollback_confluence = PRODUCTION_CONFLUENCE
@@ -398,9 +395,9 @@ def promote_candidate(
         store.monitor_warnings = []
         # Seed validated baseline from evidence if present
         ev = _load_candidate_validation_summary()
-        cand_metrics = ((ev.get("candidate") or {}) if isinstance(ev, dict) else {}).get(
-            "metrics"
-        )
+        cand_metrics = (
+            (ev.get("candidate") or {}) if isinstance(ev, dict) else {}
+        ).get("metrics")
         if isinstance(cand_metrics, dict):
             store.validated_baseline = dict(cand_metrics)
         record = {
@@ -448,7 +445,7 @@ def promote_candidate(
             reason=reason_clean,
             now=now,
         )
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     return {
@@ -533,7 +530,7 @@ def rollback_to_production(
             reason=reason_clean,
             now=now,
         )
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
 
     return {
@@ -666,13 +663,13 @@ def _evaluate_degradation_locked(
     base = store.validated_baseline or {}
     issues: list[str] = []
 
-    def worse_lower_is_bad(live_v: float | None, base_v: float | None, name: str) -> None:
+    def worse_lower_is_bad(
+        live_v: float | None, base_v: float | None, name: str
+    ) -> None:
         if live_v is None or base_v is None or base_v == 0:
             return
         if live_v < base_v * (1.0 - _DEG_REL):
-            issues.append(
-                f"{name} degraded: live={live_v} vs baseline={base_v}"
-            )
+            issues.append(f"{name} degraded: live={live_v} vs baseline={base_v}")
 
     worse_lower_is_bad(
         _f(live.get("profit_factor")), _f(base.get("profit_factor")), "profit_factor"
@@ -680,9 +677,7 @@ def _evaluate_degradation_locked(
     worse_lower_is_bad(
         _f(live.get("expectancy")), _f(base.get("expectancy")), "expectancy"
     )
-    worse_lower_is_bad(
-        _f(live.get("win_rate")), _f(base.get("win_rate")), "win_rate"
-    )
+    worse_lower_is_bad(_f(live.get("win_rate")), _f(base.get("win_rate")), "win_rate")
     worse_lower_is_bad(
         _f(live.get("average_rr")), _f(base.get("average_rr")), "average_rr"
     )

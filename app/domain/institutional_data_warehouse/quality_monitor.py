@@ -1,4 +1,4 @@
-"""Data Quality Monitor — missing / duplicates / ordering / latency / integrity."""
+"""Data Quality Monitor - missing / duplicates / ordering / latency / integrity."""
 
 from __future__ import annotations
 
@@ -30,10 +30,18 @@ def run_data_quality_monitor(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     scanned = 0
     empty_domains: list[str] = []
 
-    required = ("uuid", "timestamp", "source", "correlation_id", "session", "trading_day", "environment")
+    required = (
+        "uuid",
+        "timestamp",
+        "source",
+        "correlation_id",
+        "session",
+        "trading_day",
+        "environment",
+    )
 
     for domain in DATA_DOMAINS:
-        rows = wh.list(domain, limit=20_000)  # type: ignore[arg-type]
+        rows = wh.list(domain, limit=20_000)
         if not rows:
             empty_domains.append(domain)
             continue
@@ -66,9 +74,11 @@ def run_data_quality_monitor(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
                     latency_samples.append(age)
 
     avg_latency = (
-        round(sum(latency_samples) / len(latency_samples), 2) if latency_samples else None
+        round(sum(latency_samples) / len(latency_samples), 2)
+        if latency_samples
+        else None
     )
-    # Integrity score 0–100
+    # Integrity score 0-100
     if scanned == 0:
         integrity = 0.0
     else:
@@ -82,7 +92,9 @@ def run_data_quality_monitor(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
         integrity = max(0.0, min(100.0, 100.0 - penalties / max(scanned, 1) * 10.0))
         # boost if keyed well
         completeness = 1.0 - (sum(missing_fields.values()) / (scanned * len(required)))
-        integrity = round(max(0.0, min(100.0, integrity * 0.5 + completeness * 50.0)), 2)
+        integrity = round(
+            max(0.0, min(100.0, integrity * 0.5 + completeness * 50.0)), 2
+        )
 
     return {
         "status": "available",

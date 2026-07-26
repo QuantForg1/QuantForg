@@ -1,4 +1,4 @@
-"""AI Scalping score v5 — institutional quality, balanced BUY/SELL, 1–10m hold."""
+"""AI Scalping score v5 - institutional quality, balanced BUY/SELL, 1-10m hold."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
     resolve_adaptive_thresholds,
 )
 from app.domain.institutional_trading.ai_scalping.config import (
-    AiScalpingConfig,
     DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
 )
 from app.domain.institutional_trading.ai_scalping.direction import (
     decide_scalping_direction,
@@ -68,7 +68,9 @@ class AiScalpingScore:
             "ai_confidence": self.confidence,
             "trade_quality": self.trade_quality,
             "confluence": self.confluence,
-            "expected_rr": str(self.expected_rr) if self.expected_rr is not None else None,
+            "expected_rr": (
+                str(self.expected_rr) if self.expected_rr is not None else None
+            ),
             "expected_hold_time": self.expected_hold_time,
             "market_regime": self.market_regime,
             "momentum": self.momentum,
@@ -101,7 +103,7 @@ def _hold_time(cfg: AiScalpingConfig, confidence: int, regime: str) -> str:
         "breakout",
     }:
         hi = cfg.max_hold_minutes_if_confident
-    return f"{lo}–{hi}m"
+    return f"{lo}-{hi}m"
 
 
 def score_scalping_setup(
@@ -133,8 +135,13 @@ def score_scalping_setup(
 
     liq = snapshot.liquidity
     sweeps = len(liq.sweeps) if liq else 0
-    liquidity_score = 88 if sweeps else max(
-        20, int((getattr(quality, "components", {}) or {}).get("liquidity", 40) or 40)
+    liquidity_score = (
+        88
+        if sweeps
+        else max(
+            20,
+            int((getattr(quality, "components", {}) or {}).get("liquidity", 40) or 40),
+        )
     )
     factors["liquidity_sweep"] = liquidity_score
     if sweeps:
@@ -258,7 +265,7 @@ def score_scalping_setup(
             reasons.append(f"REJECT: {r}")
     else:
         reasons.append(
-            f"TAKE {direction_dec.direction.value}: all institutional quality gates passed"
+            f"TAKE {direction_dec.direction.value}: all institutional quality gates passed"  # noqa: E501
         )
 
     hold = _hold_time(cfg, confidence, regime.regime)
@@ -285,7 +292,9 @@ def score_scalping_setup(
         structure_score=direction_dec.structure_score,
         entry=str(targets.entry) if targets.entry is not None else None,
         stop_loss=str(targets.stop_loss) if targets.stop_loss is not None else None,
-        take_profit=str(targets.take_profit) if targets.take_profit is not None else None,
+        take_profit=(
+            str(targets.take_profit) if targets.take_profit is not None else None
+        ),
         quality_checks=gates.checks,
         reject_reasons=gates.rejects,
     )

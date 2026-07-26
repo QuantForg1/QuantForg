@@ -41,7 +41,9 @@ def qcdm_dashboard(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/models")
 def qcdm_models(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.quantforg_canonical_data_model import qcdm_models as svc
+    from app.application.services.quantforg_canonical_data_model import (
+        qcdm_models as svc,
+    )
 
     payload = svc()
     payload.update(_flags())
@@ -50,7 +52,9 @@ def qcdm_models(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/models/{model}")
 def qcdm_model(model: str, _user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.quantforg_canonical_data_model import qcdm_model as svc
+    from app.application.services.quantforg_canonical_data_model import (
+        qcdm_model as svc,
+    )
 
     payload = svc(model)
     payload.update(_flags())

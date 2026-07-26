@@ -40,12 +40,8 @@ def test_policies_cannot_unlock() -> None:
 
 def test_missing_feeds_reported() -> None:
     out = RealMarketIntelligencePlatform().evaluate(RmipInput())
-    assert (
-        out["modules"]["economic_calendar"]["recommendation"] == MISSING
-    )
-    assert (
-        out["modules"]["volatility_observatory"]["recommendation"] == MISSING
-    )
+    assert out["modules"]["economic_calendar"]["recommendation"] == MISSING
+    assert out["modules"]["volatility_observatory"]["recommendation"] == MISSING
     assert out["never_order_send"] is True
     assert out["never_change_trading_rules"] is True
 
@@ -68,12 +64,11 @@ def test_never_guesses_actual() -> None:
     )
     events = out["modules"]["economic_calendar"]["details"]["events"]
     assert events[0]["actual"] is None
-    assert out["modules"]["economic_calendar"]["details"][
-        "never_guesses_missing_values"
-    ] is True
-    assert out["modules"]["economic_calendar"]["details"][
-        "market_risk_level"
-    ] == "HIGH"
+    assert (
+        out["modules"]["economic_calendar"]["details"]["never_guesses_missing_values"]
+        is True
+    )
+    assert out["modules"]["economic_calendar"]["details"]["market_risk_level"] == "HIGH"
 
 
 def test_full_context_cycle() -> None:

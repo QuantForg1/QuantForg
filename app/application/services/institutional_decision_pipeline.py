@@ -183,7 +183,8 @@ class InstitutionalDecisionPipeline:
                         symbol=str(snapshot.symbol),
                         direction=ai_score.direction,
                         confidence=ai_score.confidence,
-                        reason="; ".join(ai_score.reasons[-3:]) or "quality gates passed",
+                        reason="; ".join(ai_score.reasons[-3:])
+                        or "quality gates passed",
                         details=ai_score.to_dict(),
                     )
             except Exception:
@@ -224,7 +225,7 @@ class InstitutionalDecisionPipeline:
                     sd = abs(_D(str(entry_s)) - _D(str(raw_sd)))
                     if sd > 0:
                         stop_distance = sd
-            except Exception:
+            except Exception:  # noqa: S110  # best-effort optional path
                 pass
         entry = account.mid_price
         if entry is None or entry <= 0:

@@ -118,21 +118,15 @@ class IntegrationSprintV1:
             "note": "POST this body to the existing /evaluate endpoint",
         }
 
-    def storage_append(
-        self, namespace: str, record: dict[str, Any]
-    ) -> dict[str, Any]:
+    def storage_append(self, namespace: str, record: dict[str, Any]) -> dict[str, Any]:
         assert self.feeds is not None
         return self.feeds.store.append(namespace, record)
 
-    def storage_list(
-        self, namespace: str, *, limit: int = 50
-    ) -> dict[str, Any]:
+    def storage_list(self, namespace: str, *, limit: int = 50) -> dict[str, Any]:
         assert self.feeds is not None
         return self.feeds.store.list(namespace, limit=limit)
 
-    def ingest_warehouse(
-        self, bars: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    def ingest_warehouse(self, bars: list[dict[str, Any]]) -> dict[str, Any]:
         assert self.feeds is not None
         count = self.feeds.ingest_warehouse_bars(bars)
         return {
@@ -171,9 +165,7 @@ def build_feeds_from_runtime(
         from core.config.settings import get_settings
 
         settings = get_settings()
-        url = str(
-            getattr(settings, "economic_calendar_feed_url", "") or ""
-        )
+        url = str(getattr(settings, "economic_calendar_feed_url", "") or "")
         calendar = (
             ConfiguredHttpEconomicCalendar(url=url)
             if url.strip()

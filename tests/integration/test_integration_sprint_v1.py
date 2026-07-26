@@ -50,10 +50,7 @@ def test_integration_sprint_router_registered(app) -> None:
 
 def test_integration_domain_no_order_send() -> None:
     root = (
-        Path(__file__).resolve().parents[2]
-        / "app"
-        / "domain"
-        / "integration_sprint_v1"
+        Path(__file__).resolve().parents[2] / "app" / "domain" / "integration_sprint_v1"
     )
     offenders = [
         p.name

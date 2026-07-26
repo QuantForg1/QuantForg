@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -55,7 +56,7 @@ class IntegrationSprintConfig:
         self.invent_market_data = False
         self.invent_trades = False
 
-    def update(self, updates: dict[str, object]) -> IntegrationSprintConfig:
+    def update(self, updates: dict[str, Any]) -> IntegrationSprintConfig:
         locked = {
             "allow_order_send",
             "allow_modify_auto_trading",
@@ -73,7 +74,7 @@ class IntegrationSprintConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                flags = dict(data["feature_flags"])
                 for fk, fv in value.items():
                     if isinstance(fv, bool) and str(fk) in FEED_NAMES:
                         flags[str(fk)] = fv
@@ -87,10 +88,10 @@ class IntegrationSprintConfig:
             max_warehouse_bars=int(data["max_warehouse_bars"]),
             max_durable_per_namespace=int(data["max_durable_per_namespace"]),
             stale_after_seconds=float(data["stale_after_seconds"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=dict(data["feature_flags"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

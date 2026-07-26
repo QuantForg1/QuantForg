@@ -61,7 +61,7 @@ def compare_strategies(
     out: dict[str, Any] = {}
     for name in ("scalping", "intraday", "swing"):
         rows = [r for r in base if (r.strategy or "swing").lower() == name]
-        # If strategy not tagged, attribute to swing bucket for untagged traded rows once
+        # If strategy not tagged, attribute to swing bucket for untagged traded rows once  # noqa: E501
         if name == "swing":
             untagged = [r for r in base if not r.strategy]
             rows = rows + untagged

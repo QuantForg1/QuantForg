@@ -94,14 +94,9 @@ def log_risk_lock_overridden(
 ) -> None:
     """Emit the required operator banner for every overridden trade path."""
     current = (
-        str(current_daily_loss_pct)
-        if current_daily_loss_pct is not None
-        else "unknown"
+        str(current_daily_loss_pct) if current_daily_loss_pct is not None else "unknown"
     )
-    if current.endswith("%"):
-        current_txt = current
-    else:
-        current_txt = f"{current}%"
+    current_txt = current if current.endswith("%") else f"{current}%"
     lines = [
         "RISK LOCK OVERRIDDEN",
         f"Current Daily Loss: {current_txt}",
@@ -120,9 +115,7 @@ def risk_lock_override_status(settings: Any | None = None) -> dict[str, Any]:
         "banner": enabled,
         "test_mode": enabled,
         "message": (
-            "Daily loss lock overridden."
-            if enabled
-            else "Risk lock override inactive"
+            "Daily loss lock overridden." if enabled else "Risk lock override inactive"
         ),
         "reason": OVERRIDE_REASON if enabled else None,
         "overrides": ["daily_loss"] if enabled else [],
@@ -146,5 +139,5 @@ def log_risk_lock_override_startup(settings: Any | None = None) -> None:
     )
     if enabled:
         logger.warning(
-            "TEST MODE — Daily loss lock overridden (capital protection otherwise intact)"
+            "TEST MODE — Daily loss lock overridden (capital protection otherwise intact)"  # noqa: E501
         )

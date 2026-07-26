@@ -18,9 +18,7 @@ from app.domain.institutional_validation_program.orchestrator import (
 
 class InstitutionalValidationProgramService:
     def __init__(self, config: IvpConfig | None = None) -> None:
-        self._system = InstitutionalValidationProgram(
-            config or DEFAULT_IVP_CONFIG
-        )
+        self._system = InstitutionalValidationProgram(config or DEFAULT_IVP_CONFIG)
 
     def status(self) -> dict[str, object]:
         return self._system.status()

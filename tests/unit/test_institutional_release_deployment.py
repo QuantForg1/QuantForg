@@ -77,9 +77,10 @@ class TestIrdpGovernance:
                 break
         assert rel["stage"] == ReleaseStage.HUMAN_APPROVAL.value
         blocked = advance_stage(rel, to_stage=ReleaseStage.PRODUCTION.value)
-        assert blocked.get("gate", {}).get("blocked") is True or blocked[
-            "status"
-        ] == ReleaseStatus.AWAITING_APPROVAL.value
+        assert (
+            blocked.get("gate", {}).get("blocked") is True
+            or blocked["status"] == ReleaseStatus.AWAITING_APPROVAL.value
+        )
 
         approved = apply_human_approval(
             rel, approver="alice", decision="approve", comment="ok"
@@ -119,9 +120,7 @@ class TestIrdpPlatform:
             row = irdp.advance(row["release_id"]) or row
             if row.get("status") == ReleaseStatus.AWAITING_APPROVAL.value:
                 break
-        approved = irdp.approve(
-            row["release_id"], approver="bob", decision="approve"
-        )
+        approved = irdp.approve(row["release_id"], approver="bob", decision="approve")
         assert approved and approved["status"] == ReleaseStatus.APPROVED.value
         approvals = irdp.store.list_approvals(limit=5)
         assert approvals

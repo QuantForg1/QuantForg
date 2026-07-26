@@ -30,18 +30,18 @@ class MultiAgentAIService:
     ) -> dict[str, Any]:
         return self._system.list_events(limit=limit, session_id=session_id)
 
-    def memory(
-        self, *, limit: int = 50, kind: str | None = None
-    ) -> dict[str, Any]:
+    def memory(self, *, limit: int = 50, kind: str | None = None) -> dict[str, Any]:
         return self._system.list_memory(limit=limit, kind=kind)
 
     def store_memory(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._system.store_memory(
             kind=str(payload.get("kind") or "observation"),
             agent=str(payload.get("agent") or "operator"),
-            content=payload.get("content")
-            if isinstance(payload.get("content"), dict)
-            else {},
+            content=(
+                payload.get("content")
+                if isinstance(payload.get("content"), dict)
+                else {}
+            ),
             session_id=(
                 str(payload["session_id"]) if payload.get("session_id") else None
             ),

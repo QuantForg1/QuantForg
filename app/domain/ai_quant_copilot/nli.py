@@ -41,7 +41,7 @@ def answer_question(
         return {
             "question": question,
             **package_evidence(
-                answer="Ask an operational question — e.g. why no trade, quality fail, PF change.",
+                answer="Ask an operational question — e.g. why no trade, quality fail, PF change.",  # noqa: E501
                 evidence=[],
                 source_subsystem="aqc",
                 confidence=0.0,
@@ -81,15 +81,16 @@ def answer_question(
         quality_fails = []
         for inv in investigations:
             for step in inv.get("timeline") or []:
-                if "quality" in str(step.get("stage") or "").lower() and str(
-                    step.get("status") or ""
-                ).upper() == "FAIL":
+                if (
+                    "quality" in str(step.get("stage") or "").lower()
+                    and str(step.get("status") or "").upper() == "FAIL"
+                ):
                     quality_fails.append({"investigation": inv.get("id"), **step})
         return {
             "question": question,
             **package_evidence(
                 answer=(
-                    f"Found {len(quality_fails)} Quality FAIL stages in investigation timelines."
+                    f"Found {len(quality_fails)} Quality FAIL stages in investigation timelines."  # noqa: E501
                     if quality_fails
                     else "No Quality FAIL stages in current investigation sample."
                 ),
@@ -126,7 +127,7 @@ def answer_question(
         return {
             "question": question,
             **package_evidence(
-                answer="Evidence packages from latest investigations and AQS recommendations.",
+                answer="Evidence packages from latest investigations and AQS recommendations.",  # noqa: E501
                 evidence={
                     "investigations": investigations[:3],
                     "aqs_recommendations": aqs_recs[:3],
@@ -166,9 +167,9 @@ def answer_question(
             "question": question,
             **package_evidence(
                 answer=(
-                    f"Current regime={current.get('current_regime') or regime.get('current_regime')}. "
-                    "Safest regime is the one with lowest drawdown / highest PF in regime research — "
-                    "confirm via AQS regime expectations; AQC does not change thresholds."
+                    f"Current regime={current.get('current_regime') or regime.get('current_regime')}. "  # noqa: E501
+                    "Safest regime is the one with lowest drawdown / highest PF in regime research — "  # noqa: E501
+                    "confirm via AQS regime expectations; AQC does not change thresholds."  # noqa: E501
                 ),
                 evidence=[current or regime, hist[:5]],
                 source_subsystem="market_regime_intelligence",
@@ -185,14 +186,14 @@ def answer_question(
             best = max(
                 aqs_recs,
                 key=lambda r: float(
-                    (_as_dict(r.get("scores")).get("research_confidence_score") or 0)
+                    _as_dict(r.get("scores")).get("research_confidence_score") or 0
                 ),
             )
         return {
             "question": question,
             **package_evidence(
                 answer=(
-                    f"Highest-confidence research item: {best.get('name') or best.get('title')}"
+                    f"Highest-confidence research item: {best.get('name') or best.get('title')}"  # noqa: E501
                     if best
                     else "No experiments/recommendations available in snapshot."
                 ),
@@ -210,7 +211,7 @@ def answer_question(
         return {
             "question": question,
             **package_evidence(
-                answer=f"ICC reports {len(alerts)} alerts/open items in current snapshot.",
+                answer=f"ICC reports {len(alerts)} alerts/open items in current snapshot.",  # noqa: E501
                 evidence=alerts[:10],
                 source_subsystem="institutional_control_center",
                 confidence=0.75 if alerts else 0.45,
@@ -223,7 +224,7 @@ def answer_question(
             "question": question,
             **package_evidence(
                 answer=(
-                    f"Daily summary — PF={_as_dict(daily.get('trading')).get('profit_factor')}, "
+                    f"Daily summary — PF={_as_dict(daily.get('trading')).get('profit_factor')}, "  # noqa: E501
                     f"trades={_as_dict(daily.get('trading')).get('trade_count')}, "
                     f"regime={daily.get('regime')}."
                 ),
@@ -241,14 +242,16 @@ def answer_question(
         return {
             "question": question,
             **package_evidence(
-                answer=f"Max drawdown in portfolio snapshot: {risk.get('max_drawdown_pct')}%.",
+                answer=f"Max drawdown in portfolio snapshot: {risk.get('max_drawdown_pct')}%.",  # noqa: E501
                 evidence=[risk, comparison],
                 source_subsystem="portfolio_analytics",
                 confidence=0.7,
             ),
         }
 
-    if any(k in q for k in ("knowledge graph", "qkg", "lineage", "root cause", "graph")):
+    if any(
+        k in q for k in ("knowledge graph", "qkg", "lineage", "root cause", "graph")
+    ):
         try:
             from app.domain.quant_knowledge_graph import qkg_query_for_ai
 
@@ -262,7 +265,7 @@ def answer_question(
                     confidence=0.7,
                 ),
             }
-        except Exception:  # noqa: BLE001
+        except Exception:
             return {
                 "question": question,
                 **package_evidence(
@@ -279,7 +282,7 @@ def answer_question(
         **package_evidence(
             answer=(
                 f"AQC correlated {ctx.get('source_count', 0)} subsystems. "
-                "Try: why no trade, quality fail, PF decrease, safest regime, show evidence."
+                "Try: why no trade, quality fail, PF decrease, safest regime, show evidence."  # noqa: E501
             ),
             evidence={
                 "availability": ctx.get("availability"),

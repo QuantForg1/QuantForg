@@ -48,7 +48,7 @@ def run_market_agent(
     snap = inp.market_snapshot or {}
     spread = inp.spread
     if spread is None and snap.get("spread") is not None:
-        spread = _conf(snap.get("spread"), "0")  # type: ignore[assignment]
+        spread = _conf(snap.get("spread"), "0")
     regime = inp.regime or (str(snap["regime"]) if snap.get("regime") else None)
 
     if spread is None and regime is None and not snap:
@@ -378,7 +378,7 @@ def run_execution_agent(
     mode = (inp.execution_mode or str(snap.get("mode") or "")).upper()
     spread = inp.spread
     if spread is None and snap.get("spread") is not None:
-        spread = _conf(snap.get("spread"))  # type: ignore[assignment]
+        spread = _conf(snap.get("spread"))
 
     if not mode and spread is None and not snap:
         out = AgentOutput(
@@ -409,9 +409,7 @@ def run_execution_agent(
         reasons.append("Execution Agent never calls order_send")
         reasons.append("Existing execution pipeline unchanged")
         lead = reasons[0] if reasons else ""
-        if not any(
-            token in lead.lower() for token in ("mode", "spread", "reject")
-        ):
+        if not any(token in lead.lower() for token in ("mode", "spread", "reject")):
             reasons.insert(0, "Execution readiness advisory complete")
         out = AgentOutput(
             agent="execution",

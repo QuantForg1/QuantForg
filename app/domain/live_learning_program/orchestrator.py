@@ -99,9 +99,7 @@ class LiveLearningProgram:
                 inp, self.config
             )
         if flags.get("confidence_tracking", True):
-            modules["confidence_tracking"] = confidence_tracking(
-                inp, self.config
-            )
+            modules["confidence_tracking"] = confidence_tracking(inp, self.config)
         if flags.get("weekly_review", True):
             modules["weekly_review"] = weekly_review(inp, dict(modules))
         if flags.get("monthly_research_review", True):
@@ -126,9 +124,7 @@ class LiveLearningProgram:
                 (obs.details or {}).get("observation_count") if obs else 0
             ),
             "evidence_strength_pct": (
-                (dash.details or {}).get("evidence_strength_pct")
-                if dash
-                else None
+                (dash.details or {}).get("evidence_strength_pct") if dash else None
             ),
             "coverage_pct": (
                 (dash.details or {}).get("coverage_pct") if dash else None

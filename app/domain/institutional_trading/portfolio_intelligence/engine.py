@@ -7,6 +7,9 @@ from typing import Any
 from app.domain.institutional_trading.portfolio_intelligence.allocation import (
     allocate_capital,
 )
+from app.domain.institutional_trading.portfolio_intelligence.analytics import (
+    get_long_term_analytics,
+)
 from app.domain.institutional_trading.portfolio_intelligence.capital_protection import (
     evaluate_capital_protection,
 )
@@ -37,9 +40,6 @@ from app.domain.institutional_trading.portfolio_intelligence.state import (
 )
 from app.domain.institutional_trading.portfolio_intelligence.stress import (
     run_stress_tests,
-)
-from app.domain.institutional_trading.portfolio_intelligence.analytics import (
-    get_long_term_analytics,
 )
 from core.logging import get_logger
 
@@ -82,9 +82,7 @@ def evaluate_portfolio(
     get_long_term_analytics().record_equity(st.equity)
 
     budget = get_dynamic_risk_budget().budget_for_state(st)
-    protection = evaluate_capital_protection(
-        st, candidate_symbol=candidate_symbol
-    )
+    protection = evaluate_capital_protection(st, candidate_symbol=candidate_symbol)
     allocation = allocate_capital(
         opportunities,
         st,

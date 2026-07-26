@@ -6,6 +6,9 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.ai_scalping.session_intelligence import (
+    assess_session,
+)
 from app.domain.institutional_trading.alpha_engine import (
     DEFAULT_ALPHA_CONFIG,
     DEFAULT_ALPHA_UNIVERSE,
@@ -15,9 +18,6 @@ from app.domain.institutional_trading.alpha_engine import (
     get_alpha_analytics_store,
     get_smart_recovery,
     scan_universe,
-)
-from app.domain.institutional_trading.ai_scalping.session_intelligence import (
-    assess_session,
 )
 from core.logging import get_logger
 
@@ -30,7 +30,9 @@ def get_alpha_config() -> InstitutionalAlphaConfig:
     return _ACTIVE_CONFIG
 
 
-def set_alpha_enabled(enabled: bool, *, universe: tuple[str, ...] | None = None) -> InstitutionalAlphaConfig:
+def set_alpha_enabled(
+    enabled: bool, *, universe: tuple[str, ...] | None = None
+) -> InstitutionalAlphaConfig:
     global _ACTIVE_CONFIG
     _ACTIVE_CONFIG = replace(
         _ACTIVE_CONFIG,
@@ -104,7 +106,9 @@ def _facts_from_runtime_symbol(
                         else:
                             momentum = 45
                             trend = 45
-                    volatility = 65 if atr and mid and (atr / mid) > Decimal("0.001") else 50
+                    volatility = (
+                        65 if atr and mid and (atr / mid) > Decimal("0.001") else 50
+                    )
                     reasons.append(f"{symbol} M5 structure sampled")
         except Exception as exc:
             reasons.append(f"{symbol} bars unavailable: {exc}")
@@ -189,7 +193,9 @@ def build_alpha_dashboard(
         exposure = (Decimal(len(open_syms)) * Decimal("1.0")).quantize(Decimal("0.01"))
     daily_risk = Decimal("0")
     if equity and equity > 0 and daily_pnl is not None and daily_pnl < 0:
-        daily_risk = (abs(daily_pnl) / equity * Decimal("100")).quantize(Decimal("0.01"))
+        daily_risk = (abs(daily_pnl) / equity * Decimal("100")).quantize(
+            Decimal("0.01")
+        )
 
     scan = run_alpha_scan(
         mt5_adapter=mt5_adapter,

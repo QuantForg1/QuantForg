@@ -84,13 +84,9 @@ class InstitutionalValidationProgram:
         modules: dict[str, ModuleResult] = {}
 
         if flags.get("statistical_validation", True):
-            modules["statistical_validation"] = statistical_validation(
-                inp, self.config
-            )
+            modules["statistical_validation"] = statistical_validation(inp, self.config)
         if flags.get("confidence_analysis", True):
-            modules["confidence_analysis"] = confidence_analysis(
-                inp, self.config
-            )
+            modules["confidence_analysis"] = confidence_analysis(inp, self.config)
         if flags.get("regime_validation", True):
             modules["regime_validation"] = regime_validation(inp, self.config)
         if flags.get("configuration_comparison", True):
@@ -98,9 +94,7 @@ class InstitutionalValidationProgram:
                 inp, self.config
             )
         if flags.get("stability_analysis", True):
-            modules["stability_analysis"] = stability_analysis(
-                inp, self.config
-            )
+            modules["stability_analysis"] = stability_analysis(inp, self.config)
         if flags.get("risk_validation", True):
             modules["risk_validation"] = risk_validation(inp, self.config)
         if flags.get("replay_vs_paper", True):
@@ -116,13 +110,9 @@ class InstitutionalValidationProgram:
         hdp = modules.get("human_decision_package")
         snapshot = {
             "evidence_strength_pct": (
-                (dash.details or {}).get("evidence_strength_pct")
-                if dash
-                else None
+                (dash.details or {}).get("evidence_strength_pct") if dash else None
             ),
-            "sample_size": (
-                (dash.details or {}).get("sample_size") if dash else None
-            ),
+            "sample_size": ((dash.details or {}).get("sample_size") if dash else None),
             "deployment_recommendation": (
                 (hdp.details or {}).get("deployment_recommendation")
                 if hdp
@@ -152,9 +142,7 @@ class InstitutionalValidationProgram:
             "evidence_summary": {
                 "strength_pct": snapshot["evidence_strength_pct"],
                 "sample_size": snapshot["sample_size"],
-                "deployment_recommendation": snapshot[
-                    "deployment_recommendation"
-                ],
+                "deployment_recommendation": snapshot["deployment_recommendation"],
                 "strategy_id": inp.strategy_id,
                 "configuration_id": inp.configuration_id,
             },
@@ -189,9 +177,7 @@ def input_from_dict(data: dict[str, Any]) -> IvpInput:
             else None
         ),
         risk_facts=(
-            data.get("risk_facts")
-            if isinstance(data.get("risk_facts"), dict)
-            else None
+            data.get("risk_facts") if isinstance(data.get("risk_facts"), dict) else None
         ),
         replay_results=(
             data.get("replay_results")
@@ -203,13 +189,9 @@ def input_from_dict(data: dict[str, Any]) -> IvpInput:
             if isinstance(data.get("paper_results"), dict)
             else None
         ),
-        strategy_id=(
-            str(data["strategy_id"]) if data.get("strategy_id") else None
-        ),
+        strategy_id=(str(data["strategy_id"]) if data.get("strategy_id") else None),
         configuration_id=(
-            str(data["configuration_id"])
-            if data.get("configuration_id")
-            else None
+            str(data["configuration_id"]) if data.get("configuration_id") else None
         ),
         history_event=(
             data.get("history_event")

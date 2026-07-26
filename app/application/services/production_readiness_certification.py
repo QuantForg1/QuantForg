@@ -18,9 +18,7 @@ from app.domain.production_readiness_certification.orchestrator import (
 
 class ProductionReadinessCertificationService:
     def __init__(self, config: PrcConfig | None = None) -> None:
-        self._system = ProductionReadinessCertification(
-            config or DEFAULT_PRC_CONFIG
-        )
+        self._system = ProductionReadinessCertification(config or DEFAULT_PRC_CONFIG)
 
     def status(self) -> dict[str, object]:
         return self._system.status()

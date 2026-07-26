@@ -16,13 +16,9 @@ class DurableResearchStore:
     def __init__(self, *, max_per_namespace: int = 2_000) -> None:
         self._max = max(10, max_per_namespace)
         self._lock = Lock()
-        self._rows: dict[str, list[dict[str, Any]]] = {
-            ns: [] for ns in NAMESPACES
-        }
+        self._rows: dict[str, list[dict[str, Any]]] = {ns: [] for ns in NAMESPACES}
 
-    def append(
-        self, namespace: str, record: dict[str, Any]
-    ) -> dict[str, Any]:
+    def append(self, namespace: str, record: dict[str, Any]) -> dict[str, Any]:
         ns = str(namespace).strip().lower()
         if ns not in NAMESPACES:
             return {
@@ -48,9 +44,7 @@ class DurableResearchStore:
             count = len(self._rows[ns])
         return {"status": "available", "entry": entry, "count": count}
 
-    def list(
-        self, namespace: str, *, limit: int = 50
-    ) -> dict[str, Any]:
+    def list(self, namespace: str, *, limit: int = 50) -> dict[str, Any]:
         ns = str(namespace).strip().lower()
         if ns not in NAMESPACES:
             return {

@@ -35,7 +35,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["triggers_automation"] is False
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cvf = ContinuousValidationFramework(store=CvfStore(path=tmp_path / "cvf.json"))
     monkeypatch.setattr("app.domain.continuous_validation_framework._CVF", cvf)
     monkeypatch.setattr(svc, "get_cvf", lambda: cvf)

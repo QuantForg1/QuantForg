@@ -39,8 +39,8 @@ from app.domain.institutional_trading.ai_validation.weight_optimizer import (
 )
 
 __all__ = [
-    "AiValidationConfig",
     "DEFAULT_AI_VALIDATION_CONFIG",
+    "AiValidationConfig",
     "compare_primary_shadow",
     "compute_entry_slippage",
     "estimate_buy_hold_return",

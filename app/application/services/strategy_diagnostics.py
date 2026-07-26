@@ -156,7 +156,14 @@ def extract_cycle_diagnostics(
 
     session = "—"
     session_allowed: bool | None = None
-    trend = {"h4": "—", "h1": "—", "m15": "—", "m5": "—", "aligned": None, "score": None}
+    trend = {
+        "h4": "—",
+        "h1": "—",
+        "m15": "—",
+        "m5": "—",
+        "aligned": None,
+        "score": None,
+    }
     quality_total: int | None = None
     confluence_total: int | None = None
     factors_raw: dict[str, int] = {}
@@ -214,11 +221,7 @@ def extract_cycle_diagnostics(
         "news_filter": int(
             factors_raw.get(
                 "news",
-                (
-                    100
-                    if snapshot is not None and not snapshot.news.blocked
-                    else 0
-                ),
+                (100 if snapshot is not None and not snapshot.news.blocked else 0),
             )
         ),
     }
@@ -259,9 +262,7 @@ def extract_cycle_diagnostics(
     secondary = ranked[1] if len(ranked) > 1 else None
     tertiary = ranked[2] if len(ranked) > 2 else None
 
-    q_diff = (
-        (quality_total - required_quality) if quality_total is not None else None
-    )
+    q_diff = (quality_total - required_quality) if quality_total is not None else None
     c_diff = (
         (confluence_total - required_confluence)
         if confluence_total is not None
@@ -285,9 +286,7 @@ def extract_cycle_diagnostics(
             "required": required_quality,
             "difference": q_diff,
             "passed": (
-                quality_total >= required_quality
-                if quality_total is not None
-                else None
+                quality_total >= required_quality if quality_total is not None else None
             ),
         },
         "confluence": {
@@ -401,7 +400,7 @@ def generate_smart_insights(
     stats: dict[str, Any],
     latest: dict[str, Any] | None,
 ) -> list[str]:
-    """Advisory recommendations — never suggest lowering thresholds or forcing trades."""
+    """Advisory recommendations — never suggest lowering thresholds or forcing trades."""  # noqa: E501
     insights: list[str] = []
     top = list(stats.get("top_rejection_reasons") or [])
     if not stats.get("cycles_in_window"):
@@ -437,9 +436,7 @@ def generate_smart_insights(
     avg_q = stats.get("average_quality")
     avg_c = stats.get("average_confluence")
     req_q = (
-        latest.get("quality", {}).get("required")
-        if isinstance(latest, dict)
-        else None
+        latest.get("quality", {}).get("required") if isinstance(latest, dict) else None
     ) or DEFAULT_ITE_CONFIG.min_trade_quality_score
     req_c = (
         latest.get("confluence", {}).get("required")
@@ -464,7 +461,8 @@ def generate_smart_insights(
         labels = list(latest["rejection"].get("all_labels") or [])
         if labels:
             insights.append(
-                "Latest cycle rejected because: " + " · ".join(f"❌ {x}" for x in labels[:3])
+                "Latest cycle rejected because: "
+                + " · ".join(f"❌ {x}" for x in labels[:3])
             )
 
     if rate is not None:
@@ -500,7 +498,7 @@ class StrategyDiagnosticsStore:
             from app.application.services.threshold_promotion import observe_cycle
 
             observe_cycle(cycle)
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
         # Experimental 75/75 monitor (100-eval report; never auto-promote).
         try:
@@ -509,7 +507,7 @@ class StrategyDiagnosticsStore:
             )
 
             observe_experimental_cycle(cycle)
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
 
     def record_from_artefacts(self, **kwargs: Any) -> dict[str, Any]:

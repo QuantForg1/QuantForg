@@ -113,9 +113,11 @@ def apply_trading_mode_to_runtime(
         "trading_mode": mode_l,
         "ite": ite.to_dict(),
         "pme": pme.to_dict(),
-        "ai_scalping": (scalp or DEFAULT_AI_SCALPING_CONFIG).to_dict()
-        if mode_l in {"scalping", "alpha"}
-        else None,
+        "ai_scalping": (
+            (scalp or DEFAULT_AI_SCALPING_CONFIG).to_dict()
+            if mode_l in {"scalping", "alpha"}
+            else None
+        ),
         "alpha_enabled": mode_l == "alpha",
     }
 
@@ -141,8 +143,10 @@ def current_mode_snapshot(runtime: Any) -> dict[str, Any]:
         "trading_mode": getattr(ite, "trading_mode", "swing"),
         "ite": ite.to_dict() if hasattr(ite, "to_dict") else {},
         "ai_score": ai_score,
-        "ai_scalping_config": DEFAULT_AI_SCALPING_CONFIG.to_dict()
-        if getattr(ite, "is_scalping", lambda: False)()
-        else None,
+        "ai_scalping_config": (
+            DEFAULT_AI_SCALPING_CONFIG.to_dict()
+            if getattr(ite, "is_scalping", lambda: False)()
+            else None
+        ),
         "learning": learning,
     }

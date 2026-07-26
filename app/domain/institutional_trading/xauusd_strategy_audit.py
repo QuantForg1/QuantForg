@@ -431,11 +431,11 @@ def _bucket_trades(
             "losses": losses,
             "win_rate": round(wins / n, 4) if n else None,
             "net_pnl": str(pnl_sum),
-            "avg_rr": str(
-                (sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01"))
-            )
-            if rrs
-            else None,
+            "avg_rr": (
+                str((sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01")))
+                if rrs
+                else None
+            ),
             "mixed_with_other_buckets": False,
         }
     return out
@@ -500,21 +500,21 @@ def audit_exits(trades: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "status": "available",
         "sample_size": len(trades),
-        "average_winner": str(
-            (sum(winners) / Decimal(len(winners))).quantize(Decimal("0.01"))
-        )
-        if winners
-        else None,
-        "average_loser": str(
-            (sum(losers) / Decimal(len(losers))).quantize(Decimal("0.01"))
-        )
-        if losers
-        else None,
-        "rr_achieved_avg": str(
-            (sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01"))
-        )
-        if rrs
-        else None,
+        "average_winner": (
+            str((sum(winners) / Decimal(len(winners))).quantize(Decimal("0.01")))
+            if winners
+            else None
+        ),
+        "average_loser": (
+            str((sum(losers) / Decimal(len(losers))).quantize(Decimal("0.01")))
+            if losers
+            else None
+        ),
+        "rr_achieved_avg": (
+            str((sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01")))
+            if rrs
+            else None
+        ),
         "early_exits": early_ex,
         "late_exits": late_ex,
         "stop_out_count": stopouts,
@@ -534,18 +534,16 @@ def audit_no_trade(decisions: list[dict[str, Any]] | None) -> dict[str, Any]:
     no_trade = [
         d
         for d in decisions
-        if str(d.get("decision") or d.get("action") or "")
-        .upper()
-        .replace(" ", "_")
+        if str(d.get("decision") or d.get("action") or "").upper().replace(" ", "_")
         in {"NO_TRADE", "REJECT", "WATCH", "BLOCKED"}
     ]
     return {
         "status": "available",
         "total_decisions": len(decisions),
         "no_trade_count": len(no_trade),
-        "no_trade_rate": round(len(no_trade) / len(decisions), 4)
-        if decisions
-        else None,
+        "no_trade_rate": (
+            round(len(no_trade) / len(decisions), 4) if decisions else None
+        ),
         "sample_reasons": [
             str(d.get("reason") or d.get("rejected") or d.get("why") or "")
             for d in no_trade[:15]
@@ -588,9 +586,7 @@ def build_recommendations(
         n = int((regimes.get(name) or {}).get("trades") or 0)
         need = _MIN_NEWS_SAMPLES if name == "news" else _MIN_REGIME_SAMPLES
         if n < need:
-            recs.append(
-                f"Need more {label} samples (have {n}, want >={need})"
-            )
+            recs.append(f"Need more {label} samples (have {n}, want >={need})")
 
     if trade_count < 50:
         recs.append(

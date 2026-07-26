@@ -46,13 +46,11 @@ def is_auth_failure(error: str, http_status: int | None = None) -> bool:
     return (
         "401" in blob
         or "unauthorized" in blob
-        or "authentication" in blob and "fail" in blob
+        or ("authentication" in blob and "fail" in blob)
     )
 
 
-def classify_witness_fault(
-    error: str, http_status: int | None = None
-) -> str:
+def classify_witness_fault(error: str, http_status: int | None = None) -> str:
     """Return auth | network | other — never labels trading execution failure."""
     if is_auth_failure(error, http_status):
         return "auth"
@@ -97,7 +95,7 @@ def empty_health() -> dict[str, Any]:
             "status": "UNKNOWN",
         },
         "trading_execution_health": {
-            "note": "Derived only from successful witness polls of /ite/ops/auto-trading",
+            "note": "Derived only from successful witness polls of /ite/ops/auto-trading",  # noqa: E501
             "last_cycle_outcome": None,
             "last_session": None,
             "mt5_ticket": None,
@@ -141,7 +139,9 @@ def rewrite_auth_incidents(rows: list[dict[str, Any]]) -> None:
             fh.write(json.dumps(row, default=str) + "\n")
 
 
-def mark_open_incidents_recovered(*, recovered_at: str | None = None) -> list[dict[str, Any]]:
+def mark_open_incidents_recovered(
+    *, recovered_at: str | None = None
+) -> list[dict[str, Any]]:
     moment = recovered_at or datetime.now(UTC).isoformat()
     rows = load_auth_incidents(limit=10_000)
     changed = False
@@ -195,7 +195,9 @@ def build_health_snapshot(
 
 def write_health(snapshot: dict[str, Any]) -> Path:
     REPORTS.mkdir(parents=True, exist_ok=True)
-    HEALTH_PATH.write_text(json.dumps(snapshot, indent=2, default=str), encoding="utf-8")
+    HEALTH_PATH.write_text(
+        json.dumps(snapshot, indent=2, default=str), encoding="utf-8"
+    )
     return HEALTH_PATH
 
 
@@ -217,9 +219,7 @@ def read_health() -> dict[str, Any]:
                 }
             except (OSError, json.JSONDecodeError):
                 pass
-        base["auth_incidents_recent"] = list(
-            reversed(load_auth_incidents(limit=10))
-        )
+        base["auth_incidents_recent"] = list(reversed(load_auth_incidents(limit=10)))
         return base
     try:
         return json.loads(HEALTH_PATH.read_text(encoding="utf-8"))

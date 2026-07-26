@@ -103,8 +103,7 @@ class OpportunityHistoryStore:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             with self._lock:
                 days = {
-                    d: [r.to_dict() for r in rows]
-                    for d, rows in self._by_day.items()
+                    d: [r.to_dict() for r in rows] for d, rows in self._by_day.items()
                 }
                 # prune
                 keys = sorted(days.keys())
@@ -133,7 +132,9 @@ class OpportunityHistoryStore:
                     symbol=str(opp.get("symbol") or ""),
                     direction=str(opp.get("direction") or ""),
                     opportunity_score=int(opp.get("opportunity_score") or 0),
-                    confidence=int(opp.get("ai_confidence") or opp.get("confidence") or 0),
+                    confidence=int(
+                        opp.get("ai_confidence") or opp.get("confidence") or 0
+                    ),
                     traded=bool(opp.get("traded", False)),
                     result=opp.get("result"),
                     skip_reason=opp.get("skip_reason"),

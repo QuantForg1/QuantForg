@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 from app.domain.trading.xauusd_specs import MAX_SPREAD, coerce_max_spread
@@ -60,7 +61,7 @@ class RobotV1Config:
         object.__setattr__(self, "allow_grid", False)
         object.__setattr__(self, "allow_average_losers", False)
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

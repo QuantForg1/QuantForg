@@ -72,8 +72,16 @@ def compute_experiment_statistics(
     n = max(0, int(sample_size))
     b = baseline_metric if baseline_metric is not None else 0.0
     v = variant_metric if variant_metric is not None else b
-    sb = baseline_sd if baseline_sd is not None and baseline_sd > 0 else max(abs(b) * 0.15, 1.0)
-    sv = variant_sd if variant_sd is not None and variant_sd > 0 else max(abs(v) * 0.15, 1.0)
+    sb = (
+        baseline_sd
+        if baseline_sd is not None and baseline_sd > 0
+        else max(abs(b) * 0.15, 1.0)
+    )
+    sv = (
+        variant_sd
+        if variant_sd is not None and variant_sd > 0
+        else max(abs(v) * 0.15, 1.0)
+    )
 
     # Welch-ish t approximation for effect / p-value proxy
     se = math.sqrt((sb * sb + sv * sv) / max(n, 1))
@@ -153,7 +161,9 @@ def build_variants(
         {
             "label": VARIANT_LABELS[0],
             "role": "control",
-            "source_id": baseline.get("experiment_id") or baseline.get("id") or "baseline",
+            "source_id": baseline.get("experiment_id")
+            or baseline.get("id")
+            or "baseline",
             "name": baseline.get("name") or baseline.get("title") or "Baseline",
             "metric": _metric_from_row(baseline),
             "payload": {
@@ -182,7 +192,9 @@ def build_variants(
     return rows
 
 
-def rank_variants(variants: list[dict[str, Any]], stats_by_label: dict[str, dict]) -> list[dict[str, Any]]:
+def rank_variants(
+    variants: list[dict[str, Any]], stats_by_label: dict[str, dict]
+) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
     for v in variants:
         label = str(v.get("label"))
@@ -231,7 +243,10 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         nd = _as_dict(node)
         label = str(nd.get("label") or nd.get("id") or "")
         ntype = str(nd.get("type") or nd.get("kind") or "").lower()
-        if any(k in ntype or k in label.lower() for k in ("exper", "hypoth", "strateg", "variant")):
+        if any(
+            k in ntype or k in label.lower()
+            for k in ("exper", "hypoth", "strateg", "variant")
+        ):
             qkg_links.append(
                 {
                     "node_id": nd.get("id") or nd.get("node_id"),
@@ -248,7 +263,8 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         }
         for s in sims
         if "replay" in str(_as_dict(s).get("mode") or "").lower()
-        or "historical" in str(_as_dict(s).get("mode") or _as_dict(s).get("scenario") or "").lower()
+        or "historical"
+        in str(_as_dict(s).get("mode") or _as_dict(s).get("scenario") or "").lower()
     ]
     simulation_results = [
         {
@@ -270,7 +286,8 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     }
     ai_findings = [
         {
-            "recommendation_id": _as_dict(r).get("recommendation_id") or _as_dict(r).get("id"),
+            "recommendation_id": _as_dict(r).get("recommendation_id")
+            or _as_dict(r).get("id"),
             "title": _as_dict(r).get("title") or _as_dict(r).get("summary"),
             "scores": _as_dict(r).get("scores"),
         }
@@ -278,7 +295,9 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
     baseline_metric = _f(perf.get("expectancy")) or _f(perf.get("profit_factor")) or 1.0
-    sample_n = int(_f(portfolio.get("trade_count")) or _f(perf.get("trade_count")) or 30)
+    sample_n = int(
+        _f(portfolio.get("trade_count")) or _f(perf.get("trade_count")) or 30
+    )
 
     rows: list[dict[str, Any]] = []
     if not experiments:
@@ -314,7 +333,7 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             variant_metric=control_m,
         )
         evidence = {
-            "hypothesis": "Observational comparison of research variants vs portfolio baseline",
+            "hypothesis": "Observational comparison of research variants vs portfolio baseline",  # noqa: E501
             "variables": ["expectancy", "profit_factor", "drawdown"],
             "control_group": variants[0],
             "variant_groups": variants[1:],
@@ -358,9 +377,9 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     for idx, exp in enumerate(experiments[:25]):
         ed = _as_dict(exp)
         eid = str(ed.get("experiment_id") or ed.get("id") or f"irl-{uuid4().hex[:8]}")
-        peers = [ _as_dict(x) for x in experiments if _as_dict(x).get("experiment_id") != eid ][
-            :3
-        ]
+        peers = [
+            _as_dict(x) for x in experiments if _as_dict(x).get("experiment_id") != eid
+        ][:3]
         variants = build_variants(baseline=ed, candidates=peers)
         stats_map = {}
         control_m = _f(variants[0].get("metric")) or baseline_metric
@@ -373,7 +392,9 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 variant_metric=_f(var.get("metric")),
             )
         ranked = rank_variants(variants, stats_map)
-        primary_stats = next(iter(stats_map.values()), None) or compute_experiment_statistics(
+        primary_stats = next(
+            iter(stats_map.values()), None
+        ) or compute_experiment_statistics(
             sample_size=sample_n,
             baseline_metric=control_m,
             variant_metric=control_m,
@@ -386,9 +407,9 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         )
         evidence = {
             "hypothesis": hypothesis,
-            "variables": list(_as_dict(ed.get("params") or ed.get("candidate_params")).keys())[
-                :12
-            ]
+            "variables": list(
+                _as_dict(ed.get("params") or ed.get("candidate_params")).keys()
+            )[:12]
             or ["candidate_params"],
             "control_group": variants[0],
             "variant_groups": variants[1:],
@@ -543,7 +564,9 @@ def build_reports(
             "experiment_id": primary.get("experiment_id"),
             "evidence": evidence,
             "integrity": {
-                "has_unique_ids": all(bool(e.get("experiment_id")) for e in experiments),
+                "has_unique_ids": all(
+                    bool(e.get("experiment_id")) for e in experiments
+                ),
                 "lifecycle_in_enum": all(
                     e.get("lifecycle_state") in LIFECYCLE_ORDER for e in experiments
                 ),

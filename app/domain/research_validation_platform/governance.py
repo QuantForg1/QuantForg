@@ -96,11 +96,7 @@ class RollbackEngine:
 
         listed = self.versions.list(strategy_key=strategy_key, limit=200)
         match = next(
-            (
-                v
-                for v in listed["versions"]
-                if v.get("version") == target_version
-            ),
+            (v for v in listed["versions"] if v.get("version") == target_version),
             None,
         )
         previous = self.versions.active_version(strategy_key)

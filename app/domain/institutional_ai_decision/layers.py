@@ -212,9 +212,9 @@ def evaluate_layers(
         passed=session_ok or not config.require_session,
         required=config.require_session,
         weight=Decimal("10"),
-        score_contrib=(
-            Decimal("10") if session_ok else Decimal("0")
-        ).quantize(Decimal("0.01")),
+        score_contrib=(Decimal("10") if session_ok else Decimal("0")).quantize(
+            Decimal("0.01")
+        ),
         reason=(
             f"Session {session_name} approved"
             if session_ok
@@ -238,9 +238,9 @@ def evaluate_layers(
             passed=spread_ok or not config.require_spread,
             required=config.require_spread,
             weight=Decimal("10"),
-            score_contrib=(
-                Decimal("10") if spread_ok else Decimal("0")
-            ).quantize(Decimal("0.01")),
+            score_contrib=(Decimal("10") if spread_ok else Decimal("0")).quantize(
+                Decimal("0.01")
+            ),
             reason=(
                 f"Spread {hints.spread} within {config.max_spread}"
                 if spread_ok

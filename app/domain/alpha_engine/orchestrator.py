@@ -63,9 +63,7 @@ class AlphaEngineResult:
             "symbol": self.symbol,
             "audit_id": self.audit_id,
             "composite_score": (
-                str(self.composite_score)
-                if self.composite_score is not None
-                else None
+                str(self.composite_score) if self.composite_score is not None else None
             ),
             "market_quality_band": self.market_quality_band,
             "market_quality_ok": self.market_quality_ok,
@@ -144,7 +142,8 @@ class AlphaEngine:
         )
 
         available = [
-            e for e in engines.values()
+            e
+            for e in engines.values()
             if e.status == "available" and e.score is not None
         ]
         composite: Decimal | None = None

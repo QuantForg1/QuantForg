@@ -84,7 +84,9 @@ def _ctx() -> dict:
             "irdp": {"releases": [{"release_id": "rel1", "version": "5.1.0"}]},
             "iep": {"registry": [{"experiment_id": "iep1", "title": "exp"}]},
             "aqs": {"recommendations": []},
-            "qkg": {"nodes": [{"id": "n1", "label": "XAU strategy", "type": "strategy"}]},
+            "qkg": {
+                "nodes": [{"id": "n1", "label": "XAU strategy", "type": "strategy"}]
+            },
             "portfolio": {
                 "sections": {
                     "performance": {"expectancy": 2.0, "profit_factor": 1.3},
@@ -135,9 +137,7 @@ class TestEvidenceIntegrity:
 
 
 class TestPlatform:
-    def test_dashboard(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dashboard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         qsmr = QuantForgStrategyMarketplace(
             store=QsmrStore(path=tmp_path / "qsmr.json")
         )

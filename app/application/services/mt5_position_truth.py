@@ -158,9 +158,7 @@ def force_sync_positions(
     sym = (symbol or GOLD_SYMBOL).strip().upper() or GOLD_SYMBOL
     engine_count = _internal_engine_count(position_engine, symbol=sym)
     prior_internal = (
-        int(internal_positions)
-        if internal_positions is not None
-        else engine_count
+        int(internal_positions) if internal_positions is not None else engine_count
     )
 
     _invalidate_adapter_position_cache(mt5_adapter)

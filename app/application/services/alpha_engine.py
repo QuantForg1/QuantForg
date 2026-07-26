@@ -55,8 +55,6 @@ class AlphaEngineService:
             trade_factors=_dict("trade_factors"),
             closed_trades=_list("closed_trades"),
             side=str(payload.get("side") or "buy"),
-            technique=(
-                str(payload["technique"]) if payload.get("technique") else None
-            ),
+            technique=(str(payload["technique"]) if payload.get("technique") else None),
         )
         return self._engine.evaluate(inp).to_dict()

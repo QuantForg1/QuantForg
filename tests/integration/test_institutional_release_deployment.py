@@ -32,7 +32,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["preserves_production_safety_guarantees"] is True
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     irdp = InstitutionalReleaseDeploymentPlatform(
         store=IrdpStore(path=tmp_path / "irdp.json")
     )

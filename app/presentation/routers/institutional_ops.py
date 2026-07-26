@@ -48,6 +48,11 @@ def _operator(
     )
 
 
+def _sections(payload: dict[str, Any]) -> dict[str, Any]:
+    value = payload.get("sections")
+    return value if isinstance(value, dict) else {}
+
+
 class ConfirmBody(BaseModel):
     reason: str = Field(min_length=1)
     confirmed: bool = False
@@ -84,9 +89,7 @@ class ExperimentalActivateBody(BaseModel):
 
 
 class ExperimentalRollbackBody(BaseModel):
-    reason: str = Field(
-        default="operator_rollback_experimental_to_80_80", min_length=1
-    )
+    reason: str = Field(default="operator_rollback_experimental_to_80_80", min_length=1)
     confirmed: bool = False
 
 
@@ -161,7 +164,7 @@ def get_institutional_control_center(_user: OperatorUser) -> dict[str, Any]:
 @router.get("/institutional-control-center/system")
 def get_icc_system(_user: OperatorUser) -> dict[str, Any]:
     payload = get_institutional_control_center(_user)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {"system_status": sections.get("system_status"), "advisory_only": True}
 
 
@@ -178,15 +181,18 @@ def get_icc_kpis(_user: OperatorUser) -> dict[str, Any]:
 @router.get("/institutional-control-center/alerts")
 def get_icc_alerts(_user: OperatorUser) -> dict[str, Any]:
     payload = get_institutional_control_center(_user)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {"alerts": sections.get("alerts"), "advisory_only": True}
 
 
 @router.get("/institutional-control-center/timeline")
 def get_icc_timeline(_user: OperatorUser) -> dict[str, Any]:
     payload = get_institutional_control_center(_user)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
-    return {"operational_timeline": sections.get("operational_timeline"), "advisory_only": True}
+    sections = _sections(payload)
+    return {
+        "operational_timeline": sections.get("operational_timeline"),
+        "advisory_only": True,
+    }
 
 
 @router.get("/control-center")
@@ -259,7 +265,7 @@ def readiness(_user: OperatorUser) -> dict[str, Any]:
 
 @router.get("/production-reliability")
 def production_reliability(_user: OperatorUser) -> dict[str, Any]:
-    """Production Hardening v6 dashboard (alias of /ite/reliability/production-hardening)."""
+    """Production Hardening v6 dashboard (alias of /ite/reliability/production-hardening)."""  # noqa: E501
     from app.application.services.production_reliability import (
         build_production_reliability_dashboard,
     )
@@ -695,7 +701,9 @@ def _institutional_alpha_payload() -> dict[str, Any]:
         if runtime is not None and hasattr(runtime.position_management, "engine"):
             open_symbols = [
                 str(getattr(p, "symbol", "") or "")
-                for p in getattr(runtime.position_management.engine, "_positions", {}).values()
+                for p in getattr(
+                    runtime.position_management.engine, "_positions", {}
+                ).values()
             ]
     except Exception:
         open_symbols = []
@@ -924,7 +932,7 @@ def get_production_readiness_review_checklist(
     _user: OperatorUser,
 ) -> dict[str, Any]:
     payload = get_production_readiness_review(_user, write_report=False)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {
         "production_checklist": sections.get("production_checklist"),
         "overall_production_readiness_score": payload.get(
@@ -940,7 +948,7 @@ def get_production_readiness_review_risks(
     _user: OperatorUser,
 ) -> dict[str, Any]:
     payload = get_production_readiness_review(_user, write_report=False)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {
         "risk_register": sections.get("risk_register"),
         "advisory_only": True,
@@ -952,7 +960,7 @@ def get_production_readiness_review_executive(
     _user: OperatorUser,
 ) -> dict[str, Any]:
     payload = get_production_readiness_review(_user, write_report=False)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {
         "executive_summary": sections.get("executive_summary"),
         "overall_production_readiness_score": payload.get(
@@ -987,7 +995,7 @@ def get_portfolio_analytics_dashboard(
     days: int = 365,
 ) -> dict[str, Any]:
     payload = get_portfolio_analytics(_user, days=days)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {
         "dashboard": sections.get("dashboard"),
         "institutional_health_score": sections.get("health_score"),
@@ -1002,7 +1010,7 @@ def get_portfolio_analytics_risk(
     days: int = 365,
 ) -> dict[str, Any]:
     payload = get_portfolio_analytics(_user, days=days)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {"risk_analytics": sections.get("risk"), "advisory_only": True}
 
 
@@ -1012,7 +1020,7 @@ def get_portfolio_analytics_performance(
     days: int = 365,
 ) -> dict[str, Any]:
     payload = get_portfolio_analytics(_user, days=days)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {
         "performance_analytics": sections.get("performance"),
         "advisory_only": True,
@@ -1025,7 +1033,7 @@ def get_portfolio_analytics_health(
     days: int = 365,
 ) -> dict[str, Any]:
     payload = get_portfolio_analytics(_user, days=days)
-    sections = payload.get("sections") if isinstance(payload.get("sections"), dict) else {}
+    sections = _sections(payload)
     return {
         "institutional_health_score": sections.get("health_score"),
         "advisory_only": True,
@@ -1069,9 +1077,7 @@ def get_portfolio_analytics_export_csv(
     return Response(
         content=body,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": "attachment; filename=portfolio-analytics.csv"
-        },
+        headers={"Content-Disposition": "attachment; filename=portfolio-analytics.csv"},
     )
 
 
@@ -1093,9 +1099,7 @@ def get_portfolio_analytics_export_pdf(
     return Response(
         content=body,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": "attachment; filename=portfolio-analytics.pdf"
-        },
+        headers={"Content-Disposition": "attachment; filename=portfolio-analytics.pdf"},
     )
 
 
@@ -1287,12 +1291,15 @@ def update_auto_trading(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Apply Scalping / Swing mode to live ITE runtime (same pipeline, different knobs)
     try:
-        from app.application.services.ai_scalping_mode import apply_trading_mode_to_runtime
+        from dataclasses import replace
+
+        from app.application.services.ai_scalping_mode import (
+            apply_trading_mode_to_runtime,
+        )
         from app.application.services.institutional_ite_runtime import get_ite_runtime
         from app.domain.institutional_trading.ai_scalping.config import (
             DEFAULT_AI_SCALPING_CONFIG,
         )
-        from dataclasses import replace
 
         scalp = DEFAULT_AI_SCALPING_CONFIG
         if policy.compounding_enabled:
@@ -1317,6 +1324,7 @@ def update_auto_trading(
         )
         mode_payload = None
     return {"policy": policy.to_dict(), "trading_mode_applied": mode_payload}
+
 
 @router.post("/auto-trading/evaluate")
 def evaluate_auto_trading(
@@ -1497,11 +1505,7 @@ def live_certification_attempt(
                 ticket=int(t.get("ticket") or 0),
                 deal=int(t.get("deal") or 0),
                 entry=Decimal(str(t.get("entry") or "0")),
-                exit=(
-                    Decimal(str(t["exit"]))
-                    if t.get("exit") is not None
-                    else None
-                ),
+                exit=(Decimal(str(t["exit"])) if t.get("exit") is not None else None),
                 profit_loss=(
                     Decimal(str(t["profit_loss"]))
                     if t.get("profit_loss") is not None

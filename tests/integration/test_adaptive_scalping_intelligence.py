@@ -46,8 +46,7 @@ def test_asi_router_registered(app) -> None:
     paths = _collect_paths(list(app.routes))
     assert any("adaptive-scalping-intelligence" in p for p in paths)
     assert any(
-        p.endswith("/evaluate") and "adaptive-scalping-intelligence" in p
-        for p in paths
+        p.endswith("/evaluate") and "adaptive-scalping-intelligence" in p for p in paths
     )
 
 

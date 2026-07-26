@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -56,7 +57,7 @@ class PrcConfig:
         self.allow_change_configuration_automatically = False
         self.invent_evidence = False
 
-    def update(self, updates: dict[str, object]) -> PrcConfig:
+    def update(self, updates: dict[str, Any]) -> PrcConfig:
         locked = {
             "allow_order_send",
             "allow_place_trades",
@@ -76,7 +77,7 @@ class PrcConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                flags = dict(data["feature_flags"])
                 for fk, fv in value.items():
                     if isinstance(fv, bool):
                         flags[str(fk)] = fv
@@ -87,10 +88,10 @@ class PrcConfig:
             pass_threshold=Decimal(str(data["pass_threshold"])),
             watch_threshold=Decimal(str(data["watch_threshold"])),
             max_history=int(data["max_history"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=dict(data["feature_flags"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

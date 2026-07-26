@@ -59,11 +59,15 @@ class AqsStore:
             if existing:
                 merged = {**existing, **row, "id": rid, "updated_at": now}
                 # Preserve operator status if already set beyond Open
-                if existing.get("status") in {
-                    RecommendationStatus.ACCEPTED.value,
-                    RecommendationStatus.REJECTED.value,
-                    RecommendationStatus.ARCHIVED.value,
-                } and row.get("status") == RecommendationStatus.OPEN.value:
+                if (
+                    existing.get("status")
+                    in {
+                        RecommendationStatus.ACCEPTED.value,
+                        RecommendationStatus.REJECTED.value,
+                        RecommendationStatus.ARCHIVED.value,
+                    }
+                    and row.get("status") == RecommendationStatus.OPEN.value
+                ):
                     merged["status"] = existing["status"]
             else:
                 merged = {
@@ -114,7 +118,11 @@ class AqsStore:
     def save_report(self, report: dict[str, Any]) -> dict[str, Any]:
         rid = str(report.get("report_id") or uuid4())
         now = datetime.now(UTC).isoformat()
-        row = {**report, "report_id": rid, "created_at": report.get("created_at") or now}
+        row = {
+            **report,
+            "report_id": rid,
+            "created_at": report.get("created_at") or now,
+        }
         with self._lock:
             self._reports[rid] = row
             if len(self._reports) > 100:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
@@ -80,7 +81,7 @@ class AlphaFactoryConfig:
         self.invent_metrics = False
         self.promise_profitability = False
 
-    def update(self, updates: dict[str, object]) -> AlphaFactoryConfig:
+    def update(self, updates: dict[str, Any]) -> AlphaFactoryConfig:
         locked = {
             "allow_order_send",
             "allow_modify_live_strategy",
@@ -101,7 +102,7 @@ class AlphaFactoryConfig:
             if key in locked or value is None:
                 continue
             if key == "feature_flags" and isinstance(value, dict):
-                flags = dict(data["feature_flags"])  # type: ignore[arg-type]
+                flags = dict(data["feature_flags"])
                 for fk, fv in value.items():
                     if isinstance(fv, bool):
                         flags[str(fk)] = fv
@@ -113,10 +114,10 @@ class AlphaFactoryConfig:
             min_trades_for_benchmark=int(data["min_trades_for_benchmark"]),
             max_experiments=int(data["max_experiments"]),
             max_history=int(data["max_history"]),
-            feature_flags=dict(data["feature_flags"]),  # type: ignore[arg-type]
+            feature_flags=dict(data["feature_flags"]),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
             "symbol": self.symbol,

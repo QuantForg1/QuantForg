@@ -9,7 +9,9 @@ from uuid import uuid4
 from app.domain.institutional_research_lab.benchmark import benchmark_against_production
 from app.domain.institutional_research_lab.leaderboard import build_leaderboard
 from app.domain.institutional_research_lab.models import ExperimentStatus, ReplayWindow
-from app.domain.institutional_research_lab.promotion_policy import evaluate_research_verdict
+from app.domain.institutional_research_lab.promotion_policy import (
+    evaluate_research_verdict,
+)
 from app.domain.institutional_research_lab.replay import (
     production_baseline_metrics,
     replay_historical,
@@ -36,7 +38,11 @@ class InstitutionalResearchLab:
     def dashboard(self) -> dict[str, Any]:
         experiments = self.store.list_experiments(limit=200)
         jobs = self.store.list_jobs(limit=50)
-        completed = [e for e in experiments if e.get("status") == ExperimentStatus.COMPLETED.value]
+        completed = [
+            e
+            for e in experiments
+            if e.get("status") == ExperimentStatus.COMPLETED.value
+        ]
         board = build_leaderboard(completed, limit=5)
         return {
             "mode": "institutional_research_lab",
@@ -45,7 +51,9 @@ class InstitutionalResearchLab:
                 "experiments": len(experiments),
                 "completed": len(completed),
                 "running": sum(
-                    1 for e in experiments if e.get("status") == ExperimentStatus.RUNNING.value
+                    1
+                    for e in experiments
+                    if e.get("status") == ExperimentStatus.RUNNING.value
                 ),
                 "jobs": len(jobs),
                 "reports": len(self.store.list_reports(limit=500)),
@@ -71,7 +79,9 @@ class InstitutionalResearchLab:
             candidate_params=candidate_params,
         )
 
-    def update_experiment(self, exp_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    def update_experiment(
+        self, exp_id: str, updates: dict[str, Any]
+    ) -> dict[str, Any] | None:
         return self.store.update_experiment(exp_id, updates)
 
     def get_experiment(self, exp_id: str) -> dict[str, Any] | None:
@@ -188,7 +198,9 @@ class InstitutionalResearchLab:
             "isolation": self.isolation,
         }
 
-    def leaderboard(self, *, rank_by: str = "composite", limit: int = 50) -> dict[str, Any]:
+    def leaderboard(
+        self, *, rank_by: str = "composite", limit: int = 50
+    ) -> dict[str, Any]:
         experiments = self.store.list_experiments(limit=500)
         rows = build_leaderboard(experiments, rank_by=rank_by, limit=limit)
         return {
@@ -200,7 +212,9 @@ class InstitutionalResearchLab:
     def list_reports(self, *, limit: int = 50) -> list[dict[str, Any]]:
         return self.store.list_reports(limit=limit)
 
-    def list_jobs(self, *, limit: int = 50, experiment_id: str | None = None) -> list[dict[str, Any]]:
+    def list_jobs(
+        self, *, limit: int = 50, experiment_id: str | None = None
+    ) -> list[dict[str, Any]]:
         return self.store.list_jobs(limit=limit, experiment_id=experiment_id)
 
     def add_note(self, experiment_id: str, *, author: str, body: str) -> dict[str, Any]:

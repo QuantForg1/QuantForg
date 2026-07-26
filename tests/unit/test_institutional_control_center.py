@@ -22,9 +22,12 @@ class TestInstitutionalControlCenter:
         assert payload["mutates_engines"] is False
         assert payload["influences_trading"] is False
         assert payload["advisory_only"] is True
-        assert payload[
-            "never_modifies_strategy_risk_safety_oms_gateway_auto_trading_thresholds_research_warehouse"
-        ] is True
+        assert (
+            payload[
+                "never_modifies_strategy_risk_safety_oms_gateway_auto_trading_thresholds_research_warehouse"
+            ]
+            is True
+        )
         sections = payload["sections"]
         for key in (
             "system_status",

@@ -103,7 +103,9 @@ class AlphaAnalyticsStore:
                             else None
                         ),
                         spread=(
-                            float(row["spread"]) if row.get("spread") is not None else None
+                            float(row["spread"])
+                            if row.get("spread") is not None
+                            else None
                         ),
                     )
                 )
@@ -161,9 +163,7 @@ class AlphaAnalyticsStore:
             buckets: dict[str, list[float]] = defaultdict(list)
             for r in rows:
                 buckets[key_fn(r)].append(r.pnl)
-            scored = {
-                k: sum(v) for k, v in buckets.items() if k and k != "unknown"
-            }
+            scored = {k: sum(v) for k, v in buckets.items() if k and k != "unknown"}
             if not scored:
                 return None, None
             best = max(scored, key=scored.get)
@@ -186,7 +186,7 @@ class AlphaAnalyticsStore:
         for r in rows:
             try:
                 ts = datetime.fromisoformat(r.closed_at.replace("Z", "+00:00"))
-            except Exception:
+            except Exception:  # noqa: S112  # best-effort continue
                 continue
             if ts.date() == now.date():
                 daily += r.pnl

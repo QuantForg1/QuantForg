@@ -113,19 +113,19 @@ def test_full_validation_cycle() -> None:
     assert out["modules"]["statistical_validation"]["status"] == "available"
     assert out["modules"]["confidence_analysis"]["status"] == "available"
     assert out["modules"]["regime_validation"]["status"] == "available"
-    assert out["modules"]["configuration_comparison"]["details"][
-        "auto_selected_winner"
-    ] is None
-    assert out["modules"]["configuration_comparison"]["details"][
-        "never_auto_selects_winner"
-    ] is True
+    assert (
+        out["modules"]["configuration_comparison"]["details"]["auto_selected_winner"]
+        is None
+    )
+    assert (
+        out["modules"]["configuration_comparison"]["details"][
+            "never_auto_selects_winner"
+        ]
+        is True
+    )
     assert out["modules"]["evidence_dashboard"]["status"] == "available"
-    assert out["modules"]["human_decision_package"]["details"][
-        "auto_deploy"
-    ] is False
-    assert out["modules"]["validation_history"]["details"][
-        "append_only"
-    ] is True
+    assert out["modules"]["human_decision_package"]["details"]["auto_deploy"] is False
+    assert out["modules"]["validation_history"]["details"]["append_only"] is True
     assert len(ivp.history) == 1
 
     # Append-only: second eval grows history; first entry preserved

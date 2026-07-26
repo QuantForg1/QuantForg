@@ -39,7 +39,9 @@ class RecommendationEngine:
     _rows: list[Recommendation] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    def _emit(self, *, kind: str, message: str, evidence: dict[str, Any]) -> Recommendation:
+    def _emit(
+        self, *, kind: str, message: str, evidence: dict[str, Any]
+    ) -> Recommendation:
         rec = Recommendation(
             id=str(uuid4()),
             at=datetime.now(UTC).isoformat(),
@@ -70,7 +72,7 @@ class RecommendationEngine:
             out.append(
                 self._emit(
                     kind="symbol_strength",
-                    message=f"{b.get('symbol')} currently has the best profit factor ({b.get('profit_factor')}).",
+                    message=f"{b.get('symbol')} currently has the best profit factor ({b.get('profit_factor')}).",  # noqa: E501
                     evidence=b,
                 )
             )
@@ -79,7 +81,7 @@ class RecommendationEngine:
             out.append(
                 self._emit(
                     kind="reduce_risk",
-                    message=f"Reduce risk on {w.get('symbol')} (weak profit factor {w.get('profit_factor')}).",
+                    message=f"Reduce risk on {w.get('symbol')} (weak profit factor {w.get('profit_factor')}).",  # noqa: E501
                     evidence=w,
                 )
             )
@@ -87,7 +89,7 @@ class RecommendationEngine:
             out.append(
                 self._emit(
                     kind="session_threshold",
-                    message="Increase confidence threshold during Asian session (weaker historical edge).",
+                    message="Increase confidence threshold during Asian session (weaker historical edge).",  # noqa: E501
                     evidence=dict(sess),
                 )
             )
@@ -105,7 +107,7 @@ class RecommendationEngine:
             out.append(
                 self._emit(
                     kind="slippage",
-                    message=f"Watch slippage on {s.get('symbol')} (avg {s.get('avg_slippage')}).",
+                    message=f"Watch slippage on {s.get('symbol')} (avg {s.get('avg_slippage')}).",  # noqa: E501
                     evidence=s,
                 )
             )

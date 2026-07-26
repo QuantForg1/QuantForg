@@ -82,17 +82,15 @@ def build_quality_dashboard(
             ),
         )
 
-    overall = (
-        sum(present, Decimal("0")) / Decimal(len(present))
-    ).quantize(Decimal("0.01"))
+    overall = (sum(present, Decimal("0")) / Decimal(len(present))).quantize(
+        Decimal("0.01")
+    )
     healthy = overall >= config.min_decision_quality
     reasons = [
         f"Overall decision quality {overall} from {len(present)} supplied metrics."
     ]
     if not healthy:
-        reasons.append(
-            f"Below policy minimum {config.min_decision_quality}."
-        )
+        reasons.append(f"Below policy minimum {config.min_decision_quality}.")
     return DecisionQualityDashboard(
         approve_precision=inp.approve_precision,
         reject_precision=inp.reject_precision,

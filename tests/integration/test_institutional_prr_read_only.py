@@ -18,7 +18,12 @@ def test_build_never_mutates_flags() -> None:
     payload = prr.build_institutional_production_readiness_review(write_report=False)
     assert payload["mutates_engines"] is False
     assert payload["analytics_only"] is True
-    assert payload["never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"] is True
+    assert (
+        payload[
+            "never_modifies_strategy_risk_safety_oms_execution_auto_trading_thresholds"
+        ]
+        is True
+    )
     assert "strategy" not in str(payload.get("mode", "")).lower() or True
 
 

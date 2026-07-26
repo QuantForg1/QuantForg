@@ -172,17 +172,13 @@ def build_registry(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         ]
     )
 
-    cert_status = str(
-        qcs_level.get("level") or "Not Ready"
-    )
+    cert_status = str(qcs_level.get("level") or "Not Ready")
     cert_score = _score_or(
         40.0,
         qcs_scores.get("overall_institutional_readiness_score"),
     )
     validation_score = _score_or(40.0, conf.get("confidence"))
-    execution_score = _score_or(
-        50.0, eqs_score.get("overall_execution_score")
-    )
+    execution_score = _score_or(50.0, eqs_score.get("overall_execution_score"))
     dd = _f(risk_sec.get("max_drawdown_pct") or irap_metrics.get("maximum_drawdown"))
     risk_score = _clamp(100.0 - dd * 2.5) if dd is not None else 55.0
     research_score = _score_or(
@@ -214,12 +210,21 @@ def build_registry(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                     "strategy_name": str(sd.get("name") or sid),
                     "owner": str(sd.get("owner") or "quantforg-desk"),
                     "version": str(sd.get("version") or "1.0.0"),
-                    "status": "Retired"
-                    if retired
-                    else ("Active" if "production" in lifecycle.lower() or "monitor" in lifecycle.lower() else "Research"),
+                    "status": (
+                        "Retired"
+                        if retired
+                        else (
+                            "Active"
+                            if "production" in lifecycle.lower()
+                            or "monitor" in lifecycle.lower()
+                            else "Research"
+                        )
+                    ),
                     "lifecycle": lifecycle,
-                    "research_lineage": evidence.get("research_history") or research_lineage,
-                    "replay_evidence": evidence.get("replay_results") or replay_evidence,
+                    "research_lineage": evidence.get("research_history")
+                    or research_lineage,
+                    "replay_evidence": evidence.get("replay_results")
+                    or replay_evidence,
                     "simulation_evidence": evidence.get("simulation_results")
                     or simulation_evidence,
                     "validation_evidence": evidence.get("cvf_findings")
@@ -228,9 +233,15 @@ def build_registry(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                     "certification_status": cert_status,
                     "deployment_history": evidence.get("release_history")
                     or deployment_history,
-                    "retirement_status": "Retired"
-                    if lifecycle.lower() == "retired"
-                    else ("Suspended" if lifecycle.lower() == "suspended" else "Active"),
+                    "retirement_status": (
+                        "Retired"
+                        if lifecycle.lower() == "retired"
+                        else (
+                            "Suspended"
+                            if lifecycle.lower() == "suspended"
+                            else "Active"
+                        )
+                    ),
                     "knowledge_graph_links": evidence.get("knowledge_graph_links")
                     or qkg_links[:20],
                     "scores": scores,
@@ -259,7 +270,11 @@ def build_registry(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 "strategy_name": "XAUUSD Primary",
                 "owner": "quantforg-desk",
                 "version": str(
-                    (deployment_history[0].get("version") if deployment_history else None)
+                    (
+                        deployment_history[0].get("version")
+                        if deployment_history
+                        else None
+                    )
                     or "1.0.0"
                 ),
                 "status": "Active" if portfolio else "Research",
@@ -357,7 +372,7 @@ def discover(
             r
             for r in rows
             if needle
-            in f"{r.get('strategy_id')} {r.get('strategy_name')} {r.get('owner')}".lower()
+            in f"{r.get('strategy_id')} {r.get('strategy_name')} {r.get('owner')}".lower()  # noqa: E501
         ]
     if status:
         rows = [r for r in rows if str(r.get("status") or "").lower() == status.lower()]

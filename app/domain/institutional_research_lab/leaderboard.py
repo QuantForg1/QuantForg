@@ -26,7 +26,10 @@ def composite_score(exp: dict[str, Any]) -> float:
     pf_s = max(0.0, min(100.0, pf * 30.0))
     exp_s = max(0.0, min(100.0, 50.0 + expct * 5.0))
     dd_s = max(0.0, min(100.0, 100.0 - dd * 4.0))
-    return round((pf_s * 0.3 + exp_s * 0.25 + dd_s * 0.2 + consistency * 0.15 + stability * 0.1), 2)
+    return round(
+        (pf_s * 0.3 + exp_s * 0.25 + dd_s * 0.2 + consistency * 0.15 + stability * 0.1),
+        2,
+    )
 
 
 def build_leaderboard(

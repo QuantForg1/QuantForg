@@ -49,7 +49,7 @@ def _try_live_broker_specs() -> tuple[BrokerLotSpecs, dict[str, Any]]:
                 if callable(adopt) and not getattr(client, "is_connected", False):
                     try:
                         adopt()
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         meta["adopt_error"] = str(exc)
                 if getattr(client, "is_connected", False):
                     info = client.symbol_info(GOLD_SYMBOL)
@@ -58,17 +58,15 @@ def _try_live_broker_specs() -> tuple[BrokerLotSpecs, dict[str, Any]]:
                         specs_fn = getattr(client, "_request", None)
                         if callable(specs_fn):
                             payload = specs_fn("GET", f"/symbols/{GOLD_SYMBOL}")
-                            if isinstance(payload, dict) and payload.get(
-                                "volume_min"
-                            ):
+                            if isinstance(payload, dict) and payload.get("volume_min"):
                                 raw = {**raw, **payload}
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         meta["specs_endpoint_error"] = str(exc)
                     specs = broker_specs_from_mapping(raw, source="live_broker")
                     meta["ok"] = True
                     meta["via"] = "di_adapter"
                     return specs, meta
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         meta["di_error"] = str(exc)
 
     # 2) Direct local gateway (scripts / offline ops without DI).
@@ -92,11 +90,9 @@ def _try_live_broker_specs() -> tuple[BrokerLotSpecs, dict[str, Any]]:
 
             client = GatewayMT5Client(base_url=base, token=token)
             if client.adopt_existing_session():
-                payload = client._request("GET", f"/symbols/{GOLD_SYMBOL}")  # noqa: SLF001
+                payload = client._request("GET", f"/symbols/{GOLD_SYMBOL}")
                 if isinstance(payload, dict):
-                    specs = broker_specs_from_mapping(
-                        payload, source="live_broker"
-                    )
+                    specs = broker_specs_from_mapping(payload, source="live_broker")
                     meta["ok"] = True
                     meta["via"] = "direct_gateway"
                     meta["gateway_url"] = base
@@ -104,7 +100,7 @@ def _try_live_broker_specs() -> tuple[BrokerLotSpecs, dict[str, Any]]:
             meta["error"] = "gateway_session_not_attached"
         else:
             meta["error"] = "no_MT5_GATEWAY_TOKEN"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("micro_analyzer_live_specs_failed", error=str(exc))
         meta["error"] = str(exc)
 
@@ -142,15 +138,16 @@ def _try_live_atr() -> tuple[Decimal, dict[str, Any]]:
             got = _from_client(client)
             if got is not None:
                 return got
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         meta["di_error"] = str(exc)
 
     try:
         import os
         from pathlib import Path
 
-        from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
         from dotenv import load_dotenv
+
+        from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
 
         load_dotenv(Path.cwd() / ".env")
         token = (os.getenv("MT5_GATEWAY_TOKEN") or "").strip()
@@ -170,7 +167,7 @@ def _try_live_atr() -> tuple[Decimal, dict[str, Any]]:
             meta["error"] = "gateway_session_not_attached"
         else:
             meta["error"] = "no_MT5_GATEWAY_TOKEN"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         meta["error"] = str(exc)
 
     meta["source"] = "reference_fallback"
@@ -248,9 +245,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
     if specs.get("micro_account_compatible"):
         lines.append("- **Micro account compatible** (broker min lot ≤ 0.001)")
     else:
-        lines.append(
-            "- Standard min lot — not nano; current broker settings unchanged"
-        )
+        lines.append("- Standard min lot — not nano; current broker settings unchanged")
     lines.append("")
     lines.append("## Selected analysis")
     lines.append("")
@@ -261,8 +256,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
         f"Lots={report.get('calculated_lots')}"
     )
     lines.append(
-        f"- Eligible: **{report.get('eligible_label')}** "
-        f"({report.get('status')})"
+        f"- Eligible: **{report.get('eligible_label')}** " f"({report.get('status')})"
     )
     lines.append(f"- Reason: {report.get('reason')}")
     if report.get("fifty_dollar_clear_statement"):

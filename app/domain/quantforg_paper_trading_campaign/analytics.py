@@ -8,9 +8,9 @@ from typing import Any
 
 from app.domain.quantforg_paper_trading_campaign.models import (
     CAMPAIGN_LIFECYCLE,
-    CampaignLifecycle,
     LIFECYCLE_ORDER,
     REPORT_KINDS,
+    CampaignLifecycle,
 )
 
 
@@ -24,7 +24,7 @@ def _as_list(value: Any) -> list[Any]:
 
 def _stable_id(*parts: Any) -> str:
     raw = "|".join(str(p) for p in parts)
-    return "qptcm-" + sha1(raw.encode("utf-8")).hexdigest()[:16]
+    return "qptcm-" + sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -56,7 +56,7 @@ def _candidate_strategies(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     sources = _as_dict(ctx.get("sources"))
     islm = _as_list(_as_dict(sources.get("islm")).get("registry"))
     qsf_snap = _as_dict(sources.get("qsf"))
-    # Prefer strategies marked paper-ready via QSF dossier counts / work items if present
+    # Prefer strategies marked paper-ready via QSF dossier counts / work items if present  # noqa: E501
     rows: list[dict[str, Any]] = []
     for s in islm:
         sd = _as_dict(s)
@@ -178,7 +178,9 @@ def build_campaigns(
                 "evidence": evidence,
                 "daily_snapshots": snapshots,
                 "incidents": incidents,
-                "recommendations": _campaign_recommendations(lifecycle, incidents, cert_score),
+                "recommendations": _campaign_recommendations(
+                    lifecycle, incidents, cert_score
+                ),
                 "owner": str(s.get("owner") or "campaign_ops"),
                 "requires_human_approval": True,
                 "never_places_live_trades": True,
@@ -215,7 +217,10 @@ def _build_daily_snapshots(
 def _campaign_recommendations(
     lifecycle: str, incidents: list[dict[str, Any]], cert: float
 ) -> list[str]:
-    recs = ["Keep all activity paper-scoped", "Require human approval for every lifecycle advance"]
+    recs = [
+        "Keep all activity paper-scoped",
+        "Require human approval for every lifecycle advance",
+    ]
     if incidents:
         recs.append("Triage paper incidents before advancing")
     if cert < 70:
@@ -355,7 +360,7 @@ def workflow_consistency_check(campaigns: list[dict[str, Any]]) -> dict[str, Any
         if c.get("graduation_auto_approved") is not False:
             issues.append("graduation_must_not_auto_approve")
         nxt = c.get("next_lifecycle")
-        if nxt and not can_transition(str(lc), str(nxt)):
+        if nxt and not can_transition(str(lc), str(nxt)):  # noqa: SIM102
             if next_lifecycle(str(lc)) != nxt:
                 issues.append(f"bad_next:{c.get('campaign_id')}")
     return {"ok": len(issues) == 0, "issues": issues, "read_only": True}
@@ -371,13 +376,6 @@ def evidence_integrity_check(campaigns: list[dict[str, Any]]) -> dict[str, Any]:
             issues.append(f"no_objectives:{cid}")
         if not _as_list(c.get("success_criteria")):
             issues.append(f"no_success_criteria:{cid}")
-        if c.get("lifecycle") != CampaignLifecycle.DRAFT.value:
-            if not _as_list(c.get("daily_snapshots")) and c.get("strategy_id"):
-                # drafts may lack snapshots; configured+ should have them
-                if c.get("lifecycle") not in {
-                    CampaignLifecycle.DRAFT.value,
-                }:
-                    pass
         for snap in _as_list(c.get("daily_snapshots")):
             if _as_dict(snap).get("paper_only") is not True:
                 issues.append(f"snapshot_not_paper:{cid}")

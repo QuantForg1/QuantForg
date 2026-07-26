@@ -1,4 +1,4 @@
-"""Institutional reporting — daily/weekly/monthly with CSV export."""
+"""Institutional reporting - daily/weekly/monthly with CSV export."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def _gather_sections() -> dict[str, Any]:
         )
 
         sections["risk_metrics"] = get_dynamic_risk_budget().snapshot()
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     return sections
 
@@ -72,7 +72,17 @@ def report_to_csv(report: dict[str, Any]) -> str:
     for section, payload in report.get("sections", {}).items():
         if isinstance(payload, dict):
             for k, v in payload.items():
-                writer.writerow([section, k, json.dumps(v, default=str) if isinstance(v, (dict, list)) else v])
+                writer.writerow(
+                    [
+                        section,
+                        k,
+                        (
+                            json.dumps(v, default=str)
+                            if isinstance(v, (dict, list))
+                            else v
+                        ),
+                    ]
+                )
         elif isinstance(payload, list):
             for i, row in enumerate(payload):
                 writer.writerow([section, str(i), json.dumps(row, default=str)])
@@ -82,13 +92,13 @@ def report_to_csv(report: dict[str, Any]) -> str:
 
 
 def report_to_pdf_text(report: dict[str, Any]) -> str:
-    """Plain-text PDF surrogate for environments without a PDF lib — still exportable."""
+    """Plain-text PDF surrogate for environments without a PDF lib - still exportable."""  # noqa: E501
     lines = [
-        f"QuantForg Institutional Report — {report.get('period')}",
+        f"QuantForg Institutional Report - {report.get('period')}",
         f"Generated: {report.get('generated_at')}",
         f"ID: {report.get('id')}",
         "",
-        "Guidance: Prefer 2–4 weeks demo/low-risk live evidence before promotions.",
+        "Guidance: Prefer 2-4 weeks demo/low-risk live evidence before promotions.",
         "",
     ]
     for section, payload in (report.get("sections") or {}).items():
@@ -121,7 +131,9 @@ class ReportingStore:
         try:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
             with self._lock:
-                self._reports = list(raw.get("reports", []))[-DEFAULT_RESEARCH_CONFIG.max_reports :]
+                self._reports = list(raw.get("reports", []))[
+                    -DEFAULT_RESEARCH_CONFIG.max_reports :
+                ]
         except Exception:
             logger.exception("reports_load_failed")
 
@@ -135,7 +147,9 @@ class ReportingStore:
                     "updated_at": datetime.now(UTC).isoformat(),
                     "reports": self._reports[-DEFAULT_RESEARCH_CONFIG.max_reports :],
                 }
-            self._path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+            self._path.write_text(
+                json.dumps(payload, indent=2, default=str), encoding="utf-8"
+            )
         except Exception:
             logger.exception("reports_persist_failed")
 

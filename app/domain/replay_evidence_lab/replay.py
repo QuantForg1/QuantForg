@@ -67,10 +67,7 @@ def normalize_bar(raw: dict[str, Any]) -> dict[str, Any] | None:
     if None in (o, h, low, c):
         return None
     ts = (
-        raw.get("timestamp")
-        or raw.get("time")
-        or raw.get("ts")
-        or raw.get("opened_at")
+        raw.get("timestamp") or raw.get("time") or raw.get("ts") or raw.get("opened_at")
     )
     return {
         "timestamp": ts,

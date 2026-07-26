@@ -92,10 +92,14 @@ def next_lifecycle_state(current: str) -> str | None:
         return LifecycleState.SUSPENDED.value
     if idx + 1 < len(LIFECYCLE_ORDER):
         nxt = LIFECYCLE_ORDER[idx + 1]
-        if nxt in (
-            LifecycleState.SUSPENDED.value,
-            LifecycleState.RETIRED.value,
-        ) and current != LifecycleState.MONITORING.value:
+        if (
+            nxt
+            in (
+                LifecycleState.SUSPENDED.value,
+                LifecycleState.RETIRED.value,
+            )
+            and current != LifecycleState.MONITORING.value
+        ):
             return None
         return nxt
     return None
@@ -174,8 +178,7 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
 
     research_history = [
         {
-            "experiment_id": _as_dict(e).get("experiment_id")
-            or _as_dict(e).get("id"),
+            "experiment_id": _as_dict(e).get("experiment_id") or _as_dict(e).get("id"),
             "name": _as_dict(e).get("name") or _as_dict(e).get("title"),
             "status": _as_dict(e).get("status"),
         }
@@ -256,12 +259,8 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
         conf.get("confidence"),
         50.0 + min(30.0, len(simulation_results) * 5),
     )
-    execution_score = _score_or(
-        50.0, eqs_score.get("overall_execution_score")
-    )
-    reliability_score = _score_or(
-        50.0, res_score.get("overall_reliability_score")
-    )
+    execution_score = _score_or(50.0, eqs_score.get("overall_execution_score"))
+    reliability_score = _score_or(50.0, res_score.get("overall_reliability_score"))
     # Higher risk score = healthier (invert drawdown / VaR pressure)
     dd = _f(risk_sec.get("max_drawdown_pct") or irap_metrics.get("maximum_drawdown"))
     sharpe = _f(perf.get("sharpe_ratio") or irap_metrics.get("sharpe_ratio"))
@@ -306,8 +305,7 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     version = "1.0.0"
     if release_history:
         version = str(
-            release_history[0].get("version")
-            or f"1.0.{len(release_history)}"
+            release_history[0].get("version") or f"1.0.{len(release_history)}"
         )
 
     primary = {
@@ -338,20 +336,16 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     # Lab experiments as draft/research registry entries
     for e in experiments[:12]:
         ed = _as_dict(e)
-        sid = str(
-            ed.get("experiment_id")
-            or ed.get("id")
-            or f"exp-{uuid4().hex[:8]}"
-        )
+        sid = str(ed.get("experiment_id") or ed.get("id") or f"exp-{uuid4().hex[:8]}")
         rows.append(
             {
                 "strategy_id": f"lab-{sid}",
                 "name": str(ed.get("name") or ed.get("title") or sid),
                 "owner": str(ed.get("owner") or DEFAULT_OWNER),
                 "version": str(ed.get("version") or "0.1.0"),
-                "lifecycle_state": LifecycleState.RESEARCH.value
-                if ed
-                else LifecycleState.DRAFT.value,
+                "lifecycle_state": (
+                    LifecycleState.RESEARCH.value if ed else LifecycleState.DRAFT.value
+                ),
                 "recommended_lifecycle_state": LifecycleState.RESEARCH.value,
                 "recommended_next_state": LifecycleState.REPLAY_VALIDATION.value,
                 "requires_human_approval_to_advance": True,
@@ -383,7 +377,9 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def build_alerts(strategies: list[dict[str, Any]], ctx: dict[str, Any]) -> list[dict[str, Any]]:
+def build_alerts(
+    strategies: list[dict[str, Any]], ctx: dict[str, Any]
+) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
     sources = _as_dict(ctx.get("sources"))
     portfolio = _as_dict(sources.get("portfolio"))
@@ -415,9 +411,7 @@ def build_alerts(strategies: list[dict[str, Any]], ctx: dict[str, Any]) -> list[
             }
         )
 
-    eq = _f(
-        _as_dict(eqs.get("execution_score") or eqs).get("overall_execution_score")
-    )
+    eq = _f(_as_dict(eqs.get("execution_score") or eqs).get("overall_execution_score"))
     if eq is not None and eq < 60:
         alerts.append(
             {
@@ -448,9 +442,7 @@ def build_alerts(strategies: list[dict[str, Any]], ctx: dict[str, Any]) -> list[
                 {
                     "kind": "Performance degradation",
                     "severity": "warning",
-                    "detail": (
-                        f"{s.get('strategy_id')} overall health {overall}"
-                    ),
+                    "detail": (f"{s.get('strategy_id')} overall health {overall}"),
                     "strategy_id": s.get("strategy_id"),
                     "read_only": True,
                 }
@@ -596,12 +588,21 @@ def merge_with_store(
     for row in derived:
         sid = str(row.get("strategy_id"))
         prev = by_id.get(sid) or {}
-        merged = {**row, **{k: v for k, v in prev.items() if k in (
-            "lifecycle_locked",
-            "last_approver",
-            "last_approved_at",
-            "owner",
-        ) and v is not None}}
+        merged = {
+            **row,
+            **{
+                k: v
+                for k, v in prev.items()
+                if k
+                in (
+                    "lifecycle_locked",
+                    "last_approver",
+                    "last_approved_at",
+                    "owner",
+                )
+                and v is not None
+            },
+        }
         if prev.get("lifecycle_locked") and prev.get("lifecycle_state"):
             merged["lifecycle_state"] = prev["lifecycle_state"]
             merged["lifecycle_locked"] = True

@@ -1,4 +1,4 @@
-"""Production Micro Account Analyzer — independent of Institutional Mode.
+"""Production Micro Account Analyzer - independent of Institutional Mode.
 
 Reads broker lot specs (live or desk fallback), evaluates target micro balances
 against mathematically correct percentage-risk sizing, and never fakes lots,
@@ -42,7 +42,7 @@ RISK_LADDER_PCT: tuple[Decimal, ...] = (
     Decimal("2.00"),
 )
 
-# Nano / micro lot threshold for advisory “Micro account compatible” badge.
+# Nano / micro lot threshold for advisory "Micro account compatible" badge.
 _MICRO_LOT_THRESHOLD = Decimal("0.001")
 
 
@@ -61,7 +61,7 @@ class BrokerLotSpecs:
 
     @property
     def micro_account_compatible(self) -> bool:
-        """True when broker min lot supports nano/micro (≤0.001). Advisory only."""
+        """True when broker min lot supports nano/micro (<=0.001). Advisory only."""
         return self.volume_min <= _MICRO_LOT_THRESHOLD
 
     def to_dict(self) -> dict[str, Any]:
@@ -109,7 +109,7 @@ def broker_specs_from_mapping(
         try:
             d = Decimal(str(val))
             return d if d > 0 else default
-        except Exception:  # noqa: BLE001
+        except Exception:
             return default
 
     volume_min = _d("volume_min", VOLUME_MIN)
@@ -119,7 +119,7 @@ def broker_specs_from_mapping(
     tick_size = _d("tick_size", _d("point", TICK_SIZE))
     tick_value = _d("tick_value", Decimal("0"))
     if tick_value <= 0 and tick_size > 0:
-        # Gold CFD identity: tick_value ≈ contract_size × tick_size
+        # Gold CFD identity: tick_value ≈ contract_size x tick_size
         tick_value = (contract_size * tick_size).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
@@ -136,7 +136,7 @@ def broker_specs_from_mapping(
 
 
 def institutional_profile_dict() -> dict[str, Any]:
-    """Frozen Institutional profile — never mutated by Micro Account Mode."""
+    """Frozen Institutional profile - never mutated by Micro Account Mode."""
     return {
         "profile_id": "INSTITUTIONAL",
         "frozen": True,
@@ -169,7 +169,7 @@ def micro_profile_dict(
         "never_force_min_lot": True,
         "activates_live_execution": False,
         "notes": [
-            "Advisory / sizing analyzer only — does not weaken Institutional Mode.",
+            "Advisory / sizing analyzer only - does not weaken Institutional Mode.",
             "Does not change Strategy, OMS, Safety, or Institutional risk policy.",
         ],
     }
@@ -201,7 +201,7 @@ def calculate_lots(
     stop_distance: Decimal,
     specs: BrokerLotSpecs,
 ) -> Decimal:
-    """Percentage-risk lots ROUND_DOWN to lot_step — never upsize to min_lot."""
+    """Percentage-risk lots ROUND_DOWN to lot_step - never upsize to min_lot."""
     if equity <= 0 or risk_pct <= 0 or stop_distance <= 0:
         return Decimal("0")
     budget = equity * (risk_pct / Decimal("100"))
@@ -266,7 +266,7 @@ def recommend_risk_pct(
     specs: BrokerLotSpecs,
     ladder: tuple[Decimal, ...] = RISK_LADDER_PCT,
 ) -> Decimal | None:
-    """Smallest ladder risk % where calculated lots ≥ broker min_lot."""
+    """Smallest ladder risk % where calculated lots >= broker min_lot."""
     for pct in ladder:
         lots = calculate_lots(
             equity=equity,
@@ -287,7 +287,7 @@ def evaluate_eligibility(
     specs: BrokerLotSpecs,
     atr_multiplier: Decimal = DEFAULT_ATR_STOP_MULTIPLIER,
 ) -> MicroEligibilityResult:
-    """YES/NO eligibility for one balance × risk × ATR — no forced lots."""
+    """YES/NO eligibility for one balance x risk x ATR - no forced lots."""
     stop = stop_distance_from_atr(atr, multiplier=atr_multiplier)
     lots = calculate_lots(
         equity=balance,
@@ -301,14 +301,10 @@ def evaluate_eligibility(
         specs=specs,
     )
     required_pct = min_usable_risk_pct(equity=balance, dollar_risk=min_lot_loss)
-    recommended = recommend_risk_pct(
-        equity=balance, stop_distance=stop, specs=specs
-    )
+    recommended = recommend_risk_pct(equity=balance, stop_distance=stop, specs=specs)
 
     if lots >= specs.volume_min:
-        max_loss = dollar_risk_with_specs(
-            lots=lots, stop_distance=stop, specs=specs
-        )
+        max_loss = dollar_risk_with_specs(lots=lots, stop_distance=stop, specs=specs)
         return MicroEligibilityResult(
             balance=balance,
             risk_pct=risk_pct,
@@ -319,7 +315,7 @@ def evaluate_eligibility(
             eligible=True,
             status="Eligible",
             reason=(
-                f"Calculated lots {lots} ≥ broker min_lot {specs.volume_min} "
+                f"Calculated lots {lots} >= broker min_lot {specs.volume_min} "
                 f"at {risk_pct}% risk; max loss ${max_loss}."
             ),
             recommended_risk_pct=recommended,
@@ -361,9 +357,7 @@ def min_safe_balances_table(
     )
     rows: list[dict[str, Any]] = []
     for pct in ladder:
-        floor = equity_floor_for_risk(
-            dollar_risk_at_min_lot=min_loss, risk_pct=pct
-        )
+        floor = equity_floor_for_risk(dollar_risk_at_min_lot=min_loss, risk_pct=pct)
         rows.append(
             {
                 "risk_pct": str(pct),
@@ -383,7 +377,7 @@ def analyze_micro_account(
     specs: BrokerLotSpecs | None = None,
     atr_multiplier: Decimal = DEFAULT_ATR_STOP_MULTIPLIER,
 ) -> dict[str, Any]:
-    """Full analyzer payload for UI: Balance → Specs → Risk → ATR → Lots → Eligible."""
+    """Full analyzer payload for UI: Balance -> Specs -> Risk -> ATR -> Lots -> Eligible."""  # noqa: E501
     broker = specs or desk_fallback_specs()
     stop = stop_distance_from_atr(atr, multiplier=atr_multiplier)
     result = evaluate_eligibility(

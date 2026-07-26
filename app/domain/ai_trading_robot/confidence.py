@@ -87,9 +87,7 @@ def score_ai_confidence(
 
     passed = score >= config.min_confidence
     if not passed:
-        reasons.append(
-            f"Confidence {score} below minimum {config.min_confidence}."
-        )
+        reasons.append(f"Confidence {score} below minimum {config.min_confidence}.")
     return ConfidenceScore(
         score=score,
         band=band,

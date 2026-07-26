@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.domain.quantforg_portfolio_manager.analytics import (
-    build_capital_allocation,
     build_capacity_analysis,
+    build_capital_allocation,
     build_correlation_analysis,
     build_diversification_analysis,
     build_metrics,

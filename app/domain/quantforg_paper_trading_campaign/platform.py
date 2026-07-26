@@ -19,8 +19,8 @@ from app.domain.quantforg_paper_trading_campaign.analytics import (
 from app.domain.quantforg_paper_trading_campaign.gather import gather_campaign_sources
 from app.domain.quantforg_paper_trading_campaign.models import (
     CAMPAIGN_LIFECYCLE,
-    CampaignLifecycle,
     ISOLATION_FLAGS,
+    CampaignLifecycle,
 )
 from app.domain.quantforg_paper_trading_campaign.store import QptcmStore
 
@@ -91,7 +91,7 @@ class QuantForgPaperTradingCampaignManager:
 
     def dashboard(self) -> dict[str, Any]:
         pack = self.run(persist=True)
-        counts = {s: 0 for s in CAMPAIGN_LIFECYCLE}
+        counts = dict.fromkeys(CAMPAIGN_LIFECYCLE, 0)
         for c in pack.get("campaigns") or []:
             lc = str(c.get("lifecycle") or "")
             if lc in counts:
@@ -131,7 +131,7 @@ class QuantForgPaperTradingCampaignManager:
         decision: str,
         comment: str | None = None,
     ) -> dict[str, Any]:
-        """Explicit human approval — QPTCM isolation; never live / capital / auto-grad."""
+        """Explicit human approval — QPTCM isolation; never live / capital / auto-grad."""  # noqa: E501
         if decision not in {"approved", "rejected"}:
             raise ValueError("decision must be approved or rejected")
         if to_state not in CAMPAIGN_LIFECYCLE:

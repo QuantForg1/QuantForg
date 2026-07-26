@@ -20,7 +20,9 @@ logger = get_logger(__name__)
 
 @dataclass
 class ProductionIncidentDetector:
-    config: ProductionHardeningConfig = field(default_factory=lambda: DEFAULT_HARDENING_CONFIG)
+    config: ProductionHardeningConfig = field(
+        default_factory=lambda: DEFAULT_HARDENING_CONFIG
+    )
     _recent_rejects: deque[datetime] = field(default_factory=deque, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
     _last_titles: set[str] = field(default_factory=set, repr=False)
@@ -33,7 +35,9 @@ class ProductionIncidentDetector:
         severity: IncidentSeverity = IncidentSeverity.WARNING,
         source: str = "production_hardening",
     ) -> dict[str, Any] | None:
-        minute_key = f"{datetime.now(UTC).strftime('%Y%m%d%H%M')}:{severity.value}:{title}"
+        minute_key = (
+            f"{datetime.now(UTC).strftime('%Y%m%d%H%M')}:{severity.value}:{title}"
+        )
         with self._lock:
             if minute_key in self._last_titles:
                 return None
@@ -76,7 +80,7 @@ class ProductionIncidentDetector:
         if burst >= self.config.reject_burst_threshold:
             self._raise(
                 title="Repeated broker rejects",
-                detail=f"{burst} rejects in 120s — last retcode={retcode} msg={message[:200]}",
+                detail=f"{burst} rejects in 120s — last retcode={retcode} msg={message[:200]}",  # noqa: E501
                 severity=IncidentSeverity.ERROR,
             )
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -31,20 +31,20 @@ from app.domain.institutional_trading.performance_lab.trade_replay import (
 
 
 def _decision(**kwargs):
-    defaults = dict(
-        direction=SimpleNamespace(value="BUY"),
-        action=SimpleNamespace(value="BUY"),
-        confidence=80,
-        risk_score=25,
-        estimated_rr=Decimal("2.0"),
-        symbol="XAUUSD",
-        quality=75,
-        reasons=("BOS bullish", "FVG fill", "liquidity sweep"),
-        entry_zone=SimpleNamespace(mid=2300, low=2299, high=2301),
-        stop_zone=SimpleNamespace(mid=2290, low=2289, high=2291),
-        target_zone=SimpleNamespace(mid=2320, low=2318, high=2322),
-        approved_lots=Decimal("0.1"),
-        confluence=SimpleNamespace(
+    defaults = {
+        "direction": SimpleNamespace(value="BUY"),
+        "action": SimpleNamespace(value="BUY"),
+        "confidence": 80,
+        "risk_score": 25,
+        "estimated_rr": Decimal("2.0"),
+        "symbol": "XAUUSD",
+        "quality": 75,
+        "reasons": ("BOS bullish", "FVG fill", "liquidity sweep"),
+        "entry_zone": SimpleNamespace(mid=2300, low=2299, high=2301),
+        "stop_zone": SimpleNamespace(mid=2290, low=2289, high=2291),
+        "target_zone": SimpleNamespace(mid=2320, low=2318, high=2322),
+        "approved_lots": Decimal("0.1"),
+        "confluence": SimpleNamespace(
             factors={
                 "trend": 80,
                 "momentum": 70,
@@ -53,7 +53,7 @@ def _decision(**kwargs):
                 "session": 85,
             }
         ),
-    )
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -114,7 +114,10 @@ def test_duel_store_rejects_challenger_execution(tmp_path) -> None:
 def test_replay_generation_has_frames() -> None:
     d = _decision()
     replay = build_replay_from_decision(
-        decision=d, ticket="123", entry=2300.0, trail_events=[{"label": "BE", "detail": "moved BE"}]
+        decision=d,
+        ticket="123",
+        entry=2300.0,
+        trail_events=[{"label": "BE", "detail": "moved BE"}],
     )
     assert replay.symbol == "XAUUSD"
     assert replay.bos is not None or "BOS" in replay.ai_reasoning.upper()

@@ -58,7 +58,9 @@ class IrlStore:
                 "notes": self._notes,
                 "saved_at": datetime.now(UTC).isoformat(),
             }
-            self._path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+            self._path.write_text(
+                json.dumps(payload, indent=2, default=str), encoding="utf-8"
+            )
         except OSError:
             # Research store is best-effort; never raise into production paths.
             pass
@@ -93,20 +95,28 @@ class IrlStore:
             self._persist()
         return deepcopy(row)
 
-    def update_experiment(self, exp_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    def update_experiment(
+        self, exp_id: str, updates: dict[str, Any]
+    ) -> dict[str, Any] | None:
         with self._lock:
             row = self._experiments.get(exp_id)
             if not row:
                 return None
-            if "name" in updates and updates["name"]:
+            if updates.get("name"):
                 row["name"] = str(updates["name"])[:128]
             if "description" in updates:
                 row["description"] = str(updates["description"])[:2000]
             if "candidate_params" in updates:
-                row["candidate_params"] = sanitize_candidate_params(updates["candidate_params"])
-            if "status" in updates and updates["status"] in {s.value for s in ExperimentStatus}:
+                row["candidate_params"] = sanitize_candidate_params(
+                    updates["candidate_params"]
+                )
+            if "status" in updates and updates["status"] in {
+                s.value for s in ExperimentStatus
+            }:
                 row["status"] = updates["status"]
-            if "verdict" in updates and updates["verdict"] in {v.value for v in ResearchVerdict}:
+            if "verdict" in updates and updates["verdict"] in {
+                v.value for v in ResearchVerdict
+            }:
                 row["verdict"] = updates["verdict"]
             for key in ("statistics", "significance", "benchmark", "last_job_id"):
                 if key in updates:
@@ -134,13 +144,17 @@ class IrlStore:
             self._jobs[job["job_id"]] = deepcopy(job)
             if len(self._jobs) > 400:
                 # drop oldest
-                ordered = sorted(self._jobs.items(), key=lambda kv: kv[1].get("created_at") or "")
+                ordered = sorted(
+                    self._jobs.items(), key=lambda kv: kv[1].get("created_at") or ""
+                )
                 for k, _ in ordered[: len(self._jobs) - 300]:
                     del self._jobs[k]
             self._persist()
             return deepcopy(job)
 
-    def list_jobs(self, *, limit: int = 50, experiment_id: str | None = None) -> list[dict[str, Any]]:
+    def list_jobs(
+        self, *, limit: int = 50, experiment_id: str | None = None
+    ) -> list[dict[str, Any]]:
         with self._lock:
             rows = list(self._jobs.values())
         if experiment_id:

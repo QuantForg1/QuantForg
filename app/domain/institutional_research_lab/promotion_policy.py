@@ -9,7 +9,6 @@ from typing import Any
 
 from app.domain.institutional_research_lab.models import ResearchVerdict
 
-
 DEFAULT_GATES: dict[str, Any] = {
     "min_trades": 20,
     "min_profit_factor": 1.2,

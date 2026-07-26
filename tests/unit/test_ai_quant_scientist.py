@@ -137,7 +137,11 @@ class TestAqsAnalysis:
             "recommendations": [],
         }
         ans = answer_question("Which regime produces highest PF?", pack=pack)
-        assert "PF" in ans["answer"] or "pf" in ans["answer"].lower() or "regime" in ans["answer"].lower()
+        assert (
+            "PF" in ans["answer"]
+            or "pf" in ans["answer"].lower()
+            or "regime" in ans["answer"].lower()
+        )
         assert ans["never_modifies_production"] is True
 
 
@@ -152,7 +156,9 @@ class TestAqsPlatform:
         assert "recommendations" in payload
         assert "latest_report" in payload
 
-    def test_status_accepted_does_not_claim_production_write(self, tmp_path: Path) -> None:
+    def test_status_accepted_does_not_claim_production_write(
+        self, tmp_path: Path
+    ) -> None:
         aqs = AiQuantScientist(store=AqsStore(path=tmp_path / "aqs.json"))
         pack = aqs.run_research(persist=True)
         rid = pack["recommendations"][0]["id"]

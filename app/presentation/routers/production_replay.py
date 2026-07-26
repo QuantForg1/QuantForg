@@ -70,8 +70,7 @@ async def production_replay_report(_user: CurrentUser) -> dict[str, Any]:
         return {
             "status": "empty",
             "message": (
-                "No production replay report yet. "
-                "POST /production-replay/run first."
+                "No production replay report yet. " "POST /production-replay/run first."
             ),
             "simulation_only": True,
         }

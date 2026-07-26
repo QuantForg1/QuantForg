@@ -56,7 +56,9 @@ def ise_simulate(
     paths: int = Query(default=100, ge=1, le=5000),
 ) -> dict[str, Any]:
     """Run an isolated simulation (digital twin only)."""
-    from app.application.services.institutional_simulation_engine import ise_simulate as _sim
+    from app.application.services.institutional_simulation_engine import (
+        ise_simulate as _sim,
+    )
 
     payload = _sim(mode=mode, scenario=scenario, paths=paths)
     payload.update(_flags())
@@ -89,7 +91,9 @@ def ise_simulation(simulation_id: str, _user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/simulations/{simulation_id}/aqs")
 def ise_aqs(simulation_id: str, _user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_simulation_engine import ise_aqs_analysis
+    from app.application.services.institutional_simulation_engine import (
+        ise_aqs_analysis,
+    )
 
     pack = ise_aqs_analysis(simulation_id)
     if not pack:
@@ -103,7 +107,9 @@ def ise_monte_carlo(
     paths: int = Query(default=100, ge=1, le=5000),
     scenario: str | None = None,
 ) -> dict[str, Any]:
-    from app.application.services.institutional_simulation_engine import ise_simulate as _sim
+    from app.application.services.institutional_simulation_engine import (
+        ise_simulate as _sim,
+    )
 
     payload = _sim(mode="Historical Monte Carlo", scenario=scenario, paths=paths)
     payload.update(_flags())
@@ -112,7 +118,9 @@ def ise_monte_carlo(
 
 @router.get("/walk-forward")
 def ise_walk_forward(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.institutional_simulation_engine import ise_simulate as _sim
+    from app.application.services.institutional_simulation_engine import (
+        ise_simulate as _sim,
+    )
 
     payload = _sim(mode="Historical Walk Forward")
     payload.update(_flags())
@@ -124,7 +132,9 @@ def ise_stress(
     _user: CurrentUser,
     stress: str = Query(default="volatility_spike"),
 ) -> dict[str, Any]:
-    from app.application.services.institutional_simulation_engine import ise_simulate as _sim
+    from app.application.services.institutional_simulation_engine import (
+        ise_simulate as _sim,
+    )
 
     payload = _sim(mode="Historical Stress Test", scenario=stress)
     payload.update(_flags())
@@ -136,7 +146,9 @@ def ise_reports(
     _user: CurrentUser,
     limit: int = Query(default=20, ge=1, le=100),
 ) -> dict[str, Any]:
-    from app.application.services.institutional_simulation_engine import ise_list_reports
+    from app.application.services.institutional_simulation_engine import (
+        ise_list_reports,
+    )
 
     payload = ise_list_reports(limit=limit)
     payload.update(_flags())

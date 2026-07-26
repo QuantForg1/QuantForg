@@ -8,9 +8,9 @@ from typing import Any
 
 from app.domain.quantforg_decision_intelligence.models import (
     DECISION_CATEGORIES,
-    DecisionCategory,
     PRIORITIES,
     SCORE_KEYS,
+    DecisionCategory,
 )
 
 
@@ -28,7 +28,7 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
 
 def _stable_id(*parts: Any) -> str:
     raw = "|".join(str(p) for p in parts)
-    return "qdie-" + sha1(raw.encode("utf-8")).hexdigest()[:16]
+    return "qdie-" + sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -103,9 +103,7 @@ def build_scores(ctx: dict[str, Any]) -> dict[str, float]:
         + (10.0 if avail.get("qcdm") else 0.0)
     )
 
-    confidence = _clamp(
-        (validation + cert + research + sim_consistency) / 4.0
-    )
+    confidence = _clamp((validation + cert + research + sim_consistency) / 4.0)
     overall = _clamp(
         confidence * 0.18
         + evidence_quality * 0.14
@@ -208,20 +206,30 @@ def build_recommendations(
                 category=DecisionCategory.RESEARCH.value,
                 priority="P2" if research >= 55 else "P1",
                 title="Expand research evidence before strategy promotion",
-                why="Research and experiment coverage is below institutional threshold.",
+                why="Research and experiment coverage is below institutional threshold.",  # noqa: E501
                 supporting=[
-                    {"source": "iep", "id": "iep-registry", "note": f"{iep_n} experiments"},
-                    {"source": "irl", "id": "irl-experiments", "note": f"{irl_n} lab experiments"},
-                ],
-                conflicting=[
                     {
-                        "source": "qcs",
-                        "id": "cert-pressure",
-                        "note": "Certification may still proceed with caveats",
-                    }
-                ]
-                if cert >= 60
-                else [],
+                        "source": "iep",
+                        "id": "iep-registry",
+                        "note": f"{iep_n} experiments",
+                    },
+                    {
+                        "source": "irl",
+                        "id": "irl-experiments",
+                        "note": f"{irl_n} lab experiments",
+                    },
+                ],
+                conflicting=(
+                    [
+                        {
+                            "source": "qcs",
+                            "id": "cert-pressure",
+                            "note": "Certification may still proceed with caveats",
+                        }
+                    ]
+                    if cert >= 60
+                    else []
+                ),
                 dependencies=["iep", "irl", "ise"],
                 risk_assessment="Low research depth increases false-promotion risk.",
                 next_actions=[
@@ -253,7 +261,7 @@ def build_recommendations(
                 category=DecisionCategory.STRATEGY.value,
                 priority="P1" if validation < 60 else "P2",
                 title="Hold strategy lifecycle transitions pending validation",
-                why="Strategy decisions should wait for stronger validation and human review.",
+                why="Strategy decisions should wait for stronger validation and human review.",  # noqa: E501
                 supporting=[
                     {
                         "source": "islm",
@@ -268,7 +276,7 @@ def build_recommendations(
                 ],
                 conflicting=[],
                 dependencies=["islm", "cvf", "qcs"],
-                risk_assessment="Premature lifecycle moves can pollute production readiness.",
+                risk_assessment="Premature lifecycle moves can pollute production readiness.",  # noqa: E501
                 next_actions=[
                     "Review ISLM lifecycle states",
                     "Require human approval for any promote/retire action",
@@ -298,23 +306,39 @@ def build_recommendations(
                 title="Strengthen continuous validation before release review",
                 why="Validation strength is below the advisory institutional bar.",
                 supporting=[
-                    {"source": "cvf", "id": "cvf-snapshot", "note": f"score={validation}"},
+                    {
+                        "source": "cvf",
+                        "id": "cvf-snapshot",
+                        "note": f"score={validation}",
+                    },
                     {"source": "qcs", "id": "qcs-scores", "note": f"cert={cert}"},
                 ],
-                conflicting=[
-                    {"source": "ise", "id": "sim-ok", "note": f"sim_consistency={sim}"}
-                ]
-                if sim >= 70
-                else [],
+                conflicting=(
+                    [
+                        {
+                            "source": "ise",
+                            "id": "sim-ok",
+                            "note": f"sim_consistency={sim}",
+                        }
+                    ]
+                    if sim >= 70
+                    else []
+                ),
                 dependencies=["cvf", "ise", "replay"],
-                risk_assessment="Weak validation undermines release and portfolio decisions.",
+                risk_assessment="Weak validation undermines release and portfolio decisions.",  # noqa: E501
                 next_actions=[
                     "Re-run CVF confidence checks",
                     "Reconcile replay vs live drift",
                     "Document conflicting simulation evidence",
                 ],
-                alternatives=["Gate releases until validation ≥ 75", "Accept with explicit waiver"],
-                trade_offs=["Stricter gates slow releases", "Waivers increase residual risk"],
+                alternatives=[
+                    "Gate releases until validation ≥ 75",
+                    "Accept with explicit waiver",
+                ],
+                trade_offs=[
+                    "Stricter gates slow releases",
+                    "Waivers increase residual risk",
+                ],
                 limitations=["Confidence metrics may lag recent experiments"],
                 scores=scores,
                 confidence=validation,
@@ -330,21 +354,35 @@ def build_recommendations(
                 category=DecisionCategory.RISK.value,
                 priority="P0" if risk < 50 else "P1",
                 title="Conduct formal risk review on elevated exposures",
-                why="Risk health or alert inventory indicates need for human risk review.",
+                why="Risk health or alert inventory indicates need for human risk review.",  # noqa: E501
                 supporting=[
-                    {"source": "irap", "id": "irap-alerts", "note": f"{len(irap_alerts)} alerts"},
-                    {"source": "irap", "id": "risk-health", "note": f"risk_health={risk}"},
+                    {
+                        "source": "irap",
+                        "id": "irap-alerts",
+                        "note": f"{len(irap_alerts)} alerts",
+                    },
+                    {
+                        "source": "irap",
+                        "id": "risk-health",
+                        "note": f"risk_health={risk}",
+                    },
                 ],
                 conflicting=[],
                 dependencies=["irap", "qpm", "icp"],
-                risk_assessment="Unresolved risk alerts can cascade into portfolio and ops decisions.",
+                risk_assessment="Unresolved risk alerts can cascade into portfolio and ops decisions.",  # noqa: E501
                 next_actions=[
                     "Triage IRAP alerts by severity",
                     "Map alerts to strategies and portfolios",
                     "Record human risk disposition",
                 ],
-                alternatives=["Tighten advisory risk limits", "Maintain status quo with monitoring"],
-                trade_offs=["Tighter limits reduce opportunity", "Loose limits raise drawdown risk"],
+                alternatives=[
+                    "Tighten advisory risk limits",
+                    "Maintain status quo with monitoring",
+                ],
+                trade_offs=[
+                    "Tighter limits reduce opportunity",
+                    "Loose limits raise drawdown risk",
+                ],
                 limitations=["QDIE never changes risk parameters"],
                 scores=scores,
                 confidence=risk,
@@ -361,7 +399,11 @@ def build_recommendations(
                 title="Review portfolio allocation recommendations",
                 why="Portfolio confidence/health is below advisory target.",
                 supporting=[
-                    {"source": "qpm", "id": "qpm-metrics", "note": f"portfolio={portfolio}"},
+                    {
+                        "source": "qpm",
+                        "id": "qpm-metrics",
+                        "note": f"portfolio={portfolio}",
+                    },
                 ],
                 conflicting=[],
                 dependencies=["qpm", "irap", "islm"],
@@ -372,7 +414,10 @@ def build_recommendations(
                     "Require human approval before any capital change",
                 ],
                 alternatives=["Rebalance advisory weights", "Defer allocation changes"],
-                trade_offs=["Rebalancing incurs turnover", "Deferral preserves current exposures"],
+                trade_offs=[
+                    "Rebalancing incurs turnover",
+                    "Deferral preserves current exposures",
+                ],
                 limitations=["QDIE never allocates capital"],
                 scores=scores,
                 confidence=portfolio,
@@ -388,22 +433,36 @@ def build_recommendations(
                 category=DecisionCategory.RELEASE.value,
                 priority="P0" if cert < 50 else "P1",
                 title="Defer release approval until certification clears",
-                why="Release decisions require certification readiness and explicit human approval.",
+                why="Release decisions require certification readiness and explicit human approval.",  # noqa: E501
                 supporting=[
                     {"source": "qcs", "id": "qcs-level", "note": f"cert={cert}"},
-                    {"source": "irdp", "id": "releases", "note": f"{len(releases)} releases"},
-                    {"source": "cvf", "id": "validation", "note": f"validation={validation}"},
+                    {
+                        "source": "irdp",
+                        "id": "releases",
+                        "note": f"{len(releases)} releases",
+                    },
+                    {
+                        "source": "cvf",
+                        "id": "validation",
+                        "note": f"validation={validation}",
+                    },
                 ],
                 conflicting=[],
                 dependencies=["qcs", "irdp", "cvf", "aoc"],
-                risk_assessment="Approving releases without certification risks production integrity.",
+                risk_assessment="Approving releases without certification risks production integrity.",  # noqa: E501
                 next_actions=[
                     "Review QCS blockers",
                     "Confirm IRDP approval queue remains human-gated",
                     "Publish decision brief for release committee",
                 ],
-                alternatives=["Approve with documented waiver", "Rollback candidate release"],
-                trade_offs=["Deferral slows delivery", "Waiver increases operational risk"],
+                alternatives=[
+                    "Approve with documented waiver",
+                    "Rollback candidate release",
+                ],
+                trade_offs=[
+                    "Deferral slows delivery",
+                    "Waiver increases operational risk",
+                ],
                 limitations=["QDIE never approves releases"],
                 scores=scores,
                 confidence=_clamp((cert + validation) / 2.0),
@@ -419,23 +478,38 @@ def build_recommendations(
                 category=DecisionCategory.OPERATIONAL.value,
                 priority="P1" if ops < 55 else "P2",
                 title="Operational readiness review with AOC evidence",
-                why="Platform operational score or AOC queue indicates operator attention needed.",
+                why="Platform operational score or AOC queue indicates operator attention needed.",  # noqa: E501
                 supporting=[
                     {"source": "icp", "id": "icp-health", "note": f"ops={ops}"},
-                    {"source": "aoc", "id": "aoc-recs", "note": f"{len(aoc_recs)} AOC items"},
-                    {"source": "eqs", "id": "execution", "note": f"eq={scores.get('execution_quality')}"},
-                    {"source": "res", "id": "reliability", "note": f"rel={scores.get('reliability')}"},
+                    {
+                        "source": "aoc",
+                        "id": "aoc-recs",
+                        "note": f"{len(aoc_recs)} AOC items",
+                    },
+                    {
+                        "source": "eqs",
+                        "id": "execution",
+                        "note": f"eq={scores.get('execution_quality')}",
+                    },
+                    {
+                        "source": "res",
+                        "id": "reliability",
+                        "note": f"rel={scores.get('reliability')}",
+                    },
                 ],
                 conflicting=[],
                 dependencies=["aoc", "icp", "eqs", "res", "qem"],
-                risk_assessment="Operational gaps can block safe research-to-release flow.",
+                risk_assessment="Operational gaps can block safe research-to-release flow.",  # noqa: E501
                 next_actions=[
                     "Walk AOC work queue with operators",
                     "Correlate QEM alerts to incidents",
                     "Confirm no automatic remediation is enabled",
                 ],
                 alternatives=["Increase monitoring only", "Escalate P0 ops items"],
-                trade_offs=["Escalation consumes operator time", "Ignoring raises incident probability"],
+                trade_offs=[
+                    "Escalation consumes operator time",
+                    "Ignoring raises incident probability",
+                ],
                 limitations=["QDIE never performs automatic actions"],
                 scores=scores,
                 confidence=ops,
@@ -443,24 +517,34 @@ def build_recommendations(
             )
         )
 
-    # Always ensure at least an executive overview recommendation when overall is middling
+    # Always ensure at least an executive overview recommendation when overall is middling  # noqa: E501
     if not recs:
         recs.append(
             _recommendation(
                 category=DecisionCategory.OPERATIONAL.value,
                 priority="P3",
                 title="Maintain advisory monitoring posture",
-                why=f"Overall decision score {overall} is within acceptable advisory band.",
+                why=f"Overall decision score {overall} is within acceptable advisory band.",  # noqa: E501
                 supporting=[
                     {"source": "qdie", "id": "scores", "note": f"overall={overall}"},
-                    {"source": "qcdm", "id": "contract", "note": "canonical contract available"},
+                    {
+                        "source": "qcdm",
+                        "id": "contract",
+                        "note": "canonical contract available",
+                    },
                 ],
                 conflicting=[],
                 dependencies=["qem", "qcdm", "qkg"],
                 risk_assessment="Residual risk is low; continue human oversight.",
-                next_actions=["Continue scheduled decision reviews", "Keep human approval gates intact"],
+                next_actions=[
+                    "Continue scheduled decision reviews",
+                    "Keep human approval gates intact",
+                ],
                 alternatives=["Increase review cadence", "Reduce review cadence"],
-                trade_offs=["More reviews cost time", "Fewer reviews reduce early detection"],
+                trade_offs=[
+                    "More reviews cost time",
+                    "Fewer reviews reduce early detection",
+                ],
                 limitations=["Snapshot-based; not a live guarantee"],
                 scores=scores,
                 confidence=overall,
@@ -531,7 +615,9 @@ def build_evidence_graph(
     }
 
 
-def build_tradeoff_viewer(recommendations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_tradeoff_viewer(
+    recommendations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for rec in recommendations:
         exp = _as_dict(rec.get("explainability"))
@@ -585,7 +671,9 @@ def build_reports(
         },
         "recommendation_summary": {
             "by_category": {
-                cat: sum(1 for r in recommendations if r.get("decision_category") == cat)
+                cat: sum(
+                    1 for r in recommendations if r.get("decision_category") == cat
+                )
                 for cat in DECISION_CATEGORIES
             },
             "items": [
@@ -600,7 +688,7 @@ def build_reports(
             "read_only": True,
         },
         "decision_history": {
-            "note": "Chronological advisory decisions from this run (immutable snapshot)",
+            "note": "Chronological advisory decisions from this run (immutable snapshot)",  # noqa: E501
             "entries": [
                 {
                     "decision_id": r.get("decision_id"),

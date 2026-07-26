@@ -20,7 +20,9 @@ from app.domain.institutional_trading.operations.models import OpsExecutionMode
 def test_launch_locks_require_live_and_execution() -> None:
     plane = OperationsControlPlane()
     plane.mode = OpsExecutionMode.SHADOW
-    ok, reason = launch_locks_pass(plane, settings=SimpleNamespace(execution_enabled=True))
+    ok, reason = launch_locks_pass(
+        plane, settings=SimpleNamespace(execution_enabled=True)
+    )
     assert ok is False
     assert "ops_mode" in reason
 

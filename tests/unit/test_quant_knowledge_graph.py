@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from app.domain.quant_knowledge_graph.builder import build_graph
-from app.domain.quant_knowledge_graph.models import ISOLATION_FLAGS, NodeType, RelationType
+from app.domain.quant_knowledge_graph.models import (
+    ISOLATION_FLAGS,
+    NodeType,
+    RelationType,
+)
 from app.domain.quant_knowledge_graph.platform import QuantKnowledgeGraph
 from app.domain.quant_knowledge_graph.query import (
     ai_query,
@@ -116,7 +120,9 @@ class TestQkgBuilderQuery:
 
 
 class TestQkgPlatform:
-    def test_isolation_and_perf(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_isolation_and_perf(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         assert ISOLATION_FLAGS["mutates_production"] is False
         assert ISOLATION_FLAGS["modifies_thresholds"] is False
         qkg = QuantKnowledgeGraph(store=QkgStore(path=tmp_path / "qkg.json"))

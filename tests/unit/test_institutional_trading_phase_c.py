@@ -417,9 +417,7 @@ class TestExecutionBridgePhaseC:
 
         decision, snap, acct = _buy_decision()
         decision = replace(decision, approved_lots=Decimal("0.01"))
-        op = OperatorIdentity(
-            user_id=uuid4(), role="owner", display_name="test-op"
-        )
+        op = OperatorIdentity(user_id=uuid4(), role="owner", display_name="test-op")
         plane = OperationsControlPlane()
         plane.transition_mode(
             op, OpsExecutionMode.CANARY, reason="canary", confirmed=True

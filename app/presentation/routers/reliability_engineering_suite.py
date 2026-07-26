@@ -29,7 +29,9 @@ def _flags() -> dict[str, Any]:
 
 @router.get("/dashboard")
 def res_dashboard(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     payload = build_res_dashboard()
     payload.update(_flags())
@@ -38,7 +40,9 @@ def res_dashboard(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/health")
 def res_health(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {
@@ -50,7 +54,9 @@ def res_health(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/services")
 def res_services(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {"services": pack.get("services"), **_flags()}
@@ -58,7 +64,9 @@ def res_services(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/availability")
 def res_availability(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {"availability": pack.get("availability_windows"), **_flags()}
@@ -66,7 +74,9 @@ def res_availability(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/recovery")
 def res_recovery(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {"recovery": pack.get("recovery"), **_flags()}
@@ -74,7 +84,9 @@ def res_recovery(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/failures")
 def res_failures(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {"failures": pack.get("failures"), **_flags()}
@@ -82,7 +94,9 @@ def res_failures(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/trends")
 def res_trends(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {"trends": pack.get("trends"), **_flags()}
@@ -90,7 +104,9 @@ def res_trends(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/score")
 def res_score(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {"reliability_score": pack.get("reliability_score"), **_flags()}
@@ -98,7 +114,9 @@ def res_score(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/evidence")
 def res_evidence(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.reliability_engineering_suite import build_res_dashboard
+    from app.application.services.reliability_engineering_suite import (
+        build_res_dashboard,
+    )
 
     pack = build_res_dashboard()
     return {"evidence": pack.get("evidence"), **_flags()}

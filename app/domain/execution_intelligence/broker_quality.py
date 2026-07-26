@@ -76,8 +76,7 @@ def compute_broker_quality(
         "status": "available",
         "score": round(score, 2),
         "components": {
-            k: (round(v, 2) if v is not None else None)
-            for k, v in components.items()
+            k: (round(v, 2) if v is not None else None) for k, v in components.items()
         },
         "weights_used": {k: round(w / total_w, 3) for k, w in weights.items()},
         "note": "Composite from supplied facts only — never invents fills",

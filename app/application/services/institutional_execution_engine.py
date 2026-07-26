@@ -326,13 +326,11 @@ class InstitutionalExecutionEngine:
                     result="FAIL",
                     function="InstitutionalExecutionEngine.run_submit",
                     file=(
-                        "app/application/services/"
-                        "institutional_execution_engine.py"
+                        "app/application/services/" "institutional_execution_engine.py"
                     ),
                     line=309,
                     condition=(
-                        "trade_mode in {'closeonly','close_only'} "
-                        "and not is_manage"
+                        "trade_mode in {'closeonly','close_only'} " "and not is_manage"
                     ),
                     current=trade_mode,
                     required="full",
@@ -628,12 +626,10 @@ class InstitutionalExecutionEngine:
                         log_risk_lock_overridden(
                             current_daily_loss_pct=dd.get("daily_loss_pct"),
                         )
-                except Exception:
+                except Exception:  # noqa: S110  # best-effort optional path
                     pass
                 if assessment.decision is RiskDecision.REJECT:
-                    risk_reject = list(assessment.reasons) or [
-                        "Risk Engine REJECT"
-                    ]
+                    risk_reject = list(assessment.reasons) or ["Risk Engine REJECT"]
                     # Belt-and-suspenders: strip daily-loss if still present.
                     from app.domain.institutional_trading.risk_lock_override import (
                         apply_daily_loss_lock_override,
@@ -664,9 +660,7 @@ class InstitutionalExecutionEngine:
             stages,
             stage=PipelineStage.RISK_CHECK,
             status="failed" if risk_reject else "ok",
-            reason=(
-                "; ".join(risk_reject) if risk_reject else "Risk Engine PASS"
-            ),
+            reason=("; ".join(risk_reject) if risk_reject else "Risk Engine PASS"),
             t0=t0,
             meta={"component": "risk_engine"},
         )

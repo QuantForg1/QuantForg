@@ -33,7 +33,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["triggers_automation"] is False
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     eqs = ExecutionQualitySuite(store=EqsStore(path=tmp_path / "eqs.json"))
     monkeypatch.setattr("app.domain.execution_quality_suite._EQS", eqs)
     monkeypatch.setattr(svc, "get_eqs", lambda: eqs)

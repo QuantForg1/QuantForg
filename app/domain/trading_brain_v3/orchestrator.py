@@ -31,9 +31,7 @@ from app.domain.trading_brain_v3.types import BrainInput
 
 @dataclass
 class TradingBrainV3:
-    config: TradingBrainConfig = field(
-        default_factory=lambda: DEFAULT_BRAIN_CONFIG
-    )
+    config: TradingBrainConfig = field(default_factory=lambda: DEFAULT_BRAIN_CONFIG)
     history: list[dict[str, Any]] = field(default_factory=list)
 
     def status(self) -> dict[str, object]:
@@ -99,9 +97,7 @@ class TradingBrainV3:
             "supervisor": supervisor.score,
             "post_trade": post.score,
         }
-        quality = build_quality_dashboard(
-            inp, self.config, module_scores=module_scores
-        )
+        quality = build_quality_dashboard(inp, self.config, module_scores=module_scores)
         discipline = compute_discipline_score(
             inp,
             self.config,

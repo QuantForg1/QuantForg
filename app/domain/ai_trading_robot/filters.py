@@ -60,9 +60,7 @@ def evaluate_session_filter(
     name = session.value if hasattr(session, "value") else str(session)
     name_l = str(name).lower().replace(" ", "_")
     allowed = {s.lower().replace(" ", "_") for s in config.allowed_sessions}
-    ok = name_l in allowed or any(
-        a in name_l or name_l in a for a in allowed
-    )
+    ok = name_l in allowed or any(a in name_l or name_l in a for a in allowed)
     if "overlap" in name_l and any("overlap" in a for a in allowed):
         ok = True
     return FilterResult(
@@ -115,9 +113,7 @@ def evaluate_volatility_filter(
             passed=False,
             reason="ATR/price unavailable — fail closed for new entries.",
             current="—",
-            threshold=(
-                f"{config.min_atr_pct_of_price}-{config.max_atr_pct_of_price}%"
-            ),
+            threshold=(f"{config.min_atr_pct_of_price}-{config.max_atr_pct_of_price}%"),
         )
     atr_pct = (atr / price * Decimal("100")).quantize(Decimal("0.01"))
     if atr_pct > config.max_atr_pct_of_price:
@@ -144,9 +140,7 @@ def evaluate_volatility_filter(
         passed=True,
         reason=f"ATR {atr_pct}% within band",
         current=str(atr_pct),
-        threshold=(
-            f"{config.min_atr_pct_of_price}-{config.max_atr_pct_of_price}"
-        ),
+        threshold=(f"{config.min_atr_pct_of_price}-{config.max_atr_pct_of_price}"),
     )
 
 

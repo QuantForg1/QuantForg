@@ -58,7 +58,12 @@ def build_operational_health(ctx: dict[str, Any]) -> dict[str, Any]:
         50.0,
         icp_health.get("overall_platform_health"),
         (
-            _score_or(50.0, _as_dict(eqs.get("execution_score") or eqs).get("overall_execution_score"))
+            _score_or(
+                50.0,
+                _as_dict(eqs.get("execution_score") or eqs).get(
+                    "overall_execution_score"
+                ),
+            )
             + _score_or(
                 50.0,
                 _as_dict(res.get("reliability_score") or res).get(
@@ -143,7 +148,9 @@ def build_watch_modules(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_recommendations(ctx: dict[str, Any], watches: dict[str, Any]) -> list[dict[str, Any]]:
+def build_recommendations(
+    ctx: dict[str, Any], watches: dict[str, Any]
+) -> list[dict[str, Any]]:
     sources = _as_dict(ctx.get("sources"))
     recs: list[dict[str, Any]] = []
 
@@ -184,7 +191,10 @@ def build_recommendations(ctx: dict[str, Any], watches: dict[str, Any]) -> list[
             "Validation required",
             category="Validation Watch",
             detail=f"CVF confidence {conf}",
-            evidence={"confidence": conf, "alerts": _as_dict(watches.get("validation_watch")).get("alerts")},
+            evidence={
+                "confidence": conf,
+                "alerts": _as_dict(watches.get("validation_watch")).get("alerts"),
+            },
             priority="P1" if conf < 40 else "P2",
             dependencies=["cvf"],
             next_action="Open CVF and request human validation review",
@@ -196,7 +206,10 @@ def build_recommendations(ctx: dict[str, Any], watches: dict[str, Any]) -> list[
             "Risk review required",
             category="Risk Watch",
             detail=f"IRAP drawdown {dd}",
-            evidence={"drawdown": dd, "alerts": _as_dict(watches.get("risk_watch")).get("alerts")},
+            evidence={
+                "drawdown": dd,
+                "alerts": _as_dict(watches.get("risk_watch")).get("alerts"),
+            },
             priority="P0" if dd >= 30 else "P1",
             dependencies=["irap"],
             next_action="Open IRAP and escalate risk review",
@@ -259,7 +272,9 @@ def build_recommendations(ctx: dict[str, Any], watches: dict[str, Any]) -> list[
             next_action="Schedule historical replay validation",
         )
 
-    for exp in _as_list(_as_dict(watches.get("research_backlog")).get("experiments"))[:5]:
+    for exp in _as_list(_as_dict(watches.get("research_backlog")).get("experiments"))[
+        :5
+    ]:
         ed = _as_dict(exp)
         state = str(ed.get("lifecycle_state") or ed.get("status") or "").lower()
         if "human" in state or "ai review" in state or "research" in state or not state:
@@ -357,24 +372,44 @@ def build_executive_scores(
     watches: dict[str, Any],
 ) -> dict[str, Any]:
     sources = _as_dict(ctx.get("sources"))
-    qcs_scores = _as_dict(_as_dict(sources.get("qcs")).get("scores") or sources.get("qcs"))
+    qcs_scores = _as_dict(
+        _as_dict(sources.get("qcs")).get("scores") or sources.get("qcs")
+    )
     qpm_health = _as_dict(
         _as_dict(watches.get("portfolio_watch")).get("health")
         or _as_dict(sources.get("qpm")).get("health")
     )
-    icp_health = _as_dict(_as_dict(sources.get("icp")).get("health") or sources.get("icp"))
+    icp_health = _as_dict(
+        _as_dict(sources.get("icp")).get("health") or sources.get("icp")
+    )
     iep_n = len(_as_list(_as_dict(watches.get("research_backlog")).get("experiments")))
     release = _score_or(
         45.0,
         qcs_scores.get("overall_institutional_readiness_score"),
-        55.0 if _as_dict(watches.get("release_readiness")).get("certification_level") else 40.0,
+        (
+            55.0
+            if _as_dict(watches.get("release_readiness")).get("certification_level")
+            else 40.0
+        ),
     )
     platform = _score_or(
         50.0,
         icp_health.get("overall_platform_health"),
         health.get("overall_operational_health"),
     )
-    research = _clamp(40.0 + min(40.0, iep_n * 5) + min(20.0, len(_as_list(_as_dict(watches.get("research_backlog")).get("aqs_recommendations"))) * 3))
+    research = _clamp(
+        40.0
+        + min(40.0, iep_n * 5)
+        + min(
+            20.0,
+            len(
+                _as_list(
+                    _as_dict(watches.get("research_backlog")).get("aqs_recommendations")
+                )
+            )
+            * 3,
+        )
+    )
     portfolio = _score_or(
         50.0,
         qpm_health.get("overall_portfolio_health"),
@@ -411,9 +446,9 @@ def build_evidence_explorer(ctx: dict[str, Any]) -> dict[str, Any]:
             {
                 "source": sid,
                 "present": bool(blob),
-                "summary_keys": list(_as_dict(blob).keys())[:12]
-                if isinstance(blob, dict)
-                else [],
+                "summary_keys": (
+                    list(_as_dict(blob).keys())[:12] if isinstance(blob, dict) else []
+                ),
                 "evidence_ref": f"sources.{sid}",
             }
         )

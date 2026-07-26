@@ -57,7 +57,9 @@ class ChampionChallengerDuel:
         return asdict(self)
 
 
-def _factors_from_decision(decision: Any, snapshot: Any | None = None) -> dict[str, int]:
+def _factors_from_decision(
+    decision: Any, snapshot: Any | None = None
+) -> dict[str, int]:
     factors: dict[str, int] = {}
     confluence = getattr(decision, "confluence", None)
     raw = getattr(confluence, "factors", None) if confluence is not None else None
@@ -65,7 +67,7 @@ def _factors_from_decision(decision: Any, snapshot: Any | None = None) -> dict[s
         for k, v in raw.items():
             try:
                 factors[str(k).lower()] = _clamp(int(v))
-            except Exception:
+            except Exception:  # noqa: S112  # best-effort continue
                 continue
     conf = int(getattr(decision, "confidence", 50) or 50)
     quality = int(getattr(decision, "quality", conf) or conf)
@@ -103,7 +105,9 @@ def champion_from_decision(decision: Any) -> ProfileDecision:
         profile="champion",
         direction=direction,
         confidence=conf,
-        opportunity_score=_clamp(conf),  # production confidence proxy when no alpha score
+        opportunity_score=_clamp(
+            conf
+        ),  # production confidence proxy when no alpha score
         expected_rr=rr,
         risk_score=int(getattr(decision, "risk_score", 0) or 0),
         may_execute=True,
@@ -129,7 +133,9 @@ def evaluate_challenger(
         weighted += score * float(w)
         total_w += float(w)
     score = _clamp(round(weighted / total_w) if total_w else 50)
-    conf = _clamp(round(0.55 * score + 0.45 * int(getattr(decision, "confidence", 50) or 50)))
+    conf = _clamp(
+        round(0.55 * score + 0.45 * int(getattr(decision, "confidence", 50) or 50))
+    )
 
     primary_dir = str(
         getattr(getattr(decision, "direction", None), "value", None)
@@ -141,7 +147,11 @@ def evaluate_challenger(
     if score < 48 or bos < 38:
         direction = "NONE"
     elif abs(score - conf) > 25 and bos < 55:
-        direction = "SELL" if primary_dir == "BUY" else ("BUY" if primary_dir == "SELL" else "NONE")
+        direction = (
+            "SELL"
+            if primary_dir == "BUY"
+            else ("BUY" if primary_dir == "SELL" else "NONE")
+        )
     else:
         direction = primary_dir if primary_dir in {"BUY", "SELL"} else "NONE"
 

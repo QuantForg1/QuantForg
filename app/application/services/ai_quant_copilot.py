@@ -77,5 +77,5 @@ def aqc_recommendations(
             "research_area": research_area,
         },
         "isolation": ISOLATION_FLAGS,
-        "note": "AQS recommendations explored read-only — Accepted never applies production",
+        "note": "AQS recommendations explored read-only — Accepted never applies production",  # noqa: E501
     }

@@ -65,9 +65,10 @@ def _find_cell(
     matrix: list[dict[str, Any]], *, quality: int, confluence: int
 ) -> dict[str, Any] | None:
     for row in matrix:
-        if int(row.get("quality_gate", -1)) == quality and int(
-            row.get("confluence_gate", -1)
-        ) == confluence:
+        if (
+            int(row.get("quality_gate", -1)) == quality
+            and int(row.get("confluence_gate", -1)) == confluence
+        ):
             return row
     return None
 
@@ -91,12 +92,8 @@ def decide_candidate(
     dd_p = _f(production.get("maximum_drawdown_pct"))
     dd_c = _f(candidate.get("maximum_drawdown_pct"))
 
-    pf_improves = (
-        pf_p is not None and pf_c is not None and pf_c > pf_p
-    )
-    exp_improves = (
-        exp_p is not None and exp_c is not None and exp_c > exp_p
-    )
+    pf_improves = pf_p is not None and pf_c is not None and pf_c > pf_p
+    exp_improves = exp_p is not None and exp_c is not None and exp_c > exp_p
 
     # Material DD increase: > +10% relative or +1 percentage point (whichever larger).
     dd_materially_worse = False
@@ -337,7 +334,9 @@ def report_to_markdown(report: dict[str, Any]) -> str:
                 "",
             ]
         )
-    lines.append("Production thresholds remain Q80/C80. This report never applies changes.")
+    lines.append(
+        "Production thresholds remain Q80/C80. This report never applies changes."
+    )
     lines.append("")
     return "\n".join(lines)
 

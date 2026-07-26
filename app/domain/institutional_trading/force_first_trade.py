@@ -60,9 +60,11 @@ class ForceFirstTradeConfig:
 
     @classmethod
     def from_settings(cls, settings: Any) -> ForceFirstTradeConfig:
-        raw_dir = str(
-            getattr(settings, "force_first_trade_direction", "AUTO") or "AUTO"
-        ).strip().upper()
+        raw_dir = (
+            str(getattr(settings, "force_first_trade_direction", "AUTO") or "AUTO")
+            .strip()
+            .upper()
+        )
         direction: ForceDirection = (
             raw_dir if raw_dir in {"BUY", "SELL", "AUTO"} else "AUTO"
         )
@@ -230,12 +232,7 @@ def force_first_trade_status(
     cfg = ForceFirstTradeConfig.from_settings(settings)
     state = get_force_first_trade_state()
     remaining = max(0, cfg.max_trades - state.executed_count)
-    armed = (
-        cfg.enabled
-        and state.armed
-        and remaining > 0
-        and bool(execution_enabled)
-    )
+    armed = cfg.enabled and state.armed and remaining > 0 and bool(execution_enabled)
     banner = bool(cfg.enabled and state.armed and remaining > 0)
     return {
         "enabled": cfg.enabled,
@@ -313,9 +310,7 @@ def maybe_override_decision(
         # Force First Trade continues past signal/risk soft blocks to OMS.
         # Margin / market-open / spread remain enforced in eligibility below.
         logger.warning("Force First Trade detected")
-        logger.warning(
-            "Bypassing:\n- Quality\n- Confluence\n- MTF"
-        )
+        logger.warning("Bypassing:\n- Quality\n- Confluence\n- MTF")
 
         forced_confluence = ConfluenceResult(
             confidence=decision.confluence.confidence,
@@ -497,9 +492,9 @@ def record_forced_trade_success(
             try:
                 object.__setattr__(settings, "force_first_trade", False)
             except Exception:
-                try:
-                    settings.force_first_trade = False  # type: ignore[misc]
-                except Exception:
+                try:  # noqa: SIM105
+                    settings.force_first_trade = False
+                except Exception:  # noqa: S110  # best-effort optional path
                     pass
     except Exception:
         logger.exception("force_first_trade_settings_disarm_failed")

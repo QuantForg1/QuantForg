@@ -14,9 +14,7 @@ from app.domain.adaptive_scalping_intelligence.orchestrator import input_from_di
 
 class AdaptiveScalpingIntelligenceService:
     def __init__(self, config: AsiConfig | None = None) -> None:
-        self._system = AdaptiveScalpingIntelligence(
-            config or DEFAULT_ASI_CONFIG
-        )
+        self._system = AdaptiveScalpingIntelligence(config or DEFAULT_ASI_CONFIG)
 
     def status(self) -> dict[str, object]:
         return self._system.status()

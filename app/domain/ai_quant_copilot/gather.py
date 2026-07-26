@@ -8,7 +8,7 @@ from typing import Any
 def _safe(fn, default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -160,7 +160,9 @@ def gather_ops_context() -> dict[str, Any]:
         lambda: __import__(
             "app.domain.audit_governance.store",
             fromlist=["get_audit_store"],
-        ).get_audit_store().list(limit=60),
+        )
+        .get_audit_store()
+        .list(limit=60),
         [],
     )
     availability["audit"] = isinstance(sources["audit"], list)

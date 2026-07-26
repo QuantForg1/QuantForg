@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 REGIMES = (
     "GLOBAL_RISK_ON",
     "GLOBAL_RISK_OFF",
@@ -49,18 +48,24 @@ def detect_global_regime(
 
     if avg_spread is not None and avg_spread > 0 and portfolio_volatility > 2:
         reasons.append("spread+vol elevated")
-        return GlobalRegime("LIQUIDITY_HUNT", 70, tuple(reasons) or ("liquidity stress",))
+        return GlobalRegime(
+            "LIQUIDITY_HUNT", 70, tuple(reasons) or ("liquidity stress",)
+        )
 
     if portfolio_volatility >= 3.5:
         reasons.append(f"portfolio_vol={portfolio_volatility}")
         if daily_pnl < 0:
-            return GlobalRegime("TREND_EXHAUSTION", 65, tuple(reasons) + ("negative daily pnl",))
+            return GlobalRegime(
+                "TREND_EXHAUSTION", 65, (*tuple(reasons), "negative daily pnl")
+            )
         return GlobalRegime("TREND_EXPANSION", 65, tuple(reasons))
 
     if equity > 0 and abs(daily_pnl) / equity > 0.02 and daily_pnl < 0:
         return GlobalRegime("GLOBAL_RISK_OFF", 60, ("sharp daily loss",))
 
     if daily_pnl > 0 and portfolio_volatility < 1.5:
-        return GlobalRegime("GLOBAL_RISK_ON", 55, ("constructive pnl with contained vol",))
+        return GlobalRegime(
+            "GLOBAL_RISK_ON", 55, ("constructive pnl with contained vol",)
+        )
 
     return GlobalRegime("NEUTRAL", 50, ("no dominant global signal",))

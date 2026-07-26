@@ -33,15 +33,9 @@ class EvaluateRequest(BaseModel):
 
 
 class PoliciesRequest(BaseModel):
-    min_observations_for_edge: int | None = Field(
-        default=None, ge=1, le=10_000
-    )
-    min_observations_for_calibration: int | None = Field(
-        default=None, ge=1, le=10_000
-    )
-    min_evidence_for_live_change_rec: int | None = Field(
-        default=None, ge=1, le=50_000
-    )
+    min_observations_for_edge: int | None = Field(default=None, ge=1, le=10_000)
+    min_observations_for_calibration: int | None = Field(default=None, ge=1, le=10_000)
+    min_evidence_for_live_change_rec: int | None = Field(default=None, ge=1, le=50_000)
     max_observations: int | None = Field(default=None, ge=10, le=100_000)
     max_feedback: int | None = Field(default=None, ge=10, le=50_000)
     max_journal: int | None = Field(default=None, ge=10, le=50_000)
@@ -56,9 +50,7 @@ async def llp_status(user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/evaluate")
-async def llp_evaluate(
-    body: EvaluateRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def llp_evaluate(body: EvaluateRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.evaluate(body.model_dump())
 

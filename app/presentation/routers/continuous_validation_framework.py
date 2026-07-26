@@ -115,7 +115,9 @@ def cvf_reports(
     _user: CurrentUser,
     limit: int = Query(default=20, ge=1, le=100),
 ) -> dict[str, Any]:
-    from app.application.services.continuous_validation_framework import cvf_list_reports
+    from app.application.services.continuous_validation_framework import (
+        cvf_list_reports,
+    )
 
     payload = cvf_list_reports(limit=limit)
     payload.update(_flags())

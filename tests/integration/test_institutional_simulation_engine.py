@@ -33,7 +33,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["modifies_scheduler"] is False
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ise = InstitutionalSimulationEngine(store=IseStore(path=tmp_path / "ise.json"))
     monkeypatch.setattr("app.domain.institutional_simulation_engine._ISE", ise)
     monkeypatch.setattr(svc, "get_ise", lambda: ise)

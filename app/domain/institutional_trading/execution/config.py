@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.institutional_trading.execution.models import ExecutionMode
 from app.domain.trading.gold_only import GOLD_SYMBOL
@@ -40,7 +41,7 @@ class ExecutionBridgeConfig:
     # Slippage points passed to OMS intent
     slippage: int = 10
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "config_version": self.config_version,

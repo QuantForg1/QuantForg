@@ -22,9 +22,7 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 
 @dataclass
 class MultiAgentSystem:
-    config: MultiAgentConfig = field(
-        default_factory=lambda: DEFAULT_MULTI_AGENT_CONFIG
-    )
+    config: MultiAgentConfig = field(default_factory=lambda: DEFAULT_MULTI_AGENT_CONFIG)
     bus: AgentEventBus = field(default_factory=AgentEventBus)
     memory: AIMemory = field(default_factory=AIMemory)
     sessions: list[dict[str, Any]] = field(default_factory=list)
@@ -66,10 +64,7 @@ class MultiAgentSystem:
     def list_events(
         self, *, limit: int = 100, session_id: str | None = None
     ) -> dict[str, Any]:
-        rows = [
-            e.to_dict()
-            for e in self.bus.list(limit=limit, session_id=session_id)
-        ]
+        rows = [e.to_dict() for e in self.bus.list(limit=limit, session_id=session_id)]
         return {"status": "available" if rows else "empty", "events": rows}
 
     def list_memory(
@@ -196,12 +191,15 @@ class MultiAgentSystem:
             "memory_note": "Observations and reports stored; rules not rewritten",
             "inputs": _input_to_dict(inp),
         }
-        self.sessions.insert(0, {
-            "session_id": session_id,
-            "decision": decision.decision,
-            "allow_execution_path": decision.allow_execution_path,
-            "agent_count": len(outputs),
-        })
+        self.sessions.insert(
+            0,
+            {
+                "session_id": session_id,
+                "decision": decision.decision,
+                "allow_execution_path": decision.allow_execution_path,
+                "agent_count": len(outputs),
+            },
+        )
         if len(self.sessions) > self.config.max_sessions:
             self.sessions = self.sessions[: self.config.max_sessions]
         return result
@@ -216,9 +214,7 @@ def _input_to_dict(inp: CollaborationInput) -> dict[str, Any]:
         "strategy_id": inp.strategy_id,
         "strategy_signal": inp.strategy_signal,
         "portfolio_exposure": (
-            str(inp.portfolio_exposure)
-            if inp.portfolio_exposure is not None
-            else None
+            str(inp.portfolio_exposure) if inp.portfolio_exposure is not None else None
         ),
         "open_positions": inp.open_positions,
         "execution_mode": inp.execution_mode,

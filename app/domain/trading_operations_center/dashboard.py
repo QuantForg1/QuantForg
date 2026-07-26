@@ -24,9 +24,7 @@ def build_recommendations(
 ) -> list[str]:
     recs: list[str] = []
     for fail in checklist.get("failures") or []:
-        recs.append(
-            f"Resolve {fail.get('label')}: {fail.get('how_to_resolve')}"
-        )
+        recs.append(f"Resolve {fail.get('label')}: {fail.get('how_to_resolve')}")
     for alert in alerts.get("alerts") or []:
         recs.append(f"Ops alert [{alert.get('severity')}]: {alert.get('title')}")
     evidence = dict(evidence_summary or {})
@@ -93,9 +91,9 @@ def build_executive_dashboard(
         },
         "risk": risk
         or {
-            "maximum_drawdown_pct": m.get("maximum_drawdown_pct")
-            if isinstance(m, dict)
-            else None,
+            "maximum_drawdown_pct": (
+                m.get("maximum_drawdown_pct") if isinstance(m, dict) else None
+            ),
             "note": "From supplied metrics only",
         },
         "execution": execution

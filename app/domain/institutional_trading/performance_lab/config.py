@@ -12,7 +12,9 @@ class PerformanceLabConfig:
 
     # Champion = production; Challenger = candidate weights only (never executes)
     challenger_enabled: bool = True
-    challenger_may_execute: bool = False  # HARD LOCK — never flip without evidence + human gate
+    challenger_may_execute: bool = (
+        False  # HARD LOCK — never flip without evidence + human gate
+    )
 
     # Challenger weight tilt vs champion (candidate scoring profile)
     challenger_weight_tilt: dict[str, float] | None = None

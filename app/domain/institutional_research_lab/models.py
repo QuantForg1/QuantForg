@@ -44,7 +44,7 @@ CANDIDATE_PARAM_KEYS: tuple[str, ...] = (
 
 
 def empty_candidate_params() -> dict[str, Any]:
-    return {k: None for k in CANDIDATE_PARAM_KEYS}
+    return dict.fromkeys(CANDIDATE_PARAM_KEYS)
 
 
 def sanitize_candidate_params(raw: dict[str, Any] | None) -> dict[str, Any]:

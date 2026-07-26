@@ -116,7 +116,7 @@ def _ctx() -> dict:
             "oms": {},
             "gateway": {},
         },
-        "availability": {s: True for s in EVENT_SOURCES},
+        "availability": dict.fromkeys(EVENT_SOURCES, True),
         "source_count": len(EVENT_SOURCES),
         "read_only": True,
     }

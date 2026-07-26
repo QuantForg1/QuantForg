@@ -8,7 +8,7 @@ from typing import Any
 def _safe(fn, default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -20,16 +20,18 @@ def gather_release_evidence() -> dict[str, Any]:
     sources["cvf"] = _safe(
         lambda: __import__(
             "app.domain.continuous_validation_framework", fromlist=["get_cvf"]
-        ).get_cvf().store.__dict__.get("_snapshot")
+        )
+        .get_cvf()
+        .store.__dict__.get("_snapshot")
         or {},
         {},
     )
     availability["cvf"] = bool(sources["cvf"])
 
     sources["eqs"] = _safe(
-        lambda: __import__(
-            "app.domain.execution_quality_suite", fromlist=["get_eqs"]
-        ).get_eqs().store.__dict__.get("_snapshot")
+        lambda: __import__("app.domain.execution_quality_suite", fromlist=["get_eqs"])
+        .get_eqs()
+        .store.__dict__.get("_snapshot")
         or {},
         {},
     )
@@ -38,7 +40,9 @@ def gather_release_evidence() -> dict[str, Any]:
     sources["res"] = _safe(
         lambda: __import__(
             "app.domain.reliability_engineering_suite", fromlist=["get_res"]
-        ).get_res().store.__dict__.get("_snapshot")
+        )
+        .get_res()
+        .store.__dict__.get("_snapshot")
         or {},
         {},
     )
@@ -62,9 +66,7 @@ def gather_release_evidence() -> dict[str, Any]:
     availability["ise"] = isinstance(sources["ise"], dict)
 
     sources["qkg"] = _safe(
-        lambda: __import__(
-            "app.domain.quant_knowledge_graph", fromlist=["get_qkg"]
-        )
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
         .get_qkg()
         .store.get_snapshot(),
         {},
@@ -75,7 +77,9 @@ def gather_release_evidence() -> dict[str, Any]:
         lambda: __import__(
             "app.domain.audit_governance.store",
             fromlist=["get_audit_store"],
-        ).get_audit_store().list(limit=40),
+        )
+        .get_audit_store()
+        .list(limit=40),
         [],
     )
     availability["audit"] = isinstance(sources["audit"], list)

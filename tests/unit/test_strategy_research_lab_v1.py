@@ -81,9 +81,7 @@ def test_scorecard_and_validation_report() -> None:
 
 def test_scorecard_unavailable_without_metrics() -> None:
     cfg = StrategyLabConfig()
-    card = build_strategy_scorecard(
-        cfg, ScorecardInput(strategy_key="x")
-    )
+    card = build_strategy_scorecard(cfg, ScorecardInput(strategy_key="x"))
     assert card.status == "unavailable"
     assert card.passed is False
 

@@ -193,25 +193,115 @@ MODEL_FIELDS: dict[str, tuple[dict[str, Any], ...]] = {
 # Directed relationships: from_model -> to_model via field
 RELATIONSHIPS: tuple[dict[str, Any], ...] = (
     {"from": "Trade", "to": "Order", "via": "order_id", "cardinality": "many_to_one"},
-    {"from": "Trade", "to": "Execution", "via": "execution_id", "cardinality": "many_to_one"},
-    {"from": "Trade", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Order", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
+    {
+        "from": "Trade",
+        "to": "Execution",
+        "via": "execution_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Trade",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Order",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
     {"from": "Order", "to": "Signal", "via": "signal_id", "cardinality": "many_to_one"},
-    {"from": "Execution", "to": "Order", "via": "order_id", "cardinality": "many_to_one"},
-    {"from": "Signal", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Experiment", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Replay", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Simulation", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Simulation", "to": "Experiment", "via": "experiment_id", "cardinality": "many_to_one"},
-    {"from": "RiskEvent", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "RiskEvent", "to": "Portfolio", "via": "portfolio_id", "cardinality": "many_to_one"},
-    {"from": "ValidationEvent", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Certification", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Release", "to": "Strategy", "via": "strategy_id", "cardinality": "many_to_one"},
-    {"from": "Release", "to": "Certification", "via": "certification_id", "cardinality": "many_to_one"},
-    {"from": "Incident", "to": "Alert", "via": "related_alert_ids", "cardinality": "many_to_many"},
-    {"from": "Evidence", "to": "Strategy", "via": "linked_entity_id", "cardinality": "many_to_one"},
-    {"from": "Recommendation", "to": "Evidence", "via": "metadata.evidence_ids", "cardinality": "many_to_many"},
+    {
+        "from": "Execution",
+        "to": "Order",
+        "via": "order_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Signal",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Experiment",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Replay",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Simulation",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Simulation",
+        "to": "Experiment",
+        "via": "experiment_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "RiskEvent",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "RiskEvent",
+        "to": "Portfolio",
+        "via": "portfolio_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "ValidationEvent",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Certification",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Release",
+        "to": "Strategy",
+        "via": "strategy_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Release",
+        "to": "Certification",
+        "via": "certification_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Incident",
+        "to": "Alert",
+        "via": "related_alert_ids",
+        "cardinality": "many_to_many",
+    },
+    {
+        "from": "Evidence",
+        "to": "Strategy",
+        "via": "linked_entity_id",
+        "cardinality": "many_to_one",
+    },
+    {
+        "from": "Recommendation",
+        "to": "Evidence",
+        "via": "metadata.evidence_ids",
+        "cardinality": "many_to_many",
+    },
 )
 
 # Per-model validation rules (declarative)
@@ -231,28 +321,47 @@ VALIDATION_RULES: dict[str, tuple[dict[str, Any], ...]] = {
         {"rule": "order_ref_required", "field": "order_id", "assert": "non_empty"},
     ),
     "Signal": (
-        {"rule": "direction_enum", "field": "direction", "assert": "in:long,short,flat"},
-        {"rule": "confidence_range", "field": "confidence", "assert": "range:0,1", "optional": True},
+        {
+            "rule": "direction_enum",
+            "field": "direction",
+            "assert": "in:long,short,flat",
+        },
+        {
+            "rule": "confidence_range",
+            "field": "confidence",
+            "assert": "range:0,1",
+            "optional": True,
+        },
     ),
     "Strategy": (
         {"rule": "name_required", "field": "name", "assert": "non_empty"},
-        {"rule": "lifecycle_required", "field": "lifecycle_state", "assert": "non_empty"},
+        {
+            "rule": "lifecycle_required",
+            "field": "lifecycle_state",
+            "assert": "non_empty",
+        },
     ),
     "Experiment": (
         {"rule": "title_required", "field": "title", "assert": "non_empty"},
         {"rule": "status_required", "field": "status", "assert": "non_empty"},
     ),
     "Replay": (
-        {"rule": "window_order", "field": "window_end", "assert": "gte_field:window_start"},
+        {
+            "rule": "window_order",
+            "field": "window_end",
+            "assert": "gte_field:window_start",
+        },
     ),
-    "Simulation": (
-        {"rule": "mode_required", "field": "mode", "assert": "non_empty"},
-    ),
+    "Simulation": ({"rule": "mode_required", "field": "mode", "assert": "non_empty"},),
     "Portfolio": (
         {"rule": "allocations_array", "field": "allocations", "assert": "is_array"},
     ),
     "RiskEvent": (
-        {"rule": "severity_enum", "field": "severity", "assert": "in:info,warning,critical"},
+        {
+            "rule": "severity_enum",
+            "field": "severity",
+            "assert": "in:info,warning,critical",
+        },
     ),
     "ValidationEvent": (
         {"rule": "result_enum", "field": "result", "assert": "in:pass,fail,warn"},
@@ -265,18 +374,28 @@ VALIDATION_RULES: dict[str, tuple[dict[str, Any], ...]] = {
         {"rule": "status_required", "field": "status", "assert": "non_empty"},
     ),
     "Incident": (
-        {"rule": "severity_enum", "field": "severity", "assert": "in:info,warning,critical"},
+        {
+            "rule": "severity_enum",
+            "field": "severity",
+            "assert": "in:info,warning,critical",
+        },
         {"rule": "summary_required", "field": "summary", "assert": "non_empty"},
     ),
     "Alert": (
-        {"rule": "severity_enum", "field": "severity", "assert": "in:info,warning,critical"},
+        {
+            "rule": "severity_enum",
+            "field": "severity",
+            "assert": "in:info,warning,critical",
+        },
         {"rule": "message_required", "field": "message", "assert": "non_empty"},
     ),
-    "Evidence": (
-        {"rule": "kind_required", "field": "kind", "assert": "non_empty"},
-    ),
+    "Evidence": ({"rule": "kind_required", "field": "kind", "assert": "non_empty"},),
     "Recommendation": (
-        {"rule": "human_approval_true", "field": "requires_human_approval", "assert": "eq:true"},
+        {
+            "rule": "human_approval_true",
+            "field": "requires_human_approval",
+            "assert": "eq:true",
+        },
         {"rule": "never_auto_applied", "field": "auto_applied", "assert": "eq:false"},
     ),
 }
@@ -329,12 +448,12 @@ COMPATIBILITY_RULES: tuple[dict[str, Any], ...] = (
 DEPRECATION_RULES: tuple[dict[str, Any], ...] = (
     {
         "rule_id": "deprecate_before_remove",
-        "description": "Fields must be marked deprecated for at least one minor release before removal",
+        "description": "Fields must be marked deprecated for at least one minor release before removal",  # noqa: E501
         "min_minor_releases": 1,
     },
     {
         "rule_id": "deprecation_notice",
-        "description": "Deprecated fields remain readable; writers should stop emitting them",
+        "description": "Deprecated fields remain readable; writers should stop emitting them",  # noqa: E501
     },
     {
         "rule_id": "no_silent_removal",

@@ -440,18 +440,26 @@ async def execution_optimization(
         )
 
     broker_q = compute_broker_quality(
-        fill_rate=float(metrics["fill_rate"])
-        if metrics.get("fill_rate") is not None
-        else None,
-        reject_rate=float(metrics["reject_rate"])
-        if metrics.get("reject_rate") is not None
-        else None,
-        avg_slippage=float(metrics["average_slippage"])
-        if metrics.get("average_slippage") is not None
-        else None,
-        latency_p95_ms=float(metrics["order_latency_ms_p95"])
-        if metrics.get("order_latency_ms_p95") is not None
-        else None,
+        fill_rate=(
+            float(metrics["fill_rate"])
+            if metrics.get("fill_rate") is not None
+            else None
+        ),
+        reject_rate=(
+            float(metrics["reject_rate"])
+            if metrics.get("reject_rate") is not None
+            else None
+        ),
+        avg_slippage=(
+            float(metrics["average_slippage"])
+            if metrics.get("average_slippage") is not None
+            else None
+        ),
+        latency_p95_ms=(
+            float(metrics["order_latency_ms_p95"])
+            if metrics.get("order_latency_ms_p95") is not None
+            else None
+        ),
         attempt_count=int((base.sample_sizes or {}).get("attempts") or 0),
     )
     return {

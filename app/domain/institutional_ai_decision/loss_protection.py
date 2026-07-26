@@ -58,9 +58,7 @@ def evaluate_loss_protection(
     else:
         spread_ok = spread <= config.max_spread
         if not spread_ok:
-            reasons.append(
-                f"Abnormal spread {spread} exceeds {config.max_spread}."
-            )
+            reasons.append(f"Abnormal spread {spread} exceeds {config.max_spread}.")
 
     if atr is None or price is None or price <= 0:
         vol_ok = False

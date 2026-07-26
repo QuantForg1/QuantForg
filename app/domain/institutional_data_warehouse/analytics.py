@@ -86,16 +86,12 @@ def no_trade_analysis(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     no_trade = 0
     for row in combined:
         payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
-        decision = str(
-            payload.get("decision") or payload.get("action") or ""
-        ).upper()
+        decision = str(payload.get("decision") or payload.get("action") or "").upper()
         if decision != "NO_TRADE":
             continue
         no_trade += 1
         reason = str(
-            payload.get("no_trade_reason")
-            or payload.get("reason")
-            or "unspecified"
+            payload.get("no_trade_reason") or payload.get("reason") or "unspecified"
         )
         reasons[reason] += 1
     return {
@@ -191,7 +187,9 @@ def run_analytics(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
         "replay_coverage": replay_coverage(wh),
         "evidence_growth": evidence_growth(wh),
         "risk_event_history": risk_event_history(wh),
-        "historical_aggregation": historical_aggregation(wh, domain="trades", grain="day"),
+        "historical_aggregation": historical_aggregation(
+            wh, domain="trades", grain="day"
+        ),
         "rolling_statistics": rolling_statistics(wh, domain="trades", window=20),
         "read_only": True,
     }

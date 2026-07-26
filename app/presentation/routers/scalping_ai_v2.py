@@ -116,9 +116,7 @@ async def scalping_ai_v2_status(user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/cycle")
-async def scalping_ai_v2_cycle(
-    body: CycleRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def scalping_ai_v2_cycle(body: CycleRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.cycle(body.model_dump())
 
@@ -201,8 +199,6 @@ async def scalping_ai_v2_emergency_clear(
 
 
 @router.post("/soak")
-async def scalping_ai_v2_soak(
-    body: SoakRequest, user: CurrentUser
-) -> dict[str, Any]:
+async def scalping_ai_v2_soak(body: SoakRequest, user: CurrentUser) -> dict[str, Any]:
     _ = user
     return _service.soak(profile=body.profile)

@@ -80,7 +80,8 @@ def backoff_ms_for_attempt(
     base = max(1, int(cfg.retry_base_backoff_ms))
     raw = min(cfg.retry_max_backoff_ms, base * (2 ** max(0, attempt - 1)))
     jitter = raw * cfg.retry_jitter_ratio
-    return int(max(1, raw + random.uniform(-jitter, jitter)))
+    # Retry backoff jitter only (not cryptographic).
+    return int(max(1, raw + random.uniform(-jitter, jitter)))  # noqa: S311
 
 
 def decide_retry(

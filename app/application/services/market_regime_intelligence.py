@@ -196,9 +196,7 @@ def classify_regime(cycle: dict[str, Any]) -> dict[str, Any]:
             (REGIME_LIQ_SWEEP, min(95, 70 + liq // 5), f"Liquidity sweep score={liq}")
         )
     elif liq >= 40:
-        hits.append(
-            (REGIME_LIQ_SWEEP, 55 + liq // 4, f"Liquidity sweep soft={liq}")
-        )
+        hits.append((REGIME_LIQ_SWEEP, 55 + liq // 4, f"Liquidity sweep soft={liq}"))
 
     if atr_pct is not None:
         if atr_pct >= float(ATR_HIGH_PCT):
@@ -208,9 +206,7 @@ def classify_regime(cycle: dict[str, Any]) -> dict[str, Any]:
             )
         elif atr_pct <= float(ATR_LOW_PCT):
             conf = min(90, int(70 + (float(ATR_LOW_PCT) - atr_pct) * 20))
-            hits.append(
-                (REGIME_LOW_VOL, conf, f"ATR%={atr_pct:.2f} <= {ATR_LOW_PCT}")
-            )
+            hits.append((REGIME_LOW_VOL, conf, f"ATR%={atr_pct:.2f} <= {ATR_LOW_PCT}"))
 
     high_vol = atr_pct is not None and atr_pct >= float(ATR_HIGH_PCT)
     if bos >= 70 and (high_vol or (mtf is not None and mtf >= 75)):
@@ -219,8 +215,7 @@ def classify_regime(cycle: dict[str, Any]) -> dict[str, Any]:
             (
                 REGIME_BREAKOUT,
                 min(96, conf),
-                f"BOS={bos}"
-                + (" + vol expansion" if high_vol else " + strong MTF"),
+                f"BOS={bos}" + (" + vol expansion" if high_vol else " + strong MTF"),
             )
         )
     elif bos >= 70 and trending:
@@ -245,9 +240,7 @@ def classify_regime(cycle: dict[str, Any]) -> dict[str, Any]:
         conf = 90 if aligned is True else (80 if mtf and mtf >= 80 else 72)
         if mtf is not None:
             conf = min(95, max(conf, 60 + int(mtf) // 3))
-        hits.append(
-            (REGIME_TRENDING, conf, f"MTF score={mtf} aligned={aligned}")
-        )
+        hits.append((REGIME_TRENDING, conf, f"MTF score={mtf} aligned={aligned}"))
     elif ranging:
         conf = 75 if aligned is False else 65
         if choch >= 70:
@@ -281,9 +274,7 @@ def classify_regime(cycle: dict[str, Any]) -> dict[str, Any]:
     ordered = sorted(
         best.items(),
         key=lambda kv: (
-            _PRIMARY_PRIORITY.index(kv[0])
-            if kv[0] in _PRIMARY_PRIORITY
-            else 99,
+            _PRIMARY_PRIORITY.index(kv[0]) if kv[0] in _PRIMARY_PRIORITY else 99,
             -kv[1][0],
         ),
     )
@@ -366,11 +357,7 @@ def historical_performance_by_regime(
         else:
             pf = 0.0
 
-        rr_vals = [
-            x
-            for x in (_f(r.get("risk_reward")) for r in rows)
-            if x is not None
-        ]
+        rr_vals = [x for x in (_f(r.get("risk_reward")) for r in rows) if x is not None]
         expectancy = round(mean(rr_vals), 2) if rr_vals else None
         if expectancy is None and wins:
             avg_win = mean(_f(r.get("profit_loss")) or 0 for r in wins)
@@ -397,9 +384,7 @@ def historical_performance_by_regime(
                 if expectancy is not None
                 else None
             ),
-            "total_pnl": round(
-                sum(_f(r.get("profit_loss")) or 0 for r in rows), 2
-            ),
+            "total_pnl": round(sum(_f(r.get("profit_loss")) or 0 for r in rows), 2),
         }
     return out
 
@@ -502,9 +487,7 @@ def build_regime_distribution(
             {
                 "regime": REGIME_UNKNOWN,
                 "count": counter[REGIME_UNKNOWN],
-                "share_pct": round(
-                    100.0 * counter[REGIME_UNKNOWN] / total, 1
-                ),
+                "share_pct": round(100.0 * counter[REGIME_UNKNOWN] / total, 1),
             }
         )
     return rows
@@ -543,9 +526,7 @@ def build_market_regime_intelligence(
 
             # Load enriched trades only — SIC embeds a compact regime summary
             # that uses skip_sic_trade_load to avoid recursion.
-            sic = build_strategy_intelligence_center(
-                days=90, diagnostics=diagnostics
-            )
+            sic = build_strategy_intelligence_center(days=90, diagnostics=diagnostics)
             trades = list(sic.get("trades") or [])
         except Exception:
             trades = []

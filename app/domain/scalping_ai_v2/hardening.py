@@ -261,9 +261,7 @@ class SafeModeController:
         with self._lock:
             if unhealthy:
                 self._active = True
-                self._reasons = [
-                    f"{k} unhealthy" for k in unhealthy
-                ]
+                self._reasons = [f"{k} unhealthy" for k in unhealthy]
                 return {
                     "safe_mode": True,
                     "pause_new_trades": True,
@@ -324,9 +322,11 @@ def validate_market_data(
     clock_drift_ms = _dec(
         md.get("clock_drift_ms")
         if "clock_drift_ms" in md
-        else (inp.health or {}).get("clock_drift_ms")
-        if isinstance(inp.health, dict)
-        else None
+        else (
+            (inp.health or {}).get("clock_drift_ms")
+            if isinstance(inp.health, dict)
+            else None
+        )
     )
     duplicate_tick = md.get("duplicate_tick")
     missing_candles = md.get("missing_candles")

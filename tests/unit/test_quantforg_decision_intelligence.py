@@ -55,7 +55,10 @@ def _ctx() -> dict:
                 "registry": [{"strategy_id": "st1", "lifecycle_state": "Research"}],
                 "approvals": [],
             },
-            "irdp": {"releases": [{"release_id": "r1", "status": "draft"}], "approvals": []},
+            "irdp": {
+                "releases": [{"release_id": "r1", "status": "draft"}],
+                "approvals": [],
+            },
             "icp": {"health": {"overall_platform_health": 58}, "alerts": []},
             "aoc": {
                 "executive_scores": {"operational_readiness": 55},
@@ -65,7 +68,7 @@ def _ctx() -> dict:
             "qem": {"stats": {"event_count": 3}},
             "qcdm": {"schema_version": "1.0.0"},
         },
-        "availability": {s: True for s in DATA_SOURCES},
+        "availability": dict.fromkeys(DATA_SOURCES, True),
         "source_count": len(DATA_SOURCES),
         "read_only": True,
     }

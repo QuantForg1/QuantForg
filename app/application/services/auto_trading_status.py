@@ -75,18 +75,14 @@ def _probe_collector(settings: Settings) -> LiveProbeCollector:
     return LiveProbeCollector(settings=settings)
 
 
-def _sync_ops_health(
-    plane: OperationsControlPlane, *, probes: Any
-) -> None:
+def _sync_ops_health(plane: OperationsControlPlane, *, probes: Any) -> None:
     """Write live probe results into the ops HealthMonitor (no alert spam)."""
     plane.health.observe(
         HealthInputs(
             gateway_latency_ms=float(getattr(probes, "gateway_latency_ms", 0.0) or 0.0),
             gateway_available=bool(getattr(probes, "gateway_available", False)),
             mt5_connected=bool(getattr(probes, "mt5_connected", False)),
-            cloudflare_tunnel_up=bool(
-                getattr(probes, "cloudflare_tunnel_up", False)
-            ),
+            cloudflare_tunnel_up=bool(getattr(probes, "cloudflare_tunnel_up", False)),
         )
     )
 
@@ -131,7 +127,7 @@ def _enrich_from_adapter(
             payload.get("account") if isinstance(payload.get("account"), dict) else {}
         )
         # Explicit flags when gateway exposes them — never invent True.
-        # AutoTrading comes from terminal_info.trade_allowed (not account trade_allowed).
+        # AutoTrading comes from terminal_info.trade_allowed (not account trade_allowed).  # noqa: E501
         for key, dest in (
             ("account_trade_allowed", "account_trading_enabled"),
             ("trading_allowed", "account_trading_enabled"),
@@ -155,14 +151,21 @@ def _enrich_from_adapter(
             ):
                 out[dest] = bool(account.get(key))
 
-        # Bare trade_allowed on account → account trading; on mt5 nested → AutoTrading.
-        if out["account_trading_enabled"] is None and isinstance(account, dict):
-            if account.get("trade_allowed") is not None:
-                out["account_trading_enabled"] = bool(account.get("trade_allowed"))
-        if out["mt5_autotrading_enabled"] is None and isinstance(mt5, dict):
-            if mt5.get("trade_allowed") is not None:
-                # Only if explicitly nested under mt5 (terminal-level).
-                out["mt5_autotrading_enabled"] = bool(mt5.get("trade_allowed"))
+        # Bare trade_allowed on account -> account trading;
+        # on mt5 nested -> AutoTrading.
+        if (
+            out["account_trading_enabled"] is None
+            and isinstance(account, dict)
+            and account.get("trade_allowed") is not None
+        ):
+            out["account_trading_enabled"] = bool(account.get("trade_allowed"))
+        if (
+            out["mt5_autotrading_enabled"] is None
+            and isinstance(mt5, dict)
+            and mt5.get("trade_allowed") is not None
+        ):
+            # Only if explicitly nested under mt5 (terminal-level).
+            out["mt5_autotrading_enabled"] = bool(mt5.get("trade_allowed"))
 
         support = (
             mt5.get("capability_support")
@@ -262,9 +265,7 @@ def build_status_facts(
         symbol_tradable=_opt_bool(
             enriched.get("symbol_tradable"), when_unknown=broker_ok
         ),
-        margin_available=_opt_bool(
-            enriched.get("margin_available"), when_unknown=True
-        ),
+        margin_available=_opt_bool(enriched.get("margin_available"), when_unknown=True),
         margin_evaluated=enriched.get("margin_available") is not None,
         no_broker_restrictions=_opt_bool(
             enriched.get("no_broker_restrictions"), when_unknown=True
@@ -272,9 +273,11 @@ def build_status_facts(
         open_positions=0,
         session="",
         session_evaluated=False,
-        spread=enriched.get("spread")
-        if isinstance(enriched.get("spread"), Decimal)
-        else None,
+        spread=(
+            enriched.get("spread")
+            if isinstance(enriched.get("spread"), Decimal)
+            else None
+        ),
         spread_evaluated=isinstance(enriched.get("spread"), Decimal),
         news_blocked=False,
         daily_loss_exceeded=plane.daily_loss_exceeded,

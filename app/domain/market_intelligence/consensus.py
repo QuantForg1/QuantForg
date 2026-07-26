@@ -75,9 +75,7 @@ def build_strategy_consensus(
     majority = buys if len(buys) >= len(sells) else sells
     side = majority[0].side.lower()
     agreeing_ids = tuple(s.strategy_id for s in majority)
-    dissenting_ids = tuple(
-        s.strategy_id for s in enabled if s.side.lower() != side
-    )
+    dissenting_ids = tuple(s.strategy_id for s in enabled if s.side.lower() != side)
 
     if len(majority) < config.min_agreeing_strategies:
         reasons.append(
@@ -99,8 +97,7 @@ def build_strategy_consensus(
     ).quantize(Decimal("0.01"))
     if avg < config.min_consensus_confidence:
         reasons.append(
-            f"Consensus confidence {avg} below "
-            f"{config.min_consensus_confidence}."
+            f"Consensus confidence {avg} below " f"{config.min_consensus_confidence}."
         )
         return ConsensusResult(
             accepted=False,

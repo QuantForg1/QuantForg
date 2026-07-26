@@ -262,7 +262,7 @@ class GatewayMT5Client:
             )
 
             get_reliability_platform().network.observe_upstream(payload)
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
 
     def _build_http_client(self) -> httpx.Client:
@@ -349,7 +349,7 @@ class GatewayMT5Client:
                         last_exc = exc
                         # No silent reconnect — log every transport retry.
                         try:
-                            from app.domain.institutional_trading.reliability.platform import (
+                            from app.domain.institutional_trading.reliability.platform import (  # noqa: E501
                                 get_reliability_platform,
                             )
 
@@ -357,12 +357,11 @@ class GatewayMT5Client:
                                 component="gateway",
                                 attempt=attempt_i + 1,
                                 detail=(
-                                    f"{type(exc).__name__}: {exc} "
-                                    f"({method} {path})"
+                                    f"{type(exc).__name__}: {exc} " f"({method} {path})"
                                 ),
                                 success=False,
                             )
-                        except Exception:
+                        except Exception:  # noqa: S110  # best-effort optional path
                             pass
                         if attempt_i + 1 >= attempts:
                             raise
@@ -1288,10 +1287,7 @@ class GatewayMT5Client:
         self._account_cache_at = 0.0
         # Prefer explicit keys; also accept raw MT5 aliases order/deal/ticket.
         order_ticket = int(
-            data.get("order_ticket")
-            or data.get("order")
-            or data.get("ticket")
-            or 0
+            data.get("order_ticket") or data.get("order") or data.get("ticket") or 0
         )
         deal_ticket = int(data.get("deal_ticket") or data.get("deal") or 0)
         # Exact broker comment — never replace with a humanized string.
@@ -1330,9 +1326,7 @@ class GatewayMT5Client:
             comment=result.comment,
             order_ticket=result.order_ticket,
             deal_ticket=result.deal_ticket,
-            raw_keys=sorted(str(k) for k in data.keys())
-            if isinstance(data, dict)
-            else [],
+            raw_keys=sorted(str(k) for k in data) if isinstance(data, dict) else [],
         )
         return result
 

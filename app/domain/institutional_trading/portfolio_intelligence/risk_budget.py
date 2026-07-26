@@ -20,7 +20,9 @@ class DynamicRiskBudget:
     weak_streak: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    def observe_day(self, *, positive: bool, config: PortfolioIntelligenceConfig | None = None) -> None:
+    def observe_day(
+        self, *, positive: bool, config: PortfolioIntelligenceConfig | None = None
+    ) -> None:
         cfg = config or DEFAULT_PI_CONFIG
         with self._lock:
             if positive:

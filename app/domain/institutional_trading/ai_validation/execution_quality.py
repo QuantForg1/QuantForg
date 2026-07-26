@@ -6,7 +6,6 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-
 STAGES = (
     "signal_generation",
     "ai_decision",
@@ -19,8 +18,8 @@ STAGES = (
 
 @dataclass
 class ExecutionQualityMonitor:
-    _sums: dict[str, float] = field(default_factory=lambda: {s: 0.0 for s in STAGES})
-    _counts: dict[str, int] = field(default_factory=lambda: {s: 0 for s in STAGES})
+    _sums: dict[str, float] = field(default_factory=lambda: dict.fromkeys(STAGES, 0.0))
+    _counts: dict[str, int] = field(default_factory=lambda: dict.fromkeys(STAGES, 0))
     _last: dict[str, float] = field(default_factory=dict)
     _totals: list[float] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -47,11 +46,11 @@ class ExecutionQualityMonitor:
             avgs: dict[str, float | None] = {}
             for stage in STAGES:
                 c = self._counts.get(stage, 0)
-                avgs[stage] = (
-                    round(self._sums[stage] / c, 3) if c else None
-                )
+                avgs[stage] = round(self._sums[stage] / c, 3) if c else None
             avg_total = (
-                round(sum(self._totals) / len(self._totals), 3) if self._totals else None
+                round(sum(self._totals) / len(self._totals), 3)
+                if self._totals
+                else None
             )
             # Bottleneck = highest average among stages with data
             bottleneck = None

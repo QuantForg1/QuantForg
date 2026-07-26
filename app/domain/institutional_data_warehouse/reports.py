@@ -76,7 +76,7 @@ def build_quality_report(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     scanned = 0
     complete = 0
     for domain in DATA_DOMAINS:
-        for row in wh.list(domain, limit=5_000):  # type: ignore[arg-type]
+        for row in wh.list(domain, limit=5_000):
             scanned += 1
             flags = _quality_flags(row)
             if not flags:
@@ -88,9 +88,7 @@ def build_quality_report(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
         "status": "available",
         "records_scanned": scanned,
         "fully_keyed_records": complete,
-        "completeness_ratio": (
-            round(complete / scanned, 4) if scanned else None
-        ),
+        "completeness_ratio": (round(complete / scanned, 4) if scanned else None),
         "flag_histogram": dict(flag_counts),
         "read_only": True,
         "note": "Missing fields stay null — never fabricated",
@@ -101,7 +99,7 @@ def build_correlation_report(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     by_corr: dict[str, list[str]] = defaultdict(list)
     linked = 0
     for domain in DATA_DOMAINS:
-        for row in wh.list(domain, limit=5_000):  # type: ignore[arg-type]
+        for row in wh.list(domain, limit=5_000):
             cid = row.get("correlation_id")
             if not cid:
                 continue
@@ -137,23 +135,18 @@ def build_recommendations(
         target = meta.get("target")
         ratio = meta.get("ratio")
         if target and ratio is not None and ratio < 1.0:
-            recs.append(
-                f"Grow {domain} coverage "
-                f"({meta.get('observed')}/{target})"
-            )
+            recs.append(f"Grow {domain} coverage " f"({meta.get('observed')}/{target})")
     completeness = quality.get("completeness_ratio")
     if completeness is not None and completeness < 0.8:
-        recs.append(
-            "Improve version/correlation key completeness on ingested rows"
-        )
-    recs.append(
-        "Warehouse is read-only — never modify production trading systems"
-    )
+        recs.append("Improve version/correlation key completeness on ingested rows")
+    recs.append("Warehouse is read-only — never modify production trading systems")
     return recs
 
 
 def build_warehouse_pack(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
-    from app.domain.institutional_data_warehouse.dimensional import build_dimensional_model
+    from app.domain.institutional_data_warehouse.dimensional import (
+        build_dimensional_model,
+    )
     from app.domain.institutional_data_warehouse.quality_monitor import (
         run_data_quality_monitor,
     )
@@ -199,15 +192,11 @@ def build_warehouse_pack(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
         "recommendations": recommendations,
         "evidence_summary": {
             "total_records": wh.inventory().get("total_records"),
-            "domains_populated": sum(
-                1 for n in wh.counts().values() if n > 0
-            ),
+            "domains_populated": sum(1 for n in wh.counts().values() if n > 0),
             "domains_total": len(DATA_DOMAINS),
             "completeness_ratio": quality.get("completeness_ratio"),
             "integrity_score": dq.get("integrity_score"),
-            "cross_domain_correlations": correlation.get(
-                "cross_domain_correlations"
-            ),
+            "cross_domain_correlations": correlation.get("cross_domain_correlations"),
             "read_only": True,
         },
     }

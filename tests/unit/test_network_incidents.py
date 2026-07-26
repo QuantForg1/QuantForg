@@ -15,7 +15,6 @@ from app.domain.institutional_trading.reliability.network_incidents import (
     is_network_error,
 )
 from app.domain.institutional_trading.reliability.platform import (
-    ReliabilityPlatform,
     reset_reliability_platform_for_tests,
 )
 

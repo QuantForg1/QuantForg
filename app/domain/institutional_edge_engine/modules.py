@@ -68,9 +68,7 @@ def _rr(t: dict[str, Any]) -> Decimal | None:
 def score_edge(inp: IeeInput, config: IeeConfig) -> ModuleResult:
     trades = _trades(inp)
     if len(trades) < config.min_trades_for_edge:
-        return _insufficient(
-            "edge_scoring", config.min_trades_for_edge, len(trades)
-        )
+        return _insufficient("edge_scoring", config.min_trades_for_edge, len(trades))
 
     wins = 0
     losses = 0
@@ -120,27 +118,15 @@ def score_edge(inp: IeeInput, config: IeeConfig) -> ModuleResult:
             reasons=("Trades lack win/pnl fields",),
         )
 
-    win_rate = (Decimal(wins) / Decimal(n) * Decimal(100)).quantize(
-        Decimal("0.01")
-    )
-    avg_rr = (
-        (sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01"))
-        if rrs
-        else None
-    )
+    win_rate = (Decimal(wins) / Decimal(n) * Decimal(100)).quantize(Decimal("0.01"))
+    avg_rr = (sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01")) if rrs else None
     gross_win = sum(win_pnls) if win_pnls else Decimal("0")
     gross_loss = sum(loss_pnls) if loss_pnls else Decimal("0")
     profit_factor = (
-        (gross_win / gross_loss).quantize(Decimal("0.01"))
-        if gross_loss > 0
-        else None
+        (gross_win / gross_loss).quantize(Decimal("0.01")) if gross_loss > 0 else None
     )
     expectancy = (pnl_sum / Decimal(n)).quantize(Decimal("0.01"))
-    recovery = (
-        (pnl_sum / max_dd).quantize(Decimal("0.01"))
-        if max_dd > 0
-        else None
-    )
+    recovery = (pnl_sum / max_dd).quantize(Decimal("0.01")) if max_dd > 0 else None
 
     # Composite edge score 0-100 from supplied stats only
     score = Decimal("50")
@@ -154,9 +140,7 @@ def score_edge(inp: IeeInput, config: IeeConfig) -> ModuleResult:
         score += Decimal("10")
     if max_dd == 0 or (pnl_sum > 0 and max_dd < abs(pnl_sum)):
         score += Decimal("5")
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
 
     return ModuleResult(
         module="edge_scoring",
@@ -178,9 +162,7 @@ def score_edge(inp: IeeInput, config: IeeConfig) -> ModuleResult:
                 str(profit_factor) if profit_factor is not None else None
             ),
             "maximum_drawdown": str(max_dd),
-            "recovery_factor": (
-                str(recovery) if recovery is not None else None
-            ),
+            "recovery_factor": (str(recovery) if recovery is not None else None),
             "consecutive_wins_max": max_cw,
             "consecutive_losses_max": max_cl,
             "sample_size": n,
@@ -188,9 +170,7 @@ def score_edge(inp: IeeInput, config: IeeConfig) -> ModuleResult:
     )
 
 
-def evaluate_strategy_stability(
-    inp: IeeInput, config: IeeConfig
-) -> ModuleResult:
+def evaluate_strategy_stability(inp: IeeInput, config: IeeConfig) -> ModuleResult:
     trades = _trades(inp)
     windows = [w for w in config.rolling_windows if w > 0]
     if not trades:
@@ -213,9 +193,7 @@ def evaluate_strategy_stability(
             }
             continue
         slice_t = trades[-w:]
-        pnls = [
-            float(_dec(t.get("pnl") or t.get("net_pnl")) or 0) for t in slice_t
-        ]
+        pnls = [float(_dec(t.get("pnl") or t.get("net_pnl")) or 0) for t in slice_t]
         wins = sum(1 for t in slice_t if _win(t) is True)
         wr = wins / w * 100
         variance = pstdev(pnls) if len(pnls) > 1 else 0.0
@@ -243,16 +221,12 @@ def evaluate_strategy_stability(
     score = Decimal("70")
     if alerts:
         score -= Decimal(min(40, 10 * len(alerts)))
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     return ModuleResult(
         module="strategy_stability",
         status="available",
         score=score,
-        recommendation=(
-            "Stability alerts" if alerts else "Rolling windows stable"
-        ),
+        recommendation=("Stability alerts" if alerts else "Rolling windows stable"),
         reasons=(
             *(alerts or ("No degradation/instability alerts from supplied rolls",)),
             "Advisory alerts only — never disables trading",
@@ -265,9 +239,7 @@ def evaluate_strategy_stability(
     )
 
 
-def evaluate_regime_performance(
-    inp: IeeInput, config: IeeConfig
-) -> ModuleResult:
+def evaluate_regime_performance(inp: IeeInput, config: IeeConfig) -> ModuleResult:
     trades = _trades(inp)
     if len(trades) < config.min_trades_for_regime:
         return _insufficient(
@@ -296,9 +268,7 @@ def evaluate_regime_performance(
                     tags.append("new_york")
                 elif "asia" in s or "asian" in s:
                     tags.append("asia")
-            elif key == "news" and (
-                val is True or s in {"true", "1", "news", "yes"}
-            ):
+            elif key == "news" and (val is True or s in {"true", "1", "news", "yes"}):
                 tags.append("news")
             elif key == "regime":
                 if "trend" in s:
@@ -378,26 +348,18 @@ def evaluate_entry_quality(inp: IeeInput, config: IeeConfig) -> ModuleResult:
             status="empty",
             score=None,
             recommendation="Insufficient Data",
-            reasons=(
-                "No entry_timing / MAE / MFE fields on completed trades",
-            ),
+            reasons=("No entry_timing / MAE / MFE fields on completed trades",),
         )
 
     avg_mae = (
-        (sum(maes) / Decimal(len(maes))).quantize(Decimal("0.01"))
-        if maes
-        else None
+        (sum(maes) / Decimal(len(maes))).quantize(Decimal("0.01")) if maes else None
     )
     avg_mfe = (
-        (sum(mafes) / Decimal(len(mafes))).quantize(Decimal("0.01"))
-        if mafes
-        else None
+        (sum(mafes) / Decimal(len(mafes))).quantize(Decimal("0.01")) if mafes else None
     )
     score = Decimal("70")
     score -= Decimal(min(30, late * 2 + early + missed))
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     return ModuleResult(
         module="entry_quality",
         status="available",
@@ -458,14 +420,10 @@ def evaluate_exit_quality(inp: IeeInput, config: IeeConfig) -> ModuleResult:
         )
 
     avg_hold = (
-        (sum(holds) / Decimal(len(holds))).quantize(Decimal("0.01"))
-        if holds
-        else None
+        (sum(holds) / Decimal(len(holds))).quantize(Decimal("0.01")) if holds else None
     )
     avg_eff = (
-        (sum(efficiencies) / Decimal(len(efficiencies))).quantize(
-            Decimal("0.01")
-        )
+        (sum(efficiencies) / Decimal(len(efficiencies))).quantize(Decimal("0.01"))
         if efficiencies
         else None
     )
@@ -473,9 +431,7 @@ def evaluate_exit_quality(inp: IeeInput, config: IeeConfig) -> ModuleResult:
     score -= Decimal(min(30, premature * 2 + late * 2))
     if avg_eff is not None:
         score = (score + avg_eff) / Decimal("2")
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     return ModuleResult(
         module="exit_quality",
         status="available",
@@ -497,13 +453,9 @@ def evaluate_exit_quality(inp: IeeInput, config: IeeConfig) -> ModuleResult:
     )
 
 
-def evaluate_risk_discipline(
-    inp: IeeInput, config: IeeConfig
-) -> ModuleResult:
+def evaluate_risk_discipline(inp: IeeInput, config: IeeConfig) -> ModuleResult:
     _ = config
-    facts = (
-        inp.discipline_facts if isinstance(inp.discipline_facts, dict) else {}
-    )
+    facts = inp.discipline_facts if isinstance(inp.discipline_facts, dict) else {}
     trades = _trades(inp)
     if not facts and not trades:
         return ModuleResult(
@@ -552,9 +504,7 @@ def evaluate_risk_discipline(
             reasons=("Discipline fields not present on input",),
         )
 
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     reasons.append("Never auto-modifies risk policies")
     return ModuleResult(
         module="risk_discipline",
@@ -792,9 +742,7 @@ def monthly_research_package(
     stab = modules.get("strategy_stability")
     if stab and (stab.details or {}).get("alerts"):
         weaknesses.append("Rolling stability alerts present")
-        recommendations.append(
-            "Human review of recent rolling windows recommended"
-        )
+        recommendations.append("Human review of recent rolling windows recommended")
 
     decay = modules.get("edge_decay")
     if decay and (decay.details or {}).get("edge_warning"):
@@ -806,9 +754,7 @@ def monthly_research_package(
     recommendations.append(
         "Do not modify strategy rules automatically from this package"
     )
-    recommendations.append(
-        "Validate conclusions against raw completed-trade exports"
-    )
+    recommendations.append("Validate conclusions against raw completed-trade exports")
 
     return ModuleResult(
         module="monthly_research_package",
@@ -825,9 +771,7 @@ def monthly_research_package(
             "performance_summary": edge.to_dict() if edge else None,
             "observed_strengths": strengths,
             "observed_weaknesses": weaknesses,
-            "market_regime_analysis": (
-                regime.to_dict() if regime else None
-            ),
+            "market_regime_analysis": (regime.to_dict() if regime else None),
             "session_analysis": (
                 regime.details if regime and regime.status == "available" else None
             ),

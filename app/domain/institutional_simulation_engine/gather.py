@@ -8,7 +8,7 @@ from typing import Any
 def _safe(fn, default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 

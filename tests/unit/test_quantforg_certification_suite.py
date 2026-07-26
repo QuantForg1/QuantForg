@@ -33,7 +33,11 @@ pytestmark = pytest.mark.unit
 def _ctx() -> dict:
     return {
         "sources": {
-            "irl": {"experiments": [{"experiment_id": "e1"}], "jobs": [], "leaderboard": {}},
+            "irl": {
+                "experiments": [{"experiment_id": "e1"}],
+                "jobs": [],
+                "leaderboard": {},
+            },
             "replay": {"simulations": [{"simulation_id": "r1"}], "jobs": []},
             "benchmark": {"leaderboard": {"top": {"composite": 70}}},
             "ise": {"simulations": [{"simulation_id": "s1"}], "reports": []},
@@ -77,7 +81,7 @@ def _ctx() -> dict:
             "aqc": {"snapshot": {}},
             "qkg": {"nodes": [{"id": "n1"}]},
         },
-        "availability": {s: True for s in DATA_SOURCES},
+        "availability": dict.fromkeys(DATA_SOURCES, True),
         "source_count": len(DATA_SOURCES),
         "read_only": True,
     }
@@ -125,12 +129,8 @@ class TestEvidenceIntegrity:
 
 
 class TestPlatformPerformance:
-    def test_dashboard(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        qcs = QuantForgCertificationSuite(
-            store=QcsStore(path=tmp_path / "qcs.json")
-        )
+    def test_dashboard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        qcs = QuantForgCertificationSuite(store=QcsStore(path=tmp_path / "qcs.json"))
         monkeypatch.setattr(
             "app.domain.quantforg_certification_suite.platform.gather_certification_sources",
             _ctx,
@@ -143,7 +143,10 @@ class TestPlatformPerformance:
         assert pack["never_approves_releases_automatically"] is True
         assert pack["human_approval_required_for_certification"] is True
         assert pack["certification_consistency"]["ok"] is True
-        assert pack["level"]["level"] != CertificationLevel.INSTITUTIONAL_CERTIFIED.value or True
+        assert (
+            pack["level"]["level"] != CertificationLevel.INSTITUTIONAL_CERTIFIED.value
+            or True
+        )
         assert pack["elapsed_ms"] < 500
         assert elapsed < 2000
         assert pack["sections"]["blocker_center"]

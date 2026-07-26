@@ -99,9 +99,7 @@ def build_strategy_scorecard(
             strengths.append(f"Trade count {inp.trade_count}")
         else:
             grades["sample_size"] = "fail"
-            weaknesses.append(
-                f"Trade count {inp.trade_count} < {config.min_trades}"
-            )
+            weaknesses.append(f"Trade count {inp.trade_count} < {config.min_trades}")
     else:
         grades["sample_size"] = "unavailable"
 

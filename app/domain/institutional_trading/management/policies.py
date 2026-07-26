@@ -145,7 +145,7 @@ def plan_action(
             )
             if ai_action is not None:
                 return ai_action
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
 
     # --- Time stop ---

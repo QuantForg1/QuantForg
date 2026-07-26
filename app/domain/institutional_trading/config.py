@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
@@ -93,7 +94,7 @@ class ITEConfig:
     def is_scalping(self) -> bool:
         return str(self.trading_mode).lower() in {"scalping", "alpha"}
 
-    def to_dict(self) -> dict[str, object]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "config_version": self.config_version,

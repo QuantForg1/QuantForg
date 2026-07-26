@@ -22,7 +22,9 @@ from app.domain.reliability_engineering_suite.models import (
     ISOLATION_FLAGS,
     SERVICE_NAMES,
 )
-from app.domain.reliability_engineering_suite.platform import ReliabilityEngineeringSuite
+from app.domain.reliability_engineering_suite.platform import (
+    ReliabilityEngineeringSuite,
+)
 from app.domain.reliability_engineering_suite.store import ResStore
 
 pytestmark = pytest.mark.unit
@@ -126,7 +128,9 @@ class TestResAnalytics:
 
 
 class TestResPlatform:
-    def test_isolation_and_perf(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_isolation_and_perf(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         assert ISOLATION_FLAGS["executes_trades"] is False
         assert ISOLATION_FLAGS["triggers_automation"] is False
         assert ISOLATION_FLAGS["modifies_scheduler"] is False

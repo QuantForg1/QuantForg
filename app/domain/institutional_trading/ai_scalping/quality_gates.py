@@ -6,9 +6,12 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
+    ResolvedThresholds,
+)
 from app.domain.institutional_trading.ai_scalping.config import (
-    AiScalpingConfig,
     DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
 )
 from app.domain.institutional_trading.ai_scalping.direction import DirectionDecision
 from app.domain.institutional_trading.ai_scalping.session_intelligence import (
@@ -16,9 +19,6 @@ from app.domain.institutional_trading.ai_scalping.session_intelligence import (
 )
 from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     SpreadAssessment,
-)
-from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
-    ResolvedThresholds,
 )
 
 
@@ -92,15 +92,17 @@ def evaluate_quality_gates(
             vol_ok = False
             rejects.append(f"Volatility too compressed ATR%={atr_pct}")
     checks["valid_volatility"] = vol_ok
-    if cfg.require_valid_volatility and not vol_ok and "Invalid" not in " ".join(rejects):
+    if (
+        cfg.require_valid_volatility
+        and not vol_ok
+        and "Invalid" not in " ".join(rejects)
+    ):
         pass  # already appended
 
     session_ok = session.stars >= cfg.min_session_stars
     checks["session_quality"] = session_ok
     if cfg.require_session_quality and not session_ok:
-        rejects.append(
-            f"Session quality {session.stars}★ < {cfg.min_session_stars}★"
-        )
+        rejects.append(f"Session quality {session.stars}★ < {cfg.min_session_stars}★")
 
     checks["clear_direction"] = direction.direction.value in {"BUY", "SELL"}
     if not checks["clear_direction"]:
@@ -109,21 +111,19 @@ def evaluate_quality_gates(
     checks["adaptive_confidence"] = confidence >= thresholds.confidence
     if not checks["adaptive_confidence"]:
         rejects.append(
-            f"Confidence {confidence} < adaptive {thresholds.confidence} ({thresholds.band})"
+            f"Confidence {confidence} < adaptive {thresholds.confidence} ({thresholds.band})"  # noqa: E501
         )
 
     checks["adaptive_quality"] = trade_quality >= thresholds.quality
     if not checks["adaptive_quality"]:
         rejects.append(
-            f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"
+            f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"  # noqa: E501
         )
 
     rr_ok = expected_rr is not None and expected_rr >= cfg.min_expected_rr
     checks["min_rr"] = bool(rr_ok)
     if not rr_ok:
-        rejects.append(
-            f"Expected RR {expected_rr} below minimum {cfg.min_expected_rr}"
-        )
+        rejects.append(f"Expected RR {expected_rr} below minimum {cfg.min_expected_rr}")
 
     return QualityGateResult(
         passed=len(rejects) == 0,

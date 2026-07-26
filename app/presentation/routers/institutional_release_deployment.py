@@ -103,7 +103,9 @@ def irdp_advance(
     release_id: str, body: AdvanceBody, _user: CurrentUser
 ) -> dict[str, Any]:
     """Advance pipeline stage — staging/production blocked without approval."""
-    from app.application.services.institutional_release_deployment import irdp_advance as _adv
+    from app.application.services.institutional_release_deployment import (
+        irdp_advance as _adv,
+    )
 
     row = _adv(release_id, to_stage=body.to_stage)
     if not row:
@@ -211,7 +213,9 @@ def irdp_reports(
     _user: CurrentUser,
     limit: int = Query(default=20, ge=1, le=100),
 ) -> dict[str, Any]:
-    from app.application.services.institutional_release_deployment import irdp_list_reports
+    from app.application.services.institutional_release_deployment import (
+        irdp_list_reports,
+    )
 
     payload = irdp_list_reports(limit=limit)
     payload.update(_flags())

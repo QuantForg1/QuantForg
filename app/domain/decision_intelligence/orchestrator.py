@@ -49,9 +49,7 @@ class DecisionCenterInput:
     signal_present: bool | None = None
     strategy_consensus_ok: bool | None = None
     market_regime_ok: bool | None = None
-    confidence_factors: ConfidenceFactors = field(
-        default_factory=ConfidenceFactors
-    )
+    confidence_factors: ConfidenceFactors = field(default_factory=ConfidenceFactors)
     spread: Decimal | None = None
     daily_drawdown_pct: Decimal = Decimal("0")
     consecutive_losses: int = 0
@@ -163,17 +161,13 @@ class DecisionIntelligenceCenter:
         if "require_signal" in updates:
             require_signal = bool(updates["require_signal"])
         if "require_strategy_consensus" in updates:
-            require_strategy_consensus = bool(
-                updates["require_strategy_consensus"]
-            )
+            require_strategy_consensus = bool(updates["require_strategy_consensus"])
         if "require_market_regime_ok" in updates:
             require_market_regime_ok = bool(updates["require_market_regime_ok"])
         if "max_spread" in updates:
             max_spread = Decimal(str(updates["max_spread"]))
         if "max_daily_drawdown_pct" in updates:
-            max_daily_drawdown_pct = Decimal(
-                str(updates["max_daily_drawdown_pct"])
-            )
+            max_daily_drawdown_pct = Decimal(str(updates["max_daily_drawdown_pct"]))
         if "max_consecutive_losses" in updates:
             max_consecutive_losses = int(updates["max_consecutive_losses"])
         if "min_decision_quality" in updates:
@@ -255,11 +249,7 @@ class DecisionIntelligenceCenter:
         elif override and override.action == "hold":
             decision = "HOLD"
         elif (
-            waterfall_ok
-            and risk_ok
-            and safety_ok
-            and veto.clear
-            and confidence.passed
+            waterfall_ok and risk_ok and safety_ok and veto.clear and confidence.passed
         ):
             decision = "APPROVE"
         else:

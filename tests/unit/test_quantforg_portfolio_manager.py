@@ -7,20 +7,17 @@ from pathlib import Path
 import pytest
 
 from app.domain.quantforg_portfolio_manager.analytics import (
+    build_capacity_analysis,
     build_capital_allocation,
+    build_correlation_analysis,
+    build_diversification_analysis,
     build_metrics,
+    build_portfolio_exposure,
+    build_portfolio_readiness,
     build_recommendations,
     build_strategy_ranking,
     evidence_integrity_check,
     recommendation_consistency_check,
-)
-from app.domain.quantforg_portfolio_manager.analytics import (
-    build_capacity_analysis,
-    build_correlation_analysis,
-    build_diversification_analysis,
-    build_portfolio_exposure,
-    build_portfolio_health,
-    build_portfolio_readiness,
 )
 from app.domain.quantforg_portfolio_manager.models import (
     ISOLATION_FLAGS,
@@ -85,7 +82,13 @@ def _ctx() -> dict:
                     },
                 ]
             },
-            "irap": {"metrics": {"sharpe_ratio": 1.1, "sortino_ratio": 1.4, "maximum_drawdown": 18}},
+            "irap": {
+                "metrics": {
+                    "sharpe_ratio": 1.1,
+                    "sortino_ratio": 1.4,
+                    "maximum_drawdown": 18,
+                }
+            },
             "cvf": {"confidence": {"confidence": 68}},
             "ise": {"simulations": [{"simulation_id": "s1"}]},
             "iep": {"registry": []},
@@ -98,9 +101,10 @@ def _ctx() -> dict:
             },
             "icp": {"health": {"risk_health": 65}},
         },
-        "availability": {k: True for k in (
-            "qsmr", "irap", "cvf", "ise", "iep", "islm", "eqs", "res", "qcs", "icp"
-        )},
+        "availability": dict.fromkeys(
+            ("qsmr", "irap", "cvf", "ise", "iep", "islm", "eqs", "res", "qcs", "icp"),
+            True,
+        ),
         "source_count": 10,
         "read_only": True,
     }
@@ -141,15 +145,16 @@ class TestRecommendationConsistency:
         assert all(r.get("requires_human_approval") for r in recs)
         assert all(r.get("auto_applied") is False for r in recs)
         assert recommendation_consistency_check(recs)["ok"] is True
-        assert evidence_integrity_check(
-            ranked=ranked, allocation=allocation, metrics=metrics
-        )["ok"] is True
+        assert (
+            evidence_integrity_check(
+                ranked=ranked, allocation=allocation, metrics=metrics
+            )["ok"]
+            is True
+        )
 
 
 class TestPlatform:
-    def test_dashboard(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dashboard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         qpm = QuantForgPortfolioManager(store=QpmStore(path=tmp_path / "qpm.json"))
         monkeypatch.setattr(
             "app.domain.quantforg_portfolio_manager.platform.gather_portfolio_sources",

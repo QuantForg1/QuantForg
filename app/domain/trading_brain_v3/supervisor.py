@@ -16,9 +16,7 @@ def _try_dec(value: Any) -> Decimal | None:
         return None
 
 
-def supervise_active_trade(
-    inp: BrainInput, config: TradingBrainConfig
-) -> ModuleResult:
+def supervise_active_trade(inp: BrainInput, config: TradingBrainConfig) -> ModuleResult:
     _ = config
     trade = inp.active_trade
     if trade is None and inp.open_positions is None and inp.unrealized_pnl is None:
@@ -73,9 +71,7 @@ def supervise_active_trade(
             score -= Decimal("10")
             reasons.append("Negative unrealized — supervise tightly")
 
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     reasons.append("Supervisor is advisory — does not close or send orders")
     reasons.append("Capital preservation focus; losses still possible")
     return ModuleResult(

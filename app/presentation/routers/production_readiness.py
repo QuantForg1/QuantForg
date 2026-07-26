@@ -50,9 +50,7 @@ class FailureLogBody(BaseModel):
 
 
 def _operator(user: CurrentUser) -> str:
-    return str(
-        getattr(user, "email", None) or getattr(user, "id", "") or "operator"
-    )
+    return str(getattr(user, "email", None) or getattr(user, "id", "") or "operator")
 
 
 @router.get("/status")
@@ -91,11 +89,7 @@ async def production_readiness_update_policies(
     body: PoliciesBody, user: CurrentUser
 ) -> dict[str, Any]:
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
-    return {
-        "policies": _service.update_policies(
-            updates, operator=_operator(user)
-        )
-    }
+    return {"policies": _service.update_policies(updates, operator=_operator(user))}
 
 
 @router.get("/audit")

@@ -29,7 +29,9 @@ def test_isolation_flags() -> None:
     assert ISOLATION_FLAGS["modifies_research"] is False
 
 
-def test_service_dashboard_flags(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_service_dashboard_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     aqc = AiQuantCopilot(store=AqcStore(path=tmp_path / "aqc.json"))
     monkeypatch.setattr("app.domain.ai_quant_copilot._AQC", aqc)
     monkeypatch.setattr(svc, "get_aqc", lambda: aqc)

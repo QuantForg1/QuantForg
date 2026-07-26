@@ -65,9 +65,7 @@ def compute_discipline_score(
 
     passed = score >= config.min_discipline_score
     rec = "Proceed" if passed else "No Trade"
-    reasons.append(
-        f"Discipline {score} vs min {config.min_discipline_score}"
-    )
+    reasons.append(f"Discipline {score} vs min {config.min_discipline_score}")
     reasons.append("Score measures process discipline — not expected profit")
     return ModuleResult(
         module="institutional_discipline_score",

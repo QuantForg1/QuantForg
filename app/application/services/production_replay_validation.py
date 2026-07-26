@@ -159,9 +159,7 @@ def build_synthetic_bars(
     days: int = 30, *, end: datetime | None = None
 ) -> dict[Timeframe, list[Candle]]:
     """Deterministic multi-TF (H4/H1/M15/M5) synthetic XAUUSD bar set."""
-    anchor = end or datetime.now(UTC).replace(
-        minute=0, second=0, microsecond=0
-    )
+    anchor = end or datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     if anchor.tzinfo is None:
         anchor = anchor.replace(tzinfo=UTC)
     m5 = _generate_m5_series(days=days, end=anchor)
@@ -395,9 +393,7 @@ async def run_production_replay(
     """
     generated_at = datetime.now(UTC)
     normalized = (
-        _normalize_bars_by_tf(bars_by_tf)
-        if bars_by_tf
-        else build_synthetic_bars(days)
+        _normalize_bars_by_tf(bars_by_tf) if bars_by_tf else build_synthetic_bars(days)
     )
 
     m15 = normalized.get(Timeframe.M15, [])
@@ -484,9 +480,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
         f"{report.get('order_send_called', False)}` "
         "(never places orders, never mutates Risk/Safety/strategy engines)"
     )
-    lines.append(
-        f"- Sessions allowed: {', '.join(report.get('allowed_sessions', []))}"
-    )
+    lines.append(f"- Sessions allowed: {', '.join(report.get('allowed_sessions', []))}")
     lines.append("")
     lines.append("## Statistics")
     lines.append("")
@@ -528,9 +522,7 @@ def report_to_markdown(report: dict[str, Any]) -> str:
             "| Timestamp | Session | Signal ID | Quality | Confluence | Action | "
             "Risk | Safety | OMS | MT5 | Rejection Reason |"
         )
-        lines.append(
-            "|---|---|---|---|---|---|---|---|---|---|---|"
-        )
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
         for o in opportunities:
             lines.append(
                 f"| {o.get('timestamp')} | {o.get('session')} | "

@@ -98,10 +98,7 @@ def test_policies_cannot_unlock() -> None:
 
 def test_insufficient_without_evidence() -> None:
     out = ProductionReadinessCertification().evaluate(PrcInput())
-    assert (
-        out["modules"]["reliability_certification"]["recommendation"]
-        == INSUFFICIENT
-    )
+    assert out["modules"]["reliability_certification"]["recommendation"] == INSUFFICIENT
     assert out["human_approval_required"] is True
     assert out["changes_configuration_automatically"] is False
 
@@ -115,12 +112,11 @@ def test_full_certification_pass() -> None:
     assert report["human_approval_required"] is True
     assert report["certification_status"] == VERDICT_PASS
     assert float(report["overall_readiness_score"]) >= 80
-    assert out["modules"]["human_signoff_package"]["details"][
-        "human_approval_required"
-    ] is True
-    assert out["modules"]["human_signoff_package"]["details"][
-        "auto_deploy"
-    ] is False
+    assert (
+        out["modules"]["human_signoff_package"]["details"]["human_approval_required"]
+        is True
+    )
+    assert out["modules"]["human_signoff_package"]["details"]["auto_deploy"] is False
 
 
 def test_status_change_notifies_only() -> None:

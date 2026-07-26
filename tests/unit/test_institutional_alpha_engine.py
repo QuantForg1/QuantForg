@@ -101,7 +101,10 @@ def test_smart_recovery_reduces_risk_and_raises_min_score() -> None:
     alloc = allocate_risk_pct(90, recovery=rec)
     assert alloc.recovery_active
     assert alloc.risk_pct < DEFAULT_ALPHA_CONFIG.risk_pct_high
-    assert min_score_with_recovery(recovery=rec) > DEFAULT_ALPHA_CONFIG.min_opportunity_score
+    assert (
+        min_score_with_recovery(recovery=rec)
+        > DEFAULT_ALPHA_CONFIG.min_opportunity_score
+    )
     rec.record_outcome(win=True)
     assert rec.active() is False
 

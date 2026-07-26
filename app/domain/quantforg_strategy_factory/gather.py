@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from app.domain.quantforg_strategy_factory.models import INTEGRATIONS
 
@@ -10,7 +11,7 @@ from app.domain.quantforg_strategy_factory.models import INTEGRATIONS
 def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -54,9 +55,9 @@ def gather_factory_sources() -> dict[str, Any]:
         ).get_iep()
         return {
             "registry": iep.store.list_experiments(limit=25),
-            "snapshot": iep.store.get_snapshot()
-            if hasattr(iep.store, "get_snapshot")
-            else {},
+            "snapshot": (
+                iep.store.get_snapshot() if hasattr(iep.store, "get_snapshot") else {}
+            ),
         }
 
     sources["iep"] = _safe(_iep, {"registry": [], "snapshot": {}})
@@ -71,11 +72,7 @@ def gather_factory_sources() -> dict[str, Any]:
     sources["ise"] = _safe(_ise, {"simulations": []})
     availability["ise"] = isinstance(sources["ise"], dict)
 
-    sims = (
-        sources["ise"].get("simulations")
-        if isinstance(sources["ise"], dict)
-        else []
-    )
+    sims = sources["ise"].get("simulations") if isinstance(sources["ise"], dict) else []
     replay_sims = [
         s
         for s in (sims if isinstance(sims, list) else [])
@@ -126,18 +123,14 @@ def gather_factory_sources() -> dict[str, Any]:
     availability["qsmr"] = bool(sources["qsmr"])
 
     sources["qkg"] = _safe(
-        lambda: __import__(
-            "app.domain.quant_knowledge_graph", fromlist=["get_qkg"]
-        )
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
         .get_qkg()
         .store.get_snapshot(),
         {},
     )
     availability["qkg"] = bool(sources["qkg"])
 
-    sources["qem"] = _store_snapshot(
-        "app.domain.quantforg_event_mesh", "get_qem"
-    )
+    sources["qem"] = _store_snapshot("app.domain.quantforg_event_mesh", "get_qem")
     availability["qem"] = bool(sources["qem"])
 
     sources["qcdm"] = _store_snapshot(

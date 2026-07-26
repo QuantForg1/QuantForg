@@ -29,14 +29,16 @@ class RiskAllocation:
 
 
 class SmartRecoveryState:
-    """Temporary risk reduction after losses — configurable, never martingale."""
+    """Temporary risk reduction after losses - configurable, never martingale."""
 
     def __init__(self) -> None:
         self._lock = Lock()
         self._remaining: int = 0
         self._last_loss: bool = False
 
-    def record_outcome(self, *, win: bool, config: InstitutionalAlphaConfig | None = None) -> None:
+    def record_outcome(
+        self, *, win: bool, config: InstitutionalAlphaConfig | None = None
+    ) -> None:
         cfg = config or DEFAULT_ALPHA_CONFIG
         with self._lock:
             if win:
@@ -132,11 +134,11 @@ def allocate_risk_pct(
             f"Score {opportunity_score} below min {cfg.min_opportunity_score}",
         )
 
-    reason = f"Quality band={band} score={opportunity_score} → risk={risk}%"
+    reason = f"Quality band={band} score={opportunity_score} -> risk={risk}%"
     recovery_on = rec.active()
     if recovery_on:
         risk = (risk * cfg.recovery_risk_mult).quantize(Decimal("0.01"))
-        reason += f" · recovery×{cfg.recovery_risk_mult}"
+        reason += f" · recoveryx{cfg.recovery_risk_mult}"
 
     remaining_daily = cfg.max_daily_risk_pct - daily_risk_used_pct
     if risk > remaining_daily:

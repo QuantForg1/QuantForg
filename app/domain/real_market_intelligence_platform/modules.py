@@ -120,9 +120,7 @@ def economic_calendar(inp: RmipInput, config: RmipConfig) -> ModuleResult:
     risk_map = {0: "LOW", 1: "LOW", 2: "MEDIUM", 3: "HIGH", 4: "CRITICAL"}
     market_risk = risk_map[max_rank] if max_rank else "LOW"
     # If every event lacks importance, risk is unknown — not guessed as LOW
-    if max_rank == 0 and all(
-        e.get("importance") is None for e in normalized
-    ):
+    if max_rank == 0 and all(e.get("importance") is None for e in normalized):
         market_risk = MISSING
 
     return ModuleResult(
@@ -200,8 +198,12 @@ def session_intelligence(inp: RmipInput, config: RmipConfig) -> ModuleResult:
             if abs(cur_mins - end_mins) <= 30:
                 closing.append(name)
 
-    primary = active[0] if len(active) == 1 else (
-        overlaps[0].split("_")[-1] if overlaps else (active[0] if active else None)
+    primary = (
+        active[0]
+        if len(active) == 1
+        else (
+            overlaps[0].split("_")[-1] if overlaps else (active[0] if active else None)
+        )
     )
     if hint in SESSIONS and not active:
         primary = hint
@@ -265,8 +267,8 @@ def volatility_observatory(inp: RmipInput, config: RmipConfig) -> ModuleResult:
         if v is None:
             missing.append(k)
         else:
-            present[k] = v if not isinstance(v, (int, float, Decimal)) else str(
-                _dec(v) or v
+            present[k] = (
+                v if not isinstance(v, (int, float, Decimal)) else str(_dec(v) or v)
             )
 
     level_raw = obs.get("level") or obs.get("volatility_level")
@@ -356,8 +358,8 @@ def liquidity_observatory(inp: RmipInput, config: RmipConfig) -> ModuleResult:
         if v is None:
             missing.append(k)
         else:
-            present[k] = v if not isinstance(v, (int, float, Decimal)) else str(
-                _dec(v) or v
+            present[k] = (
+                v if not isinstance(v, (int, float, Decimal)) else str(_dec(v) or v)
             )
 
     quality = obs.get("liquidity_quality") or obs.get("quality")
@@ -405,21 +407,13 @@ def market_context_timeline(
     entry = {
         "recorded_at": datetime.now(UTC).isoformat(),
         "market_regime": inp.regime,
-        "volatility": (
-            (vol.details or {}).get("volatility_level") if vol else None
-        ),
-        "liquidity": (
-            (liq.details or {}).get("liquidity_quality") if liq else None
-        ),
-        "economic_events": (
-            (econ.details or {}).get("event_count") if econ else None
-        ),
+        "volatility": ((vol.details or {}).get("volatility_level") if vol else None),
+        "liquidity": ((liq.details or {}).get("liquidity_quality") if liq else None),
+        "economic_events": ((econ.details or {}).get("event_count") if econ else None),
         "economic_risk": (
             (econ.details or {}).get("market_risk_level") if econ else None
         ),
-        "session": (
-            (sess.details or {}).get("primary_session") if sess else None
-        ),
+        "session": ((sess.details or {}).get("primary_session") if sess else None),
         "trend": inp.trend,
         "confidence": inp.confidence,
     }
@@ -445,9 +439,7 @@ def market_context_timeline(
     )
 
 
-def context_scoring(
-    inp: RmipInput, modules: dict[str, ModuleResult]
-) -> ModuleResult:
+def context_scoring(inp: RmipInput, modules: dict[str, ModuleResult]) -> ModuleResult:
     econ = modules.get("economic_calendar")
     sess = modules.get("session_intelligence")
     vol = modules.get("volatility_observatory")
@@ -459,9 +451,7 @@ def context_scoring(
 
     economic_risk = MISSING
     if econ and econ.status == "available":
-        economic_risk = str(
-            (econ.details or {}).get("market_risk_level") or MISSING
-        )
+        economic_risk = str((econ.details or {}).get("market_risk_level") or MISSING)
         inputs_used.append("economic_calendar")
         if economic_risk == "LOW":
             score += Decimal("10")
@@ -501,9 +491,7 @@ def context_scoring(
 
     liquidity = MISSING
     if liq and liq.status == "available":
-        liquidity = str(
-            (liq.details or {}).get("liquidity_quality") or "Observed"
-        )
+        liquidity = str((liq.details or {}).get("liquidity_quality") or "Observed")
         inputs_used.append("liquidity_observatory")
         score += Decimal("10")
     else:
@@ -532,9 +520,7 @@ def context_scoring(
         module="context_scoring",
         status="available" if inputs_used else "missing_data",
         score=score if inputs_used else None,
-        recommendation=(
-            f"Market Context {score}" if inputs_used else MISSING
-        ),
+        recommendation=(f"Market Context {score}" if inputs_used else MISSING),
         reasons=(
             "Unified score from supplied modules only",
             "Never invents economic or market inputs",
@@ -597,9 +583,7 @@ def operator_intelligence_feed(
         details={
             "upcoming_events": upcoming,
             "current_regime": (
-                ((timeline.details or {}).get("entry") or {}).get(
-                    "market_regime"
-                )
+                ((timeline.details or {}).get("entry") or {}).get("market_regime")
                 if timeline
                 else MISSING
             ),
@@ -619,9 +603,7 @@ def operator_intelligence_feed(
                 else MISSING
             ),
             "market_context": (
-                (score.details or {}).get("market_context")
-                if score
-                else MISSING
+                (score.details or {}).get("market_context") if score else MISSING
             ),
             "open_risks": open_risks,
         },
@@ -724,9 +706,7 @@ def context_api_payload(modules: dict[str, ModuleResult]) -> ModuleResult:
             "READ ONLY — never places trades",
         ),
         details={
-            "current_context": (
-                (feed.details if feed else None) or MISSING
-            ),
+            "current_context": ((feed.details if feed else None) or MISSING),
             "historical_context": "via /history and archive module",
             "session": (
                 (sess.details or {})
@@ -734,9 +714,7 @@ def context_api_payload(modules: dict[str, ModuleResult]) -> ModuleResult:
                 else {"verdict": MISSING}
             ),
             "economic_risk": (
-                (econ.details or {}).get("market_risk_level")
-                if econ
-                else MISSING
+                (econ.details or {}).get("market_risk_level") if econ else MISSING
             ),
             "volatility": (
                 (vol.details or {})
@@ -749,15 +727,9 @@ def context_api_payload(modules: dict[str, ModuleResult]) -> ModuleResult:
                 else {"verdict": MISSING}
             ),
             "timeline": (
-                (timeline.details or {}).get("entry")
-                if timeline
-                else MISSING
+                (timeline.details or {}).get("entry") if timeline else MISSING
             ),
-            "context_score": (
-                (score.details or {})
-                if score
-                else {"verdict": MISSING}
-            ),
+            "context_score": ((score.details or {}) if score else {"verdict": MISSING}),
             "read_only": True,
         },
     )

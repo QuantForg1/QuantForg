@@ -1,4 +1,4 @@
-"""ATR (Average True Range) for ITE sizing — observational indicator only.
+"""ATR (Average True Range) for ITE sizing - observational indicator only.
 
 Does not alter strategy rules, risk %, min-lot policy, or OMS.
 Matches the simple TR-window average used by production replay validation.
@@ -45,7 +45,7 @@ def stop_distance_from_atr(
     *,
     multiplier: Decimal = Decimal("1.5"),
 ) -> Decimal | None:
-    """Decision-pipeline stop distance: ``multiplier × ATR``."""
+    """Decision-pipeline stop distance: ``multiplier x ATR``."""
     if atr is None or atr <= 0:
         return None
     return (atr * multiplier).quantize(Decimal("0.0001"))

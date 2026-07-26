@@ -56,7 +56,9 @@ class AiQuantScientist:
             else:
                 by_id[s["id"]] = s
         merged = list(by_id.values())
-        merged.sort(key=lambda r: r.get("updated_at") or r.get("created_at") or "", reverse=True)
+        merged.sort(
+            key=lambda r: r.get("updated_at") or r.get("created_at") or "", reverse=True
+        )
 
         score_vals = [
             (r.get("scores") or {}).get("research_confidence_score")
@@ -64,42 +66,48 @@ class AiQuantScientist:
             if (r.get("scores") or {}).get("research_confidence_score") is not None
         ]
         scores_avg = {
-            "research_confidence_score": round(statistics.mean(score_vals), 1)
-            if score_vals
-            else 50.0,
-            "evidence_strength": round(
-                statistics.mean(
-                    [
-                        (r.get("scores") or {}).get("evidence_strength") or 50
-                        for r in merged
-                    ]
-                ),
-                1,
-            )
-            if merged
-            else 50.0,
-            "statistical_reliability": round(
-                statistics.mean(
-                    [
-                        (r.get("scores") or {}).get("statistical_reliability") or 50
-                        for r in merged
-                    ]
-                ),
-                1,
-            )
-            if merged
-            else 50.0,
-            "recommendation_strength": round(
-                statistics.mean(
-                    [
-                        (r.get("scores") or {}).get("recommendation_strength") or 50
-                        for r in merged
-                    ]
-                ),
-                1,
-            )
-            if merged
-            else 50.0,
+            "research_confidence_score": (
+                round(statistics.mean(score_vals), 1) if score_vals else 50.0
+            ),
+            "evidence_strength": (
+                round(
+                    statistics.mean(
+                        [
+                            (r.get("scores") or {}).get("evidence_strength") or 50
+                            for r in merged
+                        ]
+                    ),
+                    1,
+                )
+                if merged
+                else 50.0
+            ),
+            "statistical_reliability": (
+                round(
+                    statistics.mean(
+                        [
+                            (r.get("scores") or {}).get("statistical_reliability") or 50
+                            for r in merged
+                        ]
+                    ),
+                    1,
+                )
+                if merged
+                else 50.0
+            ),
+            "recommendation_strength": (
+                round(
+                    statistics.mean(
+                        [
+                            (r.get("scores") or {}).get("recommendation_strength") or 50
+                            for r in merged
+                        ]
+                    ),
+                    1,
+                )
+                if merged
+                else 50.0
+            ),
         }
 
         report = build_executive_report(
@@ -140,7 +148,9 @@ class AiQuantScientist:
         pack["sections"] = {
             "research_feed": pack["feed"],
             "recommendation_center": {
-                "open": [r for r in pack["recommendations"] if r.get("status") == "Open"],
+                "open": [
+                    r for r in pack["recommendations"] if r.get("status") == "Open"
+                ],
                 "accepted": [
                     r for r in pack["recommendations"] if r.get("status") == "Accepted"
                 ],
@@ -154,7 +164,11 @@ class AiQuantScientist:
             "pattern_explorer": pack["patterns"],
             "strategy_comparator": pack["comparison"],
             "explainability": [
-                {"id": r["id"], "title": r["title"], "explainability": r.get("explainability")}
+                {
+                    "id": r["id"],
+                    "title": r["title"],
+                    "explainability": r.get("explainability"),
+                }
                 for r in pack["recommendations"][:20]
             ],
             "executive_reports": self.store.list_reports(limit=10),

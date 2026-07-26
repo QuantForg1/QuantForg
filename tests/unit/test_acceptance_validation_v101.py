@@ -352,9 +352,7 @@ class TestRecoveryValidation:
 
     def test_kill_switch_blocks_auto_trading(self) -> None:
         plane = OperationsControlPlane()
-        op = OperatorIdentity(
-            user_id=uuid4(), role="owner", display_name="Acceptance"
-        )
+        op = OperatorIdentity(user_id=uuid4(), role="owner", display_name="Acceptance")
         plane.arm_kill_switch(op, reason="acceptance drill", confirmed=True)
         assert plane.kill_switch_armed is True
         result = evaluate_auto_trade_safety(

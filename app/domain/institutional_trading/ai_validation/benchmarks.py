@@ -78,7 +78,6 @@ def estimate_sma_crossover_return(
         return None
     cash = 1.0
     pos = 0.0
-    entry = 0.0
     for i in range(slow, len(prices)):
         f = sum(prices[i - fast : i]) / fast
         s = sum(prices[i - slow : i]) / slow
@@ -89,7 +88,6 @@ def estimate_sma_crossover_return(
         if prev_f <= prev_s and f > s and pos == 0:
             pos = cash / price
             cash = 0.0
-            entry = price
         # death cross
         elif prev_f >= prev_s and f < s and pos > 0:
             cash = pos * price

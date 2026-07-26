@@ -13,7 +13,10 @@ import pytest
 
 from app.application.services import ops_state_persistence as osp
 from app.application.services.mt5_position_truth import force_sync_positions
-from app.application.services.ops_state_persistence import load_ops_state, save_ops_state
+from app.application.services.ops_state_persistence import (
+    load_ops_state,
+    save_ops_state,
+)
 from app.domain.entities.mt5_portfolio import MT5Position
 from app.domain.institutional_trading.management.engine import PositionManagementEngine
 from app.domain.institutional_trading.management.models import (
@@ -172,8 +175,10 @@ def test_recover_registers_fill_with_broker_sl() -> None:
 def test_safety_blocked_still_manages_open_positions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """max-open / SAFETY_BLOCKED must not skip PME — continuous scalping requires exits."""
-    from app.application.services.institutional_ite_runtime import InstitutionalIteRuntime
+    """max-open / SAFETY_BLOCKED must not skip PME — continuous scalping requires exits."""  # noqa: E501
+    from app.application.services.institutional_ite_runtime import (
+        InstitutionalIteRuntime,
+    )
     from app.domain.institutional_trading.decision_models import AccountRiskState
     from app.domain.institutional_trading.operations.models import OpsExecutionMode
 
@@ -227,7 +232,7 @@ def test_safety_blocked_still_manages_open_positions(
     )
     monkeypatch.setattr(
         "app.application.services.mt5_position_truth.force_sync_positions",
-        lambda *a, **k: sync,
+        lambda *_a, **_k: sync,
     )
     monkeypatch.setattr(
         "app.application.services.mt5_position_truth.apply_mt5_position_truth",

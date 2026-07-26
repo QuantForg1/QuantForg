@@ -66,10 +66,7 @@ def test_insufficient_history_reported() -> None:
     assert out["never_fabricate_statistics"] is True
     assert out["auto_modifies_trading_rules"] is False
     assert out["insufficient_modules"]
-    assert any(
-        m["status"] == "insufficient_history"
-        for m in out["modules"].values()
-    )
+    assert any(m["status"] == "insufficient_history" for m in out["modules"].values())
 
 
 def test_full_evaluate_with_history() -> None:

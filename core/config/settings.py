@@ -392,9 +392,7 @@ class Settings(BaseSettings):
                 "auto-disarm. Never bypasses connectivity, margin, market open, "
                 "or spread protection."
             ),
-            validation_alias=AliasChoices(
-                "FORCE_FIRST_TRADE", "force_first_trade"
-            ),
+            validation_alias=AliasChoices("FORCE_FIRST_TRADE", "force_first_trade"),
         ),
     ] = False
     force_first_trade_max: Annotated[

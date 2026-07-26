@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-
 _ASSET_CLASS: dict[str, str] = {
     "XAUUSD": "metals",
     "XAGUSD": "metals",
@@ -61,7 +60,11 @@ class PortfolioAnalyticsStore:
     def _return_since(self, delta: timedelta) -> float | None:
         if len(self.equity_points) < 2:
             # fallback: sum pnl samples
-            return round(sum(self.daily_returns[-max(1, int(delta.days) or 1) :]), 2) if self.daily_returns else None
+            return (
+                round(sum(self.daily_returns[-max(1, int(delta.days) or 1) :]), 2)
+                if self.daily_returns
+                else None
+            )
         start = datetime.now(UTC) - delta
         series = [(t, e) for t, e in self.equity_points if t >= start]
         if len(series) < 2:

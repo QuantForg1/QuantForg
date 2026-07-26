@@ -110,9 +110,7 @@ async def analyze(
 ) -> dict[str, Any]:
     """Analyze supplied observability samples (copies only)."""
     ops_facts = (
-        payload.get("ops_facts")
-        if isinstance(payload.get("ops_facts"), dict)
-        else None
+        payload.get("ops_facts") if isinstance(payload.get("ops_facts"), dict) else None
     )
     latency = (
         payload.get("latency_samples")
@@ -126,11 +124,11 @@ async def analyze(
     )
     if include_live and ops_facts is None:
         return run_observability(
-            latency_samples=latency,  # type: ignore[arg-type]
+            latency_samples=latency,
             error_events=events,
         )
     return run_observability(
         ops_facts=ops_facts,
-        latency_samples=latency,  # type: ignore[arg-type]
+        latency_samples=latency,
         error_events=events if events is not None else [],
     )

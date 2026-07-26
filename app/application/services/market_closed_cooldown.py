@@ -77,8 +77,14 @@ def note_oms_reject(
     """If reject is market-closed, start cooldown. Returns True when cooled."""
     msg = (message or "").lower()
     code = int(retcode or 0)
-    if code == MARKET_CLOSED_RETCODE or "market closed" in msg or "market is closed" in msg:
-        mark_market_closed(symbol, retcode=code or MARKET_CLOSED_RETCODE, comment=message)
+    if (
+        code == MARKET_CLOSED_RETCODE
+        or "market closed" in msg
+        or "market is closed" in msg
+    ):
+        mark_market_closed(
+            symbol, retcode=code or MARKET_CLOSED_RETCODE, comment=message
+        )
         return True
     return False
 

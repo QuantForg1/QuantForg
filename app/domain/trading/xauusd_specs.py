@@ -1,7 +1,7 @@
 """Canonical MT5 XAUUSD (Gold) instrument specifications.
 
 QuantForg trades XAUUSD only. All risk, margin, exposure, spread, and
-sizing math must use these specs — never FX-major (100000 / 0.0001) defaults.
+sizing math must use these specs - never FX-major (100000 / 0.0001) defaults.
 """
 
 from __future__ import annotations
@@ -27,11 +27,11 @@ VOLUME_MAX = Decimal("10")
 VOLUME_STEP = Decimal("0.01")
 
 # --- Desk policy (absolute price units, not FX pips) ---------------------------
-# Live XAU spreads are typically ~0.20–0.60 USD. FX ceilings like 0.00050
+# Live XAU spreads are typically ~0.20-0.60 USD. FX ceilings like 0.00050
 # are invalid for gold and must never be applied.
 MAX_SPREAD = Decimal("2.00")
 MAX_SPREAD_TIGHT = Decimal("0.50")  # full confluence score
-# Any configured ceiling below this is treated as FX inheritance → coerce.
+# Any configured ceiling below this is treated as FX inheritance -> coerce.
 MIN_VALID_SPREAD_CEILING = Decimal("0.05")
 
 # Weltrade gold accounts commonly run 1:1000. Cap matches broker, not FX 1:500.
@@ -39,7 +39,7 @@ MAX_LEVERAGE = Decimal("1000")
 # Safer fallback when account.leverage is missing (never use FX 100k path).
 EXPOSURE_LEVERAGE_FALLBACK = Decimal("1000")
 
-# Whitelist — platform is single-instrument.
+# Whitelist - platform is single-instrument.
 SYMBOL_WHITELIST: frozenset[str] = frozenset({SYMBOL})
 
 
@@ -62,7 +62,7 @@ def margin_required(
     leverage: Decimal,
     contract_size: Decimal = CONTRACT_SIZE,
 ) -> Decimal:
-    """MT5-style required margin: volume × contract_size × price / leverage."""
+    """MT5-style required margin: volume x contract_size x price / leverage."""
     lev = leverage if leverage > 0 else EXPOSURE_LEVERAGE_FALLBACK
     return (volume * contract_size * price / lev).quantize(Decimal("0.01"))
 

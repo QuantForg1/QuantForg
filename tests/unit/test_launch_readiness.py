@@ -202,9 +202,7 @@ class TestLaunchReadiness:
         assert plane.auto_trading_run_state == "running"
         for step in out["steps"]:
             if step.get("action") == "mode_transition":
-                assert not (
-                    step.get("from") == "SHADOW" and step.get("to") == "LIVE"
-                )
+                assert not (step.get("from") == "SHADOW" and step.get("to") == "LIVE")
 
     def test_never_jumps_shadow_to_live_directly(self) -> None:
         plane = OperationsControlPlane()

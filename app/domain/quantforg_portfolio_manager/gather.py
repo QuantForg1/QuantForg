@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -37,9 +38,9 @@ def gather_portfolio_sources() -> dict[str, Any]:
         ).get_qsmr()
         return {
             "registry": qsmr.store.list_strategies(limit=50),
-            "snapshot": qsmr.store.get_snapshot()
-            if hasattr(qsmr.store, "get_snapshot")
-            else {},
+            "snapshot": (
+                qsmr.store.get_snapshot() if hasattr(qsmr.store, "get_snapshot") else {}
+            ),
         }
 
     sources["qsmr"] = _safe(_qsmr, {"registry": [], "snapshot": {}})
@@ -82,9 +83,7 @@ def gather_portfolio_sources() -> dict[str, Any]:
     sources["islm"] = _safe(_islm, {"registry": []})
     availability["islm"] = isinstance(sources["islm"], dict)
 
-    sources["eqs"] = _store_snapshot(
-        "app.domain.execution_quality_suite", "get_eqs"
-    )
+    sources["eqs"] = _store_snapshot("app.domain.execution_quality_suite", "get_eqs")
     availability["eqs"] = bool(sources["eqs"])
 
     sources["res"] = _store_snapshot(

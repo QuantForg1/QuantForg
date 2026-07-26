@@ -73,9 +73,7 @@ def build_self_analysis_report(
     if filters_total > 0:
         ratio = Decimal(filters_passed) / Decimal(filters_total)
         score += (ratio - Decimal("0.5")) * Decimal("20")
-        findings.append(
-            f"Filter pass rate {filters_passed}/{filters_total}."
-        )
+        findings.append(f"Filter pass rate {filters_passed}/{filters_total}.")
 
     if journal is not None:
         findings.append(

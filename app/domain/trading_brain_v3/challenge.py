@@ -9,9 +9,7 @@ from app.domain.trading_brain_v3.config import TradingBrainConfig
 from app.domain.trading_brain_v3.types import BrainInput, ModuleResult
 
 
-def run_decision_challenge(
-    inp: BrainInput, config: TradingBrainConfig
-) -> ModuleResult:
+def run_decision_challenge(inp: BrainInput, config: TradingBrainConfig) -> ModuleResult:
     reasons: list[str] = []
     score = Decimal("50")
     details: dict[str, Any] = {}

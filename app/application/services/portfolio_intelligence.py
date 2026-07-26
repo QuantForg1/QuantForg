@@ -1,4 +1,4 @@
-"""Portfolio Intelligence executive dashboard — v9."""
+"""Portfolio Intelligence executive dashboard - v9."""
 
 from __future__ import annotations
 
@@ -47,7 +47,9 @@ def build_portfolio_intelligence_dashboard() -> dict[str, Any]:
                 if sym:
                     open_symbols.append(sym)
                     exposure[sym] = exposure.get(sym, 0.0) + float(
-                        d.get("remaining_volume") or getattr(pos, "remaining_volume", 0) or 0
+                        d.get("remaining_volume")
+                        or getattr(pos, "remaining_volume", 0)
+                        or 0
                     )
         mt5 = getattr(runtime, "mt5_adapter", None) if runtime else None
         alpha = build_alpha_dashboard(mt5_adapter=mt5, open_symbols=open_symbols)
@@ -66,7 +68,11 @@ def build_portfolio_intelligence_dashboard() -> dict[str, Any]:
             from core.config.settings import get_settings
 
             facts, live = build_status_facts(plane, settings=get_settings())
-            equity = float(live.get("equity") or facts.equity or 0) if hasattr(facts, "equity") else float(live.get("equity") or 0)
+            equity = (
+                float(live.get("equity") or facts.equity or 0)
+                if hasattr(facts, "equity")
+                else float(live.get("equity") or 0)
+            )
             free_margin = float(live.get("free_margin") or live.get("margin_free") or 0)
             session = str(live.get("session") or "unknown")
         except Exception:
@@ -83,11 +89,11 @@ def build_portfolio_intelligence_dashboard() -> dict[str, Any]:
             if pa.get("equity"):
                 equity = float(pa["equity"])
             eq_mon = get_execution_quality_monitor().snapshot()
-            # Normalize execution quality 0–1 from inverse latency
+            # Normalize execution quality 0-1 from inverse latency
             lat = eq_mon.get("avg_total_execution_ms")
             if lat:
                 exec_q = max(0.2, min(1.0, 1.0 - float(lat) / 5000.0))
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort optional path
             pass
     except Exception:
         logger.exception("portfolio_intelligence_dashboard_gather_failed")

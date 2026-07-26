@@ -41,7 +41,9 @@ class ValidationAlerter:
     _consecutive_losses: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    def _emit(self, *, kind: str, detail: str, severity: str = "WARNING") -> ValidationAlert:
+    def _emit(
+        self, *, kind: str, detail: str, severity: str = "WARNING"
+    ) -> ValidationAlert:
         alert = ValidationAlert(
             id=str(uuid4()),
             at=datetime.now(UTC).isoformat(),
@@ -90,7 +92,7 @@ class ValidationAlerter:
         if latency_ms >= cfg.alert_latency_spike_ms:
             self._emit(
                 kind="latency_spike",
-                detail=f"Execution latency {latency_ms}ms >= {cfg.alert_latency_spike_ms}ms",
+                detail=f"Execution latency {latency_ms}ms >= {cfg.alert_latency_spike_ms}ms",  # noqa: E501
             )
 
     def on_trade_result(self, *, win: bool) -> None:

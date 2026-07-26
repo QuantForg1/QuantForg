@@ -161,9 +161,10 @@ def evaluate_multi_timeframe(
         score += Decimal("10")
     if inp.ltf_confirmation:
         reasons.append(f"LTF confirmation {inp.ltf_confirmation}")
-        if inp.htf_bias and str(inp.htf_bias).lower() == str(
-            inp.ltf_confirmation
-        ).lower():
+        if (
+            inp.htf_bias
+            and str(inp.htf_bias).lower() == str(inp.ltf_confirmation).lower()
+        ):
             score += Decimal("20")
             reasons.append("HTF/LTF aligned")
         else:
@@ -330,14 +331,8 @@ def rank_opportunities(
             )
             continue
         # Lower risk_score is better; invert for composite.
-        risk_component = (
-            (Decimal("100") - r) if r is not None else Decimal("50")
-        )
-        parts = [
-            x
-            for x in (q, c, risk_component, e)
-            if x is not None
-        ]
+        risk_component = (Decimal("100") - r) if r is not None else Decimal("50")
+        parts = [x for x in (q, c, risk_component, e) if x is not None]
         composite = (sum(parts) / Decimal(len(parts))).quantize(Decimal("0.01"))
         ok = (
             (q is None or q >= config.min_quality_score)

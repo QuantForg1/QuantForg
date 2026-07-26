@@ -1,4 +1,4 @@
-"""Self-learning store — record closed trades to improve future scoring."""
+"""Self-learning store - record closed trades to improve future scoring."""
 
 from __future__ import annotations
 
@@ -105,7 +105,9 @@ class ScalpingLearningStore:
             with self._lock:
                 payload = {
                     "updated_at": datetime.now(UTC).isoformat(),
-                    "records": [r.to_dict() for r in self._records[-self.max_records :]],
+                    "records": [
+                        r.to_dict() for r in self._records[-self.max_records :]
+                    ],
                 }
             self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception:
@@ -132,7 +134,7 @@ class ScalpingLearningStore:
         regime: str | None,
         spread: Decimal | None = None,
     ) -> int:
-        """Return 0–100 similarity prior from past outcomes (wins weighted up)."""
+        """Return 0-100 similarity prior from past outcomes (wins weighted up)."""
         with self._lock:
             rows = list(self._records)
         if not rows:
@@ -151,14 +153,14 @@ class ScalpingLearningStore:
                 try:
                     if abs(Decimal(str(r.spread)) - spread) <= Decimal("0.25"):
                         score += 1.0
-                except Exception:
+                except Exception:  # noqa: S110  # best-effort optional path
                     pass
             if score <= 0:
                 continue
             scored.append(score * (1.4 if r.win else 0.6))
         if not scored:
             return 55
-        # Map average match strength → 40–90 band
+        # Map average match strength -> 40-90 band
         avg = sum(scored) / len(scored)
         return max(40, min(90, int(50 + avg * 6)))
 

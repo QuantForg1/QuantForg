@@ -42,9 +42,7 @@ class AiHealthDashboard:
                 else None
             ),
             "risk_discipline": (
-                str(self.risk_discipline)
-                if self.risk_discipline is not None
-                else None
+                str(self.risk_discipline) if self.risk_discipline is not None else None
             ),
             "system_reliability": (
                 str(self.system_reliability)
@@ -83,9 +81,9 @@ def build_ai_health_dashboard(
             ),
         )
 
-    overall = (
-        sum(present, Decimal("0")) / Decimal(len(present))
-    ).quantize(Decimal("0.01"))
+    overall = (sum(present, Decimal("0")) / Decimal(len(present))).quantize(
+        Decimal("0.01")
+    )
     reasons: list[str] = []
     healthy = True
 

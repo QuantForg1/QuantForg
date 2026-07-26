@@ -46,15 +46,10 @@ def research_workspace(
     if draft is not None:
         created = {
             "id": str(draft.get("id") or f"exp_{uuid4().hex[:10]}"),
-            "author": str(
-                draft.get("author") or inp.author or "unknown"
-            ),
+            "author": str(draft.get("author") or inp.author or "unknown"),
             "version": str(draft.get("version") or "0.1.0"),
             "status": str(draft.get("status") or "draft"),
-            "created": str(
-                draft.get("created")
-                or datetime.now(UTC).isoformat()
-            ),
+            "created": str(draft.get("created") or datetime.now(UTC).isoformat()),
             "description": str(draft.get("description") or ""),
             "family": draft.get("family"),
             "cloned_from": draft.get("cloned_from"),
@@ -153,17 +148,13 @@ def strategy_laboratory(
         details={
             "families": by_family,
             "strategies": strategies[:100],
-            "certified_count": sum(
-                1 for s in strategies if s.get("certified") is True
-            ),
+            "certified_count": sum(1 for s in strategies if s.get("certified") is True),
             "affects_production": False,
         },
     )
 
 
-def replay_engine(
-    inp: AlphaFactoryInput, config: AlphaFactoryConfig
-) -> ModuleResult:
+def replay_engine(inp: AlphaFactoryInput, config: AlphaFactoryConfig) -> ModuleResult:
     _ = config
     replay = inp.replay if isinstance(inp.replay, dict) else None
     if not replay:
@@ -351,16 +342,14 @@ def promotion_workflow(
     stage = str(promo.get("stage") or "Development")
     if stage not in PROMOTION_STAGES:
         stage = "Development"
-    approvals = promo.get("approvals") if isinstance(
-        promo.get("approvals"), dict
-    ) else {}
+    approvals = (
+        promo.get("approvals") if isinstance(promo.get("approvals"), dict) else {}
+    )
     try:
         idx = PROMOTION_STAGES.index(stage)
     except ValueError:
         idx = 0
-    next_stage = (
-        PROMOTION_STAGES[idx + 1] if idx + 1 < len(PROMOTION_STAGES) else None
-    )
+    next_stage = PROMOTION_STAGES[idx + 1] if idx + 1 < len(PROMOTION_STAGES) else None
 
     # Never auto-advance to Production
     auto = False
@@ -466,8 +455,7 @@ def research_dashboard(
         active = [
             e
             for e in ws.details["experiments"]
-            if str(e.get("status") or "").lower()
-            not in {"archived", "rejected"}
+            if str(e.get("status") or "").lower() not in {"archived", "rejected"}
         ]
     certified = 0
     if lab:
@@ -502,9 +490,7 @@ def research_dashboard(
     )
 
 
-def alpha_score(
-    inp: AlphaFactoryInput, config: AlphaFactoryConfig
-) -> ModuleResult:
+def alpha_score(inp: AlphaFactoryInput, config: AlphaFactoryConfig) -> ModuleResult:
     src = inp.score_inputs if isinstance(inp.score_inputs, dict) else {}
     # Also accept from replay/paper metrics
     dims = (
@@ -522,13 +508,9 @@ def alpha_score(
             values[d] = v
 
     trade_n = None
-    if isinstance(inp.replay, dict) and isinstance(
-        inp.replay.get("trades"), list
-    ):
+    if isinstance(inp.replay, dict) and isinstance(inp.replay.get("trades"), list):
         trade_n = len(inp.replay["trades"])
-    elif isinstance(inp.paper, dict) and isinstance(
-        inp.paper.get("trades"), list
-    ):
+    elif isinstance(inp.paper, dict) and isinstance(inp.paper.get("trades"), list):
         trade_n = len(inp.paper["trades"])
     if trade_n is not None and trade_n < config.min_trades_for_score:
         return _insufficient(
@@ -541,9 +523,7 @@ def alpha_score(
             "Need ≥3 supplied score dimensions — Insufficient Data",
         )
 
-    overall = (
-        sum(values.values()) / Decimal(len(values))
-    ).quantize(Decimal("0.01"))
+    overall = (sum(values.values()) / Decimal(len(values))).quantize(Decimal("0.01"))
     return ModuleResult(
         module="alpha_score",
         status="available",
@@ -557,9 +537,7 @@ def alpha_score(
         details={
             "dimensions": {k: str(v) for k, v in values.items()},
             "trade_count": trade_n,
-            "insufficient_dimensions": [
-                d for d in dims if d not in values
-            ],
+            "insufficient_dimensions": [d for d in dims if d not in values],
         },
     )
 

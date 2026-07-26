@@ -199,9 +199,7 @@ def _item(
         value=value,
         why=why if not passed else "",
         how_to_resolve=(
-            ""
-            if passed
-            else _RESOLVE.get(key, "Resolve via OWNER Ops controls")
+            "" if passed else _RESOLVE.get(key, "Resolve via OWNER Ops controls")
         ),
         required_for_promotion=required_for_promotion,
         required_for_canary=required_for_canary,
@@ -331,9 +329,11 @@ def build_launch_readiness(
         _item(
             "trading_allowed",
             "Trading Allowed",
-            passed=trading_allowed
-            if facts.account_flags_evaluated
-            else bool(facts.broker_connected),
+            passed=(
+                trading_allowed
+                if facts.account_flags_evaluated
+                else bool(facts.broker_connected)
+            ),
             value=(
                 "YES"
                 if (
@@ -348,9 +348,11 @@ def build_launch_readiness(
         _item(
             "symbol_ready",
             "Symbol Ready",
-            passed=symbol_ready
-            if facts.symbol_tradable or facts.broker_connected
-            else False,
+            passed=(
+                symbol_ready
+                if facts.symbol_tradable or facts.broker_connected
+                else False
+            ),
             value=(
                 "XAUUSD READY"
                 if symbol_ready or facts.broker_connected

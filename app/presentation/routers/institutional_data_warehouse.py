@@ -36,9 +36,7 @@ async def warehouse_dashboard(
     limit: int = Query(default=200, ge=1, le=2000),
 ) -> dict[str, Any]:
     """Warehouse overview — snapshots journal read-only then aggregates."""
-    snapshot_read_only_sources(
-        journal_rows=_journal_rows(journal, str(user.id), limit)
-    )
+    snapshot_read_only_sources(journal_rows=_journal_rows(journal, str(user.id), limit))
     return run_warehouse()
 
 
@@ -72,7 +70,7 @@ async def explore_dataset(
             "allowed": list(DATA_DOMAINS),
         }
     rows = get_warehouse().list(
-        domain,  # type: ignore[arg-type]
+        domain,
         limit=limit,
         q=q,
         since=since,
@@ -207,7 +205,7 @@ async def export_dataset(
             indent=2,
         )
         return PlainTextResponse(body, media_type="application/json", status_code=400)
-    rows = get_warehouse().list(domain, limit=limit)  # type: ignore[arg-type]
+    rows = get_warehouse().list(domain, limit=limit)
     body = json.dumps(
         {
             "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -222,8 +220,6 @@ async def export_dataset(
         body,
         media_type="application/json",
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="idw_{domain}_export.json"'
-            )
+            "Content-Disposition": (f'attachment; filename="idw_{domain}_export.json"')
         },
     )

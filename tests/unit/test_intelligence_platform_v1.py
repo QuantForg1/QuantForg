@@ -65,9 +65,7 @@ def test_decision_inspector_and_governance() -> None:
 
 
 def test_candle_playback_never_invents() -> None:
-    dash = IntelligencePlatformCenter().build_dashboard(
-        IntelligenceFeeds(candles=[])
-    )
+    dash = IntelligencePlatformCenter().build_dashboard(IntelligenceFeeds(candles=[]))
     p = dash["panels"]["candle_playback"]
     assert p["status"] == "empty"
     assert p["data"]["invents_candles"] is False

@@ -1,4 +1,4 @@
-"""Portfolio heatmap — exposure, correlation, risk, confidence, PnL."""
+"""Portfolio heatmap - exposure, correlation, risk, confidence, PnL."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ class PortfolioHeatmapStore:
                         continue
                     try:
                         vals.append(abs(float(v)))
-                    except Exception:
+                    except Exception:  # noqa: S112  # best-effort continue
                         continue
                 corr_heat = max(vals) if vals else 0.0
             ai_conf = conf.get(sym)
@@ -54,7 +54,7 @@ class PortfolioHeatmapStore:
                     "ai_confidence": ai_conf_f,
                     "unrealized_pnl": unrealized,
                     "realized_pnl": realized_pnl,
-                    # Heat intensities 0–100 for UI
+                    # Heat intensities 0-100 for UI
                     "heat_exposure": min(100, int(abs(exposure) * 200)),
                     "heat_correlation": min(100, int(corr_heat * 100)),
                     "heat_pnl": min(100, int(abs(unrealized) * 2)),

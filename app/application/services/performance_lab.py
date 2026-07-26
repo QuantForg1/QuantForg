@@ -38,16 +38,20 @@ def build_performance_lab_dashboard(
 
     # Heatmap: try live positions from ITE runtime
     try:
-        from app.application.services.institutional_ite_runtime import get_ite_runtime
         from app.application.services.institutional_alpha_engine import (
             build_alpha_dashboard,
         )
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
 
         runtime = get_ite_runtime()
         positions: list[dict[str, Any]] = []
         if runtime is not None:
             for pos in (runtime.position_management.engine._positions or {}).values():
-                positions.append(pos.to_dict() if hasattr(pos, "to_dict") else {"ticket": getattr(pos, "ticket", None)})
+                positions.append(
+                    pos.to_dict()
+                    if hasattr(pos, "to_dict")
+                    else {"ticket": getattr(pos, "ticket", None)}
+                )
         alpha = {}
         try:
             mt5 = getattr(runtime, "mt5_adapter", None) if runtime else None

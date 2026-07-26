@@ -48,9 +48,7 @@ class ScalpingAiV2Service:
     def arm_emergency_stop(self, reason: str = "operator") -> dict[str, Any]:
         return self._system.arm_emergency_stop(reason)
 
-    def clear_emergency_stop(
-        self, reason: str = "operator_clear"
-    ) -> dict[str, Any]:
+    def clear_emergency_stop(self, reason: str = "operator_clear") -> dict[str, Any]:
         return self._system.clear_emergency_stop(reason)
 
     def soak(self, profile: str = "24h") -> dict[str, Any]:

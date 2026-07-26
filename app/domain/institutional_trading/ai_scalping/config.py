@@ -1,4 +1,4 @@
-"""Institutional AI Scalping v5 — quality-first config (never raise risk casually)."""
+"""Institutional AI Scalping v5 - quality-first config (never raise risk casually)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ MarketRegimeLabel = Literal[
     "distribution",
 ]
 
-# Same institutional universe as Alpha — trade only the best opportunity.
+# Same institutional universe as Alpha - trade only the best opportunity.
 DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
     "XAUUSD",
     "EURUSD",
@@ -44,20 +44,20 @@ class AdaptiveThresholdBand:
 
 @dataclass(frozen=True, slots=True)
 class AiScalpingConfig:
-    """Institutional AI Scalping Engine — quality over quantity."""
+    """Institutional AI Scalping Engine - quality over quantity."""
 
     version: str = "ai-scalping-v5.0.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE
 
-    # MTF stack — H1 direction · M15 structure · M5 entry · M1 precision
+    # MTF stack - H1 direction · M15 structure · M5 entry · M1 precision
     direction_tf: Timeframe = Timeframe.H1
     structure_tf: Timeframe = Timeframe.M15
     entry_tf: Timeframe = Timeframe.M5
     execution_tf: Timeframe = Timeframe.M1
 
-    # Tighter adaptive floors — reject weak setups (do NOT loosen for fill rate)
+    # Tighter adaptive floors - reject weak setups (do NOT loosen for fill rate)
     high_vol: AdaptiveThresholdBand = field(
         default_factory=lambda: AdaptiveThresholdBand(quality=75, confidence=76)
     )
@@ -89,12 +89,12 @@ class AiScalpingConfig:
     max_hold_minutes_if_confident: int = 20
     high_confidence_for_extend: int = 88
 
-    # Multi-trade — prefer quality, not stacking losers
+    # Multi-trade - prefer quality, not stacking losers
     max_open_trades: int = 2
     require_probability_improvement: bool = True
     min_confidence_delta_for_add: int = 5
 
-    # Dynamic sizing — DO NOT increase risk vs prior default without evidence
+    # Dynamic sizing - DO NOT increase risk vs prior default without evidence
     risk_per_trade_pct: Decimal = Decimal("0.50")
     compounding_enabled: bool = False
     max_daily_exposure_pct: Decimal = Decimal("2.00")
@@ -103,7 +103,7 @@ class AiScalpingConfig:
     broker_max_lot: Decimal = Decimal("50.00")
     stop_atr_mult: Decimal = Decimal("1.10")  # structure-first; ATR is fallback
 
-    # Profit management — scale out fast
+    # Profit management - scale out fast
     partial_tp_enabled: bool = True
     break_even_at_r: Decimal = Decimal("0.5")
     partial_at_r: Decimal = Decimal("1.0")
@@ -117,7 +117,7 @@ class AiScalpingConfig:
     momentum_fade_exit: bool = True
     momentum_fade_threshold: int = 40
 
-    # Session aggression (1–5 stars)
+    # Session aggression (1-5 stars)
     session_stars: dict[str, int] = field(
         default_factory=lambda: {
             MarketSession.LONDON.value: 5,
@@ -132,7 +132,7 @@ class AiScalpingConfig:
     aggressive_session_min_stars: int = 5
     weak_session_confidence_penalty: int = 10
 
-    # Spread — hard reject weak liquidity
+    # Spread - hard reject weak liquidity
     max_spread_for_full_score: Decimal = Decimal("0.40")
     max_spread_reject: Decimal = Decimal("1.50")
     spread_soft_penalty_max: int = 22
@@ -148,7 +148,7 @@ class AiScalpingConfig:
     learning_enabled: bool = True
     learning_max_records: int = 5000
 
-    # Hard safety — never disable
+    # Hard safety - never disable
     allow_martingale: bool = False
     allow_grid: bool = False
     allow_unlimited_averaging: bool = False
@@ -160,7 +160,7 @@ class AiScalpingConfig:
         object.__setattr__(self, "allow_grid", False)
         object.__setattr__(self, "allow_unlimited_averaging", False)
         object.__setattr__(self, "never_prefer_buy_only", True)
-        # Cap risk — quality upgrade must not silently raise risk
+        # Cap risk - quality upgrade must not silently raise risk
         if self.risk_per_trade_pct > Decimal("0.75"):
             object.__setattr__(self, "risk_per_trade_pct", Decimal("0.75"))
 
@@ -232,7 +232,7 @@ def scalping_ite_config(
     *,
     scalp: AiScalpingConfig | None = None,
 ) -> ITEConfig:
-    """Map AI Scalping knobs onto ITEConfig (H1/M15/M5/M1 — no H4)."""
+    """Map AI Scalping knobs onto ITEConfig (H1/M15/M5/M1 - no H4)."""
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 
     src = base or DEFAULT_ITE_CONFIG

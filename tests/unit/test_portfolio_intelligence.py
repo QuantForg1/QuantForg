@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.application.services.portfolio_intelligence_lab import PortfolioIntelligenceService
+from app.application.services.portfolio_intelligence_lab import (
+    PortfolioIntelligenceService,
+)
 from app.domain.portfolio_intelligence.statistics import (
     expected_shortfall,
     historical_var,

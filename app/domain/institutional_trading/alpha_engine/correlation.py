@@ -59,11 +59,18 @@ def may_open_with_correlation(
     open_norms = {_norm(s) for s in open_symbols}
     group_norms = {_norm(s) for s in group}
     conflicts = tuple(
-        sorted(s for s in open_symbols if _norm(s) in group_norms and _norm(s) != _norm(candidate_symbol))
+        sorted(
+            s
+            for s in open_symbols
+            if _norm(s) in group_norms and _norm(s) != _norm(candidate_symbol)
+        )
     )
     open_in_group = sum(1 for s in open_norms if s in group_norms)
     # If candidate already open, counting toward limit is fine
-    if open_in_group >= cfg.max_correlated_open and _norm(candidate_symbol) not in open_norms:
+    if (
+        open_in_group >= cfg.max_correlated_open
+        and _norm(candidate_symbol) not in open_norms
+    ):
         return CorrelationDecision(
             False,
             (
@@ -76,7 +83,7 @@ def may_open_with_correlation(
     if conflicts and cfg.max_correlated_open <= 1:
         return CorrelationDecision(
             False,
-            f"Correlation block: cannot open {candidate_symbol} with {', '.join(conflicts)}",
+            f"Correlation block: cannot open {candidate_symbol} with {', '.join(conflicts)}",  # noqa: E501
             conflicting_symbols=conflicts,
         )
     return CorrelationDecision(True, "Correlation check passed")
@@ -98,7 +105,9 @@ def correlation_matrix(
                 matrix[a][b] = 1.0
                 continue
             gb = correlation_group_for(b, config=cfg)
-            linked = bool(ga and gb and set(ga) & set(gb) and a in (ga or ()) and b in (gb or ()))
+            linked = bool(
+                ga and gb and set(ga) & set(gb) and a in (ga or ()) and b in (gb or ())
+            )
             # Same group membership
             if ga and _norm(b) in {_norm(x) for x in ga}:
                 linked = True

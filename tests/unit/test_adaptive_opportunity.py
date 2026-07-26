@@ -138,7 +138,10 @@ def test_wait_statistics_from_history():
                 "decision_action": action,
                 "executed": action == "BUY",
                 "market_session": "new_york" if action == "BUY" else "london",
-                "trend": {"aligned": action == "BUY", "score": 80 if action == "BUY" else 50},
+                "trend": {
+                    "aligned": action == "BUY",
+                    "score": 80 if action == "BUY" else 50,
+                },
                 "quality": {
                     "score": 80 if action == "BUY" else 60,
                     "required": 75,

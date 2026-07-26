@@ -84,15 +84,12 @@ def run_certification_pipeline(
         Decimal(passed_count) / Decimal(len(CERT_STAGES)) * Decimal("100")
     ).quantize(Decimal("0.01"))
     certified = (
-        passed_count == len(CERT_STAGES)
-        and score >= config.min_certification_score
+        passed_count == len(CERT_STAGES) and score >= config.min_certification_score
     )
     if certified:
         reasons.append("All certification stages passed")
     else:
-        reasons.append(
-            f"Certification incomplete ({passed_count}/{len(CERT_STAGES)})"
-        )
+        reasons.append(f"Certification incomplete ({passed_count}/{len(CERT_STAGES)})")
     reasons.append("Production blocked until certified — live pipeline unchanged")
     reasons.append("Never order_send from certification")
 

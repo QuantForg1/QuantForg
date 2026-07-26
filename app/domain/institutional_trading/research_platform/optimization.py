@@ -53,7 +53,9 @@ def score_candidate(metrics: dict[str, Any]) -> float:
     pf = float(metrics.get("profit_factor") or 0)
     dd = float(metrics.get("drawdown") or 0) / 100.0
     sharpe = float(metrics.get("sharpe") or 0)
-    return round(wr * 40 + min(pf, 3) * 20 + max(0.0, 1.0 - dd) * 20 + max(0.0, sharpe) * 20, 3)
+    return round(
+        wr * 40 + min(pf, 3) * 20 + max(0.0, 1.0 - dd) * 20 + max(0.0, sharpe) * 20, 3
+    )
 
 
 @dataclass
@@ -140,7 +142,7 @@ class OptimizationStudio:
             id=str(uuid4()),
             at=datetime.now(UTC).isoformat(),
             author=author,
-            target=target if target in OPTIMIZABLE_PARAMS else target,
+            target=target,
             search_space=dict(search_space),
             best_params=best or {},
             best_score=best_score,
@@ -151,7 +153,9 @@ class OptimizationStudio:
         with self._lock:
             self._runs.append(run)
             if len(self._runs) > DEFAULT_RESEARCH_CONFIG.max_optimization_runs:
-                self._runs = self._runs[-DEFAULT_RESEARCH_CONFIG.max_optimization_runs :]
+                self._runs = self._runs[
+                    -DEFAULT_RESEARCH_CONFIG.max_optimization_runs :
+                ]
         self._persist()
         logger.info(
             "optimization_run_recorded",

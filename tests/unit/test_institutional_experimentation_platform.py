@@ -84,9 +84,7 @@ def _ctx() -> dict:
                 "alerts": [],
             },
             "aqs": {
-                "recommendations": [
-                    {"recommendation_id": "a1", "title": "review gate"}
-                ]
+                "recommendations": [{"recommendation_id": "a1", "title": "review gate"}]
             },
             "qkg": {
                 "nodes": [
@@ -109,8 +107,7 @@ class TestLifecycleAndIsolation:
 
     def test_infer(self) -> None:
         assert (
-            infer_lifecycle({"hypothesis": "x"})
-            == ExperimentLifecycle.HYPOTHESIS.value
+            infer_lifecycle({"hypothesis": "x"}) == ExperimentLifecycle.HYPOTHESIS.value
         )
         assert (
             infer_lifecycle({"replay_results": [{}]})
@@ -166,9 +163,7 @@ class TestEvidenceIntegrity:
 
 
 class TestPlatform:
-    def test_dashboard(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dashboard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         iep = InstitutionalExperimentationPlatform(
             store=IepStore(path=tmp_path / "iep.json")
         )

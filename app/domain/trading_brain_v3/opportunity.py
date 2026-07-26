@@ -9,9 +9,7 @@ from app.domain.trading_brain_v3.config import TradingBrainConfig
 from app.domain.trading_brain_v3.types import BrainInput, ModuleResult
 
 
-def discover_opportunities(
-    inp: BrainInput, config: TradingBrainConfig
-) -> ModuleResult:
+def discover_opportunities(inp: BrainInput, config: TradingBrainConfig) -> ModuleResult:
     cands = inp.opportunity_candidates
     if cands is None:
         return ModuleResult(
@@ -20,9 +18,7 @@ def discover_opportunities(
             score=None,
             passed=None,
             recommendation="No Trade",
-            reasons=(
-                "No opportunity candidates supplied — never invents setups",
-            ),
+            reasons=("No opportunity candidates supplied — never invents setups",),
             details={"count": 0},
         )
     if len(cands) == 0:

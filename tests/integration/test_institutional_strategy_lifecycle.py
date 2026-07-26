@@ -37,9 +37,7 @@ def test_service_dashboard_flags(
     islm = InstitutionalStrategyLifecycleManager(
         store=IslmStore(path=tmp_path / "islm.json")
     )
-    monkeypatch.setattr(
-        "app.domain.institutional_strategy_lifecycle._ISLM", islm
-    )
+    monkeypatch.setattr("app.domain.institutional_strategy_lifecycle._ISLM", islm)
     monkeypatch.setattr(svc, "get_islm", lambda: islm)
     monkeypatch.setattr(
         "app.domain.institutional_strategy_lifecycle.platform.gather_lifecycle_sources",

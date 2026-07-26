@@ -41,9 +41,7 @@ def _insufficient(module: str, need: int, have: int) -> ModuleResult:
     )
 
 
-def detect_market_personality(
-    inp: AsiInput, config: AsiConfig
-) -> ModuleResult:
+def detect_market_personality(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     hist = _hist(inp)
     live_bits: list[str] = []
     if inp.regime:
@@ -80,9 +78,7 @@ def detect_market_personality(
             "market_personality", config.min_history_observations, len(hist)
         )
 
-    labels = [
-        str(r.get("personality") or r.get("regime") or "unknown") for r in hist
-    ]
+    labels = [str(r.get("personality") or r.get("regime") or "unknown") for r in hist]
     counts = Counter(labels)
     top, top_n = counts.most_common(1)[0]
     share = (Decimal(top_n) / Decimal(len(hist)) * Decimal(100)).quantize(
@@ -112,9 +108,7 @@ def detect_market_personality(
     )
 
 
-def evaluate_session_intelligence(
-    inp: AsiInput, config: AsiConfig
-) -> ModuleResult:
+def evaluate_session_intelligence(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     hist = _hist(inp)
     session = (inp.session or "").lower() or None
     if not session and not hist:
@@ -160,9 +154,7 @@ def evaluate_session_intelligence(
             by_session.items(), key=lambda kv: sum(kv[1]) / len(kv[1])
         )
         sample_n = len(best_vals)
-        hist_avg = (sum(best_vals) / Decimal(len(best_vals))).quantize(
-            Decimal("0.01")
-        )
+        hist_avg = (sum(best_vals) / Decimal(len(best_vals))).quantize(Decimal("0.01"))
         session = best_s
 
     if hist_avg is None:
@@ -195,9 +187,7 @@ def evaluate_session_intelligence(
     )
 
 
-def evaluate_time_intelligence(
-    inp: AsiInput, config: AsiConfig
-) -> ModuleResult:
+def evaluate_time_intelligence(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     hist = _hist(inp)
     if len(hist) < config.min_history_observations:
         live = []
@@ -252,9 +242,7 @@ def evaluate_time_intelligence(
     )
     best_h, best_avg, best_n = ranked[0]
     live_note = (
-        f"live hour_utc={inp.hour_utc}"
-        if inp.hour_utc is not None
-        else "no live hour"
+        f"live hour_utc={inp.hour_utc}" if inp.hour_utc is not None else "no live hour"
     )
     return ModuleResult(
         module="time_intelligence",
@@ -277,13 +265,9 @@ def evaluate_time_intelligence(
     )
 
 
-def build_opportunity_database(
-    inp: AsiInput, config: AsiConfig
-) -> ModuleResult:
+def build_opportunity_database(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     catalog = (
-        inp.opportunity_catalog
-        if isinstance(inp.opportunity_catalog, list)
-        else []
+        inp.opportunity_catalog if isinstance(inp.opportunity_catalog, list) else []
     )
     catalog = [c for c in catalog if isinstance(c, dict)]
     hist = _hist(inp)
@@ -343,16 +327,18 @@ def build_opportunity_database(
     )
 
 
-def evaluate_pattern_intelligence(
-    inp: AsiInput, config: AsiConfig
-) -> ModuleResult:
+def evaluate_pattern_intelligence(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     hist = _hist(inp)
     pattern = inp.pattern_id
-    matches = [
-        r
-        for r in hist
-        if str(r.get("pattern_id") or r.get("opportunity_id") or "") == str(pattern)
-    ] if pattern else []
+    matches = (
+        [
+            r
+            for r in hist
+            if str(r.get("pattern_id") or r.get("opportunity_id") or "") == str(pattern)
+        ]
+        if pattern
+        else []
+    )
     if pattern and len(matches) < config.min_pattern_samples:
         return ModuleResult(
             module="pattern_intelligence",
@@ -468,9 +454,7 @@ def calibrate_confidence(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     curve = {}
     for key, wins in buckets.items():
         wr = (
-            Decimal(sum(1 for w in wins if w))
-            / Decimal(len(wins))
-            * Decimal(100)
+            Decimal(sum(1 for w in wins if w)) / Decimal(len(wins)) * Decimal(100)
         ).quantize(Decimal("0.01"))
         curve[key] = {"n": len(wins), "realized_win_rate_pct": str(wr)}
 
@@ -496,9 +480,7 @@ def calibrate_confidence(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     )
 
 
-def build_opportunity_heat_map(
-    inp: AsiInput, config: AsiConfig
-) -> ModuleResult:
+def build_opportunity_heat_map(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     hist = _hist(inp)
     if len(hist) < config.min_history_observations:
         return _insufficient(
@@ -507,9 +489,7 @@ def build_opportunity_heat_map(
             len(hist),
         )
 
-    grid: dict[str, dict[str, list[Decimal]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    grid: dict[str, dict[str, list[Decimal]]] = defaultdict(lambda: defaultdict(list))
     for r in hist:
         session = str(r.get("session") or "unknown")
         hour = r.get("hour_utc")
@@ -569,9 +549,7 @@ def build_opportunity_heat_map(
     )
 
 
-def capital_preservation_index(
-    inp: AsiInput, config: AsiConfig
-) -> ModuleResult:
+def capital_preservation_index(inp: AsiInput, config: AsiConfig) -> ModuleResult:
     _ = config
     facts = inp.capital_facts if isinstance(inp.capital_facts, dict) else {}
     closed = inp.closed_trades if isinstance(inp.closed_trades, list) else []
@@ -606,9 +584,7 @@ def capital_preservation_index(
             pnl = _dec(c.get("pnl"))
             if c.get("win") is False or (pnl is not None and pnl < 0):
                 losses += 1
-        reasons.append(
-            f"Historical closed trades n={len(closed)}, losses={losses}"
-        )
+        reasons.append(f"Historical closed trades n={len(closed)}, losses={losses}")
         if len(closed) >= 5:
             loss_rate = Decimal(losses) / Decimal(len(closed))
             score -= loss_rate * Decimal("20")
@@ -680,8 +656,7 @@ def weekly_ai_coach_report(inp: AsiInput, config: AsiConfig) -> ModuleResult:
                     f"Need ≥{config.min_calibration_samples} observations; "
                     f"have {len(pool)}"
                 ),
-                f"Lookback target {config.coach_lookback_days}d "
-                "(caller-filtered)",
+                f"Lookback target {config.coach_lookback_days}d " "(caller-filtered)",
                 "Coach never auto-modifies trading rules",
             ),
             details={

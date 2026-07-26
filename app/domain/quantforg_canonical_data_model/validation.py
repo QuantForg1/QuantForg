@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.domain.quantforg_canonical_data_model.catalog import build_catalog, build_model_schema
+from app.domain.quantforg_canonical_data_model.catalog import (
+    build_catalog,
+    build_model_schema,
+)
 from app.domain.quantforg_canonical_data_model.models import (
     CANONICAL_MODELS,
     COMMON_FIELDS,
@@ -119,11 +122,13 @@ def validate_instance(model: str, payload: dict[str, Any]) -> dict[str, Any]:
         field = rule.get("field")
         assertion = str(rule.get("assert") or "")
         optional = bool(rule.get("optional"))
-        if field not in data:
-            if optional or not any(
+        if field not in data and (
+            optional
+            or not any(
                 f["name"] == field and f.get("required") for f in schema["fields"]
-            ):
-                continue
+            )
+        ):
+            continue
         value = data.get(field)
         if assertion == "non_empty" and (value is None or value == ""):
             issues.append(f"rule:{rule.get('rule')}")
@@ -137,11 +142,11 @@ def validate_instance(model: str, payload: dict[str, Any]) -> dict[str, Any]:
             allowed = assertion.split(":", 1)[1].split(",")
             if str(value) not in allowed:
                 issues.append(f"rule:{rule.get('rule')}")
-        elif assertion == "eq:true" and value is not True:
-            issues.append(f"rule:{rule.get('rule')}")
-        elif assertion == "eq:false" and value is not False:
-            issues.append(f"rule:{rule.get('rule')}")
-        elif assertion == "is_array" and not isinstance(value, list):
+        elif (
+            (assertion == "eq:true" and value is not True)
+            or (assertion == "eq:false" and value is not False)
+            or (assertion == "is_array" and not isinstance(value, list))
+        ):
             issues.append(f"rule:{rule.get('rule')}")
         elif assertion.startswith("range:") and isinstance(value, (int, float)):
             lo, hi = assertion.split(":", 1)[1].split(",")
@@ -177,9 +182,7 @@ def compatibility_validation(
             issues.append(f"model_removed:{name}")
             continue
         pfields = {
-            f["name"]: f
-            for f in (pschema.get("fields") or [])
-            if isinstance(f, dict)
+            f["name"]: f for f in (pschema.get("fields") or []) if isinstance(f, dict)
         }
         cfields = {
             f["name"]: f

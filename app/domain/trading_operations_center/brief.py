@@ -60,12 +60,14 @@ def build_daily_brief(
         "high_impact_news": news_block,
         "current_market_regime": market_regime or None,
         "volatility_expectation": volatility_expectation or None,
-        "evidence_status": evidence
-        if evidence
-        else {
-            "status": "unknown",
-            "note": "Evidence status not supplied",
-        },
+        "evidence_status": (
+            evidence
+            if evidence
+            else {
+                "status": "unknown",
+                "note": "Evidence status not supplied",
+            }
+        ),
         "open_operational_alerts": alerts,
         "open_alert_count": len(alerts),
         "advisory_only": True,

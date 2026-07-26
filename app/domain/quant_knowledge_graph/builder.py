@@ -114,7 +114,9 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
     # Market regimes
     regime = _as_dict(sources.get("regime"))
     current = _as_dict(regime.get("current"))
-    cur_name = current.get("current_regime") or regime.get("current_regime") or "UNKNOWN"
+    cur_name = (
+        current.get("current_regime") or regime.get("current_regime") or "UNKNOWN"
+    )
     regime_id = add_node(
         _node(
             node_id=_nid("regime", cur_name),
@@ -124,9 +126,9 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
             source_subsystem="market_regime_intelligence",
         )
     )
-    for r in _as_list(regime.get("history") or sources.get("idw", {}).get("regimes") or [])[
-        :25
-    ]:
+    for r in _as_list(
+        regime.get("history") or sources.get("idw", {}).get("regimes") or []
+    )[:25]:
         if not isinstance(r, dict):
             continue
         name = r.get("regime") or r.get("name") or r.get("id")
@@ -156,7 +158,9 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
             continue
         sid = add_node(
             _node(
-                node_id=_nid("signal", sig.get("id") or sig.get("signal_id") or uuid4()),
+                node_id=_nid(
+                    "signal", sig.get("id") or sig.get("signal_id") or uuid4()
+                ),
                 node_type=NodeType.SIGNAL,
                 label=str(sig.get("symbol") or sig.get("id") or "signal"),
                 props=sig,
@@ -167,9 +171,7 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
         add_edge(
             _edge(source=sid, target=strategy_id, relation=RelationType.GENERATED_BY)
         )
-        add_edge(
-            _edge(source=sid, target=regime_id, relation=RelationType.OBSERVED_IN)
-        )
+        add_edge(_edge(source=sid, target=regime_id, relation=RelationType.OBSERVED_IN))
         sess = sig.get("session")
         if sess:
             add_edge(
@@ -195,9 +197,7 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
         add_edge(
             _edge(source=tid, target=strategy_id, relation=RelationType.GENERATED_BY)
         )
-        add_edge(
-            _edge(source=tid, target=regime_id, relation=RelationType.OBSERVED_IN)
-        )
+        add_edge(_edge(source=tid, target=regime_id, relation=RelationType.OBSERVED_IN))
         # Link to nearest signal if same symbol
         sym = tr.get("symbol")
         for sid in signal_ids[:20]:
@@ -226,9 +226,7 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
                 source_subsystem="institutional_research_lab",
             )
         )
-        add_edge(
-            _edge(source=eid, target=strategy_id, relation=RelationType.LINKED_TO)
-        )
+        add_edge(_edge(source=eid, target=strategy_id, relation=RelationType.LINKED_TO))
         verdict = str(exp.get("verdict") or "").lower()
         if "pass" in verdict or "confirm" in verdict:
             add_edge(
@@ -328,12 +326,8 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
                 source_subsystem="ai_quant_scientist",
             )
         )
-        add_edge(
-            _edge(source=rid, target=strategy_id, relation=RelationType.LINKED_TO)
-        )
-        add_edge(
-            _edge(source=rid, target=regime_id, relation=RelationType.AFFECTED_BY)
-        )
+        add_edge(_edge(source=rid, target=strategy_id, relation=RelationType.LINKED_TO))
+        add_edge(_edge(source=rid, target=regime_id, relation=RelationType.AFFECTED_BY))
 
     for rep in _as_list(aqs.get("reports"))[:15]:
         if not isinstance(rep, dict):
@@ -361,7 +355,8 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
             node_type=NodeType.PORTFOLIO_METRIC,
             label="Portfolio Metrics",
             props={
-                "profit_factor": perf.get("profit_factor") or portfolio.get("profit_factor"),
+                "profit_factor": perf.get("profit_factor")
+                or portfolio.get("profit_factor"),
                 "win_rate": perf.get("win_rate_pct") or perf.get("win_rate"),
                 "trade_count": perf.get("trade_count") or portfolio.get("trade_count"),
                 "max_drawdown_pct": risk.get("max_drawdown_pct"),
@@ -383,7 +378,9 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
             continue
         did = add_node(
             _node(
-                node_id=_nid("diagnostic", cycle.get("cycle_id") or cycle.get("id") or i),
+                node_id=_nid(
+                    "diagnostic", cycle.get("cycle_id") or cycle.get("id") or i
+                ),
                 node_type=NodeType.DIAGNOSTIC,
                 label=f"Cycle {cycle.get('cycle_id') or i}",
                 props=cycle,
@@ -404,11 +401,11 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
                     source_subsystem="strategy_diagnostics",
                 )
             )
+            add_edge(_edge(source=did, target=reid, relation=RelationType.GENERATED_BY))
             add_edge(
-                _edge(source=did, target=reid, relation=RelationType.GENERATED_BY)
-            )
-            add_edge(
-                _edge(source=reid, target=strategy_id, relation=RelationType.AFFECTED_BY)
+                _edge(
+                    source=reid, target=strategy_id, relation=RelationType.AFFECTED_BY
+                )
             )
         if "safety" in outcome:
             seid = add_node(
@@ -420,9 +417,7 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
                     source_subsystem="strategy_diagnostics",
                 )
             )
-            add_edge(
-                _edge(source=did, target=seid, relation=RelationType.GENERATED_BY)
-            )
+            add_edge(_edge(source=did, target=seid, relation=RelationType.GENERATED_BY))
 
     # Alerts from ICC
     icc = _as_dict(sources.get("icc"))
@@ -441,12 +436,8 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
                 source_subsystem="institutional_control_center",
             )
         )
-        add_edge(
-            _edge(source=aid, target=strategy_id, relation=RelationType.LINKED_TO)
-        )
-        add_edge(
-            _edge(source=aid, target=metric_id, relation=RelationType.AFFECTED_BY)
-        )
+        add_edge(_edge(source=aid, target=strategy_id, relation=RelationType.LINKED_TO))
+        add_edge(_edge(source=aid, target=metric_id, relation=RelationType.AFFECTED_BY))
 
     # Audit as confirming/contradicting evidence links to strategy
     for i, ev in enumerate(_as_list(sources.get("audit"))[:25]):

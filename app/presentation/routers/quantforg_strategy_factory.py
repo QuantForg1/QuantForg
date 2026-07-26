@@ -62,7 +62,9 @@ def qsf_pipeline(_user: CurrentUser) -> dict[str, Any]:
 
 @router.get("/work-items")
 def qsf_work_items(_user: CurrentUser) -> dict[str, Any]:
-    from app.application.services.quantforg_strategy_factory import qsf_work_items as svc
+    from app.application.services.quantforg_strategy_factory import (
+        qsf_work_items as svc,
+    )
 
     payload = svc()
     payload.update(_flags())

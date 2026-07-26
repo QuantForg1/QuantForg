@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,15 +32,15 @@ from app.domain.institutional_trading.ai_validation.weight_optimizer import (
 
 
 def _decision(**kwargs):
-    defaults = dict(
-        direction=SimpleNamespace(value="BUY"),
-        action=SimpleNamespace(value="BUY"),
-        confidence=72,
-        risk_score=30,
-        estimated_rr=Decimal("1.8"),
-        symbol="XAUUSD",
-        quality=70,
-        confluence=SimpleNamespace(
+    defaults = {
+        "direction": SimpleNamespace(value="BUY"),
+        "action": SimpleNamespace(value="BUY"),
+        "confidence": 72,
+        "risk_score": 30,
+        "estimated_rr": Decimal("1.8"),
+        "symbol": "XAUUSD",
+        "quality": 70,
+        "confluence": SimpleNamespace(
             factors={
                 "trend": 80,
                 "momentum": 75,
@@ -49,7 +49,7 @@ def _decision(**kwargs):
                 "session": 90,
             }
         ),
-    )
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -89,7 +89,7 @@ def test_shadow_direction_none_when_weak() -> None:
 def test_weight_optimizer_gradual_and_logged(tmp_path) -> None:
     store = WeightOptimizerStore()
     store._path = tmp_path / "opt.json"
-    store.multipliers = {k: 1.0 for k in store.multipliers}
+    store.multipliers = dict.fromkeys(store.multipliers, 1.0)
     entry = store.optimize_from_trade(
         win=True, factor_scores={"trend": 80, "momentum": 70, "bos": 65}
     )

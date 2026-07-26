@@ -7,7 +7,9 @@ gateway, scheduler, or production data.
 
 from __future__ import annotations
 
-from app.domain.reliability_engineering_suite.platform import ReliabilityEngineeringSuite
+from app.domain.reliability_engineering_suite.platform import (
+    ReliabilityEngineeringSuite,
+)
 
 __all__ = ["ReliabilityEngineeringSuite", "get_res"]
 

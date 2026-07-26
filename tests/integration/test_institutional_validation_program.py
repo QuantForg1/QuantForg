@@ -69,9 +69,7 @@ def test_ivp_domain_no_order_send() -> None:
 def test_ivp_service_read_only() -> None:
     out = InstitutionalValidationProgramService().evaluate(
         {
-            "completed_trades": [
-                {"pnl": 10 if i % 2 else -5} for i in range(40)
-            ],
+            "completed_trades": [{"pnl": 10 if i % 2 else -5} for i in range(40)],
         }
     )
     assert out["read_only"] is True

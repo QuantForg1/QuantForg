@@ -45,7 +45,7 @@ def test_service_dashboard_flags(
         "app.domain.quantforg_certification_suite.platform.gather_certification_sources",
         lambda: {
             "sources": {s: {} for s in DATA_SOURCES},
-            "availability": {s: False for s in DATA_SOURCES},
+            "availability": dict.fromkeys(DATA_SOURCES, False),
             "source_count": 0,
             "read_only": True,
         },

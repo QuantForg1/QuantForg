@@ -459,7 +459,7 @@ class OperationsControlPlane:
                         "trading_mode must be 'swing', 'scalping', or 'alpha'"
                     )
                 self.trading_mode = mode
-                if mode == "scalping" and max_open_positions is None:
+                if mode == "scalping" and max_open_positions is None:  # noqa: SIM102
                     if self.max_open_trades < 3:
                         self.max_open_trades = 3
                 if mode == "alpha":
@@ -858,8 +858,7 @@ def get_control_plane() -> OperationsControlPlane:
                 plane.trading_mode = raw_tm
             elif (
                 "trading_mode" not in state
-                and plane.mode
-                in {OpsExecutionMode.LIVE, OpsExecutionMode.CANARY}
+                and plane.mode in {OpsExecutionMode.LIVE, OpsExecutionMode.CANARY}
                 and plane.auto_trading_run_state in {"running", "paused"}
             ):
                 # Restart continuity: LIVE auto desk lost trading_mode on

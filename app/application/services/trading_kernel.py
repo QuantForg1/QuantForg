@@ -86,20 +86,22 @@ class TradingKernelService:
                 if payload.get("execution_mode")
                 else None
             ),
-            alpha=payload.get("alpha")
-            if isinstance(payload.get("alpha"), dict)
-            else None,
+            alpha=(
+                payload.get("alpha") if isinstance(payload.get("alpha"), dict) else None
+            ),
             risk_engine_passed=_opt_bool(payload.get("risk_engine_passed")),
             safety_engine_passed=_opt_bool(payload.get("safety_engine_passed")),
-            decision=(
-                str(payload["decision"]) if payload.get("decision") else None
+            decision=(str(payload["decision"]) if payload.get("decision") else None),
+            plugin_snapshot=(
+                payload.get("plugin_snapshot")
+                if isinstance(payload.get("plugin_snapshot"), dict)
+                else None
             ),
-            plugin_snapshot=payload.get("plugin_snapshot")
-            if isinstance(payload.get("plugin_snapshot"), dict)
-            else None,
-            certification=payload.get("certification")
-            if isinstance(payload.get("certification"), dict)
-            else None,
+            certification=(
+                payload.get("certification")
+                if isinstance(payload.get("certification"), dict)
+                else None
+            ),
             go_nogo=str(payload["go_nogo"]) if payload.get("go_nogo") else None,
         )
         return self._kernel.run_cycle(inp)

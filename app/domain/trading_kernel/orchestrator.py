@@ -125,9 +125,7 @@ class TradingKernel:
         certification: dict[str, Any] | None = None,
         go_nogo: str | None = None,
     ) -> dict[str, Any]:
-        return build_certification_workflow(
-            certification, go_nogo=go_nogo
-        ).to_dict()
+        return build_certification_workflow(certification, go_nogo=go_nogo).to_dict()
 
     def run_cycle(
         self,
@@ -175,9 +173,9 @@ class TradingKernel:
                 {
                     "stage": "alpha",
                     "ok": True,
-                    "detail": "Alpha advisory observed"
-                    if alpha_ok
-                    else "No alpha payload",
+                    "detail": (
+                        "Alpha advisory observed" if alpha_ok else "No alpha payload"
+                    ),
                     "inputs": {},
                     "outputs": {"alpha_present": alpha_ok},
                 }
@@ -464,28 +462,40 @@ def _input_from_dict(data: dict[str, Any]) -> KernelCycleInput:
         side=str(data.get("side") or "buy"),
         spread=_dec(data.get("spread")),
         confidence=_dec(data.get("confidence")),
-        news_blackout=data.get("news_blackout")
-        if isinstance(data.get("news_blackout"), bool)
-        else None,
-        kill_switch=data.get("kill_switch")
-        if isinstance(data.get("kill_switch"), bool)
-        else None,
-        execution_mode=str(data["execution_mode"])
-        if data.get("execution_mode")
-        else None,
+        news_blackout=(
+            data.get("news_blackout")
+            if isinstance(data.get("news_blackout"), bool)
+            else None
+        ),
+        kill_switch=(
+            data.get("kill_switch")
+            if isinstance(data.get("kill_switch"), bool)
+            else None
+        ),
+        execution_mode=(
+            str(data["execution_mode"]) if data.get("execution_mode") else None
+        ),
         alpha=data.get("alpha") if isinstance(data.get("alpha"), dict) else None,
-        risk_engine_passed=data.get("risk_engine_passed")
-        if isinstance(data.get("risk_engine_passed"), bool)
-        else None,
-        safety_engine_passed=data.get("safety_engine_passed")
-        if isinstance(data.get("safety_engine_passed"), bool)
-        else None,
+        risk_engine_passed=(
+            data.get("risk_engine_passed")
+            if isinstance(data.get("risk_engine_passed"), bool)
+            else None
+        ),
+        safety_engine_passed=(
+            data.get("safety_engine_passed")
+            if isinstance(data.get("safety_engine_passed"), bool)
+            else None
+        ),
         decision=str(data["decision"]) if data.get("decision") else None,
-        plugin_snapshot=data.get("plugin_snapshot")
-        if isinstance(data.get("plugin_snapshot"), dict)
-        else None,
-        certification=data.get("certification")
-        if isinstance(data.get("certification"), dict)
-        else None,
+        plugin_snapshot=(
+            data.get("plugin_snapshot")
+            if isinstance(data.get("plugin_snapshot"), dict)
+            else None
+        ),
+        certification=(
+            data.get("certification")
+            if isinstance(data.get("certification"), dict)
+            else None
+        ),
         go_nogo=str(data["go_nogo"]) if data.get("go_nogo") else None,
     )

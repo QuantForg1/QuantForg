@@ -44,7 +44,7 @@ class OptimizationLogEntry:
 @dataclass
 class WeightOptimizerStore:
     multipliers: dict[str, float] = field(
-        default_factory=lambda: {k: 1.0 for k in OPTIMIZER_FACTORS}
+        default_factory=lambda: dict.fromkeys(OPTIMIZER_FACTORS, 1.0)
     )
     logs: list[OptimizationLogEntry] = field(default_factory=list)
     updates: int = 0
@@ -73,7 +73,9 @@ class WeightOptimizerStore:
                     if k in mult:
                         self.multipliers[k] = float(mult[k])
                 self.updates = int(raw.get("updates") or 0)
-                for row in raw.get("logs", [])[-DEFAULT_AI_VALIDATION_CONFIG.max_optimization_logs :]:
+                for row in raw.get("logs", [])[
+                    -DEFAULT_AI_VALIDATION_CONFIG.max_optimization_logs :
+                ]:
                     if isinstance(row, dict):
                         self.logs.append(
                             OptimizationLogEntry(
@@ -99,7 +101,12 @@ class WeightOptimizerStore:
                     "updated_at": datetime.now(UTC).isoformat(),
                     "updates": self.updates,
                     "multipliers": dict(self.multipliers),
-                    "logs": [e.to_dict() for e in self.logs[-DEFAULT_AI_VALIDATION_CONFIG.max_optimization_logs :]],
+                    "logs": [
+                        e.to_dict()
+                        for e in self.logs[
+                            -DEFAULT_AI_VALIDATION_CONFIG.max_optimization_logs :
+                        ]
+                    ],
                 }
             self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception:
@@ -121,9 +128,13 @@ class WeightOptimizerStore:
             for k in OPTIMIZER_FACTORS:
                 score = scores[k]
                 if win and score >= 60:
-                    self.multipliers[k] = min(cfg.optimizer_max, self.multipliers[k] + step)
+                    self.multipliers[k] = min(
+                        cfg.optimizer_max, self.multipliers[k] + step
+                    )
                 elif (not win) and score >= 60:
-                    self.multipliers[k] = max(cfg.optimizer_min, self.multipliers[k] - step)
+                    self.multipliers[k] = max(
+                        cfg.optimizer_min, self.multipliers[k] - step
+                    )
             after = dict(self.multipliers)
             self.updates += 1
             entry = OptimizationLogEntry(
@@ -147,7 +158,9 @@ class WeightOptimizerStore:
         )
         return entry
 
-    def apply_to_weights(self, base_weights: dict[str, int | float]) -> dict[str, float]:
+    def apply_to_weights(
+        self, base_weights: dict[str, int | float]
+    ) -> dict[str, float]:
         with self._lock:
             out: dict[str, float] = {}
             for k, w in base_weights.items():

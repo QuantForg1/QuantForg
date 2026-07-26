@@ -1,4 +1,4 @@
-"""Strategy Intelligence Center — read-only post-trade intelligence.
+"""Strategy Intelligence Center - read-only post-trade intelligence.
 
 Analyzes completed XAUUSD trades (MT5 deals paired into round-trips) and
 optionally soft-joins Strategy Diagnostics context (MTF / Quality /
@@ -127,9 +127,7 @@ def pair_deals_into_closed_trades(
     closed: list[dict[str, Any]] = []
     for pos_id, group in by_pos.items():
         entries = [
-            g
-            for g in group
-            if "in" in g["deal_type"] and "out" not in g["deal_type"]
+            g for g in group if "in" in g["deal_type"] and "out" not in g["deal_type"]
         ]
         exits = [g for g in group if "out" in g["deal_type"]]
         if not entries:
@@ -141,9 +139,7 @@ def pair_deals_into_closed_trades(
         entry = entries[0]
         exit_d = exits[-1]
         net = sum(g["profit"] + g["commission"] + g["swap"] for g in group)
-        hold_ms = max(
-            0.0, (exit_d["time"] - entry["time"]).total_seconds() * 1000.0
-        )
+        hold_ms = max(0.0, (exit_d["time"] - entry["time"]).total_seconds() * 1000.0)
         closed.append(
             {
                 "id": f"pos-{pos_id}",
@@ -239,9 +235,7 @@ def _join_diagnostics(
         "confluence": _i(confluence.get("total")),
         "atr": atr,
         "spread": spread,
-        "stop_distance": _f(
-            best.get("stop_distance") or sizing.get("stop_distance")
-        ),
+        "stop_distance": _f(best.get("stop_distance") or sizing.get("stop_distance")),
         "diagnostics_signal_id": best.get("signal_id"),
         "mid_price": _f(trade.get("entry")),
     }
@@ -302,9 +296,7 @@ def enrich_trade(
     pnl = _f(row.get("profit_loss")) or 0.0
     vol_lots = _f(row.get("volume")) or 0.0
     if rr is None and stop and stop > 0 and vol_lots > 0:
-        dollar_risk = float(
-            Decimal(str(vol_lots)) * Decimal(str(stop)) * CONTRACT_SIZE
-        )
+        dollar_risk = float(Decimal(str(vol_lots)) * Decimal(str(stop)) * CONTRACT_SIZE)
         if dollar_risk > 0:
             rr = round(pnl / dollar_risk, 3)
     elif rr is None and atr and atr > 0 and vol_lots > 0:
@@ -378,7 +370,7 @@ def _best_worst_bucket(
 
 
 def _range_label(lo: float, hi: float) -> str:
-    return f"{lo:.2f}–{hi:.2f}"
+    return f"{lo:.2f}-{hi:.2f}"
 
 
 def _best_worst_numeric_range(
@@ -388,16 +380,18 @@ def _best_worst_numeric_range(
     bins: int = 4,
 ) -> tuple[str | None, str | None, dict[str, Any]]:
     vals = [(_f(t.get(field)), t) for t in trades]
-    vals = [(v, t) for v, t in vals if v is not None]
-    if len(vals) < MIN_BUCKET * 2:
+    typed: list[tuple[float, dict[str, Any]]] = [
+        (v, t) for v, t in vals if v is not None
+    ]
+    if len(typed) < MIN_BUCKET * 2:
         return None, None, {}
-    numbers = sorted(v for v, _ in vals)
+    numbers = sorted(v for v, _ in typed)
     lo, hi = numbers[0], numbers[-1]
     if hi <= lo:
         return None, None, {}
     width = (hi - lo) / bins
     bucket_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for v, t in vals:
+    for v, t in typed:
         idx = min(bins - 1, int((v - lo) / width)) if width > 0 else 0
         a = lo + idx * width
         b = lo + (idx + 1) * width
@@ -426,21 +420,13 @@ def discover_patterns(trades: list[dict[str, Any]]) -> dict[str, Any]:
     losses = [t for t in trades if t.get("loss")]
 
     def floors(rows: list[dict[str, Any]], field: str) -> float | None:
-        xs = sorted(
-            x
-            for x in (_f(r.get(field)) for r in rows)
-            if x is not None
-        )
+        xs = sorted(x for x in (_f(r.get(field)) for r in rows) if x is not None)
         if len(xs) < MIN_BUCKET:
             return None
         return round(_percentile(xs, 0.25) or xs[0], 1)
 
     def band(rows: list[dict[str, Any]], field: str) -> tuple[float, float] | None:
-        xs = sorted(
-            x
-            for x in (_f(r.get(field)) for r in rows)
-            if x is not None
-        )
+        xs = sorted(x for x in (_f(r.get(field)) for r in rows) if x is not None)
         if len(xs) < MIN_BUCKET:
             return None
         lo = _percentile(xs, 0.25)
@@ -515,23 +501,17 @@ def generate_intelligence(trades: list[dict[str, Any]]) -> dict[str, Any]:
     best_atr, worst_atr, atr_stats = _best_worst_numeric_range(trades, "atr")
     best_sp, worst_sp, sp_stats = _best_worst_numeric_range(trades, "spread")
 
-    holds = [h for h in (_f(t.get("holding_time_sec")) for t in trades) if h is not None]
+    holds = [
+        h for h in (_f(t.get("holding_time_sec")) for t in trades) if h is not None
+    ]
     win_rr = [
         x
-        for x in (
-            _f(t.get("risk_reward"))
-            for t in trades
-            if t.get("win")
-        )
+        for x in (_f(t.get("risk_reward")) for t in trades if t.get("win"))
         if x is not None
     ]
     lose_rr = [
         x
-        for x in (
-            _f(t.get("risk_reward"))
-            for t in trades
-            if t.get("loss")
-        )
+        for x in (_f(t.get("risk_reward")) for t in trades if t.get("loss"))
         if x is not None
     ]
 
@@ -547,9 +527,7 @@ def generate_intelligence(trades: list[dict[str, Any]]) -> dict[str, Any]:
         "best_spread_range": best_sp,
         "worst_spread_range": worst_sp,
         "average_holding_time_sec": round(mean(holds), 1) if holds else None,
-        "average_holding_time_display": (
-            _fmt_hold(mean(holds)) if holds else None
-        ),
+        "average_holding_time_display": (_fmt_hold(mean(holds)) if holds else None),
         "average_winning_rr": round(mean(win_rr), 2) if win_rr else None,
         "average_losing_rr": round(mean(lose_rr), 2) if lose_rr else None,
         "bucket_stats": {
@@ -568,7 +546,7 @@ def score_current_market(
     intelligence: dict[str, Any],
     patterns: dict[str, Any],
 ) -> dict[str, Any]:
-    """0–100 Strategy Intelligence Score vs historically profitable conditions."""
+    """0-100 Strategy Intelligence Score vs historically profitable conditions."""
     if not current:
         return {
             "score": None,
@@ -654,7 +632,7 @@ def score_current_market(
             "insufficient_history": True,
         }
 
-    score = int(round(100.0 * points / max_points))
+    score = round(100.0 * points / max_points)
     if score >= 70:
         level, label = "GREEN", "Historically Favorable"
     elif score >= 40:
@@ -737,7 +715,7 @@ def _load_history_deals(days: int = 90) -> tuple[list[dict[str, Any]], dict[str,
         out: list[dict[str, Any]] = []
         for r in rows:
             if hasattr(r, "to_dict"):
-                out.append(dict(r.to_dict()))  # type: ignore[arg-type]
+                out.append(dict(r.to_dict()))
             elif isinstance(r, dict):
                 out.append(r)
         return out
@@ -755,7 +733,7 @@ def _load_history_deals(days: int = 90) -> tuple[list[dict[str, Any]], dict[str,
             meta["via"] = "di_adapter"
             meta["raw_count"] = len(deals)
             return deals, meta
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         meta["di_error"] = str(exc)[:200]
 
     try:
@@ -778,14 +756,15 @@ def _load_history_deals(days: int = 90) -> tuple[list[dict[str, Any]], dict[str,
 
             client = GatewayMT5Client(base_url=base, token=token)
             if client.adopt_existing_session():
-                raw = client.history_deals(days=days)
+                date_from = datetime.now(UTC) - timedelta(days=max(1, int(days)))
+                raw = client.history_deals(date_from=date_from)
                 deals = _normalize(list(raw or []))
                 meta["ok"] = True
                 meta["via"] = "local_gateway"
                 meta["raw_count"] = len(deals)
                 return deals, meta
             meta["adopt_failed"] = True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         meta["gateway_error"] = str(exc)[:200]
 
     return deals, meta
@@ -819,9 +798,7 @@ def build_strategy_intelligence_center(
             cycles = []
             current_cycle = None
 
-    payload = analyze_trades(
-        closed, cycles=cycles, current_cycle=current_cycle
-    )
+    payload = analyze_trades(closed, cycles=cycles, current_cycle=current_cycle)
     payload["deal_source"] = deal_meta
     payload["diagnostics_cycles_joined"] = len(cycles)
     payload["observed_at"] = datetime.now(UTC).isoformat()
@@ -833,8 +810,7 @@ def build_strategy_intelligence_center(
         )
 
         payload["market_regime_intelligence"] = regime_summary_for_sic(
-            diagnostics=diagnostics
-            or {"cycles": cycles, "latest": current_cycle},
+            diagnostics=diagnostics or {"cycles": cycles, "latest": current_cycle},
             trades=list(payload.get("trades") or []),
         )
     except Exception:

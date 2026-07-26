@@ -148,7 +148,9 @@ class TestEqsAnalytics:
 
 
 class TestEqsPlatform:
-    def test_isolation_and_perf(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_isolation_and_perf(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         assert ISOLATION_FLAGS["executes_trades"] is False
         assert ISOLATION_FLAGS["modifies_oms"] is False
         assert ISOLATION_FLAGS["modifies_gateway"] is False

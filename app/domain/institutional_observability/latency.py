@@ -32,9 +32,7 @@ def collect_latencies(
         from app.domain.institutional_data_warehouse.store import get_warehouse
 
         if merged["journal"] is None:
-            merged["journal"] = measure_latency_ms(
-                lambda: get_warehouse().counts()
-            )
+            merged["journal"] = measure_latency_ms(lambda: get_warehouse().counts())
     except Exception:
         merged.setdefault("journal", None)
 

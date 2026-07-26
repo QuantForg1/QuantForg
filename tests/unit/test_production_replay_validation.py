@@ -42,9 +42,7 @@ class TestProductionReplayValidation:
     async def test_sufficient_history_produces_bounded_opportunities(self) -> None:
         """days=15 clears the H4 history floor — expect a bounded, non-empty walk."""
         max_evaluations = 5
-        report = await run_production_replay(
-            days=15, max_evaluations=max_evaluations
-        )
+        report = await run_production_replay(days=15, max_evaluations=max_evaluations)
 
         opportunities = report["opportunities"]
         assert len(opportunities) <= max_evaluations

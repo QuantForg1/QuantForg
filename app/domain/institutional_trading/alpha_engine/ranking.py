@@ -1,4 +1,4 @@
-"""Opportunity ranking — Opportunity Score 0–100 per symbol."""
+"""Opportunity ranking - Opportunity Score 0-100 per symbol."""
 
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ def score_opportunity(
             rr = Decimal(str(expected_rr))
         except Exception:
             rr = Decimal("0")
-    # Map RR 0–3 → 0–100
+    # Map RR 0-3 -> 0-100
     rr_score = _clamp(int(float(min(rr, Decimal("3"))) / 3.0 * 100))
 
     weights = {
@@ -85,22 +85,22 @@ def score_opportunity(
         "expected_rr": cfg.w_expected_rr,
         "session": cfg.w_session,
     }
-    # Continuous learning — gradual multipliers only; never overwrite base rules.
+    # Continuous learning - gradual multipliers only; never overwrite base rules.
     try:
         from app.domain.institutional_trading.production_hardening.learning import (
             get_learning_weight_store,
         )
 
         weights = get_learning_weight_store().apply_to_weights(weights)
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
-    # v7 weight optimizer — additional SMC factor multipliers (rules unchanged)
+    # v7 weight optimizer - additional SMC factor multipliers (rules unchanged)
     try:
         from app.domain.institutional_trading.ai_validation import get_weight_optimizer
 
         optimized = get_weight_optimizer().apply_to_weights(weights)
-        weights = {k: max(1, int(round(v))) for k, v in optimized.items()}
-    except Exception:
+        weights = {k: max(1, round(v)) for k, v in optimized.items()}
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     factors = {
         "confidence": _clamp(ai_confidence),
@@ -163,7 +163,7 @@ def rank_opportunities(
                 rank=i,
             )
         )
-    # Filter below floor for execution candidates (ranking still returned full list by caller)
+    # Filter below floor for execution candidates (ranking still returned full list by caller)  # noqa: E501
     _ = cfg
     return out
 

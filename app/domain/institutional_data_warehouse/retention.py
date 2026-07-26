@@ -31,7 +31,7 @@ def apply_retention_classification(
 
     moved = {"raw_events": 0, "aggregates": 0, "archive": 0}
     for domain in DATA_DOMAINS:
-        rows = wh.list(domain, limit=50_000)  # type: ignore[arg-type]
+        rows = wh.list(domain, limit=50_000)
         classified: list[dict[str, Any]] = []
         for row in rows:
             ts_raw = row.get("timestamp")
@@ -51,7 +51,7 @@ def apply_retention_classification(
             row["retention_tier"] = tier
             classified.append(row)
             moved[tier] = moved.get(tier, 0) + 1
-        wh.replace_rows(domain, classified)  # type: ignore[arg-type]
+        wh.replace_rows(domain, classified)
 
     return {
         "status": "available",
@@ -66,7 +66,7 @@ def apply_retention_classification(
 def retention_status(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     counts = {"raw_events": 0, "aggregates": 0, "archive": 0, "unknown": 0}
     for domain in DATA_DOMAINS:
-        for row in wh.list(domain, limit=50_000):  # type: ignore[arg-type]
+        for row in wh.list(domain, limit=50_000):
             tier = str(row.get("retention_tier") or "raw_events")
             if tier not in counts:
                 counts["unknown"] += 1

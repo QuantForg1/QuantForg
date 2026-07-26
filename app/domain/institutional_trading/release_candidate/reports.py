@@ -44,7 +44,7 @@ def _gather() -> dict[str, Any]:
 
         sections["risk"] = get_dynamic_risk_budget().snapshot()
         sections["portfolio"] = sections["risk"]
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     try:
         from app.domain.institutional_trading.ai_validation import (
@@ -54,7 +54,7 @@ def _gather() -> dict[str, Any]:
 
         sections["strategy"] = get_strategy_performance_store().snapshot()
         sections["execution"] = get_execution_quality_monitor().snapshot()
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     try:
         from app.domain.institutional_trading.performance_lab import (
@@ -64,7 +64,7 @@ def _gather() -> dict[str, Any]:
 
         sections["ai"] = get_calibration_store().chart()
         sections["recommendations"] = get_recommendation_engine().recent(limit=20)
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort optional path
         pass
     return sections
 
@@ -80,7 +80,11 @@ def report_to_csv(report: dict[str, Any]) -> str:
                     [
                         section,
                         k,
-                        json.dumps(v, default=str) if isinstance(v, (dict, list)) else v,
+                        (
+                            json.dumps(v, default=str)
+                            if isinstance(v, (dict, list))
+                            else v
+                        ),
                     ]
                 )
         elif isinstance(payload, list):

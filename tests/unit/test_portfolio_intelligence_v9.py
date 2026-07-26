@@ -35,10 +35,30 @@ def test_allocation_is_dynamic_and_advisory() -> None:
     assert DEFAULT_PI_CONFIG.capital_reallocation_auto is False
     state = build_portfolio_state(equity=100_000, open_symbols=["EURUSD"])
     opps = [
-        {"symbol": "XAUUSD", "opportunity_score": 90, "ai_confidence": 88, "expected_rr": 2.0},
-        {"symbol": "USDJPY", "opportunity_score": 70, "ai_confidence": 65, "expected_rr": 1.5},
-        {"symbol": "BTCUSD", "opportunity_score": 55, "ai_confidence": 50, "expected_rr": 1.2},
-        {"symbol": "NAS100", "opportunity_score": 40, "ai_confidence": 40, "expected_rr": 1.0},
+        {
+            "symbol": "XAUUSD",
+            "opportunity_score": 90,
+            "ai_confidence": 88,
+            "expected_rr": 2.0,
+        },
+        {
+            "symbol": "USDJPY",
+            "opportunity_score": 70,
+            "ai_confidence": 65,
+            "expected_rr": 1.5,
+        },
+        {
+            "symbol": "BTCUSD",
+            "opportunity_score": 55,
+            "ai_confidence": 50,
+            "expected_rr": 1.2,
+        },
+        {
+            "symbol": "NAS100",
+            "opportunity_score": 40,
+            "ai_confidence": 40,
+            "expected_rr": 1.0,
+        },
     ]
     alloc = allocate_capital(opps, state, risk_budget_pct=4.0, new_exposure_scale=1.0)
     assert alloc["auto_applied"] is False
@@ -68,7 +88,9 @@ def test_capital_protection_blocks_daily_loss() -> None:
 
 @pytest.mark.unit
 def test_capital_protection_scales_near_limit() -> None:
-    state = build_portfolio_state(equity=100_000, daily_pnl=-2500, current_drawdown_pct=0)
+    state = build_portfolio_state(
+        equity=100_000, daily_pnl=-2500, current_drawdown_pct=0
+    )
     prot = evaluate_capital_protection(state)
     assert prot.allow_new_exposure is True
     assert prot.new_exposure_scale < 1.0
@@ -103,8 +125,18 @@ def test_opportunity_queue_priority() -> None:
     state = build_portfolio_state(equity=100_000)
     items = q.rebuild(
         [
-            {"symbol": "A", "opportunity_score": 50, "ai_confidence": 50, "expected_rr": 1},
-            {"symbol": "B", "opportunity_score": 90, "ai_confidence": 80, "expected_rr": 2},
+            {
+                "symbol": "A",
+                "opportunity_score": 50,
+                "ai_confidence": 50,
+                "expected_rr": 1,
+            },
+            {
+                "symbol": "B",
+                "opportunity_score": 90,
+                "ai_confidence": 80,
+                "expected_rr": 2,
+            },
         ],
         state,
         risk_budget_pct=4.0,

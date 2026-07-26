@@ -67,7 +67,9 @@ class ModelRegistry:
                             date=str(row.get("date") or ""),
                             performance=dict(row.get("performance") or {}),
                             notes=str(row.get("notes") or ""),
-                            approval_status=str(row.get("approval_status") or "pending"),
+                            approval_status=str(
+                                row.get("approval_status") or "pending"
+                            ),
                             promoted=bool(row.get("promoted", False)),
                         )
                     )
@@ -139,7 +141,7 @@ class ModelRegistry:
             for i, row in enumerate(self._models):
                 if row.id == model_id:
                     updated = ModelVersion(**{**row.to_dict(), "promoted": False})
-                    # promoted flag stays False until explicit promotion workflow stage=Production
+                    # promoted flag stays False until explicit promotion workflow stage=Production  # noqa: E501
                     self._models[i] = updated
                     break
         if updated is not None:

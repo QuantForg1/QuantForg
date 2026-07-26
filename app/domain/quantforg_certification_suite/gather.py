@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return default
 
 
@@ -39,9 +40,7 @@ def gather_certification_sources() -> dict[str, Any]:
     if irl is not None:
         experiments = _safe(lambda: irl.list_experiments(limit=30), [])
         jobs = _safe(lambda: irl.list_jobs(limit=30), [])
-        leaderboard = _safe(
-            lambda: irl.leaderboard(rank_by="composite", limit=15), {}
-        )
+        leaderboard = _safe(lambda: irl.leaderboard(rank_by="composite", limit=15), {})
         sources["irl"] = {
             "experiments": experiments,
             "leaderboard": leaderboard,
@@ -51,7 +50,7 @@ def gather_certification_sources() -> dict[str, Any]:
         for j in jobs if isinstance(jobs, list) else []:
             if not isinstance(j, dict):
                 continue
-            blob = f"{j.get('kind') or ''} {j.get('type') or ''} {j.get('name') or ''}".lower()
+            blob = f"{j.get('kind') or ''} {j.get('type') or ''} {j.get('name') or ''}".lower()  # noqa: E501
             if "replay" in blob:
                 replay_jobs.append(j)
         sources["replay"] = {"jobs": replay_jobs, "from_irl": True}
@@ -73,9 +72,11 @@ def gather_certification_sources() -> dict[str, Any]:
         ).get_ise()
         return {
             "simulations": ise.store.list_simulations(limit=20),
-            "reports": ise.store.list_reports(limit=10)
-            if hasattr(ise.store, "list_reports")
-            else [],
+            "reports": (
+                ise.store.list_reports(limit=10)
+                if hasattr(ise.store, "list_reports")
+                else []
+            ),
         }
 
     sources["ise"] = _safe(_ise, {"simulations": [], "reports": []})
@@ -111,9 +112,9 @@ def gather_certification_sources() -> dict[str, Any]:
         ).get_iep()
         return {
             "registry": iep.store.list_experiments(limit=20),
-            "snapshot": iep.store.get_snapshot()
-            if hasattr(iep.store, "get_snapshot")
-            else {},
+            "snapshot": (
+                iep.store.get_snapshot() if hasattr(iep.store, "get_snapshot") else {}
+            ),
         }
 
     sources["iep"] = _safe(_iep, {"registry": [], "snapshot": {}})
@@ -136,9 +137,7 @@ def gather_certification_sources() -> dict[str, Any]:
     )
     availability["irap"] = bool(sources["irap"])
 
-    sources["eqs"] = _store_snapshot(
-        "app.domain.execution_quality_suite", "get_eqs"
-    )
+    sources["eqs"] = _store_snapshot("app.domain.execution_quality_suite", "get_eqs")
     availability["eqs"] = bool(sources["eqs"])
 
     sources["res"] = _store_snapshot(
@@ -153,9 +152,11 @@ def gather_certification_sources() -> dict[str, Any]:
         return {
             "releases": irdp.store.list_releases(limit=15),
             "approvals": irdp.store.list_approvals(limit=15),
-            "reports": irdp.store.list_reports(limit=10)
-            if hasattr(irdp.store, "list_reports")
-            else [],
+            "reports": (
+                irdp.store.list_reports(limit=10)
+                if hasattr(irdp.store, "list_reports")
+                else []
+            ),
         }
 
     sources["irdp"] = _safe(_irdp, {"releases": [], "approvals": [], "reports": []})
@@ -195,13 +196,13 @@ def gather_certification_sources() -> dict[str, Any]:
     )
     availability["aqs"] = isinstance(sources["aqs"], dict)
 
-    sources["aqc"] = {"snapshot": _store_snapshot("app.domain.ai_quant_copilot", "get_aqc")}
+    sources["aqc"] = {
+        "snapshot": _store_snapshot("app.domain.ai_quant_copilot", "get_aqc")
+    }
     availability["aqc"] = True
 
     sources["qkg"] = _safe(
-        lambda: __import__(
-            "app.domain.quant_knowledge_graph", fromlist=["get_qkg"]
-        )
+        lambda: __import__("app.domain.quant_knowledge_graph", fromlist=["get_qkg"])
         .get_qkg()
         .store.get_snapshot(),
         {},

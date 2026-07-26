@@ -113,16 +113,10 @@ def supervise_active_trade(
         if config.trailing_enabled and r_val >= config.trail_after_r:
             actions.append("trailing_stop_advisory")
         if config.partial_exit_enabled and r_val >= config.partial_exit_at_r:
-            actions.append(
-                f"partial_exit_advisory_{config.partial_exit_pct}pct"
-            )
+            actions.append(f"partial_exit_advisory_{config.partial_exit_pct}pct")
 
-    reasons.append(
-        "Management is policy-driven advisory only — no order_send"
-    )
-    score = min(max(score, Decimal("0")), Decimal("100")).quantize(
-        Decimal("0.01")
-    )
+    reasons.append("Management is policy-driven advisory only — no order_send")
+    score = min(max(score, Decimal("0")), Decimal("100")).quantize(Decimal("0.01"))
     return ModuleResult(
         module="active_trade_supervisor",
         status="available",
@@ -186,9 +180,7 @@ def run_auto_controller(
     )
 
 
-def run_watchdog(
-    inp: ScalpCycleInput, config: ScalpingAiV2Config
-) -> ModuleResult:
+def run_watchdog(inp: ScalpCycleInput, config: ScalpingAiV2Config) -> ModuleResult:
     health = inp.health if isinstance(inp.health, dict) else {}
     probes = {
         "execution_loop": health.get("execution_loop"),
@@ -198,9 +190,7 @@ def run_watchdog(
         "analytics": health.get("analytics"),
         "risk_engine": health.get("risk_engine", inp.risk_engine_passed),
         "safety_engine": health.get("safety_engine", inp.safety_engine_passed),
-        "decision_engine": health.get(
-            "decision_engine", inp.decision_approved
-        ),
+        "decision_engine": health.get("decision_engine", inp.decision_approved),
     }
     if all(v is None for v in probes.values()):
         return ModuleResult(
@@ -279,9 +269,7 @@ def plan_incident_recovery(
     incident_type = str(
         incident
         if isinstance(incident, str)
-        else (incident or {}).get("type")
-        if isinstance(incident, dict)
-        else "unknown"
+        else (incident or {}).get("type") if isinstance(incident, dict) else "unknown"
     )
     reasons = [
         f"Incident {incident_type}",

@@ -30,18 +30,14 @@ class VetoResult:
         }
 
 
-def evaluate_vetoes(
-    config: DecisionIntelligenceConfig, inp: VetoInput
-) -> VetoResult:
+def evaluate_vetoes(config: DecisionIntelligenceConfig, inp: VetoInput) -> VetoResult:
     vetoes: list[str] = []
     if inp.forbidden_technique:
         vetoes.append("Forbidden technique (martingale/grid/average-down).")
     if inp.spread is None:
         vetoes.append("Spread unavailable — veto fail-closed.")
     elif inp.spread > config.max_spread:
-        vetoes.append(
-            f"Abnormal spread {inp.spread} exceeds {config.max_spread}."
-        )
+        vetoes.append(f"Abnormal spread {inp.spread} exceeds {config.max_spread}.")
     if inp.daily_drawdown_pct >= config.max_daily_drawdown_pct:
         vetoes.append(
             f"Daily drawdown {inp.daily_drawdown_pct}% >= "
@@ -53,7 +49,5 @@ def evaluate_vetoes(
             f"{config.max_consecutive_losses}."
         )
     if inp.operator_veto:
-        vetoes.append(
-            inp.operator_veto_reason or "Operator veto applied."
-        )
+        vetoes.append(inp.operator_veto_reason or "Operator veto applied.")
     return VetoResult(clear=len(vetoes) == 0, vetoes=tuple(vetoes))

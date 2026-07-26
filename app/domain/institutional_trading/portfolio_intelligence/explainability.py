@@ -60,12 +60,14 @@ class PortfolioExplainStore:
                 at=datetime.now(UTC).isoformat(),
                 symbol=str(a.get("symbol") or ""),
                 share_pct=float(a.get("share_pct") or 0),
-                why=f"Why {a.get('symbol')} received {a.get('share_pct')}%: {a.get('reason')}",
+                why=f"Why {a.get('symbol')} received {a.get('share_pct')}%: {a.get('reason')}",  # noqa: E501
                 skipped=False,
             )
             out.append(expl)
         for sym in allocation.get("skipped_symbols") or []:
-            reason = (skipped_reasons or {}).get(sym, "ranked below deployable slots / correlation")
+            reason = (skipped_reasons or {}).get(
+                sym, "ranked below deployable slots / correlation"
+            )
             out.append(
                 AllocationExplanation(
                     id=str(uuid4()),
@@ -91,7 +93,10 @@ class PortfolioExplainStore:
             with self._lock:
                 payload = {
                     "updated_at": datetime.now(UTC).isoformat(),
-                    "records": [r.to_dict() for r in self._rows[-DEFAULT_PI_CONFIG.max_explanations :]],
+                    "records": [
+                        r.to_dict()
+                        for r in self._rows[-DEFAULT_PI_CONFIG.max_explanations :]
+                    ],
                 }
             self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception:

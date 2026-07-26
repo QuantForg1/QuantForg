@@ -32,7 +32,7 @@ def build_dimensions(wh: InstitutionalDataWarehouse) -> dict[str, list[dict[str,
         "opportunity",
     ):
         try:
-            rows = wh.list(domain, limit=10_000)  # type: ignore[arg-type]
+            rows = wh.list(domain, limit=10_000)
         except ValueError:
             continue
         for row in rows:
@@ -48,7 +48,10 @@ def build_dimensions(wh: InstitutionalDataWarehouse) -> dict[str, list[dict[str,
                 }
             sess = row.get("session")
             if sess:
-                dim_session[str(sess)] = {"session_key": str(sess), "session": str(sess)}
+                dim_session[str(sess)] = {
+                    "session_key": str(sess),
+                    "session": str(sess),
+                }
             strat = row.get("strategy_version")
             if strat:
                 dim_strategy[str(strat)] = {
@@ -120,14 +123,14 @@ def build_facts(wh: InstitutionalDataWarehouse) -> dict[str, list[dict[str, Any]
         "fact_signals": _map(
             "signals",
             fact_name="fact_signals",
-            extra=lambda r, p: {
+            extra=lambda _r, p: {
                 "decision": p.get("decision") or p.get("action"),
             },
         ),
         "fact_executions": _map(
             "execution",
             fact_name="fact_executions",
-            extra=lambda r, p: {
+            extra=lambda _r, p: {
                 "retcode": p.get("retcode"),
                 "oms_status": p.get("oms_status"),
             },
@@ -135,7 +138,7 @@ def build_facts(wh: InstitutionalDataWarehouse) -> dict[str, list[dict[str, Any]
         "fact_research": _map(
             "research",
             fact_name="fact_research",
-            extra=lambda r, p: {
+            extra=lambda _r, p: {
                 "experiment_id": p.get("uuid") or p.get("experiment_id"),
                 "verdict": p.get("verdict"),
             },
@@ -143,14 +146,14 @@ def build_facts(wh: InstitutionalDataWarehouse) -> dict[str, list[dict[str, Any]
         "fact_portfolio": _map(
             "portfolio",
             fact_name="fact_portfolio",
-            extra=lambda r, p: {
+            extra=lambda _r, p: {
                 "net_profit": p.get("net_profit") or p.get("net_pnl"),
             },
         ),
         "fact_risk": _map(
             "risk",
             fact_name="fact_risk",
-            extra=lambda r, p: {
+            extra=lambda _r, p: {
                 "action": p.get("action"),
                 "severity": p.get("severity"),
             },
@@ -158,7 +161,7 @@ def build_facts(wh: InstitutionalDataWarehouse) -> dict[str, list[dict[str, Any]
         "fact_diagnostics": _map(
             "diagnostics",
             fact_name="fact_diagnostics",
-            extra=lambda r, p: {
+            extra=lambda _r, p: {
                 "cycle_id": p.get("cycle_id") or p.get("id"),
             },
         ),

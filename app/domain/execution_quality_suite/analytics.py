@@ -78,7 +78,9 @@ def _collect_orders(ctx: dict[str, Any]) -> list[dict[str, Any]]:
     diag = _as_dict(sources.get("diagnostics"))
     for cycle in _as_list(diag.get("cycles") or diag.get("items")):
         if isinstance(cycle, dict) and (
-            cycle.get("forwarded_to_oms") or cycle.get("explain") or cycle.get("decision_action")
+            cycle.get("forwarded_to_oms")
+            or cycle.get("explain")
+            or cycle.get("decision_action")
         ):
             orders.append({**cycle, "_origin": "diagnostics"})
 
@@ -106,8 +108,12 @@ def build_execution_timelines(ctx: dict[str, Any]) -> list[dict[str, Any]]:
             if isinstance(s, dict):
                 stage_map[str(s.get("key") or s.get("stage") or "").lower()] = s
 
-        def _ts(key: str, fallback: Any = None) -> Any:
-            s = stage_map.get(key)
+        def _ts(
+            key: str,
+            fallback: Any = None,
+            _stages: dict[str, Any] = stage_map,
+        ) -> Any:
+            s = _stages.get(key)
             if isinstance(s, dict):
                 return s.get("timestamp") or s.get("at") or fallback
             return fallback
@@ -191,7 +197,8 @@ def build_execution_timelines(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 "timeline": timeline,
                 "stages_canonical": list(TIMELINE_STAGES),
                 "evidence": {
-                    "oms": order.get("_origin") == "idw:oms" or bool(order.get("oms_status")),
+                    "oms": order.get("_origin") == "idw:oms"
+                    or bool(order.get("oms_status")),
                     "gateway": bool(order.get("gateway")),
                     "broker": bool(order.get("broker")),
                     "origin": order.get("_origin"),
@@ -214,9 +221,17 @@ def build_latency_analytics(ctx: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(row, dict):
             continue
         lat = _f(row.get("latency_ms"))
-        gw = _f(row.get("gateway_latency_ms") or _as_dict(row.get("meta")).get("gateway_latency_ms"))
-        br = _f(row.get("broker_latency_ms") or _as_dict(row.get("meta")).get("broker_latency_ms"))
-        oms_l = _f(row.get("oms_latency_ms") or _as_dict(row.get("meta")).get("oms_latency_ms"))
+        gw = _f(
+            row.get("gateway_latency_ms")
+            or _as_dict(row.get("meta")).get("gateway_latency_ms")
+        )
+        br = _f(
+            row.get("broker_latency_ms")
+            or _as_dict(row.get("meta")).get("broker_latency_ms")
+        )
+        oms_l = _f(
+            row.get("oms_latency_ms") or _as_dict(row.get("meta")).get("oms_latency_ms")
+        )
         strat = _f(
             row.get("strategy_latency_ms")
             or _as_dict(row.get("meta")).get("strategy_latency_ms")
@@ -242,7 +257,11 @@ def build_latency_analytics(ctx: dict[str, Any]) -> dict[str, Any]:
     ):
         for row in _as_list(idw.get(domain)):
             if isinstance(row, dict):
-                v = _f(row.get("latency_ms") or row.get("response_ms") or row.get("duration_ms"))
+                v = _f(
+                    row.get("latency_ms")
+                    or row.get("response_ms")
+                    or row.get("duration_ms")
+                )
                 if v is not None:
                     bucket.append(v)
 
@@ -275,7 +294,7 @@ def build_latency_analytics(ctx: dict[str, Any]) -> dict[str, Any]:
         "fill_latency": _latency_stats(fill),
         "total_execution_latency": _latency_stats(total),
         "units": "ms",
-        "note": "Missing stage latencies may be proportionally estimated from total when only total is observed",
+        "note": "Missing stage latencies may be proportionally estimated from total when only total is observed",  # noqa: E501
         "never_modifies_production": True,
     }
 
@@ -365,7 +384,9 @@ def build_fill_quality(ctx: dict[str, Any]) -> dict[str, Any]:
 
     live = _as_dict(_as_dict(ctx.get("sources")).get("live_metrics"))
     full = max(full, int(live.get("fills") or 0))
-    rejected = max(rejected, int(live.get("rejects") or 0) + int(live.get("oms_failures") or 0))
+    rejected = max(
+        rejected, int(live.get("rejects") or 0) + int(live.get("oms_failures") or 0)
+    )
 
     attempts = full + partial + rejected + expired + cancelled
     success_rate = round(((full + partial) / attempts) * 100.0, 2) if attempts else None
@@ -381,7 +402,7 @@ def build_fill_quality(ctx: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_consistency(ctx: dict[str, Any], latency: dict[str, Any]) -> dict[str, Any]:
+def build_consistency(_ctx: dict[str, Any], latency: dict[str, Any]) -> dict[str, Any]:
     def _stability(stats: dict[str, Any]) -> float | None:
         avg = _f(stats.get("average"))
         mx = _f(stats.get("maximum"))
@@ -431,8 +452,10 @@ def build_broker_health(ctx: dict[str, Any]) -> dict[str, Any]:
         if v is not None:
             latencies.append(v)
 
-    avg_resp = round(statistics.mean(latencies), 3) if latencies else _f(
-        rc1.get("avg_broker_latency_ms") or live.get("execution_latency_ms")
+    avg_resp = (
+        round(statistics.mean(latencies), 3)
+        if latencies
+        else _f(rc1.get("avg_broker_latency_ms") or live.get("execution_latency_ms"))
     )
     uptime = _f(icc.get("broker_uptime_pct"))
     if uptime is None:

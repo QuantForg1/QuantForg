@@ -197,9 +197,7 @@ class RobotV1Orchestrator:
         # --- Filters (1-7) ---
         session_f = evaluate_session_filter(self.config, as_of=as_of)
         spread_f = evaluate_spread_filter(self.config, spread=inp.spread)
-        vol_f = evaluate_volatility_filter(
-            self.config, atr=inp.atr, price=inp.price
-        )
+        vol_f = evaluate_volatility_filter(self.config, atr=inp.atr, price=inp.price)
         news_f = evaluate_news_filter(
             self.config, as_of=as_of, calendar=inp.news_calendar
         )
@@ -424,6 +422,4 @@ class RobotV1Orchestrator:
             strategy_id=strategy_id, closed_pnls=list(closed_pnls)
         )
         health = score_strategy_health(self.config, perf)
-        return build_self_analysis_report(
-            self.config, journal=journal, health=health
-        )
+        return build_self_analysis_report(self.config, journal=journal, health=health)

@@ -201,9 +201,7 @@ def test_resolve_direction_auto_follows_h4() -> None:
         passed=False,
     )
     assert (
-        resolve_force_direction(
-            configured="AUTO", snapshot=snap, confluence=conf
-        )
+        resolve_force_direction(configured="AUTO", snapshot=snap, confluence=conf)
         is TradeDirection.BUY
     )
 
