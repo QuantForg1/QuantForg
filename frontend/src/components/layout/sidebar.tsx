@@ -3,14 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ChevronsLeft,
-  ChevronsRight,
-  Menu,
-  Pin,
-  Star,
-  X,
-} from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   isPrimaryActive,
@@ -18,8 +11,6 @@ import {
   type PrimaryNavItem,
 } from "@/components/layout/nav-config";
 import { Button } from "@/components/ui/button";
-import { useNavMemory } from "@/hooks/use-nav-memory";
-import { labelForHref } from "@/lib/workspace/nav-memory";
 import {
   Tooltip,
   TooltipContent,
@@ -34,51 +25,6 @@ import {
   SHELL_SIDEBAR_MIN,
   type ShellChromeState,
 } from "@/lib/workspace/shell-chrome";
-
-function MemoryLinks({
-  title,
-  items,
-  collapsed,
-  onNavigate,
-}: {
-  title: string;
-  items: { href: string; label: string }[];
-  collapsed?: boolean;
-  onNavigate?: () => void;
-}) {
-  const pathname = usePathname();
-  if (items.length === 0 || collapsed) return null;
-  return (
-    <div className="mb-[var(--space-3)]">
-      <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-        {title}
-      </p>
-      <ul className="space-y-0.5">
-        {items.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
-          return (
-            <li key={`${title}-${item.href}`}>
-              <Link
-                href={item.href}
-                onClick={onNavigate}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12px] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)]",
-                  active
-                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                    : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
-                )}
-              >
-                <span className="truncate">{item.label}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
 
 function PrimaryLink({
   item,
@@ -149,73 +95,8 @@ function NavBody({
   collapsed?: boolean;
   onNavigate?: () => void;
 }) {
-  const pathname = usePathname();
-  const memory = useNavMemory();
-
-  const pinCurrent = () => {
-    memory.togglePinned({ href: pathname, label: labelForHref(pathname) });
-  };
-  const favCurrent = () => {
-    memory.toggleFavorite({ href: pathname, label: labelForHref(pathname) });
-  };
-
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
-      {!collapsed ? (
-        <div className="mb-3 flex items-center gap-1 px-0.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 flex-1 gap-1 px-2 text-[11px]"
-            onClick={pinCurrent}
-            aria-pressed={memory.isPinned(pathname)}
-            title="Pin current page"
-          >
-            <Pin className="h-3 w-3" aria-hidden />
-            {memory.isPinned(pathname) ? "Unpin" : "Pin"}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 flex-1 gap-1 px-2 text-[11px]"
-            onClick={favCurrent}
-            aria-pressed={memory.isFavorite(pathname)}
-            title="Favorite current page"
-          >
-            <Star className="h-3 w-3" aria-hidden />
-            {memory.isFavorite(pathname) ? "Unstar" : "Star"}
-          </Button>
-        </div>
-      ) : null}
-
-      <MemoryLinks
-        title="Pinned"
-        items={memory.pinned}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
-      <MemoryLinks
-        title="Favorites"
-        items={memory.favorites.slice(0, 6)}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
-      <MemoryLinks
-        title="Recent"
-        items={memory.recent.slice(0, 5)}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
-
-      {!collapsed &&
-      (memory.pinned.length > 0 ||
-        memory.favorites.length > 0 ||
-        memory.recent.length > 0) ? (
-        <div className="mb-2 border-t border-[var(--border)] pt-2" />
-      ) : null}
-
       {!collapsed ? (
         <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
           Workspaces

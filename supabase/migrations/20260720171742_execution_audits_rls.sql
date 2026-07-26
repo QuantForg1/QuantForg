@@ -1,8 +1,8 @@
 -- =============================================================================
 -- QuantForg migration: Execution Audits RLS
--- Version: 20260720190100
--- Reversible: see supabase/migrations/down/20260720190100_execution_audits_rls.down.sql
--- Depends on: 20260720190000_execution_audits
+-- Version: 20260720171742
+-- Reversible: see supabase/migrations/down/20260720171742_execution_audits_rls.down.sql
+-- Depends on: 20260720171731_execution_audits
 -- =============================================================================
 
 ALTER TABLE public.execution_audits ENABLE ROW LEVEL SECURITY;

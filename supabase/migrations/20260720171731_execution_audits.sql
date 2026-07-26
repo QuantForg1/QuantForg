@@ -1,7 +1,7 @@
 -- =============================================================================
 -- QuantForg migration: Execution Audit Engine (Phase 11)
--- Version: 20260720190000
--- Reversible: see supabase/migrations/down/20260720190000_execution_audits.down.sql
+-- Version: 20260720171731
+-- Reversible: see supabase/migrations/down/20260720171731_execution_audits.down.sql
 -- Depends on: users
 -- NOTE: Immutable execution-stage history — no credentials. Additive only.
 -- =============================================================================
