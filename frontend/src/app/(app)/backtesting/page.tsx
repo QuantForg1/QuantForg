@@ -150,7 +150,7 @@ export default function BacktestingPage() {
                         key={id}
                         type="button"
                         onClick={() => setSelectedId(id)}
-                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${
+                        className={`flex w-full items-center justify-between rounded-[var(--radius-os)] border px-3 py-2 text-left text-sm ${
                           selectedId === id || (!selectedId && id === str(report.id))
                             ? "border-[var(--accent)] bg-[var(--accent-soft)]"
                             : "border-[var(--border)] bg-[var(--surface-2)]"

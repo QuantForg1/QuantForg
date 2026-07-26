@@ -19,11 +19,13 @@ import { TerminalRightRail } from "@/components/terminal/right-rail";
 import { TerminalBlotter } from "@/components/terminal/blotter";
 import {
   DEFAULT_TERMINAL_LAYOUT,
+  PRESET_TERMINAL,
   TERMINAL_SYMBOL_KEY,
   loadTerminalLayout,
   saveTerminalLayout,
   type TerminalLayoutState,
   type TerminalBlotterTab,
+  type TerminalPresetId,
 } from "@/components/terminal/layout-store";
 import type { OrderTicketHandle } from "@/components/execution/order-ticket";
 import { useExecutionStream } from "@/hooks/realtime";
@@ -51,10 +53,18 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "\\", action: "Toggle blotter" },
   { keys: "C", action: "Toggle AI decision" },
   { keys: "F", action: "Chart fullscreen" },
+  { keys: "P", action: "Cycle layout preset" },
   { keys: "Esc", action: "Cancel / close sheets" },
   { keys: "?", action: "This help" },
-  { keys: "⌘1–6", action: "Workspace jump" },
+  { keys: "⌘1–8", action: "Workspace jump" },
 ];
+
+const PRESET_ORDER: TerminalPresetId[] = ["default", "chart-focus", "tape-focus"];
+const PRESET_LABEL: Record<TerminalPresetId, string> = {
+  default: "Default",
+  "chart-focus": "Chart",
+  "tape-focus": "Tape",
+};
 
 /**
  * QuantForg Terminal V3 — flagship trading surface.
@@ -182,6 +192,20 @@ export function TerminalShell() {
     [patchLayout],
   );
 
+  const applyPreset = useCallback(
+    (preset: TerminalPresetId) => {
+      patchLayout({ ...PRESET_TERMINAL[preset] });
+    },
+    [patchLayout],
+  );
+
+  const cyclePreset = useCallback(() => {
+    const current = layoutRef.current.preset;
+    const idx = PRESET_ORDER.indexOf(current);
+    const next = PRESET_ORDER[(idx + 1) % PRESET_ORDER.length] ?? "default";
+    applyPreset(next);
+  }, [applyPreset]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const current = layoutRef.current;
@@ -245,6 +269,11 @@ export function TerminalShell() {
         patchLayout({ chartFullscreen: !current.chartFullscreen });
         return;
       }
+      if (k === "p") {
+        e.preventDefault();
+        cyclePreset();
+        return;
+      }
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
         e.preventDefault();
         setHelpOpen(true);
@@ -252,7 +281,7 @@ export function TerminalShell() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [patchLayout, setBlotterTab, isMobile]);
+  }, [patchLayout, setBlotterTab, isMobile, cyclePreset]);
 
   const showRight =
     !isMobile && !layout.rightCollapsed && !layout.chartFullscreen;
@@ -269,11 +298,40 @@ export function TerminalShell() {
       aria-label="QuantForg Terminal"
     >
       <header className="shrink-0">
-        <div className="flex h-7 items-center justify-between gap-2 border-b border-[var(--border)]/70 px-2">
-          <h1 className="shrink-0 text-[11px] font-semibold tracking-tight text-[var(--fg)]">
-            Terminal
-          </h1>
+        <div className="flex h-8 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="shrink-0 text-[11px] font-semibold tracking-tight text-[var(--fg)]">
+              Terminal
+            </h1>
+            <span className="hidden h-3 w-px bg-[var(--border)] sm:block" aria-hidden />
+            <span className="qf-caption hidden truncate text-[var(--fg-subtle)] sm:inline">
+              Chart primary
+            </span>
+          </div>
           <div className="flex items-center gap-0.5">
+            {!isMobile ? (
+              <div
+                className="mr-1 hidden items-center gap-0.5 rounded-[var(--radius-sm)] border border-[var(--border)] p-0.5 sm:flex"
+                role="group"
+                aria-label="Layout preset"
+              >
+                {PRESET_ORDER.map((id) => (
+                  <Button
+                    key={id}
+                    size="sm"
+                    variant={layout.preset === id ? "secondary" : "ghost"}
+                    className={cn(
+                      "h-6 px-2 text-[10px]",
+                      layout.preset === id && "bg-[var(--surface-2)] text-[var(--fg)]",
+                    )}
+                    aria-pressed={layout.preset === id}
+                    onClick={() => applyPreset(id)}
+                  >
+                    {PRESET_LABEL[id]}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
             {!isMobile ? (
               <Button
                 size="sm"
@@ -443,7 +501,7 @@ export function TerminalShell() {
             aria-hidden={!layout.mobileTicketOpen}
           >
             <div
-              className="mx-auto max-h-[78dvh] overflow-hidden rounded-t-2xl border border-b-0 border-[var(--border)] bg-[var(--bg-elevated)] shadow-2xl"
+              className="mx-auto max-h-[78dvh] overflow-hidden rounded-t-[var(--radius-os)] border border-b-0 border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
             >
               <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2">
                 <p className="text-sm font-semibold">Order Ticket</p>

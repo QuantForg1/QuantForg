@@ -411,50 +411,50 @@ export function buildAcceptanceCountdownModel(input: {
         hasTicket: bool(last.mt5_ticket) || hasTicket,
       });
 
-  const mark = (done: boolean, waitingDetail: string): EvidenceItem["mark"] =>
+  const mark = (done: boolean): EvidenceItem["mark"] =>
     done ? "✅" : "⏳";
 
   const evidence: EvidenceItem[] = [
     {
       label: "Infrastructure",
       done: gatewayOk && brokerOk && mt5Ok,
-      mark: mark(gatewayOk && brokerOk && mt5Ok, "Waiting"),
+      mark: mark(gatewayOk && brokerOk && mt5Ok),
       detail: gatewayOk && brokerOk && mt5Ok ? "OK" : "Waiting",
     },
     {
       label: "Persistence",
       done: durable,
-      mark: mark(durable, "Waiting"),
+      mark: mark(durable),
       detail: durable ? "OK" : "Waiting",
     },
     {
       label: "Market Context",
       done: marketOk && snapshotOk,
-      mark: mark(marketOk && snapshotOk, "Waiting"),
+      mark: mark(marketOk && snapshotOk),
       detail: snapshotOk ? "OK" : "Waiting",
     },
     {
       label: "Strategy",
       done: strategyOk,
-      mark: mark(strategyOk, "Waiting"),
+      mark: mark(strategyOk),
       detail: strategyOk ? "OK" : "Waiting",
     },
     {
       label: "Decision",
       done: decisionAlive,
-      mark: mark(decisionAlive, "Waiting"),
+      mark: mark(decisionAlive),
       detail: decisionAlive ? "OK" : "Waiting",
     },
     {
       label: "Risk",
       done: riskOk && !killArmed,
-      mark: mark(riskOk && !killArmed, "Waiting"),
+      mark: mark(riskOk && !killArmed),
       detail: riskOk ? "OK" : "Waiting",
     },
     {
       label: "Safety",
       done: !killArmed,
-      mark: mark(!killArmed, "Waiting"),
+      mark: mark(!killArmed),
       detail: !killArmed ? "OK" : "Waiting",
     },
     {

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { cn } from "@/lib/utils";
+import { DeskInlineEmpty } from "@/components/desk/inline-empty";
 
 /** Calm empty surface for Terminal panels — never invent data. */
 export const TerminalEmpty = memo(function TerminalEmpty({
@@ -16,18 +16,12 @@ export const TerminalEmpty = memo(function TerminalEmpty({
   action?: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "flex h-full min-h-[8rem] flex-col items-center justify-center gap-2 px-6 text-center",
-        className,
-      )}
-      role="status"
-    >
-      <p className="qf-heading text-[var(--fg)]">{title}</p>
-      {description ? (
-        <p className="qf-caption max-w-sm text-[var(--fg-muted)]">{description}</p>
-      ) : null}
-      {action}
-    </div>
+    <DeskInlineEmpty
+      title={title}
+      description={description}
+      className={className}
+      action={action}
+      minHeight="8rem"
+    />
   );
 });

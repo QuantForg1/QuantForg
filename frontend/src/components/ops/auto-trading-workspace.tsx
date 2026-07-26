@@ -122,12 +122,6 @@ export function AutoTradingWorkspace() {
     retry: false,
     refetchInterval: 20_000,
   });
-  const optQ = useQuery({
-    queryKey: ["execution-optimization", "auto-ws"],
-    queryFn: () => executionApi.optimization(100),
-    retry: false,
-    refetchInterval: 30_000,
-  });
   const positionsQ = useQuery({
     queryKey: ["portfolio-positions", "auto-ws"],
     queryFn: () => portfolioApi.positions(),
@@ -216,12 +210,6 @@ export function AutoTradingWorkspace() {
     executionState.execution_enabled ?? asRecord(autoQ.data).execution_enabled,
   );
   const riskReasons = asList(reasonGroups.risk).map(String);
-  const connectivityReasons = asList(reasonGroups.connectivity).map(String);
-  const operatorReasons = [
-    ...asList(reasonGroups.operator).map(String),
-    ...asList(reasonGroups.configuration).map(String),
-    ...asList(reasonGroups.safety).map(String),
-  ];
   const liveFacts = asRecord(asRecord(autoQ.data).live);
   const gatewayLive = Boolean(
     executionState.gateway_connected ??
@@ -286,7 +274,6 @@ export function AutoTradingWorkspace() {
     balance > 0 && equity > 0 ? Math.max(0, ((balance - equity) / balance) * 100) : 0;
   const dailyLossPct = todayPl < 0 && balance > 0 ? (Math.abs(todayPl) / balance) * 100 : 0;
   const dailyRiskUsed = Math.max(dailyDdPct, dailyLossPct);
-  const remainingCapacity = Math.max(0, maxDailyLossPct - dailyRiskUsed);
   const openExposure = positions.reduce(
     (s, p) => s + Math.abs(num(p.volume) * num(p.open_price ?? p.price_open) * 100) / Math.max(num(asRecord(mt5Q.data).leverage, 1000), 1),
     0,
@@ -302,17 +289,7 @@ export function AutoTradingWorkspace() {
     [journalQ.data, auditsQ.data],
   );
 
-  const lastTradeTime = latestFill?.at
-    ? latestFill.at.replace("T", " ").slice(0, 19)
-    : "—";
   const signals = asList(asRecord(signalsQ.data).items ?? signalsQ.data).map(asRecord);
-  const lastSignalTime = (() => {
-    const first = signals[0];
-    if (!first) return "—";
-    return str(first.created_at || first.timestamp || first.time, "—")
-      .replace("T", " ")
-      .slice(0, 19);
-  })();
 
   const tick = asRecord(tickQ.data);
   const mid =
@@ -322,28 +299,6 @@ export function AutoTradingWorkspace() {
   const marketOpen = session.connected && (tick.bid != null || tick.ask != null);
 
   const analytics = asRecord(asRecord(analyticsQ.data).metrics);
-  const optTrends = asRecord(asRecord(asRecord(optQ.data).risk_trends).trends);
-  const sessionOverall = asRecord(
-    asRecord(asRecord(optQ.data).session_analytics).overall,
-  );
-  const pf =
-    sessionOverall.profit_factor != null
-      ? formatNumber(num(sessionOverall.profit_factor), 2)
-      : "—";
-  const expectancy =
-    sessionOverall.expectancy != null
-      ? formatNumber(num(sessionOverall.expectancy), 2)
-      : "—";
-  const avgR =
-    optTrends.average_r != null
-      ? formatNumber(num(optTrends.average_r), 2)
-      : "—";
-  const avgHold =
-    analytics.order_duration_ms_avg != null
-      ? `${formatNumber(num(analytics.order_duration_ms_avg) / 1000, 1)}s`
-      : sessionOverall.avg_duration_seconds != null
-        ? `${formatNumber(num(sessionOverall.avg_duration_seconds), 1)}s`
-        : "—";
   const todayJournal = journalItems.filter((j) => {
     const t = Date.parse(str(j.timestamp || j.submitted_at));
     return Number.isFinite(t) && t >= todayStart.getTime();
@@ -360,52 +315,6 @@ export function AutoTradingWorkspace() {
     todayWins + todayFails > 0
       ? `${formatNumber((todayWins / (todayWins + todayFails)) * 100, 0)}%`
       : "—";
-
-  const pipelineStages = useMemo(() => {
-    const journals = asList(asRecord(journalQ.data).items ?? journalQ.data).map(
-      asRecord,
-    );
-    const audits = asList(asRecord(auditsQ.data).items ?? auditsQ.data).map(
-      asRecord,
-    );
-    const submit = audits.find(
-      (a) =>
-        str(a.request_id) === (latestFill?.requestId || "") &&
-        str(a.stage).toLowerCase() === "submit",
-    );
-    const fromPayload = asList(asRecord(submit?.payload_out).stages).map(asRecord);
-    const fromJournal = asList(
-      journals.find((j) => str(j.request_id) === latestFill?.requestId)?.stages,
-    ).map(asRecord);
-    const list = fromPayload.length ? fromPayload : fromJournal;
-    const pick = (...names: string[]) => {
-      for (const s of list) {
-        const n = str(s.stage).toLowerCase().replace(/\s+/g, "_");
-        if (names.some((x) => n.includes(x))) {
-          const ms = num(s.elapsed_ms ?? s.latency_ms);
-          return Number.isFinite(ms) ? `${formatNumber(ms, 0)} ms` : "ok";
-        }
-      }
-      return "—";
-    };
-    return [
-      { label: "AI Signal", dur: pick("draft", "signal") },
-      { label: "Strategy Validation", dur: pick("validation") },
-      { label: "Risk Engine", dur: pick("risk") },
-      { label: "Safety Engine", dur: pick("safety", "execution_check") },
-      { label: "Execution Queue", dur: pick("execution_check", "draft") },
-      { label: "Broker", dur: pick("broker_submission", "broker") },
-      {
-        label: "Filled",
-        dur:
-          latestFill?.metrics.brokerFillMs != null
-            ? `${formatNumber(latestFill.metrics.brokerFillMs, 0)} ms`
-            : pick("broker_fill", "fill"),
-      },
-      { label: "Journal", dur: pick("journal") },
-      { label: "Analytics", dur: pick("analytics") },
-    ];
-  }, [latestFill, auditsQ.data, journalQ.data]);
 
   const eventTimeline = useMemo(() => {
     const events: { at: string; label: string; detail: string }[] = [];
@@ -688,41 +597,6 @@ export function AutoTradingWorkspace() {
       label,
     };
   };
-
-  const signalRows = signals.slice(0, 20).map((s) => {
-    const decision = str(s.decision || s.status || s.outcome, "").toLowerCase();
-    let status = "No decision";
-    if (!decision) {
-      status =
-        opsMode === "SHADOW"
-          ? "Shadow hold"
-          : opsMode === "CANARY" || opsMode === "LIVE"
-            ? "Awaiting cycle"
-            : "No decision";
-    } else if (decision.includes("allow") || decision.includes("approv")) {
-      status = "Approved";
-    } else if (decision.includes("reject") || decision.includes("block")) {
-      status = "Rejected";
-    } else if (decision.includes("execut") || decision.includes("fill")) {
-      status = "Executed";
-    } else if (decision.includes("expir")) {
-      status = "Expired";
-    } else if (decision.includes("queue") || decision.includes("pending")) {
-      status = opsMode === "SHADOW" ? "Shadow hold" : "Queued";
-    } else {
-      status = decision.charAt(0).toUpperCase() + decision.slice(1);
-    }
-    return [
-      str(s.created_at || s.timestamp || s.time, "—").replace("T", " ").slice(0, 19),
-      str(s.side || s.direction, "—").toUpperCase(),
-      str(s.confidence || s.score, "—"),
-      str(s.entry || s.entry_price, "—"),
-      str(s.stop_loss || s.sl, "—"),
-      str(s.take_profit || s.tp, "—"),
-      str(s.risk_pct || riskPerTradePct, "—"),
-      status,
-    ];
-  });
 
   if (autoQ.isLoading && !autoQ.data) {
     return <DeskSkeleton rows={8} />;

@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { authApi } from "@/lib/api/endpoints";
+import { ApiError } from "@/lib/api/client";
 import {
   clearSession,
   getAccessToken,
@@ -33,10 +34,9 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const stored = getStoredUser();
-    return stored && getAccessToken() ? stored : null;
-  });
+  // Deterministic SSR/client first paint: never read localStorage during render.
+  // Session is restored in useEffect so server HTML and client hydrate match.
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshMe = useCallback(async () => {
@@ -47,14 +47,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await authApi.me();
       setUser(me);
-    } catch {
+    } catch (e) {
+      // Preserve session on transient network loss; only wipe on auth failure.
+      if (
+        e instanceof ApiError &&
+        (e.status === 401 || e.status === 403 || e.code === "unauthorized")
+      ) {
+        clearSession();
+        setUser(null);
+        return;
+      }
+      if (e instanceof ApiError && e.code === "network_error") {
+        // Keep stored user for UI; ConnectionBanner reports API unreachable.
+        const stored = getStoredUser();
+        setUser(stored);
+        return;
+      }
       clearSession();
       setUser(null);
     }
   }, []);
 
   useEffect(() => {
-    refreshMe().finally(() => setLoading(false));
+    const stored = getStoredUser();
+    if (stored && getAccessToken()) {
+      setUser(stored);
+    }
+    void refreshMe().finally(() => setLoading(false));
   }, [refreshMe]);
 
   useEffect(() => {

@@ -75,6 +75,8 @@ export function subscribeMonitoredErrors(fn: (events: MonitoredError[]) => void)
   return () => listeners.delete(fn);
 }
 
+const recentLogAt = new Map<string, number>();
+
 export function captureError(
   kind: MonitoredError["kind"],
   error: unknown,
@@ -109,17 +111,45 @@ export function captureError(
     details: sanitizePayload(extra?.details),
   };
 
-  const next = [event, ...load()].slice(0, MAX);
-  persist(next);
-  void maybeShip(event);
+  const isNetwork =
+    extra?.status === 0 ||
+    /failed to fetch|network_error|unable to reach the quantforg api/i.test(
+      event.message,
+    );
 
-  if (process.env.NODE_ENV !== "production") {
-    console.error("qf_monitored_error", {
-      kind: event.kind,
-      message: event.message,
-      request_id: event.request_id,
-      route: event.route,
-    });
+  // Deduplicate noisy network failures (same kind+path within window).
+  const dedupeKey = `${event.kind}|${event.path || ""}|${isNetwork ? "net" : event.message}`;
+  const now = Date.now();
+  const last = recentLogAt.get(dedupeKey) ?? 0;
+  const withinWindow = now - last < (isNetwork ? 30_000 : 5_000);
+  if (!withinWindow) {
+    recentLogAt.set(dedupeKey, now);
+    if (recentLogAt.size > 200) {
+      const oldest = recentLogAt.keys().next().value;
+      if (oldest) recentLogAt.delete(oldest);
+    }
+
+    const next = [event, ...load()].slice(0, MAX);
+    persist(next);
+    void maybeShip(event);
+
+    if (process.env.NODE_ENV !== "production") {
+      if (isNetwork) {
+        // One quiet warning — ConnectionBanner surfaces the operator-facing state.
+        console.warn("qf_api_unreachable", {
+          kind: event.kind,
+          path: event.path,
+          api: process.env.NEXT_PUBLIC_API_BASE_URL || "(dev fallback)",
+        });
+      } else {
+        console.error("qf_monitored_error", {
+          kind: event.kind,
+          message: event.message,
+          request_id: event.request_id,
+          route: event.route,
+        });
+      }
+    }
   }
 
   return event;
@@ -139,6 +169,19 @@ export function installErrorMonitoring() {
   });
 
   window.addEventListener("unhandledrejection", (ev) => {
-    captureError("unhandled_rejection", ev.reason);
+    const reason = ev.reason;
+    const msg =
+      reason instanceof Error
+        ? reason.message
+        : typeof reason === "string"
+          ? reason
+          : "";
+    // Network failures are handled by apiFetch + ConnectionBanner — avoid double spam.
+    if (
+      /failed to fetch|network_error|unable to reach the quantforg api/i.test(msg)
+    ) {
+      return;
+    }
+    captureError("unhandled_rejection", reason);
   });
 }

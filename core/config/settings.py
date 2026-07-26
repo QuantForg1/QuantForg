@@ -686,7 +686,10 @@ class Settings(BaseSettings):
         # CORS: strip wildcards; production seeds Railway + canonical frontends.
         origins = [o.strip() for o in self.cors_origins if o and o.strip() and o != "*"]
         if self.app_env == AppEnvironment.PRODUCTION:
-            from core.config.frontend_origins import PRODUCTION_FRONTEND_ORIGINS
+            from core.config.frontend_origins import (
+                LOCAL_DEV_ORIGINS,
+                PRODUCTION_FRONTEND_ORIGINS,
+            )
 
             if domain:
                 railway_origin = f"https://{domain}"
@@ -695,6 +698,11 @@ class Settings(BaseSettings):
             for frontend_origin in PRODUCTION_FRONTEND_ORIGINS:
                 if frontend_origin not in origins:
                     origins.append(frontend_origin)
+            # Local SPA → production API (e.g. next dev on :3000). Browser Origin
+            # is unforgeable; only localhost / 127.0.0.1 are seeded.
+            for local_origin in LOCAL_DEV_ORIGINS:
+                if local_origin not in origins:
+                    origins.append(local_origin)
             redirect = (self.auth_redirect_url or "").strip()
             if redirect:
                 parsed = urlparse(redirect)

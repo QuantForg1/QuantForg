@@ -102,8 +102,8 @@ export default function AiPage() {
                 key={i}
                 className={
                   m.role === "user"
-                    ? "ml-auto max-w-[80%] rounded-xl bg-[var(--accent)] px-3 py-2 text-sm text-[var(--accent-fg)]"
-                    : "mr-auto max-w-[80%] whitespace-pre-wrap rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--fg)]"
+                    ? "ml-auto max-w-[80%] rounded-[var(--radius-os)] bg-[var(--accent)] px-3 py-2 text-sm text-[var(--accent-fg)]"
+                    : "mr-auto max-w-[80%] whitespace-pre-wrap rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--fg)]"
                 }
               >
                 {m.content}

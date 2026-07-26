@@ -328,7 +328,7 @@ export default function StrategyPage() {
                   <button
                     key={str(c.key)}
                     type="button"
-                    className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
+                    className={`w-full rounded-[var(--radius-os)] border px-3 py-2.5 text-left transition ${
                       strategyKey === str(c.key)
                         ? "border-[var(--accent)] bg-[var(--accent-soft)]"
                         : "border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--accent)]/40"
@@ -384,7 +384,7 @@ export default function StrategyPage() {
                   "Select a strategy. Bars load from MT5 when connected — never fabricated."}
               </p>
               <textarea
-                className="min-h-[220px] w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-xs text-[var(--fg)]"
+                className="min-h-[220px] w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 font-mono text-xs text-[var(--fg)]"
                 value={
                   strategyKey === "custom_rules" ? customRulesJson : paramsJson
                 }
@@ -410,7 +410,7 @@ export default function StrategyPage() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3"
+                  className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="accent">{str(signalBlock.action)}</Badge>
@@ -510,7 +510,7 @@ export default function StrategyPage() {
                 <button
                   key={t.id}
                   type="button"
-                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-left transition hover:border-[var(--accent)]/40"
+                  className="w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-left transition hover:border-[var(--accent)]/40"
                   onClick={() => {
                     setStructureBias(t.bias);
                     setRules((r) => ({ ...r, ...t.patch }));
@@ -573,7 +573,7 @@ export default function StrategyPage() {
                     key={key}
                     type="button"
                     onClick={() => toggle(key)}
-                    className={`rounded-lg border px-3 py-3 text-left text-sm transition ${
+                    className={`rounded-[var(--radius-os)] border px-3 py-3 text-left text-sm transition ${
                       rules[key]
                         ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--fg)]"
                         : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--fg-muted)]"
@@ -592,7 +592,7 @@ export default function StrategyPage() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3"
+                  className="mt-4 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="accent">{str(lastResult.decision)}</Badge>

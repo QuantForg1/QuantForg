@@ -49,7 +49,7 @@ export const LearningMemory = memo(function LearningMemory({
   return (
     <section
       className={cn(
-        "flex h-full min-h-0 flex-col rounded-md border border-[var(--border)] bg-[var(--surface)] p-3",
+        "flex h-full min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3",
         focused && "ring-1 ring-[var(--accent)]",
         className,
       )}
@@ -57,7 +57,7 @@ export const LearningMemory = memo(function LearningMemory({
     >
       <header className="mb-2 shrink-0">
         <h2 className="qf-label text-[var(--fg)]">Learning Memory</h2>
-        <p className="qf-caption">Paper edge · session notes</p>
+        <p className="qf-caption text-[var(--fg-subtle)]">Paper edge · session notes</p>
       </header>
       {rows.length === 0 ? (
         <CounselEmpty

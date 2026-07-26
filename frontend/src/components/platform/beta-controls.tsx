@@ -60,7 +60,7 @@ export function BetaInviteGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8">
-      <div className="w-full max-w-sm space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+      <div className="w-full max-w-sm space-y-3 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-6">
         <h1 className="text-lg font-semibold">Closed beta access</h1>
         <p className="text-sm text-[var(--fg-muted)]">
           Enter your invite code to unlock the QuantForg closed beta.

@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { Keyboard, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SessionBar } from "@/components/broker/session-bar";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskShellHeader } from "@/components/desk/panel";
+import { DeskShortcutsDialog } from "@/components/desk/shortcuts-dialog";
 import { PromotionPipeline } from "@/components/research/promotion-pipeline";
 import { StrategyDna } from "@/components/research/strategy-dna";
 import { ConfidenceTimeline } from "@/components/research/confidence-timeline";
@@ -294,84 +295,84 @@ export function ResearchShell() {
       aria-label="QuantForg Research"
     >
       <header className="shrink-0">
-        <div className="flex h-9 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="text-xs font-semibold tracking-tight text-[var(--fg)]">
-              Research
-            </h1>
-            <span className="qf-caption hidden sm:inline">
-              Idea → Promote · advisory only
-            </span>
-            <Input
-              className="h-7 w-24 font-mono text-[11px]"
-              value={layout.symbol}
-              onChange={(e) =>
-                patch({ symbol: e.target.value.toUpperCase().slice(0, 16) })
-              }
-              aria-label="Focus symbol"
-            />
-            <select
-              className="h-7 max-w-[10rem] truncate rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[11px]"
-              value={strategyKey}
-              onChange={(e) => patch({ strategyKey: e.target.value })}
-              aria-label="Strategy"
-            >
-              <option value="">Select strategy…</option>
-              {libraryItems.map((i) => {
-                const k = str(i.strategy_key ?? i.key);
-                return (
-                  <option key={`lib-${k}`} value={k}>
-                    {str(i.name, k)}
-                  </option>
-                );
-              })}
-              {catalogItems.map((i) => {
-                const k = str(i.strategy_key ?? i.key ?? i.id);
-                if (!k || libraryItems.some((l) => str(l.strategy_key) === k)) {
-                  return null;
+        <DeskShellHeader
+          title="Research"
+          subtitle="Idea → Promote · advisory only"
+          meta={
+            <>
+              <Input
+                className="h-7 w-24 font-mono text-[11px]"
+                value={layout.symbol}
+                onChange={(e) =>
+                  patch({ symbol: e.target.value.toUpperCase().slice(0, 16) })
                 }
-                return (
-                  <option key={`cat-${k}`} value={k}>
-                    {str(i.name, k)}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-          <div className="flex items-center gap-0.5">
-            <Button
-              size="sm"
-              className="h-7 text-[11px]"
-              disabled={!strategyKey || validateMut.isPending}
-              onClick={() => validateMut.mutate()}
-            >
-              Validate
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label="Refresh research"
-              onClick={refreshAll}
-            >
-              <RefreshCw
-                className={cn(
-                  "h-3.5 w-3.5",
-                  dashQ.isFetching && "animate-spin",
-                )}
+                aria-label="Focus symbol"
               />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label="Keyboard shortcuts"
-              onClick={() => setHelpOpen(true)}
-            >
-              <Keyboard className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+              <select
+                className="h-7 max-w-[10rem] truncate rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[11px]"
+                value={strategyKey}
+                onChange={(e) => patch({ strategyKey: e.target.value })}
+                aria-label="Strategy"
+              >
+                <option value="">Select strategy…</option>
+                {libraryItems.map((i) => {
+                  const k = str(i.strategy_key ?? i.key);
+                  return (
+                    <option key={`lib-${k}`} value={k}>
+                      {str(i.name, k)}
+                    </option>
+                  );
+                })}
+                {catalogItems.map((i) => {
+                  const k = str(i.strategy_key ?? i.key ?? i.id);
+                  if (!k || libraryItems.some((l) => str(l.strategy_key) === k)) {
+                    return null;
+                  }
+                  return (
+                    <option key={`cat-${k}`} value={k}>
+                      {str(i.name, k)}
+                    </option>
+                  );
+                })}
+              </select>
+            </>
+          }
+          actions={
+            <>
+              <Button
+                size="sm"
+                className="h-7 text-[11px]"
+                disabled={!strategyKey || validateMut.isPending}
+                onClick={() => validateMut.mutate()}
+              >
+                Validate
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label="Refresh research"
+                onClick={refreshAll}
+              >
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    dashQ.isFetching && "animate-spin",
+                  )}
+                />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label="Keyboard shortcuts"
+                onClick={() => setHelpOpen(true)}
+              >
+                <Keyboard className="h-4 w-4" />
+              </Button>
+            </>
+          }
+        />
         <SessionBar />
         <PromotionPipeline
           stage={stage}
@@ -384,7 +385,7 @@ export function ResearchShell() {
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-hidden p-2 sm:p-3">
+      <div className="min-h-0 flex-1 overflow-hidden p-[var(--space-2)]">
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <DeskSkeleton rows={6} />
@@ -397,7 +398,7 @@ export function ResearchShell() {
             />
           </div>
         ) : (
-          <div className="grid h-full min-h-0 gap-2 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid h-full min-h-0 gap-[var(--space-2)] lg:grid-cols-2 xl:grid-cols-3">
             <StrategyDna
               catalogItem={catalogItem}
               libraryItem={libraryItem}
@@ -449,24 +450,12 @@ export function ResearchShell() {
         )}
       </div>
 
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>Research shortcuts</DialogTitle>
-          <ul className="mt-3 space-y-2">
-            {SHORTCUTS.map((row) => (
-              <li
-                key={row.keys}
-                className="flex items-baseline justify-between gap-4 text-sm"
-              >
-                <kbd className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[11px]">
-                  {row.keys}
-                </kbd>
-                <span className="text-[var(--fg-muted)]">{row.action}</span>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
+      <DeskShortcutsDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        title="Research shortcuts"
+        shortcuts={SHORTCUTS}
+      />
     </div>
   );
 }

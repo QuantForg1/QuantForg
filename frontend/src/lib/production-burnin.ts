@@ -270,7 +270,7 @@ export function buildBurnInModel(input: {
     str(mt5.status).toLowerCase() === "connected" ||
     brokerOk;
 
-  let store: BurnInStore = {
+  const store: BurnInStore = {
     ...input.store,
     counters: { ...EMPTY_COUNTERS, ...input.store.counters },
     rejectionCounts: { ...input.store.rejectionCounts },

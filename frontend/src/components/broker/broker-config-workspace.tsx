@@ -343,7 +343,7 @@ export function BrokerConfigWorkspace() {
             <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
               Operations · Broker
             </p>
-            <h1 className="mt-1 font-display text-xl tracking-tight text-[var(--fg)]">
+            <h1 className="mt-1 text-xl font-semibold tracking-tight text-[var(--fg)]">
               Broker Workspace
             </h1>
             <p className="mt-1 text-sm text-[var(--fg-muted)]">

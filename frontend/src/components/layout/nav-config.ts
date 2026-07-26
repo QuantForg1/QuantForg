@@ -66,9 +66,102 @@ export type NavGroup = {
   items: NavItem[];
 };
 
+export type PrimaryNavItem = NavItem & {
+  /** Path prefixes that count as active for this desk (beyond href). */
+  match?: string[];
+  /** ⌘N desk jump hint shown in rail tooltip */
+  shortcut?: string;
+};
+
 /**
- * QuantForg OS V3 — workspace information architecture.
- * Each route has one responsibility. Terminal remains the sole live execution surface.
+ * ADR-0016 — eight primary surfaces only in the trader rail.
+ * Everything else is ⌘K, pin/favorite/recent, deep link, or nested desk.
+ */
+export const primaryRail: PrimaryNavItem[] = [
+  {
+    href: "/terminal",
+    label: "Terminal",
+    icon: LayoutTemplate,
+    hint: "Trade — chart · ticket · blotter",
+    match: ["/terminal", "/workspace", "/execution"],
+    shortcut: "1",
+  },
+  {
+    href: "/portfolio",
+    label: "Book",
+    icon: Briefcase,
+    hint: "Understand portfolio · risk · exposure",
+    match: [
+      "/portfolio",
+      "/book",
+      "/performance",
+      "/exposure",
+      "/allocation",
+      "/risk-center",
+    ],
+    shortcut: "2",
+  },
+  {
+    href: "/research",
+    label: "Research",
+    icon: FlaskConical,
+    hint: "Idea → promote pipeline",
+    match: ["/research", "/screeners"],
+    shortcut: "3",
+  },
+  {
+    href: "/ai-signals",
+    label: "Counsel",
+    icon: Scale,
+    hint: "Decide — advisory only, never executes",
+    match: ["/ai-signals", "/counsel"],
+    shortcut: "4",
+  },
+  {
+    href: "/journal",
+    label: "Journal",
+    icon: NotebookPen,
+    hint: "Session memory and trade notes",
+    match: ["/journal", "/trade-replay"],
+    shortcut: "5",
+  },
+  {
+    href: "/broker",
+    label: "Broker",
+    icon: Building2,
+    hint: "Attach session · connectivity",
+    match: ["/broker", "/gateway"],
+    shortcut: "6",
+  },
+  {
+    href: "/notifications",
+    label: "Inbox",
+    icon: Bell,
+    hint: "Alerts and notifications",
+    match: ["/notifications", "/alerts"],
+    shortcut: "7",
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: Settings,
+    hint: "Profile, org, preferences",
+    match: ["/settings", "/integrations", "/shortcuts"],
+    shortcut: "8",
+  },
+];
+
+export function isPrimaryActive(pathname: string, item: PrimaryNavItem): boolean {
+  const prefixes = item.match ?? [item.href];
+  return prefixes.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+/**
+ * Full product catalog for command palette / deep links.
+ * NOT rendered in the left rail. Routes stay alive; features stay reachable.
+ * Terminal remains the sole live execution surface.
  */
 export const appNav: NavGroup[] = [
   {
@@ -787,7 +880,7 @@ export const appNav: NavGroup[] = [
   },
 ];
 
-/** Compact mobile bottom bar — one-hand primary surfaces. */
+/** Compact mobile bottom bar — thumb-first primary desks. */
 export const mobileTabNav: NavItem[] = [
   {
     href: "/terminal",
@@ -799,7 +892,7 @@ export const mobileTabNav: NavItem[] = [
     href: "/portfolio",
     label: "Book",
     icon: Briefcase,
-    hint: "Portfolio",
+    hint: "Book",
   },
   {
     href: "/research",
@@ -808,10 +901,10 @@ export const mobileTabNav: NavItem[] = [
     hint: "Research",
   },
   {
-    href: "/journal",
-    label: "Journal",
-    icon: NotebookPen,
-    hint: "Journal",
+    href: "/ai-signals",
+    label: "Counsel",
+    icon: Scale,
+    hint: "Counsel",
   },
   {
     href: "/broker",
@@ -821,24 +914,36 @@ export const mobileTabNav: NavItem[] = [
   },
 ];
 
-export const commandItems: NavItem[] = [
-  ...appNav.flatMap((g) => g.items),
-  {
-    href: "/counsel",
-    label: "Counsel",
-    icon: Scale,
-    hint: "Decision intelligence (advise only)",
-  },
-  {
-    href: "/auto-trading",
-    label: "Auto Trading",
-    icon: Sparkles,
-    hint: "Operator auto-trade controls",
-  },
-  {
-    href: "/ops",
-    label: "Ops control",
-    icon: Gauge,
-    hint: "ITE control plane · kill switch",
-  },
-];
+/** Deduped catalog for ⌘K — every living route remains searchable. */
+export const commandItems: NavItem[] = (() => {
+  const map = new Map<string, NavItem>();
+  for (const item of primaryRail) map.set(item.href, item);
+  for (const g of appNav) {
+    for (const item of g.items) map.set(item.href, item);
+  }
+  const extras: NavItem[] = [
+    {
+      href: "/counsel",
+      label: "Counsel",
+      icon: Scale,
+      hint: "Decision intelligence (advise only)",
+    },
+    {
+      href: "/auto-trading",
+      label: "Auto Trading",
+      icon: Sparkles,
+      hint: "Operator auto-trade controls",
+    },
+    {
+      href: "/ops",
+      label: "Ops control",
+      icon: Gauge,
+      hint: "ITE control plane · kill switch",
+    },
+  ];
+  for (const item of extras) map.set(item.href, item);
+  return [...map.values()];
+})();
+
+/** Flat list used by command palette page search. */
+export const commandCatalog: NavItem[] = commandItems;

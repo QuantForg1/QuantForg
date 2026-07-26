@@ -183,7 +183,7 @@ export const MarketWatch = memo(function MarketWatch({
           ))}
         </div>
         {connected && selected ? (
-          <div className="grid grid-cols-3 gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
+          <div className="grid grid-cols-3 gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
             <div>
               <p className="text-[var(--fg-subtle)]">Bid</p>
               <p className="tabular text-sm font-semibold text-[var(--danger)]">
@@ -222,7 +222,7 @@ export const MarketWatch = memo(function MarketWatch({
           <p className="py-8 text-center text-sm text-[var(--fg-muted)]">No symbols match.</p>
         ) : (
           <div className="flex max-h-[22rem] flex-col gap-2">
-            <div className="overflow-y-auto rounded-lg border border-[var(--border)]">
+            <div className="overflow-y-auto rounded-[var(--radius-os)] border border-[var(--border)]">
               <table className="w-full text-left text-xs" aria-label="Market watch">
                 <thead className="sticky top-0 z-10 bg-[var(--surface-2)]/95 backdrop-blur">
                   <tr className="text-[var(--fg-subtle)]">

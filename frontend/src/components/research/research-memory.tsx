@@ -6,7 +6,7 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import { ResearchEmpty } from "@/components/research/empty-state";
 
 /**
- * Research Memory — dashboard leaders, regime, paper snapshot, library preview.
+ * Research Memory â€” dashboard leaders, regime, paper snapshot, library preview.
  * Real research-lab fields only.
  */
 export const ResearchMemory = memo(function ResearchMemory({
@@ -32,25 +32,25 @@ export const ResearchMemory = memo(function ResearchMemory({
     if (Object.keys(candidate).length) {
       rows.push({
         title: "Candidate",
-        body: str(candidate.name, str(candidate.strategy_key, "—")),
+        body: str(candidate.name, str(candidate.strategy_key, "â€”")),
       });
     }
     if (Object.keys(best).length) {
       rows.push({
         title: "Best on file",
-        body: str(best.name, str(best.strategy_key, "—")),
+        body: str(best.name, str(best.strategy_key, "â€”")),
       });
     }
     if (Object.keys(worst).length) {
       rows.push({
         title: "Weakest on file",
-        body: str(worst.name, str(worst.strategy_key, "—")),
+        body: str(worst.name, str(worst.strategy_key, "â€”")),
       });
     }
     if (regime && Object.keys(regime).length) {
       rows.push({
         title: "Regime",
-        body: str(regime.label ?? regime.regime ?? regime.name, "—"),
+        body: str(regime.label ?? regime.regime ?? regime.name, "â€”"),
       });
     }
     if (paper && Object.keys(paper).length) {
@@ -58,14 +58,14 @@ export const ResearchMemory = memo(function ResearchMemory({
         title: "Paper desk",
         body: str(
           paper.status ?? paper.summary,
-          `trades ${str(asRecord(paper.metrics).trade_count, "—")}`,
+          `trades ${str(asRecord(paper.metrics).trade_count, "â€”")}`,
         ),
       });
     }
     for (const p of preview.slice(0, 4)) {
       rows.push({
         title: "Library",
-        body: `${str(p.name, str(p.strategy_key))} · ${
+        body: `${str(p.name, str(p.strategy_key))} Â· ${
           p.updated_at
             ? formatRelativeTime(String(p.updated_at))
             : str(p.status, "saved")
@@ -78,14 +78,14 @@ export const ResearchMemory = memo(function ResearchMemory({
   return (
     <section
       className={cn(
-        "flex h-full min-h-0 flex-col rounded-md border border-[var(--border)] bg-[var(--surface)] p-3",
+        "flex h-full min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3",
         className,
       )}
       aria-label="Research Memory"
     >
       <header className="mb-2 shrink-0">
         <h2 className="qf-label text-[var(--fg)]">Research Memory</h2>
-        <p className="qf-caption">Leaders, regime, paper — from research lab</p>
+        <p className="qf-caption">Leaders, regime, paper â€” from research lab</p>
       </header>
       {memories.length === 0 ? (
         <ResearchEmpty

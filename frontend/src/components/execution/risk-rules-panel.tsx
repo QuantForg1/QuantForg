@@ -108,7 +108,7 @@ export const RiskRulesPanel = memo(function RiskRulesPanel({
     return (
       <div
         className={cn(
-          "rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3",
+          "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3",
           className,
         )}
       >
@@ -126,7 +126,7 @@ export const RiskRulesPanel = memo(function RiskRulesPanel({
   return (
     <div
       className={cn(
-        "rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3",
+        "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3",
         className,
       )}
       aria-live="polite"

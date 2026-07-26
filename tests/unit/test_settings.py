@@ -184,8 +184,20 @@ class TestSettings:
         assert "https://quantforg-production.up.railway.app" in settings.cors_origins
         assert "https://www.quantforg.com" in settings.cors_origins
         assert "https://quantforg.com" in settings.cors_origins
+        assert "http://localhost:3000" in settings.cors_origins
+        assert "http://127.0.0.1:3000" in settings.cors_origins
 
-    def test_cors_allowed_origins_alias(self) -> None:
+    def test_production_cors_keeps_localhost_when_env_omits_it(self) -> None:
+        settings = production_settings(
+            secret_key="a-real-production-secret-key-with-enough-entropy-here",
+            postgres_password="a-real-production-password-here",
+            railway_public_domain="quantforg-production.up.railway.app",
+            cors_origins="https://www.quantforg.com",  # type: ignore[arg-type]
+        )
+        assert "https://www.quantforg.com" in settings.cors_origins
+        assert "http://localhost:3000" in settings.cors_origins
+        assert "http://localhost:8000" in settings.cors_origins
+
         settings = Settings(
             _env_file=None,
             secret_key="test-secret-key-that-is-long-enough-for-validation-32chars",

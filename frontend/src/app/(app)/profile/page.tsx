@@ -194,7 +194,7 @@ export default function ProfilePage() {
                 >
                   Update password
                 </Button>
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm text-[var(--fg-muted)]">
+                <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm text-[var(--fg-muted)]">
                   <p className="font-medium text-[var(--fg)]">2FA</p>
                   <p className="mt-1 text-xs">
                     Two-factor authentication is managed through your Supabase auth provider settings.

@@ -21,7 +21,7 @@ export const SessionStrip = memo(function SessionStrip({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-3 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
       role="status"

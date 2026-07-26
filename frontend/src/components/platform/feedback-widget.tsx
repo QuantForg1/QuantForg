@@ -36,7 +36,7 @@ export function FeedbackWidget() {
           role="dialog"
           aria-modal="true"
           aria-label="Send feedback"
-          className="w-[min(92vw,22rem)] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]"
+          className="w-[min(92vw,22rem)] rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]"
         >
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-[var(--fg)]">Send feedback</p>

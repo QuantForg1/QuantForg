@@ -58,7 +58,11 @@
   --space-8: 4rem;
 
   --ease-os: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-os-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-os-in: cubic-bezier(0.4, 0, 1, 1);
+  --duration-fast: 160ms;
   --duration-os: 200ms;
+  --duration-slow: 220ms;
 }
 
 .light {
@@ -206,7 +210,27 @@ body {
 }
 
 .qf-fade-in {
-  animation: qf-fade-in var(--duration-os) var(--ease-os);
+  animation: qf-fade-in var(--duration-os) var(--ease-os) both;
+}
+
+.qf-motion-overlay {
+  animation: qf-fade-in var(--duration-fast) var(--ease-os) both;
+}
+
+.qf-motion-pop {
+  animation: qf-motion-pop var(--duration-os) var(--ease-os-out) both;
+}
+
+.qf-motion-slide-up {
+  animation: qf-motion-slide-up var(--duration-os) var(--ease-os-out) both;
+}
+
+.qf-motion-slide-down {
+  animation: qf-motion-slide-down var(--duration-os) var(--ease-os-out) both;
+}
+
+.qf-motion-desk {
+  animation: qf-motion-desk var(--duration-os) var(--ease-os) both;
 }
 
 @keyframes qf-fade-in {
@@ -215,6 +239,50 @@ body {
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes qf-motion-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes qf-motion-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes qf-motion-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes qf-motion-desk {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -258,15 +326,33 @@ body {
 }
 
 .qf-card-interactive {
-  transition: border-color var(--duration-os) var(--ease-os);
+  transition:
+    border-color var(--duration-os) var(--ease-os),
+    background-color var(--duration-os) var(--ease-os);
 }
 
 .qf-card-interactive:hover {
   border-color: var(--border-strong);
 }
 
+.qf-card-interactive:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 .qf-elevate {
   border-radius: var(--radius-os);
+}
+
+.qf-panel-live {
+  transition:
+    border-color var(--duration-os) var(--ease-os),
+    box-shadow var(--duration-os) var(--ease-os);
+}
+
+.qf-panel-live[data-focused="true"] {
+  border-color: var(--border-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .qf-cmd-group {
@@ -291,14 +377,24 @@ body {
   padding: 0.5rem 0.65rem;
   font-size: 0.8125rem;
   color: var(--fg-muted);
-  transition: background-color var(--duration-os) var(--ease-os),
-    color var(--duration-os) var(--ease-os);
+  transition:
+    background-color var(--duration-fast) var(--ease-os),
+    color var(--duration-fast) var(--ease-os),
+    transform var(--duration-fast) var(--ease-os);
 }
 
 .qf-cmd-item[aria-selected="true"],
 .qf-cmd-item[data-selected="true"] {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* OS rail — active inset indicator uses box-shadow on links */
+.qf-rail-link {
+  transition:
+    background-color var(--duration-os) var(--ease-os),
+    color var(--duration-os) var(--ease-os),
+    box-shadow var(--duration-os) var(--ease-os);
 }
 
 .qf-pulse-once {
@@ -315,7 +411,7 @@ body {
 }
 
 .qf-exec-flash {
-  animation: qf-exec-flash 420ms var(--ease-os);
+  animation: qf-exec-flash var(--duration-slow) var(--ease-os);
 }
 
 @keyframes qf-exec-flash {
@@ -327,6 +423,19 @@ body {
   }
 }
 
+.qf-kpi-flash {
+  animation: qf-kpi-flash var(--duration-slow) var(--ease-os);
+}
+
+@keyframes qf-kpi-flash {
+  0% {
+    color: var(--accent);
+  }
+  100% {
+    color: inherit;
+  }
+}
+
 .qf-contain {
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
@@ -334,9 +443,15 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .qf-fade-in,
+  .qf-motion-overlay,
+  .qf-motion-pop,
+  .qf-motion-slide-up,
+  .qf-motion-slide-down,
+  .qf-motion-desk,
   .qf-shimmer,
   .qf-pulse-once,
-  .qf-exec-flash {
+  .qf-exec-flash,
+  .qf-kpi-flash {
     animation: none !important;
   }
 

@@ -74,7 +74,7 @@ export const PortfolioImpact = memo(function PortfolioImpact({
   return (
     <section
       className={cn(
-        "flex h-full min-h-0 flex-col rounded-md border border-[var(--border)] bg-[var(--surface)] p-3",
+        "flex h-full min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3",
         focused && "ring-1 ring-[var(--accent)]",
         className,
       )}
@@ -82,7 +82,7 @@ export const PortfolioImpact = memo(function PortfolioImpact({
     >
       <header className="mb-2 shrink-0">
         <h2 className="qf-label text-[var(--fg)]">Portfolio Impact</h2>
-        <p className="qf-caption">Live book · never invents exposure</p>
+        <p className="qf-caption text-[var(--fg-subtle)]">Live book · never invents exposure</p>
       </header>
       {!hasBook ? (
         <CounselEmpty

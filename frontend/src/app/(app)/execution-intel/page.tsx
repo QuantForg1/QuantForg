@@ -231,7 +231,7 @@ export default function ExecutionIntelPage() {
                       key={str(row.lifecycle_id)}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs"
+                      className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-xs"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-medium">
@@ -300,7 +300,7 @@ export default function ExecutionIntelPage() {
                   return (
                     <div
                       key={i}
-                      className="rounded-lg border border-[var(--border)] p-3 text-xs"
+                      className="rounded-[var(--radius-os)] border border-[var(--border)] p-3 text-xs"
                     >
                       <div className="flex justify-between gap-2">
                         <span className="font-medium">

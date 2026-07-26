@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/** Phase 1 card language — steel surface, border separation, no blur stacks. */
 export function Card({
   className,
   ...props
@@ -8,7 +9,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-[var(--border)] bg-[var(--surface)]/85 backdrop-blur-xl shadow-[var(--shadow-card)] transition-[border-color,box-shadow] duration-200",
+        "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] transition-[border-color,box-shadow] duration-[var(--duration-os)] ease-[var(--ease-os)]",
         className,
       )}
       {...props}
@@ -20,7 +21,15 @@ export function CardHeader({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col gap-1.5 p-5 pb-3", className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 border-b border-[var(--border)] px-[var(--space-4)] py-[var(--space-3)]",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function CardTitle({
@@ -28,7 +37,13 @@ export function CardTitle({
   ...props
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h3 className={cn("text-base font-semibold tracking-tight text-[var(--fg)]", className)} {...props} />
+    <h3
+      className={cn(
+        "text-sm font-semibold tracking-tight text-[var(--fg)]",
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
@@ -36,12 +51,19 @@ export function CardDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-[var(--fg-muted)]", className)} {...props} />;
+  return (
+    <p className={cn("qf-caption", className)} {...props} />
+  );
 }
 
 export function CardContent({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-5 pt-2", className)} {...props} />;
+  return (
+    <div
+      className={cn("p-[var(--space-4)]", className)}
+      {...props}
+    />
+  );
 }

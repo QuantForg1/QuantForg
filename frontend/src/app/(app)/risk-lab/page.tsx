@@ -348,7 +348,7 @@ export default function RiskLabPage() {
                     return (
                       <li
                         key={str(r.symbol)}
-                        className="rounded-lg border border-[var(--border)] p-3 text-xs"
+                        className="rounded-[var(--radius-os)] border border-[var(--border)] p-3 text-xs"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium text-[var(--fg)]">

@@ -21,7 +21,7 @@ export const DecisionPulse = memo(function DecisionPulse({
     return (
       <section
         className={cn(
-          "rounded-md border border-[var(--border)] bg-[var(--surface)] p-3",
+          "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3",
           focused && "ring-1 ring-[var(--accent)]",
           className,
         )}
@@ -41,7 +41,7 @@ export const DecisionPulse = memo(function DecisionPulse({
   return (
     <section
       className={cn(
-        "rounded-md border border-[var(--border)] bg-[var(--surface)] p-3",
+        "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3",
         focused && "ring-1 ring-[var(--accent)]",
         className,
       )}

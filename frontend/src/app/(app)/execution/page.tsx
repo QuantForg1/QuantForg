@@ -1,25 +1,37 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { DeskSkeleton } from "@/components/desk/primitives";
 
-const WorkspaceShell = dynamic(
-  () => import("@/components/workspace/shell").then((m) => m.WorkspaceShell),
+/**
+ * Legacy /execution path — same Terminal OS as /terminal.
+ * next.config also redirects here → /terminal; this keeps deep links consistent.
+ */
+const TerminalShell = dynamic(
+  () => import("@/components/terminal/shell").then((m) => m.TerminalShell),
   {
     ssr: false,
     loading: () => (
-      <div className="p-4">
+      <div className="flex h-full items-center justify-center p-6">
         <DeskSkeleton variant="page" />
       </div>
     ),
   },
 );
 
-/** Institutional Trading Terminal — same multipanel shell as /workspace. */
 export default function ExecutionPage() {
   return (
-    <div className="-mx-4 -mb-6 flex h-[calc(100dvh-3.5rem)] min-h-[36rem] flex-col md:-mx-6">
-      <WorkspaceShell />
+    <div className="h-full min-h-0 w-full">
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center p-6">
+            <DeskSkeleton variant="page" />
+          </div>
+        }
+      >
+        <TerminalShell />
+      </Suspense>
     </div>
   );
 }

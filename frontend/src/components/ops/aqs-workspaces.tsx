@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { MetricCard, OpsPanel } from "@/components/ops/auto-trading-ops-ui";
 import { aqsApi } from "@/lib/api/endpoints";
-import { asList, asRecord, num, str } from "@/lib/desk";
+import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 
 const LINKS = [

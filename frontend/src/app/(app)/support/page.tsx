@@ -120,7 +120,7 @@ export default function SupportPage() {
                   {deps.map((d) => (
                     <li
                       key={str(d.name)}
-                      className="flex items-center justify-between rounded-lg border border-[var(--border)] px-3 py-2"
+                      className="flex items-center justify-between rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2"
                     >
                       <span className="text-sm">{str(d.name)}</span>
                       <Badge

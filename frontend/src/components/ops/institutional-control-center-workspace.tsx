@@ -35,7 +35,7 @@ function KpiBar({ label, value }: { label: string; value: number }) {
       </div>
       <div className="h-1.5 w-full bg-[var(--surface-2)]">
         <div
-          className={cn("h-full transition-all duration-200", tone)}
+          className={cn("h-full transition-all duration-[var(--duration-os)]", tone)}
           style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
           role="progressbar"
           aria-valuenow={Number.isFinite(value) ? value : 0}

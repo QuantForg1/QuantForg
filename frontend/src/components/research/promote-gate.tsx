@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { ResearchEmpty } from "@/components/research/empty-state";
 
 /**
- * Promote Gate — eligibility evaluate only. Deploy to Terminal is human-led.
+ * Promote Gate â€” eligibility evaluate only. Deploy to Terminal is human-led.
  */
 export const PromoteGate = memo(function PromoteGate({
   criteria,
@@ -41,7 +41,7 @@ export const PromoteGate = memo(function PromoteGate({
   return (
     <section
       className={cn(
-        "flex h-full min-h-0 flex-col rounded-md border border-[var(--border)] bg-[var(--surface)] p-3",
+        "flex h-full min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3",
         className,
       )}
       aria-label="Promote to Terminal"
@@ -49,7 +49,7 @@ export const PromoteGate = memo(function PromoteGate({
       <header className="mb-2 flex shrink-0 items-center justify-between gap-2">
         <div>
           <h2 className="qf-label text-[var(--fg)]">Promote</h2>
-          <p className="qf-caption">Eligibility only — never auto-deploys</p>
+          <p className="qf-caption">Eligibility only â€” never auto-deploys</p>
         </div>
         <div className="flex gap-1">
           <Button
@@ -58,7 +58,7 @@ export const PromoteGate = memo(function PromoteGate({
             disabled={!strategyKey || evaluating}
             onClick={onEvaluate}
           >
-            {evaluating ? "Evaluating…" : "Evaluate"}
+            {evaluating ? "Evaluatingâ€¦" : "Evaluate"}
           </Button>
           <Button size="sm" variant="secondary" className="h-7 text-[11px]" asChild>
             <Link href="/terminal">Terminal</Link>
@@ -108,7 +108,7 @@ export const PromoteGate = memo(function PromoteGate({
                   ? "Eligible for Decision Engine gate"
                   : str(
                       promoteResult.message,
-                      "Not eligible — Decision Engine remains gatekeeper",
+                      "Not eligible â€” Decision Engine remains gatekeeper",
                     )}
               </p>
               {checks.length > 0 ? (
@@ -117,7 +117,7 @@ export const PromoteGate = memo(function PromoteGate({
                     <li key={i} className="flex justify-between gap-2 text-[var(--fg-muted)]">
                       <span>{str(c.name ?? c.criterion ?? c.id, `Check ${i + 1}`)}</span>
                       <span className="tabular">
-                        {str(c.status ?? c.passed ?? c.result, "—")}
+                        {str(c.status ?? c.passed ?? c.result, "â€”")}
                       </span>
                     </li>
                   ))}

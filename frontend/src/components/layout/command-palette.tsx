@@ -4,7 +4,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { Clock, Pin, Star } from "lucide-react";
-import { commandItems, appNav } from "@/components/layout/nav-config";
+import {
+  appNav,
+  commandCatalog,
+  primaryRail,
+} from "@/components/layout/nav-config";
 import { useNavMemory } from "@/hooks/use-nav-memory";
 import { labelForHref } from "@/lib/workspace/nav-memory";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
@@ -52,13 +56,10 @@ export function CommandPalette({
     };
   }, [open, onOpenChange]);
 
-  const allPages = useMemo(() => {
-    const fromNav = appNav.flatMap((g) => g.items);
-    const map = new Map<string, { href: string; label: string; hint?: string }>();
-    for (const item of [...fromNav, ...commandItems]) {
-      map.set(item.href, { href: item.href, label: item.label, hint: item.hint });
-    }
-    return [...map.values()];
+  const iconByHref = useMemo(() => {
+    const map = new Map<string, (typeof commandCatalog)[number]["icon"]>();
+    for (const item of commandCatalog) map.set(item.href, item.icon);
+    return map;
   }, []);
 
   const go = (href: string, label?: string) => {
@@ -71,7 +72,7 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 p-4 pt-[10vh] backdrop-blur-[6px]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-[12vh] qf-motion-overlay"
       role="presentation"
     >
       <button
@@ -84,26 +85,26 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-xl qf-elevate"
+        className="relative z-10 w-full max-w-xl qf-elevate qf-motion-slide-up"
       >
         <h2 id={titleId} className="sr-only">
           Command palette
         </h2>
         <Command
-          className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
+          className="overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-elevated)]"
           label="Global search"
         >
           <Command.Input
             ref={inputRef}
             value={query}
             onValueChange={setQuery}
-            placeholder="Jump to page, symbol, or action…"
+            placeholder="Jump to workspace, page, symbol, or action…"
             aria-label="Search pages, symbols, and actions"
             className="h-12 w-full border-b border-[var(--border)] bg-transparent px-4 text-sm text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)]"
           />
-          <Command.List className="max-h-[min(24rem,55vh)] overflow-y-auto p-1.5">
+          <Command.List className="max-h-[min(28rem,58vh)] overflow-y-auto p-1.5">
             <Command.Empty className="px-3 py-8 text-center text-sm text-[var(--fg-muted)]">
-              No matches.
+              No matches. Try a page name, symbol, or action.
             </Command.Empty>
 
             {memory.pinned.length > 0 ? (
@@ -154,6 +155,28 @@ export function CommandPalette({
               </Command.Group>
             ) : null}
 
+            <Command.Group heading="Workspaces" className="qf-cmd-group">
+              {primaryRail.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Command.Item
+                    key={`desk-${item.href}`}
+                    value={`workspace ${item.label} ${item.hint ?? ""} ${item.href}`}
+                    onSelect={() => go(item.href, item.label)}
+                    className="qf-cmd-item"
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    {item.shortcut ? (
+                      <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--fg-subtle)]">
+                        ⌘{item.shortcut}
+                      </kbd>
+                    ) : null}
+                  </Command.Item>
+                );
+              })}
+            </Command.Group>
+
             <Command.Group heading="Instrument" className="qf-cmd-group">
               <Command.Item
                 value={`symbol ${TRADING_SYMBOL} gold xauusd`}
@@ -161,34 +184,48 @@ export function CommandPalette({
                 className="qf-cmd-item"
               >
                 <span className="tabular text-[var(--accent)]">{TRADING_SYMBOL}</span>
-                <span className="text-[var(--fg-subtle)]">XAUUSD only</span>
+                <span className="text-[var(--fg-subtle)]">Open in Terminal</span>
               </Command.Item>
             </Command.Group>
 
-            <Command.Group heading="Pages" className="qf-cmd-group">
-              {allPages.map((item) => {
-                const Icon =
-                  commandItems.find((c) => c.href === item.href)?.icon ??
-                  appNav.flatMap((g) => g.items).find((c) => c.href === item.href)?.icon;
-                return (
-                  <Command.Item
-                    key={`page-${item.href}`}
-                    value={`${item.label} ${item.hint ?? ""} ${item.href}`}
-                    onSelect={() => go(item.href, item.label)}
-                    className="qf-cmd-item"
-                  >
-                    {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
-                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    {item.hint ? (
-                      <span className="hidden truncate text-[11px] text-[var(--fg-subtle)] sm:inline">
-                        {item.hint}
-                      </span>
-                    ) : null}
-                  </Command.Item>
-                );
-              })}
-            </Command.Group>
+            {appNav.map((group) => (
+              <Command.Group
+                key={group.title}
+                heading={group.title}
+                className="qf-cmd-group"
+              >
+                {group.items.map((item) => {
+                  const Icon = iconByHref.get(item.href) ?? item.icon;
+                  return (
+                    <Command.Item
+                      key={`page-${group.title}-${item.href}`}
+                      value={`${group.title} ${item.label} ${item.hint ?? ""} ${item.href}`}
+                      onSelect={() => go(item.href, item.label)}
+                      className="qf-cmd-item"
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {item.hint ? (
+                        <span className="hidden max-w-[40%] truncate text-[11px] text-[var(--fg-subtle)] sm:inline">
+                          {item.hint}
+                        </span>
+                      ) : null}
+                    </Command.Item>
+                  );
+                })}
+              </Command.Group>
+            ))}
           </Command.List>
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] px-3 py-2">
+            <p className="qf-caption">Jump anywhere · pin favorites from the rail</p>
+            <div className="flex items-center gap-2 text-[10px] text-[var(--fg-subtle)]">
+              <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 font-mono">↑↓</kbd>
+              <span>move</span>
+              <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 font-mono">↵</kbd>
+              <span>open</span>
+              <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 font-mono">esc</kbd>
+            </div>
+          </div>
         </Command>
       </div>
     </div>

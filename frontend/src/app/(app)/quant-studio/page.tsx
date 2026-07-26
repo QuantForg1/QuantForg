@@ -267,7 +267,7 @@ export default function QuantStudioPage() {
 
           {/* Module dock */}
           <div
-            className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]/60 p-1.5 backdrop-blur"
+            className="flex gap-1 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/60 p-1.5 backdrop-blur"
             role="tablist"
             aria-label="Quant Studio modules"
           >
@@ -281,7 +281,7 @@ export default function QuantStudioPage() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setModule(m.id)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-[var(--radius-os)] px-3 py-2 text-xs transition ${
                     active
                       ? "bg-[var(--surface-2)] text-[var(--fg)] shadow-sm"
                       : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)]/50"
@@ -370,7 +370,7 @@ export default function QuantStudioPage() {
                         {nodes.map((n, idx) => (
                           <div
                             key={n.id}
-                            className="rounded-lg border border-[var(--border)] bg-[linear-gradient(160deg,rgba(20,32,48,0.9),rgba(8,12,20,0.95))] p-3"
+                            className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[linear-gradient(160deg,rgba(20,32,48,0.9),rgba(8,12,20,0.95))] p-3"
                           >
                             <div className="mb-2 flex items-center justify-between">
                               <Badge tone="neutral">

@@ -1,28 +1,55 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, Pin, Star, X } from "lucide-react";
+import {
+  ChevronsLeft,
+  ChevronsRight,
+  Menu,
+  Pin,
+  Star,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { appNav } from "@/components/layout/nav-config";
+import {
+  isPrimaryActive,
+  primaryRail,
+  type PrimaryNavItem,
+} from "@/components/layout/nav-config";
 import { Button } from "@/components/ui/button";
 import { useNavMemory } from "@/hooks/use-nav-memory";
 import { labelForHref } from "@/lib/workspace/nav-memory";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  loadShellChrome,
+  saveShellChrome,
+  SHELL_SIDEBAR_COLLAPSED,
+  SHELL_SIDEBAR_DEFAULT,
+  SHELL_SIDEBAR_MAX,
+  SHELL_SIDEBAR_MIN,
+  type ShellChromeState,
+} from "@/lib/workspace/shell-chrome";
 
 function MemoryLinks({
   title,
   items,
+  collapsed,
   onNavigate,
 }: {
   title: string;
   items: { href: string; label: string }[];
+  collapsed?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  if (items.length === 0) return null;
+  if (items.length === 0 || collapsed) return null;
   return (
-    <div className="mb-3">
+    <div className="mb-[var(--space-3)]">
       <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
         {title}
       </p>
@@ -37,7 +64,7 @@ function MemoryLinks({
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+                  "flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 text-[12px] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)]",
                   active
                     ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                     : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
@@ -53,22 +80,77 @@ function MemoryLinks({
   );
 }
 
-function NavBody({ onNavigate }: { onNavigate?: () => void }) {
+function PrimaryLink({
+  item,
+  collapsed,
+  onNavigate,
+}: {
+  item: PrimaryNavItem;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
+  const pathname = usePathname();
+  const active = isPrimaryActive(pathname, item);
+  const Icon = item.icon;
+  const title = item.hint
+    ? `${item.label} — ${item.hint}${item.shortcut ? ` (⌘${item.shortcut})` : ""}`
+    : item.label;
+
+  return (
+    <li>
+      <Tooltip delayDuration={400}>
+        <TooltipTrigger asChild>
+          <Link
+            href={item.href}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
+            aria-label={title}
+            className={cn(
+              "qf-rail-link group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] text-[13px] font-medium",
+              collapsed ? "justify-center px-0 py-2.5" : "px-2.5 py-2",
+              active
+                ? "bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_2px_0_0_0_var(--accent)]"
+                : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
+            )}
+          >
+            <Icon
+              className={cn(
+                "h-4 w-4 shrink-0 transition-transform duration-[var(--duration-fast)] ease-[var(--ease-os)]",
+                active && "scale-105",
+              )}
+              aria-hidden
+            />
+            {!collapsed ? (
+              <>
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {item.shortcut ? (
+                  <kbd className="rounded border border-[var(--border)] px-1 py-px font-mono text-[10px] text-[var(--fg-subtle)] opacity-0 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100 group-focus-visible:opacity-100">
+                    ⌘{item.shortcut}
+                  </kbd>
+                ) : null}
+              </>
+            ) : (
+              <span className="sr-only">{item.label}</span>
+            )}
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent side="right" hidden={!collapsed}>
+          {title}
+        </TooltipContent>
+      </Tooltip>
+    </li>
+  );
+}
+
+function NavBody({
+  collapsed,
+  onNavigate,
+}: {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const memory = useNavMemory();
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    for (const g of appNav) initial[g.title] = true;
-    return initial;
-  });
-
-  useEffect(() => {
-    for (const g of appNav) {
-      if (g.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
-        setOpenGroups((prev) => ({ ...prev, [g.title]: true }));
-      }
-    }
-  }, [pathname]);
 
   const pinCurrent = () => {
     memory.togglePinned({ href: pathname, label: labelForHref(pathname) });
@@ -79,129 +161,209 @@ function NavBody({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
-      <div className="mb-3 flex items-center gap-1 px-1">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 flex-1 gap-1 px-2 text-[11px]"
-          onClick={pinCurrent}
-          aria-pressed={memory.isPinned(pathname)}
-          title="Pin current page"
-        >
-          <Pin className="h-3 w-3" aria-hidden />
-          {memory.isPinned(pathname) ? "Unpin" : "Pin"}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-7 flex-1 gap-1 px-2 text-[11px]"
-          onClick={favCurrent}
-          aria-pressed={memory.isFavorite(pathname)}
-          title="Favorite current page"
-        >
-          <Star className="h-3 w-3" aria-hidden />
-          {memory.isFavorite(pathname) ? "Unstar" : "Star"}
-        </Button>
-      </div>
+      {!collapsed ? (
+        <div className="mb-3 flex items-center gap-1 px-0.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 flex-1 gap-1 px-2 text-[11px]"
+            onClick={pinCurrent}
+            aria-pressed={memory.isPinned(pathname)}
+            title="Pin current page"
+          >
+            <Pin className="h-3 w-3" aria-hidden />
+            {memory.isPinned(pathname) ? "Unpin" : "Pin"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 flex-1 gap-1 px-2 text-[11px]"
+            onClick={favCurrent}
+            aria-pressed={memory.isFavorite(pathname)}
+            title="Favorite current page"
+          >
+            <Star className="h-3 w-3" aria-hidden />
+            {memory.isFavorite(pathname) ? "Unstar" : "Star"}
+          </Button>
+        </div>
+      ) : null}
 
-      <MemoryLinks title="Pinned" items={memory.pinned} onNavigate={onNavigate} />
+      <MemoryLinks
+        title="Pinned"
+        items={memory.pinned}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      />
       <MemoryLinks
         title="Favorites"
         items={memory.favorites.slice(0, 6)}
+        collapsed={collapsed}
         onNavigate={onNavigate}
       />
       <MemoryLinks
         title="Recent"
         items={memory.recent.slice(0, 5)}
+        collapsed={collapsed}
         onNavigate={onNavigate}
       />
 
-      {appNav.map((group) => {
-        const expanded = openGroups[group.title] !== false;
-        return (
-          <div key={group.title} className="mb-2">
-            <button
-              type="button"
-              className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-muted)] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
-              aria-expanded={expanded}
-              onClick={() =>
-                setOpenGroups((prev) => ({
-                  ...prev,
-                  [group.title]: !expanded,
-                }))
-              }
-            >
-              {group.title}
-              <ChevronDown
-                className={cn(
-                  "h-3.5 w-3.5 transition-transform duration-[var(--duration-os)] ease-[var(--ease-os)]",
-                  expanded ? "rotate-0" : "-rotate-90",
-                )}
-                aria-hidden
-              />
-            </button>
-            {expanded ? (
-              <ul className="space-y-0.5">
-                {group.items.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        onClick={onNavigate}
-                        aria-current={active ? "page" : undefined}
-                        title={item.hint}
-                        className={cn(
-                          "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
-                          active
-                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                            : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                        <span className="truncate">{item.label}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-          </div>
-        );
-      })}
+      {!collapsed &&
+      (memory.pinned.length > 0 ||
+        memory.favorites.length > 0 ||
+        memory.recent.length > 0) ? (
+        <div className="mb-2 border-t border-[var(--border)] pt-2" />
+      ) : null}
+
+      {!collapsed ? (
+        <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+          Workspaces
+        </p>
+      ) : null}
+
+      <ul className="space-y-0.5">
+        {primaryRail.map((item) => (
+          <PrimaryLink
+            key={item.href}
+            item={item}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </ul>
     </nav>
   );
 }
 
-function Brand() {
+function Brand({ collapsed }: { collapsed?: boolean }) {
   return (
-    <div className="flex h-12 items-center gap-2.5 border-b border-[var(--border)] px-4">
+    <div
+      className={cn(
+        "flex h-12 shrink-0 items-center border-b border-[var(--border)]",
+        collapsed ? "justify-center px-2" : "gap-2.5 px-3",
+      )}
+    >
       <div
-        className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--accent-fg)]"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--accent-fg)]"
         aria-hidden
       >
         <span className="text-xs font-semibold tracking-tight">QF</span>
       </div>
-      <div>
-        <p className="text-sm font-semibold tracking-tight text-[var(--fg)]">
-          QuantForg
-        </p>
-        <p className="qf-caption">Trading OS</p>
-      </div>
+      {!collapsed ? (
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold tracking-tight text-[var(--fg)]">
+            QuantForg
+          </p>
+          <p className="qf-caption truncate">Trading OS</p>
+        </div>
+      ) : (
+        <span className="sr-only">QuantForg Trading OS</span>
+      )}
     </div>
   );
 }
 
 export function Sidebar() {
+  const [chrome, setChrome] = useState<ShellChromeState>({
+    collapsed: false,
+    width: SHELL_SIDEBAR_DEFAULT,
+  });
+  const [hydrated, setHydrated] = useState(false);
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    setChrome(loadShellChrome());
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveShellChrome(chrome);
+  }, [chrome, hydrated]);
+
+  const toggleCollapsed = useCallback(() => {
+    setChrome((prev) => ({ ...prev, collapsed: !prev.collapsed }));
+  }, []);
+
+  const onResizeStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (chrome.collapsed) return;
+      e.preventDefault();
+      dragging.current = true;
+      const startX = e.clientX;
+      const startW = chrome.width;
+      const onMove = (ev: PointerEvent) => {
+        if (!dragging.current) return;
+        const next = Math.min(
+          SHELL_SIDEBAR_MAX,
+          Math.max(SHELL_SIDEBAR_MIN, startW + (ev.clientX - startX)),
+        );
+        setChrome((prev) => ({ ...prev, width: next }));
+      };
+      const onUp = () => {
+        dragging.current = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [chrome.collapsed, chrome.width],
+  );
+
+  const width = chrome.collapsed ? SHELL_SIDEBAR_COLLAPSED : chrome.width;
+
   return (
-    <aside className="hidden w-56 shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] lg:flex lg:flex-col">
-      <Brand />
-      <NavBody />
+    <aside
+      style={{ width }}
+      className="relative hidden shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
+      aria-label="Workspace rail"
+    >
+      <Brand collapsed={chrome.collapsed} />
+      <NavBody collapsed={chrome.collapsed} />
+      <div className="flex shrink-0 items-center justify-end border-t border-[var(--border)] p-1.5">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 px-0"
+          aria-label={chrome.collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={chrome.collapsed}
+          onClick={toggleCollapsed}
+        >
+          {chrome.collapsed ? (
+            <ChevronsRight className="h-4 w-4" aria-hidden />
+          ) : (
+            <ChevronsLeft className="h-4 w-4" aria-hidden />
+          )}
+        </Button>
+      </div>
+      {!chrome.collapsed ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          tabIndex={0}
+          className="absolute inset-y-0 right-0 z-10 w-1 cursor-col-resize touch-none hover:bg-[var(--accent)]/30 focus-visible:bg-[var(--accent)]/40 focus-visible:outline-none"
+          onPointerDown={onResizeStart}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              setChrome((prev) => ({
+                ...prev,
+                width: Math.max(SHELL_SIDEBAR_MIN, prev.width - 8),
+              }));
+            } else if (e.key === "ArrowRight") {
+              e.preventDefault();
+              setChrome((prev) => ({
+                ...prev,
+                width: Math.min(SHELL_SIDEBAR_MAX, prev.width + 8),
+              }));
+            }
+          }}
+        />
+      ) : null}
     </aside>
   );
 }

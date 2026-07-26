@@ -14,7 +14,7 @@ type Node = {
 };
 
 /**
- * Confidence Timeline — stage-by-stage confidence from real validation artifacts.
+ * Confidence Timeline â€” stage-by-stage confidence from real validation artifacts.
  * Missing stages show null (not fabricated scores).
  */
 export const ConfidenceTimeline = memo(function ConfidenceTimeline({
@@ -101,7 +101,7 @@ export const ConfidenceTimeline = memo(function ConfidenceTimeline({
               ? 0.5
               : null,
         detail: Object.keys(mc).length
-          ? `Monte Carlo · ${mcPass || "recorded"}`
+          ? `Monte Carlo Â· ${mcPass || "recorded"}`
           : "No MC artifact",
       },
       {
@@ -128,7 +128,7 @@ export const ConfidenceTimeline = memo(function ConfidenceTimeline({
   return (
     <section
       className={cn(
-        "flex h-full min-h-0 flex-col rounded-md border border-[var(--border)] bg-[var(--surface)] p-3",
+        "flex h-full min-h-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-3",
         className,
       )}
       aria-label="Confidence Timeline"
@@ -149,7 +149,7 @@ export const ConfidenceTimeline = memo(function ConfidenceTimeline({
               <div className="flex items-baseline justify-between gap-2 text-[11px]">
                 <span className="text-[var(--fg-muted)]">{n.label}</span>
                 <span className="tabular text-[var(--fg-subtle)]">
-                  {n.score == null ? "—" : `${Math.round(n.score * 100)}%`}
+                  {n.score == null ? "â€”" : `${Math.round(n.score * 100)}%`}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]">

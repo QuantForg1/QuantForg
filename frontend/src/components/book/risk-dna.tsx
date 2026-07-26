@@ -182,7 +182,7 @@ export const RiskDna = memo(function RiskDna({
               >
                 <div
                   className={cn(
-                    "h-full rounded-full transition-[width] duration-200",
+                    "h-full rounded-full transition-[width] duration-[var(--duration-os)]",
                     s.tone === "ok" && "bg-[var(--success)]",
                     s.tone === "warn" && "bg-[var(--warning)]",
                     s.tone === "danger" && "bg-[var(--danger)]",

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -55,12 +54,10 @@ export function InstitutionalAlphaWorkspace() {
   const data = asRecord(alphaQ.data);
   const matrix = asRecord(data.correlation_matrix);
   const symbols = Object.keys(matrix);
-  const matrixRows = useMemo(() => {
-    return symbols.map((row) => {
-      const cells = asRecord(matrix[row]);
-      return { row, cells };
-    });
-  }, [matrix, symbols]);
+  const matrixRows = symbols.map((row) => {
+    const cells = asRecord(matrix[row]);
+    return { row, cells };
+  });
 
   if (alphaQ.isLoading) return <DeskSkeleton rows={6} />;
   if (alphaQ.isError) {

@@ -116,7 +116,7 @@ function KpiCell({
   tone?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg-panel)] px-2.5 py-2 transition-colors duration-[var(--duration-os)]">
+    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 transition-colors duration-[var(--duration-os)]">
       <p className="truncate text-[9px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
         {label}
       </p>
@@ -141,7 +141,7 @@ function ChartPanel({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-panel)] p-3">
+    <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
       <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
         {title}
       </p>
@@ -368,7 +368,7 @@ export function OrdersHistoryDesk() {
           <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
             Journal · Live MT5
           </p>
-          <h1 className="font-[family-name:var(--font-display)] text-xl tracking-tight text-[var(--fg)]">
+          <h1 className="text-xl tracking-tight text-[var(--fg)]">
             Orders History
           </h1>
           <p className="mt-1 max-w-xl text-xs text-[var(--fg-muted)]">
@@ -517,7 +517,7 @@ export function OrdersHistoryDesk() {
       ) : null}
 
       {/* Filters */}
-      <div className="flex shrink-0 flex-wrap items-end gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-panel)] p-2.5">
+      <div className="flex shrink-0 flex-wrap items-end gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2.5">
         <div className="flex flex-wrap gap-1">
           {(
             [
@@ -614,7 +614,7 @@ export function OrdersHistoryDesk() {
       </div>
 
       {/* Table */}
-      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--bg-panel)]">
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--surface)]">
         {historyQ.isLoading ? (
           <div className="p-4">
             <DeskSkeleton rows={8} />

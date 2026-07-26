@@ -156,6 +156,15 @@ export function IrdpDashboardWorkspace() {
 
 export function IrdpTimelineWorkspace() {
   const q = useIrdpDashboard();
+  const qc = useQueryClient();
+  const releases = asList(asRecord(q.data).releases).map(asRecord);
+  const latest = releases[0] || {};
+  const timeline = asList(latest.timeline).map(asRecord);
+  const advance = useMutation({
+    mutationFn: () => irdpApi.advance(str(latest.release_id)),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["irdp"] }),
+  });
+
   if (q.isLoading) return <DeskSkeleton rows={6} />;
   if (q.isError) {
     return (
@@ -165,14 +174,6 @@ export function IrdpTimelineWorkspace() {
       />
     );
   }
-  const releases = asList(asRecord(q.data).releases).map(asRecord);
-  const latest = releases[0] || {};
-  const timeline = asList(latest.timeline).map(asRecord);
-  const qc = useQueryClient();
-  const advance = useMutation({
-    mutationFn: () => irdpApi.advance(str(latest.release_id)),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["irdp"] }),
-  });
 
   return (
     <div className="space-y-4">

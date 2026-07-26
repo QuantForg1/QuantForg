@@ -40,15 +40,15 @@ export const TerminalBlotter = memo(function TerminalBlotter({
 
   return (
     <section
-      className="flex h-full min-h-0 flex-col bg-[var(--bg-elevated)]"
+      className="flex h-full min-h-0 flex-col border-t border-[var(--border)] bg-[var(--bg-elevated)]"
       aria-label="Trading blotter"
     >
       <div
-        className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-2 py-1"
+        className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-[var(--border)] px-1.5"
         role="tablist"
         aria-label="Blotter tabs"
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {TABS.map((t) => {
             const active = tab === t.id;
             const Icon = t.icon;
@@ -56,19 +56,21 @@ export const TerminalBlotter = memo(function TerminalBlotter({
               <Button
                 key={t.id}
                 size="sm"
-                variant={active ? "secondary" : "ghost"}
+                variant="ghost"
                 className={cn(
-                  "h-7 gap-1.5 px-2 text-[11px]",
-                  active && "bg-[var(--surface-2)]",
+                  "h-6 gap-1 rounded-[var(--radius-sm)] px-1.5 text-[11px] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)]",
+                  active
+                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "text-[var(--fg-muted)] hover:text-[var(--fg)]",
                 )}
                 role="tab"
                 aria-selected={active}
                 onClick={() => onTabChange(t.id)}
               >
-                <Icon className="h-3.5 w-3.5" aria-hidden />
+                <Icon className="h-3 w-3" aria-hidden />
                 {t.label}
                 {t.id === "positions" && openCount > 0 ? (
-                  <span className="ml-0.5 tabular text-[var(--fg-subtle)]">
+                  <span className="ml-0.5 tabular text-[10px] text-[var(--fg-subtle)]">
                     {openCount}
                   </span>
                 ) : null}
@@ -81,7 +83,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
         </div>
         <Link
           href="/journal"
-          className="pr-1 text-[10px] text-[var(--fg-muted)] hover:text-[var(--fg)]"
+          className="pr-1 text-[10px] text-[var(--fg-subtle)] transition-colors duration-[var(--duration-fast)] hover:text-[var(--fg)]"
         >
           Journal →
         </Link>
@@ -90,7 +92,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
       <div className="min-h-0 flex-1 overflow-hidden" role="tabpanel">
         {tab === "positions" ? (
           session.connected || openCount > 0 ? (
-            <div className="h-full overflow-auto p-1 [&_.rounded-xl]:rounded-md [&_.shadow-sm]:shadow-none">
+            <div className="h-full overflow-auto p-1 [&_.shadow-sm]:shadow-none [&_[class*='rounded']]:rounded-[var(--radius-sm)]">
               <PositionManager connected={session.connected} />
             </div>
           ) : (
@@ -107,7 +109,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
         ) : null}
 
         {tab === "orders" ? (
-          <div className="h-full overflow-auto p-1 [&_.rounded-xl]:rounded-md [&_.shadow-sm]:shadow-none">
+          <div className="h-full overflow-auto p-1 [&_.shadow-sm]:shadow-none [&_[class*='rounded']]:rounded-[var(--radius-sm)]">
             <OrdersWorkspace connected={session.connected} />
           </div>
         ) : null}
@@ -126,14 +128,14 @@ export const TerminalBlotter = memo(function TerminalBlotter({
           ) : (
             <div className="h-full overflow-auto">
               <table className="w-full text-left text-[11px]">
-                <thead className="sticky top-0 bg-[var(--bg-elevated)] text-[var(--fg-subtle)]">
+                <thead className="sticky top-0 z-[1] bg-[var(--bg-elevated)] text-[var(--fg-subtle)]">
                   <tr className="border-b border-[var(--border)]">
-                    <th className="px-2 py-1.5 font-medium">Time</th>
-                    <th className="px-2 py-1.5 font-medium">Symbol</th>
-                    <th className="px-2 py-1.5 font-medium">Side</th>
-                    <th className="px-2 py-1.5 font-medium">Vol</th>
-                    <th className="px-2 py-1.5 font-medium">Price</th>
-                    <th className="px-2 py-1.5 font-medium">PnL</th>
+                    <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Time</th>
+                    <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Symbol</th>
+                    <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Side</th>
+                    <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Vol</th>
+                    <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">Price</th>
+                    <th className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.06em]">PnL</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -143,7 +145,7 @@ export const TerminalBlotter = memo(function TerminalBlotter({
                     return (
                       <tr
                         key={str(d.ticket ?? d.deal ?? i)}
-                        className="border-b border-[var(--border)]/60 hover:bg-[var(--surface-2)]"
+                        className="border-b border-[var(--border)]/50 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)] hover:bg-[var(--surface-2)]/80"
                       >
                         <td className="px-2 py-1 tabular text-[var(--fg-muted)]">
                           {str(d.time ?? d.closed_at, "—")}

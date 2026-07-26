@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { DeskPanel } from "@/components/desk/panel";
 
-/** Premium steel panel — Design Bible compliant (no neon). */
+/** Ops / Automation panel — inherits Phase 1 DeskPanel language. */
 export function OpsPanel({
   title,
   children,
@@ -17,20 +18,9 @@ export function OpsPanel({
   className?: string;
 }) {
   return (
-    <section
-      className={cn(
-        "border border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur-[2px] transition-opacity duration-[var(--duration-os)]",
-        className,
-      )}
-    >
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
-          {title}
-        </h2>
-        {action}
-      </header>
-      <div className="p-3">{children}</div>
-    </section>
+    <DeskPanel title={title} actions={action} className={className}>
+      {children}
+    </DeskPanel>
   );
 }
 
@@ -58,11 +48,11 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        "min-w-0 border border-[var(--border)] bg-[var(--bg)]/40 px-3 py-3 transition-[border-color,background-color] duration-[var(--duration-os)]",
-        large && "py-4",
+        "min-w-0 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-[var(--space-3)] py-[var(--space-2)] transition-[border-color,background-color] duration-[var(--duration-os)] ease-[var(--ease-os)]",
+        large && "py-[var(--space-3)]",
       )}
     >
-      <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+      <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
         {label}
       </p>
       <p

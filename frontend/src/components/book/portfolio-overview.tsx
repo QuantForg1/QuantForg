@@ -132,66 +132,78 @@ export const PortfolioOverview = memo(function PortfolioOverview({
   return (
     <section
       className={cn(
-        "rounded-lg border border-[var(--border)] bg-[var(--bg-panel)] p-3",
+        "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-[var(--space-3)]",
         className,
       )}
-      aria-label="Portfolio overview"
+      aria-label="Book overview"
     >
-      <div className="mb-3 flex items-end justify-between gap-2">
+      <div className="mb-[var(--space-3)] flex items-end justify-between gap-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-            Portfolio
-          </p>
-          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">
-            Live MT5 account and deal-derived returns · Book surface
+          <p className="qf-label">Portfolio</p>
+          <p className="qf-caption mt-0.5">
+            Live account · deal-derived returns · never fabricated
           </p>
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      <div className="grid gap-[var(--space-2)] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         {cells.map((c) => (
           <div
             key={c.label}
-            className="rounded border border-[var(--border)]/70 bg-[var(--surface-2)]/50 px-2.5 py-2"
+            className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-[var(--space-2)] py-[var(--space-2)]"
           >
-            <p className="text-[9px] uppercase tracking-wide text-[var(--fg-subtle)]">{c.label}</p>
-            <p className={cn("mt-1 font-mono text-sm tabular-nums text-[var(--fg)]", c.tone)}>
+            <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+              {c.label}
+            </p>
+            <p
+              className={cn(
+                "mt-1 font-mono text-sm tabular-nums tracking-tight text-[var(--fg)]",
+                c.tone,
+              )}
+            >
               {c.value}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+      <div className="mt-[var(--space-3)] grid gap-[var(--space-3)] lg:grid-cols-2">
         <div>
-          <p className="mb-2 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
             Open position allocation
           </p>
           {allocation.length ? (
             <ul className="space-y-1.5">
               {allocation.map((a) => (
-                <li key={a.label} className="grid grid-cols-[4.5rem_1fr_3rem] items-center gap-2 text-[11px]">
+                <li
+                  key={a.label}
+                  className="grid grid-cols-[4.5rem_1fr_3rem] items-center gap-2 text-[11px]"
+                >
                   <span className="font-mono text-[var(--fg-muted)]">{a.label}</span>
-                  <div className="h-1.5 overflow-hidden rounded bg-[var(--bg-elevated)]">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--bg-elevated)]">
                     <div
-                      className="h-full rounded bg-[var(--accent)]"
+                      className="h-full rounded-full bg-[var(--accent)]"
                       style={{ width: `${Math.min(100, a.pct)}%` }}
                     />
                   </div>
-                  <span className="text-right font-mono tabular-nums">{formatNumber(a.pct, 1)}%</span>
+                  <span className="text-right font-mono tabular-nums">
+                    {formatNumber(a.pct, 1)}%
+                  </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-[11px] text-[var(--fg-muted)]">Not available — no open positions</p>
+            <p className="text-[11px] text-[var(--fg-muted)]">
+              Not available — no open positions
+            </p>
           )}
         </div>
         <div>
-          <p className="mb-2 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
             Exposure notes
           </p>
-          <p className="text-[11px] text-[var(--fg-muted)]">
-            Asset allocation and performance calendar use live positions and closed deals only.
+          <p className="text-[11px] leading-relaxed text-[var(--fg-muted)]">
+            Asset allocation and performance use live positions and closed deals only.
             Inception equity for total return is Not available unless provided by the broker
             snapshot.
           </p>

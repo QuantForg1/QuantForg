@@ -666,7 +666,7 @@ export default function DashboardPage() {
                     {Object.entries(buckets).map(([k, v]) => (
                       <div
                         key={k}
-                        className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
+                        className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
                       >
                         <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
                           {k}
@@ -759,7 +759,7 @@ export default function DashboardPage() {
                 ].map(([label, value]) => (
                   <div
                     key={label}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/80 px-3 py-3"
+                    className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)]/80 px-3 py-3"
                   >
                     <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
                       {label}
@@ -1016,7 +1016,7 @@ export default function DashboardPage() {
                     return (
                       <li
                         key={code}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-2.5 py-2 transition hover:bg-[var(--surface-2)]"
+                        className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-2.5 py-2 transition hover:bg-[var(--surface-2)]"
                       >
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{code}</p>
@@ -1145,7 +1145,7 @@ export default function DashboardPage() {
                   {insights.slice(0, 8).map((text, i) => (
                     <li
                       key={i}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)]/70 px-3 py-2 text-sm text-[var(--fg-muted)]"
+                      className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)]/70 px-3 py-2 text-sm text-[var(--fg-muted)]"
                     >
                       {text}
                     </li>
@@ -1207,7 +1207,7 @@ function Metric({
   hint?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2">
+    <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2">
       <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
       <p className="tabular text-sm font-semibold text-[var(--fg)]">{value}</p>
       {hint ? <p className="text-[10px] text-[var(--fg-subtle)]">{hint}</p> : null}
@@ -1227,7 +1227,7 @@ function FeedRow({
   tone: "success" | "danger" | "accent" | "neutral";
 }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] px-3 py-2 transition hover:bg-[var(--surface-2)]/60">
+    <div className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 transition hover:bg-[var(--surface-2)]/60">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-[var(--fg)]">{title}</p>
         <Badge tone={tone === "danger" ? "danger" : tone === "success" ? "success" : tone}>

@@ -39,8 +39,8 @@ export const PromotionPipeline = memo(function PromotionPipeline({
             type="button"
             onClick={() => onStageChange(s.id)}
             className={cn(
-              "flex shrink-0 items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors duration-200",
-              active && "bg-[var(--surface-2)] text-[var(--fg)]",
+              "flex shrink-0 items-center gap-1 rounded-[var(--radius-sm)] px-2 py-1 text-[11px] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+              active && "bg-[var(--accent-soft)] text-[var(--accent)]",
               !active && done && "text-[var(--success)]",
               !active && !done && "text-[var(--fg-subtle)] hover:text-[var(--fg-muted)]",
             )}

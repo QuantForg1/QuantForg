@@ -86,7 +86,7 @@ export const StrategyIntelligencePanel = memo(function StrategyIntelligencePanel
 
   if (!session.connected) {
     return (
-      <div className={cn("rounded-lg border border-[var(--border)] p-3", className)}>
+      <div className={cn("rounded-[var(--radius-os)] border border-[var(--border)] p-3", className)}>
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
           Strategy Intelligence
         </p>
@@ -98,7 +98,7 @@ export const StrategyIntelligencePanel = memo(function StrategyIntelligencePanel
   }
 
   return (
-    <div className={cn("rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3", className)}>
+    <div className={cn("rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3", className)}>
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
         Strategy Intelligence
       </p>

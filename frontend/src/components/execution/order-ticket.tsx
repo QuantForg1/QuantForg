@@ -565,7 +565,7 @@ export const ExecutionOrderTicket = forwardRef<
   return (
     <div
       className={cn(
-        dense ? "border-0" : "rounded-lg border border-[var(--border)]",
+        dense ? "border-0" : "rounded-[var(--radius-os)] border border-[var(--border)]",
         execFlash && "qf-exec-flash",
       )}
       aria-busy={busy}
@@ -578,7 +578,7 @@ export const ExecutionOrderTicket = forwardRef<
           </Badge>
         </div>
       ) : null}
-      <div className={cn("space-y-3", dense ? "space-y-2.5 px-3 py-2.5" : "space-y-4 p-4")}>
+      <div className={cn("space-y-3", dense ? "space-y-2 px-2.5 py-2" : "space-y-4 p-4")}>
         {/* Quote + side */}
         <div className="grid grid-cols-2 gap-1.5">
           <button
@@ -587,10 +587,10 @@ export const ExecutionOrderTicket = forwardRef<
             onClick={() => void oneClick("buy")}
             aria-label="Buy market"
             className={cn(
-              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+              "flex flex-col items-center justify-center rounded-md border px-2 py-2 transition-[background-color,opacity,transform] duration-[var(--duration-fast)] ease-[var(--ease-os)] active:scale-[0.98]",
               "border-[var(--buy)]/40 bg-[var(--buy)]/10 text-[var(--buy)]",
-              "hover:bg-[var(--buy)]/20 disabled:opacity-40",
-              dense ? "min-h-[3.25rem]" : "min-h-14",
+              "hover:bg-[var(--buy)]/20 disabled:opacity-40 disabled:active:scale-100",
+              dense ? "min-h-[2.85rem]" : "min-h-14",
             )}
           >
             <span className="text-[10px] uppercase tracking-wider opacity-80">Buy</span>
@@ -604,10 +604,10 @@ export const ExecutionOrderTicket = forwardRef<
             onClick={() => void oneClick("sell")}
             aria-label="Sell market"
             className={cn(
-              "flex flex-col items-center justify-center rounded-md border px-2 py-2.5 transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+              "flex flex-col items-center justify-center rounded-md border px-2 py-2 transition-[background-color,opacity,transform] duration-[var(--duration-fast)] ease-[var(--ease-os)] active:scale-[0.98]",
               "border-[var(--sell)]/40 bg-[var(--sell)]/10 text-[var(--sell)]",
-              "hover:bg-[var(--sell)]/20 disabled:opacity-40",
-              dense ? "min-h-[3.25rem]" : "min-h-14",
+              "hover:bg-[var(--sell)]/20 disabled:opacity-40 disabled:active:scale-100",
+              dense ? "min-h-[2.85rem]" : "min-h-14",
             )}
           >
             <span className="text-[10px] uppercase tracking-wider opacity-80">Sell</span>
@@ -872,7 +872,7 @@ export const ExecutionOrderTicket = forwardRef<
         </div>
 
         {!dense ? (
-          <div className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs sm:grid-cols-4">
             <Est label="Est. commission" value={commission} />
             <Est label="Est. swap" value={swap} />
             <Est label="Est. profit" value={estProfit === "—" ? "—" : formatMaybeMoney(estProfit)} />

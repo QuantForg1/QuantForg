@@ -186,7 +186,7 @@ export function WorkspaceShell() {
     >
       <header className="shrink-0">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5">
-          <h1 className="font-display text-xs font-semibold tracking-tight text-[var(--fg)] sm:text-sm">
+          <h1 className="text-xs font-semibold tracking-tight text-[var(--fg)] sm:text-sm">
             Trading Terminal
           </h1>
           <div className="flex items-center gap-1">

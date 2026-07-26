@@ -115,7 +115,7 @@ export function ExecutionDiagnosticsPanel({ dense = false }: { dense?: boolean }
     <section
       id="bw-execution-diagnostics"
       className={cn(
-        "scroll-mt-24 space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]",
+        "scroll-mt-24 space-y-4 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]",
         dense && "p-3",
       )}
       aria-label="Execution diagnostics"
@@ -165,7 +165,7 @@ export function ExecutionDiagnosticsPanel({ dense = false }: { dense?: boolean }
       )}
 
       {selected ? (
-        <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg)]/40 p-4">
+        <div className="space-y-3 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg)]/40 p-4">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-medium text-[var(--fg)]">
@@ -191,7 +191,7 @@ export function ExecutionDiagnosticsPanel({ dense = false }: { dense?: boolean }
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-subtle)]">
                 Request payload
               </p>
-              <pre className="max-h-48 overflow-auto rounded-lg bg-[var(--surface-2)] p-2 text-[11px] text-[var(--fg-muted)]">
+              <pre className="max-h-48 overflow-auto rounded-[var(--radius-os)] bg-[var(--surface-2)] p-2 text-[11px] text-[var(--fg-muted)]">
                 {JSON.stringify(selected.request_payload ?? {}, null, 2)}
               </pre>
             </div>
@@ -199,7 +199,7 @@ export function ExecutionDiagnosticsPanel({ dense = false }: { dense?: boolean }
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--fg-subtle)]">
                 Response payload
               </p>
-              <pre className="max-h-48 overflow-auto rounded-lg bg-[var(--surface-2)] p-2 text-[11px] text-[var(--fg-muted)]">
+              <pre className="max-h-48 overflow-auto rounded-[var(--radius-os)] bg-[var(--surface-2)] p-2 text-[11px] text-[var(--fg-muted)]">
                 {JSON.stringify(selected.response_payload ?? {}, null, 2)}
               </pre>
             </div>

@@ -6,6 +6,11 @@ import {
   saveSession,
   type AuthSession,
 } from "@/lib/auth/session";
+import {
+  isNetworkFailure,
+  markApiReachable,
+  markApiUnreachable,
+} from "@/lib/api/connectivity";
 import { newRequestId } from "@/lib/observability/context";
 import { captureError } from "@/lib/observability/error-monitor";
 
@@ -39,6 +44,8 @@ type RequestOptions = {
   signal?: AbortSignal;
   /** Observability classification for failed calls */
   errorKind?: "api" | "execution" | "mt5";
+  /** Skip error-monitor logging (still throws). */
+  silent?: boolean;
 };
 
 async function parseError(res: Response, requestId: string) {
@@ -67,18 +74,24 @@ let refreshPromise: Promise<string | null> | null = null;
 async function refreshAccessToken(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
-  const res = await fetch(`${env.apiBaseUrl}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ refresh_token: refresh }),
-  });
-  if (!res.ok) {
-    clearSession();
+  try {
+    const res = await fetch(`${env.apiBaseUrl}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+    if (!res.ok) {
+      clearSession();
+      return null;
+    }
+    const session = (await res.json()) as AuthSession;
+    saveSession(session);
+    markApiReachable();
+    return session.access_token;
+  } catch {
+    markApiUnreachable();
     return null;
   }
-  const session = (await res.json()) as AuthSession;
-  saveSession(session);
-  return session.access_token;
 }
 
 function classifyPath(path: string): "api" | "execution" | "mt5" {
@@ -87,11 +100,22 @@ function classifyPath(path: string): "api" | "execution" | "mt5" {
   return "api";
 }
 
+function toNetworkApiError(err: unknown, requestId: string): ApiError {
+  if (err instanceof ApiError && err.code === "network_error") return err;
+  return new ApiError(
+    "Unable to reach the QuantForg API. Check connection and API base URL.",
+    0,
+    "network_error",
+    { cause: err instanceof Error ? err.message : String(err) },
+    requestId,
+  );
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, auth = true, signal } = options;
+  const { method = "GET", body, auth = true, signal, silent = false } = options;
   const requestId = newRequestId("req");
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -116,23 +140,51 @@ export async function apiFetch<T>(
       signal,
     });
   } catch (err) {
-    captureError(kind, err, { request_id: requestId, path: safePath });
-    throw err;
+    markApiUnreachable();
+    const networkErr = toNetworkApiError(err, requestId);
+    if (!silent) {
+      captureError(kind, networkErr, {
+        request_id: requestId,
+        path: safePath,
+        status: 0,
+        details: { network: true },
+      });
+    }
+    throw networkErr;
   }
 
+  markApiReachable();
+
   if (res.status === 401 && auth) {
-    if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => {
-      refreshPromise = null;
-    });
+    if (!refreshPromise) {
+      refreshPromise = refreshAccessToken().finally(() => {
+        refreshPromise = null;
+      });
+    }
     const next = await refreshPromise;
     if (next) {
       headers.Authorization = `Bearer ${next}`;
-      res = await fetch(url, {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal,
-      });
+      try {
+        res = await fetch(url, {
+          method,
+          headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal,
+        });
+        markApiReachable();
+      } catch (err) {
+        markApiUnreachable();
+        const networkErr = toNetworkApiError(err, requestId);
+        if (!silent) {
+          captureError(kind, networkErr, {
+            request_id: requestId,
+            path: safePath,
+            status: 0,
+            details: { network: true, phase: "retry_after_refresh" },
+          });
+        }
+        throw networkErr;
+      }
     }
   }
 
@@ -141,15 +193,19 @@ export async function apiFetch<T>(
       await parseError(res, requestId);
     } catch (e) {
       const apiErr = e instanceof ApiError ? e : null;
-      captureError(kind, e, {
-        request_id: apiErr?.requestId || requestId,
-        status: res.status,
-        path: safePath,
-        details: apiErr?.details,
-      });
+      if (!silent) {
+        captureError(kind, e, {
+          request_id: apiErr?.requestId || requestId,
+          status: res.status,
+          path: safePath,
+          details: apiErr?.details,
+        });
+      }
       throw e;
     }
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+export { isNetworkFailure };

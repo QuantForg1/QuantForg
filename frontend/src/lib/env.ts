@@ -1,9 +1,14 @@
 /**
  * Environment resolution for QuantForg frontend.
  *
- * API traffic always targets the configured backend (Railway in production).
+ * API traffic targets the configured backend (Railway in production).
  * App/canonical URLs resolve for localhost, Vercel previews, and custom domains
  * without baking a single hard-coded host into client redirects.
+ *
+ * Loading order (Next.js):
+ *   .env → .env.local → .env.[development|production] → .env.[mode].local
+ * Missing NEXT_PUBLIC_API_BASE_URL in local setups previously fell back to
+ * http://127.0.0.1:8000 — if that API is not running, every fetch fails loudly.
  */
 
 function normalizeApiBaseUrl(raw: string): string {
@@ -12,9 +17,10 @@ function normalizeApiBaseUrl(raw: string): string {
   return `${trimmed}/api/v1`;
 }
 
+const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "";
+
 function resolveApiBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (configured) return normalizeApiBaseUrl(configured);
+  if (configuredApiBase) return normalizeApiBaseUrl(configuredApiBase);
 
   // Local/dev fallback only — never silently bind production builds to a hardcoded host.
   if (process.env.NODE_ENV !== "production") {
@@ -55,8 +61,15 @@ function resolveAppUrl(): string {
   return "https://www.quantforg.com";
 }
 
+const apiBaseUrl = resolveApiBaseUrl();
+
 export const env = {
-  apiBaseUrl: resolveApiBaseUrl(),
+  apiBaseUrl,
+  /** True when NEXT_PUBLIC_API_BASE_URL was set in the environment. */
+  apiBaseExplicit: Boolean(configuredApiBase),
+  /** True when using the local 127.0.0.1:8000 development fallback. */
+  apiBaseIsLocalFallback:
+    !configuredApiBase && process.env.NODE_ENV !== "production",
   appUrl: resolveAppUrl(),
   // Production never serves mock AI. Dev may opt in via NEXT_PUBLIC_MOCK_AI=true.
   useMockAi:

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { mobileTabNav } from "@/components/layout/nav-config";
+import { isPrimaryActive, mobileTabNav, primaryRail } from "@/components/layout/nav-config";
 
 /**
- * Thumb-first mobile bottom navigation — one-hand primary surfaces.
+ * Thumb-first mobile bottom navigation — primary desks only.
  */
 export function MobileTabBar() {
   const pathname = usePathname();
@@ -19,8 +19,10 @@ export function MobileTabBar() {
     >
       <ul className="grid h-[4.25rem] grid-cols-5">
         {mobileTabNav.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const desk = primaryRail.find((d) => d.href === item.href);
+          const active = desk
+            ? isPrimaryActive(pathname, desk)
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return (
             <li key={item.href} className="min-w-0">
@@ -28,7 +30,7 @@ export function MobileTabBar() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "qf-touch-target flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)]",
+                  "qf-touch-target flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)]",
                   active
                     ? "text-[var(--accent)]"
                     : "text-[var(--fg-muted)] active:text-[var(--fg)]",

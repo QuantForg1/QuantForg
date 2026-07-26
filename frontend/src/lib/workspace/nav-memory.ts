@@ -132,7 +132,8 @@ export function pushRecentSymbol(symbol: string): string[] {
 export function labelForHref(href: string, fallback?: string): string {
   const known: Record<string, string> = {
     "/terminal": "Terminal",
-    "/portfolio": "Portfolio",
+    "/portfolio": "Book",
+    "/book": "Book",
     "/research": "Research",
     "/journal": "Journal",
     "/broker": "Broker",
@@ -141,11 +142,18 @@ export function labelForHref(href: string, fallback?: string): string {
     "/orders": "Orders",
     "/positions": "Positions",
     "/executions": "Executions",
-    "/ai-signals": "AI Signals",
+    "/ai-signals": "Counsel",
+    "/counsel": "Counsel",
     "/settings": "Settings",
-    "/notifications": "Notifications",
+    "/notifications": "Inbox",
+    "/alerts": "Alerts",
     "/risk-center": "Risk",
     "/gateway": "Gateway",
+    "/performance": "Performance",
+    "/exposure": "Exposure",
+    "/allocation": "Allocation",
+    "/integrations": "Integrations",
+    "/shortcuts": "Keyboard Shortcuts",
   };
   return known[href] ?? fallback ?? href;
 }

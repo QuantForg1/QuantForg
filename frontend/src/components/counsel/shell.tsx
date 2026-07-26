@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { Keyboard, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SessionBar } from "@/components/broker/session-bar";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskShellHeader } from "@/components/desk/panel";
+import { DeskShortcutsDialog } from "@/components/desk/shortcuts-dialog";
 import { DecisionPulse } from "@/components/counsel/decision-pulse";
 import { ContextLens } from "@/components/counsel/context-lens";
 import { RecommendationCard } from "@/components/counsel/recommendation-card";
@@ -219,14 +220,10 @@ export function CounselShell() {
       aria-label="QuantForg Counsel"
     >
       <header className="shrink-0">
-        <div className="flex h-9 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="text-xs font-semibold tracking-tight text-[var(--fg)]">
-              Counsel
-            </h1>
-            <span className="qf-caption hidden sm:inline">
-              Decision OS · never executes
-            </span>
+        <DeskShellHeader
+          title="Counsel"
+          subtitle="Evidence · actions · advisory · never executes"
+          meta={
             <Input
               className="h-7 w-24 font-mono text-[11px]"
               value={layout.symbol}
@@ -235,38 +232,40 @@ export function CounselShell() {
               }
               aria-label="Focus symbol"
             />
-          </div>
-          <div className="flex items-center gap-0.5">
-            <Button
-              size="sm"
-              className="h-7 text-[11px]"
-              disabled={evaluate.isPending}
-              onClick={() => evaluate.mutate()}
-            >
-              {evaluate.isPending ? "Evaluating…" : "Evaluate"}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label="Refresh counsel"
-              onClick={refreshAll}
-            >
-              <RefreshCw
-                className={cn("h-3.5 w-3.5", dashQ.isFetching && "animate-spin")}
-              />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label="Keyboard shortcuts"
-              onClick={() => setHelpOpen(true)}
-            >
-              <Keyboard className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+          }
+          actions={
+            <>
+              <Button
+                size="sm"
+                className="h-7 text-[11px]"
+                disabled={evaluate.isPending}
+                onClick={() => evaluate.mutate()}
+              >
+                {evaluate.isPending ? "Evaluating…" : "Evaluate"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label="Refresh counsel"
+                onClick={refreshAll}
+              >
+                <RefreshCw
+                  className={cn("h-3.5 w-3.5", dashQ.isFetching && "animate-spin")}
+                />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label="Keyboard shortcuts"
+                onClick={() => setHelpOpen(true)}
+              >
+                <Keyboard className="h-4 w-4" />
+              </Button>
+            </>
+          }
+        />
         <SessionBar />
         <SilenceProtocol
           recommendation={recommendation}
@@ -278,7 +277,7 @@ export function CounselShell() {
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-hidden p-2 sm:p-3">
+      <div className="min-h-0 flex-1 overflow-hidden p-[var(--space-2)]">
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <DeskSkeleton rows={6} />
@@ -291,16 +290,12 @@ export function CounselShell() {
             />
           </div>
         ) : (
-          <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+          <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-[var(--space-2)]">
             <DecisionPulse
               recommendation={recommendation}
               focused={focus === "pulse"}
             />
-            <div className="grid min-h-0 gap-2 lg:grid-cols-2 xl:grid-cols-3">
-              <RecommendationCard
-                recommendation={recommendation}
-                focused={focus === "recommendation"}
-              />
+            <div className="grid min-h-0 gap-[var(--space-2)] lg:grid-cols-2 xl:grid-cols-3">
               <ContextLens
                 decisionRoot={decisionRoot}
                 marketContext={marketContext}
@@ -308,6 +303,10 @@ export function CounselShell() {
                   assistant && Object.keys(assistant).length ? assistant : null
                 }
                 focused={focus === "context"}
+              />
+              <RecommendationCard
+                recommendation={recommendation}
+                focused={focus === "recommendation"}
               />
               <PortfolioImpact
                 equity={equity}
@@ -320,7 +319,7 @@ export function CounselShell() {
                 focused={focus === "impact"}
               />
             </div>
-            <div className="grid min-h-0 gap-2 lg:grid-cols-2">
+            <div className="grid min-h-0 gap-[var(--space-2)] lg:grid-cols-2">
               <DecisionTimeline
                 paperRecent={paperRecent}
                 reports={reports}
@@ -340,24 +339,12 @@ export function CounselShell() {
         )}
       </div>
 
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>Counsel shortcuts</DialogTitle>
-          <ul className="mt-3 space-y-2">
-            {SHORTCUTS.map((row) => (
-              <li
-                key={row.keys}
-                className="flex items-baseline justify-between gap-4 text-sm"
-              >
-                <kbd className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[11px]">
-                  {row.keys}
-                </kbd>
-                <span className="text-[var(--fg-muted)]">{row.action}</span>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
+      <DeskShortcutsDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        title="Counsel shortcuts"
+        shortcuts={SHORTCUTS}
+      />
     </div>
   );
 }

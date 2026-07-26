@@ -109,7 +109,7 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="Settings"
-        description="Appearance, security posture, notifications, sessions, and workspace controls."
+        description="Appearance, security, notifications, sessions, and workspace controls."
         actions={
           tab !== "Danger Zone" ? (
             <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
@@ -120,7 +120,7 @@ export default function SettingsPage() {
       />
 
       <div
-        className="mb-5 flex flex-wrap gap-1.5"
+        className="mb-[var(--space-4)] flex flex-wrap gap-1 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-1"
         role="tablist"
         aria-label="Settings sections"
       >
@@ -130,7 +130,12 @@ export default function SettingsPage() {
             size="sm"
             role="tab"
             aria-selected={tab === t}
-            variant={tab === t ? "default" : "ghost"}
+            variant="ghost"
+            className={
+              tab === t
+                ? "h-8 bg-[var(--accent-soft)] text-[var(--accent)]"
+                : "h-8 text-[var(--fg-muted)]"
+            }
             onClick={() => setTab(t)}
           >
             {t}
@@ -370,7 +375,7 @@ function Toggle({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-left transition hover:border-[var(--border-strong)]"
+      className="flex w-full items-center justify-between rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-left transition hover:border-[var(--border-strong)]"
     >
       <span className="text-sm text-[var(--fg)]">{label}</span>
       <Badge tone={checked ? "success" : "neutral"}>{checked ? "On" : "Off"}</Badge>

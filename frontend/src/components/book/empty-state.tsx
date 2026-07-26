@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { cn } from "@/lib/utils";
+import { DeskInlineEmpty } from "@/components/desk/inline-empty";
 
 export const BookEmpty = memo(function BookEmpty({
   title,
@@ -15,18 +15,12 @@ export const BookEmpty = memo(function BookEmpty({
   action?: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "flex h-full min-h-[6rem] flex-col items-center justify-center gap-2 px-4 text-center",
-        className,
-      )}
-      role="status"
-    >
-      <p className="qf-heading text-[var(--fg)]">{title}</p>
-      {description ? (
-        <p className="qf-caption max-w-sm text-[var(--fg-muted)]">{description}</p>
-      ) : null}
-      {action}
-    </div>
+    <DeskInlineEmpty
+      title={title}
+      description={description}
+      className={className}
+      action={action}
+      minHeight="6rem"
+    />
   );
 });

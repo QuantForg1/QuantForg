@@ -12,6 +12,7 @@ import { OfflineBanner } from "@/components/system/offline-banner";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { cn } from "@/lib/utils";
 import { labelForHref, pushRecentPage } from "@/lib/workspace/nav-memory";
+import { primaryRail } from "@/components/layout/nav-config";
 
 /** Full-bleed zero-scroll operating surfaces. */
 const OS_FULLBLEED_PATHS = [
@@ -36,9 +37,10 @@ function deskId(pathname: string): string {
     pathname.startsWith("/performance") ||
     pathname.startsWith("/exposure") ||
     pathname.startsWith("/allocation") ||
-    pathname.startsWith("/book")
+    pathname.startsWith("/book") ||
+    pathname.startsWith("/risk-center")
   ) {
-    return "portfolio";
+    return "book";
   }
   if (pathname.startsWith("/research") || pathname.startsWith("/screeners")) {
     return "research";
@@ -52,15 +54,17 @@ function deskId(pathname: string): string {
   if (pathname.startsWith("/broker") || pathname.startsWith("/gateway")) {
     return "broker";
   }
-  if (pathname.startsWith("/monitoring") || pathname.startsWith("/ops")) {
-    return "operations";
-  }
   if (pathname.startsWith("/notifications") || pathname.startsWith("/alerts")) {
     return "inbox";
   }
-  if (pathname.startsWith("/settings")) return "settings";
+  if (pathname.startsWith("/settings") || pathname.startsWith("/integrations")) {
+    return "settings";
+  }
   return "app";
 }
+
+/** ADR-0016 desk jumps — ⌘1–8 map to primaryRail order. */
+const DESK_SHORTCUTS = primaryRail.map((item) => item.href);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated } = useAuth();
@@ -85,25 +89,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key === "1") {
-        e.preventDefault();
-        router.push("/terminal");
-      } else if (e.key === "2") {
-        e.preventDefault();
-        router.push("/portfolio");
-      } else if (e.key === "3") {
-        e.preventDefault();
-        router.push("/research");
-      } else if (e.key === "4") {
-        e.preventDefault();
-        router.push("/journal");
-      } else if (e.key === "5") {
-        e.preventDefault();
-        router.push("/broker");
-      } else if (e.key === "6") {
-        e.preventDefault();
-        router.push("/monitoring");
-      }
+      if (e.key < "1" || e.key > "8") return;
+      const idx = Number(e.key) - 1;
+      const href = DESK_SHORTCUTS[idx];
+      if (!href) return;
+      e.preventDefault();
+      router.push(href);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -144,10 +135,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <ErrorBoundary>
               <div
+                key={pathname}
                 className={cn(
                   isFullBleed
-                    ? "h-[calc(100dvh-3.25rem-4.25rem)] w-full max-w-none lg:h-[calc(100dvh-3.25rem)]"
-                    : "mx-auto w-full max-w-[1600px] qf-fade-in",
+                    ? "h-[calc(100dvh-3.25rem-4.25rem)] w-full max-w-none lg:h-[calc(100dvh-3.25rem)] qf-motion-desk"
+                    : "mx-auto w-full max-w-[1600px] qf-motion-desk",
                 )}
               >
                 {children}

@@ -123,7 +123,7 @@ export default function OrganizationsPage() {
                       key={str(o.id)}
                       type="button"
                       onClick={() => setSelectedId(str(o.id))}
-                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left ${
+                      className={`flex w-full items-center justify-between rounded-[var(--radius-os)] border px-3 py-2.5 text-left ${
                         activeId === str(o.id)
                           ? "border-[var(--accent)] bg-[var(--accent-soft)]"
                           : "border-[var(--border)]"
@@ -163,7 +163,7 @@ export default function OrganizationsPage() {
                         {(["owner", "admin", "member", "viewer"] as const).map((role) => (
                           <div
                             key={role}
-                            className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3"
+                            className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3"
                           >
                             <p className="text-xs text-[var(--fg-subtle)]">{ROLE_LABEL[role]}</p>
                             <p className="mt-1 text-sm text-[var(--fg)]">

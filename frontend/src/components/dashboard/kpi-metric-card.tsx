@@ -49,9 +49,9 @@ export const KpiMetricCard = memo(function KpiMetricCard({
           key={value}
           initial={{ opacity: 0.35, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28 }}
+          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
           className={cn(
-            "tabular text-xl font-semibold tracking-tight text-[var(--fg)] sm:text-2xl",
+            "tabular text-xl font-semibold tracking-tight text-[var(--fg)] qf-kpi-flash sm:text-2xl",
             tone === "up" && "text-[var(--success)]",
             tone === "down" && "text-[var(--danger)]",
           )}

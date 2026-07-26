@@ -12,6 +12,7 @@ import {
 } from "@/components/platform/beta-controls";
 import { FirstRunChecklist } from "@/components/platform/first-run-checklist";
 import { ProductTour } from "@/components/platform/product-tour";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <ObservabilityBootstrap />
       <RealtimeProvider>
         <TradingSessionProvider>
+        <TooltipProvider delayDuration={320} skipDelayDuration={100}>
         <MaintenanceGate>
           <BetaInviteGate>
             <div className="flex min-h-0 flex-1 flex-col">
@@ -29,6 +31,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
             </div>
           </BetaInviteGate>
         </MaintenanceGate>
+        </TooltipProvider>
         </TradingSessionProvider>
       </RealtimeProvider>
     </AuthLayoutProviders>

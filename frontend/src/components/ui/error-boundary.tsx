@@ -23,8 +23,10 @@ export class ErrorBoundary extends React.Component<
   render() {
     if (this.state.error) {
       return (
-        <div className="rounded-xl border border-[var(--danger)]/40 bg-[var(--danger-soft)] p-6">
-          <h2 className="text-lg font-semibold text-[var(--danger)]">Something went wrong</h2>
+        <div className="rounded-[var(--radius-os)] border border-[var(--danger)]/40 bg-[var(--danger-soft)] p-[var(--space-4)]">
+          <h2 className="text-[var(--text-heading)] font-semibold text-[var(--danger)]">
+            Something went wrong
+          </h2>
           <p className="mt-2 text-sm text-[var(--fg-muted)]">{this.state.error.message}</p>
           <Button className="mt-4" onClick={() => this.setState({ error: null })}>
             Try again

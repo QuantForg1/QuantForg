@@ -39,7 +39,8 @@ Every redesign phase must finish production-ready before the next begins.
 
 P1–P4 flagship desks: Terminal, Book, Research, Counsel.
 P4.5 Design Bible is binding (`docs/design/`, ADR-0022).
-Do not modify `components/terminal/`, `book/`, `research/`, or `counsel/` unless explicitly asked.
-Future features must pass Design Bible + acceptance checklists.
+**Design Freeze (post-RC3):** no redesign/restyle/new visual patterns — only verified bugs, a11y, responsive, performance, and proven usability fixes. See `quantforg-design-freeze.mdc`.
+Do not modify `components/terminal/`, `book/`, `research/`, or `counsel/` unless explicitly asked (or fixing a freeze-allowed issue).
+Future features must pass Design Bible + acceptance checklists and inherit the frozen Design System.
 
 See `docs/adr/0016`–`0022` and `docs/design/README.md`.

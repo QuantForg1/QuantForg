@@ -285,7 +285,7 @@ export default function ResearchLabPage() {
           )}
 
           <div
-            className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]/60 p-1.5 backdrop-blur"
+            className="flex gap-1 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/60 p-1.5 backdrop-blur"
             role="tablist"
             aria-label="Research Lab modules"
           >
@@ -299,7 +299,7 @@ export default function ResearchLabPage() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setModule(m.id)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-[var(--radius-os)] px-3 py-2 text-xs transition ${
                     active
                       ? "bg-[var(--surface-2)] text-[var(--fg)] shadow-sm"
                       : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)]/50"
@@ -326,7 +326,7 @@ export default function ResearchLabPage() {
                   <motion.section
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="relative overflow-hidden rounded-xl border border-[var(--border)] bg-[linear-gradient(150deg,rgba(18,32,40,0.96),rgba(6,10,16,0.94))] p-5"
+                    className="relative overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[linear-gradient(150deg,rgba(18,32,40,0.96),rgba(6,10,16,0.94))] p-5"
                   >
                     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(70,140,120,0.12),transparent_55%)]" />
                     <div className="relative">

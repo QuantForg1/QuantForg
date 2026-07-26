@@ -78,7 +78,7 @@ export function Mt5BrokerDashboard() {
     return (
       <section
         id="bw-dashboard"
-        className="scroll-mt-24 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]"
+        className="scroll-mt-24 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]"
         aria-label="MT5 Broker Dashboard"
       >
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -98,7 +98,7 @@ export function Mt5BrokerDashboard() {
   return (
     <section
       id="bw-dashboard"
-      className="scroll-mt-24 space-y-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]"
+      className="scroll-mt-24 space-y-5 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 p-5 shadow-[var(--shadow-card)]"
       aria-label="MT5 Broker Dashboard"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

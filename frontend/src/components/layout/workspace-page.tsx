@@ -2,9 +2,12 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { DeskEmpty } from "@/components/desk/primitives";
+import { DESK_PANEL_SURFACE } from "@/components/desk/panel";
+import { cn } from "@/lib/utils";
 
 /**
- * Focused workspace page chrome — one responsibility, elegant empty when live data absent.
+ * Scrollable workspace page chrome — Phase 1 language for Settings / Ops / History / Labs.
+ * One responsibility; elegant empty when live data absent.
  */
 export function WorkspacePage({
   title,
@@ -28,19 +31,21 @@ export function WorkspacePage({
   children?: ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-[var(--space-5)]">
       <PageHeader title={title} description={description} actions={actions} />
       {children ?? (
-        <DeskEmpty
-          icon={Icon}
-          title={emptyTitle ?? title}
-          description={
-            emptyDescription ??
-            "This workspace is ready. Live data appears when the session provides it."
-          }
-          actionLabel={actionLabel}
-          actionHref={actionHref}
-        />
+        <div className={cn(DESK_PANEL_SURFACE, "p-[var(--space-5)]")}>
+          <DeskEmpty
+            icon={Icon}
+            title={emptyTitle ?? title}
+            description={
+              emptyDescription ??
+              "This workspace is ready. Live data appears when the session provides it."
+            }
+            actionLabel={actionLabel}
+            actionHref={actionHref}
+          />
+        </div>
       )}
     </div>
   );

@@ -34,24 +34,24 @@ export function EmptyState({
     <div
       role="status"
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)]/40 px-6 py-14 text-center",
+          "flex flex-col items-center justify-center rounded-[var(--radius-os)] border border-dashed border-[var(--border)] bg-[var(--surface)] px-[var(--space-5)] py-[var(--space-7)] text-center qf-motion-desk",
         className,
       )}
     >
       <div
-        className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)] shadow-[var(--shadow-card)]"
+        className="mb-[var(--space-3)] flex h-12 w-12 items-center justify-center rounded-[var(--radius-os)] bg-[var(--accent-soft)] text-[var(--accent)]"
         aria-hidden
       >
-        <Icon className="h-6 w-6" />
+        <Icon className="h-5 w-5" />
       </div>
-      <h3 className="font-[family-name:var(--font-display)] text-xl tracking-tight text-[var(--fg)]">
+      <h3 className="text-[var(--text-heading)] font-semibold leading-[var(--leading-heading)] tracking-tight text-[var(--fg)]">
         {title}
       </h3>
       <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--fg-muted)]">
         {description}
       </p>
       {hasPrimary || hasSecondary ? (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+        <div className="mt-[var(--space-5)] flex flex-wrap items-center justify-center gap-2">
           {hasPrimary ? (
             actionHref ? (
               <Button asChild>

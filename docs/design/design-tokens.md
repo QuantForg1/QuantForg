@@ -46,10 +46,25 @@ Use `--space-1` … `--space-8` only for OS layout rhythm.
 
 | Token | Value | Use |
 |---|---|---|
+| `--duration-fast` | 160ms | Hover / selection / cmd items |
 | `--duration-os` | 200ms | Default transitions (range 180–220ms) |
+| `--duration-slow` | 220ms | Status flashes / emphasis |
 | `--ease-os` | `cubic-bezier(0.2, 0.8, 0.2, 1)` | Standard ease |
+| `--ease-os-out` | `cubic-bezier(0.16, 1, 0.3, 1)` | Enter (dialog, palette, panels) |
+| `--ease-os-in` | `cubic-bezier(0.4, 0, 1, 1)` | Exit |
 
-No decorative looping animations on trading desks.
+### Utility classes
+
+| Class | Role |
+|---|---|
+| `.qf-fade-in` / `.qf-motion-overlay` | Overlay / scrim |
+| `.qf-motion-pop` | Centered dialog |
+| `.qf-motion-slide-up` | Command palette / sheets |
+| `.qf-motion-slide-down` | Tooltips / dropdowns |
+| `.qf-motion-desk` | Workspace content enter |
+| `.qf-panel-live` | Focused desk panel emphasis |
+
+No decorative looping animations on trading desks. Always respect `prefers-reduced-motion`.
 
 ## Elevation
 

@@ -48,7 +48,7 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
   return (
     <div
       className={cn(
-        "flex h-9 shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2",
+        "flex h-8 shrink-0 items-center gap-2.5 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2",
         className,
       )}
       role="status"
@@ -56,8 +56,8 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
       aria-label="Session"
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <Badge tone={session.connected ? "success" : "warning"} className="shrink-0">
-          <span className="qf-status-dot mr-1.5 h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+        <Badge tone={session.connected ? "success" : "warning"} className="shrink-0 h-5 px-1.5 text-[10px]">
+          <span className="qf-status-dot mr-1 h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
           {session.connected ? "Live" : "Offline"}
         </Badge>
         <span className="truncate qf-caption tabular text-[var(--fg-muted)]">
@@ -65,36 +65,36 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
           <span className="text-[var(--fg-subtle)]"> · </span>
           {str(session.login, "—")}
         </span>
-        <span className="hidden truncate font-mono text-[11px] text-[var(--fg)] sm:inline">
+        <span className="hidden truncate font-mono text-[11px] font-medium text-[var(--fg)] sm:inline">
           {symbol}
         </span>
         {spread != null ? (
-          <span className="hidden tabular text-[11px] text-[var(--fg-subtle)] md:inline">
+          <span className="hidden tabular text-[10px] text-[var(--fg-subtle)] md:inline">
             spr {spread.toFixed(5)}
           </span>
         ) : null}
         {latency != null && Number.isFinite(latency) ? (
-          <span className="hidden tabular text-[11px] text-[var(--fg-subtle)] lg:inline">
+          <span className="hidden tabular text-[10px] text-[var(--fg-subtle)] lg:inline">
             {Math.round(latency)} ms
           </span>
         ) : null}
       </div>
 
-      <dl className="hidden items-center gap-4 text-[11px] md:flex">
-        <div className="flex items-baseline gap-1.5">
-          <dt className="text-[var(--fg-subtle)]">Eq</dt>
+      <dl className="hidden items-center gap-3.5 text-[11px] md:flex">
+        <div className="flex items-baseline gap-1">
+          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Eq</dt>
           <dd className="tabular font-medium text-[var(--fg)]">
             {Number.isFinite(equity) ? formatCurrency(equity) : "—"}
           </dd>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <dt className="text-[var(--fg-subtle)]">Free</dt>
+        <div className="flex items-baseline gap-1">
+          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Free</dt>
           <dd className="tabular font-medium text-[var(--fg)]">
             {Number.isFinite(free) ? formatCurrency(free) : "—"}
           </dd>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <dt className="text-[var(--fg-subtle)]">Float</dt>
+        <div className="flex items-baseline gap-1">
+          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Float</dt>
           <dd
             className={cn(
               "tabular font-medium",
@@ -104,19 +104,19 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
             {formatCurrency(openPnl)}
           </dd>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <dt className="text-[var(--fg-subtle)]">Pos</dt>
+        <div className="flex items-baseline gap-1">
+          <dt className="text-[10px] uppercase tracking-[0.06em] text-[var(--fg-subtle)]">Pos</dt>
           <dd className="tabular font-medium text-[var(--fg)]">
             {session.positions.length}
           </dd>
         </div>
       </dl>
 
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-0.5">
         <Button
           size="sm"
           variant="ghost"
-          className="h-7 px-2"
+          className="h-6 w-6 px-0"
           disabled={session.refreshing}
           onClick={() => void session.invalidateAll()}
           aria-label="Sync session"
@@ -125,7 +125,7 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
             className={cn("h-3.5 w-3.5", session.refreshing && "animate-spin")}
           />
         </Button>
-        <Button size="sm" variant="secondary" className="h-7 px-2" asChild>
+        <Button size="sm" variant="ghost" className="h-6 w-6 px-0" asChild>
           <Link href="/broker" aria-label="Open Broker">
             <Cable className="h-3.5 w-3.5" />
           </Link>

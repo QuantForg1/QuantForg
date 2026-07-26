@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Keyboard, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SessionBar } from "@/components/broker/session-bar";
 import { DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskShellHeader } from "@/components/desk/panel";
+import { DeskShortcutsDialog } from "@/components/desk/shortcuts-dialog";
 import { PortfolioHealth, exposureFromPositions } from "@/components/book/portfolio-health";
 import { PortfolioOverview } from "@/components/book/portfolio-overview";
 import { PortfolioIntelligenceLab } from "@/components/book/portfolio-intelligence-lab";
@@ -51,11 +52,11 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "C", action: "Toggle Portfolio Counsel" },
   { keys: "R", action: "Refresh book data" },
   { keys: "?", action: "This help" },
-  { keys: "⌘2", action: "Portfolio (OS desk)" },
+  { keys: "⌘2", action: "Book (OS desk)" },
 ];
 
 /**
- * Portfolio OS — institutional equity, exposure, and risk operating surface.
+ * Book OS — institutional equity, exposure, and risk operating surface.
  * Zero page scroll; panels scroll internally. Terminal remains sole execution.
  */
 export function BookShell() {
@@ -188,52 +189,50 @@ export function BookShell() {
     <div
       className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg)]"
       role="application"
-      aria-label="QuantForg Portfolio"
+      aria-label="QuantForg Book"
     >
       <header className="shrink-0">
-        <div className="flex h-9 items-center justify-between gap-2 border-b border-[var(--border)] px-3">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xs font-semibold tracking-tight text-[var(--fg)]">
-              Portfolio
-            </h1>
-            <span className="qf-caption hidden sm:inline">
-              Capital · exposure · risk
-            </span>
-            {realtime.transport ? (
+        <DeskShellHeader
+          title="Book"
+          subtitle="Portfolio · risk · exposure"
+          meta={
+            realtime.transport ? (
               <span className="qf-caption tabular text-[var(--fg-subtle)]">
                 {realtime.transport}
               </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-0.5">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label="Refresh book"
-              onClick={refreshAll}
-            >
-              <RefreshCw
-                className={cn(
-                  "h-3.5 w-3.5",
-                  (portfolioQ.isFetching || session.refreshing) && "animate-spin",
-                )}
-              />
-            </Button>
-            <Button size="sm" variant="secondary" className="h-7 px-2 text-[11px]" asChild>
-              <Link href="/terminal">Terminal</Link>
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 px-0"
-              aria-label="Keyboard shortcuts"
-              onClick={() => setHelpOpen(true)}
-            >
-              <Keyboard className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+            ) : null
+          }
+          actions={
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label="Refresh book"
+                onClick={refreshAll}
+              >
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    (portfolioQ.isFetching || session.refreshing) && "animate-spin",
+                  )}
+                />
+              </Button>
+              <Button size="sm" variant="secondary" className="h-7 px-2 text-[11px]" asChild>
+                <Link href="/terminal">Terminal</Link>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label="Keyboard shortcuts"
+                onClick={() => setHelpOpen(true)}
+              >
+                <Keyboard className="h-4 w-4" />
+              </Button>
+            </>
+          }
+        />
         <SessionBar />
         <PortfolioCounsel
           connected={session.connected}
@@ -250,12 +249,12 @@ export function BookShell() {
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-hidden p-1.5 sm:p-2">
+      <div className="min-h-0 flex-1 overflow-hidden p-[var(--space-2)]">
         {!session.connected ? (
           <BookEmpty
-            className="h-full rounded-md border border-[var(--border)]/80 bg-[var(--surface)]"
+            className="h-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]"
             title="No live book"
-            description="Attach MT5 in Broker to load equity, risk, and positions. Portfolio never invents balances."
+            description="Attach MT5 in Broker to load equity, risk, and positions. Book never invents balances."
             action={
               <Button size="sm" variant="secondary" asChild>
                 <Link href="/broker">Open Broker</Link>
@@ -274,8 +273,9 @@ export function BookShell() {
             />
           </div>
         ) : (
-          <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-            <div className="min-h-0 max-h-[40%] space-y-2 overflow-y-auto overflow-x-auto">
+          <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1.1fr)_minmax(0,1fr)] gap-[var(--space-2)]">
+            {/* 1. Portfolio first */}
+            <div className="min-h-0 max-h-[38%] space-y-[var(--space-2)] overflow-y-auto overflow-x-auto">
               <PortfolioOverview
                 account={account}
                 positions={positions}
@@ -283,6 +283,8 @@ export function BookShell() {
               />
               <PortfolioIntelligenceLab />
             </div>
+
+            {/* 2. Risk second */}
             <PortfolioHealth
               focused={focus === "health"}
               metrics={{
@@ -297,7 +299,8 @@ export function BookShell() {
               }}
             />
 
-            <div className="grid min-h-0 gap-2 lg:grid-cols-2">
+            {/* 3. Trading / performance third */}
+            <div className="grid min-h-0 gap-[var(--space-2)] lg:grid-cols-2">
               <EquityTimeline
                 series={equitySeries}
                 focused={focus === "timeline"}
@@ -310,7 +313,8 @@ export function BookShell() {
               />
             </div>
 
-            <div className="grid min-h-0 gap-2 lg:grid-cols-2">
+            {/* 4. Positions / exposure */}
+            <div className="grid min-h-0 gap-[var(--space-2)] lg:grid-cols-2">
               <ExposureMap
                 positions={positions}
                 freeMargin={Number.isFinite(freeMargin) ? freeMargin : 0}
@@ -326,24 +330,12 @@ export function BookShell() {
         )}
       </div>
 
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>Portfolio shortcuts</DialogTitle>
-          <ul className="mt-3 space-y-2">
-            {SHORTCUTS.map((row) => (
-              <li
-                key={row.keys}
-                className="flex items-baseline justify-between gap-4 text-sm"
-              >
-                <kbd className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[11px]">
-                  {row.keys}
-                </kbd>
-                <span className="text-[var(--fg-muted)]">{row.action}</span>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
+      <DeskShortcutsDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        title="Book shortcuts"
+        shortcuts={SHORTCUTS}
+      />
     </div>
   );
 }

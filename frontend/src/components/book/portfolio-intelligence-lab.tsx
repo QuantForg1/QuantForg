@@ -21,7 +21,7 @@ function MetricCell({
   hint?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg-panel)] px-2.5 py-2">
+    <div className="min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2">
       <p className="truncate text-[9px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
         {label}
       </p>

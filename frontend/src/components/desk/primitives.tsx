@@ -75,7 +75,7 @@ export function DeskError({
   return (
     <div
       role="alert"
-      className="flex flex-col items-start gap-3 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-4 sm:flex-row sm:items-center sm:justify-between"
+      className="flex flex-col items-start gap-3 rounded-[var(--radius-os)] border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-[var(--space-3)] sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex items-start gap-3">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger)]" aria-hidden />
@@ -135,12 +135,12 @@ export function DeskTable({
   rows: ReactNode[][];
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+    <div className="overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)]">
       <table className="w-full text-left text-sm">
         <thead className="sticky top-0 bg-[var(--surface-2)]/95 text-[var(--fg-subtle)] backdrop-blur">
           <tr>
             {columns.map((c) => (
-              <th key={c} className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide">
+              <th key={c} className="px-3 py-2 text-[10px] font-medium uppercase tracking-[0.08em]">
                 {c}
               </th>
             ))}
@@ -150,10 +150,10 @@ export function DeskTable({
           {rows.map((row, i) => (
             <tr
               key={i}
-              className="border-t border-[var(--border)] transition-colors hover:bg-[var(--surface-2)]/60"
+              className="border-t border-[var(--border)] transition-colors duration-[var(--duration-os)] ease-[var(--ease-os)] hover:bg-[var(--surface-2)]/60"
             >
               {row.map((cell, j) => (
-                <td key={j} className="px-3 py-2.5 align-middle">
+                <td key={j} className="px-3 py-2 align-middle text-[13px]">
                   {cell}
                 </td>
               ))}

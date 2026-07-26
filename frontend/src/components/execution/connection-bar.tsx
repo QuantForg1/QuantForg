@@ -86,7 +86,7 @@ export const ConnectionBar = memo(function ConnectionBar({
         "flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5",
         compact
           ? "border-b border-[var(--border)] bg-[var(--surface)]/80 px-3 py-1.5"
-          : "rounded-xl border border-[var(--border)] bg-[var(--surface)]/90 px-4 py-3",
+          : "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 px-4 py-3",
         className,
       )}
       role="status"

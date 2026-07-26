@@ -144,7 +144,7 @@ export default function QuantAiPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="relative overflow-hidden rounded-xl border border-[var(--border)] bg-[linear-gradient(145deg,rgba(18,28,42,0.95),rgba(8,12,20,0.92))] p-5 shadow-[0_0_0_1px_rgba(120,160,200,0.06)]"
+            className="relative overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[linear-gradient(145deg,rgba(18,28,42,0.95),rgba(8,12,20,0.92))] p-5 shadow-[0_0_0_1px_rgba(120,160,200,0.06)]"
           >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(70,140,200,0.12),transparent_55%)]" />
             <div className="relative flex flex-wrap items-start justify-between gap-3">

@@ -354,7 +354,7 @@ export default function EcosystemPage() {
           </StaggerGrid>
 
           <div
-            className="flex gap-1 overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)]/60 p-1.5 backdrop-blur"
+            className="flex gap-1 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/60 p-1.5 backdrop-blur"
             role="tablist"
             aria-label="Ecosystem modules"
           >
@@ -368,7 +368,7 @@ export default function EcosystemPage() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setModule(m.id)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-[var(--radius-os)] px-3 py-2 text-xs transition ${
                     active
                       ? "bg-[var(--surface-2)] text-[var(--fg)] shadow-sm"
                       : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)]/50"

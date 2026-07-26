@@ -21,7 +21,7 @@ export function WeltradeGatewayStatus({ className, compact = false }: Props) {
   return (
     <div
       className={cn(
-        "rounded-xl border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-3",
+        "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 px-3 py-3",
         className,
       )}
     >

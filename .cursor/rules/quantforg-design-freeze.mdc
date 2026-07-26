@@ -1,0 +1,31 @@
+---
+description: Design Freeze — RC3 locked Design System (v1.0 baseline)
+alwaysApply: true
+---
+
+# QuantForg Design Freeze (post-RC3)
+
+The QuantForg Design System is **LOCKED**. RC3 is the permanent visual baseline.
+
+## Forbidden
+
+- Redesign or restyle existing UI
+- New visual patterns, tokens, or component chrome
+- New navigation models or interaction models
+- Subjective polish / “make it nicer” changes
+
+## Allowed only
+
+- Verified bugs
+- Accessibility issues
+- Responsive issues
+- Performance regressions
+- Proven usability issues discovered during testing
+
+## Inheritance
+
+Every future UI must inherit from the existing Design Bible + RC3 shell language (`docs/design/`, ADR-0022, shared desk chrome, steel tokens, IBM Plex).
+
+Do not modify `components/terminal|book|research|counsel/` unless fixing a verified bug/a11y/responsive/perf issue above.
+
+Tag target for the frozen frontend baseline: `v1.0.0-frontend`.

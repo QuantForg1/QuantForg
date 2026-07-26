@@ -34,11 +34,11 @@ export const StatCard = memo(function StatCard({
       <CardContent>
         <motion.p
           key={display}
-          initial={{ opacity: 0.4, y: 4 }}
+          initial={{ opacity: 0.4, y: 3 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
+          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
           className={cn(
-            "tabular text-2xl font-semibold tracking-tight text-[var(--fg)]",
+            "tabular text-2xl font-semibold tracking-tight text-[var(--fg)] qf-kpi-flash",
             tone === "up" && "text-[var(--success)]",
             tone === "down" && "text-[var(--danger)]",
           )}

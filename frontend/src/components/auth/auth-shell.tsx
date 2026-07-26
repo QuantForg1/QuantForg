@@ -18,15 +18,19 @@ export function AuthShell({
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex items-center gap-2">
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] font-bold text-[var(--accent-fg)]"
+            className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-os)] bg-[var(--accent)] font-bold text-[var(--accent-fg)]"
             aria-hidden
           >
             Q
           </div>
-          <span className="font-[family-name:var(--font-display)] text-lg">QuantForg</span>
+          <span className="text-lg font-semibold tracking-tight text-[var(--fg)]">
+            QuantForg
+          </span>
         </Link>
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/80 p-6 shadow-[var(--shadow-card)] backdrop-blur-xl">
-          <h1 className="font-[family-name:var(--font-display)] text-2xl tracking-tight">{title}</h1>
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-[var(--space-5)] shadow-[var(--shadow-elevated)]">
+          <h1 className="text-[var(--text-title)] font-semibold leading-[var(--leading-title)] tracking-tight text-[var(--fg)]">
+            {title}
+          </h1>
           <p className="mt-1 text-sm text-[var(--fg-muted)]">{subtitle}</p>
           <div className="mt-6">{children}</div>
         </div>
