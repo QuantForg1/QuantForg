@@ -74,8 +74,9 @@ export type PrimaryNavItem = NavItem & {
 };
 
 /**
- * ADR-0016 — eight primary surfaces only in the trader rail.
- * Everything else is ⌘K, pin/favorite/recent, deep link, or nested desk.
+ * Trader rail workspaces. ⌘1–8 remain on the eight primary desks
+ * (Terminal…Broker + Inbox + Settings). Operator workspaces in between
+ * are rail-visible without desk shortcuts; everything else is ⌘K / deep link.
  */
 export const primaryRail: PrimaryNavItem[] = [
   {
@@ -132,6 +133,34 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Attach session · connectivity",
     match: ["/broker", "/gateway"],
     shortcut: "6",
+  },
+  {
+    href: "/auto-trading",
+    label: "Auto-trading",
+    icon: Bot,
+    hint: "Autonomous command center",
+    match: ["/auto-trading"],
+  },
+  {
+    href: "/ai-scalping",
+    label: "Scalping AI",
+    icon: Crosshair,
+    hint: "H1/M15/M5/M1 · BUY/SELL quality gates",
+    match: ["/ai-scalping", "/scalping-ai-v2"],
+  },
+  {
+    href: "/strategy-diagnostics",
+    label: "Strategy Diagnostics",
+    icon: ScanSearch,
+    hint: "Why NO_TRADE · quality · confluence · MTF",
+    match: ["/strategy-diagnostics"],
+  },
+  {
+    href: "/continuous-validation",
+    label: "Continuous Validation",
+    icon: ClipboardCheck,
+    hint: "CVF · drift · replay vs live · evidence",
+    match: ["/continuous-validation"],
   },
   {
     href: "/notifications",

@@ -63,8 +63,16 @@ function deskId(pathname: string): string {
   return "app";
 }
 
-/** ADR-0016 desk jumps — ⌘1–8 map to primaryRail order. */
-const DESK_SHORTCUTS = primaryRail.map((item) => item.href);
+/** ⌘1–8 map to desks that declare a shortcut (not raw rail order). */
+const DESK_SHORTCUTS: string[] = (() => {
+  const slots: string[] = [];
+  for (const item of primaryRail) {
+    if (!item.shortcut) continue;
+    const idx = Number(item.shortcut) - 1;
+    if (idx >= 0 && idx <= 7) slots[idx] = item.href;
+  }
+  return slots;
+})();
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { loading, isAuthenticated } = useAuth();
