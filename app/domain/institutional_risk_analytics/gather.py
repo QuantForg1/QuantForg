@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 
-def _safe(fn, default: Any = None) -> Any:
+def _safe(fn: Callable[[], Any], default: Any = None) -> Any:
     try:
         return fn()
     except Exception:

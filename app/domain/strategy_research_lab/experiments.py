@@ -116,7 +116,8 @@ class ParameterExperimentManager:
                     score = Decimal(str(score_raw))
                 except Exception:
                     score = None
-            metrics = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
+            metrics_raw = row.get("metrics")
+            metrics = metrics_raw if isinstance(metrics_raw, dict) else {}
             parsed.append(
                 ExperimentResult(
                     variant_id=str(row.get("variant_id") or ""),

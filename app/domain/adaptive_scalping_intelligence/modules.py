@@ -525,13 +525,13 @@ def build_opportunity_heat_map(inp: AsiInput, config: AsiConfig) -> ModuleResult
                     "source": "historical",
                 }
             )
-    cells.sort(key=lambda c: Decimal(c["avg_quality"]), reverse=True)
+    cells.sort(key=lambda c: Decimal(str(c["avg_quality"])), reverse=True)
     top = cells[0]
     return ModuleResult(
         module="opportunity_heat_map",
         status="available",
         source="historical",
-        score=Decimal(top["avg_quality"]),
+        score=Decimal(str(top["avg_quality"])),
         recommendation=(
             f"Hottest historical cell: {top['session']} bucket {top['time_bucket']}"
         ),

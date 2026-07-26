@@ -149,10 +149,11 @@ class AlphaEngine:
         composite: Decimal | None = None
         market_quality_ok: bool | None = None
         if available:
-            composite = (
-                sum((e.score for e in available), Decimal("0"))
-                / Decimal(str(len(available)))
-            ).quantize(Decimal("0.01"))
+            total = Decimal("0")
+            for e in available:
+                if e.score is not None:
+                    total += e.score
+            composite = (total / Decimal(str(len(available)))).quantize(Decimal("0.01"))
             market_quality_ok = composite >= self.config.min_composite_for_quality_ok
 
         band = _band(composite)

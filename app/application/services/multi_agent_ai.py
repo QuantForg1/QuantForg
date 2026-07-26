@@ -38,8 +38,8 @@ class MultiAgentAIService:
             kind=str(payload.get("kind") or "observation"),
             agent=str(payload.get("agent") or "operator"),
             content=(
-                payload.get("content")
-                if isinstance(payload.get("content"), dict)
+                content_raw
+                if isinstance((content_raw := payload.get("content")), dict)
                 else {}
             ),
             session_id=(

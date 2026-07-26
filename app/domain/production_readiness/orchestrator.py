@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from app.domain.production_readiness.audit import ReadinessAuditLog
 from app.domain.production_readiness.checklists import (
@@ -19,10 +19,14 @@ from app.domain.production_readiness.config import (
 from app.domain.production_readiness.panel import PanelSnapshot, panel
 
 
-def _panel_status(raw: object) -> str:
+def _panel_status(raw: object) -> Literal["available", "empty", "unavailable"]:
     value = str(raw or "unavailable")
-    if value in ("available", "empty", "unavailable"):
-        return value
+    if value == "available":
+        return "available"
+    if value == "empty":
+        return "empty"
+    if value == "unavailable":
+        return "unavailable"
     return "available"
 
 
@@ -197,10 +201,10 @@ class ProductionReadinessCenter:
                 status="unavailable",
                 message="Control center feed unavailable",
             )
-        risk = cc.get("risk") if isinstance(cc.get("risk"), dict) else {}
-        auto = (
-            cc.get("auto_trading") if isinstance(cc.get("auto_trading"), dict) else {}
-        )
+        risk_raw = cc.get("risk")
+        risk = risk_raw if isinstance(risk_raw, dict) else {}
+        auto_raw = cc.get("auto_trading")
+        auto = auto_raw if isinstance(auto_raw, dict) else {}
         data = {
             "kill_switch": cc.get("kill_switch"),
             "oms_orders_allowed": cc.get("oms_orders_allowed"),

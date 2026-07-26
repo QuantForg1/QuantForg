@@ -322,11 +322,8 @@ def build_regime_validation(ctx: dict[str, Any]) -> dict[str, Any]:
         for r in rows
         if r.get("is_current")
         and (
-            (r.get("pf_delta_pct") is not None and abs(float(r["pf_delta_pct"])) >= 20)
-            or (
-                r.get("wr_delta_pct") is not None
-                and abs(float(r["wr_delta_pct"])) >= 15
-            )
+            ((pf_d := r.get("pf_delta_pct")) is not None and abs(float(pf_d)) >= 20)
+            or ((wr_d := r.get("wr_delta_pct")) is not None and abs(float(wr_d)) >= 15)
         )
     ]
     return {
@@ -342,7 +339,7 @@ def build_parameter_stability(ctx: dict[str, Any]) -> dict[str, Any]:
     aqs = _as_dict(ctx.get("sources", {}).get("aqs"))
     recs = _as_list(aqs.get("recommendations"))
     # Research-only observed bands (documentation of current research interest)
-    params = {
+    params: dict[str, dict[str, Any]] = {
         "quality": {"tracked_bands": [70, 75, 80, 85, 90], "stability_score": 70.0},
         "confluence": {"tracked_bands": [2, 3, 4, 5], "stability_score": 68.0},
         "atr": {"tracked_bands": ["low", "mid", "high"], "stability_score": 65.0},

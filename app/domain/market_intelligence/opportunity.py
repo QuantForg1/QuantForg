@@ -78,7 +78,7 @@ def rank_opportunities(
 
     ranked: list[RankedOpportunity] = []
     for i, (score, c) in enumerate(scored[: config.max_ranked_opportunities], start=1):
-        eligible = score >= config.min_opportunity_score
+        is_eligible = score >= config.min_opportunity_score
         ranked.append(
             RankedOpportunity(
                 rank=i,
@@ -87,10 +87,10 @@ def rank_opportunities(
                 side=c.side,
                 confidence=c.confidence,
                 score=score.quantize(Decimal("0.01")),
-                eligible=eligible,
+                eligible=is_eligible,
                 reason=(
                     f"Score {score} meets threshold {config.min_opportunity_score}"
-                    if eligible
+                    if is_eligible
                     else f"Score {score} below threshold {config.min_opportunity_score}"
                 ),
             )

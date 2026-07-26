@@ -156,16 +156,25 @@ def build_capital_allocation(ranked: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
     # Normalize residual
-    s = sum(a["recommended_weight_pct"] for a in allocations) or 1.0
+    weight_vals = [
+        float(w)
+        for a in allocations
+        if (w := a.get("recommended_weight_pct")) is not None
+    ]
+    s = sum(weight_vals) if weight_vals else 1.0
     if allocations and abs(s - 100.0) > 0.05:
+        cur = allocations[0].get("recommended_weight_pct")
         allocations[0]["recommended_weight_pct"] = round(
-            allocations[0]["recommended_weight_pct"] + (100.0 - s), 2
+            (float(cur) if cur is not None else 0.0) + (100.0 - s), 2
         )
+    total = sum(
+        float(w)
+        for a in allocations
+        if (w := a.get("recommended_weight_pct")) is not None
+    )
     return {
         "allocations": allocations,
-        "total_weight_pct": round(
-            sum(a["recommended_weight_pct"] for a in allocations), 2
-        ),
+        "total_weight_pct": round(total, 2),
         "never_allocates_automatically": True,
         "never_rebalances_automatically": True,
         "human_approval_required": True,

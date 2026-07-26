@@ -98,7 +98,9 @@ def score_opportunity(
     try:
         from app.domain.institutional_trading.ai_validation import get_weight_optimizer
 
-        optimized = get_weight_optimizer().apply_to_weights(weights)
+        optimized = get_weight_optimizer().apply_to_weights(
+            {k: float(v) for k, v in weights.items()}
+        )
         weights = {k: max(1, round(v)) for k, v in optimized.items()}
     except Exception:  # noqa: S110  # best-effort optional path
         pass

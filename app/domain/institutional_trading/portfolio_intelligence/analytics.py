@@ -43,6 +43,10 @@ class LongTermAnalyticsStore:
             }
         first, last = series[0][1], series[-1][1]
         ret = round(100.0 * (last - first) / first, 3) if first else None
+        vol: float | None
+        sharpe: float | None
+        stability: float | None
+        capital_efficiency: float | None
         if rets:
             mean = sum(rets) / len(rets)
             var = sum((x - mean) ** 2 for x in rets) / len(rets)
@@ -52,7 +56,10 @@ class LongTermAnalyticsStore:
             stability = round(max(0.0, 100.0 * (1.0 - min(1.0, vol * 50))), 2)
             capital_efficiency = round((ret or 0) / max(vol * 100, 0.01), 3)
         else:
-            vol = sharpe = stability = capital_efficiency = None
+            vol = None
+            sharpe = None
+            stability = None
+            capital_efficiency = None
         return {
             "return_pct": ret,
             "volatility": round(vol, 6) if isinstance(vol, float) else None,

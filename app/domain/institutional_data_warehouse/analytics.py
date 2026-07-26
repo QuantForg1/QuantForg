@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from typing import Any
 
 from app.domain.institutional_data_warehouse.store import InstitutionalDataWarehouse
@@ -21,11 +22,12 @@ def _pnl(payload: dict[str, Any]) -> float | None:
 def _bucket_performance(
     rows: list[dict[str, Any]],
     *,
-    key_fn,
+    key_fn: Callable[[dict[str, Any]], Any],
 ) -> dict[str, Any]:
     buckets: dict[str, list[float]] = defaultdict(list)
     for row in rows:
-        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        payload_raw = row.get("payload")
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
         pnl = _pnl(payload)
         if pnl is None:
             continue
@@ -68,7 +70,8 @@ def performance_by_regime(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     rows = wh.list("trades", limit=10_000)
 
     def _regime(row: dict[str, Any]) -> str:
-        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        payload_raw = row.get("payload")
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
         return str(payload.get("regime") or payload.get("market_regime") or "unknown")
 
     return {
@@ -85,7 +88,8 @@ def no_trade_analysis(wh: InstitutionalDataWarehouse) -> dict[str, Any]:
     reasons: dict[str, int] = defaultdict(int)
     no_trade = 0
     for row in combined:
-        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        payload_raw = row.get("payload")
+        payload = payload_raw if isinstance(payload_raw, dict) else {}
         decision = str(payload.get("decision") or payload.get("action") or "").upper()
         if decision != "NO_TRADE":
             continue

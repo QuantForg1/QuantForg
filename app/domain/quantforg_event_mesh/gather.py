@@ -47,7 +47,8 @@ def gather_event_sources() -> dict[str, Any]:
     te = sources.get("trading_engine")
     if isinstance(te, dict) and isinstance(te.get("icc"), dict):
         icc = te["icc"]
-    sections = icc.get("sections") if isinstance(icc.get("sections"), dict) else {}
+    sections_raw = icc.get("sections")
+    sections = sections_raw if isinstance(sections_raw, dict) else {}
     sources["oms"] = {"live_trading": sections.get("live_trading"), "from": "icc"}
     sources["gateway"] = {"system_status": sections.get("system_status"), "from": "icc"}
     availability["oms"] = True

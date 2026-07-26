@@ -143,7 +143,8 @@ def snapshot_read_only_sources(
         )
 
         regime = build_market_regime_intelligence(limit=50)
-        hist = regime.get("history") if isinstance(regime.get("history"), list) else []
+        hist_raw = regime.get("history")
+        hist = hist_raw if isinstance(hist_raw, list) else []
         current = regime.get("current")
         rows = list(hist)
         if isinstance(current, dict):

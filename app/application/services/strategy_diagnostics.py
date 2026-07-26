@@ -156,7 +156,7 @@ def extract_cycle_diagnostics(
 
     session = "—"
     session_allowed: bool | None = None
-    trend = {
+    trend: dict[str, Any] = {
         "h4": "—",
         "h1": "—",
         "m15": "—",
@@ -238,7 +238,7 @@ def extract_cycle_diagnostics(
     if cycle_outcome in {"no_snapshot"} and "NO_SNAPSHOT" not in rejected_codes:
         rejected_codes.append("NO_SNAPSHOT")
     if "no_smc_zone" in rejected_codes:
-        components["smc"] = min(int(components["smc"]), 20)
+        components["smc"] = min(int(components.get("smc") or 0), 20)
 
     # Soft parse known codes from free-text decision_reasons.
     for raw in decision_reasons:

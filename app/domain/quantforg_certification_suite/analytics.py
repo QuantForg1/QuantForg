@@ -170,12 +170,13 @@ def build_checks(ctx: dict[str, Any]) -> list[dict[str, Any]]:
 
     islm = _as_dict(sources.get("islm"))
     strategies = _as_list(islm.get("registry"))
-    health_vals = [
-        _f(_as_dict(s.get("health")).get("overall_strategy_health"))
+    health_vals: list[float] = [
+        h
         for s in strategies
         if isinstance(s, dict)
+        and (h := _f(_as_dict(s.get("health")).get("overall_strategy_health")))
+        is not None
     ]
-    health_vals = [h for h in health_vals if h is not None]
     avg_health = sum(health_vals) / len(health_vals) if health_vals else None
     checks.append(
         _check(

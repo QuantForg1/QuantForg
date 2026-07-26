@@ -886,7 +886,8 @@ def get_control_plane() -> OperationsControlPlane:
                     )
             if "max_open_positions" in state:
                 try:
-                    mop = int(state.get("max_open_positions"))
+                    mop_raw: Any = state.get("max_open_positions")
+                    mop = int(mop_raw)
                     if mop >= 1:
                         plane.max_open_trades = mop
                 except (TypeError, ValueError):

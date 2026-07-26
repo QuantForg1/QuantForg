@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from threading import Lock
@@ -115,20 +116,22 @@ class AlertService:
                     return updated
         return None
 
-    def list(self, *, limit: int = 100, unacked_only: bool = False) -> list[OpsAlert]:
+    def list(
+        self, *, limit: int = 100, unacked_only: bool = False
+    ) -> builtins.list[OpsAlert]:
         with self._lock:
             rows = list(self._alerts)
         if unacked_only:
             rows = [a for a in rows if not a.acknowledged]
         return rows[-limit:]
 
-    def grouped(self, *, unacked_only: bool = True) -> list[dict[str, object]]:
+    def grouped(self, *, unacked_only: bool = True) -> builtins.list[dict[str, object]]:
         """Group by kind for operator desks — reduces alert fatigue."""
         rows = self.list(limit=5_000, unacked_only=unacked_only)
-        by_kind: dict[str, list[OpsAlert]] = {}
+        by_kind: dict[str, builtins.list[OpsAlert]] = {}
         for a in rows:
             by_kind.setdefault(a.kind.value, []).append(a)
-        out: list[dict[str, object]] = []
+        out: builtins.list[dict[str, object]] = []
         for kind, items in by_kind.items():
             latest = max(items, key=lambda x: x.last_seen_at or x.created_at)
             out.append(

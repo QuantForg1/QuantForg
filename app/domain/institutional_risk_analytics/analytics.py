@@ -279,7 +279,7 @@ def build_correlation(ctx: dict[str, Any]) -> dict[str, Any]:
 
     matrix: list[dict[str, Any]] = []
     for a in labels:
-        row = {"session": a}
+        row: dict[str, Any] = {"session": a}
         for b in labels:
             if a == b:
                 row[b] = 1.0
@@ -350,7 +350,7 @@ def build_stress_loss(
     ]
     if not rows:
         rows = _as_list(scenario_risk.get("scenarios"))[:5]
-    losses = [_f(r.get("drawdown")) for r in rows if _f(r.get("drawdown")) is not None]
+    losses = [v for r in rows if (v := _f(r.get("drawdown"))) is not None]
     return {
         "stress_scenarios": rows,
         "average_stress_drawdown": (

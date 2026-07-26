@@ -60,11 +60,17 @@ class AiQuantScientist:
             key=lambda r: r.get("updated_at") or r.get("created_at") or "", reverse=True
         )
 
-        score_vals = [
-            (r.get("scores") or {}).get("research_confidence_score")
-            for r in merged
-            if (r.get("scores") or {}).get("research_confidence_score") is not None
-        ]
+        score_vals: list[float] = []
+        for r in merged:
+            scores_raw = r.get("scores")
+            scores = scores_raw if isinstance(scores_raw, dict) else {}
+            raw = scores.get("research_confidence_score")
+            if raw is None:
+                continue
+            try:
+                score_vals.append(float(raw))
+            except (TypeError, ValueError):
+                continue
         scores_avg = {
             "research_confidence_score": (
                 round(statistics.mean(score_vals), 1) if score_vals else 50.0

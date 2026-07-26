@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import threading
 from dataclasses import asdict, dataclass, field
@@ -150,14 +151,14 @@ class ModelRegistry:
             return updated
         return m
 
-    def list(self, *, approval: str | None = None) -> list[dict[str, Any]]:
+    def list(self, *, approval: str | None = None) -> builtins.list[dict[str, Any]]:
         with self._lock:
             rows = list(self._models)
         if approval:
             rows = [m for m in rows if m.approval_status == approval]
         return [m.to_dict() for m in reversed(rows)]
 
-    def approved(self) -> list[dict[str, Any]]:
+    def approved(self) -> builtins.list[dict[str, Any]]:
         return self.list(approval="approved")
 
 

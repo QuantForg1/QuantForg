@@ -306,8 +306,9 @@ def next_backoff_ms(attempt: int, config: ScalpingAiV2Config) -> int:
         attempt = 0
     if attempt >= config.max_retries:
         return -1  # stop
-    delay = config.retry_backoff_ms * (2**attempt)
-    return min(delay, config.max_retry_backoff_ms)
+    delay = int(config.retry_backoff_ms) * (2**attempt)
+    cap = int(config.max_retry_backoff_ms)
+    return delay if delay < cap else cap
 
 
 @dataclass

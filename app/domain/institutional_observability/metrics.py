@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -107,7 +108,7 @@ def compute_uptime() -> dict[str, Any]:
     }
 
 
-def measure_latency_ms(fn) -> float | None:
+def measure_latency_ms(fn: Callable[[], Any]) -> float | None:
     """Time a callable; return None on failure — never invents latency."""
     try:
         t0 = time.perf_counter()

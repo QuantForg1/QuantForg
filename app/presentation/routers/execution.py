@@ -423,6 +423,18 @@ async def execution_optimization(
 
     base = await execution_analytics(user=user, journal=journal, limit=limit)
     metrics = dict(base.metrics)
+
+    def _as_metric_float(key: str) -> float | None:
+        val: Any = metrics.get(key)
+        if val is None:
+            return None
+        return float(val)
+
+    def _as_sample_int(key: str) -> int:
+        sizes = base.sample_sizes or {}
+        val: Any = sizes.get(key) or 0
+        return int(val)
+
     # Closed-trade shaped rows from journal when present
     journal_rows = journal.list_for_user(str(user.id), limit=limit)
     trade_like: list[dict[str, Any]] = []
@@ -440,27 +452,11 @@ async def execution_optimization(
         )
 
     broker_q = compute_broker_quality(
-        fill_rate=(
-            float(metrics["fill_rate"])
-            if metrics.get("fill_rate") is not None
-            else None
-        ),
-        reject_rate=(
-            float(metrics["reject_rate"])
-            if metrics.get("reject_rate") is not None
-            else None
-        ),
-        avg_slippage=(
-            float(metrics["average_slippage"])
-            if metrics.get("average_slippage") is not None
-            else None
-        ),
-        latency_p95_ms=(
-            float(metrics["order_latency_ms_p95"])
-            if metrics.get("order_latency_ms_p95") is not None
-            else None
-        ),
-        attempt_count=int((base.sample_sizes or {}).get("attempts") or 0),
+        fill_rate=_as_metric_float("fill_rate"),
+        reject_rate=_as_metric_float("reject_rate"),
+        avg_slippage=_as_metric_float("average_slippage"),
+        latency_p95_ms=_as_metric_float("order_latency_ms_p95"),
+        attempt_count=_as_sample_int("attempts"),
     )
     return {
         "status": base.status,

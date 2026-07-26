@@ -561,7 +561,7 @@ class InstitutionalExecutionEngine:
             except (OSError, RuntimeError, ValueError):
                 spread_val = None
             if intent.price is not None:
-                entry = intent.price.value
+                entry = intent.price
             stop_dist = None
             if intent.stop_loss is not None and entry > 0:
                 stop_dist = abs(entry - intent.stop_loss.value)
@@ -623,8 +623,14 @@ class InstitutionalExecutionEngine:
                         and "daily loss lock overridden" in warn_txt.lower()
                     ):
                         dd = assessment.drawdown or {}
+                        loss_pct = dd.get("daily_loss_pct")
                         log_risk_lock_overridden(
-                            current_daily_loss_pct=dd.get("daily_loss_pct"),
+                            current_daily_loss_pct=(
+                                loss_pct
+                                if isinstance(loss_pct, (int, float, str, Decimal))
+                                or loss_pct is None
+                                else str(loss_pct)
+                            ),
                         )
                 except Exception:  # noqa: S110  # best-effort optional path
                     pass
@@ -635,10 +641,15 @@ class InstitutionalExecutionEngine:
                         apply_daily_loss_lock_override,
                     )
 
+                    dd2 = assessment.drawdown or {}
+                    loss_pct2 = dd2.get("daily_loss_pct")
                     remaining, did_override = apply_daily_loss_lock_override(
                         risk_reject,
                         current_daily_loss_pct=(
-                            (assessment.drawdown or {}).get("daily_loss_pct")
+                            loss_pct2
+                            if isinstance(loss_pct2, (int, float, str, Decimal))
+                            or loss_pct2 is None
+                            else str(loss_pct2)
                         ),
                         log=True,
                     )

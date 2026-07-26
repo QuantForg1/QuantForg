@@ -5,6 +5,17 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+# Desk/platform orchestration (MT5 dashboard) lives alongside the V1 engine.
+from app.application.services.market_intelligence_platform import (
+    MarketIntelligencePlatformService as MarketIntelligencePlatformService,
+    dashboard_cache_stats as dashboard_cache_stats,
+)
+
+__all__ = [
+    "MarketIntelligencePlatformService",
+    "MarketIntelligenceService",
+    "dashboard_cache_stats",
+]
 from app.domain.market_intelligence import (
     MarketIntelligenceEngine,
     MarketIntelligenceInput,

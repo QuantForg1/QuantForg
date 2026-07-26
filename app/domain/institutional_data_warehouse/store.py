@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from copy import deepcopy
 from datetime import UTC, datetime
 from threading import Lock
@@ -90,12 +91,12 @@ class InstitutionalDataWarehouse:
         session: str | None = None,
         environment: str | None = None,
         strategy_version: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> builtins.list[dict[str, Any]]:
         if domain not in DATA_DOMAINS:
             raise ValueError(f"Unknown warehouse domain: {domain}")
         with self._lock:
             rows = deepcopy(self._datasets[domain])
-        out: list[dict[str, Any]] = []
+        out: builtins.list[dict[str, Any]] = []
         for row in rows:
             if session and str(row.get("session") or "") != session:
                 continue
@@ -124,7 +125,7 @@ class InstitutionalDataWarehouse:
         with self._lock:
             return {d: len(self._datasets[d]) for d in DATA_DOMAINS}
 
-    def event_flow(self, *, limit: int = 40) -> list[dict[str, Any]]:
+    def event_flow(self, *, limit: int = 40) -> builtins.list[dict[str, Any]]:
         with self._lock:
             return deepcopy(self._ingest_history[-limit:])
 

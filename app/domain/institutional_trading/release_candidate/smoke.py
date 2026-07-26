@@ -57,9 +57,11 @@ def run_production_smoke(*, use_live_probes: bool = True) -> dict[str, Any]:
 
             runtime = get_ite_runtime()
             if runtime is not None and hasattr(runtime, "tick_health"):
-                probe_snap = runtime.tick_health() or {}
+                tick_health = runtime.tick_health() or {}
+                probe_snap = dict(tick_health) if isinstance(tick_health, dict) else {}
             elif runtime is not None and getattr(runtime, "probes", None):
-                probe_snap = runtime.probes.collect() or {}
+                collected: object = runtime.probes.collect() or {}
+                probe_snap = dict(collected) if isinstance(collected, dict) else {}
         except Exception as exc:
             logger.info("smoke_live_probes_skipped", error=str(exc))
 

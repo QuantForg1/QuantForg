@@ -38,7 +38,7 @@ def seed_demo_governance() -> dict[str, Any]:
     cfg = get_config_change_history()
     vers = get_trade_version_registry()
 
-    demo_events = [
+    demo_events: list[dict[str, Any]] = [
         {
             "timestamp": "2026-07-22T09:00:00Z",
             "category": "gateway",

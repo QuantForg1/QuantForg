@@ -116,7 +116,7 @@ class LiveLearningProgram:
         dash = modules.get("learning_dashboard")
         rec = modules.get("research_recommendations")
         obs = modules.get("live_observation_collector")
-        summary = {
+        summary: dict[str, Any] = {
             "learning_progress": (
                 (dash.details or {}).get("learning_progress") if dash else None
             ),

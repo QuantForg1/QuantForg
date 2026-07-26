@@ -497,16 +497,10 @@ class ExecutionBridge:
         if status is ExecutionAttemptStatus.OMS_SUCCESS:
             self.metrics.record_executed(latency)
             ticket = oms_result.order_ticket or oms_result.deal_ticket
-            sl_txt = (
-                str(intent.stop_loss.value)
-                if getattr(intent, "stop_loss", None) is not None
-                else ""
-            )
-            tp_txt = (
-                str(intent.take_profit.value)
-                if getattr(intent, "take_profit", None) is not None
-                else ""
-            )
+            sl = intent.stop_loss
+            sl_txt = str(sl.value) if sl is not None else ""
+            tp = intent.take_profit
+            tp_txt = str(tp.value) if tp is not None else ""
             lot_txt = str(
                 getattr(oms_result, "volume", None)
                 or getattr(getattr(intent, "volume", None), "value", None)
@@ -534,16 +528,10 @@ class ExecutionBridge:
         else:
             self.metrics.record_rejected(latency)
             # Never hide broker errors — print exact MT5 fields.
-            sl_txt = (
-                str(intent.stop_loss.value)
-                if getattr(intent, "stop_loss", None) is not None
-                else ""
-            )
-            tp_txt = (
-                str(intent.take_profit.value)
-                if getattr(intent, "take_profit", None) is not None
-                else ""
-            )
+            sl = intent.stop_loss
+            sl_txt = str(sl.value) if sl is not None else ""
+            tp = intent.take_profit
+            tp_txt = str(tp.value) if tp is not None else ""
             vol_txt = str(
                 getattr(getattr(intent, "volume", None), "value", None)
                 or getattr(intent, "volume", "")

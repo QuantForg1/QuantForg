@@ -525,10 +525,12 @@ def next_backoff_with_jitter_ms(
         attempt = 0
     if attempt >= config.max_retries:
         return -1
-    base = config.retry_backoff_ms * (2**attempt)
-    capped = min(base, config.max_retry_backoff_ms)
+    base = int(config.retry_backoff_ms) * (2**attempt)
+    cap = int(config.max_retry_backoff_ms)
+    capped = base if base < cap else cap
     jitter = int(capped * jitter_ratio * random.random())  # noqa: S311
-    return min(capped + jitter, config.max_retry_backoff_ms)
+    total = capped + jitter
+    return total if total < cap else cap
 
 
 def plan_restart_recovery(

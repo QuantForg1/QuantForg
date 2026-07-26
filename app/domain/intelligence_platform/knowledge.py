@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from threading import Lock
@@ -61,11 +62,11 @@ class KnowledgeBaseStore:
                 self._items = self._items[: self.max_entries]
         return entry
 
-    def list(self, *, limit: int = 50) -> list[KnowledgeEntry]:
+    def list(self, *, limit: int = 50) -> builtins.list[KnowledgeEntry]:
         with self._lock:
             return list(self._items[: max(1, min(limit, self.max_entries))])
 
-    def search(self, query: str, *, limit: int = 20) -> list[KnowledgeEntry]:
+    def search(self, query: str, *, limit: int = 20) -> builtins.list[KnowledgeEntry]:
         q = query.strip().lower()
         if not q:
             return []

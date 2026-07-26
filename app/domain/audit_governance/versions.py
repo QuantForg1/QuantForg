@@ -23,7 +23,8 @@ DEFAULT_VERSIONS: dict[str, str] = {
 
 
 def normalize_trade_versions(raw: dict[str, Any]) -> dict[str, Any]:
-    versions = raw.get("versions") if isinstance(raw.get("versions"), dict) else {}
+    versions_raw = raw.get("versions")
+    versions = versions_raw if isinstance(versions_raw, dict) else {}
     merged = {**DEFAULT_VERSIONS, **{k: str(v) for k, v in versions.items()}}
     # Also accept flat keys
     for key in DEFAULT_VERSIONS:

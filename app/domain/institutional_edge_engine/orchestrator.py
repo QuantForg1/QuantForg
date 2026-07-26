@@ -176,12 +176,22 @@ class InstitutionalEdgeEngine:
             "explainable": True,
             "auditable": True,
         }
+        edge_summary = result.get("edge_report_summary")
+        inst_score = result.get("institutional_score")
         self.history.insert(
             0,
             {
                 "audit_id": audit_id,
-                "edge_score": result["edge_report_summary"]["edge_score"],
-                "grade": result["institutional_score"]["overall_grade"],
+                "edge_score": (
+                    edge_summary.get("edge_score")
+                    if isinstance(edge_summary, dict)
+                    else None
+                ),
+                "grade": (
+                    inst_score.get("overall_grade")
+                    if isinstance(inst_score, dict)
+                    else None
+                ),
             },
         )
         if len(self.history) > self.config.max_history:

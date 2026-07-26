@@ -242,7 +242,8 @@ def paper_trading_pipeline(
             details={"real_orders": False},
         )
 
-    trades = paper.get("trades") if isinstance(paper.get("trades"), list) else []
+    trades_raw = paper.get("trades")
+    trades = trades_raw if isinstance(trades_raw, list) else []
     if not trades and not any(
         paper.get(k) is not None
         for k in ("performance", "risk_metrics", "execution_timing")
@@ -371,9 +372,9 @@ def promotion_workflow(
             "current_stage": stage,
             "next_stage": next_stage,
             "approvals": {
-                "research": approvals.get("research"),
-                "risk": approvals.get("risk"),
-                "operator": approvals.get("operator"),
+                "research": approvals.get("research") if approvals else None,
+                "risk": approvals.get("risk") if approvals else None,
+                "operator": approvals.get("operator") if approvals else None,
             },
             "automatic_promotion": auto,
             "auto_promote_blocked": blocked or True,
@@ -546,9 +547,10 @@ def promotion_report(
     inp: AlphaFactoryInput, modules: dict[str, ModuleResult]
 ) -> ModuleResult:
     promo = inp.promotion if isinstance(inp.promotion, dict) else {}
+    promo_mod = modules.get("promotion_workflow")
     stage = (promo.get("stage") if promo else None) or (
-        (modules.get("promotion_workflow").details or {}).get("current_stage")
-        if modules.get("promotion_workflow")
+        (promo_mod.details or {}).get("current_stage")
+        if promo_mod is not None
         else "Development"
     )
     strengths: list[str] = []

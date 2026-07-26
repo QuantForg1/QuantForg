@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -79,12 +80,12 @@ class AgentEventBus:
 
     def list(
         self, *, limit: int = 100, session_id: str | None = None
-    ) -> list[AgentEvent]:
+    ) -> builtins.list[AgentEvent]:
         with self._lock:
             rows = list(self._events)
         if session_id:
             rows = [e for e in rows if e.session_id == session_id]
         return rows[-max(1, min(limit, self.max_events)) :]
 
-    def by_session(self, session_id: str) -> list[AgentEvent]:
+    def by_session(self, session_id: str) -> builtins.list[AgentEvent]:
         return self.list(limit=self.max_events, session_id=session_id)

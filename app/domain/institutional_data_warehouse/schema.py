@@ -47,7 +47,8 @@ def normalize_warehouse_record(
         or raw.get("submitted_at")
         or raw.get("observed_at")
     )
-    versions = raw.get("versions") if isinstance(raw.get("versions"), dict) else {}
+    versions_raw = raw.get("versions")
+    versions = versions_raw if isinstance(versions_raw, dict) else {}
 
     def _ver(key: str, flat: str) -> str | None:
         if versions.get(key) is not None:

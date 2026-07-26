@@ -310,7 +310,7 @@ def draft_release(
 ) -> dict[str, Any]:
     rid = str(uuid4())
     commit = commit_hash or _git_commit() or "unknown"
-    release = {
+    release: dict[str, Any] = {
         "release_id": rid,
         "version": version,
         "component": component,

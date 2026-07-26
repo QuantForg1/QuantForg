@@ -553,10 +553,10 @@ def observe_cycle(cycle: dict[str, Any]) -> None:
     with store._lock:
         if not store.promoted:
             return
-        quality = cycle.get("quality") if isinstance(cycle.get("quality"), dict) else {}
-        confluence = (
-            cycle.get("confluence") if isinstance(cycle.get("confluence"), dict) else {}
-        )
+        quality_raw = cycle.get("quality")
+        quality = quality_raw if isinstance(quality_raw, dict) else {}
+        confluence_raw = cycle.get("confluence")
+        confluence = confluence_raw if isinstance(confluence_raw, dict) else {}
         sample = {
             "recorded_at": cycle.get("recorded_at"),
             "executed": bool(cycle.get("executed")),

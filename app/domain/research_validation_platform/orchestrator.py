@@ -87,7 +87,12 @@ class ResearchValidationPlatform:
         return self.registry.list()
 
     def replay_load(self, payload: dict[str, Any]) -> dict[str, Any]:
-        bars = payload.get("bars") if isinstance(payload.get("bars"), list) else []
+        bars_raw = payload.get("bars")
+        bars = [
+            b
+            for b in (bars_raw if isinstance(bars_raw, list) else [])
+            if isinstance(b, dict)
+        ]
         return self.replay.load(
             strategy_key=str(payload.get("strategy_key") or "unknown"),
             bars=bars,
@@ -104,7 +109,12 @@ class ResearchValidationPlatform:
         return run_paper_environment(payload, self.config)
 
     def compare(self, payload: dict[str, Any]) -> dict[str, Any]:
-        runs = payload.get("runs") if isinstance(payload.get("runs"), list) else []
+        runs_raw = payload.get("runs")
+        runs = [
+            r
+            for r in (runs_raw if isinstance(runs_raw, list) else [])
+            if isinstance(r, dict)
+        ]
         return compare_strategies(runs, max_comparisons=self.config.max_comparisons)
 
     def certify(self, payload: dict[str, Any]) -> dict[str, Any]:

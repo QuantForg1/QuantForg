@@ -120,6 +120,8 @@ def validate_instance(model: str, payload: dict[str, Any]) -> dict[str, Any]:
 
     for rule in VALIDATION_RULES.get(model, ()):
         field = rule.get("field")
+        if not isinstance(field, str):
+            continue
         assertion = str(rule.get("assert") or "")
         optional = bool(rule.get("optional"))
         if field not in data and (

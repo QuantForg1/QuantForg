@@ -166,10 +166,8 @@ class ProductionReadinessCertification:
                     (hsp.details or {}).get("recommended_restrictions") if hsp else []
                 ),
                 "notify_operators": (
-                    (modules.get("continuous_certification").details or {}).get(
-                        "notify_operators"
-                    )
-                    if modules.get("continuous_certification")
+                    (cc.details or {}).get("notify_operators")
+                    if (cc := modules.get("continuous_certification")) is not None
                     else False
                 ),
             },

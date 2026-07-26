@@ -65,9 +65,14 @@ class ForceFirstTradeConfig:
             .strip()
             .upper()
         )
-        direction: ForceDirection = (
-            raw_dir if raw_dir in {"BUY", "SELL", "AUTO"} else "AUTO"
-        )
+        direction: ForceDirection
+        if raw_dir == "BUY":
+            direction = "BUY"
+        elif raw_dir == "SELL":
+            direction = "SELL"
+        else:
+            direction = "AUTO"
+
         max_trades = int(getattr(settings, "force_first_trade_max", 1) or 1)
         lot_raw = getattr(settings, "force_first_trade_lot", "0.01")
         try:

@@ -151,13 +151,22 @@ class AlphaFactory:
             "explainable": True,
             "auditable": True,
         }
+        research_summary = result.get("research_summary")
         self.history.insert(
             0,
             {
                 "audit_id": audit_id,
-                "active": result["research_summary"]["active_experiments"],
+                "active": (
+                    research_summary.get("active_experiments")
+                    if isinstance(research_summary, dict)
+                    else None
+                ),
                 "certified": certified,
-                "stage": result["research_summary"]["promotion_stage"],
+                "stage": (
+                    research_summary.get("promotion_stage")
+                    if isinstance(research_summary, dict)
+                    else None
+                ),
             },
         )
         if len(self.history) > self.config.max_history:

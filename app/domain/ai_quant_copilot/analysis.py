@@ -175,7 +175,9 @@ def build_historical_comparison(ctx: dict[str, Any]) -> dict[str, Any]:
 
     # Derived reference windows from same snapshot (deterministic placeholders
     # scaled from current when finer windowing unavailable — still evidence-backed).
-    def _scaled(label: str, pf_m: float, wr_m: float, tc_m: float, dd_m: float) -> dict:
+    def _scaled(
+        label: str, pf_m: float, wr_m: float, tc_m: float, dd_m: float
+    ) -> dict[str, Any]:
         def _n(v: Any) -> float | None:
             try:
                 return float(v) if v is not None else None
@@ -429,7 +431,7 @@ def search_aqs_recommendations(
 def package_evidence(
     *,
     answer: str,
-    evidence: list[Any],
+    evidence: list[Any] | dict[str, Any],
     source_subsystem: str,
     confidence: float,
     historical_references: list[Any] | None = None,

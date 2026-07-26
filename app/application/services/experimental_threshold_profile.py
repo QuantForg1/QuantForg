@@ -435,15 +435,16 @@ def rollback_experimental_to_production(
 
 def _is_eligible_cycle(cycle: dict[str, Any]) -> bool:
     """Eligible live evaluation: scored analysis cycle (not empty/off-hours noise)."""
-    quality = cycle.get("quality") if isinstance(cycle.get("quality"), dict) else {}
-    confluence = (
-        cycle.get("confluence") if isinstance(cycle.get("confluence"), dict) else {}
-    )
+    quality_raw = cycle.get("quality")
+    quality = quality_raw if isinstance(quality_raw, dict) else {}
+    confluence_raw = cycle.get("confluence")
+    confluence = confluence_raw if isinstance(confluence_raw, dict) else {}
     q = quality.get("score")
     c = confluence.get("total")
     if q is None and c is None:
         return False
-    session = cycle.get("session") if isinstance(cycle.get("session"), dict) else {}
+    session_raw = cycle.get("session")
+    session = session_raw if isinstance(session_raw, dict) else {}
     return session.get("allowed") is not False
 
 
@@ -728,10 +729,10 @@ def observe_experimental_cycle(cycle: dict[str, Any]) -> None:
         if not _is_eligible_cycle(cycle):
             return
 
-        quality = cycle.get("quality") if isinstance(cycle.get("quality"), dict) else {}
-        confluence = (
-            cycle.get("confluence") if isinstance(cycle.get("confluence"), dict) else {}
-        )
+        quality_raw = cycle.get("quality")
+        quality = quality_raw if isinstance(quality_raw, dict) else {}
+        confluence_raw = cycle.get("confluence")
+        confluence = confluence_raw if isinstance(confluence_raw, dict) else {}
         q = int(quality.get("score") or 0)
         c = int(confluence.get("total") or 0)
         action = str(cycle.get("decision_action") or "").upper()

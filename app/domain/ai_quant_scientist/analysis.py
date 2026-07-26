@@ -339,19 +339,22 @@ def regime_research(ctx: dict[str, Any]) -> dict[str, Any]:
     ]
     table: list[dict[str, Any]] = []
     # Use historical performance from current if present; else placeholders as research estimates  # noqa: E501
-    perf = {}
+    perf: dict[str, Any] = {}
+    current_regime = None
     if isinstance(current, dict):
-        perf = current.get("historical_performance") or {}
+        hist = current.get("historical_performance")
+        perf = hist if isinstance(hist, dict) else {}
+        current_regime = current.get("current_regime")
     for lab in labels:
         # Deterministic research estimates seeded by label hash when no live stats
         seed = int(hashlib.sha256(lab.encode()).hexdigest()[:6], 16)
-        wr = 48 + (seed % 20)
+        wr: float = float(48 + (seed % 20))
         pf = round(1.1 + (seed % 140) / 100.0, 2)
         rr = round(1.0 + (seed % 90) / 100.0, 2)
         dd = round(4.0 + (seed % 120) / 10.0, 2)
-        if lab == str(current.get("current_regime") or "").upper() and perf:
+        if lab == str(current_regime or "").upper() and perf:
             wr = _f(perf.get("win_rate")) or wr
-            if isinstance(wr, float) and wr <= 1.0:
+            if wr <= 1.0:
                 wr = round(wr * 100.0, 2)
             pf = _f(perf.get("profit_factor")) or pf
             rr = _f(perf.get("avg_rr") or perf.get("expectancy")) or rr

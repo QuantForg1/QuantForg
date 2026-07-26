@@ -53,8 +53,9 @@ def _insufficient(module: str, need: int, have: int) -> ModuleResult:
 
 
 def _win(t: dict[str, Any]) -> bool | None:
-    if isinstance(t.get("win"), bool):
-        return t["win"]
+    win_val = t.get("win")
+    if isinstance(win_val, bool):
+        return win_val
     pnl = _dec(t.get("pnl") or t.get("net_pnl"))
     if pnl is None:
         return None
@@ -120,8 +121,8 @@ def score_edge(inp: IeeInput, config: IeeConfig) -> ModuleResult:
 
     win_rate = (Decimal(wins) / Decimal(n) * Decimal(100)).quantize(Decimal("0.01"))
     avg_rr = (sum(rrs) / Decimal(len(rrs))).quantize(Decimal("0.01")) if rrs else None
-    gross_win = sum(win_pnls) if win_pnls else Decimal("0")
-    gross_loss = sum(loss_pnls) if loss_pnls else Decimal("0")
+    gross_win = sum(win_pnls, start=Decimal("0"))
+    gross_loss = sum(loss_pnls, start=Decimal("0"))
     profit_factor = (
         (gross_win / gross_loss).quantize(Decimal("0.01")) if gross_loss > 0 else None
     )
@@ -291,18 +292,18 @@ def evaluate_regime_performance(inp: IeeInput, config: IeeConfig) -> ModuleResul
             ),
         )
 
-    ranked = []
+    ranked: list[dict[str, Any]] = []
     for key, rows in buckets.items():
         n = len(rows)
         wins = sum(1 for r in rows if _win(r) is True)
         wr = (Decimal(wins) / Decimal(n) * 100).quantize(Decimal("0.01"))
         ranked.append({"regime": key, "n": n, "win_rate_pct": str(wr)})
-    ranked.sort(key=lambda r: Decimal(r["win_rate_pct"]), reverse=True)
+    ranked.sort(key=lambda r: Decimal(str(r["win_rate_pct"])), reverse=True)
     best = ranked[0]
     return ModuleResult(
         module="regime_performance",
         status="available",
-        score=Decimal(best["win_rate_pct"]),
+        score=Decimal(str(best["win_rate_pct"])),
         recommendation=(
             f"Historically strongest: {best['regime']} "
             f"({best['win_rate_pct']}%, n={best['n']})"
@@ -729,9 +730,8 @@ def monthly_research_package(
     if edge and edge.status == "available":
         strengths.append(f"Edge scoring available: {edge.recommendation}")
         d = edge.details
-        if _dec(d.get("win_rate_pct")) is not None and _dec(
-            d.get("win_rate_pct")
-        ) < Decimal("45"):
+        wr = _dec(d.get("win_rate_pct"))
+        if wr is not None and wr < Decimal("45"):
             weaknesses.append(f"Win rate {d.get('win_rate_pct')}% observed")
     else:
         weaknesses.append("Edge scoring insufficient")

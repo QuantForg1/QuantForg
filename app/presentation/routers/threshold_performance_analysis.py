@@ -91,7 +91,7 @@ async def export_pdf(_user: CurrentUser) -> Response:
     from app.application.services.threshold_performance_analysis import build_pdf_bytes
 
     if _last_report is None:
-        empty = {
+        empty: dict[str, Any] = {
             "generated_at": None,
             "symbol": "XAUUSD",
             "evaluations": 0,

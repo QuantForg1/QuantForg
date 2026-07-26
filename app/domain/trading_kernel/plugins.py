@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, Protocol, runtime_checkable
@@ -32,14 +33,14 @@ class PluginRegistry:
         with self._lock:
             self._plugins.pop(name, None)
 
-    def list(self) -> list[str]:
+    def list(self) -> builtins.list[str]:
         with self._lock:
             return sorted(self._plugins.keys())
 
-    def run_all(self, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    def run_all(self, snapshot: dict[str, Any]) -> builtins.list[dict[str, Any]]:
         with self._lock:
             plugins = list(self._plugins.values())
-        results: list[dict[str, Any]] = []
+        results: builtins.list[dict[str, Any]] = []
         for plugin in plugins:
             try:
                 out = plugin.evaluate(dict(snapshot))

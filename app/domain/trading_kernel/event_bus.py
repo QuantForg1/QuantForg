@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -78,12 +79,12 @@ class KernelEventBus:
 
     def list(
         self, *, limit: int = 100, trace_id: str | None = None
-    ) -> list[KernelEvent]:
+    ) -> builtins.list[KernelEvent]:
         with self._lock:
             rows = list(self._events)
         if trace_id:
             rows = [e for e in rows if e.trace_id == trace_id]
         return rows[-max(1, min(limit, self.max_events)) :]
 
-    def by_trace(self, trace_id: str) -> list[KernelEvent]:
+    def by_trace(self, trace_id: str) -> builtins.list[KernelEvent]:
         return self.list(limit=self.max_events, trace_id=trace_id)

@@ -187,8 +187,8 @@ def report_from_dict(raw: dict[str, Any]) -> LiveCertificationReport | None:
             account_type=str(trade_raw.get("account_type") or ""),
             symbol=str(trade_raw.get("symbol") or ""),
             volume=Decimal(str(trade_raw.get("volume"))),
-            ticket=int(trade_raw.get("ticket")),
-            deal=int(trade_raw.get("deal")),
+            ticket=int(trade_raw["ticket"]),
+            deal=int(trade_raw["deal"]),
             entry=Decimal(str(trade_raw.get("entry"))),
             exit=(
                 Decimal(str(trade_raw["exit"]))
@@ -222,7 +222,8 @@ def report_from_dict(raw: dict[str, Any]) -> LiveCertificationReport | None:
     except Exception:
         return None
 
-    stages_raw = raw.get("stages") if isinstance(raw.get("stages"), list) else []
+    stages_val = raw.get("stages")
+    stages_raw = stages_val if isinstance(stages_val, list) else []
     stages = tuple(
         LiveTradeStageResult(
             stage=str(s.get("stage") or ""),
@@ -232,9 +233,8 @@ def report_from_dict(raw: dict[str, Any]) -> LiveCertificationReport | None:
         for s in stages_raw
         if isinstance(s, dict)
     )
-    checklist_raw = (
-        raw.get("checklist") if isinstance(raw.get("checklist"), dict) else {}
-    )
+    checklist_val = raw.get("checklist")
+    checklist_raw = checklist_val if isinstance(checklist_val, dict) else {}
     conditions: list[LiveCertCondition] = []
     raw_conditions = checklist_raw.get("conditions") or ()
     if isinstance(raw_conditions, (list, tuple)):

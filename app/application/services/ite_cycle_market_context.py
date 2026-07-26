@@ -224,7 +224,9 @@ async def build_ite_cycle_market_context(
             diag["ask"] = str(ask)
             diag["volume"] = str(vol) if vol is not None else None
             diag["server_time"] = (
-                ts.isoformat() if hasattr(ts, "isoformat") else str(ts or "")
+                ts.isoformat()
+                if ts is not None and hasattr(ts, "isoformat")
+                else str(ts or "")
             )
             if ask > 0 and bid > 0:
                 spread = ask - bid

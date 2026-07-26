@@ -222,7 +222,8 @@ def read_health() -> dict[str, Any]:
         base["auth_incidents_recent"] = list(reversed(load_auth_incidents(limit=10)))
         return base
     try:
-        return json.loads(HEALTH_PATH.read_text(encoding="utf-8"))
+        loaded = json.loads(HEALTH_PATH.read_text(encoding="utf-8"))
+        return loaded if isinstance(loaded, dict) else empty_health()
     except (OSError, json.JSONDecodeError):
         return empty_health()
 

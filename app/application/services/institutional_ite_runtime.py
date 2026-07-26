@@ -1060,8 +1060,9 @@ class InstitutionalIteRuntime:
                         snapshot=snapshot,
                         ticket=str(ticket) if ticket is not None else None,
                         entry=(
-                            float(account.mid_price)
-                            if getattr(account, "mid_price", None) is not None
+                            float(mid_price)
+                            if (mid_price := getattr(account, "mid_price", None))
+                            is not None
                             else None
                         ),
                     )

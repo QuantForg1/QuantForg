@@ -415,7 +415,7 @@ def compare_scenarios(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_reports(simulations: list[dict[str, Any]]) -> dict[str, Any]:
-    by_mode: dict[str, list] = {}
+    by_mode: dict[str, list[dict[str, Any]]] = {}
     for s in simulations:
         by_mode.setdefault(str(s.get("mode")), []).append(s)
 

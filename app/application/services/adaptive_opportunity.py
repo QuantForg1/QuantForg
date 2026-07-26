@@ -373,6 +373,7 @@ def estimate_wait_statistics(cycles: list[dict[str, Any]]) -> dict[str, Any]:
         if session in _NY_SESSIONS:
             ny_eligible += 1
     total_eligible = len(eligible_ts)
+    p_ny: float | None
     if total_eligible > 0:
         p_ny = round(100.0 * ny_eligible / total_eligible, 0)
         p_ny = max(p_ny, 50.0) if total_eligible < 5 else p_ny

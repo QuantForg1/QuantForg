@@ -60,7 +60,7 @@ class GetOpsMetricsUseCase:
         snap = self.metrics.snapshot()
         payload = snap.to_dict()
         try:
-            from app.application.services.market_intelligence import (
+            from app.application.services.market_intelligence_platform import (
                 dashboard_cache_stats,
             )
             from app.infrastructure.brokers.mt5.metrics import gateway_metrics

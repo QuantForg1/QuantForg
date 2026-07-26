@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from threading import Lock
@@ -56,11 +57,11 @@ class OperatorNotesStore:
                 self._items = self._items[: self.max_notes]
         return note
 
-    def list(self, *, limit: int = 50) -> list[OperatorNote]:
+    def list(self, *, limit: int = 50) -> builtins.list[OperatorNote]:
         with self._lock:
             return list(self._items[: max(1, min(limit, self.max_notes))])
 
-    def search(self, query: str, *, limit: int = 20) -> list[OperatorNote]:
+    def search(self, query: str, *, limit: int = 20) -> builtins.list[OperatorNote]:
         q = query.strip().lower()
         if not q:
             return []

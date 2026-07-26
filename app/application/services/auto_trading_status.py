@@ -122,10 +122,10 @@ def _enrich_from_adapter(
             logger.info("auto_trading_status_gateway_health_failed", error=str(exc))
 
     if payload is not None:
-        mt5 = payload.get("mt5") if isinstance(payload.get("mt5"), dict) else {}
-        account = (
-            payload.get("account") if isinstance(payload.get("account"), dict) else {}
-        )
+        mt5_raw = payload.get("mt5")
+        mt5: dict[str, Any] = mt5_raw if isinstance(mt5_raw, dict) else {}
+        account_raw = payload.get("account")
+        account: dict[str, Any] = account_raw if isinstance(account_raw, dict) else {}
         # Explicit flags when gateway exposes them — never invent True.
         # AutoTrading comes from terminal_info.trade_allowed (not account trade_allowed).  # noqa: E501
         for key, dest in (
@@ -167,9 +167,10 @@ def _enrich_from_adapter(
             # Only if explicitly nested under mt5 (terminal-level).
             out["mt5_autotrading_enabled"] = bool(mt5.get("trade_allowed"))
 
+        support_raw = mt5.get("capability_support")
         support = (
-            mt5.get("capability_support")
-            if isinstance(mt5.get("capability_support"), dict)
+            support_raw
+            if isinstance(support_raw, dict)
             else payload.get("capability_support")
         )
         if isinstance(support, dict):

@@ -255,7 +255,10 @@ def score_confluence(
             "No available engine scores to confluence",
             threshold=config.min_confluence_score,
         )
-    total = sum((e.score for e in usable), Decimal("0"))
+    total = Decimal("0")
+    for e in usable:
+        if e.score is not None:
+            total += e.score
     avg = (total / Decimal(str(len(usable)))).quantize(Decimal("0.01"))
     reasons = [f"{e.engine_id}={e.score} (pass={e.passed})" for e in usable]
     reasons.append(f"Average of {len(usable)} available engines")

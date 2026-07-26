@@ -48,7 +48,7 @@ def compute_statistics(
         al = avg_loss or 0.0
         expectancy = win_rate * avg_win - (1.0 - win_rate) * al
 
-    rrs = [_f(t.get("rr")) for t in trades if _f(t.get("rr")) is not None]
+    rrs = [v for t in trades if (v := _f(t.get("rr"))) is not None]
     avg_rr = statistics.mean(rrs) if rrs else None
     median_rr = statistics.median(rrs) if rrs else None
 
@@ -86,9 +86,7 @@ def compute_statistics(
 
     recovery = _safe_div(net, max_dd * starting_equity / 100.0) if max_dd > 0 else None
 
-    holds = [
-        _f(t.get("holding_sec")) for t in trades if _f(t.get("holding_sec")) is not None
-    ]
+    holds = [v for t in trades if (v := _f(t.get("holding_sec"))) is not None]
     avg_hold = statistics.mean(holds) if holds else None
 
     # Exposure ≈ fraction of time in market (sum hold / window estimate)

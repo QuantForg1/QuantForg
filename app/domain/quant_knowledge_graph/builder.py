@@ -61,7 +61,7 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
 
     def add_node(n: dict[str, Any]) -> str:
         nodes[n["id"]] = n
-        return n["id"]
+        return str(n["id"])
 
     def add_edge(e: dict[str, Any]) -> None:
         if e["source"] in nodes and e["target"] in nodes:
@@ -172,12 +172,12 @@ def build_graph(ctx: dict[str, Any]) -> dict[str, Any]:
             _edge(source=sid, target=strategy_id, relation=RelationType.GENERATED_BY)
         )
         add_edge(_edge(source=sid, target=regime_id, relation=RelationType.OBSERVED_IN))
-        sess = sig.get("session")
-        if sess:
+        sess_val = sig.get("session")
+        if sess_val is not None and str(sess_val):
             add_edge(
                 _edge(
                     source=sid,
-                    target=_nid("session", str(sess).lower().replace(" ", "_")),
+                    target=_nid("session", str(sess_val).lower().replace(" ", "_")),
                     relation=RelationType.OBSERVED_IN,
                 )
             )

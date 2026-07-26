@@ -12,15 +12,20 @@ def _as_list(v: Any) -> list[Any]:
 
 def _index(
     graph: dict[str, Any],
-) -> tuple[dict[str, dict], list[dict], dict[str, list], dict[str, list]]:
+) -> tuple[
+    dict[str, dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, list[dict[str, Any]]],
+    dict[str, list[dict[str, Any]]],
+]:
     nodes = {
         n["id"]: n
         for n in _as_list(graph.get("nodes"))
         if isinstance(n, dict) and n.get("id")
     }
     edges = [e for e in _as_list(graph.get("edges")) if isinstance(e, dict)]
-    out_adj: dict[str, list[dict]] = defaultdict(list)
-    in_adj: dict[str, list[dict]] = defaultdict(list)
+    out_adj: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    in_adj: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for e in edges:
         out_adj[str(e.get("source"))].append(e)
         in_adj[str(e.get("target"))].append(e)

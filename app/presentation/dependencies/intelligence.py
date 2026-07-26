@@ -8,7 +8,9 @@ from typing import Annotated, Any
 from fastapi import Depends
 
 from app.application.services.ai_market_advisor import AiMarketAdvisor
-from app.application.services.market_intelligence import MarketIntelligenceService
+from app.application.services.market_intelligence_platform import (
+    MarketIntelligencePlatformService,
+)
 from app.application.services.news_intelligence import NewsIntelligenceService
 from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.services.provider_registry import IntelligenceProviderRegistry
@@ -113,9 +115,9 @@ def get_market_intelligence(
     adapter: Annotated[MT5Adapter, Depends(get_mt5_adapter)],
     uow_factory: Annotated[Any, Depends(get_mt5_uow_factory)],
     registry: Annotated[IntelligenceProviderRegistry, Depends(get_provider_registry)],
-) -> MarketIntelligenceService:
+) -> MarketIntelligencePlatformService:
     _ = settings
-    return MarketIntelligenceService(
+    return MarketIntelligencePlatformService(
         status=GetMT5StatusUseCase(uow_factory=uow_factory, adapter=adapter),
         symbols=ListMT5SymbolsUseCase(uow_factory=uow_factory, adapter=adapter),
         portfolio_sync=PortfolioSyncService(adapter=adapter),
@@ -125,7 +127,9 @@ def get_market_intelligence(
     )
 
 
-MarketIntelSvc = Annotated[MarketIntelligenceService, Depends(get_market_intelligence)]
+MarketIntelSvc = Annotated[
+    MarketIntelligencePlatformService, Depends(get_market_intelligence)
+]
 NewsIntelSvc = Annotated[NewsIntelligenceService, Depends(get_news_intelligence)]
 ProviderRegistrySvc = Annotated[
     IntelligenceProviderRegistry, Depends(get_provider_registry)

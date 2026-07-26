@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -159,15 +160,17 @@ class AlphaAnalyticsStore:
                 "monthly_pnl": 0.0,
             }
 
-        def _bucket_pnl(key_fn):
+        def _bucket_pnl(
+            key_fn: Callable[[AlphaTradeAnalyticsRow], str],
+        ) -> tuple[str | None, str | None]:
             buckets: dict[str, list[float]] = defaultdict(list)
             for r in rows:
                 buckets[key_fn(r)].append(r.pnl)
             scored = {k: sum(v) for k, v in buckets.items() if k and k != "unknown"}
             if not scored:
                 return None, None
-            best = max(scored, key=scored.get)
-            worst = min(scored, key=scored.get)
+            best = max(scored, key=lambda k: scored[k])
+            worst = min(scored, key=lambda k: scored[k])
             return best, worst
 
         wins = sum(1 for r in rows if r.win)

@@ -23,14 +23,14 @@ def run_stress_tests(state: PortfolioState) -> dict[str, Any]:
     )
     # Normalize exposure to equity fraction proxy
     book = min(1.5, exposure if exposure < 5 else exposure / max(equity, 1.0))
-    rows = []
-    worst = None
+    rows: list[dict[str, Any]] = []
+    worst: dict[str, Any] | None = None
     for name, shock, detail in SCENARIOS:
         # Correlated books amplify
         amp = 1.0 + 0.15 * len(state.open_symbols)
         loss_pct = round(100.0 * book * shock * amp, 3)
         loss_cash = round(equity * loss_pct / 100.0, 2)
-        row = {
+        row: dict[str, Any] = {
             "scenario": name,
             "detail": detail,
             "estimated_loss_pct": loss_pct,
@@ -38,7 +38,10 @@ def run_stress_tests(state: PortfolioState) -> dict[str, Any]:
             "open_positions": state.open_positions,
         }
         rows.append(row)
-        if worst is None or loss_pct > worst["estimated_loss_pct"]:
+        worst_loss = worst.get("estimated_loss_pct") if worst is not None else None
+        if worst is None or (
+            isinstance(worst_loss, (int, float)) and loss_pct > float(worst_loss)
+        ):
             worst = row
     return {
         "scenarios": rows,

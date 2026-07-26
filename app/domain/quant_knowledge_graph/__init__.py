@@ -7,6 +7,8 @@ gateway, OMS, scheduler, or thresholds.
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.domain.quant_knowledge_graph.platform import QuantKnowledgeGraph
 
 __all__ = ["QuantKnowledgeGraph", "get_qkg", "qkg_query_for_ai"]
@@ -21,6 +23,6 @@ def get_qkg() -> QuantKnowledgeGraph:
     return _QKG
 
 
-def qkg_query_for_ai(question: str, *, node_id: str | None = None) -> dict:
+def qkg_query_for_ai(question: str, *, node_id: str | None = None) -> dict[str, Any]:
     """Allow AQS and AQC to query the graph (read-only)."""
     return get_qkg().query_for_ai(question, node_id=node_id)

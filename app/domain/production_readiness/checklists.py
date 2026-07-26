@@ -34,7 +34,7 @@ def build_pre_trade_checklist(facts: dict[str, Any] | None) -> dict[str, Any]:
     # Explicit Risk/Safety gates — never bypass.
     risk_ok = _opt_bool("risk_engine_passed")
     safety_ok = _opt_bool("safety_engine_passed")
-    extra_items = []
+    extra_items: list[dict[str, Any]] = []
     for key, value in (
         ("risk_engine_passed", risk_ok),
         ("safety_engine_passed", safety_ok),

@@ -193,7 +193,7 @@ def build_variants(
 
 
 def rank_variants(
-    variants: list[dict[str, Any]], stats_by_label: dict[str, dict]
+    variants: list[dict[str, Any]], stats_by_label: dict[str, dict[str, Any]]
 ) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
     for v in variants:
@@ -392,13 +392,15 @@ def build_registry_from_sources(ctx: dict[str, Any]) -> list[dict[str, Any]]:
                 variant_metric=_f(var.get("metric")),
             )
         ranked = rank_variants(variants, stats_map)
-        primary_stats = next(
-            iter(stats_map.values()), None
-        ) or compute_experiment_statistics(
-            sample_size=sample_n,
-            baseline_metric=control_m,
-            variant_metric=control_m,
-        )
+        values = list(stats_map.values())
+        if values:
+            primary_stats = values[0]
+        else:
+            primary_stats = compute_experiment_statistics(
+                sample_size=sample_n,
+                baseline_metric=control_m,
+                variant_metric=control_m,
+            )
         hypothesis = str(
             ed.get("hypothesis")
             or ed.get("description")

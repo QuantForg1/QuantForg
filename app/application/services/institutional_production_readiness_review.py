@@ -585,7 +585,10 @@ def audit_performance() -> dict[str, Any]:
     try:
         import resource
 
-        mem_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 2)
+        getrusage = getattr(resource, "getrusage", None)
+        rusage_self = getattr(resource, "RUSAGE_SELF", None)
+        if getrusage is not None and rusage_self is not None:
+            mem_mb = round(getrusage(rusage_self).ru_maxrss / 1024.0, 2)
         # Linux ru_maxrss is KB; on Windows resource may be absent.
     except Exception:
         try:

@@ -62,8 +62,9 @@ def _insufficient(module: str, need: int, have: int) -> ModuleResult:
 
 
 def _win(t: dict[str, Any]) -> bool | None:
-    if isinstance(t.get("win"), bool):
-        return t["win"]
+    win_val = t.get("win")
+    if isinstance(win_val, bool):
+        return win_val
     pnl = _dec(t.get("pnl") or t.get("net_pnl"))
     if pnl is None:
         return None
@@ -121,8 +122,8 @@ def _compute_stats(trades: list[dict[str, Any]]) -> dict[str, Any] | None:
 
     win_rate = (Decimal(wins) / Decimal(n) * Decimal(100)).quantize(Decimal("0.01"))
     expectancy = (pnl_sum / Decimal(n)).quantize(Decimal("0.01"))
-    gross_win = sum(win_pnls) if win_pnls else Decimal("0")
-    gross_loss = sum(loss_pnls) if loss_pnls else Decimal("0")
+    gross_win = sum(win_pnls, start=Decimal("0"))
+    gross_loss = sum(loss_pnls, start=Decimal("0"))
     profit_factor = (
         (gross_win / gross_loss).quantize(Decimal("0.01")) if gross_loss > 0 else None
     )
@@ -345,7 +346,8 @@ def configuration_comparison(inp: IvpInput, config: IvpConfig) -> ModuleResult:
     rankings: list[dict[str, Any]] = []
     for c in configs[:50]:
         cid = str(c.get("id") or c.get("configuration_id") or "unknown")
-        trades = c.get("trades") if isinstance(c.get("trades"), list) else []
+        trades_raw = c.get("trades")
+        trades = trades_raw if isinstance(trades_raw, list) else []
         trades = [t for t in trades if isinstance(t, dict)]
         if len(trades) >= config.min_trades_for_comparison:
             st = _compute_stats(trades)
@@ -383,15 +385,15 @@ def configuration_comparison(inp: IvpInput, config: IvpConfig) -> ModuleResult:
                     }
                 )
                 continue
-            exp = _dec(c.get("expectancy"))
+            exp_dec = _dec(c.get("expectancy"))
             rankings.append(
                 {
                     "id": cid,
                     "status": (
-                        "available" if exp is not None else "insufficient_evidence"
+                        "available" if exp_dec is not None else "insufficient_evidence"
                     ),
                     "trade_count": tc or len(trades),
-                    "expectancy": str(exp) if exp is not None else None,
+                    "expectancy": str(exp_dec) if exp_dec is not None else None,
                     "win_rate": (
                         str(_dec(c.get("win_rate")))
                         if _dec(c.get("win_rate")) is not None
@@ -402,8 +404,10 @@ def configuration_comparison(inp: IvpInput, config: IvpConfig) -> ModuleResult:
                         if _dec(c.get("profit_factor")) is not None
                         else None
                     ),
-                    "_sort_expectancy": (float(exp) if exp is not None else None),
-                    "verdict": None if exp is not None else INSUFFICIENT,
+                    "_sort_expectancy": (
+                        float(exp_dec) if exp_dec is not None else None
+                    ),
+                    "verdict": None if exp_dec is not None else INSUFFICIENT,
                 }
             )
 
