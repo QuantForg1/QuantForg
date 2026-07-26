@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,10 +9,12 @@ import {
   type OrderTicketHandle,
 } from "@/components/execution/order-ticket";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { useRealtime } from "@/hooks/realtime";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { num } from "@/lib/desk";
 import type { RefObject } from "react";
 import { ExecutionReadiness } from "@/components/os/execution-readiness";
+import { deriveTradingStatusLines } from "@/lib/trading/status-lines";
 
 export const WorkspaceRightRail = memo(function WorkspaceRightRail({
   symbol,
@@ -30,6 +32,7 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
   ticketRef: RefObject<OrderTicketHandle | null>;
 }) {
   const session = useTradingSession();
+  const realtime = useRealtime();
   const equity = num(session.equity);
   const balance = num(session.balance);
   const margin = num(session.margin);
@@ -42,6 +45,49 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
     typeof ask === "number" &&
     Number.isFinite(bid) &&
     Number.isFinite(ask);
+
+  const statusLines = useMemo(() => {
+    const gatewayOnline = session.healthKnown ? session.gatewayOnline : null;
+    const brokerConnected = session.healthKnown
+      ? session.brokerConnected
+      : session.connected
+        ? true
+        : null;
+    const marketOpen = !session.connected
+      ? null
+      : hasQuote
+        ? true
+        : connected
+          ? false
+          : null;
+    const feed = !realtime.online
+      ? ("offline" as const)
+      : realtime.latencyMs != null && realtime.latencyMs >= 200
+        ? ("delayed" as const)
+        : realtime.connected
+          ? ("live" as const)
+          : ("offline" as const);
+
+    return deriveTradingStatusLines({
+      gatewayOnline,
+      brokerConnected,
+      marketOpen,
+      executionEnabled: session.executionEnabled,
+      feed: session.healthKnown || realtime.updatedAt != null ? feed : null,
+    });
+  }, [
+    session.healthKnown,
+    session.gatewayOnline,
+    session.brokerConnected,
+    session.connected,
+    session.executionEnabled,
+    hasQuote,
+    connected,
+    realtime.online,
+    realtime.latencyMs,
+    realtime.connected,
+    realtime.updatedAt,
+  ]);
 
   return (
     <aside
@@ -62,35 +108,7 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
         </div>
 
         <div className="border-b border-[var(--border)] p-3">
-          <ExecutionReadiness
-            checks={[
-              {
-                id: "session",
-                label: "Session attached",
-                ok: session.connected,
-              },
-              {
-                id: "quote",
-                label: "Live quote",
-                ok: connected ? hasQuote : null,
-              },
-              {
-                id: "margin",
-                label: "Free margin",
-                ok: session.connected
-                  ? Number.isFinite(free) && free > 0
-                  : null,
-              },
-              {
-                id: "level",
-                label: "Margin level",
-                ok: session.connected
-                  ? !Number.isFinite(marginLevel) || marginLevel === 0 || marginLevel >= 100
-                  : null,
-                detail: Number.isFinite(marginLevel) ? `${marginLevel}` : undefined,
-              },
-            ]}
-          />
+          <ExecutionReadiness lines={statusLines} />
         </div>
 
         <section className="border-b border-[var(--border)] p-3" aria-label="Account">

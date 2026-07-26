@@ -346,8 +346,8 @@ export const WorkspaceChart = memo(function WorkspaceChart({
           <div className="absolute inset-0 flex items-center justify-center p-6">
             <DeskEmpty
               icon={Cable}
-              title="Broker disconnected"
-              description="Connect MT5 to load candles from the production market data API."
+              title="Broker not connected"
+              description="Connect your MT5 account to start receiving live market data and trading signals."
               actionLabel="Connect MT5"
               actionHref="/broker"
             />

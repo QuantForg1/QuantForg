@@ -22,6 +22,13 @@ export type TradingSessionState = {
   connected: boolean;
   gatewayOnline: boolean;
   brokerConnected: boolean;
+  /**
+   * Explicit EXECUTION_ENABLED from gateway health when present.
+   * null = unknown — callers must not invent Enabled.
+   */
+  executionEnabled: boolean | null;
+  /** True once weltrade health has settled (success or error). */
+  healthKnown: boolean;
   login: string;
   server: string;
   balance: string;
@@ -104,12 +111,17 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const health = asRecord(healthQ.data);
 
   const connected = Boolean(status.connected);
+  const healthKnown = healthQ.isFetched && !healthQ.isLoading;
   const gatewayOnline = Boolean(
     health.gateway_online || health.gateway_reachable || connected,
   );
   const brokerConnected = Boolean(
     health.weltrade_connected || health.mt5_connected || connected,
   );
+  const executionEnabled =
+    !healthKnown || !("execution_enabled" in health)
+      ? null
+      : Boolean(health.execution_enabled);
 
   const gatewayDetail = gatewayDiagnosticDetail(health);
   const gatewayLabel = gatewayOnline
@@ -171,6 +183,8 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
       connected,
       gatewayOnline,
       brokerConnected,
+      executionEnabled,
+      healthKnown,
       login: str(account.login || status.login, "—"),
       server: str(account.server || status.server, "—"),
       balance: str(account.balance, "—"),
@@ -203,6 +217,8 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
       connected,
       gatewayOnline,
       brokerConnected,
+      executionEnabled,
+      healthKnown,
       account,
       status,
       health,

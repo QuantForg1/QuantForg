@@ -71,6 +71,11 @@ export type PrimaryNavItem = NavItem & {
   match?: string[];
   /** ⌘N desk jump hint shown in rail tooltip */
   shortcut?: string;
+  /**
+   * Visual group for rail separators only (no collapsible sections).
+   * Separators render when the group changes between adjacent items.
+   */
+  group?: "desks" | "ops" | "system";
 };
 
 /**
@@ -86,6 +91,7 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Trade — chart · ticket · blotter",
     match: ["/terminal", "/workspace", "/execution"],
     shortcut: "1",
+    group: "desks",
   },
   {
     href: "/portfolio",
@@ -101,6 +107,7 @@ export const primaryRail: PrimaryNavItem[] = [
       "/risk-center",
     ],
     shortcut: "2",
+    group: "desks",
   },
   {
     href: "/research",
@@ -109,6 +116,7 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Idea → promote pipeline",
     match: ["/research", "/screeners"],
     shortcut: "3",
+    group: "desks",
   },
   {
     href: "/ai-signals",
@@ -117,6 +125,7 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Decide — advisory only, never executes",
     match: ["/ai-signals", "/counsel"],
     shortcut: "4",
+    group: "desks",
   },
   {
     href: "/journal",
@@ -125,6 +134,7 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Session memory and trade notes",
     match: ["/journal", "/trade-replay"],
     shortcut: "5",
+    group: "desks",
   },
   {
     href: "/broker",
@@ -133,6 +143,7 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Attach session · connectivity",
     match: ["/broker", "/gateway"],
     shortcut: "6",
+    group: "ops",
   },
   {
     href: "/auto-trading",
@@ -140,6 +151,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Bot,
     hint: "Autonomous command center",
     match: ["/auto-trading"],
+    group: "ops",
   },
   {
     href: "/ai-scalping",
@@ -147,6 +159,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Crosshair,
     hint: "H1/M15/M5/M1 · BUY/SELL quality gates",
     match: ["/ai-scalping", "/scalping-ai-v2"],
+    group: "ops",
   },
   {
     href: "/strategy-diagnostics",
@@ -154,6 +167,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: ScanSearch,
     hint: "Why NO_TRADE · quality · confluence · MTF",
     match: ["/strategy-diagnostics"],
+    group: "ops",
   },
   {
     href: "/continuous-validation",
@@ -161,6 +175,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: ClipboardCheck,
     hint: "CVF · drift · replay vs live · evidence",
     match: ["/continuous-validation"],
+    group: "ops",
   },
   {
     href: "/notifications",
@@ -169,6 +184,7 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Alerts and notifications",
     match: ["/notifications", "/alerts"],
     shortcut: "7",
+    group: "system",
   },
   {
     href: "/settings",
@@ -177,6 +193,7 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Profile, org, preferences",
     match: ["/settings", "/integrations", "/shortcuts"],
     shortcut: "8",
+    group: "system",
   },
 ];
 

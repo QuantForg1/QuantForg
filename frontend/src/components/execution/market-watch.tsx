@@ -209,8 +209,8 @@ export const MarketWatch = memo(function MarketWatch({
         {!connected ? (
           <DeskEmpty
             icon={Cable}
-            title="Broker disconnected"
-            description="Connect MT5 to load the symbol universe and live quotes."
+            title="Broker not connected"
+            description="Connect your MT5 account to start receiving live market data and trading signals."
             actionLabel="Connect MT5"
             actionHref="/broker"
           />

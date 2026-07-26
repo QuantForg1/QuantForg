@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronsLeft, ChevronsRight, Menu, X } from "lucide-react";
@@ -104,14 +104,34 @@ function NavBody({
       ) : null}
 
       <ul className="space-y-0.5">
-        {primaryRail.map((item) => (
-          <PrimaryLink
-            key={item.href}
-            item={item}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
-        ))}
+        {primaryRail.map((item, index) => {
+          const prev = index > 0 ? primaryRail[index - 1] : undefined;
+          const showSeparator =
+            Boolean(prev?.group) &&
+            Boolean(item.group) &&
+            prev!.group !== item.group;
+          return (
+            <Fragment key={item.href}>
+              {showSeparator ? (
+                <li aria-hidden className="list-none">
+                  <div
+                    className={
+                      collapsed
+                        ? "my-1.5"
+                        : "my-2 border-t border-[var(--border)]"
+                    }
+                    role="separator"
+                  />
+                </li>
+              ) : null}
+              <PrimaryLink
+                item={item}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+              />
+            </Fragment>
+          );
+        })}
       </ul>
     </nav>
   );
