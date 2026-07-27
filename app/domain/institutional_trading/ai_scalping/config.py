@@ -46,7 +46,7 @@ class AdaptiveThresholdBand:
 class AiScalpingConfig:
     """Institutional AI Scalping Engine - quality over quantity."""
 
-    version: str = "ai-scalping-v6.1.0"
+    version: str = "ai-scalping-v6.2.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE

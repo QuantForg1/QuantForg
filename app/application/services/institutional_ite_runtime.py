@@ -2486,7 +2486,9 @@ def build_ite_runtime(
     submit_port: Any = RetryingOmsSubmitPort(guarded_submit, on_retry=_on_oms_retry)
 
     config = ExecutionBridgeConfig(mode=ExecutionMode.SHADOW)
-    execution = InstitutionalExecutionIntegration.create(submit_port, config=config)
+    execution = InstitutionalExecutionIntegration.create(
+        submit_port, config=config, hydrate_hashes=True
+    )
     execution.bridge.bind_ops(plane, reliability=reliability)
 
     pme = InstitutionalPositionManagement.create(guarded_manage, ops_plane=plane)

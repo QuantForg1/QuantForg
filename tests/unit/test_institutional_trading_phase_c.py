@@ -242,6 +242,12 @@ def _bridge(
     mode: ExecutionMode = ExecutionMode.LIVE,
     ttl: int = 30,
 ) -> InstitutionalExecutionIntegration:
+    # Isolate shared LiveHealthMonitor burst state across Phase C cases
+    from app.domain.institutional_trading.ai_scalping.live_health import (
+        get_live_health_monitor,
+    )
+
+    get_live_health_monitor().reset()
     return InstitutionalExecutionIntegration.create(
         oms,
         config=ExecutionBridgeConfig(mode=mode, decision_ttl_seconds=ttl),

@@ -32,13 +32,17 @@ class InstitutionalExecutionIntegration:
         oms: OmsSubmitPort,
         *,
         config: ExecutionBridgeConfig | None = None,
+        hydrate_hashes: bool = False,
     ) -> InstitutionalExecutionIntegration:
-        return cls(
-            bridge=ExecutionBridge(
-                oms=oms,
-                config=config or DEFAULT_EXECUTION_BRIDGE_CONFIG,
-            )
+        bridge = ExecutionBridge(
+            oms=oms,
+            config=config or DEFAULT_EXECUTION_BRIDGE_CONFIG,
         )
+        # Production ITE runtime passes hydrate_hashes=True after cold start.
+        # Unit tests keep an empty in-memory set (no polluted disk state).
+        if hydrate_hashes:
+            bridge.hydrate_executed_hashes()
+        return cls(bridge=bridge)
 
     def execute(
         self,

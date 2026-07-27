@@ -202,6 +202,15 @@ class LiveHealthMonitor:
                 "self_protection": self._protection.to_dict(),
             }
 
+    def reset(self) -> None:
+        """Clear burst counters and resume entries (unit-test isolation)."""
+        with self._lock:
+            self._health = DependencyHealth()
+            self._protection = SelfProtectionState()
+            self._rejects.clear()
+            self._slips.clear()
+            self._gateway_fails.clear()
+
     def _pause(self, reason: str) -> None:
         if reason not in self._protection.reasons:
             self._protection.reasons.append(reason)

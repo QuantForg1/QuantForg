@@ -8,7 +8,7 @@ Scalping mode overlays adaptive thresholds + broker-aware lot sizing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -26,6 +26,9 @@ from app.domain.institutional_trading.decision_models import (
     TradeDirection,
 )
 from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
+from app.domain.institutional_trading.executable_direction import (
+    resolve_executable_direction,
+)
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
 
@@ -65,14 +68,23 @@ def _account_snapshot(
     )
 
 
-def _synthetic_positions(symbol: str, count: int, entry: Decimal) -> list[MT5Position]:
+def _synthetic_positions(
+    symbol: str,
+    count: int,
+    entry: Decimal,
+    *,
+    side: str = "buy",
+) -> list[MT5Position]:
+    side_l = (side or "buy").lower()
+    if side_l not in {"buy", "sell"}:
+        side_l = "buy"
     out: list[MT5Position] = []
     for i in range(max(0, count)):
         out.append(
             MT5Position(
                 ticket=i + 1,
                 symbol=symbol,
-                side="buy",
+                side=side_l,
                 volume=Decimal("0.01"),
                 open_price=entry,
                 current_price=entry,
@@ -199,18 +211,31 @@ class InstitutionalDecisionPipeline:
             current_drawdown_pct=daily_dd if daily_dd > 0 else None,
         )
 
-        # Prefer institutional AI direction when gates pass (never BUY-only default)
-        if (
-            ai_score is not None
-            and not ai_score.reject
-            and ai_score.direction in {"BUY", "SELL"}
-        ):
-            side = "buy" if ai_score.direction == "BUY" else "sell"
+        # Final validated direction — never BUY-default; never flip AI SELL → BUY OMS
+        exe = resolve_executable_direction(
+            confluence=confluence,
+            ai_direction=getattr(ai_score, "direction", None) if ai_score else None,
+            ai_reject=bool(ai_score.reject) if ai_score is not None else None,
+            scalping=cfg.is_scalping(),
+        )
+        if exe.direction in {TradeDirection.BUY, TradeDirection.SELL}:
+            confluence = replace(
+                confluence,
+                direction=exe.direction,
+                reasons=tuple(
+                    dict.fromkeys((*confluence.reasons, exe.reason))
+                ),
+            )
+            side = "buy" if exe.direction is TradeDirection.BUY else "sell"
         else:
-            side = "sell" if confluence.direction is TradeDirection.SELL else "buy"
-            # If AI rejected, still compute side for diagnostics but block below
-            if ai_score is not None and ai_score.direction in {"BUY", "SELL"}:
-                side = "buy" if ai_score.direction == "BUY" else "sell"
+            confluence = replace(
+                confluence,
+                direction=TradeDirection.NONE,
+                passed=False,
+                reasons=tuple(dict.fromkeys((*confluence.reasons, exe.reason))),
+            )
+            # No executable side — fail closed for risk sizing (never invent BUY)
+            side = "none"
 
         stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")
         stop_distance = account.atr * stop_mult if account.atr else None
@@ -244,6 +269,21 @@ class InstitutionalDecisionPipeline:
                 approved_lots=Decimal("0"),
             )
 
+        if side not in {"buy", "sell"}:
+            return TradeDecisionEngine(config=cfg).decide(
+                snapshot=snapshot,
+                confluence=confluence,
+                eligibility=EligibilityResult(
+                    eligible=False,
+                    checks={"validated_direction": False},
+                    rejection_reasons=(exe.reason or "no_validated_direction",),
+                ),
+                account=account,
+                risk_score=100,
+                risk_reasons=(exe.reason or "no_validated_direction",),
+                approved_lots=Decimal("0"),
+            )
+
         check = RiskCheckInput(
             user_id=self.user_id,
             request_id=rid,
@@ -269,7 +309,9 @@ class InstitutionalDecisionPipeline:
         )
         pos_list = list(positions or [])
         if len(pos_list) < open_count:
-            pos_list = _synthetic_positions(snapshot.symbol, open_count, entry)
+            pos_list = _synthetic_positions(
+                snapshot.symbol, open_count, entry, side=side
+            )
 
         assert self.risk_engine is not None
         # Keep risk engine limits in sync with adaptive / scalping config.

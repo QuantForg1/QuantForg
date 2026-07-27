@@ -77,6 +77,16 @@ class ExecutionBridge:
     _lock: Lock = field(default_factory=Lock, repr=False)
     _hashes_hydrated: bool = field(default=False, repr=False)
 
+    def hydrate_executed_hashes(self) -> int:
+        """Load durable decision hashes once at runtime startup (not per handle).
+
+        Unit tests construct fresh bridges with an empty in-memory set; production
+        ITE runtime must call this after process start / reconnect.
+        """
+        self._ensure_hashes_loaded()
+        with self._lock:
+            return len(self._executed_hashes)
+
     def _ensure_hashes_loaded(self) -> None:
         """Hydrate durable decision hashes once (restart-safe dedupe)."""
         if self._hashes_hydrated:
@@ -148,7 +158,6 @@ class ExecutionBridge:
     ) -> ExecutionBridgeResult:
         """Evaluate a decision. Only BUY/SELL may reach OMS (never WATCH/NO_TRADE)."""
         t0 = time.perf_counter()
-        self._ensure_hashes_loaded()
         mode = self.effective_mode()
         d_hash = compute_decision_hash(decision)
         actionable = decision.action in {DecisionAction.BUY, DecisionAction.SELL}
@@ -836,13 +845,18 @@ class ExecutionBridge:
     ) -> OrderIntent:
         assert decision.stop_zone is not None
         assert decision.target_zone is not None
-        side = "buy" if decision.action is DecisionAction.BUY else "sell"
         if decision.action is DecisionAction.BUY:
+            side = "buy"
             sl = str(decision.stop_zone.low)
             tp = str(decision.target_zone.high)
-        else:
+        elif decision.action is DecisionAction.SELL:
+            side = "sell"
             sl = str(decision.stop_zone.high)
             tp = str(decision.target_zone.low)
+        else:
+            raise ValueError(
+                f"OMS intent requires BUY or SELL, got {decision.action.value}"
+            )
         comment = f"{self.config.comment_prefix}:{decision.input_hash[:12]}"
         from app.domain.institutional_trading.force_first_trade import (
             is_forced_test_decision,

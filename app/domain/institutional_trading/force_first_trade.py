@@ -307,10 +307,10 @@ def maybe_override_decision(
         )
         if direction is None:
             logger.warning(
-                "force_first_trade_no_bias_defaulting_BUY",
+                "force_first_trade_no_validated_direction",
                 configured=cfg.direction,
             )
-            direction = TradeDirection.BUY
+            return decision, False
 
         # Force First Trade continues past signal/risk soft blocks to OMS.
         # Margin / market-open / spread remain enforced in eligibility below.
