@@ -1,0 +1,40 @@
+{
+  "status": "ok",
+  "service": "mt5-gateway",
+  "token_configured": true,
+  "websocket_enabled": true,
+  "auto_attach_enabled": true,
+  "token_fingerprint": {
+    "length": 43,
+    "preview": "QuantF******Qw8Rt5",
+    "source": "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+    "process_env_len": 0,
+    "dotenv_len": 43,
+    "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+    "process_is_placeholder": true
+  },
+  "mt5": {
+    "connected": false,
+    "session_mode": "none",
+    "latency_ms": null,
+    "terminal_build": null,
+    "build_date": null,
+    "server": null,
+    "login_status": "disconnected",
+    "last_heartbeat_at": "2026-07-27T18:33:45.194397+00:00",
+    "version": "",
+    "bridge_available": true,
+    "degraded": false,
+    "probe": "skipped",
+    "terminal_trade_allowed": null,
+    "mt5_autotrading_enabled": null,
+    "dlls_allowed": null,
+    "dll_allowed": null,
+    "capability_support": {
+      "autotrading": "NOT_SUPPORTED",
+      "dll": "NOT_SUPPORTED"
+    },
+    "capability_note": "MT5 session not connected \u2014 capabilities not probed"
+  },
+  "bridge_available": true
+}

@@ -1,0 +1,40 @@
+{
+    "status":  "ok",
+    "service":  "mt5-gateway",
+    "token_configured":  true,
+    "websocket_enabled":  true,
+    "auto_attach_enabled":  true,
+    "token_fingerprint":  {
+                              "length":  43,
+                              "preview":  "QuantF******Qw8Rt5",
+                              "source":  "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+                              "process_env_len":  0,
+                              "dotenv_len":  43,
+                              "dotenv_path":  "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+                              "process_is_placeholder":  true
+                          },
+    "mt5":  {
+                "connected":  true,
+                "session_mode":  "attached",
+                "latency_ms":  0.624,
+                "terminal_build":  6061,
+                "build_date":  "24 Jul 2026",
+                "server":  "Weltrade-Real",
+                "login_status":  "connected",
+                "last_heartbeat_at":  "2026-07-27T18:31:49.812572+00:00",
+                "version":  "500.6061 (24 Jul 2026)",
+                "bridge_available":  true,
+                "degraded":  false,
+                "probe":  "live",
+                "terminal_trade_allowed":  true,
+                "mt5_autotrading_enabled":  true,
+                "dlls_allowed":  true,
+                "dll_allowed":  true,
+                "capability_support":  {
+                                           "autotrading":  "SUPPORTED",
+                                           "dll":  "SUPPORTED"
+                                       },
+                "capability_note":  "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+            },
+    "bridge_available":  true
+}

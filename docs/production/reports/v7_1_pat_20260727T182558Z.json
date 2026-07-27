@@ -1,0 +1,460 @@
+{
+  "title": "QuantForg v7.1 Production Acceptance Test (PAT)",
+  "version": "ai-scalping-v7.1.0",
+  "started_at": "2026-07-27T18:25:23.052258+00:00",
+  "finished_at": "2026-07-27T18:25:58.714173+00:00",
+  "results": [
+    {
+      "id": "TEST_1_SYSTEM_STARTUP",
+      "status": "BLOCKED",
+      "issues": [
+        "full FE/BE/Gateway/MT5 restart cycle not executed in this harness (gw=True, api_prod=True, fe_port=False, be_port=False, profile=yes)"
+      ],
+      "evidence": {
+        "gateway_local": {
+          "ok": true,
+          "body": {
+            "status": "ok",
+            "service": "mt5-gateway",
+            "token_configured": true,
+            "websocket_enabled": true,
+            "auto_attach_enabled": true,
+            "token_fingerprint": {
+              "length": 43,
+              "preview": "QuantF******Qw8Rt5",
+              "source": "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+              "process_env_len": 0,
+              "dotenv_len": 43,
+              "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+              "process_is_placeholder": true
+            },
+            "mt5": {
+              "connected": true,
+              "session_mode": "attached",
+              "latency_ms": 0.793,
+              "terminal_build": 6061,
+              "build_date": "24 Jul 2026",
+              "server": "Weltrade-Real",
+              "login_status": "connected",
+              "last_heartbeat_at": "2026-07-27T18:25:18.724386+00:00",
+              "version": "500.6061 (24 Jul 2026)",
+              "bridge_available": true,
+              "degraded": false,
+              "probe": "live",
+              "terminal_trade_allowed": true,
+              "mt5_autotrading_enabled": true,
+              "dlls_allowed": true,
+              "dll_allowed": true,
+              "capability_support": {
+                "autotrading": "SUPPORTED",
+                "dll": "SUPPORTED"
+              },
+              "capability_note": "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+            },
+            "bridge_available": true
+          },
+          "err": null
+        },
+        "api_prod": {
+          "ok": true,
+          "body": {
+            "status": "ok"
+          },
+          "err": null
+        },
+        "local_backend_port": false,
+        "local_frontend_port": false,
+        "broker_profile": {
+          "broker": "weltrade",
+          "server": "Weltrade-Real",
+          "login": 12260878,
+          "terminal_path": "",
+          "has_encrypted_password": true,
+          "updated_at": "2026-07-27T18:24:58.712592+00:00"
+        },
+        "continuous_enabled": true,
+        "version": "ai-scalping-v7.1.0",
+        "startup_tick": {
+          "as_of": "2026-07-27T18:25:33.578966+00:00",
+          "heartbeats": {
+            "timeout_seconds": 30.0,
+            "beats": {
+              "gateway": {
+                "component": "gateway",
+                "at": "2026-07-27T18:25:33.578966+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "mt5": {
+                "component": "mt5",
+                "at": "2026-07-27T18:25:33.578966+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "oms": {
+                "component": "oms",
+                "at": "2026-07-27T18:25:33.578966+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "execution": {
+                "component": "execution",
+                "at": "2026-07-27T18:25:33.578966+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "decision": {
+                "component": "decision",
+                "at": "2026-07-27T18:25:33.578966+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "pme": {
+                "component": "pme",
+                "at": "2026-07-27T18:25:33.578966+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              }
+            }
+          },
+          "recovery": [
+            {
+              "id": "e7534b0f-b520-4f11-ba62-273a51f282f9",
+              "action": "mt5_reconnect",
+              "success": false,
+              "detail": "no mt5_reconnect_fn configured",
+              "at": "2026-07-27T18:25:33.579025+00:00"
+            }
+          ],
+          "pause": {
+            "pause_new_entries": true,
+            "reasons": [
+              "broker unavailable"
+            ],
+            "manage_open_positions": true,
+            "note": "Open positions are always managed \u2014 never abandoned."
+          },
+          "resumed_positions": true,
+          "pending_rescan": false,
+          "version": "ai-scalping-v7.1.0"
+        },
+        "decision_hash_module": true
+      }
+    },
+    {
+      "id": "TEST_2_MT5_RECONNECT",
+      "status": "BLOCKED",
+      "issues": [
+        "automatic reconnect code path verified; physical MT5 disconnect/reconnect not executed"
+      ],
+      "evidence": {
+        "heal_events": [
+          {
+            "id": "66619838-df13-41ce-a545-c16a0a833ac3",
+            "action": "mt5_reconnect",
+            "success": true,
+            "detail": "mt5 reconnect attempted",
+            "at": "2026-07-27T18:25:34.094398+00:00"
+          }
+        ],
+        "mt5_reconnect_called": true,
+        "order_send_retry_forbidden": true,
+        "gateway": {
+          "ok": true,
+          "body": {
+            "status": "ok",
+            "service": "mt5-gateway",
+            "token_configured": true,
+            "websocket_enabled": true,
+            "auto_attach_enabled": true,
+            "token_fingerprint": {
+              "length": 43,
+              "preview": "QuantF******Qw8Rt5",
+              "source": "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+              "process_env_len": 0,
+              "dotenv_len": 43,
+              "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+              "process_is_placeholder": true
+            },
+            "mt5": {
+              "connected": true,
+              "session_mode": "attached",
+              "latency_ms": 0.763,
+              "terminal_build": 6061,
+              "build_date": "24 Jul 2026",
+              "server": "Weltrade-Real",
+              "login_status": "connected",
+              "last_heartbeat_at": "2026-07-27T18:25:33.754257+00:00",
+              "version": "500.6061 (24 Jul 2026)",
+              "bridge_available": true,
+              "degraded": false,
+              "probe": "live",
+              "terminal_trade_allowed": true,
+              "mt5_autotrading_enabled": true,
+              "dlls_allowed": true,
+              "dll_allowed": true,
+              "capability_support": {
+                "autotrading": "SUPPORTED",
+                "dll": "SUPPORTED"
+              },
+              "capability_note": "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+            },
+            "bridge_available": true
+          }
+        }
+      }
+    },
+    {
+      "id": "TEST_3_GATEWAY_FAILURE",
+      "status": "BLOCKED",
+      "issues": [
+        "gateway stop/start not executed by harness"
+      ],
+      "evidence": {
+        "heal_events": [
+          {
+            "id": "83ff0589-74d4-460a-a73b-1f45f60246b5",
+            "action": "gateway_reconnect",
+            "success": true,
+            "detail": "gateway reconnect attempted",
+            "at": "2026-07-27T18:25:34.107954+00:00"
+          }
+        ],
+        "gateway_reconnect_called": true,
+        "gateway_live": {
+          "ok": true,
+          "body": {
+            "status": "ok",
+            "service": "mt5-gateway",
+            "token_configured": true,
+            "websocket_enabled": true,
+            "auto_attach_enabled": true,
+            "token_fingerprint": {
+              "length": 43,
+              "preview": "QuantF******Qw8Rt5",
+              "source": "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+              "process_env_len": 0,
+              "dotenv_len": 43,
+              "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+              "process_is_placeholder": true
+            },
+            "mt5": {
+              "connected": true,
+              "session_mode": "attached",
+              "latency_ms": 0.663,
+              "terminal_build": 6061,
+              "build_date": "24 Jul 2026",
+              "server": "Weltrade-Real",
+              "login_status": "connected",
+              "last_heartbeat_at": "2026-07-27T18:25:33.754257+00:00",
+              "version": "500.6061 (24 Jul 2026)",
+              "bridge_available": true,
+              "degraded": false,
+              "probe": "live",
+              "terminal_trade_allowed": true,
+              "mt5_autotrading_enabled": true,
+              "dlls_allowed": true,
+              "dll_allowed": true,
+              "capability_support": {
+                "autotrading": "SUPPORTED",
+                "dll": "SUPPORTED"
+              },
+              "capability_note": "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+            },
+            "bridge_available": true
+          }
+        }
+      }
+    },
+    {
+      "id": "TEST_4_MARKET_CLOSED",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "pause": {
+          "pause_new_entries": true,
+          "reasons": [
+            "market closed"
+          ],
+          "manage_open_positions": true,
+          "note": "Open positions are always managed \u2014 never abandoned."
+        },
+        "tick_alive": true
+      }
+    },
+    {
+      "id": "TEST_5_MULTI_ASSET",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "universe": [
+          "BTCUSD",
+          "ETHUSD",
+          "EURUSD",
+          "GBPUSD",
+          "NAS100",
+          "US30",
+          "USDJPY",
+          "XAUUSD"
+        ],
+        "best_symbol": "EURUSD",
+        "ranked0": "EURUSD",
+        "ranked_symbols": [
+          "EURUSD",
+          "USDJPY",
+          "US30",
+          "NAS100",
+          "GBPUSD",
+          "ETHUSD",
+          "BTCUSD"
+        ],
+        "config_version": "ai-scalping-v7.1.0"
+      }
+    },
+    {
+      "id": "TEST_6_MAX_OPEN",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "max_open_trades": 5,
+        "max_daily_exposure_pct": "2.00",
+        "risk_per_trade_pct": "0.50",
+        "snap_4_open": {
+          "open_positions": 4,
+          "daily_loss_pct": "0",
+          "exposure_pct": "2.00",
+          "max_open_positions": 5,
+          "max_daily_loss_pct": "3.0",
+          "max_exposure_pct": "2.00",
+          "equity": "10000",
+          "daily_pnl": "0",
+          "reasons": [
+            "Portfolio open=4 daily_loss=0% exposure=2.00% (limits open<5 loss<3.0% exp<2.00%)"
+          ],
+          "scope": "portfolio_all_symbols"
+        },
+        "blocked_at_exposure": true,
+        "block_why": "Portfolio exposure limit (2.00% >= 2.00%)",
+        "snap_daily_loss": {
+          "open_positions": 1,
+          "daily_loss_pct": "3.00",
+          "exposure_pct": "0.50",
+          "max_open_positions": 5,
+          "max_daily_loss_pct": "3.0",
+          "max_exposure_pct": "2.00",
+          "equity": "10000",
+          "daily_pnl": "-300",
+          "reasons": [
+            "Portfolio open=1 daily_loss=3.00% exposure=0.50% (limits open<5 loss<3.0% exp<2.00%)"
+          ],
+          "scope": "portfolio_all_symbols"
+        }
+      }
+    },
+    {
+      "id": "TEST_7_POSITION_MANAGEMENT",
+      "status": "BLOCKED",
+      "issues": [
+        "PME feature presence verified; live reconnect continuity not physically verified"
+      ],
+      "evidence": {
+        "partial_tp_enabled": true,
+        "break_even_at_r": "0.5",
+        "time_stop_minutes": 12,
+        "management_actions": [
+          "break_even",
+          "daily_shutdown",
+          "emergency_exit",
+          "noop",
+          "partial_close",
+          "skip",
+          "time_stop",
+          "trail"
+        ]
+      }
+    },
+    {
+      "id": "TEST_8_SESSION",
+      "status": "BLOCKED",
+      "issues": [
+        "browser refresh/restart/PC restart not executed in this harness"
+      ],
+      "evidence": {
+        "remember_me": true,
+        "localStorage": true,
+        "sessionStorage": true,
+        "refresh_token": true,
+        "restore_methods": [
+          "restore_from_persisted_profile",
+          "load_persisted_broker_profile",
+          "_persist_broker_runtime_profile"
+        ]
+      }
+    },
+    {
+      "id": "TEST_9_LONG_RUN",
+      "status": "BLOCKED",
+      "issues": [
+        "24-hour continuous live run not executed \u2014 requires operator soak with witness/heartbeat evidence"
+      ],
+      "evidence": {
+        "required_hours": 24,
+        "executed_hours": 0,
+        "witness_latest_keys": [
+          "observed_at",
+          "ops_mode",
+          "gate",
+          "run_state",
+          "trace_id",
+          "signal_id",
+          "snapshot_present",
+          "cycle_outcome",
+          "abort_reason",
+          "decision_action",
+          "decision_reasons",
+          "safety_failed_reasons",
+          "forwarded_to_oms",
+          "oms_message",
+          "broker_retcode",
+          "mt5_ticket",
+          "latency_ms",
+          "session",
+          "session_allowed",
+          "quality_note",
+          "confluence_note",
+          "detail",
+          "success"
+        ]
+      }
+    },
+    {
+      "id": "TEST_10_PERFORMANCE",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "avg_scan_ms": 0.474,
+        "p95_scan_ms": 0.78,
+        "gateway_latency_ms": 6.93,
+        "gateway_reachable": true,
+        "psutil": "No module named 'psutil'",
+        "api_health_latency_ms": 5321.82,
+        "note": "Scan + gateway + API latency sampled; full execution latency needs live order path metrics"
+      }
+    },
+    {
+      "id": "UNIT_SUITE_MAPPED",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "output_tail": "..........................................                               [100%]\n42 passed in 4.84s\n"
+      }
+    }
+  ],
+  "summary": {
+    "PASS": 4,
+    "FAIL": 0,
+    "BLOCKED": 6
+  },
+  "production_accepted": false,
+  "declaration": "QUANTFORG v7.1 PRODUCTION NOT ACCEPTED \u2014 BLOCKED live/operator verifications remain (reconnect soak, 24h run, browser/PC restart)."
+}

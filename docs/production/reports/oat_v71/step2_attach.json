@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "body": {
+    "connected": true,
+    "session_mode": "attached",
+    "server": "Weltrade-Real",
+    "login": 12260878,
+    "currency": "USD",
+    "note": "Attached to existing MT5 terminal session. Broker password was not collected and is not stored. Password-based reconnect requires POST /session/connect."
+  }
+}
