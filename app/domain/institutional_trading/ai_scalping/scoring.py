@@ -27,6 +27,9 @@ from app.domain.institutional_trading.ai_scalping.quality_gates import (
 from app.domain.institutional_trading.ai_scalping.regime import (
     classify_scalping_regime,
 )
+from app.domain.institutional_trading.ai_scalping.regime_execution import (
+    build_regime_execution_profile,
+)
 from app.domain.institutional_trading.ai_scalping.session_intelligence import (
     assess_session,
 )
@@ -67,6 +70,7 @@ class AiScalpingScore:
     reject_reasons: tuple[str, ...] = ()
     indicators: dict[str, object] | None = None
     entry_reason: str | None = None
+    regime_execution: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -98,6 +102,7 @@ class AiScalpingScore:
             "quality_checks": dict(self.quality_checks or {}),
             "indicators": dict(self.indicators or {}),
             "entry_reason": self.entry_reason,
+            "regime_execution": dict(self.regime_execution or {}),
             "never_prefer_buy_only": True,
         }
 
@@ -198,7 +203,7 @@ def score_scalping_setup(
     )
     reasons.append(session.reason)
 
-    spread_a = assess_spread(snapshot.spread, config=cfg)
+    spread_a = assess_spread(snapshot.spread, atr=atr, config=cfg)
     factors["spread"] = spread_a.score
     reasons.append(spread_a.reason)
 
@@ -259,6 +264,10 @@ def score_scalping_setup(
         volume_expanding=factors["volume"] >= 70,
     )
     reasons.extend(regime.reasons)
+    exec_profile = build_regime_execution_profile(
+        regime, atr_pct=resolved.atr_pct, config=cfg
+    )
+    reasons.extend(exec_profile.reasons)
 
     targets = compute_structure_targets(
         snapshot,
@@ -270,6 +279,9 @@ def score_scalping_setup(
     expected_rr = targets.expected_rr or Decimal("1.4")
     if targets.reason:
         reasons.append(targets.reason)
+
+    # Regime may raise RR floor — never lower below config min
+    effective_min_rr = max(cfg.min_expected_rr, exec_profile.min_expected_rr)
 
     gates = evaluate_quality_gates(
         direction=direction_dec,
@@ -285,6 +297,7 @@ def score_scalping_setup(
         atr_pct=resolved.atr_pct,
         config=cfg,
         pa_confluence=pa,
+        min_expected_rr_override=effective_min_rr,
     )
 
     reject = not gates.passed
@@ -335,4 +348,5 @@ def score_scalping_setup(
         reject_reasons=gates.rejects,
         indicators=pa.indicators,
         entry_reason=entry_reason,
+        regime_execution=exec_profile.to_dict(),
     )

@@ -54,6 +54,7 @@ def evaluate_quality_gates(
     atr_pct: Decimal | None,
     config: AiScalpingConfig | None = None,
     pa_confluence: PaConfluenceResult | None = None,
+    min_expected_rr_override: Decimal | None = None,
 ) -> QualityGateResult:
     """Trade only when structure, liquidity, momentum, spread, vol, session align."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -124,10 +125,18 @@ def evaluate_quality_gates(
             f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"  # noqa: E501
         )
 
-    rr_ok = expected_rr is not None and expected_rr >= cfg.min_expected_rr
+    min_rr = (
+        min_expected_rr_override
+        if min_expected_rr_override is not None
+        else cfg.min_expected_rr
+    )
+    # Never allow override below configured floor
+    if min_rr < cfg.min_expected_rr:
+        min_rr = cfg.min_expected_rr
+    rr_ok = expected_rr is not None and expected_rr >= min_rr
     checks["min_rr"] = bool(rr_ok)
     if not rr_ok:
-        rejects.append(f"Expected RR {expected_rr} below minimum {cfg.min_expected_rr}")
+        rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
 
     pa_ok = True
     if pa_confluence is not None:

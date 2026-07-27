@@ -46,7 +46,7 @@ class AdaptiveThresholdBand:
 class AiScalpingConfig:
     """Institutional AI Scalping Engine - quality over quantity."""
 
-    version: str = "ai-scalping-v6.0.0"
+    version: str = "ai-scalping-v6.1.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE
@@ -150,6 +150,25 @@ class AiScalpingConfig:
     max_spread_for_full_score: Decimal = Decimal("0.40")
     max_spread_reject: Decimal = Decimal("1.50")
     spread_soft_penalty_max: int = 22
+    # Reject when spread > ATR * this fraction (in addition to absolute max)
+    max_spread_atr_pct: Decimal = Decimal("15.0")  # 15% of ATR
+
+    # Slippage protection (price units)
+    max_entry_slippage: Decimal = Decimal("0.50")
+    slippage_protection_enabled: bool = True
+
+    # Optional volatility-adjusted sizing — never exceeds risk_per_trade_pct
+    volatility_adjusted_sizing: bool = True
+    high_vol_risk_scale: Decimal = Decimal("0.75")  # reduce risk in high vol
+    low_vol_risk_scale: Decimal = Decimal("1.00")  # never above base risk
+
+    # Self-protection (pause NEW entries only)
+    self_protection_enabled: bool = True
+    pause_drawdown_pct: Decimal = Decimal("3.0")
+    pause_reject_burst: int = 5
+    pause_slippage_burst: int = 3
+    pause_gateway_fail_burst: int = 3
+    high_latency_pause_ms: float = 2000.0
 
     # News protection — existing trades still managed by risk/PME
     news_protection_enabled: bool = True
@@ -259,6 +278,12 @@ class AiScalpingConfig:
             "allowed_sessions": list(self.allowed_sessions),
             "news_protection_enabled": self.news_protection_enabled,
             "news_fail_closed_without_feed": self.news_fail_closed_without_feed,
+            "max_spread_atr_pct": str(self.max_spread_atr_pct),
+            "max_entry_slippage": str(self.max_entry_slippage),
+            "slippage_protection_enabled": self.slippage_protection_enabled,
+            "volatility_adjusted_sizing": self.volatility_adjusted_sizing,
+            "self_protection_enabled": self.self_protection_enabled,
+            "pause_drawdown_pct": str(self.pause_drawdown_pct),
             "never_prefer_buy_only": True,
             "allow_martingale": False,
             "allow_grid": False,

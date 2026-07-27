@@ -1,4 +1,4 @@
-"""Institutional AI Scalping v5 executive dashboard."""
+"""Institutional AI Scalping v6.1 executive dashboard — read-only metrics."""
 
 from __future__ import annotations
 
@@ -36,7 +36,6 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
     with contextlib.suppress(Exception):
         learning = get_scalping_learning_store().summary()
 
-    # Live vs backtest validation stub from learning / performance stores
     live_metrics: dict[str, Any] = {}
     backtest_metrics: dict[str, Any] = {}
     try:
@@ -45,7 +44,7 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         )
 
         live_metrics = get_live_performance_monitor().snapshot() or {}
-    except Exception:  # noqa: S110  # best-effort optional path
+    except Exception:  # noqa: S110
         pass
     try:
         from app.domain.institutional_trading.production_hardening.backtest_live import (  # noqa: E501
@@ -55,13 +54,62 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         bt = get_backtest_live_store().snapshot()
         if isinstance(bt, dict):
             backtest_metrics = bt.get("backtest") or bt.get("latest_backtest") or {}
-    except Exception:  # noqa: S110  # best-effort optional path
+    except Exception:  # noqa: S110
         pass
 
     validation = compare_backtest_vs_live(
         backtest=backtest_metrics if isinstance(backtest_metrics, dict) else {},
         live=live_metrics if isinstance(live_metrics, dict) else {},
     )
+
+    execution_quality: dict[str, Any] = {}
+    post_trade: dict[str, Any] = {}
+    health: dict[str, Any] = {}
+    with contextlib.suppress(Exception):
+        from app.domain.institutional_trading.ai_scalping.execution_quality import (
+            get_execution_quality_store,
+        )
+
+        execution_quality = get_execution_quality_store().snapshot()
+    with contextlib.suppress(Exception):
+        from app.domain.institutional_trading.ai_scalping.post_trade_analytics import (
+            get_post_trade_journal,
+        )
+
+        journal = get_post_trade_journal()
+        post_trade = {
+            "performance": journal.performance_snapshot(),
+            "recent": journal.recent(limit=25),
+        }
+    with contextlib.suppress(Exception):
+        from app.domain.institutional_trading.ai_scalping.live_health import (
+            get_live_health_monitor,
+        )
+
+        health = get_live_health_monitor().snapshot()
+
+    perf = post_trade.get("performance") if isinstance(post_trade, dict) else {}
+    if not isinstance(perf, dict):
+        perf = {}
+
+    performance_metrics = {
+        "win_rate": perf.get("win_rate") or live_metrics.get("win_rate"),
+        "average_r": perf.get("average_r"),
+        "profit_factor": perf.get("profit_factor"),
+        "average_hold_time": perf.get("average_hold_minutes"),
+        "average_latency": (
+            execution_quality.get("avg_latency_ms")
+            or live_metrics.get("avg_execution_latency_ms")
+        ),
+        "execution_success_rate": execution_quality.get("execution_success_rate"),
+        "expectancy": perf.get("expectancy"),
+        "fill_rate": execution_quality.get("fill_rate"),
+        "reject_rate": execution_quality.get("reject_rate"),
+        "requote_rate": execution_quality.get("requote_rate"),
+        "partial_fill_rate": execution_quality.get("partial_fill_rate"),
+        "avg_slippage": execution_quality.get("avg_slippage")
+        or live_metrics.get("avg_slippage"),
+    }
 
     setup = {
         "direction": ai_score.get("direction"),
@@ -83,14 +131,15 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         "sell_score": ai_score.get("sell_score"),
         "reject": ai_score.get("reject"),
         "quality_checks": ai_score.get("quality_checks"),
+        "regime_execution": ai_score.get("regime_execution"),
     }
 
     return {
         "version": cfg.version,
         "config": cfg.to_dict(),
         "mission": (
-            "Institutional AI scalping — H1/M15/M5/M1, balanced BUY/SELL, "
-            "reject weak setups. Do not increase risk until quality improves."
+            "Institutional AI scalping v6.1 — execution hardening. "
+            "Quality over quantity. No strategy mutation. No risk increase."
         ),
         "current_setup": setup,
         "mode": current,
@@ -100,6 +149,10 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         },
         "learning": learning,
         "validation": validation,
+        "performance_metrics": performance_metrics,
+        "execution_quality": execution_quality,
+        "post_trade": post_trade,
+        "live_health": health,
         "universe": list(cfg.universe),
         "safeguards": {
             "allow_martingale": False,
@@ -108,5 +161,8 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
             "risk_increase_locked": True,
             "risk_per_trade_pct": str(cfg.risk_per_trade_pct),
             "broker_safety_intact": True,
+            "self_protection_enabled": cfg.self_protection_enabled,
+            "slippage_protection_enabled": cfg.slippage_protection_enabled,
+            "volatility_adjusted_sizing": cfg.volatility_adjusted_sizing,
         },
     }

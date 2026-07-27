@@ -22,22 +22,40 @@ logger = get_logger(__name__)
 
 def pme_config_for_scalping(
     scalp: AiScalpingConfig | None = None,
+    *,
+    regime_profile: Any | None = None,
 ) -> PositionManagementConfig:
     cfg = scalp or DEFAULT_AI_SCALPING_CONFIG
+    trail_after = cfg.trail_after_r
+    abs_hold = cfg.absolute_max_hold_minutes
+    time_stop = cfg.time_stop_minutes
+    partial_enabled = cfg.partial_tp_enabled
+    partial_at = cfg.partial_at_r
+    partial_pct = cfg.partial_close_pct
+    if regime_profile is not None:
+        trail_after = getattr(regime_profile, "trail_after_r", trail_after)
+        abs_hold = getattr(regime_profile, "absolute_max_hold_minutes", abs_hold)
+        time_stop = getattr(regime_profile, "time_stop_minutes", time_stop)
+        partial_enabled = getattr(regime_profile, "partial_tp_enabled", partial_enabled)
+        partial_at = getattr(regime_profile, "partial_at_r", partial_at)
+        partial_pct = getattr(regime_profile, "partial_close_pct", partial_pct)
+        # Never exceed absolute max from base config
+        if abs_hold > cfg.absolute_max_hold_minutes:
+            abs_hold = cfg.absolute_max_hold_minutes
     return replace(
         DEFAULT_PME_CONFIG,
-        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v6",
+        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v6.1",
         break_even_at_r=cfg.break_even_at_r,
-        partial_at_r=cfg.partial_at_r,
-        partial_close_pct=cfg.partial_close_pct,
-        partial_tp_enabled=cfg.partial_tp_enabled,
-        trail_after_r=cfg.trail_after_r,
+        partial_at_r=partial_at,
+        partial_close_pct=partial_pct,
+        partial_tp_enabled=partial_enabled,
+        trail_after_r=trail_after,
         atr_trail_enabled=cfg.atr_trail_enabled,
         structure_trail_enabled=cfg.structure_trail_enabled,
         liquidity_trail_enabled=cfg.liquidity_trail_enabled,
-        time_stop_minutes=cfg.time_stop_minutes,
+        time_stop_minutes=time_stop,
         time_stop_min_r=cfg.time_stop_min_r,
-        absolute_max_hold_minutes=cfg.absolute_max_hold_minutes,
+        absolute_max_hold_minutes=abs_hold,
         momentum_fade_exit=cfg.momentum_fade_exit,
         momentum_fade_threshold=cfg.momentum_fade_threshold,
         volume_step=cfg.broker_lot_step,

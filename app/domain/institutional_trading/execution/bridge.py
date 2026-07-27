@@ -10,6 +10,7 @@ import contextlib
 import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from decimal import Decimal
 from threading import Lock
 from typing import TYPE_CHECKING
 
@@ -263,6 +264,65 @@ class ExecutionBridge:
                 comment=f"Spread {spread} exceeds {self.config.max_spread_accept}",
                 t0=t0,
             )
+
+        # 5a. Scalping ATR% spread + live health / self-protection (new entries only)
+        try:
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_AI_SCALPING_CONFIG,
+            )
+            from app.domain.institutional_trading.ai_scalping.live_health import (
+                get_live_health_monitor,
+            )
+            from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
+                assess_spread,
+            )
+
+            scalp_cfg = DEFAULT_AI_SCALPING_CONFIG
+            atr = getattr(context.snapshot, "atr", None) or getattr(
+                context.account, "atr", None
+            )
+            atr_spread = assess_spread(spread, atr=atr, config=scalp_cfg)
+            if atr_spread.reject:
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.SPREAD_UNACCEPTABLE,
+                    comment=atr_spread.reason,
+                    t0=t0,
+                )
+
+            health = get_live_health_monitor()
+            if scalp_cfg.self_protection_enabled:
+                health.update_dependencies(
+                    gateway_ok=context.gateway_connected
+                    if context.gateway_connected is not None
+                    else context.connected,
+                    broker_ok=context.broker_connected,
+                    mt5_ok=context.connected,
+                    market_data_ok=context.market_data_live,
+                )
+                # Drawdown pause from account equity vs peak
+                peak = context.account.peak_equity
+                eq = context.account.equity
+                if peak is not None and peak > 0 and eq < peak:
+                    dd = ((peak - eq) / peak * Decimal("100")).quantize(Decimal("0.01"))
+                    health.max_drawdown_pct = scalp_cfg.pause_drawdown_pct
+                    health.record_drawdown(dd)
+                allowed, why = health.allow_new_entries()
+                if not allowed:
+                    return self._abort(
+                        decision=decision,
+                        context=context,
+                        decision_hash=d_hash,
+                        reason=BridgeAbortReason.SELF_PROTECTION
+                        if "Dependency" not in why
+                        else BridgeAbortReason.HEALTH_DEGRADED,
+                        comment=f"New entries paused: {why}",
+                        t0=t0,
+                    )
+        except Exception:
+            logger.exception("scalping_live_hardening_gate_failed")
 
         # 5b. Canary hard limits (before eligibility — explicit abort reasons)
         if mode is ExecutionMode.CANARY_LIVE:
@@ -521,6 +581,43 @@ class ExecutionBridge:
                     self._canary_count = 0
                 self._canary_count += 1
 
+        # Measure slippage before journaling so the attempt record stores it
+        slip_str: str | None = None
+        slip_exceeded = False
+        try:
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_AI_SCALPING_CONFIG,
+            )
+            from app.domain.institutional_trading.ai_scalping.slippage_protection import (
+                extract_fill_price,
+                measure_slippage,
+            )
+
+            if status is ExecutionAttemptStatus.OMS_SUCCESS:
+                slip = measure_slippage(
+                    side=str(
+                        getattr(decision.action, "value", decision.action)
+                    ).lower(),
+                    requested_price=context.account.mid_price,
+                    filled_price=extract_fill_price(oms_result.raw),
+                    max_slippage=DEFAULT_AI_SCALPING_CONFIG.max_entry_slippage,
+                    latency_ms=latency,
+                )
+                if slip.slippage is not None:
+                    slip_str = str(slip.slippage)
+                slip_exceeded = bool(
+                    DEFAULT_AI_SCALPING_CONFIG.slippage_protection_enabled
+                    and slip.exceeded
+                )
+                if slip_exceeded:
+                    logger.warning(
+                        "entry_slippage_exceeded",
+                        reason=slip.reason,
+                        slippage=slip_str,
+                    )
+        except Exception:
+            logger.exception("scalping_slippage_measure_failed")
+
         entry = self._record(
             decision=decision,
             context=context,
@@ -536,7 +633,49 @@ class ExecutionBridge:
             mt5_deal=oms_result.deal_ticket,
             retcode=oms_result.retcode,
             mode=mode,
+            slippage=slip_str,
         )
+
+        # v6.1 rolling execution quality + self-protection signals
+        try:
+            from app.domain.institutional_trading.ai_scalping.execution_quality import (
+                get_execution_quality_store,
+            )
+            from app.domain.institutional_trading.ai_scalping.live_health import (
+                get_live_health_monitor,
+            )
+
+            eq = get_execution_quality_store()
+            health = get_live_health_monitor()
+            msg_l = (oms_result.message or "").lower()
+            requote = "requote" in msg_l or oms_result.retcode == 10004
+            partial = "partial" in msg_l
+            if status is ExecutionAttemptStatus.OMS_SUCCESS:
+                if slip_exceeded:
+                    health.record_abnormal_slippage()
+                eq.record(
+                    outcome="success",
+                    latency_ms=latency,
+                    slippage=float(slip_str) if slip_str is not None else None,
+                    spread=float(spread) if spread is not None else None,
+                    retcode=oms_result.retcode,
+                    partial_fill=partial,
+                    requote=requote,
+                )
+            else:
+                eq.record(
+                    outcome="reject",
+                    latency_ms=latency,
+                    spread=float(spread) if spread is not None else None,
+                    retcode=oms_result.retcode,
+                    requote=requote,
+                    rejection_reason=oms_result.message,
+                )
+                health.record_reject()
+                if abort_reason is BridgeAbortReason.GATEWAY_FAILURE:
+                    health.record_gateway_instability()
+        except Exception:
+            logger.exception("scalping_execution_quality_record_failed")
 
         if status is ExecutionAttemptStatus.OMS_SUCCESS:
             self.metrics.record_executed(latency)
@@ -834,6 +973,7 @@ class ExecutionBridge:
         mt5_deal: int | None = None,
         retcode: int | None = None,
         mode: ExecutionMode | None = None,
+        slippage: str | None = None,
     ) -> ExecutionAttemptRecord:
         entry = ExecutionAttemptRecord(
             decision_hash=decision_hash,
@@ -864,6 +1004,7 @@ class ExecutionBridge:
                 if getattr(context, "spread", None) is not None
                 else None
             ),
+            slippage=slippage,
             rejection_reason=(
                 comment
                 if abort_reason is not BridgeAbortReason.NONE

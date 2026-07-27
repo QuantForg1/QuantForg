@@ -30,8 +30,10 @@ class SpreadAssessment:
 def assess_spread(
     spread: Decimal | None,
     *,
+    atr: Decimal | None = None,
     config: AiScalpingConfig | None = None,
 ) -> SpreadAssessment:
+    """Reject when spread exceeds absolute max OR configured ATR percentage."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     if spread is None:
         return SpreadAssessment(
@@ -46,9 +48,24 @@ def assess_spread(
             confidence_penalty=cfg.spread_soft_penalty_max,
             reject=True,
             reason=(
-                f"Spread {spread} exceeds configured reject " f"{cfg.max_spread_reject}"
+                f"Spread {spread} exceeds configured reject {cfg.max_spread_reject}"
             ),
         )
+    # ATR%-based protection — never enter on FOMO when spread eats the move
+    if atr is not None and atr > 0 and cfg.max_spread_atr_pct > 0:
+        atr_cap = (atr * cfg.max_spread_atr_pct / Decimal("100")).quantize(
+            Decimal("0.0001")
+        )
+        if spread > atr_cap:
+            return SpreadAssessment(
+                score=0,
+                confidence_penalty=cfg.spread_soft_penalty_max,
+                reject=True,
+                reason=(
+                    f"Spread {spread} exceeds {cfg.max_spread_atr_pct}% of ATR "
+                    f"({atr_cap})"
+                ),
+            )
     if spread <= cfg.max_spread_for_full_score:
         return SpreadAssessment(
             score=100,

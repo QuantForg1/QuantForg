@@ -97,6 +97,23 @@ def calculate_scalping_lots(
     if remaining_exposure < base_risk:
         base_risk = max(Decimal("0"), remaining_exposure)
 
+    # Optional volatility-adjusted sizing — may REDUCE risk only, never raise
+    method_suffix = ""
+    if cfg.volatility_adjusted_sizing and atr is not None and atr > 0:
+        if stop_distance and stop_distance > 0 and atr >= stop_distance * Decimal("1.5"):
+            base_risk = (base_risk * cfg.high_vol_risk_scale).quantize(Decimal("0.0001"))
+            method_suffix = "+high_vol_scale"
+        elif (
+            stop_distance
+            and stop_distance > 0
+            and atr <= stop_distance * Decimal("0.5")
+        ):
+            scale = min(Decimal("1"), cfg.low_vol_risk_scale)
+            base_risk = (base_risk * scale).quantize(Decimal("0.0001"))
+            method_suffix = "+low_vol_scale"
+        if base_risk > cfg.risk_per_trade_pct:
+            base_risk = cfg.risk_per_trade_pct
+
     dist = stop_distance
     if dist is None or dist <= 0:
         if atr is not None and atr > 0:
@@ -145,7 +162,7 @@ def calculate_scalping_lots(
         lots=lots,
         risk_amount=risk_amount,
         stop_distance=dist,
-        method="percentage_risk",
+        method=f"percentage_risk{method_suffix}",
         reason=(
             f"risk={base_risk}% equity={equity} stop={dist} "
             f"→ lots={lots} (min={cfg.broker_min_lot} step={cfg.broker_lot_step})"
