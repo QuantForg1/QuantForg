@@ -65,6 +65,7 @@ class ProductionHardeningConfig:
     # Position recovery
     recovery_on_startup: bool = True
     pme_state_filename: str = "pme_recovery_state.json"
+    decision_hash_filename: str = "execution_decision_hashes.json"
 
     def to_dict(self) -> dict[str, Any]:
         return {

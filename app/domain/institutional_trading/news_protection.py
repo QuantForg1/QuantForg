@@ -39,6 +39,7 @@ class NewsProtection:
 
     config: ITEConfig
     calendar: NewsCalendarPort | None = None
+    fail_closed_without_feed: bool = False
 
     def evaluate(self, *, as_of: datetime) -> NewsProtectionStatus:
         if not self.config.news_protection_enabled:
@@ -50,6 +51,15 @@ class NewsProtection:
                 ),
             )
         if self.calendar is None:
+            if self.fail_closed_without_feed:
+                return NewsProtectionStatus(
+                    enabled=True,
+                    blocked=True,
+                    reason=(
+                        "News protection enabled but no calendar feed — "
+                        "fail-closed (new entries paused until feed is wired)."
+                    ),
+                )
             return NewsProtectionStatus(
                 enabled=True,
                 blocked=False,

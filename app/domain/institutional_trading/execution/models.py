@@ -150,6 +150,11 @@ class ExecutionAttemptRecord:
     schema_version: str = "1.0.0"
     symbol: str = "XAUUSD"
     request_id: str = ""
+    entry_reason: str | None = None
+    spread: str | None = None
+    slippage: str | None = None
+    indicators: dict[str, Any] | None = None
+    rejection_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -177,6 +182,11 @@ class ExecutionAttemptRecord:
             "status": self.status.value,
             "symbol": self.symbol,
             "request_id": self.request_id,
+            "entry_reason": self.entry_reason,
+            "spread": self.spread,
+            "slippage": self.slippage,
+            "indicators": dict(self.indicators or {}),
+            "rejection_reason": self.rejection_reason,
         }
 
 

@@ -29,7 +29,7 @@ class ScalpingDiagnosticsStore:
                 base = Path(getattr(get_settings(), "data_dir", None) or "data")
             except Exception:
                 base = Path("data")
-            self._path = base / "ai_scalping_diagnostics_v5.jsonl"
+            self._path = base / "ai_scalping_diagnostics_v6.jsonl"
 
     def record(
         self,

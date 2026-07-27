@@ -26,13 +26,20 @@ def pme_config_for_scalping(
     cfg = scalp or DEFAULT_AI_SCALPING_CONFIG
     return replace(
         DEFAULT_PME_CONFIG,
-        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v5",
+        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v6",
         break_even_at_r=cfg.break_even_at_r,
         partial_at_r=cfg.partial_at_r,
         partial_close_pct=cfg.partial_close_pct,
+        partial_tp_enabled=cfg.partial_tp_enabled,
         trail_after_r=cfg.trail_after_r,
+        atr_trail_enabled=cfg.atr_trail_enabled,
+        structure_trail_enabled=cfg.structure_trail_enabled,
+        liquidity_trail_enabled=cfg.liquidity_trail_enabled,
         time_stop_minutes=cfg.time_stop_minutes,
         time_stop_min_r=cfg.time_stop_min_r,
+        absolute_max_hold_minutes=cfg.absolute_max_hold_minutes,
+        momentum_fade_exit=cfg.momentum_fade_exit,
+        momentum_fade_threshold=cfg.momentum_fade_threshold,
         volume_step=cfg.broker_lot_step,
         min_volume=cfg.broker_min_lot,
     )

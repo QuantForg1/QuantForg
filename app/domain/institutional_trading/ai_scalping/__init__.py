@@ -34,6 +34,10 @@ from app.domain.institutional_trading.ai_scalping.learning import (
 from app.domain.institutional_trading.ai_scalping.multi_symbol import (
     rank_scalping_opportunities,
 )
+from app.domain.institutional_trading.ai_scalping.pa_confluence import (
+    PaConfluenceResult,
+    evaluate_pa_confluence,
+)
 from app.domain.institutional_trading.ai_scalping.quality_gates import (
     QualityGateResult,
     evaluate_quality_gates,
@@ -76,6 +80,7 @@ __all__ = [
     "DirectionDecision",
     "LearningTradeRecord",
     "LotSizingResult",
+    "PaConfluenceResult",
     "QualityGateResult",
     "RegimeAssessment",
     "ResolvedThresholds",
@@ -92,6 +97,7 @@ __all__ = [
     "compare_backtest_vs_live",
     "compute_structure_targets",
     "decide_scalping_direction",
+    "evaluate_pa_confluence",
     "evaluate_quality_gates",
     "get_scalping_diagnostics_store",
     "get_scalping_learning_store",

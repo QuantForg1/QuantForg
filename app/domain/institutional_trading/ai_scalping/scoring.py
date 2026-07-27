@@ -1,7 +1,8 @@
-"""AI Scalping score v5 - institutional quality, balanced BUY/SELL, 1-10m hold."""
+"""AI Scalping score v6 - institutional quality, balanced BUY/SELL, 1-10m hold."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -16,6 +17,9 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.ai_scalping.direction import (
     decide_scalping_direction,
+)
+from app.domain.institutional_trading.ai_scalping.pa_confluence import (
+    evaluate_pa_confluence,
 )
 from app.domain.institutional_trading.ai_scalping.quality_gates import (
     evaluate_quality_gates,
@@ -34,7 +38,6 @@ from app.domain.institutional_trading.ai_scalping.structure_targets import (
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
-
 
 @dataclass(frozen=True, slots=True)
 class AiScalpingScore:
@@ -62,6 +65,8 @@ class AiScalpingScore:
     take_profit: str | None = None
     quality_checks: dict[str, bool] | None = None
     reject_reasons: tuple[str, ...] = ()
+    indicators: dict[str, object] | None = None
+    entry_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -91,6 +96,8 @@ class AiScalpingScore:
             "reject_reason": self.reject_reason,
             "reject_reasons": list(self.reject_reasons),
             "quality_checks": dict(self.quality_checks or {}),
+            "indicators": dict(self.indicators or {}),
+            "entry_reason": self.entry_reason,
             "never_prefer_buy_only": True,
         }
 
@@ -113,6 +120,10 @@ def score_scalping_setup(
     mid: Decimal | None,
     historical_similarity: int | None = None,
     config: AiScalpingConfig | None = None,
+    closes: Sequence[float] | None = None,
+    opens: Sequence[float] | None = None,
+    highs: Sequence[float] | None = None,
+    lows: Sequence[float] | None = None,
 ) -> AiScalpingScore:
     """Compute AI Confidence / Quality for institutional scalping."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -194,21 +205,39 @@ def score_scalping_setup(
     hist = int(historical_similarity) if historical_similarity is not None else 50
     factors["historical_similar"] = max(0, min(100, hist))
 
+    pa = evaluate_pa_confluence(
+        snapshot,
+        direction=direction,
+        closes=closes,
+        opens=opens,
+        highs=highs,
+        lows=lows,
+        config=cfg,
+    )
+    factors["ema"] = pa.ema_score
+    factors["rsi"] = pa.rsi_score
+    factors["candle_pa"] = pa.candle_score
+    factors["pa_confluence"] = pa.score
+    reasons.extend(pa.reasons)
+
     weights = {
-        "mtf": 16,
-        "bos": 8,
-        "choch": 8,
-        "liquidity_sweep": 12,
-        "order_block": 10,
-        "fvg": 8,
-        "atr_expansion": 6,
-        "volume": 5,
-        "momentum": 10,
-        "trend_strength": 5,
+        "mtf": 14,
+        "bos": 7,
+        "choch": 7,
+        "liquidity_sweep": 10,
+        "order_block": 8,
+        "fvg": 7,
+        "atr_expansion": 5,
+        "volume": 4,
+        "momentum": 8,
+        "trend_strength": 4,
         "volatility": 3,
         "session": 5,
         "spread": 4,
         "historical_similar": 2,
+        "ema": 5,
+        "rsi": 4,
+        "candle_pa": 3,
     }
     weighted = sum(factors.get(k, 0) * w for k, w in weights.items())
     total_w = sum(weights.values())
@@ -255,6 +284,7 @@ def score_scalping_setup(
         expected_rr=expected_rr,
         atr_pct=resolved.atr_pct,
         config=cfg,
+        pa_confluence=pa,
     )
 
     reject = not gates.passed
@@ -263,7 +293,13 @@ def score_scalping_setup(
         direction = TradeDirection.NONE
         for r in gates.rejects:
             reasons.append(f"REJECT: {r}")
+        entry_reason = reject_reason
     else:
+        entry_reason = (
+            f"TAKE {direction_dec.direction.value}: "
+            f"PA={pa.score} conf={confidence} "
+            f"EMA/RSI/SMC confluence satisfied"
+        )
         reasons.append(
             f"TAKE {direction_dec.direction.value}: all institutional quality gates passed"  # noqa: E501
         )
@@ -297,4 +333,6 @@ def score_scalping_setup(
         ),
         quality_checks=gates.checks,
         reject_reasons=gates.rejects,
+        indicators=pa.indicators,
+        entry_reason=entry_reason,
     )

@@ -74,6 +74,45 @@ class ExecutionBridge:
     _canary_day: date | None = field(default=None, repr=False)
     _canary_count: int = field(default=0, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
+    _hashes_hydrated: bool = field(default=False, repr=False)
+
+    def _ensure_hashes_loaded(self) -> None:
+        """Hydrate durable decision hashes once (restart-safe dedupe)."""
+        if self._hashes_hydrated:
+            return
+        with self._lock:
+            if self._hashes_hydrated:
+                return
+            try:
+                from app.domain.institutional_trading.execution.decision_hash_store import (
+                    load_executed_hashes,
+                )
+
+                loaded, order = load_executed_hashes(
+                    max_hashes=self._max_executed_hashes
+                )
+                self._executed_hashes |= loaded
+                # Preserve existing in-memory order; append missing from disk
+                seen = set(self._executed_hash_order)
+                for h in order:
+                    if h not in seen:
+                        self._executed_hash_order.append(h)
+                        seen.add(h)
+            except Exception:
+                logger.exception("decision_hash_hydrate_failed")
+            self._hashes_hydrated = True
+
+    def _persist_hashes(self) -> None:
+        try:
+            from app.domain.institutional_trading.execution.decision_hash_store import (
+                persist_executed_hashes,
+            )
+
+            with self._lock:
+                order = list(self._executed_hash_order)
+            persist_executed_hashes(order, max_hashes=self._max_executed_hashes)
+        except Exception:
+            logger.exception("decision_hash_bridge_persist_failed")
 
     def bind_ops(
         self,
@@ -108,6 +147,7 @@ class ExecutionBridge:
     ) -> ExecutionBridgeResult:
         """Evaluate a decision. Only BUY/SELL may reach OMS (never WATCH/NO_TRADE)."""
         t0 = time.perf_counter()
+        self._ensure_hashes_loaded()
         mode = self.effective_mode()
         d_hash = compute_decision_hash(decision)
         actionable = decision.action in {DecisionAction.BUY, DecisionAction.SELL}
@@ -446,6 +486,7 @@ class ExecutionBridge:
             ):
                 self._canary_day = context.now.date()
                 self._canary_count = 0
+        self._persist_hashes()
 
         oms_result = self.oms.submit_market(
             user_id=context.user_id,
@@ -466,6 +507,9 @@ class ExecutionBridge:
                 self._executed_hashes.discard(d_hash)
                 with contextlib.suppress(ValueError):
                     self._executed_hash_order.remove(d_hash)
+            self._persist_hashes()
+        else:
+            self._persist_hashes()
 
         if (
             mode is ExecutionMode.CANARY_LIVE
@@ -812,6 +856,19 @@ class ExecutionBridge:
             status=status,
             symbol=decision.symbol,
             request_id=context.request_id or "",
+            entry_reason=(
+                "; ".join(getattr(decision, "reasons", ()) or ())[:500] or None
+            ),
+            spread=(
+                str(context.spread)
+                if getattr(context, "spread", None) is not None
+                else None
+            ),
+            rejection_reason=(
+                comment
+                if abort_reason is not BridgeAbortReason.NONE
+                else None
+            ),
         )
         return self.journal.append(entry)
 

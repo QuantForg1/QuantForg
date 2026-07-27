@@ -321,8 +321,10 @@ class InstitutionalDecisionPipeline:
                 open_positions=account.open_positions,
                 max_open=cfg.max_open_trades,
                 new_confidence=confluence.confidence,
-                best_open_confidence=None,
+                best_open_confidence=account.best_open_confidence,
                 new_direction=confluence.direction.value,
+                open_directions=account.open_directions,
+                open_entries=account.open_entries,
                 require_improvement=DEFAULT_AI_SCALPING_CONFIG.require_probability_improvement
                 and account.open_positions > 0,
                 min_confidence_delta=DEFAULT_AI_SCALPING_CONFIG.min_confidence_delta_for_add,

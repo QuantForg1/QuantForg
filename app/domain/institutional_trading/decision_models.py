@@ -153,6 +153,9 @@ class AccountRiskState:
     atr: Decimal | None = None
     mid_price: Decimal | None = None
     free_margin: Decimal | None = None
+    best_open_confidence: int | None = None
+    open_directions: tuple[str, ...] = ()
+    open_entries: tuple[Decimal, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -169,4 +172,7 @@ class AccountRiskState:
             "atr": str(self.atr) if self.atr is not None else None,
             "mid_price": str(self.mid_price) if self.mid_price is not None else None,
             "free_margin": str(self.free_margin) if self.free_margin else None,
+            "best_open_confidence": self.best_open_confidence,
+            "open_directions": list(self.open_directions),
+            "open_entries": [str(e) for e in self.open_entries],
         }

@@ -17,6 +17,9 @@ from app.domain.institutional_trading.ai_scalping.direction import DirectionDeci
 from app.domain.institutional_trading.ai_scalping.session_intelligence import (
     SessionAssessment,
 )
+from app.domain.institutional_trading.ai_scalping.pa_confluence import (
+    PaConfluenceResult,
+)
 from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     SpreadAssessment,
 )
@@ -50,6 +53,7 @@ def evaluate_quality_gates(
     expected_rr: Decimal | None,
     atr_pct: Decimal | None,
     config: AiScalpingConfig | None = None,
+    pa_confluence: PaConfluenceResult | None = None,
 ) -> QualityGateResult:
     """Trade only when structure, liquidity, momentum, spread, vol, session align."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -124,6 +128,17 @@ def evaluate_quality_gates(
     checks["min_rr"] = bool(rr_ok)
     if not rr_ok:
         rejects.append(f"Expected RR {expected_rr} below minimum {cfg.min_expected_rr}")
+
+    pa_ok = True
+    if pa_confluence is not None:
+        pa_ok = pa_confluence.passed
+        checks["pa_confluence"] = pa_ok
+        if cfg.require_pa_confluence and not pa_ok:
+            rejects.append(
+                f"PA confluence {pa_confluence.score} < {cfg.min_pa_confluence_score}"
+            )
+    else:
+        checks["pa_confluence"] = True
 
     return QualityGateResult(
         passed=len(rejects) == 0,

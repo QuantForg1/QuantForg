@@ -134,15 +134,19 @@ def compute_structure_targets(
                 "Cannot place BUY SL without structure/ATR",
             )
         stop_distance = entry - sl
-        # TP: liquidity high → swing high → ATR expansion
-        if liq_high is not None and liq_high > entry:
+        # TP priority: fixed-R (optional) → liquidity → swing → ATR expansion
+        fixed_r = cfg.fixed_tp_r
+        if fixed_r is not None and fixed_r > 0:
+            tp = entry + stop_distance * fixed_r
+            reason_parts.append(f"TP fixed {fixed_r}R")
+        elif liq_high is not None and liq_high > entry:
             tp = liq_high
             reason_parts.append("TP liquidity high")
         elif swing_high is not None and swing_high > entry:
             tp = swing_high
             reason_parts.append("TP nearby swing high")
         elif atr_d:
-            tp = entry + atr_d * Decimal("1.8")
+            tp = entry + atr_d * cfg.atr_tp_mult
             reason_parts.append("TP ATR expansion")
         else:
             tp = entry + stop_distance * Decimal("1.5")
@@ -166,14 +170,18 @@ def compute_structure_targets(
                 "Cannot place SELL SL without structure/ATR",
             )
         stop_distance = sl - entry
-        if liq_low is not None and liq_low < entry:
+        fixed_r = cfg.fixed_tp_r
+        if fixed_r is not None and fixed_r > 0:
+            tp = entry - stop_distance * fixed_r
+            reason_parts.append(f"TP fixed {fixed_r}R")
+        elif liq_low is not None and liq_low < entry:
             tp = liq_low
             reason_parts.append("TP liquidity low")
         elif swing_low is not None and swing_low < entry:
             tp = swing_low
             reason_parts.append("TP nearby swing low")
         elif atr_d:
-            tp = entry - atr_d * Decimal("1.8")
+            tp = entry - atr_d * cfg.atr_tp_mult
             reason_parts.append("TP ATR expansion")
         else:
             tp = entry - stop_distance * Decimal("1.5")

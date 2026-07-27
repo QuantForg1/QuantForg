@@ -32,6 +32,12 @@ class LearningTradeRecord:
     regime: str | None
     execution_ms: float | None
     ticket: str | None = None
+    entry_reason: str | None = None
+    exit_reason: str | None = None
+    slippage: str | None = None
+    rejection_reason: str | None = None
+    indicators: dict[str, Any] | None = None
+    risk_pct: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -90,6 +96,16 @@ class ScalpingLearningStore:
                             else None
                         ),
                         ticket=row.get("ticket"),
+                        entry_reason=row.get("entry_reason"),
+                        exit_reason=row.get("exit_reason"),
+                        slippage=row.get("slippage"),
+                        rejection_reason=row.get("rejection_reason"),
+                        indicators=(
+                            row.get("indicators")
+                            if isinstance(row.get("indicators"), dict)
+                            else None
+                        ),
+                        risk_pct=row.get("risk_pct"),
                     )
                 )
             with self._lock:

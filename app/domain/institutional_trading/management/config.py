@@ -25,11 +25,15 @@ class PositionManagementConfig:
     break_even_offset_r: Decimal = Decimal("0.2")  # +0.2R into profit
 
     # Partial
+    partial_tp_enabled: bool = True
     partial_at_r: Decimal = Decimal("2.0")
     partial_close_pct: Decimal = Decimal("50")
 
     # Trailing (ATR-based, starts after 2R)
     trail_after_r: Decimal = Decimal("2.0")
+    atr_trail_enabled: bool = True
+    structure_trail_enabled: bool = False
+    liquidity_trail_enabled: bool = False
     trail_atr_mult_normal: Decimal = Decimal("1.0")
     trail_atr_mult_high: Decimal = Decimal("1.5")
     trail_atr_mult_low: Decimal = Decimal("0.75")
@@ -40,7 +44,13 @@ class PositionManagementConfig:
     # Time stop
     time_stop_minutes: int = 60
     time_stop_min_r: Decimal = Decimal("0.5")  # min favorable R within window
+    # Absolute max hold for scalping — flatten regardless of R when set > 0
+    absolute_max_hold_minutes: int = 0
     # Allowed presets documented: 30 / 60 / 120
+
+    # Momentum fade exit
+    momentum_fade_exit: bool = True
+    momentum_fade_threshold: int = 40
 
     # Spread emergency
     emergency_spread_max: Decimal = Decimal("5.00")
@@ -59,11 +69,18 @@ class PositionManagementConfig:
             "comment_prefix": self.comment_prefix,
             "break_even_at_r": str(self.break_even_at_r),
             "break_even_offset_r": str(self.break_even_offset_r),
+            "partial_tp_enabled": self.partial_tp_enabled,
             "partial_at_r": str(self.partial_at_r),
             "partial_close_pct": str(self.partial_close_pct),
             "trail_after_r": str(self.trail_after_r),
+            "atr_trail_enabled": self.atr_trail_enabled,
+            "structure_trail_enabled": self.structure_trail_enabled,
+            "liquidity_trail_enabled": self.liquidity_trail_enabled,
             "time_stop_minutes": self.time_stop_minutes,
             "time_stop_min_r": str(self.time_stop_min_r),
+            "absolute_max_hold_minutes": self.absolute_max_hold_minutes,
+            "momentum_fade_exit": self.momentum_fade_exit,
+            "momentum_fade_threshold": self.momentum_fade_threshold,
             "emergency_spread_max": str(self.emergency_spread_max),
         }
 

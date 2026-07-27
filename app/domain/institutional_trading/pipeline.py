@@ -173,7 +173,24 @@ class InstitutionalAnalysisPipeline:
             context_engine=None,
             prefer_utc_classifier=True,
         ).evaluate(as_of=moment)
-        news = (self.news or NewsProtection(config=cfg)).evaluate(as_of=moment)
+        news_engine = self.news
+        if news_engine is None:
+            fail_closed = False
+            if cfg.is_scalping():
+                try:
+                    from app.domain.institutional_trading.ai_scalping.config import (
+                        DEFAULT_AI_SCALPING_CONFIG,
+                    )
+
+                    fail_closed = (
+                        DEFAULT_AI_SCALPING_CONFIG.news_fail_closed_without_feed
+                    )
+                except Exception:
+                    fail_closed = False
+            news_engine = NewsProtection(
+                config=cfg, fail_closed_without_feed=fail_closed
+            )
+        news = news_engine.evaluate(as_of=moment)
 
         quality = TradeQualityEvaluator(config=cfg).evaluate(
             trend=trend,

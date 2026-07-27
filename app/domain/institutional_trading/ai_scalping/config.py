@@ -1,4 +1,4 @@
-"""Institutional AI Scalping v5 - quality-first config (never raise risk casually)."""
+"""Institutional AI Scalping v6 - execution-quality config (never raise risk casually)."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class AdaptiveThresholdBand:
 class AiScalpingConfig:
     """Institutional AI Scalping Engine - quality over quantity."""
 
-    version: str = "ai-scalping-v5.0.0"
+    version: str = "ai-scalping-v6.0.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE
@@ -77,17 +77,22 @@ class AiScalpingConfig:
     require_tight_spread: bool = True
     require_valid_volatility: bool = True
     require_session_quality: bool = True
+    require_pa_confluence: bool = True
     min_structure_score: int = 70
     min_momentum_score: int = 65
     min_liquidity_score: int = 60
     min_session_stars: int = 4
     min_expected_rr: Decimal = Decimal("1.3")
+    # EMA / RSI / candle PA composite — never below prior quality floors
+    min_pa_confluence_score: int = 55
 
     # Real scalping hold window
     typical_hold_min_minutes: int = 1
     typical_hold_max_minutes: int = 10
     max_hold_minutes_if_confident: int = 20
     high_confidence_for_extend: int = 88
+    # Absolute flatten — do not keep scalps open unnecessarily
+    absolute_max_hold_minutes: int = 25
 
     # Multi-trade - prefer quality, not stacking losers
     max_open_trades: int = 2
@@ -112,12 +117,15 @@ class AiScalpingConfig:
     atr_trail_enabled: bool = True
     liquidity_trail_enabled: bool = True
     structure_trail_enabled: bool = True
+    # Optional fixed-R TP preference (None = structure/ATR targets only)
+    fixed_tp_r: Decimal | None = Decimal("1.5")
+    atr_tp_mult: Decimal = Decimal("1.8")
     time_stop_minutes: int = 10
     time_stop_min_r: Decimal = Decimal("0.3")
     momentum_fade_exit: bool = True
     momentum_fade_threshold: int = 40
 
-    # Session aggression (1-5 stars)
+    # Session aggression (1-5 stars) — London / NY / overlap preferred
     session_stars: dict[str, int] = field(
         default_factory=lambda: {
             MarketSession.LONDON.value: 5,
@@ -131,18 +139,26 @@ class AiScalpingConfig:
     )
     aggressive_session_min_stars: int = 5
     weak_session_confidence_penalty: int = 10
+    # Configurable session allow-list (maps onto ITE when applying scalping mode)
+    allowed_sessions: tuple[str, ...] = (
+        MarketSession.LONDON.value,
+        MarketSession.NEW_YORK.value,
+        MarketSession.LONDON_NY_OVERLAP.value,
+    )
 
     # Spread - hard reject weak liquidity
     max_spread_for_full_score: Decimal = Decimal("0.40")
     max_spread_reject: Decimal = Decimal("1.50")
     spread_soft_penalty_max: int = 22
 
-    # News protection
+    # News protection — existing trades still managed by risk/PME
     news_protection_enabled: bool = True
     news_high_impact_pause: bool = True
     news_medium_risk_mult: Decimal = Decimal("0.50")
     news_blackout_minutes_before: int = 30
     news_blackout_minutes_after: int = 30
+    # Default False preserves availability when calendar feed is absent
+    news_fail_closed_without_feed: bool = False
 
     target_pipeline_latency_ms: int = 200
     learning_enabled: bool = True
@@ -163,6 +179,19 @@ class AiScalpingConfig:
         # Cap risk - quality upgrade must not silently raise risk
         if self.risk_per_trade_pct > Decimal("0.75"):
             object.__setattr__(self, "risk_per_trade_pct", Decimal("0.75"))
+        # Never loosen hold beyond absolute max
+        if self.absolute_max_hold_minutes < self.typical_hold_max_minutes:
+            object.__setattr__(
+                self,
+                "absolute_max_hold_minutes",
+                self.typical_hold_max_minutes,
+            )
+        if self.max_hold_minutes_if_confident > self.absolute_max_hold_minutes:
+            object.__setattr__(
+                self,
+                "max_hold_minutes_if_confident",
+                self.absolute_max_hold_minutes,
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -199,25 +228,37 @@ class AiScalpingConfig:
                 "require_tight_spread": self.require_tight_spread,
                 "require_valid_volatility": self.require_valid_volatility,
                 "require_session_quality": self.require_session_quality,
+                "require_pa_confluence": self.require_pa_confluence,
                 "min_structure_score": self.min_structure_score,
                 "min_momentum_score": self.min_momentum_score,
                 "min_liquidity_score": self.min_liquidity_score,
                 "min_session_stars": self.min_session_stars,
                 "min_expected_rr": str(self.min_expected_rr),
+                "min_pa_confluence_score": self.min_pa_confluence_score,
             },
             "hold_window": {
                 "typical_min": self.typical_hold_min_minutes,
                 "typical_max": self.typical_hold_max_minutes,
                 "max_if_confident": self.max_hold_minutes_if_confident,
+                "absolute_max": self.absolute_max_hold_minutes,
             },
             "max_open_trades": self.max_open_trades,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
             "risk_increase_locked": True,
             "break_even_at_r": str(self.break_even_at_r),
             "partial_at_r": str(self.partial_at_r),
+            "partial_tp_enabled": self.partial_tp_enabled,
             "trail_after_r": str(self.trail_after_r),
+            "atr_trail_enabled": self.atr_trail_enabled,
+            "structure_trail_enabled": self.structure_trail_enabled,
+            "liquidity_trail_enabled": self.liquidity_trail_enabled,
+            "fixed_tp_r": str(self.fixed_tp_r) if self.fixed_tp_r is not None else None,
             "time_stop_minutes": self.time_stop_minutes,
             "momentum_fade_exit": self.momentum_fade_exit,
+            "momentum_fade_threshold": self.momentum_fade_threshold,
+            "allowed_sessions": list(self.allowed_sessions),
+            "news_protection_enabled": self.news_protection_enabled,
+            "news_fail_closed_without_feed": self.news_fail_closed_without_feed,
             "never_prefer_buy_only": True,
             "allow_martingale": False,
             "allow_grid": False,
@@ -237,6 +278,14 @@ def scalping_ite_config(
 
     src = base or DEFAULT_ITE_CONFIG
     cfg = scalp or DEFAULT_AI_SCALPING_CONFIG
+    sessions: list[MarketSession] = []
+    for name in cfg.allowed_sessions:
+        try:
+            sessions.append(MarketSession(str(name)))
+        except ValueError:
+            continue
+    if not sessions:
+        sessions = list(src.allowed_sessions)
     return replace(
         src,
         config_version=f"{src.config_version}+{cfg.version}",
@@ -259,4 +308,5 @@ def scalping_ite_config(
         news_protection_enabled=cfg.news_protection_enabled,
         news_blackout_minutes_before=cfg.news_blackout_minutes_before,
         news_blackout_minutes_after=cfg.news_blackout_minutes_after,
+        allowed_sessions=tuple(sessions),
     )

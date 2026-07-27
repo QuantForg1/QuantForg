@@ -73,7 +73,7 @@ def _snap(
 @pytest.mark.unit
 def test_v5_mtf_and_risk_locked() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.version.startswith("ai-scalping-v5")
+    assert cfg.version.startswith("ai-scalping-v6")
     assert cfg.direction_tf is Timeframe.H1
     assert cfg.structure_tf is Timeframe.M15
     assert cfg.entry_tf is Timeframe.M5
@@ -171,7 +171,7 @@ def test_dashboard_shape() -> None:
     )
 
     dash = build_ai_scalping_dashboard()
-    assert dash["version"].startswith("ai-scalping-v5")
+    assert dash["version"].startswith("ai-scalping-v6")
     assert dash["safeguards"]["allow_martingale"] is False
     assert "current_setup" in dash
     assert "diagnostics" in dash

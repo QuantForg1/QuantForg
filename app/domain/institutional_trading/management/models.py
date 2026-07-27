@@ -157,6 +157,11 @@ class PositionManageContext:
     ai_volatility: int | None = None
     ai_liquidity: int | None = None
     ai_trend_strength: int | None = None
+    # Optional structure / liquidity trail anchors (caller-supplied)
+    structure_stop: Decimal | None = None
+    liquidity_stop: Decimal | None = None
+    spread_at_entry: Decimal | None = None
+    entry_slippage: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,8 +186,12 @@ class PositionManageRecord:
     comment: str = ""
     fingerprint: str = ""
     id: UUID = field(default_factory=uuid4)
-    schema_version: str = "1.0.0"
+    schema_version: str = "1.1.0"
     symbol: str = "XAUUSD"
+    exit_reason: str | None = None
+    spread: str | None = None
+    slippage: str | None = None
+    pnl: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -206,6 +215,10 @@ class PositionManageRecord:
             "retcode": self.retcode,
             "comment": self.comment,
             "fingerprint": self.fingerprint,
+            "exit_reason": self.exit_reason,
+            "spread": self.spread,
+            "slippage": self.slippage,
+            "pnl": self.pnl,
         }
 
 
