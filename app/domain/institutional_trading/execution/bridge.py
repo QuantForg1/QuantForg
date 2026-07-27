@@ -310,6 +310,9 @@ class ExecutionBridge:
                     broker_ok=context.broker_connected,
                     mt5_ok=context.connected,
                     market_data_ok=context.market_data_live,
+                    oms_ok=context.gateway_connected
+                    if context.gateway_connected is not None
+                    else context.connected,
                 )
                 # Drawdown pause from account equity vs peak
                 peak = context.account.peak_equity
@@ -334,6 +337,14 @@ class ExecutionBridge:
                     )
         except Exception:
             logger.exception("scalping_live_hardening_gate_failed")
+            return self._abort(
+                decision=decision,
+                context=context,
+                decision_hash=d_hash,
+                reason=BridgeAbortReason.SELF_PROTECTION,
+                comment="Live health gate failed — fail closed",
+                t0=t0,
+            )
 
         # 5b. Canary hard limits (before eligibility — explicit abort reasons)
         if mode is ExecutionMode.CANARY_LIVE:
@@ -922,6 +933,25 @@ class ExecutionBridge:
         def _flag(value: bool | None, *, fallback: bool = False) -> bool:
             return fallback if value is None else value
 
+        plane_daily = bool(
+            self.ops_plane.daily_loss_exceeded if self.ops_plane is not None else False
+        )
+        account_daily = False
+        if context.account.equity > 0 and context.account.daily_pnl < 0:
+            loss_pct = (
+                abs(context.account.daily_pnl)
+                / context.account.equity
+                * Decimal("100")
+            )
+            account_daily = loss_pct >= Decimal(str(self.ite_config.max_daily_loss_pct))
+        daily_loss_exceeded = plane_daily or account_daily
+        if (
+            account_daily
+            and self.ops_plane is not None
+            and not self.ops_plane.daily_loss_exceeded
+        ):
+            self.ops_plane.flag_daily_loss()
+
         return AutoTradeLiveFacts(
             gateway_connected=_flag(context.gateway_connected),
             broker_connected=_flag(
@@ -943,8 +973,12 @@ class ExecutionBridge:
             spread=context.spread,
             news_blocked=bool(news.blocked),
             news_reason=str(news.reason or ""),
-            daily_loss_exceeded=False,
-            emergency_stop=False,
+            daily_loss_exceeded=daily_loss_exceeded,
+            emergency_stop=bool(
+                getattr(self.ops_plane, "kill_switch_armed", False)
+                if self.ops_plane is not None
+                else False
+            ),
             ops_mode=(
                 self.ops_plane.mode.value if self.ops_plane is not None else "SHADOW"
             ),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
@@ -509,3 +510,27 @@ class TestWeltradeConnectHTTP:
         detail = response.json()["detail"]
         assert "Weltrade authentication failed" in detail
         assert "MT5 login failed" in detail
+
+
+@pytest.mark.asyncio
+async def test_reconnect_refuses_login_one_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No live session + no profile must refuse reconnect (never login=1)."""
+    from app.domain.institutional_trading.ai_scalping.broker_profile_store import (
+        BrokerProfileStore,
+    )
+
+    store = BrokerProfileStore(path=tmp_path / "missing-profile.json")
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.ai_scalping.broker_profile_store"
+        ".get_broker_profile_store",
+        lambda: store,
+    )
+    client = _StubGateway()
+    adapter = MT5Adapter(client=client)
+    svc = WeltradeIntegrationService(
+        adapter=adapter, uow_factory=MemoryMT5UnitOfWorkFactory()
+    )
+    with pytest.raises(RuntimeError, match="refusing login=1"):
+        await svc.reconnect(user_id=uuid4())

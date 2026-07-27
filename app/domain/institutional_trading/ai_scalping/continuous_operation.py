@@ -207,27 +207,35 @@ class ContinuousOperationController:
         portfolio_risk_exceeded: bool = False,
     ) -> ContinuousOpSnapshot:
         now = datetime.now(UTC)
-        self.publish_heartbeats(now=now)
+        # Only refresh heartbeats for healthy deps so missing()/pause can observe
+        # real staleness. Failed deps are also reported explicitly below (OMS has
+        # no dedicated pause flag other than missing_heartbeats).
+        if gateway_ok:
+            self.heartbeats.publish(ComponentName.GATEWAY, now=now)
+        if mt5_ok:
+            self.heartbeats.publish(ComponentName.MT5, now=now)
+        if oms_ok:
+            self.heartbeats.publish(ComponentName.OMS, now=now)
+        for comp in (
+            ComponentName.EXECUTION,
+            ComponentName.DECISION,
+            ComponentName.PME,
+        ):
+            self.heartbeats.publish(comp, now=now)
         recovery = self.heal_dependencies(
             gateway_ok=gateway_ok,
             mt5_ok=mt5_ok,
             oms_ok=oms_ok,
             feed_ok=feed_ok,
         )
-        missing = [
-            c.value
-            for c in self.heartbeats.missing(
-                (
-                    ComponentName.GATEWAY,
-                    ComponentName.MT5,
-                    ComponentName.OMS,
-                ),
-                now=now,
-            )
-        ]
-        missing_hb: tuple[str, ...] = ()
-        if not (gateway_ok and mt5_ok and oms_ok):
-            missing_hb = tuple(missing)
+        failed_deps: list[str] = []
+        if not gateway_ok:
+            failed_deps.append("gateway")
+        if not mt5_ok:
+            failed_deps.append("mt5")
+        if not oms_ok:
+            failed_deps.append("oms")
+        missing_hb = tuple(failed_deps)
         pause = self.evaluate_new_entry_pause(
             daily_loss_exceeded=daily_loss_exceeded,
             broker_available=broker_available and mt5_ok,

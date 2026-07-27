@@ -7,7 +7,7 @@ If market data cannot be loaded, returns an explicit failure reason.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -341,6 +341,75 @@ async def build_ite_cycle_market_context(
         open_positions = max(int(engine_n), 1)
         diag["positions_fail_closed_count"] = open_positions
 
+    # Book facts for duplicate / add-on guards (all symbols on MT5)
+    open_directions: list[str] = []
+    open_entries: list[Decimal] = []
+    try:
+        rows = mt5_adapter.list_positions()
+        for p in rows or []:
+            side = str(getattr(p, "side", "") or "").strip().upper()
+            if side in {"BUY", "SELL"}:
+                open_directions.append(side)
+            try:
+                entry_px = Decimal(str(getattr(p, "open_price", 0) or 0))
+            except Exception:
+                entry_px = Decimal("0")
+            if entry_px > 0:
+                open_entries.append(entry_px)
+        diag["open_directions"] = list(open_directions)
+        diag["open_entries"] = [str(e) for e in open_entries]
+    except Exception as exc:
+        logger.warning("ite_cycle_position_book_facts_failed", error=str(exc))
+        diag["open_directions"] = f"ERROR: {exc}"
+
+    # Authoritative peak HWM + daily PnL from MT5 deals (not floating profit alone)
+    peak_equity = equity
+    daily_pnl = Decimal("0")
+    try:
+        from app.application.services.live_account_risk_tracker import (
+            get_live_account_risk_tracker,
+        )
+
+        login = int(diag.get("login") or 0)
+        balance = Decimal(str(diag.get("balance") or 0))
+        deals: list[Any] = []
+        try:
+            day_start = datetime.now(UTC).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            hist = getattr(mt5_adapter, "history_deals", None)
+            if callable(hist):
+                deals = list(
+                    hist(
+                        date_from=day_start,
+                        date_to=datetime.now(UTC) + timedelta(days=1),
+                    )
+                )
+            else:
+                client = _client_of(mt5_adapter)
+                hist_c = getattr(client, "history_deals", None)
+                if callable(hist_c):
+                    deals = list(
+                        hist_c(
+                            date_from=day_start,
+                            date_to=datetime.now(UTC) + timedelta(days=1),
+                        )
+                    )
+        except Exception as exc:
+            logger.warning("ite_cycle_history_deals_failed", error=str(exc))
+            deals = []
+        peak_equity, daily_pnl = get_live_account_risk_tracker().resolve_for_risk(
+            login=login,
+            equity=equity,
+            balance=balance,
+            deals=deals,
+        )
+        diag["peak_equity"] = str(peak_equity)
+        diag["daily_pnl"] = str(daily_pnl)
+    except Exception as exc:
+        logger.warning("ite_cycle_live_risk_resolve_failed", error=str(exc))
+        diag["live_risk_resolve"] = f"ERROR: {exc}"
+
     try:
         client = _client_of(mt5_adapter)
         orders_fn = getattr(client, "list_orders", None) or getattr(
@@ -372,8 +441,8 @@ async def build_ite_cycle_market_context(
 
     account = AccountRiskState(
         equity=equity,
-        peak_equity=equity,
-        daily_pnl=Decimal("0"),
+        peak_equity=peak_equity if peak_equity > 0 else equity,
+        daily_pnl=daily_pnl,
         weekly_pnl=Decimal("0"),
         open_positions=open_positions if isinstance(open_positions, int) else 0,
         already_in_trade=(
@@ -386,6 +455,8 @@ async def build_ite_cycle_market_context(
         atr=atr_dec,
         mid_price=mid,
         free_margin=free_margin,
+        open_directions=tuple(open_directions),
+        open_entries=tuple(open_entries),
     )
 
     # Sizing diagnostics (observational) — same formulas as decision → risk path.

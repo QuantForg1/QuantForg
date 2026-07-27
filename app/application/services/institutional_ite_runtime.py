@@ -199,22 +199,77 @@ class InstitutionalIteRuntime:
                         try:
                             if hasattr(adapter, "attach"):
                                 adapter.attach(path="")
-                                return True
+                            client = getattr(adapter, "client", None) or getattr(
+                                adapter, "_client", None
+                            )
+                            return bool(
+                                client is not None
+                                and getattr(client, "is_connected", False)
+                            )
                         except Exception:
                             return False
-                        return bool(getattr(adapter, "is_connected", False))
 
                     ctrl.bind_reconnects(gateway=_gw, mt5=_mt5, oms=_gw, feed=_gw)
                     self._continuous_ops_bound = True  # type: ignore[attr-defined]
+                # Derive live pause inputs — never hardcode market/portfolio as always-ok
+                oms_ok = bool(
+                    getattr(probes, "railway_api_up", True)
+                    and probes.gateway_available
+                )
+                market_open = True
+                try:
+                    from app.application.services.market_closed_cooldown import (
+                        is_market_closed_cooled,
+                    )
+                    from app.domain.institutional_trading.ai_scalping.config import (
+                        DEFAULT_SCALPING_UNIVERSE,
+                    )
+
+                    # If any universe symbol is in market-closed cooldown, pause entries
+                    for sym in DEFAULT_SCALPING_UNIVERSE:
+                        if is_market_closed_cooled(str(sym)):
+                            market_open = False
+                            break
+                except Exception:
+                    logger.exception("continuous_ops_market_open_probe_failed")
+                    market_open = False  # fail closed
+
+                portfolio_risk_exceeded = False
+                try:
+                    last_acct = getattr(self, "_last_account_risk", None)
+                    if last_acct is not None:
+                        from app.domain.institutional_trading.ai_scalping import (
+                            check_portfolio_limits,
+                            aggregate_portfolio_risk,
+                        )
+
+                        risk_snap = aggregate_portfolio_risk(
+                            last_acct,
+                            config=DEFAULT_AI_SCALPING_CONFIG,
+                            ite_config=self.decision_pipeline.config,
+                        )
+                        blocked, _why = check_portfolio_limits(
+                            open_positions=risk_snap.open_positions,
+                            max_open_positions=risk_snap.max_open_positions,
+                            daily_loss_pct=risk_snap.daily_loss_pct,
+                            max_daily_loss_pct=risk_snap.max_daily_loss_pct,
+                            exposure_pct=risk_snap.exposure_pct,
+                            max_exposure_pct=risk_snap.max_exposure_pct,
+                        )
+                        portfolio_risk_exceeded = bool(blocked)
+                except Exception:
+                    logger.exception("continuous_ops_portfolio_risk_probe_failed")
+                    portfolio_risk_exceeded = True  # fail closed
+
                 snap = ctrl.tick(
                     gateway_ok=bool(probes.gateway_available),
                     mt5_ok=bool(probes.mt5_connected),
-                    oms_ok=True,
+                    oms_ok=oms_ok,
                     feed_ok=bool(probes.gateway_available),
                     daily_loss_exceeded=bool(self.plane.daily_loss_exceeded),
                     broker_available=bool(probes.mt5_connected),
-                    market_open=True,
-                    portfolio_risk_exceeded=False,
+                    market_open=market_open,
+                    portfolio_risk_exceeded=portfolio_risk_exceeded,
                 )
                 result["continuous_operation"] = snap.to_dict()
                 self._last_continuous_op = snap.to_dict()  # type: ignore[attr-defined]
@@ -686,6 +741,11 @@ class InstitutionalIteRuntime:
 
         tid = new_trace_id()
         t0 = time.perf_counter()
+        try:
+            # Cache for continuous-ops portfolio pause probes on health ticks
+            self._last_account_risk = account  # type: ignore[attr-defined]
+        except Exception:
+            pass
         self.reliability.traces.start(
             trace_id=tid, decision_id=None, symbol=getattr(snapshot, "symbol", "XAUUSD")
         )
@@ -764,12 +824,54 @@ class InstitutionalIteRuntime:
                 co = getattr(self, "_last_continuous_op", None)
                 pause = (co or {}).get("pause") if isinstance(co, dict) else None
                 if not isinstance(pause, dict):
+                    market_open = True
+                    try:
+                        from app.application.services.market_closed_cooldown import (
+                            is_market_closed_cooled,
+                        )
+
+                        sym = str(
+                            getattr(snapshot, "symbol", "")
+                            or getattr(decision, "symbol", "")
+                            or ""
+                        )
+                        if sym and is_market_closed_cooled(sym):
+                            market_open = False
+                    except Exception:
+                        logger.exception("entry_pause_market_open_probe_failed")
+                        market_open = False  # fail closed
+
+                    portfolio_risk_exceeded = False
+                    try:
+                        from app.domain.institutional_trading.ai_scalping import (
+                            check_portfolio_limits,
+                            aggregate_portfolio_risk,
+                        )
+
+                        risk_snap = aggregate_portfolio_risk(
+                            account,
+                            config=_scalp_cfg,
+                            ite_config=self.decision_pipeline.config,
+                        )
+                        blocked, _why = check_portfolio_limits(
+                            open_positions=risk_snap.open_positions,
+                            max_open_positions=risk_snap.max_open_positions,
+                            daily_loss_pct=risk_snap.daily_loss_pct,
+                            max_daily_loss_pct=risk_snap.max_daily_loss_pct,
+                            exposure_pct=risk_snap.exposure_pct,
+                            max_exposure_pct=risk_snap.max_exposure_pct,
+                        )
+                        portfolio_risk_exceeded = bool(blocked)
+                    except Exception:
+                        logger.exception("entry_pause_portfolio_risk_probe_failed")
+                        portfolio_risk_exceeded = True  # fail closed
+
                     pause = ctrl.evaluate_new_entry_pause(
                         daily_loss_exceeded=bool(self.plane.daily_loss_exceeded),
                         broker_available=bool(broker_connected),
                         gateway_available=bool(gateway_connected),
-                        market_open=True,
-                        portfolio_risk_exceeded=False,
+                        market_open=market_open,
+                        portfolio_risk_exceeded=portfolio_risk_exceeded,
                     ).to_dict()
                 if pause.get("pause_new_entries") and decision.action in {
                     _DA.BUY,
@@ -802,6 +904,41 @@ class InstitutionalIteRuntime:
                     )
         except Exception:
             logger.exception("continuous_ops_entry_pause_failed")
+            # Fail closed: never allow new entries when pause evaluation breaks
+            try:
+                from dataclasses import replace as _dc_replace_fc
+                from decimal import Decimal as _Dec_fc
+
+                from app.domain.institutional_trading.decision_models import (
+                    DecisionAction as _DA_fc,
+                )
+                from app.domain.institutional_trading.decision_models import (
+                    EligibilityResult as _Elig_fc,
+                )
+                from app.domain.institutional_trading.decision_models import (
+                    TradeDirection as _TD_fc,
+                )
+
+                if decision.action in {_DA_fc.BUY, _DA_fc.SELL}:
+                    decision = _dc_replace_fc(
+                        decision,
+                        action=_DA_fc.NO_TRADE,
+                        direction=_TD_fc.NONE,
+                        reasons=decision.reasons
+                        + ("continuous_ops_pause_eval_failed",),
+                        eligibility=_Elig_fc(
+                            eligible=False,
+                            checks={
+                                **dict(decision.eligibility.checks),
+                                "continuous_ops_new_entries": False,
+                            },
+                            rejection_reasons=decision.eligibility.rejection_reasons
+                            + ("continuous_ops_pause_eval_failed",),
+                        ),
+                        approved_lots=_Dec_fc("0"),
+                    )
+            except Exception:
+                logger.exception("continuous_ops_fail_closed_demote_failed")
 
         with self._lock:
             self._last_decision = decision

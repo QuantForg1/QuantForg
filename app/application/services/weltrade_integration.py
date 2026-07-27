@@ -917,23 +917,29 @@ class WeltradeIntegrationService:
         }
 
     async def reconnect(self, *, user_id: UUID) -> dict[str, Any]:
-        # Prefer gateway-side passwordless reconnect / attach.
-        request = MT5LoginRequest(login=1, password="", server="Weltrade-MT5")
+        # Prefer gateway-side passwordless reconnect / attach from a real session.
+        # Never fall through to a synthetic login=1 credential.
         live = self.adapter._live_session_ref
+        request: MT5LoginRequest | None = None
         if live and live in self.adapter._sessions:
             prior = self.adapter._sessions[live]
-            request = MT5LoginRequest(
-                login=prior.login,
-                password="",
-                server=prior.server or "Weltrade-MT5",
-                path=prior.path,
-            )
-        else:
-            # No in-process session — try encrypted restore profile
+            if int(prior.login or 0) > 1:
+                request = MT5LoginRequest(
+                    login=prior.login,
+                    password="",
+                    server=prior.server or "Weltrade-MT5",
+                    path=prior.path,
+                )
+        if request is None:
+            # No trusted in-process session — encrypted restore only
             restored = await self.restore_from_persisted_profile(user_id=user_id)
             if restored is not None:
                 restored["restored_from_profile"] = True
                 return restored
+            raise RuntimeError(
+                "Weltrade reconnect refused: no live session and no persisted "
+                "broker profile (refusing login=1 fallback)"
+            )
         logger.info("weltrade_reconnect_start", login=request.login)
         try:
             session_ref = self.adapter.reconnect(request)

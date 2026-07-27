@@ -57,8 +57,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         return;
       }
-      if (e instanceof ApiError && e.code === "network_error") {
-        // Keep stored user for UI; ConnectionBanner reports API unreachable.
+      if (
+        e instanceof ApiError &&
+        (e.code === "network_error" ||
+          e.status === 408 ||
+          e.status === 425 ||
+          e.status === 429 ||
+          e.status === 500 ||
+          e.status === 502 ||
+          e.status === 503 ||
+          e.status === 504)
+      ) {
+        // Keep stored user for UI; ConnectionBanner / retry covers transient API errors.
+        const stored = getStoredUser();
+        setUser(stored);
+        return;
+      }
+      // Unknown non-ApiError (e.g. parse): keep session if tokens still present.
+      if (!(e instanceof ApiError) && getAccessToken()) {
         const stored = getStoredUser();
         setUser(stored);
         return;

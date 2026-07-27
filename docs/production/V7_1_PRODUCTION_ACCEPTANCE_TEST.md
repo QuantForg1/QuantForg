@@ -1,6 +1,6 @@
 # QuantForg v7.1 Production Acceptance Test (PAT)
 
-Generated: `2026-07-27T18:25:58.714173+00:00`
+Generated: `2026-07-27T19:45:28.397188+00:00`
 
 **Declaration:** QUANTFORG v7.1 PRODUCTION NOT ACCEPTED — BLOCKED live/operator verifications remain (reconnect soak, 24h run, browser/PC restart).
 
@@ -25,7 +25,7 @@ Generated: `2026-07-27T18:25:58.714173+00:00`
 - FAIL: 0
 - BLOCKED: 6
 
-Evidence JSON: `docs/production/reports/v7_1_pat_20260727T182558Z.json`
+Evidence JSON: `docs/production/reports/v7_1_pat_20260727T194528Z.json`
 
 Acceptance rule: **all ten tests must be PASS** (no BLOCKED, no FAIL)
 before declaring PRODUCTION ACCEPTED.

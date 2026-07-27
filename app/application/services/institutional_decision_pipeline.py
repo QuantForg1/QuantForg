@@ -31,6 +31,9 @@ from app.domain.institutional_trading.executable_direction import (
 )
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def risk_config_from_ite(cfg: ITEConfig) -> RiskEngineConfig:
@@ -361,6 +364,13 @@ class InstitutionalDecisionPipeline:
                 risk_reasons.append(sized.reason)
                 approved_lots = Decimal("0")
 
+            min_entry_distance: Decimal | None = None
+            if account.atr is not None and account.atr > 0:
+                min_entry_distance = (account.atr * Decimal("0.15")).quantize(
+                    Decimal("0.00001")
+                )
+            elif stop_distance is not None and stop_distance > 0:
+                min_entry_distance = stop_distance
             add = may_add_scalping_trade(
                 open_positions=account.open_positions,
                 max_open=cfg.max_open_trades,
@@ -368,7 +378,9 @@ class InstitutionalDecisionPipeline:
                 best_open_confidence=account.best_open_confidence,
                 new_direction=confluence.direction.value,
                 open_directions=account.open_directions,
+                entry=entry,
                 open_entries=account.open_entries,
+                min_entry_distance=min_entry_distance,
                 require_improvement=DEFAULT_AI_SCALPING_CONFIG.require_probability_improvement
                 and account.open_positions > 0,
                 min_confidence_delta=DEFAULT_AI_SCALPING_CONFIG.min_confidence_delta_for_add,
@@ -415,8 +427,11 @@ class InstitutionalDecisionPipeline:
                             f"portfolio_risk_block:{block_why or 'limits'}"
                         )
                         approved_lots = Decimal("0")
-                except Exception:  # noqa: S110
-                    pass
+                except Exception:
+                    logger.exception("portfolio_risk_check_failed")
+                    risk_allowed = False
+                    risk_reasons.append("portfolio_risk_check_failed")
+                    approved_lots = Decimal("0")
 
         eligibility = PositionEligibilityEngine(config=cfg).evaluate(
             snapshot=snapshot,

@@ -200,3 +200,22 @@ def test_continuous_tick_production_simulation() -> None:
     assert (
         "broker unavailable" in reasons or "gateway unavailable" in reasons
     )
+    assert any("stale heartbeat" in str(r) for r in reasons)
+
+
+@pytest.mark.unit
+def test_oms_down_pauses_via_missing_heartbeat() -> None:
+    """OMS failure alone must pause new entries (no dedicated oms_available flag)."""
+    ctrl = ContinuousOperationController(config=DEFAULT_AI_SCALPING_CONFIG)
+    snap = ctrl.tick(
+        gateway_ok=True,
+        mt5_ok=True,
+        oms_ok=False,
+        feed_ok=True,
+        broker_available=True,
+        market_open=True,
+        portfolio_risk_exceeded=False,
+    )
+    assert snap.pause["pause_new_entries"] is True
+    assert snap.pause["manage_open_positions"] is True
+    assert any("stale heartbeat:oms" in str(r) for r in snap.pause["reasons"])
