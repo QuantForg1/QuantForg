@@ -14,6 +14,11 @@ from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
     classify_volatility_band,
     resolve_adaptive_thresholds,
 )
+from app.domain.institutional_trading.ai_scalping.broker_profile_store import (
+    BrokerProfileStore,
+    BrokerRuntimeProfile,
+    get_broker_profile_store,
+)
 from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
     DEFAULT_SCALPING_UNIVERSE,
@@ -21,6 +26,12 @@ from app.domain.institutional_trading.ai_scalping.config import (
     AiScalpingConfig,
     SetupFamily,
     scalping_ite_config,
+)
+from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+    ContinuousOperationController,
+    ContinuousOpSnapshot,
+    NewEntryPauseDecision,
+    get_continuous_operation_controller,
 )
 from app.domain.institutional_trading.ai_scalping.diagnostics import (
     get_scalping_diagnostics_store,
@@ -133,12 +144,17 @@ __all__ = [
     "AddTradeDecision",
     "AiScalpingConfig",
     "AiScalpingScore",
+    "BrokerProfileStore",
+    "BrokerRuntimeProfile",
+    "ContinuousOpSnapshot",
+    "ContinuousOperationController",
     "DirectionDecision",
     "ExecutionQualityStore",
     "LearningTradeRecord",
     "LiveHealthMonitor",
     "LotSizingResult",
     "MultiAssetScanScheduler",
+    "NewEntryPauseDecision",
     "PaConfluenceResult",
     "PortfolioRiskSnapshot",
     "PortfolioScanResult",
@@ -174,6 +190,8 @@ __all__ = [
     "evaluate_pa_confluence",
     "evaluate_quality_gates",
     "get_adaptive_cooldown_gate",
+    "get_broker_profile_store",
+    "get_continuous_operation_controller",
     "get_execution_quality_store",
     "get_live_health_monitor",
     "get_multi_asset_scheduler",

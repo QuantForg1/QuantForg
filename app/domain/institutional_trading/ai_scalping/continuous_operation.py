@@ -1,0 +1,269 @@
+"""Continuous autonomous operation controller (v7.1).
+
+Ties existing heartbeat + recovery into a single production tick.
+Never retries order_send. Never abandons open positions.
+Pauses NEW entries only on capital/broker/gateway/market/portfolio blocks.
+"""
+
+from __future__ import annotations
+
+import threading
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
+
+from app.domain.institutional_trading.ai_scalping.config import (
+    DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
+)
+from app.domain.institutional_trading.reliability.heartbeat import HeartbeatRegistry
+from app.domain.institutional_trading.reliability.models import ComponentName
+from app.domain.institutional_trading.reliability.recovery import RecoveryOrchestrator
+
+ReconnectFn = Callable[[], bool]
+
+
+@dataclass(frozen=True, slots=True)
+class NewEntryPauseDecision:
+    pause_new_entries: bool
+    reasons: tuple[str, ...]
+    manage_open_positions: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "pause_new_entries": self.pause_new_entries,
+            "reasons": list(self.reasons),
+            "manage_open_positions": self.manage_open_positions,
+            "note": "Open positions are always managed — never abandoned.",
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ContinuousOpSnapshot:
+    as_of: str
+    heartbeats: dict[str, Any]
+    recovery: list[dict[str, Any]]
+    pause: dict[str, Any]
+    resumed_positions: bool
+    pending_rescan: bool
+    version: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "as_of": self.as_of,
+            "heartbeats": dict(self.heartbeats),
+            "recovery": list(self.recovery),
+            "pause": dict(self.pause),
+            "resumed_positions": self.resumed_positions,
+            "pending_rescan": self.pending_rescan,
+            "version": self.version,
+        }
+
+
+@dataclass
+class ContinuousOperationController:
+    """Production continuous-ops desk — self-heal deps, never force trades."""
+
+    config: AiScalpingConfig = field(default_factory=lambda: DEFAULT_AI_SCALPING_CONFIG)
+    heartbeats: HeartbeatRegistry = field(default_factory=HeartbeatRegistry)
+    recovery: RecoveryOrchestrator = field(default_factory=RecoveryOrchestrator)
+    pending_rescan: bool = False
+    positions_resumed: bool = False
+    _oms_fn: ReconnectFn | None = field(default=None, repr=False)
+    _feed_fn: ReconnectFn | None = field(default=None, repr=False)
+    _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+
+    def bind_reconnects(
+        self,
+        *,
+        gateway: ReconnectFn | None = None,
+        mt5: ReconnectFn | None = None,
+        oms: ReconnectFn | None = None,
+        feed: ReconnectFn | None = None,
+        safe_read: Callable[[], bool] | None = None,
+    ) -> None:
+        """Attach safe reconnect callables (no order_send)."""
+        if gateway is not None:
+            self.recovery.gateway_reconnect_fn = gateway
+        if mt5 is not None:
+            self.recovery.mt5_reconnect_fn = mt5
+        if safe_read is not None:
+            self.recovery.safe_read_fn = safe_read
+        if oms is not None:
+            self._oms_fn = oms
+        if feed is not None:
+            self._feed_fn = feed
+
+    def publish_heartbeats(self, *, now: datetime | None = None) -> None:
+        moment = now or datetime.now(UTC)
+        for comp in (
+            ComponentName.GATEWAY,
+            ComponentName.MT5,
+            ComponentName.OMS,
+            ComponentName.EXECUTION,
+            ComponentName.DECISION,
+            ComponentName.PME,
+        ):
+            self.heartbeats.publish(comp, now=moment)
+
+    def evaluate_new_entry_pause(
+        self,
+        *,
+        daily_loss_exceeded: bool = False,
+        broker_available: bool = True,
+        gateway_available: bool = True,
+        market_open: bool = True,
+        portfolio_risk_exceeded: bool = False,
+        missing_heartbeats: tuple[str, ...] = (),
+    ) -> NewEntryPauseDecision:
+        """Pause NEW entries only — open positions always continue."""
+        reasons: list[str] = []
+        if daily_loss_exceeded:
+            reasons.append("daily loss exceeded")
+        if not broker_available:
+            reasons.append("broker unavailable")
+        if not gateway_available:
+            reasons.append("gateway unavailable")
+        if not market_open:
+            reasons.append("market closed")
+        if portfolio_risk_exceeded:
+            reasons.append("portfolio risk exceeded")
+        # Missing critical heartbeats → treat as unavailable (recoverable)
+        critical = {"gateway", "mt5", "oms"}
+        miss = {m.lower() for m in missing_heartbeats}
+        if miss & critical:
+            reasons.append(f"stale heartbeat:{','.join(sorted(miss & critical))}")
+        return NewEntryPauseDecision(
+            pause_new_entries=bool(reasons),
+            reasons=tuple(reasons),
+            manage_open_positions=True,
+        )
+
+    def heal_dependencies(
+        self,
+        *,
+        gateway_ok: bool = True,
+        mt5_ok: bool = True,
+        oms_ok: bool = True,
+        feed_ok: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Attempt safe reconnects for failed deps. Never retries order_send."""
+        events: list[dict[str, Any]] = []
+        if not gateway_ok:
+            ev = self.recovery.recover_gateway()
+            events.append(ev.to_dict() if hasattr(ev, "to_dict") else {"ok": False})
+        if not mt5_ok:
+            ev = self.recovery.recover_mt5()
+            events.append(ev.to_dict() if hasattr(ev, "to_dict") else {"ok": False})
+        if not oms_ok and self._oms_fn is not None:
+            try:
+                ok = bool(self._oms_fn())
+                events.append({"action": "oms_reconnect", "success": ok})
+            except Exception as exc:
+                events.append(
+                    {"action": "oms_reconnect", "success": False, "detail": str(exc)}
+                )
+        if not feed_ok and self._feed_fn is not None:
+            try:
+                ok = bool(self._feed_fn())
+                events.append({"action": "feed_reconnect", "success": ok})
+            except Exception as exc:
+                events.append(
+                    {"action": "feed_reconnect", "success": False, "detail": str(exc)}
+                )
+        if not feed_ok and self._feed_fn is None:
+            # Fallback: safe read retry (idempotent)
+            ev = self.recovery.retry_safe_read()
+            events.append(ev.to_dict() if hasattr(ev, "to_dict") else {"ok": False})
+        return events
+
+    def mark_startup_resume(self) -> None:
+        """After restart — positions continue under PME; hashes hydrated elsewhere."""
+        with self._lock:
+            self.positions_resumed = True
+
+    def request_rescan_after_close(self) -> None:
+        """After a trade closes, scan again for a NEW valid setup only."""
+        with self._lock:
+            self.pending_rescan = True
+
+    def consume_rescan(self) -> bool:
+        with self._lock:
+            flag = self.pending_rescan
+            self.pending_rescan = False
+            return flag
+
+    def tick(
+        self,
+        *,
+        gateway_ok: bool = True,
+        mt5_ok: bool = True,
+        oms_ok: bool = True,
+        feed_ok: bool = True,
+        daily_loss_exceeded: bool = False,
+        broker_available: bool = True,
+        market_open: bool = True,
+        portfolio_risk_exceeded: bool = False,
+    ) -> ContinuousOpSnapshot:
+        now = datetime.now(UTC)
+        self.publish_heartbeats(now=now)
+        recovery = self.heal_dependencies(
+            gateway_ok=gateway_ok,
+            mt5_ok=mt5_ok,
+            oms_ok=oms_ok,
+            feed_ok=feed_ok,
+        )
+        missing = [
+            c.value
+            for c in self.heartbeats.missing(
+                (
+                    ComponentName.GATEWAY,
+                    ComponentName.MT5,
+                    ComponentName.OMS,
+                ),
+                now=now,
+            )
+        ]
+        missing_hb: tuple[str, ...] = ()
+        if not (gateway_ok and mt5_ok and oms_ok):
+            missing_hb = tuple(missing)
+        pause = self.evaluate_new_entry_pause(
+            daily_loss_exceeded=daily_loss_exceeded,
+            broker_available=broker_available and mt5_ok,
+            gateway_available=gateway_ok,
+            market_open=market_open,
+            portfolio_risk_exceeded=portfolio_risk_exceeded,
+            missing_heartbeats=missing_hb,
+        )
+        with self._lock:
+            resumed = self.positions_resumed
+            pending = self.pending_rescan
+        return ContinuousOpSnapshot(
+            as_of=now.isoformat(),
+            heartbeats=self.heartbeats.snapshot(),
+            recovery=recovery,
+            pause=pause.to_dict(),
+            resumed_positions=resumed,
+            pending_rescan=pending,
+            version=getattr(self.config, "continuous_version", None)
+            or self.config.version,
+        )
+
+
+_CTRL: ContinuousOperationController | None = None
+_CTRL_LOCK = threading.Lock()
+
+
+def get_continuous_operation_controller(
+    config: AiScalpingConfig | None = None,
+) -> ContinuousOperationController:
+    global _CTRL
+    with _CTRL_LOCK:
+        if _CTRL is None:
+            _CTRL = ContinuousOperationController(
+                config=config or DEFAULT_AI_SCALPING_CONFIG
+            )
+        elif config is not None:
+            _CTRL.config = config
+        return _CTRL

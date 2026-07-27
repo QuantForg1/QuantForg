@@ -98,3 +98,35 @@ async def weltrade_reconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, A
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
+
+
+@router.get("/runtime-profile")
+async def weltrade_runtime_profile(
+    _user: CurrentUser, svc: WeltradeSvc
+) -> dict[str, Any]:
+    """Public broker restore profile (never includes password/ciphertext)."""
+    profile = svc.load_persisted_broker_profile()
+    return {"ok": True, "profile": profile}
+
+
+@router.post("/restore-profile")
+async def weltrade_restore_profile(
+    user: CurrentUser, svc: WeltradeSvc
+) -> dict[str, Any]:
+    """Restore broker session from encrypted local profile after restart."""
+    try:
+        result = await svc.restore_from_persisted_profile(user_id=user.id)
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No persisted broker profile to restore",
+            )
+        result["restored_from_profile"] = True
+        return result
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        logger.exception("weltrade_restore_profile_http_error", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc

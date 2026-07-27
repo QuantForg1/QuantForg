@@ -163,6 +163,63 @@ class InstitutionalIteRuntime:
             "supabase": probes.supabase_up,
             "cloudflare": probes.cloudflare_tunnel_up,
         }
+        # v7.1 continuous ops — heal deps, pause new entries only, never abandon book
+        try:
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_AI_SCALPING_CONFIG,
+            )
+            from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+                get_continuous_operation_controller,
+            )
+
+            if DEFAULT_AI_SCALPING_CONFIG.continuous_operation_enabled:
+                ctrl = get_continuous_operation_controller(DEFAULT_AI_SCALPING_CONFIG)
+                if not getattr(self, "_continuous_ops_bound", False):
+                    ctrl.mark_startup_resume()
+                    adapter = self.mt5_adapter
+
+                    def _gw() -> bool:
+                        try:
+                            client = getattr(adapter, "client", None)
+                            if client is not None and hasattr(client, "gateway_health"):
+                                h = client.gateway_health()
+                                return bool(
+                                    isinstance(h, dict)
+                                    and (
+                                        h.get("status") == "ok"
+                                        or h.get("connected")
+                                        or (h.get("mt5") or {}).get("connected")
+                                    )
+                                )
+                        except Exception:
+                            return False
+                        return False
+
+                    def _mt5() -> bool:
+                        try:
+                            if hasattr(adapter, "attach"):
+                                adapter.attach(path="")
+                                return True
+                        except Exception:
+                            return False
+                        return bool(getattr(adapter, "is_connected", False))
+
+                    ctrl.bind_reconnects(gateway=_gw, mt5=_mt5, oms=_gw, feed=_gw)
+                    self._continuous_ops_bound = True  # type: ignore[attr-defined]
+                snap = ctrl.tick(
+                    gateway_ok=bool(probes.gateway_available),
+                    mt5_ok=bool(probes.mt5_connected),
+                    oms_ok=True,
+                    feed_ok=bool(probes.gateway_available),
+                    daily_loss_exceeded=bool(self.plane.daily_loss_exceeded),
+                    broker_available=bool(probes.mt5_connected),
+                    market_open=True,
+                    portfolio_risk_exceeded=False,
+                )
+                result["continuous_operation"] = snap.to_dict()
+                self._last_continuous_op = snap.to_dict()  # type: ignore[attr-defined]
+        except Exception:
+            logger.exception("continuous_operation_tick_failed")
         return result
 
     def run_shadow_cycle(
@@ -536,6 +593,20 @@ class InstitutionalIteRuntime:
                             getattr(result, "record", None), "reason", ""
                         ),
                     )
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.config import (
+                            DEFAULT_AI_SCALPING_CONFIG,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+                            get_continuous_operation_controller,
+                        )
+
+                        if DEFAULT_AI_SCALPING_CONFIG.post_close_rescan_enabled:
+                            get_continuous_operation_controller(
+                                DEFAULT_AI_SCALPING_CONFIG
+                            ).request_rescan_after_close()
+                    except Exception:
+                        logger.exception("post_close_rescan_flag_failed")
             except Exception:
                 logger.exception("pme_manage_log_failed", ticket=ticket)
 
@@ -656,6 +727,81 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("force_first_trade_override_failed")
             forced_override = False
+
+        # v7.1 continuous ops — pause NEW entries only; keep managing open book
+        try:
+            from dataclasses import replace as _dc_replace
+            from decimal import Decimal as _Dec
+
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_AI_SCALPING_CONFIG as _scalp_cfg,
+            )
+            from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+                get_continuous_operation_controller as _get_co,
+            )
+            from app.domain.institutional_trading.decision_models import (
+                DecisionAction as _DA,
+            )
+            from app.domain.institutional_trading.decision_models import (
+                EligibilityResult as _Elig,
+            )
+            from app.domain.institutional_trading.decision_models import (
+                TradeDirection as _TD,
+            )
+
+            if _scalp_cfg.continuous_operation_enabled:
+                ctrl = _get_co(_scalp_cfg)
+                # After close: clear entry spacing so a NEW valid setup can scan
+                if _scalp_cfg.post_close_rescan_enabled and ctrl.consume_rescan():
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
+                            get_adaptive_cooldown_gate,
+                        )
+
+                        get_adaptive_cooldown_gate().clear_for_post_close_rescan()
+                    except Exception:
+                        logger.exception("post_close_cooldown_clear_failed")
+                co = getattr(self, "_last_continuous_op", None)
+                pause = (co or {}).get("pause") if isinstance(co, dict) else None
+                if not isinstance(pause, dict):
+                    pause = ctrl.evaluate_new_entry_pause(
+                        daily_loss_exceeded=bool(self.plane.daily_loss_exceeded),
+                        broker_available=bool(broker_connected),
+                        gateway_available=bool(gateway_connected),
+                        market_open=True,
+                        portfolio_risk_exceeded=False,
+                    ).to_dict()
+                if pause.get("pause_new_entries") and decision.action in {
+                    _DA.BUY,
+                    _DA.SELL,
+                }:
+                    why = tuple(str(r) for r in (pause.get("reasons") or ()))
+                    decision = _dc_replace(
+                        decision,
+                        action=_DA.NO_TRADE,
+                        direction=_TD.NONE,
+                        reasons=decision.reasons
+                        + ("continuous_ops_pause_new_entries",)
+                        + why,
+                        eligibility=_Elig(
+                            eligible=False,
+                            checks={
+                                **dict(decision.eligibility.checks),
+                                "continuous_ops_new_entries": False,
+                            },
+                            rejection_reasons=decision.eligibility.rejection_reasons
+                            + ("continuous_ops_pause_new_entries",)
+                            + why,
+                        ),
+                        approved_lots=_Dec("0"),
+                    )
+                    logger.warning(
+                        "continuous_ops_pause_new_entries",
+                        reasons=list(why),
+                        manage_open=True,
+                    )
+        except Exception:
+            logger.exception("continuous_ops_entry_pause_failed")
 
         with self._lock:
             self._last_decision = decision

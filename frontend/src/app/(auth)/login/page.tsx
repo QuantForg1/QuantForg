@@ -16,6 +16,7 @@ import { ApiError } from "@/lib/api/client";
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  remember: z.boolean(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -25,7 +26,7 @@ export default function LoginPage() {
   const router = useRouter();
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: "", password: "", remember: true },
   });
 
   return (
@@ -34,7 +35,9 @@ export default function LoginPage() {
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
           try {
-            await login(values.email, values.password);
+            await login(values.email, values.password, {
+              remember: values.remember !== false,
+            });
             toast.success("Signed in");
             router.replace("/terminal");
           } catch (e) {
@@ -71,6 +74,14 @@ export default function LoginPage() {
             {...form.register("password")}
           />
         </div>
+        <label className="flex items-center gap-2 text-sm text-[var(--fg-muted)]">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-[var(--accent)]"
+            {...form.register("remember")}
+          />
+          Remember me
+        </label>
         <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
         </Button>

@@ -167,6 +167,12 @@ class AdaptiveCooldownGate:
             self._last_entry_mono = time.monotonic()
             self._last_seconds = max(self._last_seconds, int(seconds))
 
+    def clear_for_post_close_rescan(self) -> None:
+        """After a close — allow immediate scan for a NEW valid setup only."""
+        with self._lock:
+            self._last_entry_mono = None
+            self._last_seconds = 0
+
     def evaluate(self, decision: AdaptiveCooldownDecision) -> AdaptiveCooldownDecision:
         with self._lock:
             if self._last_entry_mono is None:

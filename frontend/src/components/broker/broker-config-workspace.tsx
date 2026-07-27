@@ -193,6 +193,34 @@ export function BrokerConfigWorkspace() {
     await Promise.all([healthQ.refetch(), mt5Q.refetch()]);
   };
 
+  // v7.1 — auto-restore broker from encrypted profile when disconnected
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (connected) return;
+      try {
+        const meta = await weltradeApi.runtimeProfile();
+        const profileRow = asRecord(meta.profile);
+        if (!profileRow.login) return;
+        if (!cancelled && !login) setLogin(String(profileRow.login));
+        if (!cancelled && profileRow.server) setServer(String(profileRow.server));
+        if (!cancelled && profileRow.terminal_path) {
+          setTerminalPath(String(profileRow.terminal_path));
+        }
+        if (!cancelled && profileRow.broker) setBroker(String(profileRow.broker));
+        await weltradeApi.restoreProfile();
+        if (!cancelled) await refresh();
+      } catch {
+        /* no profile or restore unavailable — user can connect manually */
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot restore on mount
+  }, []);
+
   const connectMut = useMutation({
     mutationFn: weltradeApi.connect,
     onMutate: () => setProgress("Connecting…"),

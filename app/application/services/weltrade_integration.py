@@ -1,7 +1,8 @@
 """Weltrade production orchestration — Railway API → Windows MT5 Gateway.
 
 Does not change Strategy / Portfolio / Execution Intelligence.
-Broker passwords are forwarded once to the gateway and never persisted here.
+Broker passwords are forwarded to the gateway for login; optional AES-encrypted
+restore profile may be persisted locally (never plain text).
 """
 
 from __future__ import annotations
@@ -792,6 +793,12 @@ class WeltradeIntegrationService:
             path=path,
             session_ref=session_ref,
         )
+        self._persist_broker_runtime_profile(
+            login=login,
+            server=server_name,
+            path=path,
+            password=password,
+        )
         sync = await self.dashboard(user_id=user_id)
         steps.append({"step": "sync", "ok": True, "detail": "Account synchronized"})
         logger.info(
@@ -814,6 +821,79 @@ class WeltradeIntegrationService:
             },
             "status": sync.get("status"),
         }
+
+    def _persist_broker_runtime_profile(
+        self,
+        *,
+        login: int,
+        server: str,
+        path: str = "",
+        password: str = "",
+    ) -> None:
+        """Persist broker/server/login/terminal_path; encrypt password if present."""
+        try:
+            from app.domain.institutional_trading.ai_scalping import (
+                broker_profile_store as _bps,
+            )
+            from core.config.settings import get_settings
+
+            secret: str | None = None
+            if password:
+                secret = get_settings().secret_key.get_secret_value()
+            _bps.get_broker_profile_store().save(
+                broker=WELTRADE_BROKER,
+                server=server,
+                login=int(login),
+                terminal_path=path or "",
+                password_plaintext=password or None,
+                secret_key=secret,
+            )
+        except Exception:
+            logger.exception("broker_runtime_profile_persist_failed")
+
+    def load_persisted_broker_profile(self) -> dict[str, Any] | None:
+        """Public restore payload (no ciphertext)."""
+        try:
+            from app.domain.institutional_trading.ai_scalping import (
+                broker_profile_store as _bps,
+            )
+
+            profile = _bps.get_broker_profile_store().load()
+            return profile.to_public_dict() if profile else None
+        except Exception:
+            logger.exception("broker_runtime_profile_public_load_failed")
+            return None
+
+    async def restore_from_persisted_profile(
+        self, *, user_id: UUID, account_type: str = "demo"
+    ) -> dict[str, Any] | None:
+        """Auto-restore broker session from encrypted profile after restart."""
+        try:
+            from app.domain.institutional_trading.ai_scalping import (
+                broker_profile_store as _bps,
+            )
+            from core.config.settings import get_settings
+
+            store = _bps.get_broker_profile_store()
+            profile = store.load()
+            if profile is None or profile.login <= 0:
+                return None
+            password = ""
+            if profile.password_ciphertext:
+                secret = get_settings().secret_key.get_secret_value()
+                password = store.decrypt_password(profile, secret_key=secret) or ""
+            return await self.connect(
+                user_id=user_id,
+                login=profile.login,
+                password=password,
+                server=profile.server,
+                account_type=account_type,
+                prefer_attach=True,
+                path=profile.terminal_path,
+            )
+        except Exception:
+            logger.exception("broker_runtime_profile_restore_failed")
+            return None
 
     async def attach(self, *, user_id: UUID, path: str = "") -> dict[str, Any]:
         session_ref = self.adapter.attach(path=path)
@@ -848,8 +928,21 @@ class WeltradeIntegrationService:
                 server=prior.server or "Weltrade-MT5",
                 path=prior.path,
             )
+        else:
+            # No in-process session — try encrypted restore profile
+            restored = await self.restore_from_persisted_profile(user_id=user_id)
+            if restored is not None:
+                restored["restored_from_profile"] = True
+                return restored
         logger.info("weltrade_reconnect_start", login=request.login)
-        session_ref = self.adapter.reconnect(request)
+        try:
+            session_ref = self.adapter.reconnect(request)
+        except Exception:
+            restored = await self.restore_from_persisted_profile(user_id=user_id)
+            if restored is not None:
+                restored["restored_from_profile"] = True
+                return restored
+            raise
         await self.bind_user_session(
             user_id=user_id,
             login=request.login,

@@ -59,14 +59,17 @@ class AiScalpingConfig:
     remain locked to the v6.3 institutional baseline.
     """
 
-    version: str = "ai-scalping-v7.0.0"
+    version: str = "ai-scalping-v7.1.0"
     # Quality-engine baseline identity (unchanged floors from v6.3)
     quality_baseline: str = "ai-scalping-v6.3.0"
-    portfolio_version: str = "ai-scalping-v7.0.0"
+    portfolio_version: str = "ai-scalping-v7.1.0"
+    continuous_version: str = "ai-scalping-v7.1.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE
     multi_asset_scan_enabled: bool = True
+    continuous_operation_enabled: bool = True
+    post_close_rescan_enabled: bool = True
 
     # MTF stack - H1 direction · M15 structure · M5 entry · M1 precision
     direction_tf: Timeframe = Timeframe.H1
@@ -122,7 +125,8 @@ class AiScalpingConfig:
     adaptive_cooldown_enabled: bool = True
 
     # Multi-trade - prefer quality, not stacking losers
-    max_open_trades: int = 2
+    # v7.1: up to 5 concurrent when portfolio exposure/risk still allow
+    max_open_trades: int = 5
     require_probability_improvement: bool = True
     min_confidence_delta_for_add: int = 5
 
@@ -246,10 +250,13 @@ class AiScalpingConfig:
             "version": self.version,
             "quality_baseline": self.quality_baseline,
             "portfolio_version": self.portfolio_version,
+            "continuous_version": self.continuous_version,
             "symbol": self.symbol,
             "trading_mode": self.trading_mode,
             "universe": list(self.universe),
             "multi_asset_scan_enabled": self.multi_asset_scan_enabled,
+            "continuous_operation_enabled": self.continuous_operation_enabled,
+            "post_close_rescan_enabled": self.post_close_rescan_enabled,
             "timeframes": {
                 "direction": self.direction_tf.value,
                 "structure": self.structure_tf.value,

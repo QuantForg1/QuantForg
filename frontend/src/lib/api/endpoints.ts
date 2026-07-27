@@ -611,6 +611,15 @@ export const weltradeApi = {
       method: "POST",
       body: {},
     }),
+  runtimeProfile: () =>
+    apiFetch<{ ok: boolean; profile: Record<string, unknown> | null }>(
+      "/weltrade/runtime-profile",
+    ),
+  restoreProfile: () =>
+    apiFetch<Record<string, unknown>>("/weltrade/restore-profile", {
+      method: "POST",
+      body: {},
+    }),
 };
 
 export const opsApi = {

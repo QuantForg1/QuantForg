@@ -25,7 +25,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, options?: { remember?: boolean }) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<string | void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -82,10 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, options?: { remember?: boolean }) => {
     try {
       const session = await authApi.login(email, password);
-      saveSession(session);
+      saveSession(session, { remember: options?.remember !== false });
       setUser(session.user);
       recordAudit("login", "success", "User signed in", { email });
     } catch (e) {
