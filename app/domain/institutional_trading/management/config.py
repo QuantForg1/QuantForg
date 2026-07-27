@@ -51,6 +51,9 @@ class PositionManagementConfig:
     # Momentum fade exit
     momentum_fade_exit: bool = True
     momentum_fade_threshold: int = 40
+    # Volatility collapse — edge disappears in compression
+    volatility_collapse_exit: bool = True
+    volatility_collapse_threshold: int = 25
 
     # Spread emergency
     emergency_spread_max: Decimal = Decimal("5.00")
@@ -81,6 +84,8 @@ class PositionManagementConfig:
             "absolute_max_hold_minutes": self.absolute_max_hold_minutes,
             "momentum_fade_exit": self.momentum_fade_exit,
             "momentum_fade_threshold": self.momentum_fade_threshold,
+            "volatility_collapse_exit": self.volatility_collapse_exit,
+            "volatility_collapse_threshold": self.volatility_collapse_threshold,
             "emergency_spread_max": str(self.emergency_spread_max),
         }
 

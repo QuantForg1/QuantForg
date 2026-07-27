@@ -38,6 +38,12 @@ class LearningTradeRecord:
     rejection_reason: str | None = None
     indicators: dict[str, Any] | None = None
     risk_pct: str | None = None
+    setup_family: str | None = None
+    r_multiple: str | None = None
+    mae_r: str | None = None
+    mfe_r: str | None = None
+    holding_time_minutes: float | None = None
+    latency_ms: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -106,6 +112,24 @@ class ScalpingLearningStore:
                             else None
                         ),
                         risk_pct=row.get("risk_pct"),
+                        setup_family=row.get("setup_family"),
+                        r_multiple=(
+                            str(row["r_multiple"])
+                            if row.get("r_multiple") is not None
+                            else None
+                        ),
+                        mae_r=str(row["mae_r"]) if row.get("mae_r") is not None else None,
+                        mfe_r=str(row["mfe_r"]) if row.get("mfe_r") is not None else None,
+                        holding_time_minutes=(
+                            float(row["holding_time_minutes"])
+                            if row.get("holding_time_minutes") is not None
+                            else None
+                        ),
+                        latency_ms=(
+                            float(row["latency_ms"])
+                            if row.get("latency_ms") is not None
+                            else None
+                        ),
                     )
                 )
             with self._lock:
@@ -190,20 +214,34 @@ class ScalpingLearningStore:
                 "losses": 0,
                 "win_rate": None,
                 "by_session": {},
+                "by_regime": {},
+                "by_setup_family": {},
             }
         wins = sum(1 for r in rows if r.win)
         by_session: dict[str, dict[str, int]] = {}
+        by_regime: dict[str, dict[str, int]] = {}
+        by_setup: dict[str, dict[str, int]] = {}
         for r in rows:
             bucket = by_session.setdefault(r.session or "unknown", {"wins": 0, "n": 0})
             bucket["n"] += 1
             if r.win:
                 bucket["wins"] += 1
+            reg = by_regime.setdefault(r.regime or "unknown", {"wins": 0, "n": 0})
+            reg["n"] += 1
+            if r.win:
+                reg["wins"] += 1
+            fam = by_setup.setdefault(r.setup_family or "unknown", {"wins": 0, "n": 0})
+            fam["n"] += 1
+            if r.win:
+                fam["wins"] += 1
         return {
             "trades": len(rows),
             "wins": wins,
             "losses": len(rows) - wins,
             "win_rate": round(100.0 * wins / len(rows), 2),
             "by_session": by_session,
+            "by_regime": by_regime,
+            "by_setup_family": by_setup,
         }
 
 

@@ -27,6 +27,9 @@ class PostTradeAnalytics:
     expectancy_contribution: Decimal | None
     closed_at: str
     regime: str | None = None
+    setup_family: str | None = None
+    entry_reason: str | None = None
+    exit_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out = asdict(self)
@@ -54,6 +57,9 @@ def compute_post_trade_analytics(
     rejection_reason: str | None = None,
     pnl: Decimal | str | None = None,
     regime: str | None = None,
+    setup_family: str | None = None,
+    entry_reason: str | None = None,
+    exit_reason: str | None = None,
 ) -> PostTradeAnalytics:
     """Compute R / MAE / MFE / hold time for one closed trade."""
     now = closed_at or datetime.now(UTC)
@@ -115,6 +121,9 @@ def compute_post_trade_analytics(
         expectancy_contribution=r_mult,
         closed_at=now.isoformat(),
         regime=regime,
+        setup_family=setup_family,
+        entry_reason=entry_reason,
+        exit_reason=exit_reason,
     )
 
 

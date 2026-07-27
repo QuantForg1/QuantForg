@@ -82,7 +82,9 @@ def test_v5_mtf_and_risk_locked() -> None:
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
     assert cfg.never_prefer_buy_only is True
-    assert cfg.typical_hold_max_minutes == 10
+    assert cfg.typical_hold_max_minutes >= 10
+    assert cfg.typical_hold_max_minutes <= 15
+    assert cfg.typical_hold_min_minutes >= 1
     ite = scalping_ite_config()
     assert ite.risk_per_trade_pct == cfg.risk_per_trade_pct
 

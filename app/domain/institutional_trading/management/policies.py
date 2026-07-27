@@ -245,6 +245,25 @@ def plan_action(
             target_state=PositionLifecycleState.EXITED,
         )
 
+    # --- Volatility collapse — statistical edge disappears ---
+    vol_threshold = int(getattr(config, "volatility_collapse_threshold", 25) or 25)
+    if (
+        getattr(config, "volatility_collapse_exit", True)
+        and context.ai_volatility is not None
+        and int(context.ai_volatility) < vol_threshold
+        and r < Decimal("0.5")
+        and hold_minutes >= 2.0
+    ):
+        return PlannedAction(
+            ManageActionKind.EMERGENCY_EXIT,
+            (
+                f"Volatility collapsed ({context.ai_volatility}<{vol_threshold}) "
+                "— flatten scalp"
+            ),
+            volume=position.remaining_volume,
+            target_state=PositionLifecycleState.EXITED,
+        )
+
     # --- Progressive management (never skip states) ---
     mid = context.mid_price or context.current_price
     regime = volatility_regime(context.atr, mid, config)

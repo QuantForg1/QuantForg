@@ -1,12 +1,16 @@
-"""AI Scalping score v6 - institutional quality, balanced BUY/SELL, 1-10m hold."""
+"""AI Scalping score v6.3 — adaptive regime, multi-setup, quality-first."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dc_replace
 from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
+    get_adaptive_cooldown_gate,
+    resolve_adaptive_cooldown_seconds,
+)
 from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
     ResolvedThresholds,
     resolve_adaptive_thresholds,
@@ -33,6 +37,9 @@ from app.domain.institutional_trading.ai_scalping.regime_execution import (
 from app.domain.institutional_trading.ai_scalping.session_intelligence import (
     assess_session,
 )
+from app.domain.institutional_trading.ai_scalping.setup_scanner import (
+    scan_setup_families,
+)
 from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     assess_spread,
 )
@@ -41,6 +48,7 @@ from app.domain.institutional_trading.ai_scalping.structure_targets import (
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
+
 
 @dataclass(frozen=True, slots=True)
 class AiScalpingScore:
@@ -71,6 +79,9 @@ class AiScalpingScore:
     indicators: dict[str, object] | None = None
     entry_reason: str | None = None
     regime_execution: dict[str, object] | None = None
+    setup_family: str | None = None
+    setup_scan: dict[str, object] | None = None
+    adaptive_cooldown: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -103,18 +114,32 @@ class AiScalpingScore:
             "indicators": dict(self.indicators or {}),
             "entry_reason": self.entry_reason,
             "regime_execution": dict(self.regime_execution or {}),
+            "setup_family": self.setup_family,
+            "setup_scan": dict(self.setup_scan or {}),
+            "adaptive_cooldown": dict(self.adaptive_cooldown or {}),
             "never_prefer_buy_only": True,
         }
 
 
-def _hold_time(cfg: AiScalpingConfig, confidence: int, regime: str) -> str:
-    lo = cfg.typical_hold_min_minutes
-    hi = cfg.typical_hold_max_minutes
+def _hold_time(
+    cfg: AiScalpingConfig,
+    confidence: int,
+    regime: str,
+    *,
+    hold_lo: int | None = None,
+    hold_hi: int | None = None,
+) -> str:
+    lo = hold_lo if hold_lo is not None else cfg.typical_hold_min_minutes
+    hi = hold_hi if hold_hi is not None else cfg.typical_hold_max_minutes
     if confidence >= cfg.high_confidence_for_extend and regime in {
-        "trending",
+        "strong_trend",
         "breakout",
     }:
-        hi = cfg.max_hold_minutes_if_confident
+        hi = min(cfg.max_hold_minutes_if_confident, cfg.typical_hold_max_minutes)
+    lo = max(cfg.typical_hold_min_minutes, lo)
+    hi = min(hi, cfg.typical_hold_max_minutes, cfg.absolute_max_hold_minutes)
+    if hi < lo:
+        hi = lo
     return f"{lo}-{hi}m"
 
 
@@ -129,8 +154,11 @@ def score_scalping_setup(
     opens: Sequence[float] | None = None,
     highs: Sequence[float] | None = None,
     lows: Sequence[float] | None = None,
+    recent_rejects: int = 0,
+    execution_quality_ok: bool = True,
+    enforce_adaptive_cooldown: bool = False,
 ) -> AiScalpingScore:
-    """Compute AI Confidence / Quality for institutional scalping."""
+    """Compute AI Confidence / Quality for institutional adaptive scalping."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     reasons: list[str] = []
     factors: dict[str, int] = {}
@@ -193,6 +221,8 @@ def score_scalping_setup(
     factors["trend_strength"] = int(trend.alignment_score)
     factors["volatility"] = factors["atr_expansion"]
     factors["mtf"] = factors.get("h1_bias", 0) + factors.get("m15_structure", 0)
+    factors["bos"] = 85 if bos else 20
+    factors["choch"] = 80 if choch else 20
 
     session = assess_session(
         str(getattr(snapshot.session.session, "value", snapshot.session.session)),
@@ -225,6 +255,43 @@ def score_scalping_setup(
     factors["pa_confluence"] = pa.score
     reasons.extend(pa.reasons)
 
+    setup_scan = None
+    setup_family: str | None = None
+    if cfg.multi_setup_scan_enabled:
+        setup_scan = scan_setup_families(
+            alignment=int(trend.alignment_score),
+            bos=bos,
+            choch=choch,
+            sweeps=sweeps,
+            open_fvg=open_fvg,
+            momentum=factors["momentum"],
+            volume=factors["volume"],
+            liquidity=liquidity_score,
+            ema=pa.ema_score,
+            buy_score=direction_dec.buy_score,
+            sell_score=direction_dec.sell_score,
+            atr_band=resolved.band,
+            config=cfg,
+        )
+        reasons.extend(setup_scan.reasons)
+        if setup_scan.best is not None:
+            setup_family = setup_scan.best.family
+            factors["setup_family_score"] = setup_scan.best.score
+            best_dir = setup_scan.best.direction
+            if best_dir in {TradeDirection.BUY.value, TradeDirection.SELL.value}:
+                if direction_dec.direction is TradeDirection.NONE:
+                    reasons.append(
+                        f"Setup {setup_family} suggests {best_dir} but AI direction NONE"
+                    )
+                elif best_dir != direction_dec.direction.value:
+                    reasons.append(
+                        f"Setup {setup_family}={best_dir} vs AI="
+                        f"{direction_dec.direction.value} — keep AI direction; "
+                        "global gates decide"
+                    )
+                else:
+                    reasons.append(f"Setup {setup_family} agrees with AI {best_dir}")
+
     weights = {
         "mtf": 14,
         "bos": 7,
@@ -249,6 +316,9 @@ def score_scalping_setup(
     confidence = round(weighted / total_w) if total_w else 0
     confidence -= session.confidence_penalty
     confidence -= spread_a.confidence_penalty
+    if setup_scan and setup_scan.best and setup_scan.best.passed:
+        if setup_scan.best.direction == direction_dec.direction.value:
+            confidence = min(100, confidence + min(4, setup_scan.best.score // 30))
     confidence = max(0, min(100, confidence))
 
     trade_quality = int(quality.total)
@@ -269,6 +339,34 @@ def score_scalping_setup(
     )
     reasons.extend(exec_profile.reasons)
 
+    cd_decision = resolve_adaptive_cooldown_seconds(
+        atr_pct=resolved.atr_pct,
+        spread_score=spread_a.score,
+        liquidity_score=liquidity_score,
+        execution_quality_ok=execution_quality_ok,
+        recent_rejects=recent_rejects,
+        regime=regime.regime,
+        config=cfg,
+    )
+    scaled_seconds = int(Decimal(cd_decision.seconds) * exec_profile.cooldown_scale)
+    scaled_seconds = max(
+        cfg.cooldown_min_seconds,
+        min(cfg.cooldown_max_seconds, scaled_seconds),
+    )
+    cd_decision = dc_replace(cd_decision, seconds=scaled_seconds)
+    # Pure score path: recommend cooldown. Live gate enforced in pipeline/bridge.
+    if cfg.adaptive_cooldown_enabled:
+        cooldown_eval = get_adaptive_cooldown_gate().evaluate(cd_decision)
+    else:
+        cooldown_eval = dc_replace(
+            cd_decision, allow_new_entry=True, remaining_seconds=0.0
+        )
+    reasons.extend(cd_decision.reasons)
+    if not cooldown_eval.allow_new_entry:
+        reasons.append(
+            f"Adaptive cooldown active ({cooldown_eval.remaining_seconds:.0f}s remaining)"
+        )
+
     targets = compute_structure_targets(
         snapshot,
         direction=direction,
@@ -280,7 +378,6 @@ def score_scalping_setup(
     if targets.reason:
         reasons.append(targets.reason)
 
-    # Regime may raise RR floor — never lower below config min
     effective_min_rr = max(cfg.min_expected_rr, exec_profile.min_expected_rr)
 
     gates = evaluate_quality_gates(
@@ -300,24 +397,51 @@ def score_scalping_setup(
         min_expected_rr_override=effective_min_rr,
     )
 
-    reject = not gates.passed
-    reject_reason = "; ".join(gates.rejects) if gates.rejects else None
+    reject_list: list[str] = list(gates.rejects)
+    # Setup scan ranks opportunities — absence does not poison global quality gates.
+    if cfg.multi_setup_scan_enabled and (
+        setup_scan is None or setup_scan.best is None
+    ):
+        reasons.append(
+            "No setup family cleared local evidence — global gates still authoritative"
+        )
+
+    # Live cooldown gate blocks NEW entries only (quality floors unchanged).
+    if (
+        cfg.adaptive_cooldown_enabled
+        and enforce_adaptive_cooldown
+        and not cooldown_eval.allow_new_entry
+    ):
+        reject_list.append(
+            f"Adaptive cooldown active ({cooldown_eval.remaining_seconds:.0f}s remaining)"
+        )
+
+    reject_list = list(dict.fromkeys(reject_list))
+    reject = bool(reject_list)
+    reject_reason = "; ".join(reject_list) if reject_list else None
     if reject:
         direction = TradeDirection.NONE
-        for r in gates.rejects:
+        for r in reject_list:
             reasons.append(f"REJECT: {r}")
         entry_reason = reject_reason
     else:
+        fam = f" setup={setup_family}" if setup_family else ""
         entry_reason = (
             f"TAKE {direction_dec.direction.value}: "
-            f"PA={pa.score} conf={confidence} "
+            f"PA={pa.score} conf={confidence} regime={regime.regime}{fam} "
             f"EMA/RSI/SMC confluence satisfied"
         )
         reasons.append(
             f"TAKE {direction_dec.direction.value}: all institutional quality gates passed"  # noqa: E501
         )
 
-    hold = _hold_time(cfg, confidence, regime.regime)
+    hold = _hold_time(
+        cfg,
+        confidence,
+        regime.regime,
+        hold_lo=exec_profile.target_hold_min_minutes,
+        hold_hi=exec_profile.target_hold_max_minutes,
+    )
 
     return AiScalpingScore(
         confidence=confidence,
@@ -345,8 +469,11 @@ def score_scalping_setup(
             str(targets.take_profit) if targets.take_profit is not None else None
         ),
         quality_checks=gates.checks,
-        reject_reasons=gates.rejects,
+        reject_reasons=tuple(reject_list),
         indicators=pa.indicators,
         entry_reason=entry_reason,
         regime_execution=exec_profile.to_dict(),
+        setup_family=setup_family,
+        setup_scan=setup_scan.to_dict() if setup_scan else None,
+        adaptive_cooldown=cooldown_eval.to_dict(),
     )

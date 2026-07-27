@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
+    AdaptiveCooldownDecision,
+    AdaptiveCooldownGate,
+    get_adaptive_cooldown_gate,
+    resolve_adaptive_cooldown_seconds,
+)
 from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
     ResolvedThresholds,
     apply_thresholds_to_ite,
@@ -13,6 +19,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_SCALPING_UNIVERSE,
     AdaptiveThresholdBand,
     AiScalpingConfig,
+    SetupFamily,
     scalping_ite_config,
 )
 from app.domain.institutional_trading.ai_scalping.diagnostics import (
@@ -26,14 +33,14 @@ from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
     AddTradeDecision,
     may_add_scalping_trade,
 )
+from app.domain.institutional_trading.ai_scalping.execution_quality import (
+    ExecutionQualityStore,
+    get_execution_quality_store,
+)
 from app.domain.institutional_trading.ai_scalping.learning import (
     LearningTradeRecord,
     ScalpingLearningStore,
     get_scalping_learning_store,
-)
-from app.domain.institutional_trading.ai_scalping.execution_quality import (
-    ExecutionQualityStore,
-    get_execution_quality_store,
 )
 from app.domain.institutional_trading.ai_scalping.live_health import (
     LiveHealthMonitor,
@@ -72,6 +79,11 @@ from app.domain.institutional_trading.ai_scalping.session_intelligence import (
     SessionAssessment,
     assess_session,
 )
+from app.domain.institutional_trading.ai_scalping.setup_scanner import (
+    SetupCandidate,
+    SetupScanResult,
+    scan_setup_families,
+)
 from app.domain.institutional_trading.ai_scalping.sizing import (
     LotSizingResult,
     calculate_scalping_lots,
@@ -95,6 +107,8 @@ from app.domain.institutional_trading.ai_scalping.validation import (
 __all__ = [
     "DEFAULT_AI_SCALPING_CONFIG",
     "DEFAULT_SCALPING_UNIVERSE",
+    "AdaptiveCooldownDecision",
+    "AdaptiveCooldownGate",
     "AdaptiveThresholdBand",
     "AddTradeDecision",
     "AiScalpingConfig",
@@ -113,6 +127,9 @@ __all__ = [
     "ResolvedThresholds",
     "ScalpingLearningStore",
     "SessionAssessment",
+    "SetupCandidate",
+    "SetupFamily",
+    "SetupScanResult",
     "SlippageAssessment",
     "SpreadAssessment",
     "StructureTargets",
@@ -129,6 +146,7 @@ __all__ = [
     "decide_scalping_direction",
     "evaluate_pa_confluence",
     "evaluate_quality_gates",
+    "get_adaptive_cooldown_gate",
     "get_execution_quality_store",
     "get_live_health_monitor",
     "get_post_trade_journal",
@@ -137,7 +155,9 @@ __all__ = [
     "may_add_scalping_trade",
     "measure_slippage",
     "rank_scalping_opportunities",
+    "resolve_adaptive_cooldown_seconds",
     "resolve_adaptive_thresholds",
     "scalping_ite_config",
+    "scan_setup_families",
     "score_scalping_setup",
 ]

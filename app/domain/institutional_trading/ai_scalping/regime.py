@@ -1,4 +1,8 @@
-"""Market regime classification for AI Scalping execution behaviour."""
+"""Market regime classification for AI Scalping adaptive execution (v6.3).
+
+Continuous labels:
+  strong_trend | weak_trend | range | breakout | expansion | compression
+"""
 
 from __future__ import annotations
 
@@ -33,34 +37,58 @@ def classify_scalping_regime(
     range_like: bool = False,
     volume_expanding: bool = False,
 ) -> RegimeAssessment:
-    """Map structure artefacts → scalping regime (deterministic)."""
+    """Map structure + volatility artefacts → adaptive scalping regime."""
     reasons: list[str] = []
     high_vol = atr_pct is not None and atr_pct >= Decimal("1.5")
     low_vol = atr_pct is not None and atr_pct <= Decimal("0.4")
+    mid_vol = atr_pct is not None and Decimal("0.4") < atr_pct < Decimal("1.5")
 
-    if choch and sweep_count:
-        reasons.append("CHOCH + liquidity sweep → reversal")
-        return RegimeAssessment("reversal", 78, tuple(reasons))
+    # Compression first — quiet tape dominates behaviour
+    if low_vol and (range_like or alignment_score < 55):
+        reasons.append("Low ATR% + soft alignment → compression")
+        return RegimeAssessment("compression", 74, tuple(reasons))
+
+    # Breakout — structural break with expansion
     if bos and volume_expanding and high_vol:
+        reasons.append("BOS + volume + high ATR → breakout")
+        return RegimeAssessment("breakout", 82, tuple(reasons))
+    if bos and volume_expanding and mid_vol:
         reasons.append("BOS + volume expansion → breakout")
-        return RegimeAssessment("breakout", 80, tuple(reasons))
-    if alignment_score >= 70 and bos and not range_like:
-        reasons.append("Aligned MTF + BOS → trending")
-        return RegimeAssessment("trending", 82, tuple(reasons))
-    if range_like or (low_vol and alignment_score < 55):
-        if sweep_count and not bos:
-            reasons.append("Sweeps in quiet tape → accumulation")
-            return RegimeAssessment("accumulation", 70, tuple(reasons))
-        if choch and not bos:
-            reasons.append("CHOCH without trend → distribution")
-            return RegimeAssessment("distribution", 68, tuple(reasons))
-        reasons.append("Low alignment / quiet ATR → range")
+        return RegimeAssessment("breakout", 76, tuple(reasons))
+
+    # Expansion — elevated volatility without clean BOS
+    if high_vol and alignment_score >= 50:
+        reasons.append("Elevated ATR% with usable alignment → expansion")
+        return RegimeAssessment("expansion", 70, tuple(reasons))
+    if high_vol:
+        reasons.append("Elevated ATR% → expansion (alignment soft)")
+        return RegimeAssessment("expansion", 62, tuple(reasons))
+
+    # Strong / weak trend
+    if alignment_score >= 75 and bos and not range_like:
+        reasons.append("Strong MTF alignment + BOS → strong_trend")
+        return RegimeAssessment("strong_trend", 84, tuple(reasons))
+    if alignment_score >= 70 and not range_like:
+        reasons.append("Strong MTF alignment → strong_trend")
+        return RegimeAssessment("strong_trend", 78, tuple(reasons))
+    if 55 <= alignment_score < 70 and not range_like:
+        reasons.append("Partial MTF alignment → weak_trend")
+        return RegimeAssessment("weak_trend", 68, tuple(reasons))
+
+    # Range — including CHOCH/sweep quiet tape (setup family handles reversal)
+    if range_like or alignment_score < 55:
+        if choch or sweep_count:
+            reasons.append("CHOCH/sweeps inside soft tape → range (setup-driven)")
+            return RegimeAssessment("range", 70, tuple(reasons))
+        reasons.append("Low alignment / quiet structure → range")
         return RegimeAssessment("range", 72, tuple(reasons))
-    if high_vol and alignment_score >= 55:
-        reasons.append("Elevated ATR with partial alignment → breakout bias")
-        return RegimeAssessment("breakout", 65, tuple(reasons))
-    reasons.append("Default trending bias from residual alignment")
-    return RegimeAssessment("trending", max(50, alignment_score), tuple(reasons))
+
+    if low_vol:
+        reasons.append("Residual low ATR → compression")
+        return RegimeAssessment("compression", 60, tuple(reasons))
+
+    reasons.append("Default weak_trend from residual alignment")
+    return RegimeAssessment("weak_trend", max(50, alignment_score), tuple(reasons))
 
 
 def regime_from_snapshot_factors(factors: dict[str, Any]) -> RegimeAssessment:

@@ -688,6 +688,23 @@ class ExecutionBridge:
 
         if status is ExecutionAttemptStatus.OMS_SUCCESS:
             self.metrics.record_executed(latency)
+            try:
+                from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
+                    get_adaptive_cooldown_gate,
+                )
+                from app.domain.institutional_trading.ai_scalping.config import (
+                    DEFAULT_AI_SCALPING_CONFIG,
+                )
+
+                cd_secs = int(DEFAULT_AI_SCALPING_CONFIG.cooldown_base_seconds)
+                ai = getattr(decision, "ai_score", None) or {}
+                if isinstance(ai, dict):
+                    raw_cd = (ai.get("adaptive_cooldown") or {}).get("seconds")
+                    if raw_cd is not None:
+                        cd_secs = int(raw_cd)
+                get_adaptive_cooldown_gate().note_entry(seconds=cd_secs)
+            except Exception:
+                logger.exception("adaptive_cooldown_note_entry_failed")
             ticket = oms_result.order_ticket or oms_result.deal_ticket
             sl = intent.stop_loss
             sl_txt = str(sl.value) if sl is not None else ""

@@ -140,10 +140,12 @@ def test_add_trade_requires_probability_improvement() -> None:
 
 @pytest.mark.unit
 def test_regime_classification() -> None:
-    trending = classify_scalping_regime(alignment_score=80, bos=1)
-    assert trending.regime == "trending"
-    reversal = classify_scalping_regime(alignment_score=40, choch=1, sweep_count=1)
-    assert reversal.regime == "reversal"
+    strong = classify_scalping_regime(alignment_score=80, bos=1)
+    assert strong.regime == "strong_trend"
+    ranging = classify_scalping_regime(
+        alignment_score=40, choch=1, sweep_count=1, range_like=True
+    )
+    assert ranging.regime in {"range", "compression"}
 
 
 @pytest.mark.unit

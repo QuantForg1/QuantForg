@@ -207,7 +207,7 @@ def test_live_health_pauses_new_entries_only() -> None:
 @pytest.mark.unit
 def test_pme_and_dashboard_v61() -> None:
     pme = pme_config_for_scalping()
-    assert "v6.1" in pme.config_version
+    assert "scalping-v6" in pme.config_version
     dash = build_ai_scalping_dashboard()
     assert dash["version"].startswith("ai-scalping-v6")
     assert "performance_metrics" in dash

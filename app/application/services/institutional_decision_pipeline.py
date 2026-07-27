@@ -177,6 +177,7 @@ class InstitutionalDecisionPipeline:
                     mid=account.mid_price,
                     historical_similarity=hist,
                     config=DEFAULT_AI_SCALPING_CONFIG,
+                    enforce_adaptive_cooldown=True,
                 )
                 self._last_ai_score = ai_score.to_dict()
                 diag = get_scalping_diagnostics_store()

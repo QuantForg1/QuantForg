@@ -44,7 +44,7 @@ def pme_config_for_scalping(
             abs_hold = cfg.absolute_max_hold_minutes
     return replace(
         DEFAULT_PME_CONFIG,
-        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v6.1",
+        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v6.3",
         break_even_at_r=cfg.break_even_at_r,
         partial_at_r=partial_at,
         partial_close_pct=partial_pct,
@@ -58,6 +58,8 @@ def pme_config_for_scalping(
         absolute_max_hold_minutes=abs_hold,
         momentum_fade_exit=cfg.momentum_fade_exit,
         momentum_fade_threshold=cfg.momentum_fade_threshold,
+        volatility_collapse_exit=cfg.volatility_collapse_exit,
+        volatility_collapse_threshold=cfg.volatility_collapse_threshold,
         volume_step=cfg.broker_lot_step,
         min_volume=cfg.broker_min_lot,
     )

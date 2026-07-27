@@ -14,12 +14,20 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 TradingMode = Literal["swing", "scalping"]
 VolatilityBand = Literal["high", "normal", "low"]
 MarketRegimeLabel = Literal[
-    "trending",
+    "strong_trend",
+    "weak_trend",
     "range",
     "breakout",
-    "reversal",
-    "accumulation",
-    "distribution",
+    "expansion",
+    "compression",
+]
+SetupFamily = Literal[
+    "pullback_continuation",
+    "bos_continuation",
+    "choch_reversal",
+    "liquidity_sweep_reversal",
+    "fvg_continuation",
+    "breakout_continuation",
 ]
 
 # Same institutional universe as Alpha - trade only the best opportunity.
@@ -46,7 +54,7 @@ class AdaptiveThresholdBand:
 class AiScalpingConfig:
     """Institutional AI Scalping Engine - quality over quantity."""
 
-    version: str = "ai-scalping-v6.2.0"
+    version: str = "ai-scalping-v6.3.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE
@@ -86,13 +94,23 @@ class AiScalpingConfig:
     # EMA / RSI / candle PA composite — never below prior quality floors
     min_pa_confluence_score: int = 55
 
-    # Real scalping hold window
-    typical_hold_min_minutes: int = 1
-    typical_hold_max_minutes: int = 10
-    max_hold_minutes_if_confident: int = 20
+    # Real scalping hold window (target 2–15m when conditions support)
+    typical_hold_min_minutes: int = 2
+    typical_hold_max_minutes: int = 15
+    max_hold_minutes_if_confident: int = 15
     high_confidence_for_extend: int = 88
     # Absolute flatten — do not keep scalps open unnecessarily
     absolute_max_hold_minutes: int = 25
+
+    # Multi-setup local evidence floor (independent of global quality gates)
+    setup_min_local_score: int = 60
+    multi_setup_scan_enabled: bool = True
+
+    # Adaptive cooldown (seconds) — never forced trades; quality unchanged
+    cooldown_min_seconds: int = 45
+    cooldown_base_seconds: int = 90
+    cooldown_max_seconds: int = 420
+    adaptive_cooldown_enabled: bool = True
 
     # Multi-trade - prefer quality, not stacking losers
     max_open_trades: int = 2
@@ -120,10 +138,12 @@ class AiScalpingConfig:
     # Optional fixed-R TP preference (None = structure/ATR targets only)
     fixed_tp_r: Decimal | None = Decimal("1.5")
     atr_tp_mult: Decimal = Decimal("1.8")
-    time_stop_minutes: int = 10
+    time_stop_minutes: int = 12
     time_stop_min_r: Decimal = Decimal("0.3")
     momentum_fade_exit: bool = True
     momentum_fade_threshold: int = 40
+    volatility_collapse_exit: bool = True
+    volatility_collapse_threshold: int = 25
 
     # Session aggression (1-5 stars) — London / NY / overlap preferred
     session_stars: dict[str, int] = field(
@@ -261,6 +281,16 @@ class AiScalpingConfig:
                 "max_if_confident": self.max_hold_minutes_if_confident,
                 "absolute_max": self.absolute_max_hold_minutes,
             },
+            "multi_setup": {
+                "enabled": self.multi_setup_scan_enabled,
+                "min_local_score": self.setup_min_local_score,
+            },
+            "adaptive_cooldown": {
+                "enabled": self.adaptive_cooldown_enabled,
+                "min_seconds": self.cooldown_min_seconds,
+                "base_seconds": self.cooldown_base_seconds,
+                "max_seconds": self.cooldown_max_seconds,
+            },
             "max_open_trades": self.max_open_trades,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),
             "risk_increase_locked": True,
@@ -275,6 +305,8 @@ class AiScalpingConfig:
             "time_stop_minutes": self.time_stop_minutes,
             "momentum_fade_exit": self.momentum_fade_exit,
             "momentum_fade_threshold": self.momentum_fade_threshold,
+            "volatility_collapse_exit": self.volatility_collapse_exit,
+            "volatility_collapse_threshold": self.volatility_collapse_threshold,
             "allowed_sessions": list(self.allowed_sessions),
             "news_protection_enabled": self.news_protection_enabled,
             "news_fail_closed_without_feed": self.news_fail_closed_without_feed,
