@@ -36,13 +36,15 @@ from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
 @pytest.mark.unit
 def test_v61_version_preserves_v6_safety() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.version.startswith("ai-scalping-v6")
+    assert cfg.version.startswith("ai-scalping-v")
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
     assert cfg.min_expected_rr >= Decimal("1.3")
     assert cfg.self_protection_enabled is True
     assert cfg.slippage_protection_enabled is True
+    assert cfg.normal_vol.confidence == 82
+    assert cfg.risk_per_trade_pct == Decimal("0.50")
 
 
 @pytest.mark.unit
@@ -209,7 +211,7 @@ def test_pme_and_dashboard_v61() -> None:
     pme = pme_config_for_scalping()
     assert "scalping-v6" in pme.config_version
     dash = build_ai_scalping_dashboard()
-    assert dash["version"].startswith("ai-scalping-v6")
+    assert dash["version"].startswith("ai-scalping-v")
     assert "performance_metrics" in dash
     assert "execution_quality" in dash
     assert "live_health" in dash

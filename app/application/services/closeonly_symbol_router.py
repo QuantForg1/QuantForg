@@ -7,10 +7,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.domain.institutional_trading.alpha_engine.config import (
-    DEFAULT_ALPHA_UNIVERSE,
-)
-from app.domain.trading.gold_only import GOLD_SYMBOL
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -97,6 +93,16 @@ def build_opportunity_candidates(
         for sym in getattr(plane, "allowed_symbols", ()) or ():
             _add(str(sym))
 
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_SCALPING_UNIVERSE,
+    )
+    from app.domain.institutional_trading.alpha_engine.config import (
+        DEFAULT_ALPHA_UNIVERSE,
+    )
+    from app.domain.trading.gold_only import GOLD_SYMBOL
+
+    for sym in DEFAULT_SCALPING_UNIVERSE:
+        _add(sym)
     for sym in DEFAULT_ALPHA_UNIVERSE:
         _add(sym)
     _add(GOLD_SYMBOL)

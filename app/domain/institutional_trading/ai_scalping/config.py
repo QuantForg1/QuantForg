@@ -30,7 +30,7 @@ SetupFamily = Literal[
     "breakout_continuation",
 ]
 
-# Same institutional universe as Alpha - trade only the best opportunity.
+# Institutional multi-asset universe — trade only the best opportunity.
 DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
     "XAUUSD",
     "EURUSD",
@@ -39,6 +39,7 @@ DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
     "NAS100",
     "US30",
     "BTCUSD",
+    "ETHUSD",
 )
 
 
@@ -52,12 +53,20 @@ class AdaptiveThresholdBand:
 
 @dataclass(frozen=True, slots=True)
 class AiScalpingConfig:
-    """Institutional AI Scalping Engine - quality over quantity."""
+    """Institutional AI Scalping Engine - quality over quantity.
 
-    version: str = "ai-scalping-v6.3.0"
+    v7 adds multi-asset portfolio scanning. Quality floors and risk knobs
+    remain locked to the v6.3 institutional baseline.
+    """
+
+    version: str = "ai-scalping-v7.0.0"
+    # Quality-engine baseline identity (unchanged floors from v6.3)
+    quality_baseline: str = "ai-scalping-v6.3.0"
+    portfolio_version: str = "ai-scalping-v7.0.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE
+    multi_asset_scan_enabled: bool = True
 
     # MTF stack - H1 direction · M15 structure · M5 entry · M1 precision
     direction_tf: Timeframe = Timeframe.H1
@@ -235,9 +244,12 @@ class AiScalpingConfig:
     def to_dict(self) -> dict[str, Any]:
         return {
             "version": self.version,
+            "quality_baseline": self.quality_baseline,
+            "portfolio_version": self.portfolio_version,
             "symbol": self.symbol,
             "trading_mode": self.trading_mode,
             "universe": list(self.universe),
+            "multi_asset_scan_enabled": self.multi_asset_scan_enabled,
             "timeframes": {
                 "direction": self.direction_tf.value,
                 "structure": self.structure_tf.value,

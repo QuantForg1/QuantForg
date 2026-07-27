@@ -53,6 +53,21 @@ from app.domain.institutional_trading.ai_scalping.pa_confluence import (
     PaConfluenceResult,
     evaluate_pa_confluence,
 )
+from app.domain.institutional_trading.ai_scalping.portfolio_risk import (
+    PortfolioRiskSnapshot,
+    aggregate_portfolio_risk,
+    portfolio_daily_loss_pct,
+    portfolio_exposure_pct,
+)
+from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
+    PortfolioScanResult,
+    check_portfolio_limits,
+    scan_multi_asset_portfolio,
+)
+from app.domain.institutional_trading.ai_scalping.portfolio_scheduler import (
+    MultiAssetScanScheduler,
+    get_multi_asset_scheduler,
+)
 from app.domain.institutional_trading.ai_scalping.post_trade_analytics import (
     PostTradeAnalytics,
     PostTradeJournal,
@@ -100,6 +115,11 @@ from app.domain.institutional_trading.ai_scalping.structure_targets import (
     StructureTargets,
     compute_structure_targets,
 )
+from app.domain.institutional_trading.ai_scalping.symbol_state import (
+    SymbolExecutionState,
+    SymbolStateBook,
+    get_symbol_state_book,
+)
 from app.domain.institutional_trading.ai_scalping.validation import (
     compare_backtest_vs_live,
 )
@@ -118,7 +138,10 @@ __all__ = [
     "LearningTradeRecord",
     "LiveHealthMonitor",
     "LotSizingResult",
+    "MultiAssetScanScheduler",
     "PaConfluenceResult",
+    "PortfolioRiskSnapshot",
+    "PortfolioScanResult",
     "PostTradeAnalytics",
     "PostTradeJournal",
     "QualityGateResult",
@@ -133,11 +156,15 @@ __all__ = [
     "SlippageAssessment",
     "SpreadAssessment",
     "StructureTargets",
+    "SymbolExecutionState",
+    "SymbolStateBook",
+    "aggregate_portfolio_risk",
     "apply_thresholds_to_ite",
     "assess_session",
     "assess_spread",
     "build_regime_execution_profile",
     "calculate_scalping_lots",
+    "check_portfolio_limits",
     "classify_scalping_regime",
     "classify_volatility_band",
     "compare_backtest_vs_live",
@@ -149,15 +176,20 @@ __all__ = [
     "get_adaptive_cooldown_gate",
     "get_execution_quality_store",
     "get_live_health_monitor",
+    "get_multi_asset_scheduler",
     "get_post_trade_journal",
     "get_scalping_diagnostics_store",
     "get_scalping_learning_store",
+    "get_symbol_state_book",
     "may_add_scalping_trade",
     "measure_slippage",
+    "portfolio_daily_loss_pct",
+    "portfolio_exposure_pct",
     "rank_scalping_opportunities",
     "resolve_adaptive_cooldown_seconds",
     "resolve_adaptive_thresholds",
     "scalping_ite_config",
+    "scan_multi_asset_portfolio",
     "scan_setup_families",
     "score_scalping_setup",
 ]

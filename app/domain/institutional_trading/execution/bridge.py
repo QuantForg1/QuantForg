@@ -318,7 +318,9 @@ class ExecutionBridge:
                     dd = ((peak - eq) / peak * Decimal("100")).quantize(Decimal("0.01"))
                     health.max_drawdown_pct = scalp_cfg.pause_drawdown_pct
                     health.record_drawdown(dd)
-                allowed, why = health.allow_new_entries()
+                allowed, why = health.allow_new_entries(
+                    symbol=str(decision.symbol or "")
+                )
                 if not allowed:
                     return self._abort(
                         decision=decision,
@@ -680,7 +682,17 @@ class ExecutionBridge:
                     requote=requote,
                     rejection_reason=oms_result.message,
                 )
-                health.record_reject()
+                health.record_reject(symbol=str(decision.symbol or "") or None)
+                try:
+                    from app.domain.institutional_trading.ai_scalping.symbol_state import (
+                        get_symbol_state_book,
+                    )
+
+                    sym = str(decision.symbol or "").upper()
+                    if sym:
+                        get_symbol_state_book().note_reject(sym)
+                except Exception:
+                    logger.exception("symbol_state_note_reject_failed")
                 if abort_reason is BridgeAbortReason.GATEWAY_FAILURE:
                     health.record_gateway_instability()
         except Exception:
@@ -689,11 +701,11 @@ class ExecutionBridge:
         if status is ExecutionAttemptStatus.OMS_SUCCESS:
             self.metrics.record_executed(latency)
             try:
-                from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
-                    get_adaptive_cooldown_gate,
-                )
                 from app.domain.institutional_trading.ai_scalping.config import (
                     DEFAULT_AI_SCALPING_CONFIG,
+                )
+                from app.domain.institutional_trading.ai_scalping.symbol_state import (
+                    get_symbol_state_book,
                 )
 
                 cd_secs = int(DEFAULT_AI_SCALPING_CONFIG.cooldown_base_seconds)
@@ -702,7 +714,13 @@ class ExecutionBridge:
                     raw_cd = (ai.get("adaptive_cooldown") or {}).get("seconds")
                     if raw_cd is not None:
                         cd_secs = int(raw_cd)
-                get_adaptive_cooldown_gate().note_entry(seconds=cd_secs)
+                # Per-symbol only — never arm a process-global cooldown gate
+                sym = str(
+                    getattr(intent, "symbol", None) or decision.symbol or ""
+                ).upper()
+                if sym:
+                    get_symbol_state_book().note_entry(sym, seconds=cd_secs)
+                    get_symbol_state_book().clear_reject_streak(sym)
             except Exception:
                 logger.exception("adaptive_cooldown_note_entry_failed")
             ticket = oms_result.order_ticket or oms_result.deal_ticket

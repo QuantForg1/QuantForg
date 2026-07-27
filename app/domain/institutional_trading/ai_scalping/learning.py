@@ -216,11 +216,13 @@ class ScalpingLearningStore:
                 "by_session": {},
                 "by_regime": {},
                 "by_setup_family": {},
+                "by_symbol": {},
             }
         wins = sum(1 for r in rows if r.win)
         by_session: dict[str, dict[str, int]] = {}
         by_regime: dict[str, dict[str, int]] = {}
         by_setup: dict[str, dict[str, int]] = {}
+        by_symbol: dict[str, dict[str, int]] = {}
         for r in rows:
             bucket = by_session.setdefault(r.session or "unknown", {"wins": 0, "n": 0})
             bucket["n"] += 1
@@ -234,6 +236,12 @@ class ScalpingLearningStore:
             fam["n"] += 1
             if r.win:
                 fam["wins"] += 1
+            sym = by_symbol.setdefault(
+                (r.symbol or "unknown").upper(), {"wins": 0, "n": 0}
+            )
+            sym["n"] += 1
+            if r.win:
+                sym["wins"] += 1
         return {
             "trades": len(rows),
             "wins": wins,
@@ -242,6 +250,8 @@ class ScalpingLearningStore:
             "by_session": by_session,
             "by_regime": by_regime,
             "by_setup_family": by_setup,
+            "by_symbol": by_symbol,
+            "scope": "portfolio",
         }
 
 

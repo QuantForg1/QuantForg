@@ -82,7 +82,10 @@ def _snap(*, alignment: int = 70) -> MagicMock:
 @pytest.mark.unit
 def test_v6_version_and_risk_locks() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.version.startswith("ai-scalping-v6")
+    assert cfg.version.startswith("ai-scalping-v")
+    assert cfg.quality_baseline == "ai-scalping-v6.3.0"
+    assert cfg.risk_per_trade_pct == Decimal("0.50")
+    assert cfg.normal_vol.confidence == 82
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False

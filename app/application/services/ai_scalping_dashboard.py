@@ -79,6 +79,7 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         journal = get_post_trade_journal()
         post_trade = {
             "performance": journal.performance_snapshot(),
+            "performance_by_symbol": journal.performance_by_symbol(),
             "recent": journal.recent(limit=25),
         }
     with contextlib.suppress(Exception):
@@ -109,7 +110,16 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         "partial_fill_rate": execution_quality.get("partial_fill_rate"),
         "avg_slippage": execution_quality.get("avg_slippage")
         or live_metrics.get("avg_slippage"),
+        "scope": "portfolio",
     }
+
+    performance_by_symbol = (
+        post_trade.get("performance_by_symbol")
+        if isinstance(post_trade, dict)
+        else {}
+    )
+    if not isinstance(performance_by_symbol, dict):
+        performance_by_symbol = {}
 
     setup = {
         "direction": ai_score.get("direction"),
@@ -150,6 +160,7 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
         "learning": learning,
         "validation": validation,
         "performance_metrics": performance_metrics,
+        "performance_by_symbol": performance_by_symbol,
         "execution_quality": execution_quality,
         "post_trade": post_trade,
         "live_health": health,

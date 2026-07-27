@@ -37,11 +37,12 @@ def rank_scalping_opportunities(
 
     eligible.sort(
         key=lambda r: (
-            int(r.get("ai_confidence") or r.get("confidence") or 0),
-            float(r.get("expected_rr") or 0),
-            int(r.get("trade_quality") or 0),
+            -int(r.get("ai_confidence") or r.get("confidence") or 0),
+            -float(r.get("expected_rr") or 0),
+            -int(r.get("trade_quality") or 0),
+            # Ascending symbol tie-break — identical inputs ⇒ identical order
+            str(r.get("symbol") or "").upper(),
         ),
-        reverse=True,
     )
     best = eligible[0] if eligible else None
     return {
@@ -51,5 +52,8 @@ def rank_scalping_opportunities(
         "best": best,
         "ranked": eligible[:10],
         "rejected_sample": rejected[:20],
-        "note": "Trade only the highest quality opportunity — never grid/martingale.",
+        "note": (
+            "Trade only the highest quality opportunity — never grid/martingale. "
+            "Ties break by symbol ascending for deterministic ordering."
+        ),
     }

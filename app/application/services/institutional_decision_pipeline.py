@@ -178,6 +178,7 @@ class InstitutionalDecisionPipeline:
                     historical_similarity=hist,
                     config=DEFAULT_AI_SCALPING_CONFIG,
                     enforce_adaptive_cooldown=True,
+                    symbol=str(getattr(snapshot, "symbol", "") or ""),
                 )
                 self._last_ai_score = ai_score.to_dict()
                 diag = get_scalping_diagnostics_store()
@@ -384,6 +385,38 @@ class InstitutionalDecisionPipeline:
                     f"ai_scalping_quality_reject:{ai_score.reject_reason or 'gates'}"
                 )
                 approved_lots = Decimal("0")
+
+            # Portfolio-wide exposure + daily loss (all symbols combined)
+            if DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled:
+                try:
+                    from app.domain.institutional_trading.ai_scalping.portfolio_risk import (
+                        aggregate_portfolio_risk,
+                    )
+                    from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
+                        check_portfolio_limits,
+                    )
+
+                    risk_snap = aggregate_portfolio_risk(
+                        account,
+                        config=DEFAULT_AI_SCALPING_CONFIG,
+                        ite_config=cfg,
+                    )
+                    blocked, block_why = check_portfolio_limits(
+                        open_positions=risk_snap.open_positions,
+                        max_open_positions=risk_snap.max_open_positions,
+                        daily_loss_pct=risk_snap.daily_loss_pct,
+                        max_daily_loss_pct=risk_snap.max_daily_loss_pct,
+                        exposure_pct=risk_snap.exposure_pct,
+                        max_exposure_pct=risk_snap.max_exposure_pct,
+                    )
+                    if blocked:
+                        risk_allowed = False
+                        risk_reasons.append(
+                            f"portfolio_risk_block:{block_why or 'limits'}"
+                        )
+                        approved_lots = Decimal("0")
+                except Exception:  # noqa: S110
+                    pass
 
         eligibility = PositionEligibilityEngine(config=cfg).evaluate(
             snapshot=snapshot,

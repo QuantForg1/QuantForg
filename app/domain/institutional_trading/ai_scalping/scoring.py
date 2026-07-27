@@ -8,7 +8,6 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
-    get_adaptive_cooldown_gate,
     resolve_adaptive_cooldown_seconds,
 )
 from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
@@ -45,6 +44,9 @@ from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
 )
 from app.domain.institutional_trading.ai_scalping.structure_targets import (
     compute_structure_targets,
+)
+from app.domain.institutional_trading.ai_scalping.symbol_state import (
+    get_symbol_state_book,
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -157,6 +159,7 @@ def score_scalping_setup(
     recent_rejects: int = 0,
     execution_quality_ok: bool = True,
     enforce_adaptive_cooldown: bool = False,
+    symbol: str | None = None,
 ) -> AiScalpingScore:
     """Compute AI Confidence / Quality for institutional adaptive scalping."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -354,9 +357,10 @@ def score_scalping_setup(
         min(cfg.cooldown_max_seconds, scaled_seconds),
     )
     cd_decision = dc_replace(cd_decision, seconds=scaled_seconds)
-    # Pure score path: recommend cooldown. Live gate enforced in pipeline/bridge.
-    if cfg.adaptive_cooldown_enabled:
-        cooldown_eval = get_adaptive_cooldown_gate().evaluate(cd_decision)
+    # Per-symbol cooldown only — never share a global gate across the universe.
+    sym_key = (symbol or str(getattr(snapshot, "symbol", "") or "")).upper()
+    if cfg.adaptive_cooldown_enabled and sym_key:
+        cooldown_eval = get_symbol_state_book().evaluate_cooldown(sym_key, cd_decision)
     else:
         cooldown_eval = dc_replace(
             cd_decision, allow_new_entry=True, remaining_seconds=0.0
@@ -365,6 +369,7 @@ def score_scalping_setup(
     if not cooldown_eval.allow_new_entry:
         reasons.append(
             f"Adaptive cooldown active ({cooldown_eval.remaining_seconds:.0f}s remaining)"
+            + (f" symbol={sym_key}" if sym_key else "")
         )
 
     targets = compute_structure_targets(

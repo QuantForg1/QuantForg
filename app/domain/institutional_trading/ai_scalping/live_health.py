@@ -1,4 +1,10 @@
-"""Live health monitor + self-protection — pause NEW entries only."""
+"""Live health monitor + self-protection — pause NEW entries only.
+
+Global dependencies (gateway/broker/MT5/OMS/data/latency/drawdown/slippage/
+gateway instability) pause the whole desk.
+
+Reject bursts are PER-SYMBOL — a reject storm on XAUUSD must not block EURUSD.
+"""
 
 from __future__ import annotations
 
@@ -89,7 +95,11 @@ class LiveHealthMonitor:
     _rejects: deque[datetime] = field(default_factory=deque, repr=False)
     _slips: deque[datetime] = field(default_factory=deque, repr=False)
     _gateway_fails: deque[datetime] = field(default_factory=deque, repr=False)
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _symbol_rejects: dict[str, deque[datetime]] = field(
+        default_factory=dict, repr=False
+    )
+    _symbol_reject_reasons: dict[str, str] = field(default_factory=dict, repr=False)
+    _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def update_dependencies(
         self,
@@ -143,9 +153,28 @@ class LiveHealthMonitor:
                 detail=self._health.detail,
             )
 
-    def record_reject(self) -> None:
+    def record_reject(self, symbol: str | None = None) -> None:
+        """Record a reject. With symbol → pause that symbol only."""
         now = datetime.now(UTC)
+        key = (symbol or "").strip().upper()
         with self._lock:
+            if key:
+                q = self._symbol_rejects.setdefault(key, deque())
+                q.append(now)
+                self._trim(q, self.reject_window_seconds)
+                if len(q) >= self.reject_burst_threshold:
+                    reason = (
+                        f"Excessive rejects on {key} ({len(q)} in "
+                        f"{self.reject_window_seconds}s)"
+                    )
+                    self._symbol_reject_reasons[key] = reason
+                # Track aggregate count for observability only (no global pause)
+                self._protection.reject_burst = sum(
+                    len(v) for v in self._symbol_rejects.values()
+                )
+                return
+
+            # Legacy / unspecified symbol — global reject pause
             self._rejects.append(now)
             self._trim(self._rejects, self.reject_window_seconds)
             self._protection.reject_burst = len(self._rejects)
@@ -186,20 +215,42 @@ class LiveHealthMonitor:
             elif self._protection.new_entries_paused:
                 self._maybe_resume_health()
 
-    def allow_new_entries(self) -> tuple[bool, str]:
+    def allow_new_entries(self, symbol: str | None = None) -> tuple[bool, str]:
+        """Global deps always apply. Reject bursts are symbol-scoped when keyed."""
+        key = (symbol or "").strip().upper()
         with self._lock:
             if not self._health.all_ok:
                 return False, self._health.detail
             if self._protection.new_entries_paused:
                 reason = "; ".join(self._protection.reasons) or "self-protection pause"
                 return False, reason
+            if key:
+                q = self._symbol_rejects.get(key)
+                if q is not None:
+                    self._trim(q, self.reject_window_seconds)
+                    if len(q) >= self.reject_burst_threshold:
+                        why = self._symbol_reject_reasons.get(key) or (
+                            f"Excessive rejects on {key}"
+                        )
+                        return False, why
+                    if len(q) < self.reject_burst_threshold:
+                        self._symbol_reject_reasons.pop(key, None)
             return True, "ok"
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
+            per_sym = {
+                sym: {
+                    "reject_burst": len(q),
+                    "paused": len(q) >= self.reject_burst_threshold,
+                    "reason": self._symbol_reject_reasons.get(sym),
+                }
+                for sym, q in self._symbol_rejects.items()
+            }
             return {
                 "health": self._health.to_dict(),
                 "self_protection": self._protection.to_dict(),
+                "symbol_rejects": per_sym,
             }
 
     def reset(self) -> None:
@@ -210,6 +261,8 @@ class LiveHealthMonitor:
             self._rejects.clear()
             self._slips.clear()
             self._gateway_fails.clear()
+            self._symbol_rejects.clear()
+            self._symbol_reject_reasons.clear()
 
     def _pause(self, reason: str) -> None:
         if reason not in self._protection.reasons:
@@ -220,7 +273,7 @@ class LiveHealthMonitor:
             self._protection.paused_at = datetime.now(UTC).isoformat()
 
     def _maybe_resume_health(self) -> None:
-        """Resume only when health is clear and burst counters recovered."""
+        """Resume only when health is clear and global burst counters recovered."""
         if not self._health.all_ok:
             return
         now = datetime.now(UTC)
@@ -237,10 +290,18 @@ class LiveHealthMonitor:
             and len(self._gateway_fails) < self.gateway_fail_threshold
         )
         if dd_ok and bursts_ok and self._protection.new_entries_paused:
+            # Keep dependency/slippage/drawdown/gateway pauses only — strip reject noise
             self._protection.new_entries_paused = False
-            self._protection.reasons = []
+            self._protection.reasons = [
+                r
+                for r in self._protection.reasons
+                if "Excessive rejects" not in r
+            ]
             self._protection.paused_at = None
-        _ = now  # keep for future cool-down logic
+            if self._protection.reasons:
+                # Still have global reasons (should not happen if bursts_ok)
+                pass
+        _ = now
 
     @staticmethod
     def _trim(q: deque[datetime], window_s: int) -> None:

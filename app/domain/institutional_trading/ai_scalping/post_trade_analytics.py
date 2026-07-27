@@ -140,24 +140,34 @@ class PostTradeJournal:
                 self._records = self._records[-self.max_records :]
         return analytics
 
-    def recent(self, *, limit: int = 50) -> list[dict[str, Any]]:
+    def recent(self, *, limit: int = 50, symbol: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
-            rows = list(self._records[-max(1, limit) :])
+            rows = list(self._records[-max(1, limit * 4) :])
+        if symbol:
+            key = symbol.strip().upper()
+            rows = [r for r in rows if (r.symbol or "").upper() == key]
+        rows = rows[-max(1, limit) :]
         return [r.to_dict() for r in reversed(rows)]
 
-    def performance_snapshot(self) -> dict[str, Any]:
+    def performance_snapshot(self, *, symbol: str | None = None) -> dict[str, Any]:
         with self._lock:
             rows = list(self._records)
+        if symbol:
+            key = symbol.strip().upper()
+            rows = [r for r in rows if (r.symbol or "").upper() == key]
         closed = [r for r in rows if r.r_multiple is not None]
+        empty = {
+            "trades": 0,
+            "win_rate": None,
+            "average_r": None,
+            "profit_factor": None,
+            "average_hold_minutes": None,
+            "expectancy": None,
+            "symbol": symbol.upper() if symbol else None,
+            "scope": "symbol" if symbol else "portfolio",
+        }
         if not closed:
-            return {
-                "trades": 0,
-                "win_rate": None,
-                "average_r": None,
-                "profit_factor": None,
-                "average_hold_minutes": None,
-                "expectancy": None,
-            }
+            return empty
         wins = [r for r in closed if r.win]
         losses = [r for r in closed if r.win is False]
         rs = [float(r.r_multiple or 0) for r in closed]
@@ -181,7 +191,14 @@ class PostTradeJournal:
                 round(sum(holds) / len(holds), 3) if holds else None
             ),
             "expectancy": round(avg_r, 4),
+            "symbol": symbol.upper() if symbol else None,
+            "scope": "symbol" if symbol else "portfolio",
         }
+
+    def performance_by_symbol(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            symbols = sorted({(r.symbol or "UNKNOWN").upper() for r in self._records})
+        return {sym: self.performance_snapshot(symbol=sym) for sym in symbols}
 
 
 _JOURNAL: PostTradeJournal | None = None
