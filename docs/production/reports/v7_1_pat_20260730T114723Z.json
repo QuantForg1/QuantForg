@@ -1,0 +1,355 @@
+{
+  "title": "QuantForg v7.1 Production Acceptance Test (PAT)",
+  "version": "ai-scalping-v7.1.0",
+  "started_at": "2026-07-30T11:47:20.733223+00:00",
+  "finished_at": "2026-07-30T11:47:23.076653+00:00",
+  "results": [
+    {
+      "id": "TEST_1_SYSTEM_STARTUP",
+      "status": "BLOCKED",
+      "issues": [
+        "full FE/BE/Gateway/MT5 restart cycle not executed in this harness (gw=False, api_prod=True, fe_port=False, be_port=False, profile=yes)"
+      ],
+      "evidence": {
+        "gateway_local": {
+          "ok": false,
+          "body": null,
+          "err": "<urlopen error [Errno 111] Connection refused>"
+        },
+        "api_prod": {
+          "ok": true,
+          "body": {
+            "status": "ok"
+          },
+          "err": null
+        },
+        "local_backend_port": false,
+        "local_frontend_port": false,
+        "broker_profile": {
+          "broker": "weltrade",
+          "server": "Weltrade-Real",
+          "login": 12260878,
+          "terminal_path": "",
+          "has_encrypted_password": true,
+          "updated_at": "2026-07-30T11:28:39.108607+00:00"
+        },
+        "continuous_enabled": true,
+        "version": "ai-scalping-v7.1.0",
+        "startup_tick": {
+          "as_of": "2026-07-30T11:47:21.117306+00:00",
+          "heartbeats": {
+            "timeout_seconds": 30.0,
+            "beats": {
+              "oms": {
+                "component": "oms",
+                "at": "2026-07-30T11:47:21.117306+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "execution": {
+                "component": "execution",
+                "at": "2026-07-30T11:47:21.117306+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "decision": {
+                "component": "decision",
+                "at": "2026-07-30T11:47:21.117306+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              },
+              "pme": {
+                "component": "pme",
+                "at": "2026-07-30T11:47:21.117306+00:00",
+                "latency_ms": 0.0,
+                "meta": {}
+              }
+            }
+          },
+          "recovery": [
+            {
+              "id": "1e4c4f9d-f007-4456-8676-12522ffb56c5",
+              "action": "gateway_reconnect",
+              "success": false,
+              "detail": "no gateway_reconnect_fn configured",
+              "at": "2026-07-30T11:47:21.117319+00:00"
+            },
+            {
+              "id": "26e1400f-5b70-493a-aadc-6e02cd5d9d1e",
+              "action": "mt5_reconnect",
+              "success": false,
+              "detail": "no mt5_reconnect_fn configured",
+              "at": "2026-07-30T11:47:21.117344+00:00"
+            },
+            {
+              "id": "92840e28-31c6-45e2-b144-8cead6319ebe",
+              "action": "safe_read_retry",
+              "success": false,
+              "detail": "no safe_read_fn configured",
+              "at": "2026-07-30T11:47:21.117356+00:00"
+            }
+          ],
+          "pause": {
+            "pause_new_entries": true,
+            "reasons": [
+              "broker unavailable",
+              "gateway unavailable",
+              "stale heartbeat:gateway,mt5"
+            ],
+            "manage_open_positions": true,
+            "note": "Open positions are always managed \u2014 never abandoned."
+          },
+          "resumed_positions": true,
+          "pending_rescan": false,
+          "version": "ai-scalping-v7.1.0"
+        },
+        "decision_hash_module": true
+      }
+    },
+    {
+      "id": "TEST_2_MT5_RECONNECT",
+      "status": "BLOCKED",
+      "issues": [
+        "automatic reconnect code path verified; physical MT5 disconnect/reconnect not executed"
+      ],
+      "evidence": {
+        "heal_events": [
+          {
+            "id": "1c74c6b4-f1e6-4910-8958-c1b49a988d4f",
+            "action": "mt5_reconnect",
+            "success": true,
+            "detail": "mt5 reconnect attempted",
+            "at": "2026-07-30T11:47:21.214070+00:00"
+          }
+        ],
+        "mt5_reconnect_called": true,
+        "order_send_retry_forbidden": true,
+        "gateway": {
+          "ok": false,
+          "body": "<urlopen error [Errno 111] Connection refused>"
+        }
+      }
+    },
+    {
+      "id": "TEST_3_GATEWAY_FAILURE",
+      "status": "BLOCKED",
+      "issues": [
+        "gateway stop/start not executed by harness"
+      ],
+      "evidence": {
+        "heal_events": [
+          {
+            "id": "48ca1618-0d6e-4c61-9744-e6195d2a4fc2",
+            "action": "gateway_reconnect",
+            "success": true,
+            "detail": "gateway reconnect attempted",
+            "at": "2026-07-30T11:47:21.214288+00:00"
+          }
+        ],
+        "gateway_reconnect_called": true,
+        "gateway_live": {
+          "ok": false,
+          "body": "<urlopen error [Errno 111] Connection refused>"
+        }
+      }
+    },
+    {
+      "id": "TEST_4_MARKET_CLOSED",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "pause": {
+          "pause_new_entries": true,
+          "reasons": [
+            "market closed"
+          ],
+          "manage_open_positions": true,
+          "note": "Open positions are always managed \u2014 never abandoned."
+        },
+        "tick_alive": true
+      }
+    },
+    {
+      "id": "TEST_5_MULTI_ASSET",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "universe": [
+          "BTCUSD",
+          "ETHUSD",
+          "EURUSD",
+          "GBPUSD",
+          "NAS100",
+          "US30",
+          "USDJPY",
+          "XAUUSD"
+        ],
+        "best_symbol": "EURUSD",
+        "ranked0": "EURUSD",
+        "ranked_symbols": [
+          "EURUSD",
+          "USDJPY",
+          "US30",
+          "NAS100",
+          "GBPUSD",
+          "ETHUSD",
+          "BTCUSD"
+        ],
+        "config_version": "ai-scalping-v7.1.0"
+      }
+    },
+    {
+      "id": "TEST_6_MAX_OPEN",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "max_open_trades": 5,
+        "max_daily_exposure_pct": "2.00",
+        "risk_per_trade_pct": "0.50",
+        "snap_4_open": {
+          "open_positions": 4,
+          "daily_loss_pct": "0",
+          "exposure_pct": "2.00",
+          "max_open_positions": 5,
+          "max_daily_loss_pct": "3.0",
+          "max_exposure_pct": "2.00",
+          "equity": "10000",
+          "daily_pnl": "0",
+          "reasons": [
+            "Portfolio open=4 daily_loss=0% exposure=2.00% (limits open<5 loss<3.0% exp<2.00%)"
+          ],
+          "scope": "portfolio_all_symbols"
+        },
+        "blocked_at_exposure": true,
+        "block_why": "Portfolio exposure limit (2.00% >= 2.00%)",
+        "snap_daily_loss": {
+          "open_positions": 1,
+          "daily_loss_pct": "3.00",
+          "exposure_pct": "0.50",
+          "max_open_positions": 5,
+          "max_daily_loss_pct": "3.0",
+          "max_exposure_pct": "2.00",
+          "equity": "10000",
+          "daily_pnl": "-300",
+          "reasons": [
+            "Portfolio open=1 daily_loss=3.00% exposure=0.50% (limits open<5 loss<3.0% exp<2.00%)"
+          ],
+          "scope": "portfolio_all_symbols"
+        }
+      }
+    },
+    {
+      "id": "TEST_7_POSITION_MANAGEMENT",
+      "status": "BLOCKED",
+      "issues": [
+        "PME feature presence verified; live reconnect continuity not physically verified"
+      ],
+      "evidence": {
+        "partial_tp_enabled": true,
+        "break_even_at_r": "0.5",
+        "time_stop_minutes": 12,
+        "management_actions": [
+          "break_even",
+          "daily_shutdown",
+          "emergency_exit",
+          "noop",
+          "partial_close",
+          "skip",
+          "time_stop",
+          "trail"
+        ]
+      }
+    },
+    {
+      "id": "TEST_8_SESSION",
+      "status": "BLOCKED",
+      "issues": [
+        "browser refresh/restart/PC restart not executed in this harness"
+      ],
+      "evidence": {
+        "remember_me": true,
+        "localStorage": true,
+        "sessionStorage": true,
+        "refresh_token": true,
+        "restore_methods": [
+          "restore_from_persisted_profile",
+          "load_persisted_broker_profile",
+          "_persist_broker_runtime_profile"
+        ]
+      }
+    },
+    {
+      "id": "TEST_9_LONG_RUN",
+      "status": "FAIL",
+      "issues": [
+        "soak duration 16.16h < required 24h (first=2026-07-27T18:35:38.2499607Z, last=2026-07-28T10:45:19.9132149Z, samples=505)",
+        "soak evidence STALE \u2014 last sample age 49.03h > 2.0h (last_ts=2026-07-28T10:45:19.9132149Z). Claimed longer soaks on operator hosts are not present in accessible git/workspace evidence."
+      ],
+      "evidence": {
+        "required_hours": 24,
+        "executed_hours": 16.162,
+        "freshness_max_age_hours": 2.0,
+        "soak_metrics_path": "/workspace/docs/production/reports/oat_v71/soak_24h_metrics.jsonl",
+        "soak_latest_path": "/workspace/docs/production/reports/oat_v71/soak_24h_latest.json",
+        "samples": 505,
+        "first_ts": "2026-07-27T18:35:38.2499607Z",
+        "last_ts": "2026-07-28T10:45:19.9132149Z",
+        "age_hours_since_last_sample": 49.034,
+        "gateway_ok_samples": 504,
+        "gateway_bad_samples": 1,
+        "mt5_connected_samples": 504,
+        "stale": true,
+        "meets_24h": false,
+        "latest_snapshot": {
+          "ts": "2026-07-28T10:45:19.9132149Z",
+          "gateway": {
+            "latency_ms": 0,
+            "hb": "2026-07-28T10:45:17.254328+00:00",
+            "ok": true,
+            "connected": true,
+            "session": "attached",
+            "mt5_latency_ms": 0.885
+          },
+          "railway": {
+            "latency_ms": 13353.35,
+            "ok": true,
+            "status": "ok"
+          },
+          "cpu": 37.12,
+          "ram_mb": 65.09,
+          "err": null
+        }
+      }
+    },
+    {
+      "id": "TEST_10_PERFORMANCE",
+      "status": "BLOCKED",
+      "issues": [
+        "gateway latency not measurable (gateway down)"
+      ],
+      "evidence": {
+        "avg_scan_ms": 0.105,
+        "p95_scan_ms": 0.115,
+        "gateway_latency_ms": null,
+        "gateway_reachable": false,
+        "psutil": "No module named 'psutil'",
+        "api_health_latency_ms": 112.46
+      }
+    },
+    {
+      "id": "UNIT_SUITE_MAPPED",
+      "status": "PASS",
+      "issues": [],
+      "evidence": {
+        "output_tail": "............................................                             [100%]\n44 passed in 0.80s\n"
+      }
+    }
+  ],
+  "summary": {
+    "PASS": 3,
+    "FAIL": 1,
+    "BLOCKED": 6
+  },
+  "production_accepted": false,
+  "declaration": "QUANTFORG v7.1 PRODUCTION NOT ACCEPTED \u2014 FAIL items must be fixed."
+}

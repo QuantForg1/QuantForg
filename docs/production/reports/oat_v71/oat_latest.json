@@ -1,0 +1,175 @@
+{
+  "title": "QuantForg v7.1 Live Operational Acceptance Test (OAT)",
+  "generated_at": "2026-07-30T11:56:24.631109+00:00",
+  "declaration": "QUANTFORG v7.1 LIVE PRODUCTION NOT ACCEPTED \u2014 see FAIL steps with live evidence.",
+  "production_accepted": false,
+  "live_probes": {
+    "railway_health": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok"
+      },
+      "url": "https://quantforg-production.up.railway.app/api/v1/health"
+    },
+    "railway_status": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 181.7
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.04
+          }
+        ]
+      },
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/status"
+    },
+    "frontend": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "raw_len": 8013
+      },
+      "url": "https://www.quantforg.com/"
+    },
+    "gateway_public": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok",
+        "service": "mt5-gateway",
+        "token_configured": true,
+        "websocket_enabled": true,
+        "auto_attach_enabled": true,
+        "token_fingerprint": {
+          "length": 43,
+          "preview": "QuantF******Qw8Rt5",
+          "source": "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+          "process_env_len": 0,
+          "dotenv_len": 43,
+          "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+          "process_is_placeholder": true
+        },
+        "mt5": {
+          "connected": true,
+          "session_mode": "attached",
+          "latency_ms": 0.497,
+          "terminal_build": 6061,
+          "build_date": "24 Jul 2026",
+          "server": "Weltrade-Real",
+          "login_status": "connected",
+          "last_heartbeat_at": "2026-07-30T11:56:43.029048+00:00",
+          "version": "500.6061 (24 Jul 2026)",
+          "bridge_available": true,
+          "degraded": false,
+          "probe": "live",
+          "terminal_trade_allowed": true,
+          "mt5_autotrading_enabled": true,
+          "dlls_allowed": true,
+          "dll_allowed": true,
+          "capability_support": {
+            "autotrading": "SUPPORTED",
+            "dll": "SUPPORTED"
+          },
+          "capability_note": "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+        },
+        "bridge_available": true
+      },
+      "url": "https://gateway.quantforg.com/health"
+    },
+    "gateway_local": {
+      "ok": false,
+      "error": "<urlopen error [Errno 111] Connection refused>",
+      "url": "http://127.0.0.1:8765/health"
+    }
+  },
+  "soak_analysis": {
+    "samples": 505,
+    "first_ts": "2026-07-27T18:35:38.2499607Z",
+    "last_ts": "2026-07-28T10:45:19.9132149Z",
+    "duration_hours": 16.162,
+    "age_hours_since_last_sample": 49.185,
+    "meets_24h": false,
+    "meets_48h": false,
+    "stale": true,
+    "windows_expected_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\docs\\production\\reports\\oat_v71\\soak_24h_metrics.jsonl",
+    "import_status": "NOT_IMPORTED \u2014 Windows JSONL not present in git beyond 2026-07-28T10:45Z",
+    "live_gateway_proves_host_up": true,
+    "live_gateway_heartbeat": "2026-07-30T11:56:43.029048+00:00"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "item": "Full restart (FE/BE/Gateway/MT5)",
+      "status": "FAIL",
+      "evidence": {
+        "frontend": true,
+        "railway": true,
+        "gateway_public": true,
+        "note": "Services healthy now; full restart cycle still not proven."
+      }
+    },
+    {
+      "id": 2,
+      "item": "MT5 reconnect",
+      "status": "PASS",
+      "evidence": {
+        "prior_logs": [
+          "step2_*.json"
+        ],
+        "live_attached": "attached"
+      }
+    },
+    {
+      "id": 3,
+      "item": "Gateway restart",
+      "status": "FAIL",
+      "evidence": {
+        "note": "Process-level recycle still not proven (prior Access denied)."
+      }
+    },
+    {
+      "id": 4,
+      "item": "Browser / PC restart",
+      "status": "FAIL",
+      "evidence": {
+        "note": "Remember-Me / PC restart witness still absent."
+      }
+    },
+    {
+      "id": 5,
+      "item": "24h long run",
+      "status": "FAIL",
+      "evidence": {
+        "samples": 505,
+        "first_ts": "2026-07-27T18:35:38.2499607Z",
+        "last_ts": "2026-07-28T10:45:19.9132149Z",
+        "duration_hours": 16.162,
+        "age_hours_since_last_sample": 49.185,
+        "meets_24h": false,
+        "meets_48h": false,
+        "stale": true,
+        "windows_expected_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\docs\\production\\reports\\oat_v71\\soak_24h_metrics.jsonl",
+        "import_status": "NOT_IMPORTED \u2014 Windows JSONL not present in git beyond 2026-07-28T10:45Z",
+        "live_gateway_proves_host_up": true,
+        "live_gateway_heartbeat": "2026-07-30T11:56:43.029048+00:00"
+      }
+    }
+  ],
+  "summary": {
+    "PASS": 1,
+    "FAIL": 4,
+    "BLOCKED": 0
+  },
+  "evidence_gap": "docs/production/WINDOWS_SOAK_EVIDENCE_GAP.md"
+}

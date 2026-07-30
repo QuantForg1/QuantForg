@@ -1,0 +1,151 @@
+{
+  "collected_at": "2026-07-30T11:45:58.237314+00:00",
+  "probes": {
+    "https://quantforg-production.up.railway.app/api/v1/health": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    "https://quantforg-production.up.railway.app/api/v1/health/status": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 167.93
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.04
+          }
+        ]
+      }
+    },
+    "https://quantforg-production.up.railway.app/api/v1/health/ready": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    "https://quantforg-production.up.railway.app/api/v1/health/live": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    "https://www.quantforg.com/": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "raw": "<!doctype html>\n<html lang=\"en\" class=\"dark\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>QuantForg</title>\n    <meta\n      name=\"description\"\n      content=\"Enterprise quantitative trading terminal \u2014 portfolio, risk, MT5, and research.\"\n    />\n    <meta name=\"robots\" content=\"index,follow\" />\n    <style>\n      :root {\n        --bg: #0b1016;\n        --surface: #141c27;\n        --surface-2: #1a2433;\n        --border: ",
+        "len": 8013
+      }
+    },
+    "http://127.0.0.1:8765/health": {
+      "ok": false,
+      "error": "<urlopen error [Errno 111] Connection refused>"
+    }
+  },
+  "github": {},
+  "local_soak": {
+    "samples": 505,
+    "first_ts": "2026-07-27T18:35:38.2499607Z",
+    "last_ts": "2026-07-28T10:45:19.9132149Z",
+    "duration_hours": 16.162,
+    "age_hours_since_last_sample": 49.011,
+    "gateway_ok": 504,
+    "gateway_bad": 1,
+    "mt5_connected": 504,
+    "mt5_disconnected": 0,
+    "railway_ok": 238,
+    "railway_bad": 267,
+    "ram_mb_first": 48.3,
+    "ram_mb_last": 65.09,
+    "ram_mb_max": 122.78,
+    "stale_vs_now": true,
+    "meets_24h": false,
+    "meets_48h": false
+  },
+  "branches": {
+    "list": [
+      "cursor/v7-1-acceptance-evidence",
+      "* cursor/v7-1-production-stabilization-bc83",
+      "main",
+      "remotes/origin/HEAD -> origin/main",
+      "remotes/origin/cursor/v7-1-acceptance-evidence",
+      "remotes/origin/cursor/v7-1-production-stabilization-bc83",
+      "remotes/origin/dependabot/docker/python-3.14-slim-bookworm",
+      "remotes/origin/dependabot/github_actions/actions/setup-node-7",
+      "remotes/origin/dependabot/github_actions/actions/setup-python-7",
+      "remotes/origin/dependabot/pip/asyncpg-0.31.0",
+      "remotes/origin/dependabot/pip/cryptography-49.0.0",
+      "remotes/origin/dependabot/pip/faker-40.36.0",
+      "remotes/origin/dependabot/pip/fastapi-0.140.0",
+      "remotes/origin/dependabot/pip/httpx2-2.9.1",
+      "remotes/origin/dependabot/pip/mypy-2.3.0",
+      "remotes/origin/dependabot/pip/pre-commit-4.6.1",
+      "remotes/origin/dependabot/pip/pytest-9.1.1",
+      "remotes/origin/dependabot/pip/ruff-0.16.0",
+      "remotes/origin/dependabot/pip/testcontainers-4.15.0",
+      "remotes/origin/feat/broker-foundation-sprint-1",
+      "remotes/origin/feat/complete-user-platform-foundation",
+      "remotes/origin/main",
+      "remotes/origin/railway/fix-deploy-01477b",
+      "remotes/origin/railway/fix-deploy-2f460e"
+    ],
+    "main": null,
+    "origin/main": null,
+    "cursor/v7-1-acceptance-evidence": "6addea9da53601c2f768cdd93f843647c58f0ca9 2026-07-28 11:46:53 +0100 Production release v7.1 continuous autonomous operation",
+    "origin/cursor/v7-1-acceptance-evidence": "6addea9da53601c2f768cdd93f843647c58f0ca9 2026-07-28 11:46:53 +0100 Production release v7.1 continuous autonomous operation",
+    "HEAD": "6addea9da53601c2f768cdd93f843647c58f0ca9 2026-07-28 11:46:53 +0100 Production release v7.1 continuous autonomous operation",
+    "origin/main_soak_latest": "MISSING",
+    "origin/cursor/v7-1-acceptance-evidence_soak_latest": {
+      "ts": "2026-07-28T10:45:19.9132149Z",
+      "gateway": {
+        "latency_ms": 0,
+        "hb": "2026-07-28T10:45:17.254328+00:00",
+        "ok": true,
+        "connected": true,
+        "session": "attached",
+        "mt5_latency_ms": 0.885
+      },
+      "railway": {
+        "latency_ms": 13353.35,
+        "ok": true,
+        "status": "ok"
+      },
+      "cpu": 37.12,
+      "ram_mb": 65.09,
+      "err": null
+    },
+    "origin/cursor/v7-1-production-stabilization-bc83_soak_latest": {
+      "ts": "2026-07-28T10:45:19.9132149Z",
+      "gateway": {
+        "latency_ms": 0,
+        "hb": "2026-07-28T10:45:17.254328+00:00",
+        "ok": true,
+        "connected": true,
+        "session": "attached",
+        "mt5_latency_ms": 0.885
+      },
+      "railway": {
+        "latency_ms": 13353.35,
+        "ok": true,
+        "status": "ok"
+      },
+      "cpu": 37.12,
+      "ram_mb": 65.09,
+      "err": null
+    }
+  }
+}

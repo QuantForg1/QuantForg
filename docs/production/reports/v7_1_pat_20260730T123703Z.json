@@ -1,0 +1,140 @@
+{
+  "title": "QuantForg v7.1 Production Acceptance Test (PAT)",
+  "version": "ai-scalping-v7.1.0",
+  "started_at": "2026-07-30T12:36:47.471256+00:00",
+  "finished_at": "2026-07-30T12:37:03.739625+00:00",
+  "results": [
+    {
+      "id": "check_test1_startup",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "check_test2_mt5_reconnect",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "check_test3_gateway_failure",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "check_test4_market_closed",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "check_test5_multi_asset",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "check_test6_max_open",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "check_test7_position_management",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "check_test8_session",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "TEST_9_LONG_RUN",
+      "status": "FAIL",
+      "issues": [
+        "soak duration 23.99h < required 24h (first=2026-07-27T18:35:38.2499607Z, last=2026-07-28T18:35:18.1603001Z, samples=908)",
+        "soak evidence STALE \u2014 last sample age 42.03h > 2.0h (last_ts=2026-07-28T18:35:18.1603001Z). Claimed longer soaks on operator hosts are not present in accessible git/workspace evidence."
+      ],
+      "evidence": {
+        "required_hours": 24,
+        "executed_hours": 23.994,
+        "freshness_max_age_hours": 2.0,
+        "soak_metrics_path": "/workspace/docs/production/reports/oat_v71/soak_24h_metrics.jsonl",
+        "soak_latest_path": "/workspace/docs/production/reports/oat_v71/soak_24h_latest.json",
+        "samples": 908,
+        "first_ts": "2026-07-27T18:35:38.2499607Z",
+        "last_ts": "2026-07-28T18:35:18.1603001Z",
+        "age_hours_since_last_sample": 42.029,
+        "gateway_ok_samples": 906,
+        "gateway_bad_samples": 2,
+        "mt5_connected_samples": 601,
+        "stale": true,
+        "meets_24h": false,
+        "latest_snapshot": {
+          "ts": "2026-07-28T18:35:18.1603001Z",
+          "gateway": {
+            "latency_ms": 0,
+            "hb": "2026-07-28T12:36:33.924315+00:00",
+            "ok": true,
+            "connected": false,
+            "session": "attached",
+            "mt5_latency_ms": null
+          },
+          "railway": {
+            "latency_ms": 1051.15,
+            "ok": true,
+            "status": "ok"
+          },
+          "cpu": 30.36,
+          "ram_mb": 17.31,
+          "err": null
+        }
+      }
+    },
+    {
+      "id": "check_test10_performance",
+      "status": "FAIL",
+      "issues": [
+        "exception: No module named 'pydantic'"
+      ],
+      "evidence": {}
+    },
+    {
+      "id": "UNIT_SUITE_MAPPED",
+      "status": "FAIL",
+      "issues": [
+        "mapped unit suite failed"
+      ],
+      "evidence": {
+        "output_tail": "/usr/bin/python3: No module named pytest\n"
+      }
+    }
+  ],
+  "summary": {
+    "PASS": 0,
+    "FAIL": 1,
+    "BLOCKED": 0
+  },
+  "production_accepted": false,
+  "declaration": "QUANTFORG v7.1 PRODUCTION NOT ACCEPTED \u2014 FAIL items must be fixed."
+}
