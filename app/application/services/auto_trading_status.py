@@ -87,6 +87,83 @@ def _sync_ops_health(plane: OperationsControlPlane, *, probes: Any) -> None:
     )
 
 
+def _apply_health_payload_flags(
+    out: dict[str, Any], payload: dict[str, Any]
+) -> None:
+    """Map gateway /health fields into enrich destinations — never invent True."""
+    out["health_payload"] = payload
+    mt5_raw = payload.get("mt5")
+    mt5: dict[str, Any] = mt5_raw if isinstance(mt5_raw, dict) else {}
+    account_raw = payload.get("account")
+    account: dict[str, Any] = account_raw if isinstance(account_raw, dict) else {}
+    # AutoTrading comes from terminal_info.trade_allowed (not account trade_allowed).
+    for key, dest in (
+        ("account_trade_allowed", "account_trading_enabled"),
+        ("trading_allowed", "account_trading_enabled"),
+        ("autotrading", "mt5_autotrading_enabled"),
+        ("autotrading_enabled", "mt5_autotrading_enabled"),
+        ("mt5_autotrading_enabled", "mt5_autotrading_enabled"),
+        ("terminal_trade_allowed", "mt5_autotrading_enabled"),
+        ("dlls_allowed", "dlls_allowed"),
+        ("dll_allowed", "dlls_allowed"),
+        ("dll_enabled", "dlls_allowed"),
+    ):
+        if key in payload and payload.get(key) is not None:
+            out[dest] = bool(payload.get(key))
+        elif isinstance(mt5, dict) and key in mt5 and mt5.get(key) is not None:
+            out[dest] = bool(mt5.get(key))
+        elif (
+            isinstance(account, dict)
+            and key in account
+            and account.get(key) is not None
+            and dest == "account_trading_enabled"
+        ):
+            out[dest] = bool(account.get(key))
+
+    if (
+        out["account_trading_enabled"] is None
+        and isinstance(account, dict)
+        and account.get("trade_allowed") is not None
+    ):
+        out["account_trading_enabled"] = bool(account.get("trade_allowed"))
+    if (
+        out["mt5_autotrading_enabled"] is None
+        and isinstance(mt5, dict)
+        and mt5.get("trade_allowed") is not None
+    ):
+        out["mt5_autotrading_enabled"] = bool(mt5.get("trade_allowed"))
+
+    support_raw = mt5.get("capability_support")
+    support = (
+        support_raw
+        if isinstance(support_raw, dict)
+        else payload.get("capability_support")
+    )
+    if isinstance(support, dict):
+        if support.get("autotrading") is not None:
+            out["autotrading_support"] = str(support.get("autotrading"))
+        if support.get("dll") is not None:
+            out["dll_support"] = str(support.get("dll"))
+
+    trade_mode = account.get("trade_mode") or payload.get("trade_mode")
+    if trade_mode is not None and out["account_trading_enabled"] is None:
+        mode = str(trade_mode).strip().lower()
+        if mode in {"disabled", "0"}:
+            out["account_trading_enabled"] = False
+        elif mode in {"full", "enabled", "2", "4"}:
+            out["account_trading_enabled"] = True
+
+    if out["account_trading_enabled"] is True:
+        out["no_broker_restrictions"] = True
+    elif out["account_trading_enabled"] is False:
+        out["no_broker_restrictions"] = False
+
+    free = account.get("margin_free") or account.get("free_margin")
+    if free is not None:
+        with contextlib.suppress(Exception):
+            out["margin_available"] = Decimal(str(free)) > 0
+
+
 def _enrich_from_adapter(
     collector: LiveProbeCollector,
 ) -> dict[str, Any]:
@@ -117,86 +194,39 @@ def _enrich_from_adapter(
             raw = health_fn()
             if isinstance(raw, dict):
                 payload = raw
-                out["health_payload"] = raw
         except Exception as exc:
             logger.info("auto_trading_status_gateway_health_failed", error=str(exc))
 
-    if payload is not None:
-        mt5_raw = payload.get("mt5")
-        mt5: dict[str, Any] = mt5_raw if isinstance(mt5_raw, dict) else {}
-        account_raw = payload.get("account")
-        account: dict[str, Any] = account_raw if isinstance(account_raw, dict) else {}
-        # Explicit flags when gateway exposes them — never invent True.
-        # AutoTrading comes from terminal_info.trade_allowed (not account trade_allowed).  # noqa: E501
-        for key, dest in (
-            ("account_trade_allowed", "account_trading_enabled"),
-            ("trading_allowed", "account_trading_enabled"),
-            ("autotrading", "mt5_autotrading_enabled"),
-            ("autotrading_enabled", "mt5_autotrading_enabled"),
-            ("mt5_autotrading_enabled", "mt5_autotrading_enabled"),
-            ("terminal_trade_allowed", "mt5_autotrading_enabled"),
-            ("dlls_allowed", "dlls_allowed"),
-            ("dll_allowed", "dlls_allowed"),
-            ("dll_enabled", "dlls_allowed"),
-        ):
-            if key in payload and payload.get(key) is not None:
-                out[dest] = bool(payload.get(key))
-            elif isinstance(mt5, dict) and key in mt5 and mt5.get(key) is not None:
-                out[dest] = bool(mt5.get(key))
-            elif (
-                isinstance(account, dict)
-                and key in account
-                and account.get(key) is not None
-                and dest == "account_trading_enabled"
-            ):
-                out[dest] = bool(account.get(key))
+    # Prefer authenticated client health; fall back to last public /health probe
+    # so terminal AutoTrading flags are not lost when MockMT5Client is wired.
+    if payload is None:
+        cached = getattr(collector, "last_health_payload", None)
+        if isinstance(cached, dict):
+            payload = cached
 
-        # Bare trade_allowed on account -> account trading;
-        # on mt5 nested -> AutoTrading.
-        if (
-            out["account_trading_enabled"] is None
-            and isinstance(account, dict)
-            and account.get("trade_allowed") is not None
-        ):
-            out["account_trading_enabled"] = bool(account.get("trade_allowed"))
-        if (
-            out["mt5_autotrading_enabled"] is None
-            and isinstance(mt5, dict)
-            and mt5.get("trade_allowed") is not None
-        ):
-            # Only if explicitly nested under mt5 (terminal-level).
-            out["mt5_autotrading_enabled"] = bool(mt5.get("trade_allowed"))
-
-        support_raw = mt5.get("capability_support")
-        support = (
-            support_raw
-            if isinstance(support_raw, dict)
-            else payload.get("capability_support")
+    if payload is None:
+        # Orchestrator may enrich before tick_health runs — fetch public /health.
+        base = (getattr(collector.settings, "mt5_gateway_base_url", None) or "").rstrip(
+            "/"
         )
-        if isinstance(support, dict):
-            if support.get("autotrading") is not None:
-                out["autotrading_support"] = str(support.get("autotrading"))
-            if support.get("dll") is not None:
-                out["dll_support"] = str(support.get("dll"))
+        if base:
+            try:
+                from app.application.services.institutional_live_probes import (
+                    _http_get_json,
+                )
 
-        trade_mode = account.get("trade_mode") or payload.get("trade_mode")
-        if trade_mode is not None and out["account_trading_enabled"] is None:
-            mode = str(trade_mode).strip().lower()
-            if mode in {"disabled", "0"}:
-                out["account_trading_enabled"] = False
-            elif mode in {"full", "enabled", "2", "4"}:
-                out["account_trading_enabled"] = True
+                _ok, _lat, _code, body, _cf = _http_get_json(f"{base}/health")
+                if isinstance(body, dict):
+                    payload = body
+                    collector.last_health_payload = dict(body)
+            except Exception as exc:
+                logger.info(
+                    "auto_trading_status_public_health_failed",
+                    error=str(exc),
+                )
 
-        # Derive broker-restriction flag from known account trading state only.
-        if out["account_trading_enabled"] is True:
-            out["no_broker_restrictions"] = True
-        elif out["account_trading_enabled"] is False:
-            out["no_broker_restrictions"] = False
-
-        free = account.get("margin_free") or account.get("free_margin")
-        if free is not None:
-            with contextlib.suppress(Exception):
-                out["margin_available"] = Decimal(str(free)) > 0
+    if payload is not None:
+        _apply_health_payload_flags(out, payload)
 
     # Live tick → market data + spread (same evidence Broker uses for Market Open).
     adapter = collector.mt5_adapter

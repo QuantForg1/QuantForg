@@ -2363,7 +2363,7 @@ class InstitutionalIteRuntime:
             mt5_at = (
                 bool(enrich["mt5_autotrading_enabled"])
                 if enrich.get("mt5_autotrading_enabled") is not None
-                else False  # fail closed when terminal flag unknown
+                else bool(ctx.mt5_autotrading_enabled)
             )
             acct_ok = (
                 bool(enrich["account_trading_enabled"])
@@ -2620,7 +2620,7 @@ class InstitutionalIteRuntime:
                     mt5_at = (
                         bool(enrich["mt5_autotrading_enabled"])
                         if enrich.get("mt5_autotrading_enabled") is not None
-                        else False  # fail closed when terminal flag unknown
+                        else bool(ctx.mt5_autotrading_enabled)
                     )
                     acct_ok = (
                         bool(enrich["account_trading_enabled"])
