@@ -1,8 +1,8 @@
 {
   "title": "QuantForg v7.1 Production Acceptance Test (PAT)",
   "version": "ai-scalping-v7.1.0",
-  "started_at": "2026-07-30T17:16:06.349651+00:00",
-  "finished_at": "2026-07-30T17:16:12.732855+00:00",
+  "started_at": "2026-07-30T17:15:23.634008+00:00",
+  "finished_at": "2026-07-30T17:15:46.536112+00:00",
   "results": [
     {
       "id": "TEST_1_SYSTEM_STARTUP",
@@ -33,12 +33,12 @@
             "mt5": {
               "connected": true,
               "session_mode": "attached",
-              "latency_ms": 0.487,
+              "latency_ms": 12.541,
               "terminal_build": 6061,
               "build_date": "24 Jul 2026",
               "server": "Weltrade-Real",
               "login_status": "connected",
-              "last_heartbeat_at": "2026-07-30T17:16:04.440937+00:00",
+              "last_heartbeat_at": "2026-07-30T17:15:24.256149+00:00",
               "version": "500.6061 (24 Jul 2026)",
               "bridge_available": true,
               "degraded": false,
@@ -76,42 +76,42 @@
           "login": 12260878,
           "terminal_path": "",
           "has_encrypted_password": true,
-          "updated_at": "2026-07-30T17:15:46.273482+00:00"
+          "updated_at": "2026-07-30T14:29:22.195130+00:00"
         },
         "continuous_enabled": true,
         "version": "ai-scalping-v7.1.0",
         "startup_tick": {
-          "as_of": "2026-07-30T17:16:07.416945+00:00",
+          "as_of": "2026-07-30T17:15:25.098479+00:00",
           "heartbeats": {
             "timeout_seconds": 30.0,
             "beats": {
               "gateway": {
                 "component": "gateway",
-                "at": "2026-07-30T17:16:07.416945+00:00",
+                "at": "2026-07-30T17:15:25.098479+00:00",
                 "latency_ms": 0.0,
                 "meta": {}
               },
               "oms": {
                 "component": "oms",
-                "at": "2026-07-30T17:16:07.416945+00:00",
+                "at": "2026-07-30T17:15:25.098479+00:00",
                 "latency_ms": 0.0,
                 "meta": {}
               },
               "execution": {
                 "component": "execution",
-                "at": "2026-07-30T17:16:07.416945+00:00",
+                "at": "2026-07-30T17:15:25.098479+00:00",
                 "latency_ms": 0.0,
                 "meta": {}
               },
               "decision": {
                 "component": "decision",
-                "at": "2026-07-30T17:16:07.416945+00:00",
+                "at": "2026-07-30T17:15:25.098479+00:00",
                 "latency_ms": 0.0,
                 "meta": {}
               },
               "pme": {
                 "component": "pme",
-                "at": "2026-07-30T17:16:07.416945+00:00",
+                "at": "2026-07-30T17:15:25.098479+00:00",
                 "latency_ms": 0.0,
                 "meta": {}
               }
@@ -119,11 +119,11 @@
           },
           "recovery": [
             {
-              "id": "775d3fa3-fab7-4d7a-8580-1400bade5dec",
+              "id": "bd6b48d0-f942-42e1-9ea1-5b7ba0689f3e",
               "action": "mt5_reconnect",
               "success": false,
               "detail": "no mt5_reconnect_fn configured",
-              "at": "2026-07-30T17:16:07.416959+00:00"
+              "at": "2026-07-30T17:15:25.098494+00:00"
             }
           ],
           "pause": {
@@ -151,11 +151,11 @@
       "evidence": {
         "heal_events": [
           {
-            "id": "7863bc7b-17f9-40fa-b590-ce442de83aa6",
+            "id": "bd2ef19e-8cad-492d-9b13-d7408b9261c1",
             "action": "mt5_reconnect",
             "success": true,
             "detail": "mt5 reconnect attempted",
-            "at": "2026-07-30T17:16:07.513285+00:00"
+            "at": "2026-07-30T17:15:25.201361+00:00"
           }
         ],
         "mt5_reconnect_called": true,
@@ -182,12 +182,12 @@
             "mt5": {
               "connected": true,
               "session_mode": "attached",
-              "latency_ms": 0.611,
+              "latency_ms": 0.566,
               "terminal_build": 6061,
               "build_date": "24 Jul 2026",
               "server": "Weltrade-Real",
               "login_status": "connected",
-              "last_heartbeat_at": "2026-07-30T17:16:04.440937+00:00",
+              "last_heartbeat_at": "2026-07-30T17:15:24.256149+00:00",
               "version": "500.6061 (24 Jul 2026)",
               "bridge_available": true,
               "degraded": false,
@@ -216,11 +216,11 @@
       "evidence": {
         "heal_events": [
           {
-            "id": "f4b1210a-7e63-4d71-966f-4a7bc80d669e",
+            "id": "51fee284-e7bf-458f-b59c-75385fa1e05d",
             "action": "gateway_reconnect",
             "success": true,
             "detail": "gateway reconnect attempted",
-            "at": "2026-07-30T17:16:07.979451+00:00"
+            "at": "2026-07-30T17:15:25.634728+00:00"
           }
         ],
         "gateway_reconnect_called": true,
@@ -246,12 +246,12 @@
             "mt5": {
               "connected": true,
               "session_mode": "attached",
-              "latency_ms": 0.547,
+              "latency_ms": 1.522,
               "terminal_build": 6061,
               "build_date": "24 Jul 2026",
               "server": "Weltrade-Real",
               "login_status": "connected",
-              "last_heartbeat_at": "2026-07-30T17:16:04.440937+00:00",
+              "last_heartbeat_at": "2026-07-30T17:15:24.256149+00:00",
               "version": "500.6061 (24 Jul 2026)",
               "bridge_available": true,
               "degraded": false,
@@ -401,7 +401,7 @@
       "status": "FAIL",
       "issues": [
         "soak duration 23.99h < required 24h (first=2026-07-27T18:35:38.2499607Z, last=2026-07-28T18:35:18.1603001Z, samples=908)",
-        "soak evidence STALE \u2014 last sample age 46.68h > 2.0h (last_ts=2026-07-28T18:35:18.1603001Z). Claimed longer soaks on operator hosts are not present in accessible git/workspace evidence."
+        "soak evidence STALE \u2014 last sample age 46.67h > 2.0h (last_ts=2026-07-28T18:35:18.1603001Z). Claimed longer soaks on operator hosts are not present in accessible git/workspace evidence."
       ],
       "evidence": {
         "required_hours": 24,
@@ -412,7 +412,7 @@
         "samples": 908,
         "first_ts": "2026-07-27T18:35:38.2499607Z",
         "last_ts": "2026-07-28T18:35:18.1603001Z",
-        "age_hours_since_last_sample": 46.681,
+        "age_hours_since_last_sample": 46.669,
         "gateway_ok_samples": 906,
         "gateway_bad_samples": 2,
         "mt5_connected_samples": 601,
@@ -444,13 +444,13 @@
       "status": "PASS",
       "issues": [],
       "evidence": {
-        "avg_scan_ms": 0.105,
-        "p95_scan_ms": 0.125,
-        "gateway_latency_ms": 458.94,
+        "avg_scan_ms": 0.103,
+        "p95_scan_ms": 0.109,
+        "gateway_latency_ms": 822.77,
         "gateway_reachable": true,
         "gateway_url": "https://gateway.quantforg.com/health",
         "psutil": "No module named 'psutil'",
-        "api_health_latency_ms": 246.96,
+        "api_health_latency_ms": 4701.16,
         "note": "Scan + gateway + API latency sampled; full execution latency needs live order path metrics"
       }
     },
@@ -459,7 +459,7 @@
       "status": "PASS",
       "issues": [],
       "evidence": {
-        "output_tail": "............................................                             [100%]\n44 passed in 0.74s\n"
+        "output_tail": "............................................                             [100%]\n44 passed in 1.65s\n"
       }
     }
   ],
