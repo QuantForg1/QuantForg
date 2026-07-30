@@ -36,10 +36,34 @@ EXPECTED_UNIVERSE = {
     "ETHUSD",
 }
 
+# Production Windows gateway is published via Cloudflare. Localhost is used only
+# when the verifier runs on the Windows host itself.
+DEFAULT_PUBLIC_GATEWAY = "https://gateway.quantforg.com"
+
+
+def _gateway_base_urls() -> list[str]:
+    """Ordered gateway bases: env override → localhost → public production host."""
+    urls: list[str] = []
+    for key in ("QUANTFORG_GATEWAY_URL", "MT5_GATEWAY_BASE_URL"):
+        raw = (os.environ.get(key) or "").strip().rstrip("/")
+        if raw and raw not in urls:
+            urls.append(raw)
+    for raw in ("http://127.0.0.1:8765", DEFAULT_PUBLIC_GATEWAY):
+        if raw not in urls:
+            urls.append(raw)
+    return urls
+
 
 def _http_json(url: str, timeout: float = 8.0) -> tuple[bool, Any]:
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                # Cloudflare blocks some default Python UA signatures (error 1010).
+                "User-Agent": "QuantForg-PAT/7.1",
+            },
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
             raw = resp.read().decode("utf-8", errors="replace")
             try:
@@ -48,6 +72,22 @@ def _http_json(url: str, timeout: float = 8.0) -> tuple[bool, Any]:
                 return True, {"raw": raw[:500], "status": getattr(resp, "status", None)}
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+
+
+def _gateway_health(timeout: float = 8.0) -> tuple[bool, Any, str | None]:
+    """Probe gateway /health across known bases; return first success."""
+    last_err: Any = None
+    last_url: str | None = None
+    for base in _gateway_base_urls():
+        url = f"{base}/health"
+        last_url = url
+        ok, body = _http_json(url, timeout=timeout)
+        if ok and isinstance(body, dict) and (
+            body.get("status") == "ok" or body.get("service") == "mt5-gateway"
+        ):
+            return True, body, url
+        last_err = body
+    return False, last_err, last_url
 
 
 def _port_open(host: str, port: int, timeout: float = 1.5) -> bool:
@@ -111,7 +151,7 @@ def check_test1_startup() -> dict[str, Any]:
     issues: list[str] = []
     evidence: dict[str, Any] = {}
 
-    gw_ok, gw = _http_json("http://127.0.0.1:8765/health")
+    gw_ok, gw, gw_url = _gateway_health()
     api_ok, api = _http_json(
         "https://quantforg-production.up.railway.app/api/v1/health", timeout=15
     )
@@ -119,8 +159,10 @@ def check_test1_startup() -> dict[str, Any]:
     fe = _port_open("127.0.0.1", 3000)
     evidence["gateway_local"] = {
         "ok": gw_ok,
+        "url": gw_url,
         "body": gw if gw_ok else None,
         "err": None if gw_ok else gw,
+        "candidates": _gateway_base_urls(),
     }
     evidence["api_prod"] = {
         "ok": api_ok,
@@ -214,8 +256,8 @@ def check_test2_mt5_reconnect() -> dict[str, Any]:
     except AttributeError:
         evidence["order_send_retry_forbidden"] = "no retry_order_send (safe)"
 
-    gw_ok, gw = _http_json("http://127.0.0.1:8765/health")
-    evidence["gateway"] = {"ok": gw_ok, "body": gw if gw_ok else gw}
+    gw_ok, gw, gw_url = _gateway_health()
+    evidence["gateway"] = {"ok": gw_ok, "url": gw_url, "body": gw if gw_ok else gw}
     issues.append(
         "automatic reconnect code path verified; physical MT5 disconnect/"
         "reconnect not executed"
@@ -251,8 +293,12 @@ def check_test3_gateway_failure() -> dict[str, Any]:
     if "gateway" not in hits:
         issues.append("gateway reconnect callback not invoked")
 
-    live_ok, live = _http_json("http://127.0.0.1:8765/health")
-    evidence["gateway_live"] = {"ok": live_ok, "body": live if live_ok else live}
+    live_ok, live, live_url = _gateway_health()
+    evidence["gateway_live"] = {
+        "ok": live_ok,
+        "url": live_url,
+        "body": live if live_ok else live,
+    }
     issues.append("gateway stop/start not executed by harness")
     structural = [i for i in issues if "not executed" not in i]
     status: Status = "FAIL" if structural else "BLOCKED"
@@ -491,28 +537,126 @@ def check_test8_session() -> dict[str, Any]:
 
 
 def check_test9_long_run() -> dict[str, Any]:
-    issues = [
-        "24-hour continuous live run not executed — requires operator soak "
-        "with witness/heartbeat evidence"
-    ]
-    evidence: dict[str, Any] = {"required_hours": 24, "executed_hours": 0}
-    witness = (
+    """Evaluate wall-clock soak evidence under docs/production/reports/oat_v71."""
+    issues: list[str] = []
+    evidence: dict[str, Any] = {
+        "required_hours": 24,
+        "executed_hours": 0,
+        "freshness_max_age_hours": 2.0,
+    }
+    soak_path = (
         ROOT
         / "docs"
         / "production"
         / "reports"
-        / "live_execution_witness_latest.json"
+        / "oat_v71"
+        / "soak_24h_metrics.jsonl"
     )
-    if witness.exists():
+    latest_path = (
+        ROOT
+        / "docs"
+        / "production"
+        / "reports"
+        / "oat_v71"
+        / "soak_24h_latest.json"
+    )
+    evidence["soak_metrics_path"] = str(soak_path)
+    evidence["soak_latest_path"] = str(latest_path)
+    if not soak_path.is_file():
+        issues.append("soak_24h_metrics.jsonl missing — no wall-clock soak evidence")
+        return {
+            "id": "TEST_9_LONG_RUN",
+            "status": "BLOCKED",
+            "issues": issues,
+            "evidence": evidence,
+        }
+
+    rows: list[dict[str, Any]] = []
+    for line in soak_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
         try:
-            evidence["witness_latest_keys"] = list(
-                json.loads(witness.read_text(encoding="utf-8")).keys()
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    if len(rows) < 2:
+        issues.append("soak metrics have fewer than 2 samples")
+        return {
+            "id": "TEST_9_LONG_RUN",
+            "status": "FAIL",
+            "issues": issues,
+            "evidence": evidence,
+        }
+
+    def _parse(ts: str) -> datetime:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+    first_ts = str(rows[0].get("ts") or "")
+    last_ts = str(rows[-1].get("ts") or "")
+    t0 = _parse(first_ts)
+    t1 = _parse(last_ts)
+    now = datetime.now(UTC)
+    duration_h = (t1 - t0).total_seconds() / 3600.0
+    age_h = (now - t1).total_seconds() / 3600.0
+    gateway_ok = sum(
+        1 for r in rows if (r.get("gateway") or {}).get("ok") is True
+    )
+    gateway_bad = sum(
+        1 for r in rows if (r.get("gateway") or {}).get("ok") is False
+    )
+    connected = sum(
+        1 for r in rows if (r.get("gateway") or {}).get("connected") is True
+    )
+    evidence.update(
+        {
+            "samples": len(rows),
+            "first_ts": first_ts,
+            "last_ts": last_ts,
+            "executed_hours": round(duration_h, 3),
+            "age_hours_since_last_sample": round(age_h, 3),
+            "gateway_ok_samples": gateway_ok,
+            "gateway_bad_samples": gateway_bad,
+            "mt5_connected_samples": connected,
+            "stale": age_h > float(evidence["freshness_max_age_hours"]),
+            "meets_24h": duration_h >= 24.0,
+        }
+    )
+    if latest_path.is_file():
+        try:
+            evidence["latest_snapshot"] = json.loads(
+                latest_path.read_text(encoding="utf-8")
             )
         except Exception as exc:  # noqa: BLE001
-            evidence["witness_error"] = str(exc)
+            evidence["latest_snapshot_error"] = str(exc)
+
+    if duration_h < 24.0:
+        issues.append(
+            f"soak duration {duration_h:.2f}h < required 24h "
+            f"(first={first_ts}, last={last_ts}, samples={len(rows)})"
+        )
+    if age_h > float(evidence["freshness_max_age_hours"]):
+        issues.append(
+            f"soak evidence STALE — last sample age {age_h:.2f}h "
+            f"> {evidence['freshness_max_age_hours']}h "
+            f"(last_ts={last_ts}). Claimed longer soaks on operator hosts "
+            "are not present in accessible git/workspace evidence."
+        )
+    if gateway_bad > max(3, len(rows) // 20):
+        issues.append(
+            f"excessive gateway failures during soak: {gateway_bad}/{len(rows)}"
+        )
+
+    if not issues:
+        status: Status = "PASS"
+    elif evidence["stale"] or duration_h < 24.0:
+        # Incomplete or stale wall-clock evidence is a hard fail for acceptance.
+        status = "FAIL"
+    else:
+        status = "FAIL"
     return {
         "id": "TEST_9_LONG_RUN",
-        "status": "BLOCKED",
+        "status": status,
         "issues": issues,
         "evidence": evidence,
     }
@@ -537,15 +681,18 @@ def check_test10_performance() -> dict[str, Any]:
     )
 
     latencies: list[float] = []
+    gw_url_used: str | None = None
     for _ in range(5):
         t0 = time.perf_counter()
-        ok, _ = _http_json("http://127.0.0.1:8765/health", timeout=5)
+        ok, _, url = _gateway_health(timeout=5)
         if ok:
             latencies.append((time.perf_counter() - t0) * 1000.0)
+            gw_url_used = url
     evidence["gateway_latency_ms"] = (
         round(statistics.mean(latencies), 2) if latencies else None
     )
     evidence["gateway_reachable"] = bool(latencies)
+    evidence["gateway_url"] = gw_url_used
 
     try:
         import psutil  # type: ignore
