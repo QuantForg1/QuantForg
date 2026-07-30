@@ -178,8 +178,6 @@ class RetryingOmsSubmitPort:
             if not decision.retryable:
                 return last
             self.retry_count += 1
-            # Distinct request_id suffix so OMS idempotency does not collapse retries
-            rid = str(kwargs.get("request_id") or "")
-            if rid and f":r{attempt}" not in rid:
-                kwargs = {**kwargs, "request_id": f"{rid}:r{attempt}"}
+            # Preserve request_id across retries so OMS/idempotency can collapse
+            # duplicate submits. Never mint a new id after an ambiguous reject.
             sleep_backoff(decision.backoff_ms)

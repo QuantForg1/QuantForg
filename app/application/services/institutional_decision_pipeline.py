@@ -371,6 +371,18 @@ class InstitutionalDecisionPipeline:
                 )
             elif stop_distance is not None and stop_distance > 0:
                 min_entry_distance = stop_distance
+            # Incomplete open-book facts must never allow add-ons (fail closed).
+            if (
+                account.open_positions > 0
+                and not account.open_directions
+                and not account.open_entries
+            ):
+                risk_allowed = False
+                risk_reasons.append(
+                    "open_book_facts_incomplete — blocking add-on"
+                )
+                approved_lots = Decimal("0")
+
             add = may_add_scalping_trade(
                 open_positions=account.open_positions,
                 max_open=cfg.max_open_trades,

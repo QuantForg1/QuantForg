@@ -344,6 +344,7 @@ async def build_ite_cycle_market_context(
     # Book facts for duplicate / add-on guards (all symbols on MT5)
     open_directions: list[str] = []
     open_entries: list[Decimal] = []
+    book_facts_ok = False
     try:
         rows = mt5_adapter.list_positions()
         for p in rows or []:
@@ -358,21 +359,31 @@ async def build_ite_cycle_market_context(
                 open_entries.append(entry_px)
         diag["open_directions"] = list(open_directions)
         diag["open_entries"] = [str(e) for e in open_entries]
+        book_facts_ok = True
+        # Open book reported but no parseable sides/entries → treat as incomplete
+        if open_positions > 0 and not open_directions and not open_entries:
+            book_facts_ok = False
+            diag["book_facts_incomplete"] = True
     except Exception as exc:
         logger.warning("ite_cycle_position_book_facts_failed", error=str(exc))
         diag["open_directions"] = f"ERROR: {exc}"
+        diag["book_facts_incomplete"] = True
+        book_facts_ok = False
 
     # Authoritative peak HWM + daily PnL from MT5 deals (not floating profit alone)
     peak_equity = equity
     daily_pnl = Decimal("0")
+    daily_pnl_trusted = False
     try:
         from app.application.services.live_account_risk_tracker import (
             get_live_account_risk_tracker,
         )
+        from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 
         login = int(diag.get("login") or 0)
         balance = Decimal(str(diag.get("balance") or 0))
-        deals: list[Any] = []
+        deals: list[Any] | None = None
+        deals_fetch_ok = False
         try:
             day_start = datetime.now(UTC).replace(
                 hour=0, minute=0, second=0, microsecond=0
@@ -385,6 +396,7 @@ async def build_ite_cycle_market_context(
                         date_to=datetime.now(UTC) + timedelta(days=1),
                     )
                 )
+                deals_fetch_ok = True
             else:
                 client = _client_of(mt5_adapter)
                 hist_c = getattr(client, "history_deals", None)
@@ -395,20 +407,50 @@ async def build_ite_cycle_market_context(
                             date_to=datetime.now(UTC) + timedelta(days=1),
                         )
                     )
+                    deals_fetch_ok = True
+                else:
+                    diag["history_deals"] = "UNAVAILABLE"
         except Exception as exc:
             logger.warning("ite_cycle_history_deals_failed", error=str(exc))
-            deals = []
-        peak_equity, daily_pnl = get_live_account_risk_tracker().resolve_for_risk(
-            login=login,
-            equity=equity,
-            balance=balance,
-            deals=deals,
-        )
+            diag["history_deals"] = f"ERROR: {exc}"
+            deals = None
+            deals_fetch_ok = False
+
+        tracker = get_live_account_risk_tracker()
+        if deals_fetch_ok and deals is not None:
+            peak_equity, daily_pnl = tracker.resolve_for_risk(
+                login=login,
+                equity=equity,
+                balance=balance,
+                deals=deals,
+            )
+            daily_pnl_trusted = True
+        else:
+            # Still refresh HWM from live equity; never invent flat daily PnL.
+            peak_equity = tracker.observe_equity(login=login, equity=equity)
+            if balance > peak_equity:
+                peak_equity = tracker.observe_equity(login=login, equity=balance)
+            max_dd = Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct))
+            # Fail closed: trip daily-loss gate until deals can be read.
+            daily_pnl = -(equity * max_dd / Decimal("100"))
+            diag["daily_pnl_fail_closed"] = True
+            logger.warning(
+                "ite_cycle_daily_pnl_fail_closed",
+                reason="history_deals_unavailable",
+                daily_pnl=str(daily_pnl),
+            )
         diag["peak_equity"] = str(peak_equity)
         diag["daily_pnl"] = str(daily_pnl)
+        diag["daily_pnl_trusted"] = daily_pnl_trusted
     except Exception as exc:
         logger.warning("ite_cycle_live_risk_resolve_failed", error=str(exc))
         diag["live_risk_resolve"] = f"ERROR: {exc}"
+        diag["daily_pnl_fail_closed"] = True
+        from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+
+        max_dd = Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct))
+        daily_pnl = -(equity * max_dd / Decimal("100"))
+        daily_pnl_trusted = False
 
     try:
         client = _client_of(mt5_adapter)
@@ -439,15 +481,20 @@ async def build_ite_cycle_market_context(
         atr = None
     atr_dec = Decimal(str(atr)) if atr is not None else None
 
+    open_n = open_positions if isinstance(open_positions, int) else 0
+    # Incomplete book with opens: clear sides so pipeline fail-closes add-ons
+    if open_n > 0 and not book_facts_ok:
+        open_directions = []
+        open_entries = []
+        diag["book_facts_incomplete"] = True
+
     account = AccountRiskState(
         equity=equity,
         peak_equity=peak_equity if peak_equity > 0 else equity,
         daily_pnl=daily_pnl,
         weekly_pnl=Decimal("0"),
-        open_positions=open_positions if isinstance(open_positions, int) else 0,
-        already_in_trade=(
-            open_positions > 0 if isinstance(open_positions, int) else False
-        ),
+        open_positions=open_n,
+        already_in_trade=open_n > 0,
         consecutive_losses=0,
         cooldown_active=False,
         cooldown_remaining_minutes=0,
@@ -494,7 +541,8 @@ async def build_ite_cycle_market_context(
         account_trading_enabled=account_trading_enabled,
         mt5_autotrading_enabled=False,
         symbol_tradable=market_data_live,
-        no_broker_restrictions=True,
+        # Known account + trading enabled ⇒ no restriction evidence; else fail closed
+        no_broker_restrictions=bool(account_trading_enabled),
         spread=spread,
         latency_ms=(time.perf_counter() - t0) * 1000.0,
         bars_loaded=bars_loaded,

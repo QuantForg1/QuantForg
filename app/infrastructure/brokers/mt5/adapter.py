@@ -147,8 +147,19 @@ class MT5Adapter:
         )
         login = int(getattr(self._client, "_login", 0) or 0)
         server = str(getattr(self._client, "_server", "") or "")
+        # Never persist synthetic login=1 — reconnect refuses it.
+        if login <= 1:
+            try:
+                info = self._client.account_info()
+                real_login = int(getattr(info, "login", 0) or 0)
+                if real_login > 1:
+                    login = real_login
+                if not server:
+                    server = str(getattr(info, "server", "") or "")
+            except Exception:
+                login = 0
         self._sessions[session_ref] = MT5LoginRequest(
-            login=login or 1,
+            login=login if login > 1 else 0,
             password="",
             server=server or "attached",
             path=path,

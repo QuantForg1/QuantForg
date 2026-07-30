@@ -61,7 +61,10 @@ def test_lifecycle_records_timestamped_events(tmp_path) -> None:
 @pytest.mark.unit
 def test_retry_classifies_transient_vs_permanent() -> None:
     assert is_transient_reject(retcode=10004, message="Requote") is True
-    assert is_transient_reject(retcode=10012, message="timeout") is True
+    assert is_transient_reject(retcode=10020, message="price changed") is True
+    # Ambiguous fill outcomes must NOT be auto-retried
+    assert is_transient_reject(retcode=10012, message="timeout") is False
+    assert is_transient_reject(retcode=10031, message="connection") is False
     assert is_permanent_reject(retcode=10014, message="invalid volume") is True
     assert is_permanent_reject(retcode=10016, message="invalid stops") is True
     assert is_permanent_reject(retcode=10019, message="no money") is True
@@ -72,6 +75,9 @@ def test_retry_classifies_transient_vs_permanent() -> None:
     assert d.retryable is True
     assert d.backoff_ms > 0
 
+    d_timeout = decide_retry(attempt=1, retcode=10012, message="timeout")
+    assert d_timeout.retryable is False
+
     d2 = decide_retry(attempt=1, retcode=10016, message="invalid stops")
     assert d2.retryable is False
 
@@ -79,10 +85,12 @@ def test_retry_classifies_transient_vs_permanent() -> None:
 @pytest.mark.unit
 def test_retrying_oms_port_retries_transient_only() -> None:
     calls = {"n": 0}
+    ids: list[str] = []
 
     class Inner:
         def submit_market(self, **kwargs):
             calls["n"] += 1
+            ids.append(str(kwargs.get("request_id")))
             if calls["n"] < 3:
                 return SimpleNamespace(
                     outcome="rejected",
@@ -107,6 +115,28 @@ def test_retrying_oms_port_retries_transient_only() -> None:
     assert result.outcome == "success"
     assert calls["n"] == 3
     assert port.retry_count == 2
+    assert ids == ["req1", "req1", "req1"]
+
+
+@pytest.mark.unit
+def test_retrying_oms_preserves_request_id_and_skips_timeout() -> None:
+    calls: list[str] = []
+
+    class Inner:
+        def submit_market(self, **kwargs):
+            calls.append(str(kwargs.get("request_id")))
+            return SimpleNamespace(
+                outcome="rejected",
+                retcode=10012,
+                message="Request timeout",
+            )
+
+    cfg = ProductionHardeningConfig(retry_base_backoff_ms=1, retry_max_backoff_ms=2)
+    port = RetryingOmsSubmitPort(Inner(), config=cfg)
+    result = port.submit_market(request_id="auto_abc")
+    assert result.retcode == 10012
+    assert calls == ["auto_abc"]
+    assert port.retry_count == 0
 
 
 @pytest.mark.unit
