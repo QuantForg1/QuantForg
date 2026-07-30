@@ -25,12 +25,12 @@ Evidence under `docs/production/reports/oat_v71/`.
 
 ## Software fixes
 
-1. Gateway reconnect-loop fix: **NOT LANDED** in git (docs previously over-claimed). Defect still in `services/mt5_gateway/runtime.py`.
+1. Gateway reconnect-loop fix: **LANDED in git** (`runtime.py`, gateway **1.1.1**). Windows deploy + post-fix soak via `deploy_reconnect_fix_and_start_soak.ps1`. PAT/OAT remain **NOT ACCEPTED**.
 2. Remember Me soft fix: still requires operator PC-restart evidence (`step4_remember_me_*.json`).
 
 ## Remaining blockers (must clear for acceptance)
 
-1. Land + deploy gateway reconnect-loop fix, then run **post-fix** ≥24h soak with disconnect self-heal verified
+1. Deploy gateway 1.1.1 on Windows and complete **post-fix** ≥24h soak with disconnect self-heal verified
 2. Operator completes Remember Me checklist after **PC restart** with evidence files
 3. Re-declare PAT + OAT **ACCEPTED** only when steps above PASS
 

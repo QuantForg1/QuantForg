@@ -812,20 +812,74 @@ class MT5GatewayRuntime:
             self.diagnostics.reconnect_events = self.diagnostics.reconnect_events[-20:]
 
     def _heartbeat_loop(self) -> None:
+        """Heartbeat + reconnect loop.
+
+        Safety preserved:
+        - No reconnect without in-memory credentials (intentional disconnect clears them)
+        - Honors ``mt5_reconnect_enabled``
+        - Bounded attempt bursts via ``mt5_reconnect_max_attempts``
+        - Backoff between attempts; cool-down before the next burst
+        - Never holds ``_lock`` across MT5 API calls
+
+        Fix: do **not** permanently abandon reconnect when ``connected=False``.
+        While credentials remain, keep attempting recovery without process restart.
+        """
         interval = self.settings.mt5_heartbeat_interval_seconds
+        cooldown_until = 0.0
         while not self._stop.wait(interval):
             with self._lock:
-                should_beat = self.diagnostics.connected and self._creds is not None
-            if not should_beat:
+                has_creds = self._creds is not None
+                connected = self.diagnostics.connected
+            if not has_creds:
+                # No retained session — do not invent reconnects.
                 continue
-            try:
-                # Do not hold _lock across MT5 API — hangs would freeze connect/attach.
-                self.heartbeat()
-            except Exception:
-                backoff = self.settings.mt5_reconnect_backoff_seconds
-                with self._lock:
-                    self._try_reconnect()
-                time.sleep(backoff)
+
+            if connected:
+                try:
+                    # Do not hold _lock across MT5 API — hangs would freeze connect/attach.
+                    self.heartbeat()
+                    continue
+                except Exception:
+                    with self._lock:
+                        self.diagnostics.connected = False
+                    backoff = self.settings.mt5_reconnect_backoff_seconds
+                    with self._lock:
+                        self._try_reconnect()
+                    time.sleep(backoff)
+                    continue
+
+            # Disconnected but credentials retained — keep trying (no abandon).
+            if not self.settings.mt5_reconnect_enabled:
+                continue
+            now = time.monotonic()
+            if now < cooldown_until:
+                continue
+
+            with self._lock:
+                if (
+                    self.diagnostics.reconnect_attempts
+                    >= self.settings.mt5_reconnect_max_attempts
+                ):
+                    # New burst after cool-down — do not permanently stop.
+                    self.diagnostics.reconnect_attempts = 0
+                recovered = self._try_reconnect()
+
+            if recovered:
+                cooldown_until = 0.0
+                continue
+
+            backoff = self.settings.mt5_reconnect_backoff_seconds
+            with self._lock:
+                exhausted = (
+                    self.diagnostics.reconnect_attempts
+                    >= self.settings.mt5_reconnect_max_attempts
+                )
+            if exhausted:
+                cooldown_until = time.monotonic() + max(
+                    backoff * max(1, self.settings.mt5_reconnect_max_attempts),
+                    interval * 2.0,
+                )
+            time.sleep(backoff)
 
     def _ensure_symbol(self, symbol: str) -> None:
         if not self.bridge.symbol_select(symbol, True):

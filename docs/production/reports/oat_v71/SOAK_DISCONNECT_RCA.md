@@ -43,22 +43,29 @@ Classification:
 | Railway FE/API | Intermittent sample timeouts; not the MT5 disconnect cause |
 | QuantForg trading strategy / OMS | Not implicated |
 
-## Fix status (corrected 2026-07-30)
+## Fix status (updated 2026-07-30)
 
-**Proposed** (not landed in git / not deployed):
+**Landed in git** on `cursor/v7-1-production-stabilization-bc83`:
 
-`services/mt5_gateway/runtime.py` `_heartbeat_loop` should:
+`services/mt5_gateway/runtime.py` `_heartbeat_loop` now:
 
-- While credentials remain, keep attempting reconnect even when `connected=False`
-- After max-attempt bursts, cool down then start a new burst (do not permanently abandon)
+- While credentials remain, keeps attempting reconnect even when `connected=False`
+- After max-attempt bursts, cools down then starts a new burst (does not permanently abandon)
+- Intentional `disconnect()` still clears credentials and stops reconnect
 
-As of `2026-07-30T12:45Z`, `main` / acceptance-evidence / stabilization still contain the abandoned-reconnect `should_beat = connected and creds` gate (blame: `f66173c`, 2026-07-20). Claimed unit test `test_attached_session_recovers_after_connected_flag_drop` is absent.
+Unit coverage: `TestMT5GatewayReconnectLoop` in `tests/unit/test_mt5_gateway.py`
+
+Gateway package version bumped to **1.1.1** (`gateway_version` on `/health`) for deploy confirmation.
+
+**Windows deploy + post-fix soak:** run
+`docs/production/reports/oat_v71/deploy_reconnect_fix_and_start_soak.ps1`
+on the production host (elevated). PAT/OAT remain **NOT ACCEPTED** until that soak completes.
 
 See `SOAK_POST_FIX_CLASSIFICATION.md`.
 
 ## Soak acceptance status
 
-**Not yet accepted for release.** Synced soak (`2026-07-27`→`2026-07-28`) is **pre-fix evidence** and includes a multi-hour unmanaged disconnect window. After the gateway fix is actually committed **and** deployed, run a fresh ≥24h soak with:
+**Not yet accepted for release.** Prior synced soak (`2026-07-27`→`2026-07-28`) is **pre-fix evidence**. After Windows deploy of 1.1.1, run a fresh ≥24h soak with:
 
 - disconnect samples near zero (or brief blips that self-heal within minutes)
 - single gateway worker
