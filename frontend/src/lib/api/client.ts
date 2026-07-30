@@ -3,6 +3,7 @@ import {
   clearSession,
   getAccessToken,
   getRefreshToken,
+  isRememberMeEnabled,
   saveSession,
   type AuthSession,
 } from "@/lib/auth/session";
@@ -85,7 +86,8 @@ async function refreshAccessToken(): Promise<string | null> {
       return null;
     }
     const session = (await res.json()) as AuthSession;
-    saveSession(session);
+    // Preserve Remember Me storage preference across refresh (do not force localStorage).
+    saveSession(session, { remember: isRememberMeEnabled() });
     markApiReachable();
     return session.access_token;
   } catch {
