@@ -1,0 +1,230 @@
+{
+  "generated_at": "2026-07-30T22:53:59.511749Z",
+  "api_base": "https://quantforg-production.up.railway.app",
+  "preview_url": "https://quant-forg-c01exaxfj-quantforg.vercel.app",
+  "verdict": "NOC OPSAT NOT ACCEPTED",
+  "counts": {
+    "PASS": 16,
+    "FAIL": 0,
+    "BLOCKED": 2,
+    "PARTIAL": 0
+  },
+  "checks": [
+    {
+      "check": "1_global_health_cards",
+      "status": "PASS",
+      "detail": "cards=['AI Engine', 'AutoTrading', 'Broker', 'Execution Enabled', 'Gateway', 'MT5', 'OMS', 'Railway']",
+      "evidence": {
+        "missing": []
+      }
+    },
+    {
+      "check": "1_railway_status",
+      "status": "PASS",
+      "detail": "railway=warning detail=API process alive (NOC probe)",
+      "evidence": {
+        "key": "Railway",
+        "label": "Railway",
+        "status": "warning",
+        "last_heartbeat": "2026-07-30T22:53:53.132385Z",
+        "latency_ms": null,
+        "detail": "API process alive (NOC probe)"
+      }
+    },
+    {
+      "check": "2_pipeline_stages",
+      "status": "PASS",
+      "detail": "node_count=13 ai_fail=True",
+      "evidence": {
+        "Scheduler": "PASS",
+        "Market Data": "PASS",
+        "Context": "PASS",
+        "AI": "FAIL",
+        "Risk": "WAITING",
+        "Eligibility": "WAITING",
+        "Execution Bridge": "WAITING",
+        "OMS": "WAITING",
+        "Gateway": "WAITING",
+        "MT5": "WAITING",
+        "Broker": "WAITING",
+        "Position Open": "WAITING",
+        "Position Close": "WAITING"
+      }
+    },
+    {
+      "check": "3_ai_panel",
+      "status": "PASS",
+      "detail": "symbol=XAUUSD decision=NO_TRADE quality=62",
+      "evidence": {
+        "reasons": [
+          "Quality below threshold",
+          "Session filter: off-hours"
+        ],
+        "session": "london"
+      }
+    },
+    {
+      "check": "4_open_positions_contract",
+      "status": "PASS",
+      "detail": "count=0 (empty allowed when PME absent)",
+      "evidence": null
+    },
+    {
+      "check": "5_closed_trades_contract",
+      "status": "PASS",
+      "detail": "count=0 (never fabricated)",
+      "evidence": null
+    },
+    {
+      "check": "6_event_stream",
+      "status": "PASS",
+      "detail": "events=20 ordered=True dup_ratio=0.00",
+      "evidence": null
+    },
+    {
+      "check": "7_alerts",
+      "status": "PASS",
+      "detail": "alert_count=6",
+      "evidence": [
+        {
+          "id": "noc-current-blocker",
+          "severity": "warning",
+          "kind": "execution_blocker",
+          "message": "AI: Quality below threshold",
+          "created_at": "2026-07-30T22:53:53.131397Z",
+          "acknowledged": false
+        },
+        {
+          "id": "noc-safety-20989",
+          "severity": "warning",
+          "kind": "safety",
+          "message": "Operator Auto Trading is OFF",
+          "created_at": "2026-07-30T22:53:53.131407Z",
+          "acknowledged": false
+        },
+        {
+          "id": "noc-safety-56864",
+          "severity": "warning",
+          "kind": "safety",
+          "message": "Auto Trading is OFF \u2014 no automatic trades",
+          "created_at": "2026-07-30T22:53:53.131411Z",
+          "acknowledged": false
+        },
+        {
+          "id": "noc-safety-50518",
+          "severity": "warning",
+          "kind": "safety",
+          "message": "EXECUTION_ENABLED=false \u2014 OMS not permitted",
+          "created_at": "2026-07-30T22:53:53.131412Z",
+          "acknowledged": false
+        },
+        {
+          "id": "noc-safety-61870",
+          "severity": "warning",
+          "kind": "safety",
+          "message": "MT5 Gateway not connected",
+          "created_at": "2026-07-30T22:53:53.131414Z",
+          "acknowledged": false
+        }
+      ]
+    },
+    {
+      "check": "8_validation_history",
+      "status": "PASS",
+      "detail": "validation_id=val_2783a25825db4649 in_history=True",
+      "evidence": {
+        "history_count": 1
+      }
+    },
+    {
+      "check": "9_copilot_grounded",
+      "status": "PASS",
+      "detail": "grounded answers cite telemetry; missing values called out",
+      "evidence": {
+        "answer_excerpt": "NO_TRADE / block reasons from live telemetry:\n- Quality below threshold\n- Session filter: off-hours\nPipeline first blocker: AI: Quality below threshold",
+        "missing_evidence": [
+          "gateway_ping_ms=unavailable",
+          "oms_avg_latency_ms=unavailable"
+        ]
+      }
+    },
+    {
+      "check": "10_snapshot_stability",
+      "status": "PASS",
+      "detail": "flags stable across consecutive builds",
+      "evidence": null
+    },
+    {
+      "check": "11_security_redaction",
+      "status": "PASS",
+      "detail": "payload_secret_pattern=False redact_ok=True",
+      "evidence": null
+    },
+    {
+      "check": "prod_health_live",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": {
+        "status": "ok"
+      }
+    },
+    {
+      "check": "prod_health_status",
+      "status": "PASS",
+      "detail": "env=production version=1.0.0",
+      "evidence": [
+        {
+          "name": "postgres",
+          "status": "healthy",
+          "latency_ms": 192.55
+        },
+        {
+          "name": "redis",
+          "status": "disabled",
+          "latency_ms": 0.04
+        }
+      ]
+    },
+    {
+      "check": "prod_noc_endpoint_deployed",
+      "status": "BLOCKED",
+      "detail": "NOC API not on production main yet (HTTP 404). PR #42 not merged/deployed.",
+      "evidence": {
+        "error": {
+          "code": "http_error",
+          "message": "Not Found",
+          "details": {}
+        },
+        "request_id": "req_bf6cb2583e7e4e3ea7ea27bbb45c07ba"
+      }
+    },
+    {
+      "check": "prod_authenticated_telemetry",
+      "status": "BLOCKED",
+      "detail": "No QUANTFORG_OWNER_TOKEN / E2E_OWNER_TOKEN in environment \u2014 cannot verify AI/positions/OMS against live production ops APIs (401 without bearer).",
+      "evidence": {
+        "pvm_http": 401,
+        "auto_http": 401
+      }
+    },
+    {
+      "check": "11_unauthorized_access",
+      "status": "PASS",
+      "detail": "Unauthenticated NOC access denied/unavailable (HTTP 404)",
+      "evidence": null
+    },
+    {
+      "check": "preview_noc_route",
+      "status": "PASS",
+      "detail": "Vercel preview /admin/noc HTTP 401 (auth redirect expected)",
+      "evidence": {
+        "preview": "https://quant-forg-c01exaxfj-quantforg.vercel.app"
+      }
+    }
+  ],
+  "notes": [
+    "Observe-only OpsAT \u2014 no trading mutations.",
+    "Authenticated live widget parity requires OWNER token + deployed NOC API.",
+    "Local aggregator checks prove pipeline/AI/copilot/security fidelity."
+  ]
+}
