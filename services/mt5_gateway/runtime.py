@@ -777,8 +777,9 @@ class MT5GatewayRuntime:
             }
 
         # Metadata must never flip a healthy session to disconnected.
-        # Also never hang health on secondary probes.
-        meta_timeout = min(timeout, 0.2)
+        # Also never hang health on secondary probes. 200ms was too tight under
+        # load and could omit AutoTrading → API fail-closed falsely.
+        meta_timeout = min(max(timeout, 0.5), 1.0)
         try:
             term = call_mt5_bounded(
                 self.bridge.terminal_info,
@@ -975,8 +976,8 @@ class MT5GatewayRuntime:
                     with self._lock:
                         self.diagnostics.connected = False
                     backoff = self.settings.mt5_reconnect_backoff_seconds
-                    with self._lock:
-                        self._try_reconnect()
+                    # Never hold _lock across initialize/login (MT5 can stall).
+                    self._try_reconnect()
                     time.sleep(backoff)
                     continue
 
@@ -994,7 +995,8 @@ class MT5GatewayRuntime:
                 ):
                     # New burst after cool-down — do not permanently stop.
                     self.diagnostics.reconnect_attempts = 0
-                recovered = self._try_reconnect()
+            # Do not hold _lock across MT5 API — hangs would freeze connect/attach.
+            recovered = self._try_reconnect()
 
             if recovered:
                 cooldown_until = 0.0
@@ -1405,7 +1407,14 @@ class MT5GatewayRuntime:
                 filling_name(int(request.get("type_filling") or -1)),
             )
 
-        result = self.bridge.order_send(request)
+        result = call_mt5_bounded(
+            lambda: self.bridge.order_send(request),
+            # Trades need more headroom than heartbeat (default API timeout is 2s).
+            timeout_seconds=max(
+                float(self.settings.mt5_api_call_timeout_seconds), 15.0
+            ),
+            label="order_send",
+        )
         payload = serialize_send_result(result, request)
         payload["component"] = "mt5_order_send"
         try:
@@ -1463,7 +1472,13 @@ class MT5GatewayRuntime:
         if ticket <= 0:
             raise RuntimeError("ticket must be > 0")
         request = {"action": TRADE_ACTION_REMOVE, "order": int(ticket)}
-        result = self.bridge.order_send(request)
+        result = call_mt5_bounded(
+            lambda: self.bridge.order_send(request),
+            timeout_seconds=max(
+                float(self.settings.mt5_api_call_timeout_seconds), 15.0
+            ),
+            label="order_cancel",
+        )
         payload = serialize_send_result(result, request)
         if result is None:
             err = self.bridge.last_error()

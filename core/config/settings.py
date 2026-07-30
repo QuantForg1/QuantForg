@@ -636,10 +636,12 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "gold_only_mode", True)
                 object.__setattr__(self, "multi_symbol_enabled", False)
                 object.__setattr__(self, "default_trading_symbol", "XAUUSD")
-            # Live trading requires an explicit flag AND a configured gateway.
-            # Do not silently invent fills via MockMT5Client in production.
+            # Live trading requires an explicit flag AND a configured live gateway
+            # (URL + caller token). Without a token DI uses MockMT5Client and
+            # cannot place real orders — keep settings.execution_enabled aligned.
             has_gateway = bool((self.mt5_gateway_base_url or "").strip())
-            if self.execution_enabled and not has_gateway:
+            has_caller_token = bool((self.mt5_gateway_caller_token or "").strip())
+            if self.execution_enabled and not (has_gateway and has_caller_token):
                 object.__setattr__(self, "execution_enabled", False)
             insecure_markers = ("change-me", "dev_password", "secret-key-at-least")
             secret = self.secret_key.get_secret_value()

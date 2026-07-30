@@ -60,6 +60,32 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _cycle_flag_prefer_context(
+    *,
+    ctx_value: bool,
+    enrich: dict[str, Any],
+    key: str,
+) -> bool:
+    """Prefer fresher market-context flags over earlier enrich probes.
+
+    Enrich runs before ``build_ite_cycle_market_context``. An explicit stale
+    ``False`` in enrich must not override a live ``True`` from context.
+    """
+    ctx_bool = bool(ctx_value)
+    if key not in enrich or enrich.get(key) is None:
+        return ctx_bool
+    enrich_bool = bool(enrich.get(key))
+    if enrich_bool != ctx_bool:
+        logger.warning(
+            "cycle_flag_enrich_ctx_mismatch",
+            key=key,
+            enrich=enrich_bool,
+            context=ctx_bool,
+            using="context",
+        )
+    return ctx_bool
+
+
 @dataclass
 class ShadowCycleResult:
     ok: bool
@@ -352,11 +378,43 @@ class InstitutionalIteRuntime:
             raw_probes = health.get("live_probes") or {}
             if isinstance(raw_probes, dict):
                 live_probes = raw_probes
-        gw = bool(live_probes.get("gateway", gateway_connected))
-        mt5 = bool(live_probes.get("mt5", broker_connected))
+        # After a successful market-context build, callers pass gateway/broker=True.
+        # Do not let a flaky live_probes False wipe that proven connectivity
+        # (would SAFETY_BLOCK while bars/account already loaded).
+        probe_gw = live_probes.get("gateway")
+        probe_mt5 = live_probes.get("mt5")
+        gw = bool(gateway_connected) or (
+            bool(probe_gw) if probe_gw is not None else False
+        )
+        mt5 = bool(broker_connected) or (
+            bool(probe_mt5) if probe_mt5 is not None else False
+        )
+        if gateway_connected and probe_gw is False:
+            logger.warning(
+                "live_probe_gateway_false_ignored",
+                kwargs_gateway=gateway_connected,
+                probe_gateway=probe_gw,
+            )
+        if broker_connected and probe_mt5 is False:
+            logger.warning(
+                "live_probe_mt5_false_ignored",
+                kwargs_broker=broker_connected,
+                probe_mt5=probe_mt5,
+            )
 
         settings = get_settings()
         execution_on = bool(getattr(settings, "execution_enabled", False))
+        adapter_exec = bool(getattr(self.mt5_adapter, "execution_enabled", False))
+        if execution_on and not adapter_exec:
+            logger.warning(
+                "execution_enabled_settings_adapter_mismatch",
+                settings_execution_enabled=execution_on,
+                adapter_execution_enabled=adapter_exec,
+                hint=(
+                    "settings True but MT5Adapter live-send False — usually "
+                    "missing MT5_GATEWAY_CALLER_TOKEN (MockMT5Client path)"
+                ),
+            )
 
         if snapshot is None or account is None:
             safety = self.plane.evaluate_auto_trading(
@@ -554,6 +612,21 @@ class InstitutionalIteRuntime:
                 with self._lock:
                     self._last_cycle = result
                     self._cycles += 1
+                logger.warning(
+                    "execution_path_step",
+                    step="Safety",
+                    result="FAIL",
+                    abort_reason="SAFETY_BLOCKED",
+                    primary_blocker=(
+                        safety.failed_reasons[0] if safety.failed_reasons else None
+                    ),
+                    reasons=list(result.safety_failed_reasons),
+                    gateway=gw,
+                    broker=mt5,
+                    execution_enabled=execution_on,
+                    mt5_autotrading_enabled=mt5_autotrading_enabled,
+                    forwarded_to_oms=False,
+                )
                 logger.info(
                     "ite_cycle_outcome",
                     outcome=result.cycle_outcome,
@@ -2360,30 +2433,30 @@ class InstitutionalIteRuntime:
                 )
                 return payload
 
-            mt5_at = (
-                bool(enrich["mt5_autotrading_enabled"])
-                if enrich.get("mt5_autotrading_enabled") is not None
-                else bool(ctx.mt5_autotrading_enabled)
+            mt5_at = _cycle_flag_prefer_context(
+                ctx_value=bool(ctx.mt5_autotrading_enabled),
+                enrich=enrich,
+                key="mt5_autotrading_enabled",
             )
-            acct_ok = (
-                bool(enrich["account_trading_enabled"])
-                if enrich.get("account_trading_enabled") is not None
-                else ctx.account_trading_enabled
+            acct_ok = _cycle_flag_prefer_context(
+                ctx_value=bool(ctx.account_trading_enabled),
+                enrich=enrich,
+                key="account_trading_enabled",
             )
-            sym_ok = (
-                bool(enrich["symbol_tradable"])
-                if enrich.get("symbol_tradable") is not None
-                else ctx.symbol_tradable
+            sym_ok = _cycle_flag_prefer_context(
+                ctx_value=bool(ctx.symbol_tradable),
+                enrich=enrich,
+                key="symbol_tradable",
             )
-            mkt_ok = (
-                bool(enrich["market_data_live"])
-                if enrich.get("market_data_live") is not None
-                else ctx.market_data_live
+            mkt_ok = _cycle_flag_prefer_context(
+                ctx_value=bool(ctx.market_data_live),
+                enrich=enrich,
+                key="market_data_live",
             )
-            no_restr = (
-                bool(enrich["no_broker_restrictions"])
-                if enrich.get("no_broker_restrictions") is not None
-                else bool(ctx.no_broker_restrictions)
+            no_restr = _cycle_flag_prefer_context(
+                ctx_value=bool(ctx.no_broker_restrictions),
+                enrich=enrich,
+                key="no_broker_restrictions",
             )
             if self.plane.mode is OpsExecutionMode.SHADOW:
                 cycle = self.run_shadow_cycle(
@@ -2617,30 +2690,30 @@ class InstitutionalIteRuntime:
                         mode=self.plane.mode.value,
                     )
                 else:
-                    mt5_at = (
-                        bool(enrich["mt5_autotrading_enabled"])
-                        if enrich.get("mt5_autotrading_enabled") is not None
-                        else bool(ctx.mt5_autotrading_enabled)
+                    mt5_at = _cycle_flag_prefer_context(
+                        ctx_value=bool(ctx.mt5_autotrading_enabled),
+                        enrich=enrich,
+                        key="mt5_autotrading_enabled",
                     )
-                    acct_ok = (
-                        bool(enrich["account_trading_enabled"])
-                        if enrich.get("account_trading_enabled") is not None
-                        else ctx.account_trading_enabled
+                    acct_ok = _cycle_flag_prefer_context(
+                        ctx_value=bool(ctx.account_trading_enabled),
+                        enrich=enrich,
+                        key="account_trading_enabled",
                     )
-                    sym_ok = (
-                        bool(enrich["symbol_tradable"])
-                        if enrich.get("symbol_tradable") is not None
-                        else ctx.symbol_tradable
+                    sym_ok = _cycle_flag_prefer_context(
+                        ctx_value=bool(ctx.symbol_tradable),
+                        enrich=enrich,
+                        key="symbol_tradable",
                     )
-                    mkt_ok = (
-                        bool(enrich["market_data_live"])
-                        if enrich.get("market_data_live") is not None
-                        else ctx.market_data_live
+                    mkt_ok = _cycle_flag_prefer_context(
+                        ctx_value=bool(ctx.market_data_live),
+                        enrich=enrich,
+                        key="market_data_live",
                     )
-                    no_restr = (
-                        bool(enrich["no_broker_restrictions"])
-                        if enrich.get("no_broker_restrictions") is not None
-                        else bool(ctx.no_broker_restrictions)
+                    no_restr = _cycle_flag_prefer_context(
+                        ctx_value=bool(ctx.no_broker_restrictions),
+                        enrich=enrich,
+                        key="no_broker_restrictions",
                     )
                     if self.plane.mode is OpsExecutionMode.SHADOW:
                         self.run_shadow_cycle(

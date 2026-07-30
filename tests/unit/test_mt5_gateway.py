@@ -267,7 +267,7 @@ class TestMT5Gateway:
         body = res.json()
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
-        assert body.get("gateway_version") == "1.1.3"
+        assert body.get("gateway_version") == "1.1.4"
         assert body["auto_attach_enabled"] is False
         mt5 = body.get("mt5") or {}
         # No session yet — capabilities not probed (never invent Enabled).

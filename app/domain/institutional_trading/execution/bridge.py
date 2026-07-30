@@ -316,9 +316,11 @@ class ExecutionBridge:
                 )
                 # Drawdown pause from account equity vs peak
                 peak = context.account.peak_equity
-                eq = context.account.equity
-                if peak is not None and peak > 0 and eq < peak:
-                    dd = ((peak - eq) / peak * Decimal("100")).quantize(Decimal("0.01"))
+                equity = context.account.equity
+                if peak is not None and peak > 0 and equity is not None and equity < peak:
+                    dd = ((peak - equity) / peak * Decimal("100")).quantize(
+                        Decimal("0.01")
+                    )
                     health.max_drawdown_pct = scalp_cfg.pause_drawdown_pct
                     health.record_drawdown(dd)
                 allowed, why = health.allow_new_entries(
@@ -667,7 +669,7 @@ class ExecutionBridge:
                 get_live_health_monitor,
             )
 
-            eq = get_execution_quality_store()
+            quality = get_execution_quality_store()
             health = get_live_health_monitor()
             msg_l = (oms_result.message or "").lower()
             requote = "requote" in msg_l or oms_result.retcode == 10004
@@ -675,7 +677,7 @@ class ExecutionBridge:
             if status is ExecutionAttemptStatus.OMS_SUCCESS:
                 if slip_exceeded:
                     health.record_abnormal_slippage()
-                eq.record(
+                quality.record(
                     outcome="success",
                     latency_ms=latency,
                     slippage=float(slip_str) if slip_str is not None else None,
@@ -685,7 +687,7 @@ class ExecutionBridge:
                     requote=requote,
                 )
             else:
-                eq.record(
+                quality.record(
                     outcome="reject",
                     latency_ms=latency,
                     spread=float(spread) if spread is not None else None,

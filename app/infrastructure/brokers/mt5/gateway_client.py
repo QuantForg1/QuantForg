@@ -234,10 +234,29 @@ class GatewayMT5Client:
     _positions_cache: list[MT5Position] | None = field(default=None, init=False)
     _positions_cache_at: float = field(default=0.0, init=False)
     _snapshot_ttl_seconds: float = field(default=0.75, init=False)
+    _http: Any = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.base_url = normalize_gateway_base_url(self.base_url)
         self.token = (self.token or "").strip()
+
+    def close(self) -> None:
+        """Close the reused httpx client (best-effort)."""
+        client = self._http
+        self._http = None
+        if client is not None:
+            try:
+                client.close()
+            except Exception:  # noqa: S110 — shutdown best-effort
+                pass
+
+    def _http_client(self) -> httpx.Client:
+        """Reuse one httpx client to avoid TLS handshake churn per request."""
+        client = self._http
+        if client is None or getattr(client, "is_closed", False):
+            client = self._build_http_client()
+            self._http = client
+        return client
 
     @property
     def session_token(self) -> str:
@@ -281,13 +300,15 @@ class GatewayMT5Client:
         return headers
 
     def _timeout(self) -> httpx.Timeout:
-        # Cloudflare Quick Tunnels can be slow on first connect.
+        # Cloudflare Quick Tunnels can be slow on first connect; keep reads
+        # shorter than a full minute so stalled tunnels fail closed faster.
         connect = min(15.0, float(self.timeout_seconds))
+        read = min(float(self.timeout_seconds), 30.0)
         return httpx.Timeout(
-            self.timeout_seconds,
+            read,
             connect=connect,
-            read=float(self.timeout_seconds),
-            write=float(self.timeout_seconds),
+            read=read,
+            write=min(float(self.timeout_seconds), 30.0),
             pool=connect,
         )
 
@@ -378,47 +399,47 @@ class GatewayMT5Client:
         )
 
         try:
-            with self._build_http_client() as client:
-                # Safe retries: GET + connect failures only. Never retry order_send
-                # after the request may have reached the broker (duplicate risk).
-                attempts = 2 if method.upper() == "GET" else 1
-                last_exc: Exception | None = None
-                response = None
-                for attempt_i in range(attempts):
+            client = self._http_client()
+            # Safe retries: GET + connect failures only. Never retry order_send
+            # after the request may have reached the broker (duplicate risk).
+            attempts = 2 if method.upper() == "GET" else 1
+            last_exc: Exception | None = None
+            response = None
+            for attempt_i in range(attempts):
+                try:
+                    response = client.request(
+                        method,
+                        url,
+                        headers=headers,
+                        json=json_body,
+                        params=params,
+                    )
+                    last_exc = None
+                    break
+                except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                    last_exc = exc
+                    # No silent reconnect — log every transport retry.
                     try:
-                        response = client.request(
-                            method,
-                            url,
-                            headers=headers,
-                            json=json_body,
-                            params=params,
+                        from app.domain.institutional_trading.reliability.platform import (  # noqa: E501
+                            get_reliability_platform,
                         )
-                        last_exc = None
-                        break
-                    except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-                        last_exc = exc
-                        # No silent reconnect — log every transport retry.
-                        try:
-                            from app.domain.institutional_trading.reliability.platform import (  # noqa: E501
-                                get_reliability_platform,
-                            )
 
-                            get_reliability_platform().network.log_reconnect_attempt(
-                                component="gateway",
-                                attempt=attempt_i + 1,
-                                detail=(
-                                    f"{type(exc).__name__}: {exc} " f"({method} {path})"
-                                ),
-                                success=False,
-                            )
-                        except Exception:  # noqa: S110  # best-effort optional path
-                            pass
-                        if attempt_i + 1 >= attempts:
-                            raise
-                        time.sleep(0.15 * (attempt_i + 1))
-                if response is None and last_exc is not None:
-                    raise last_exc
-                assert response is not None
+                        get_reliability_platform().network.log_reconnect_attempt(
+                            component="gateway",
+                            attempt=attempt_i + 1,
+                            detail=(
+                                f"{type(exc).__name__}: {exc} " f"({method} {path})"
+                            ),
+                            success=False,
+                        )
+                    except Exception:  # noqa: S110  # best-effort optional path
+                        pass
+                    if attempt_i + 1 >= attempts:
+                        raise
+                    time.sleep(0.15 * (attempt_i + 1))
+            if response is None and last_exc is not None:
+                raise last_exc
+            assert response is not None
         except httpx.TooManyRedirects as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
             gateway_metrics.record_request(latency_ms=latency_ms, error=True)

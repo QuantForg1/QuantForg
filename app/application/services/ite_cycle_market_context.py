@@ -343,8 +343,18 @@ async def build_ite_cycle_market_context(
             free_margin = Decimal(str(free_raw))
         trade_mode = str(getattr(info, "trade_mode", "") or "").strip().lower()
         account_trading_enabled = trade_mode not in {"", "disabled", "0"}
-        if not account_trading_enabled and equity > 0:
+        # Equity fallback only when trade_mode is unknown/empty — never when the
+        # broker reports trading explicitly disabled.
+        if (
+            not account_trading_enabled
+            and equity > 0
+            and trade_mode in {"", "unknown"}
+        ):
             account_trading_enabled = True
+            diag["account_trading_source"] = "equity_fallback_unknown_mode"
+        else:
+            diag["account_trading_source"] = f"trade_mode:{trade_mode or 'empty'}"
+            diag["account_trading_enabled"] = account_trading_enabled
         diag["account"] = "OK"
         diag["terminal"] = str(getattr(info, "server", "") or "")
         diag["balance"] = str(balance)
