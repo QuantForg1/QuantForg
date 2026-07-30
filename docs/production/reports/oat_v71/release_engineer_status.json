@@ -1,100 +1,42 @@
 {
-  "role": "release_engineer",
-  "recorded_at": "2026-07-30T14:21:55.703978+00:00",
+  "recorded_at": "2026-07-30T14:26:17.362397+00:00",
   "branch": "cursor/v7-1-acceptance-evidence",
-  "head": "0dc5f5a89c84eb6c7f7757ff2ce2d3685bcec530",
-  "deployed_commit_operator": "a60715eabdb023a009e9c678a136fab3a0dfac71",
+  "head": "1d71886362adab3708f4a2f30a246c200cd26b96",
   "pat_oat_accepted": false,
   "main_push_performed": false,
-  "soak_complete": false,
-  "monitoring": {
-    "monitored_at": "2026-07-30T14:21:39.281348+00:00",
-    "live_samples": [
-      {
-        "at": "2026-07-30T14:21:11.823108+00:00",
-        "gateway_version": "1.1.1",
-        "error": null,
-        "connected": false,
-        "session_mode": "none",
-        "login_status": "disconnected",
-        "server": null,
-        "hb": null,
-        "degraded": false
-      },
-      {
-        "at": "2026-07-30T14:21:18.841200+00:00",
-        "gateway_version": "1.1.1",
-        "error": null,
-        "connected": false,
-        "session_mode": "none",
-        "login_status": "disconnected",
-        "server": null,
-        "hb": null,
-        "degraded": false
-      },
-      {
-        "at": "2026-07-30T14:21:39.277650+00:00",
-        "gateway_version": "1.1.1",
-        "error": null,
-        "connected": false,
-        "session_mode": "none",
-        "login_status": "disconnected",
-        "server": null,
-        "hb": null,
-        "degraded": false
-      }
+  "live": {
+    "gateway_version": "1.1.1",
+    "connected": false,
+    "session_mode": "none",
+    "login_status": "disconnected",
+    "auto_attach_enabled": true
+  },
+  "mt5_recover_attempt": {
+    "attempted": true,
+    "result": "HTTP 401 Invalid or missing gateway token",
+    "token_available_in_cloud_env": false
+  },
+  "git_soak_still_pre_fix": {
+    "samples": 908,
+    "first_ts": "2026-07-27T18:35:38.2499607Z",
+    "last_ts": "2026-07-28T18:35:18.1603001Z"
+  },
+  "step4_evidence_files": [],
+  "remaining_blocker": {
+    "primary": "Cloud agent cannot recover live MT5, complete/sync post-fix soak, or create Remember Me Step 4 evidence.",
+    "required_operator_actions": [
+      "On Windows host with MT5 terminal logged in: POST /session/attach with MT5_GATEWAY_TOKEN (or ensure auto-attach succeeds after terminal login), confirm https://gateway.quantforg.com/health shows connected=true.",
+      "Keep post-fix soak_24h.ps1 running until >=24h of samples after gateway 1.1.1 deploy; then run scripts/sync_windows_soak_evidence.ps1 and push.",
+      "Complete docs/production/reports/oat_v71/REMEMBER_ME_OPERATOR_CHECKLIST.md and write step4_remember_me_*.json evidence files.",
+      "Re-run PAT/OAT only after the above evidence is in git."
     ],
-    "git_soak": {
-      "samples": 908,
-      "bytes": 249165,
-      "first_ts": "2026-07-27T18:35:38.2499607Z",
-      "last_ts": "2026-07-28T18:35:18.1603001Z",
-      "duration_h": 23.9944,
-      "age_h": 43.773,
-      "meets_24h": false,
-      "fresh_2h": false,
-      "mt5_connected": 601,
-      "mt5_disconnected": 305,
-      "latest_connected": false,
-      "is_post_fix_window": false
-    },
-    "artifacts_present": {
-      "post_fix_deploy.json": false,
-      "post_fix_soak_start.json": false,
-      "post_fix_deploy_status.json": false,
-      "release_engineer_status.json": true
-    },
-    "latest_file": {
-      "ts": "2026-07-28T18:35:18.1603001Z",
-      "gateway": {
-        "latency_ms": 0,
-        "hb": "2026-07-28T12:36:33.924315+00:00",
-        "ok": true,
-        "connected": false,
-        "session": "attached",
-        "mt5_latency_ms": null
-      },
-      "railway": {
-        "latency_ms": 1051.15,
-        "ok": true,
-        "status": "ok"
-      },
-      "cpu": 30.36,
-      "ram_mb": 17.31,
-      "err": null
+    "evidence": {
+      "live_mt5_connected": false,
+      "attach_api_without_token": "401",
+      "gateway_token_in_cloud_env": false,
+      "no_winrm_ssh_to_windows": true,
+      "soak_in_git_window": "2026-07-27T18:35:38.2499607Z .. 2026-07-28T18:35:18.1603001Z",
+      "step4_files_count": 0
     }
-  },
-  "gates": {
-    "gateway_version_1_1_1_live": true,
-    "mt5_attached_live": false,
-    "post_fix_soak_metrics_in_git": false,
-    "post_fix_soak_meets_24h": false,
-    "remember_me_step4_evidence": false
-  },
-  "remaining_blockers": [
-    "Post-fix soak incomplete: git still has pre-fix soak_24h_metrics.jsonl (2026-07-27..2026-07-28, ~43.8h stale). No post-fix metrics synced yet.",
-    "Live MT5 disconnected under gateway 1.1.1: connected=false, session_mode=none across monitoring samples.",
-    "OAT Step 4 Remember Me evidence absent (step4_remember_me_*.json).",
-    "PAT/OAT remain NOT ACCEPTED; cannot regenerate acceptance from incomplete soak."
-  ]
+  }
 }
