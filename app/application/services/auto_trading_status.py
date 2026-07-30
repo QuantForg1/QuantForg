@@ -187,6 +187,12 @@ def _enrich_from_adapter(
             elif mode in {"full", "enabled", "2", "4"}:
                 out["account_trading_enabled"] = True
 
+        # Derive broker-restriction flag from known account trading state only.
+        if out["account_trading_enabled"] is True:
+            out["no_broker_restrictions"] = True
+        elif out["account_trading_enabled"] is False:
+            out["no_broker_restrictions"] = False
+
         free = account.get("margin_free") or account.get("free_margin")
         if free is not None:
             with contextlib.suppress(Exception):

@@ -16,14 +16,14 @@ class ProductionHardeningConfig:
     retry_base_backoff_ms: int = 150
     retry_max_backoff_ms: int = 2_000
     retry_jitter_ratio: float = 0.15
-    # MetaTrader transient retcodes
+    # MetaTrader transient retcodes — only safe-to-retry (no ambiguous fill).
+    # TIMEOUT (10012) and CONNECTION (10031) are intentionally excluded: the
+    # broker may have accepted the order; retrying risks a duplicate fill.
     retryable_retcodes: tuple[int, ...] = (
         10004,  # REQUOTE
-        10012,  # TIMEOUT
         10020,  # PRICE_CHANGED
         10021,  # PRICE_OFF
         10024,  # ORDER_LOCKED (transient lock)
-        10031,  # CONNECTION / trade server
     )
     # Permanent — never retry
     permanent_retcodes: tuple[int, ...] = (
@@ -38,12 +38,10 @@ class ProductionHardeningConfig:
     retryable_message_tokens: tuple[str, ...] = (
         "requote",
         "trade context is busy",
-        "timeout",
-        "timed out",
+        "price changed",
+        "price off",
+        "order locked",
         "gateway delay",
-        "network",
-        "connection",
-        "no connection",
     )
 
     # Lifecycle / explainability

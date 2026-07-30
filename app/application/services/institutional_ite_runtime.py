@@ -134,18 +134,26 @@ class InstitutionalIteRuntime:
     def tick_health(self) -> dict[str, Any]:
         """Live probes → ReliabilityPlatform.tick (no POST body flags)."""
         probes = self.probes.collect()
-        # Heartbeats for core components each tick
+        # Heartbeats only for components that are currently healthy — never
+        # refresh a failed dependency as alive (stale-heartbeat pause must work).
         now = datetime.now(UTC)
-        for comp in (
-            ComponentName.GATEWAY,
-            ComponentName.MT5,
-            ComponentName.DECISION,
-            ComponentName.OMS,
-            ComponentName.RAILWAY_API,
-            ComponentName.SUPABASE,
-            ComponentName.CLOUDFLARE_TUNNEL,
-        ):
-            self.reliability.heartbeats.publish(comp, now=now)
+        oms_ok_probe = bool(
+            getattr(probes, "railway_api_up", True) and probes.gateway_available
+        )
+        healthy_map = {
+            ComponentName.GATEWAY: bool(probes.gateway_available),
+            ComponentName.MT5: bool(probes.mt5_connected),
+            ComponentName.DECISION: True,  # this process is deciding
+            ComponentName.OMS: oms_ok_probe,
+            ComponentName.RAILWAY_API: bool(getattr(probes, "railway_api_up", False)),
+            ComponentName.SUPABASE: bool(getattr(probes, "supabase_up", False)),
+            ComponentName.CLOUDFLARE_TUNNEL: bool(
+                getattr(probes, "cloudflare_tunnel_up", False)
+            ),
+        }
+        for comp, ok in healthy_map.items():
+            if ok:
+                self.reliability.heartbeats.publish(comp, now=now)
         result = self.reliability.tick(
             probes,
             now=now,
@@ -275,6 +283,17 @@ class InstitutionalIteRuntime:
                 self._last_continuous_op = snap.to_dict()  # type: ignore[attr-defined]
         except Exception:
             logger.exception("continuous_operation_tick_failed")
+            # Fail closed: pause new entries until the next healthy tick.
+            fail_closed = {
+                "pause": {
+                    "pause_new_entries": True,
+                    "manage_open_positions": True,
+                    "reasons": ["continuous_operation_tick_failed"],
+                },
+                "error": True,
+            }
+            self._last_continuous_op = fail_closed  # type: ignore[attr-defined]
+            result["continuous_operation"] = fail_closed
         return result
 
     def run_shadow_cycle(
@@ -1168,8 +1187,16 @@ class InstitutionalIteRuntime:
             now=decision.as_of,
             user_id=self.user_id,
             execution_enabled=False if force_shadow else execution_enabled,
-            risk_allowed=(True if forced_override else risk_allowed),
-            risk_reasons=risk_reasons,
+            risk_allowed=(
+                True
+                if forced_override
+                else bool(decision.eligibility.checks.get("risk_available", False))
+            ),
+            risk_reasons=(
+                ()
+                if forced_override
+                else tuple(decision.risk_reasons or risk_reasons or ())
+            ),
             connected=broker_connected or force_shadow,
             login=None,
             request_id=f"{'shadow' if force_shadow else 'auto'}_{tid[:12]}",
@@ -2336,7 +2363,7 @@ class InstitutionalIteRuntime:
             mt5_at = (
                 bool(enrich["mt5_autotrading_enabled"])
                 if enrich.get("mt5_autotrading_enabled") is not None
-                else True
+                else False  # fail closed when terminal flag unknown
             )
             acct_ok = (
                 bool(enrich["account_trading_enabled"])
@@ -2356,7 +2383,7 @@ class InstitutionalIteRuntime:
             no_restr = (
                 bool(enrich["no_broker_restrictions"])
                 if enrich.get("no_broker_restrictions") is not None
-                else True
+                else bool(ctx.no_broker_restrictions)
             )
             if self.plane.mode is OpsExecutionMode.SHADOW:
                 cycle = self.run_shadow_cycle(
@@ -2593,7 +2620,7 @@ class InstitutionalIteRuntime:
                     mt5_at = (
                         bool(enrich["mt5_autotrading_enabled"])
                         if enrich.get("mt5_autotrading_enabled") is not None
-                        else True
+                        else False  # fail closed when terminal flag unknown
                     )
                     acct_ok = (
                         bool(enrich["account_trading_enabled"])
@@ -2613,7 +2640,7 @@ class InstitutionalIteRuntime:
                     no_restr = (
                         bool(enrich["no_broker_restrictions"])
                         if enrich.get("no_broker_restrictions") is not None
-                        else True
+                        else bool(ctx.no_broker_restrictions)
                     )
                     if self.plane.mode is OpsExecutionMode.SHADOW:
                         self.run_shadow_cycle(
