@@ -1,19 +1,19 @@
 {
-    "ts":  "2026-07-28T10:45:19.9132149Z",
+    "ts":  "2026-07-28T18:35:18.1603001Z",
     "gateway":  {
                     "latency_ms":  0,
-                    "hb":  "2026-07-28T10:45:17.254328+00:00",
+                    "hb":  "2026-07-28T12:36:33.924315+00:00",
                     "ok":  true,
-                    "connected":  true,
+                    "connected":  false,
                     "session":  "attached",
-                    "mt5_latency_ms":  0.885
+                    "mt5_latency_ms":  null
                 },
     "railway":  {
-                    "latency_ms":  13353.35,
+                    "latency_ms":  1051.15,
                     "ok":  true,
                     "status":  "ok"
                 },
-    "cpu":  37.12,
-    "ram_mb":  65.09,
+    "cpu":  30.36,
+    "ram_mb":  17.31,
     "err":  null
 }

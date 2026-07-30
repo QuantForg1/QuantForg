@@ -1,58 +1,68 @@
 {
-  "validated_at": "2026-07-30T12:08:59.325732+00:00",
+  "validated_at": "2026-07-30T12:37:28.230157+00:00",
+  "evidence_commit": "9837123",
+  "evidence_branch": "cursor/v7-1-acceptance-evidence",
   "path": "docs/production/reports/oat_v71/soak_24h_metrics.jsonl",
-  "repo_bytes": 139021,
-  "windows_claimed_bytes": 250073,
-  "size_mismatch": true,
-  "samples": 505,
+  "repo_bytes": 249165,
+  "samples": 908,
   "first_ts": "2026-07-27T18:35:38.2499607Z",
-  "last_ts": "2026-07-28T10:45:19.9132149Z",
-  "duration_hours": 16.162,
-  "age_hours_since_last_sample": 49.394,
+  "last_ts": "2026-07-28T18:35:18.1603001Z",
+  "duration_hours": 23.9944,
+  "age_hours_since_last_sample": 42.036,
   "meets_24h_duration": false,
   "meets_freshness_2h": false,
-  "gateway_ok": 504,
-  "gateway_bad": 1,
-  "mt5_connected": 504,
-  "mt5_disconnected": 0,
-  "session_attached": 504,
-  "railway_ok": 238,
-  "railway_bad": 267,
+  "gateway_ok": 906,
+  "gateway_bad": 2,
+  "mt5_connected": 601,
+  "mt5_disconnected": 305,
+  "railway_ok": 621,
+  "railway_bad": 287,
   "reconnect_count_connected_false_to_true": 0,
   "reconnect_timestamps": [],
   "sampling_gaps_gt_3min": [
     {
-      "from": "2026-07-28T04:30:46.979293+00:00",
-      "to": "2026-07-28T10:35:54.060844+00:00",
+      "from": "2026-07-28T04:30:46.9792938Z",
+      "to": "2026-07-28T10:35:54.0608441Z",
       "seconds": 21907.1
+    },
+    {
+      "from": "2026-07-28T17:44:54.8952983Z",
+      "to": "2026-07-28T18:08:27.6958516Z",
+      "seconds": 1412.8
     }
   ],
+  "longest_unmanaged_disconnect": {
+    "from": "2026-07-28T12:38:14.5483764Z",
+    "to": "2026-07-28T18:35:18.1603001Z",
+    "hours": 5.951
+  },
+  "remember_me_step4_evidence_present": false,
   "pat_oat_soak_satisfied": false,
-  "blocker": "Windows host reports soak file size 250073 bytes, but this git workspace / all remotes still have 139021 bytes ending 2026-07-28T10:45:19.9132149Z. Cloud verifier cannot read the Windows filesystem; normal git add/commit/push from Windows is required to synchronize.",
+  "blocker": "Synced soak from 9837123 is NOT acceptance-grade: duration 23.994h (<24h), stale (~42h), 305 MT5 disconnected samples with 0 false\u2192true reconnects, unmanaged disconnect ~5.95h after 2026-07-28T12:38:14Z; Remember Me step4 evidence files absent.",
   "live_gateway_now": {
     "reachable": true,
     "connected": true,
     "session": "attached",
-    "heartbeat": "2026-07-30T12:09:00.135339+00:00",
+    "heartbeat": "2026-07-30T12:37:29.765680+00:00",
     "server": "Weltrade-Real"
   },
   "latest_sample": {
-    "ts": "2026-07-28T10:45:19.9132149Z",
+    "ts": "2026-07-28T18:35:18.1603001Z",
     "gateway": {
       "latency_ms": 0,
-      "hb": "2026-07-28T10:45:17.254328+00:00",
+      "hb": "2026-07-28T12:36:33.924315+00:00",
       "ok": true,
-      "connected": true,
+      "connected": false,
       "session": "attached",
-      "mt5_latency_ms": 0.885
+      "mt5_latency_ms": null
     },
     "railway": {
-      "latency_ms": 13353.35,
+      "latency_ms": 1051.15,
       "ok": true,
       "status": "ok"
     },
-    "cpu": 37.12,
-    "ram_mb": 65.09,
+    "cpu": 30.36,
+    "ram_mb": 17.31,
     "err": null
   }
 }
