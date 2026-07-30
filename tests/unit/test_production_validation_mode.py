@@ -63,7 +63,8 @@ def test_validation_id_and_stage_timeline(tmp_path: Path) -> None:
         id = "sig-1"
 
     record_decision_reasons(_Dec())
-    summary = finalize(export=True)
+    # Never write fabricated pytest evidence into docs/production/validation/
+    summary = finalize(export=False)
     assert summary is not None
     assert summary["accepted"] is False
     assert summary["final_result"] == "BLOCKED"
