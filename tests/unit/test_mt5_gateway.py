@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
@@ -260,6 +261,7 @@ class TestMT5Gateway:
         body = res.json()
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
+        assert body.get("gateway_version") == "1.1.1"
         assert body["auto_attach_enabled"] is False
         mt5 = body.get("mt5") or {}
         # No session yet — capabilities not probed (never invent Enabled).
@@ -623,3 +625,149 @@ class TestFillingModeSelection:
 
         with pytest.raises(MT5CallTimeout):
             call_mt5_bounded(_hang, timeout_seconds=0.1, label="test")
+
+
+@pytest.mark.unit
+class TestMT5GatewayReconnectLoop:
+    """Prove reconnect continues after connected=false without process restart."""
+
+    def _fast_settings(self, gateway_env: MT5GatewaySettings) -> MT5GatewaySettings:
+        gateway_env.mt5_heartbeat_interval_seconds = 0.05
+        gateway_env.mt5_reconnect_backoff_seconds = 0.05
+        gateway_env.mt5_reconnect_max_attempts = 3
+        gateway_env.mt5_reconnect_enabled = True
+        gateway_env.mt5_api_call_timeout_seconds = 1.0
+        return gateway_env
+
+    def test_attached_session_recovers_after_connected_flag_drop(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        settings = self._fast_settings(gateway_env)
+        bridge = _FakeBridge(prelogged=True)
+        runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
+        attached = runtime.attach(path="")
+        assert attached["connected"] is True
+        assert runtime._creds is not None
+        login_before = runtime._creds.login
+        server_before = runtime._creds.server
+        mode_before = runtime._creds.mode
+
+        # Simulate the soak failure mode: connected dropped, credentials retained.
+        runtime.diagnostics.connected = False
+        runtime.diagnostics.reconnect_attempts = 0
+
+        runtime.start_background()
+        try:
+            deadline = time.time() + 3.0
+            while time.time() < deadline and not runtime.diagnostics.connected:
+                time.sleep(0.05)
+        finally:
+            runtime.stop_background()
+
+        assert runtime.diagnostics.connected is True
+        assert runtime._creds is not None
+        assert runtime._creds.login == login_before
+        assert runtime._creds.server == server_before
+        assert runtime._creds.mode == mode_before
+        assert any(
+            ev.get("result") == "ok" for ev in runtime.diagnostics.reconnect_events
+        )
+
+    def test_reconnect_preserves_credentials_across_failures(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        settings = self._fast_settings(gateway_env)
+        bridge = _FakeBridge(prelogged=False)
+        runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
+        runtime.connect(
+            login=4242, password="secret", server="Weltrade-Demo", path=""
+        )
+        assert runtime._creds is not None
+        assert runtime._creds.password == "secret"
+        assert runtime._creds.login == 4242
+
+        # Fail first reconnects, then succeed — credentials must remain.
+        fail_budget = {"n": 2}
+
+        original_initialize = bridge.initialize
+
+        def flaky_initialize(path: str = "") -> bool:
+            if fail_budget["n"] > 0:
+                fail_budget["n"] -= 1
+                return False
+            return original_initialize(path)
+
+        bridge.initialize = flaky_initialize  # type: ignore[method-assign]
+        runtime.diagnostics.connected = False
+        runtime.diagnostics.reconnect_attempts = 0
+
+        runtime.start_background()
+        try:
+            deadline = time.time() + 4.0
+            while time.time() < deadline and not runtime.diagnostics.connected:
+                time.sleep(0.05)
+        finally:
+            runtime.stop_background()
+
+        assert runtime.diagnostics.connected is True
+        assert runtime._creds is not None
+        assert runtime._creds.password == "secret"
+        assert runtime._creds.login == 4242
+        assert runtime._creds.server == "Weltrade-Demo"
+
+    def test_self_recovers_after_max_attempt_burst_without_process_restart(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        settings = self._fast_settings(gateway_env)
+        settings.mt5_reconnect_max_attempts = 2
+        bridge = _FakeBridge(prelogged=True)
+        runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
+        runtime.attach(path="")
+        runtime.diagnostics.connected = False
+
+        # Exhaust a full burst, then allow recovery — must not require restart.
+        fail_budget = {"n": 2}
+        original_initialize = bridge.initialize
+
+        def flaky_initialize(path: str = "") -> bool:
+            if fail_budget["n"] > 0:
+                fail_budget["n"] -= 1
+                return False
+            return original_initialize(path)
+
+        bridge.initialize = flaky_initialize  # type: ignore[method-assign]
+        # Pretend prior burst already exhausted so cool-down + new burst path runs.
+        runtime.diagnostics.reconnect_attempts = settings.mt5_reconnect_max_attempts
+
+        runtime.start_background()
+        try:
+            deadline = time.time() + 5.0
+            while time.time() < deadline and not runtime.diagnostics.connected:
+                time.sleep(0.05)
+        finally:
+            runtime.stop_background()
+
+        assert runtime.diagnostics.connected is True
+        assert runtime._creds is not None
+        assert runtime._hb_thread is not None
+
+    def test_intentional_disconnect_does_not_auto_reconnect(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        settings = self._fast_settings(gateway_env)
+        bridge = _FakeBridge(prelogged=True)
+        runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
+        runtime.attach(path="")
+        runtime.disconnect()
+        assert runtime._creds is None
+        assert runtime.diagnostics.connected is False
+
+        runtime.start_background()
+        try:
+            time.sleep(0.4)
+        finally:
+            runtime.stop_background()
+
+        assert runtime.diagnostics.connected is False
+        assert runtime._creds is None
+        assert runtime.diagnostics.reconnect_events == []

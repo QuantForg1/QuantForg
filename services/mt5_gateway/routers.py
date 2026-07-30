@@ -70,9 +70,12 @@ async def health(request: Request) -> dict[str, Any]:
     runtime = getattr(request.app.state, "runtime", None)
     token = normalize_gateway_token(settings.mt5_gateway_token)
     meta = token_load_meta()
+    from services.mt5_gateway import __version__ as gateway_version
+
     payload: dict[str, Any] = {
         "status": "ok",
         "service": "mt5-gateway",
+        "gateway_version": gateway_version,
         "token_configured": bool(token) and len(token) > 0,
         "websocket_enabled": settings.mt5_gateway_enable_websocket,
         "auto_attach_enabled": settings.mt5_gateway_auto_attach,

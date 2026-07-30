@@ -1,6 +1,7 @@
 # Soak disconnect RCA — v7.1 OAT Step 5
 
 Generated: 2026-07-29T01:20Z (approx)
+Updated: 2026-07-30T13:25Z
 
 ## Evidence
 
@@ -43,18 +44,23 @@ Classification:
 | Railway FE/API | Intermittent sample timeouts; not the MT5 disconnect cause |
 | QuantForg trading strategy / OMS | Not implicated |
 
-## Fix applied
+## Fix status (updated 2026-07-30)
 
-`services/mt5_gateway/runtime.py` `_heartbeat_loop`:
+**Landed in git** on `cursor/v7-1-acceptance-evidence` (cherry-picked from `de992f1`):
 
-- While credentials remain, keep attempting reconnect even when `connected=False`
-- After max-attempt bursts, cool down then start a new burst (do not permanently abandon)
+`services/mt5_gateway/runtime.py` `_heartbeat_loop` now:
 
-Unit coverage: `test_attached_session_recovers_after_connected_flag_drop`
+- While credentials remain, keeps attempting reconnect even when `connected=False`
+- After max-attempt bursts, cools down then starts a new burst (does not permanently abandon)
+- Intentional `disconnect()` still clears credentials and stops reconnect
+
+Unit coverage: `TestMT5GatewayReconnectLoop` in `tests/unit/test_mt5_gateway.py`
+
+Gateway package version bumped to **1.1.1** (`gateway_version` on `/health`) for deploy confirmation.
 
 ## Soak acceptance status
 
-**Not yet accepted for release.** Prior soak includes a multi-hour unmanaged disconnect window. After deploying the gateway fix, run a fresh ≥24h soak with:
+**Not yet accepted for release.** Prior synced soak (`2026-07-27`→`2026-07-28`) is **pre-fix evidence**. After Windows deploy of 1.1.1, run a fresh ≥24h soak with:
 
 - disconnect samples near zero (or brief blips that self-heal within minutes)
 - single gateway worker
