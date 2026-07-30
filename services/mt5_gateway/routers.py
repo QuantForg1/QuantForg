@@ -136,6 +136,12 @@ async def health(request: Request) -> dict[str, Any]:
             }
         payload["mt5"] = mt5_payload
         payload["bridge_available"] = runtime.bridge.available
+        # When the MetaTrader5 Python package failed to import, expose the
+        # import error on public /health so operators can diagnose without a
+        # token (attach/diagnostics remain authenticated).
+        if not runtime.bridge.available:
+            payload["bridge_import_error"] = runtime.bridge._import_error
+            mt5_payload["bridge_import_error"] = runtime.bridge._import_error
         # Top-level status stays "ok" while the gateway process is serving —
         # MT5 degradation lives under payload["mt5"] so live probes still see
         # a reachable gateway (HTTP 200 + status=ok).

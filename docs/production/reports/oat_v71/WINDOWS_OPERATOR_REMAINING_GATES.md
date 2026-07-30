@@ -10,26 +10,36 @@ Cloud agents cannot perform these steps (no Windows shell, no `MT5_GATEWAY_TOKEN
 
 ## 1. Restore MT5 on the live gateway
 
-1. Confirm MetaTrader 5 is running and **logged into** Weltrade-Real (or the production account).
-2. From the QuantForg repo on the Windows host, load the gateway token from `.env` (never commit it):
+**First check bridge, not just terminal login.** If `/health` shows
+`bridge_available=false`, the MetaTrader5 **Python package** failed to import
+in the gateway process. See `BRIDGE_INIT_RCA.md`. No Expert Advisor is required.
 
 ```powershell
 cd "C:\Users\P7 PROVIDER\QuantForg"
+# Confirm package in the interpreter that will run the gateway:
+& "C:\Python314\python.exe" -c "import MetaTrader5 as m; print('OK', m)"
+# If that fails:
+& "C:\Python314\python.exe" -m pip install --upgrade MetaTrader5
+
+# Ensure only ONE listener on 8765, then restart gateway from this repo.
+Get-NetTCPConnection -LocalPort 8765 -State Listen -EA SilentlyContinue |
+  ForEach-Object { taskkill /F /PID $_.OwningProcess }
+Start-Sleep -Seconds 3
+& "C:\Python314\python.exe" -m services.mt5_gateway.main
+```
+
+Then attach (token from `.env`):
+
+```powershell
 $token = (Get-Content .env | Where-Object { $_ -match '^\s*MT5_GATEWAY_TOKEN\s*=' } | Select-Object -Last 1)
 $token = ($token -split '=',2)[1].Trim().Trim('"').Trim("'")
 Invoke-RestMethod -Method POST -Uri "http://127.0.0.1:8765/session/attach" `
   -Headers @{ Authorization = "Bearer $token"; Accept = "application/json" } `
   -ContentType "application/json" -Body "{}"
-Invoke-RestMethod "http://127.0.0.1:8765/health" | ConvertTo-Json -Depth 6
-```
-
-3. Public check must show `gateway_version=1.1.1` and `mt5.connected=true`:
-
-```powershell
 Invoke-RestMethod "https://gateway.quantforg.com/health" | ConvertTo-Json -Depth 6
 ```
 
-If attach fails, log into the MT5 UI first, then retry. `auto_attach_enabled` is true but only works when the terminal already has an account session.
+Required live fields: `gateway_version=1.1.1`, `bridge_available=true`, `mt5.connected=true`, `session_mode` not `none`.
 
 ---
 

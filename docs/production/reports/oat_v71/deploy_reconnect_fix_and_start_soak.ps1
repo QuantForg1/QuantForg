@@ -54,6 +54,11 @@ New-Item -ItemType File -Force -Path $SoakOut | Out-Null
 Write-Log "starting gateway"
 $outLog = Join-Path $ReportDir "gateway_post_fix.out.log"
 $errLog = Join-Path $ReportDir "gateway_post_fix.err.log"
+# Fail fast if this interpreter cannot import MetaTrader5 (bridge_available=false root cause).
+& $Python -c "import MetaTrader5 as m; print('MetaTrader5OK', getattr(m, '__file__', m))"
+if ($LASTEXITCODE -ne 0) {
+  throw "MetaTrader5 package missing/unusable in $Python - install with: $Python -m pip install MetaTrader5"
+}
 $gatewayArgs = @("-m", "services.mt5_gateway.main")
 Start-Process -FilePath $Python -ArgumentList $gatewayArgs -WorkingDirectory $RepoRoot -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
 Start-Sleep -Seconds 8

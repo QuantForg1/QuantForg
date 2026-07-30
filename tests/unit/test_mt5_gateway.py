@@ -271,6 +271,33 @@ class TestMT5Gateway:
         assert support.get("autotrading") == "NOT_SUPPORTED"
         assert support.get("dll") == "NOT_SUPPORTED"
 
+    def test_health_exposes_bridge_import_error_when_unavailable(
+        self, gateway_env: MT5GatewaySettings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _ = gateway_env
+
+        class _BrokenBridge(LiveMT5Bridge):
+            def __init__(self) -> None:
+                self._mt5 = None
+                self._import_error = "ModuleNotFoundError: No module named 'MetaTrader5'"
+
+        app = create_app()
+        with TestClient(app) as test_client:
+            existing = getattr(test_client.app.state, "runtime", None)
+            if existing is not None:
+                existing.stop_background()
+            runtime = MT5GatewayRuntime(
+                settings=get_gateway_settings(), bridge=_BrokenBridge()
+            )
+            test_client.app.state.runtime = runtime
+            res = test_client.get("/health")
+            assert res.status_code == 200
+            body = res.json()
+            assert body["bridge_available"] is False
+            assert "MetaTrader5" in (body.get("bridge_import_error") or "")
+            assert body["mt5"]["bridge_available"] is False
+            assert "MetaTrader5" in (body["mt5"].get("bridge_import_error") or "")
+
     def test_health_reports_terminal_capabilities_when_connected(
         self, client: TestClient
     ) -> None:
