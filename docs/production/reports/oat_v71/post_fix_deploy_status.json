@@ -1,12 +1,29 @@
 {
-  "recorded_at": "2026-07-30T12:50:23.388664+00:00",
-  "commit": "de992f1a8edf5e81b8912e75ba92c423a53b4f45",
+  "recorded_at": "2026-07-30T13:10:54.529778+00:00",
+  "fix_commit": "de992f1a8edf5e81b8912e75ba92c423a53b4f45",
   "branch": "cursor/v7-1-production-stabilization-bc83",
   "gateway_version_in_git": "1.1.1",
-  "unit_tests": "41 passed (test_mt5_gateway + gateway_auth + terminal_capabilities)",
+  "live_gateway": {
+    "reachable": true,
+    "gateway_version": null,
+    "connected": true,
+    "session_mode": "attached",
+    "server": "Weltrade-Real",
+    "degraded": false,
+    "last_heartbeat_at": "2026-07-30T13:10:55.085949+00:00",
+    "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env"
+  },
   "windows_deploy_confirmed": false,
-  "windows_deploy_blocker": "Cloud agent has no shell/WinRM/SSH access to Windows production host; live /health still lacks gateway_version field (pre-1.1.1 process).",
-  "operator_deploy_script": "docs/production/reports/oat_v71/deploy_reconnect_fix_and_start_soak.ps1",
+  "gateway_version_1_1_1_verified": false,
   "soak_started_at": null,
-  "pat_oat_accepted": false
+  "pat_oat_accepted": false,
+  "main_push_performed": false,
+  "blocker": "Cloud agent cannot deploy/restart the Windows MT5 gateway or start the soak. Live /health has no gateway_version (still pre-1.1.1).",
+  "required_manual_operator_action": [
+    "On the Windows production host (elevated PowerShell), from the QuantForg repo:",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\P7 PROVIDER\\QuantForg\\docs\\production\\reports\\oat_v71\\deploy_reconnect_fix_and_start_soak.ps1\"",
+    "That script pulls cursor/v7-1-production-stabilization-bc83 (includes de992f1), restarts the gateway, verifies health, and starts soak_24h.ps1.",
+    "Confirm https://gateway.quantforg.com/health returns gateway_version=1.1.1 and mt5.connected=true.",
+    "Sync soak evidence later via scripts/sync_windows_soak_evidence.ps1 \u2014 do not declare PAT/OAT ACCEPTED until post-fix soak completes."
+  ]
 }
