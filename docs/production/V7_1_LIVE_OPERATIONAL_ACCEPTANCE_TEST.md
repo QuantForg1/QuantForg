@@ -1,54 +1,36 @@
 # QuantForg v7.1 Live Operational Acceptance Test (OAT)
 
-Generated: `2026-07-27T18:36:00Z` (approx)
+Updated: `2026-07-29T01:25Z` (approx)
 
 **Declaration: QUANTFORG v7.1 LIVE PRODUCTION NOT ACCEPTED**
 
-No product code was changed. Evidence under `docs/production/reports/oat_v71/`.
+Evidence under `docs/production/reports/oat_v71/`.
 
 ## Results
 
 | Step | Item | Status | Evidence / notes |
 |---|---|---|---|
-| 1 | Full restart (FE/BE/Gateway/MT5) | **FAIL** | Production FE `www.quantforg.com` = 200; Railway API = ok; broker profile present; MT5 attached on Weltrade-Real. **Gateway process restart failed** — PID 8052 is elevated (`Access is denied` on `taskkill` / `schtasks /RL HIGHEST`). Soft `Stop-Process` left same PID. Local ports 3000/8000 down (prod uses www + Railway). |
-| 2 | MT5 reconnect | **PASS** | Live `POST /session/disconnect` → mid `connected=false`; `POST /session/attach` → poll0 `connected=true` / `session=attached` without manual broker setup. Logs: `step2_*.json`. |
-| 3 | Gateway restart | **FAIL** | Cannot terminate elevated gateway from this agent session. Elevated scheduled task create also `Access is denied`. Heartbeat remained healthy on existing process; **process-level stop/start not proven**. |
-| 4 | Browser / PC restart | **FAIL** | Agent browser opened `https://www.quantforg.com/login` (Remember Me UI present) — **session not restored** in this browser profile (login form shown). PC restart **not executed**. |
-| 5 | 24h long run | **BLOCKED** | Read-only soak logger **started** (PID in `soak_24h.pid`), first samples written to `soak_24h_metrics.jsonl` / `soak_24h_latest.json`. **24 hours not elapsed** — cannot PASS yet. |
+| 1 | Full restart (FE/BE/Gateway/MT5) | **PARTIAL** | Gateway process recycle proven (PID change 8052→10988→8844); FE/Railway health ok. Full coordinated FE+Railway recycle still operator-confirmed. |
+| 2 | MT5 reconnect | **PASS** | Live disconnect→attach recovery (`step2_*.json`). |
+| 3 | Gateway restart | **PASS** | Operator admin restart completed; subsequent probes show single healthy listener + attached MT5. |
+| 4 | Browser / PC restart | **FAIL** | No operator evidence yet. Agent browser cannot prove this. Checklist: `REMEMBER_ME_OPERATOR_CHECKLIST.md`. Soft fix: refresh preserves Remember Me preference. |
+| 5 | 24h long run | **FAIL** | Soak ran ~23.99h but includes **305 disconnect samples** after `2026-07-28T12:38:14Z` with no self-heal until process recycle. RCA: `SOAK_DISCONNECT_RCA.md`. Gateway reconnect loop fix applied — **requires a fresh ≥24h soak** after deploying the fix. |
 
 ## Summary
 
-- PASS: 1 (MT5 session reconnect)
-- FAIL: 3 (full stack restart, gateway process restart, browser/PC session)
-- BLOCKED: 1 (24h soak in progress)
+- PASS: 2 (MT5 reconnect, gateway restart)
+- PARTIAL: 1 (full stack)
+- FAIL: 2 (Remember Me/PC restart; soak quality)
 
-## Live metrics (sample)
+## Software fixes landed (not sufficient alone)
 
-From `soak_24h_latest.json` at `2026-07-27T18:36:46Z`:
-
-- Gateway HTTP latency: **104.53 ms**
-- MT5 probe latency: **0.607 ms**
-- MT5 connected / attached: **true**
-- Heartbeat: present
-- CPU sample: **72.98%**
-- Gateway+terminal RAM sample: **38.21 MB**
-- Railway health that sample: **timeout** (intermittent; earlier direct probe was `ok`)
-- Soak process: **PID 5476** running (`soak_24h.pid`)
+1. Gateway heartbeat no longer permanently abandons reconnect when `connected=false` (`services/mt5_gateway/runtime.py`)
+2. Auth token refresh preserves Remember Me storage preference (`frontend/src/lib/api/client.ts`)
 
 ## Remaining blockers (must clear for acceptance)
 
-1. **Admin restart of elevated gateway** — run as Administrator: stop PID on :8765, start `python -m services.mt5_gateway.main`, confirm auto-attach + heartbeat.
-2. **Full stack restart proof** — confirm Railway backend recycle (Railway dashboard/CLI) and production FE deploy health after recycle; confirm no duplicate workers/orders.
-3. **Operator browser session** — in the real browser profile with Remember Me: refresh, close/reopen, then **PC restart**; confirm still logged in + broker restore.
-4. **Complete 24h soak** — leave `soak_24h.ps1` running; after 24h inspect `soak_24h_metrics.jsonl` for disconnects, memory growth, duplicate-order incidents (ops logs).
+1. Operator completes Remember Me checklist after **PC restart** with evidence files
+2. Fresh ≥24h soak after gateway fix with disconnect self-heal verified
+3. Re-declare PAT + OAT **ACCEPTED** only when steps above PASS
 
-## What already passed live
-
-- MT5 disconnect → attach recovery without manual login/setup
-- Gateway + MT5 heartbeat healthy on Weltrade-Real after session reconnect
-- Production FE and Railway API reachable
-- Encrypted broker profile present on disk
-
----
-
-**Acceptance rule:** all OAT steps must be **PASS**. Until then, do **not** declare LIVE PRODUCTION ACCEPTED.
+**Acceptance rule:** all OAT steps must be **PASS**. Until then, do **not** declare LIVE PRODUCTION ACCEPTED / do not push release to `main`.
