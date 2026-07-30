@@ -1,0 +1,12 @@
+{
+  "recorded_at": "2026-07-30T12:50:23.388664+00:00",
+  "commit": "de992f1a8edf5e81b8912e75ba92c423a53b4f45",
+  "branch": "cursor/v7-1-production-stabilization-bc83",
+  "gateway_version_in_git": "1.1.1",
+  "unit_tests": "41 passed (test_mt5_gateway + gateway_auth + terminal_capabilities)",
+  "windows_deploy_confirmed": false,
+  "windows_deploy_blocker": "Cloud agent has no shell/WinRM/SSH access to Windows production host; live /health still lacks gateway_version field (pre-1.1.1 process).",
+  "operator_deploy_script": "docs/production/reports/oat_v71/deploy_reconnect_fix_and_start_soak.ps1",
+  "soak_started_at": null,
+  "pat_oat_accepted": false
+}
