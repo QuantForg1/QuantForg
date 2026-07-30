@@ -23,7 +23,9 @@ PREVIEW = os.environ.get(
     "NOC_PREVIEW_URL",
     "https://quant-forg-c01exaxfj-quantforg.vercel.app",
 )
-OWNER_TOKEN = os.environ.get("QUANTFORG_OWNER_TOKEN") or os.environ.get("E2E_OWNER_TOKEN")
+OWNER_TOKEN = os.environ.get("QUANTFORG_OWNER_TOKEN") or os.environ.get(
+    "E2E_OWNER_TOKEN"
+)
 
 OUT_DIR = Path("docs/production/reports/noc_opsat")
 SECRET_RE = re.compile(
@@ -49,7 +51,11 @@ def _http(path: str, *, token: str | None = None) -> dict[str, Any]:
                 parsed: Any = json.loads(body)
             except json.JSONDecodeError:
                 parsed = {"raw": body[:500]}
-            return {"ok": 200 <= resp.status < 300, "status": resp.status, "body": parsed}
+            return {
+                "ok": 200 <= resp.status < 300,
+                "status": resp.status,
+                "body": parsed,
+            }
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
         try:
@@ -57,7 +63,7 @@ def _http(path: str, *, token: str | None = None) -> dict[str, Any]:
         except json.JSONDecodeError:
             parsed = {"raw": raw[:500]}
         return {"ok": False, "status": int(exc.code), "body": parsed}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"ok": False, "status": 0, "body": {"error": str(exc)}}
 
 
@@ -96,7 +102,9 @@ def run_local_aggregator_opsat() -> list[dict[str, Any]]:
     stage(ValidationStage.SCHEDULER, ok=True, reason="tick", latency_ms=1.2)
     stage(ValidationStage.MARKET_DATA, ok=True, reason="quotes_live", latency_ms=2.0)
     stage(ValidationStage.CONTEXT, ok=True, reason="context_ok", latency_ms=3.0)
-    stage(ValidationStage.AI, ok=False, reason="Quality below threshold", latency_ms=4.0)
+    stage(
+        ValidationStage.AI, ok=False, reason="Quality below threshold", latency_ms=4.0
+    )
     rec = get_production_validation_recorder()
     rec.record_no_trade_reasons(
         ["Quality below threshold", "Session filter: off-hours"]
@@ -143,7 +151,9 @@ def run_local_aggregator_opsat() -> list[dict[str, Any]]:
     checks.append(
         _check(
             "1_railway_status",
-            "PASS" if railway.get("status") in {"healthy", "warning", "critical", "unknown"} else "FAIL",
+            "PASS"
+            if railway.get("status") in {"healthy", "warning", "critical", "unknown"}
+            else "FAIL",
             f"railway={railway.get('status')} detail={railway.get('detail')}",
             railway,
         )
@@ -151,7 +161,9 @@ def run_local_aggregator_opsat() -> list[dict[str, Any]]:
 
     # 2 Pipeline
     nodes = (snap1.get("pipeline") or {}).get("nodes") or []
-    statuses = {str(n.get("stage_key") or n.get("stage")): n.get("status") for n in nodes}
+    statuses = {
+        str(n.get("stage_key") or n.get("stage")): n.get("status") for n in nodes
+    }
     expect_fail_ai = any(
         "AI" in str(n.get("stage")) and n.get("status") == "FAIL" for n in nodes
     )
@@ -261,9 +273,10 @@ def run_local_aggregator_opsat() -> list[dict[str, Any]]:
             "event_stream": [],
         },
     )
-    states_unavailable = "None" in str(missing.get("answer")) or "unavailable" in str(
-        missing.get("evidence")
-    ).lower()
+    states_unavailable = (
+        "None" in str(missing.get("answer"))
+        or "unavailable" in str(missing.get("evidence")).lower()
+    )
     checks.append(
         _check(
             "9_copilot_grounded",
@@ -291,7 +304,10 @@ def run_local_aggregator_opsat() -> list[dict[str, Any]]:
     secret_hit = bool(SECRET_RE.search(blob))
     poisoned = {
         **snap1,
-        "gateway": {**(snap1.get("gateway") or {}), "api_token": "super-secret-token-value"},
+        "gateway": {
+            **(snap1.get("gateway") or {}),
+            "api_token": "super-secret-token-value",
+        },
     }
     from app.application.services.noc_command_center import _redact
 
@@ -365,7 +381,9 @@ def run_production_probes() -> list[dict[str, Any]]:
 
     if OWNER_TOKEN:
         auth_noc = _http("/api/v1/ite/ops/noc-command-center", token=OWNER_TOKEN)
-        auth_pvm = _http("/api/v1/ite/ops/production-validation-mode", token=OWNER_TOKEN)
+        auth_pvm = _http(
+            "/api/v1/ite/ops/production-validation-mode", token=OWNER_TOKEN
+        )
         auth_auto = _http("/api/v1/ite/ops/auto-trading", token=OWNER_TOKEN)
         for name, res in (
             ("auth_noc", auth_noc),
@@ -379,7 +397,12 @@ def run_production_probes() -> list[dict[str, Any]]:
                     f"HTTP {res.get('status')}",
                     {
                         k: (res.get("body") or {}).get(k)
-                        for k in ("header", "primary_blocker", "current_blocker", "flags")
+                        for k in (
+                            "header",
+                            "primary_blocker",
+                            "current_blocker",
+                            "flags",
+                        )
                         if isinstance(res.get("body"), dict)
                     },
                 )
@@ -492,7 +515,11 @@ def main() -> int:
         ]
     )
     md_path.write_text("\n".join(lines), encoding="utf-8")
-    print(json.dumps({"verdict": verdict, "counts": counts, "json": str(json_path)}, indent=2))
+    print(
+        json.dumps(
+            {"verdict": verdict, "counts": counts, "json": str(json_path)}, indent=2
+        )
+    )
     return 1 if counts["FAIL"] else 0
 
 

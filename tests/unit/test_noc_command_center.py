@@ -6,13 +6,13 @@ from app.application.services.noc_command_center import (
     answer_noc_copilot,
     build_noc_command_center,
 )
+from app.domain.institutional_trading.production_validation_mode.models import (
+    ValidationStage,
+)
 from app.domain.institutional_trading.production_validation_mode.observe import (
     begin_validation,
     finalize,
     stage,
-)
-from app.domain.institutional_trading.production_validation_mode.models import (
-    ValidationStage,
 )
 from app.domain.institutional_trading.production_validation_mode.recorder import (
     reset_production_validation_recorder_for_tests,
@@ -67,7 +67,11 @@ def test_copilot_grounded_no_hallucination() -> None:
     out = answer_noc_copilot("Why isn't QuantForg trading?", telemetry=telemetry)
     assert out["grounded"] is True
     assert out["hallucination_guard"] is True
-    assert "Session" in out["answer"] or "blocker" in out["answer"].lower() or "NO_TRADE" in out["answer"]
+    assert (
+        "Session" in out["answer"]
+        or "blocker" in out["answer"].lower()
+        or "NO_TRADE" in out["answer"]
+    )
     assert out["evidence"]
 
     empty = answer_noc_copilot("")

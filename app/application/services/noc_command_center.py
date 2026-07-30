@@ -30,12 +30,17 @@ _SECRET_PARTS = frozenset(
 )
 
 
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _is_secret_key(key: str) -> bool:
-    """True only for credential-bearing field names — not flags like never_exposes_secrets."""
+    """True for credential-bearing field names only."""
     parts = [p for p in str(key).lower().replace("-", "_").split("_") if p]
     if not parts:
         return False
@@ -98,7 +103,11 @@ def _git_commit() -> str | None:
 
 
 def _header(*, settings: Any) -> dict[str, Any]:
-    env = str(getattr(settings, "environment", None) or getattr(settings, "app_env", None) or "unknown")
+    env = str(
+        getattr(settings, "environment", None)
+        or getattr(settings, "app_env", None)
+        or "unknown"
+    )
     version = str(getattr(settings, "app_version", None) or "unknown")
     return {
         "title": "QuantForg Command Center",
@@ -115,7 +124,7 @@ def _header(*, settings: Any) -> dict[str, Any]:
 
 def _health_cards(
     *,
-    plane: Any,
+    _plane: Any,
     settings: Any,
     auto: Any,
     services: dict[str, Any],
@@ -195,8 +204,10 @@ def _health_cards(
         card(
             "Gateway",
             ok=gw,
-            heartbeat=_svc("gateway").get("heartbeat_at") or live.get("gateway_checked_at"),
-            latency_ms=_svc("gateway").get("latency_ms") or live.get("gateway_latency_ms"),
+            heartbeat=_svc("gateway").get("heartbeat_at")
+            or live.get("gateway_checked_at"),
+            latency_ms=_svc("gateway").get("latency_ms")
+            or live.get("gateway_latency_ms"),
             detail=_svc("gateway").get("last_error") or "",
         ),
         card(
@@ -234,8 +245,10 @@ def _health_cards(
         ),
         card(
             "AutoTrading",
-            ok=run_state == "running" and bool(getattr(auto, "safety", None) and auto.safety.allowed),
-            warn=run_state == "running" and not (getattr(auto, "safety", None) and auto.safety.allowed),
+            ok=run_state == "running"
+            and bool(getattr(auto, "safety", None) and auto.safety.allowed),
+            warn=run_state == "running"
+            and not (getattr(auto, "safety", None) and auto.safety.allowed),
             detail=f"run_state={run_state} mt5_autotrading={mt5_at}",
         ),
     ]
@@ -255,8 +268,9 @@ def _pipeline_from_pvm(pvm: dict[str, Any]) -> dict[str, Any]:
         PIPELINE_ORDER,
     )
 
-    last = pvm.get("last_validation") if isinstance(pvm.get("last_validation"), dict) else {}
-    pipeline = last.get("pipeline") if isinstance(last.get("pipeline"), list) else []
+    last = _as_dict(pvm.get("last_validation"))
+    raw_pipeline = last.get("pipeline")
+    pipeline: list[Any] = list(raw_pipeline) if isinstance(raw_pipeline, list) else []
     by_stage: dict[str, dict[str, Any]] = {}
     for row in pipeline:
         if not isinstance(row, dict):
@@ -281,7 +295,7 @@ def _pipeline_from_pvm(pvm: dict[str, Any]) -> dict[str, Any]:
             "reason": row.get("reason") or None,
         }
 
-    # Always render full institutional pipeline; missing stages → WAITING (never invent PASS).
+    # Full pipeline always; missing stages → WAITING.
     nodes: list[dict[str, Any]] = []
     for stage in PIPELINE_ORDER:
         key = stage.value
@@ -308,10 +322,10 @@ def _pipeline_from_pvm(pvm: dict[str, Any]) -> dict[str, Any]:
 
 
 def _ai_engine(*, diagnostics: dict[str, Any], pvm: dict[str, Any]) -> dict[str, Any]:
-    latest = diagnostics.get("latest") if isinstance(diagnostics.get("latest"), dict) else {}
-    last = pvm.get("last_validation") if isinstance(pvm.get("last_validation"), dict) else {}
-    thresholds = diagnostics.get("thresholds") if isinstance(diagnostics.get("thresholds"), dict) else {}
-    reasons = []
+    latest = _as_dict(diagnostics.get("latest"))
+    last = _as_dict(pvm.get("last_validation"))
+    thresholds = _as_dict(diagnostics.get("thresholds"))
+    reasons: list[str] = []
     for key in ("decision_reasons", "reasons", "no_trade_reasons"):
         raw = latest.get(key) or last.get(key)
         if isinstance(raw, list):
@@ -356,12 +370,12 @@ def _ai_engine(*, diagnostics: dict[str, Any], pvm: dict[str, Any]) -> dict[str,
     }
 
 
-def _market_context(*, diagnostics: dict[str, Any], pvm: dict[str, Any], auto: Any) -> dict[str, Any]:
-    latest = diagnostics.get("latest") if isinstance(diagnostics.get("latest"), dict) else {}
-    last = pvm.get("last_validation") if isinstance(pvm.get("last_validation"), dict) else {}
-    diag = latest.get("market_context_diagnostics")
-    if not isinstance(diag, dict):
-        diag = {}
+def _market_context(
+    *, diagnostics: dict[str, Any], pvm: dict[str, Any], auto: Any
+) -> dict[str, Any]:
+    latest = _as_dict(diagnostics.get("latest"))
+    last = _as_dict(pvm.get("last_validation"))
+    diag = _as_dict(latest.get("market_context_diagnostics"))
     facts = getattr(auto, "facts", None)
     return {
         "trend": diag.get("trend") or latest.get("trend") or "—",
@@ -374,7 +388,9 @@ def _market_context(*, diagnostics: dict[str, Any], pvm: dict[str, Any], auto: A
         "spread": last.get("spread") or diag.get("spread"),
         "atr": last.get("atr") or diag.get("atr"),
         "liquidity": last.get("liquidity"),
-        "market_data_live": bool(getattr(facts, "market_data_live", False)) if facts else None,
+        "market_data_live": bool(getattr(facts, "market_data_live", False))
+        if facts
+        else None,
         "snapshot_present": latest.get("snapshot_present"),
     }
 
@@ -401,18 +417,32 @@ def _positions_read_only() -> list[dict[str, Any]]:
                         or getattr(pos, "type", None)
                         or "—"
                     ),
-                    "entry": str(getattr(pos, "entry_price", None) or getattr(pos, "price_open", None) or "—"),
+                    "entry": str(
+                        getattr(pos, "entry_price", None)
+                        or getattr(pos, "price_open", None)
+                        or "—"
+                    ),
                     "current_price": str(
                         getattr(pos, "current_price", None)
                         or getattr(pos, "price_current", None)
                         or "—"
                     ),
-                    "profit": str(getattr(pos, "profit", None) or getattr(pos, "unrealized_pnl", None) or "—"),
+                    "profit": str(
+                        getattr(pos, "profit", None)
+                        or getattr(pos, "unrealized_pnl", None)
+                        or "—"
+                    ),
                     "swap": str(getattr(pos, "swap", None) or "—"),
-                    "duration": str(getattr(pos, "duration", None) or getattr(pos, "opened_at", None) or "—"),
+                    "duration": str(
+                        getattr(pos, "duration", None)
+                        or getattr(pos, "opened_at", None)
+                        or "—"
+                    ),
                     "risk": str(getattr(pos, "risk", None) or "—"),
                     "floating_pnl": str(
-                        getattr(pos, "profit", None) or getattr(pos, "unrealized_pnl", None) or "—"
+                        getattr(pos, "profit", None)
+                        or getattr(pos, "unrealized_pnl", None)
+                        or "—"
                     ),
                     "broker": "MT5",
                 }
@@ -423,7 +453,7 @@ def _positions_read_only() -> list[dict[str, Any]]:
 
 
 def _closed_trades_read_only(*, limit: int = 20) -> list[dict[str, Any]]:
-    """Recent closed trades from execution journal / audits if available — never invent."""
+    """Recent closed trades from journal when available."""
     rows: list[dict[str, Any]] = []
     try:
         # Prefer bridge journal on runtime if present
@@ -442,13 +472,19 @@ def _closed_trades_read_only(*, limit: int = 20) -> list[dict[str, Any]]:
         elif hasattr(journal, "entries"):
             recent = list(getattr(journal, "entries", []) or [])[-limit:]
         for entry in recent:
-            d = entry.to_dict() if hasattr(entry, "to_dict") else (
-                entry if isinstance(entry, dict) else {}
+            d = (
+                entry.to_dict()
+                if hasattr(entry, "to_dict")
+                else (entry if isinstance(entry, dict) else {})
             )
             if not d:
                 continue
             status = str(d.get("status") or d.get("execution_result") or "").lower()
-            if "close" not in status and "exit" not in status and d.get("mt5_ticket") is None:
+            if (
+                "close" not in status
+                and "exit" not in status
+                and d.get("mt5_ticket") is None
+            ):
                 # Still surface filled attempts as execution history when close unknown
                 pass
             rows.append(
@@ -471,9 +507,11 @@ def _closed_trades_read_only(*, limit: int = 20) -> list[dict[str, Any]]:
     return rows[:limit]
 
 
-def _oms_dashboard(*, pvm: dict[str, Any], attempts: list[dict[str, Any]]) -> dict[str, Any]:
-    last = pvm.get("last_validation") if isinstance(pvm.get("last_validation"), dict) else {}
-    oms = last.get("oms") if isinstance(last.get("oms"), dict) else {}
+def _oms_dashboard(
+    *, pvm: dict[str, Any], attempts: list[dict[str, Any]]
+) -> dict[str, Any]:
+    last = _as_dict(pvm.get("last_validation"))
+    oms = _as_dict(last.get("oms"))
     successes = 0
     failures = 0
     latencies: list[float] = []
@@ -491,8 +529,8 @@ def _oms_dashboard(*, pvm: dict[str, Any], attempts: list[dict[str, Any]]) -> di
         if o.get("latency_ms") is not None:
             try:
                 latencies.append(float(o["latency_ms"]))
-            except Exception:
-                pass
+            except (TypeError, ValueError):
+                logger.debug("noc_oms_latency_parse_skipped")
         retries += int(o.get("retry_count") or 0)
     total = successes + failures
     return {
@@ -506,10 +544,11 @@ def _oms_dashboard(*, pvm: dict[str, Any], attempts: list[dict[str, Any]]) -> di
     }
 
 
-def _gateway_dashboard(*, pvm: dict[str, Any], services: dict[str, Any], live: dict[str, Any]) -> dict[str, Any]:
-    last = pvm.get("last_validation") if isinstance(pvm.get("last_validation"), dict) else {}
-    raw_gw = last.get("gateway")
-    gw: dict[str, Any] = raw_gw if isinstance(raw_gw, dict) else {}
+def _gateway_dashboard(
+    *, pvm: dict[str, Any], services: dict[str, Any], live: dict[str, Any]
+) -> dict[str, Any]:
+    last = _as_dict(pvm.get("last_validation"))
+    gw = _as_dict(last.get("gateway"))
     svc: dict[str, Any] = {}
     for row in services.get("services") or []:
         if isinstance(row, dict) and str(row.get("name", "")).lower() == "gateway":
@@ -540,10 +579,11 @@ def _gateway_dashboard(*, pvm: dict[str, Any], services: dict[str, Any], live: d
 
 def _broker_dashboard(*, auto: Any, live: dict[str, Any]) -> dict[str, Any]:
     facts = getattr(auto, "facts", None)
-    raw_account = live.get("account")
-    account: dict[str, Any] = raw_account if isinstance(raw_account, dict) else {}
+    account = _as_dict(live.get("account"))
     return {
-        "broker_connected": bool(getattr(facts, "broker_connected", False)) if facts else None,
+        "broker_connected": bool(getattr(facts, "broker_connected", False))
+        if facts
+        else None,
         "account": account.get("login") or live.get("login"),
         "balance": account.get("balance") or live.get("balance"),
         "equity": account.get("equity") or live.get("equity"),
@@ -556,8 +596,7 @@ def _broker_dashboard(*, auto: Any, live: dict[str, Any]) -> dict[str, Any]:
 
 
 def _performance(*, diagnostics: dict[str, Any]) -> dict[str, Any]:
-    raw_stats = diagnostics.get("statistics")
-    stats: dict[str, Any] = raw_stats if isinstance(raw_stats, dict) else {}
+    stats = _as_dict(diagnostics.get("statistics"))
     # Only surface fields that diagnostics actually provides — never invent win rate/PF.
     weekly = stats.get("weekly")
     monthly = stats.get("monthly")
@@ -597,7 +636,11 @@ def _event_stream(
         events.append(
             {
                 "kind": "pipeline",
-                "level": "critical" if st == "FAIL" else "info" if st == "PASS" else "warning",
+                "level": "critical"
+                if st == "FAIL"
+                else "info"
+                if st == "PASS"
+                else "warning",
                 "message": f"{node.get('stage')} {st}",
                 "reason": node.get("reason"),
                 "timestamp": node.get("timestamp"),
@@ -633,7 +676,9 @@ def _event_stream(
     return events[:100]
 
 
-def _alert_center(*, plane: Any, pvm: dict[str, Any], auto: Any) -> list[dict[str, Any]]:
+def _alert_center(
+    *, plane: Any, pvm: dict[str, Any], auto: Any
+) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
     try:
         alert_svc = getattr(plane, "alerts", None)
@@ -723,18 +768,23 @@ def _collect_ops_metrics_safe(
                 out["request_count"] = payload.get("request_count")
                 out["error_count"] = payload.get("error_count")
     except Exception:
-        # Common in unit tests / pre-boot — silent by design (no spam).
-        pass
+        # Common in unit tests / pre-boot — avoid exception spam.
+        logger.debug("noc_metrics_collector_unavailable", exc_info=True)
 
     try:
         from app.infrastructure.brokers.mt5.metrics import gateway_metrics
 
         gw_snap = gateway_metrics.snapshot()
         if isinstance(gw_snap, dict):
-            out.setdefault("gateway_latency_ms", gw_snap.get("latency_ms") or gw_snap.get("avg_latency_ms"))
-            out["execution_count"] = gw_snap.get("order_send_count") or gw_snap.get("orders_sent")
+            out.setdefault(
+                "gateway_latency_ms",
+                gw_snap.get("latency_ms") or gw_snap.get("avg_latency_ms"),
+            )
+            out["execution_count"] = gw_snap.get("order_send_count") or gw_snap.get(
+                "orders_sent"
+            )
     except Exception:
-        pass
+        logger.debug("noc_gateway_metrics_unavailable", exc_info=True)
 
     return out
 
@@ -759,7 +809,7 @@ def _system_metrics(*, ops_metrics: dict[str, Any] | None) -> dict[str, Any]:
         "series": m.get("series") if isinstance(m.get("series"), dict) else None,
         "collected_at": m.get("collected_at"),
         "resource_source": m.get("resource_source"),
-        "note": "Scalars only when collected by ops metrics; null means unavailable (never mocked).",
+        "note": "Null means unavailable (never mocked).",
     }
 
 
@@ -791,21 +841,24 @@ def build_noc_command_center() -> dict[str, Any]:
         {"attempts": []},
     ) or {"attempts": []}
     attempts = list(attempts_payload.get("attempts") or [])
-    diagnostics = _safe_call(
-        "diagnostics",
-        lambda: get_strategy_diagnostics_store().snapshot(limit=40),
-        {},
-    ) or {}
+    diagnostics = (
+        _safe_call(
+            "diagnostics",
+            lambda: get_strategy_diagnostics_store().snapshot(limit=40),
+            {},
+        )
+        or {}
+    )
 
     # Reuse services-health construction lightly
     services: dict[str, Any] = {}
     try:
-        from app.presentation.routers.institutional_ops import services_health
-
         # Call underlying logic without FastAPI user dep — duplicate minimal collect
         from app.application.services.auto_trading_status import build_status_facts
         from app.application.services.institutional_ite_runtime import get_ite_runtime
-        from app.application.services.institutional_live_probes import LiveProbeCollector
+        from app.application.services.institutional_live_probes import (
+            LiveProbeCollector,
+        )
 
         facts, live = build_status_facts(plane, settings=settings)
         runtime = get_ite_runtime()
@@ -817,7 +870,9 @@ def build_noc_command_center() -> dict[str, Any]:
             "services": [
                 {
                     "name": "gateway",
-                    "status": "healthy" if getattr(probes, "gateway_ok", False) or facts.gateway_connected else "unhealthy",
+                    "status": "healthy"
+                    if getattr(probes, "gateway_ok", False) or facts.gateway_connected
+                    else "unhealthy",
                     "latency_ms": getattr(probes, "gateway_latency_ms", None),
                     "last_error": getattr(probes, "gateway_error", None),
                     "heartbeat_at": getattr(probes, "as_of", None),
@@ -838,7 +893,9 @@ def build_noc_command_center() -> dict[str, Any]:
             ],
             "live": live if isinstance(live, dict) else {},
         }
-        live_map = services.get("live") if isinstance(services.get("live"), dict) else {}
+        live_map = (
+            services.get("live") if isinstance(services.get("live"), dict) else {}
+        )
     except Exception:
         logger.exception("noc_services_collect_failed")
         live_map = getattr(auto, "live", None) or {}
@@ -847,19 +904,20 @@ def build_noc_command_center() -> dict[str, Any]:
     if auto is None:
         # Minimal empty auto stand-in
         class _Empty:
-            facts = None
-            safety = None
-            live: dict[str, Any] = {}
-            execution_state: dict[str, Any] = {}
-            primary_blocker = None
+            def __init__(self) -> None:
+                self.facts = None
+                self.safety = None
+                self.live: dict[str, Any] = {}
+                self.execution_state: dict[str, Any] = {}
+                self.primary_blocker = None
 
         auto = _Empty()
 
     pipeline = _pipeline_from_pvm(pvm)
     alerts = _alert_center(plane=plane, pvm=pvm, auto=auto)
     header = _header(settings=settings)
-    # Process answering this request is the Railway API service — report online only when
-    # we successfully collected live auto-trading facts (never invent deploy meta).
+    # Railway API process online only when auto-trading facts collected.
+    # Never invent deploy meta.
     header["railway_status"] = (
         "online" if getattr(auto, "facts", None) is not None else "unknown"
     )
@@ -925,7 +983,7 @@ def build_noc_command_center() -> dict[str, Any]:
     payload: dict[str, Any] = {
         "header": header,
         "global_health": _health_cards(
-            plane=plane,
+            _plane=plane,
             settings=settings,
             auto=auto,
             services=services,
@@ -960,7 +1018,9 @@ def build_noc_command_center() -> dict[str, Any]:
     return redacted if isinstance(redacted, dict) else payload
 
 
-def answer_noc_copilot(question: str, *, telemetry: dict[str, Any] | None = None) -> dict[str, Any]:
+def answer_noc_copilot(
+    question: str, *, telemetry: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Rule-based copilot — answers only from provided/real telemetry. Never invents."""
     q = " ".join((question or "").strip().lower().split())
     data = telemetry if isinstance(telemetry, dict) else build_noc_command_center()
@@ -975,7 +1035,10 @@ def answer_noc_copilot(question: str, *, telemetry: dict[str, Any] | None = None
 
     if not q:
         return {
-            "answer": "Ask a production telemetry question (e.g. why isn't QuantForg trading?).",
+            "answer": (
+                "Ask a production telemetry question "
+                "(e.g. why isn't QuantForg trading?)."
+            ),
             "evidence": [],
             "grounded": True,
             "hallucination_guard": True,
@@ -986,7 +1049,17 @@ def answer_noc_copilot(question: str, *, telemetry: dict[str, Any] | None = None
     health = data.get("global_health") or []
     blocker = data.get("primary_blocker") or ai.get("current_blocker")
 
-    if any(k in q for k in ("why", "not trading", "isn't trading", "isnt trading", "no trade", "rejected")):
+    if any(
+        k in q
+        for k in (
+            "why",
+            "not trading",
+            "isn't trading",
+            "isnt trading",
+            "no trade",
+            "rejected",
+        )
+    ):
         cite("decision", ai.get("decision"))
         cite("blocker", blocker)
         cite("session", ai.get("current_session"))
@@ -1003,7 +1076,9 @@ def answer_noc_copilot(question: str, *, telemetry: dict[str, Any] | None = None
                 "No explicit blocker field in current telemetry snapshot."
             )
         if pipeline.get("first_blocker"):
-            answer_parts.append(f"Pipeline first blocker: {pipeline.get('first_blocker')}")
+            answer_parts.append(
+                f"Pipeline first blocker: {pipeline.get('first_blocker')}"
+            )
             cite("pipeline_first_blocker", pipeline.get("first_blocker"))
 
     elif "latency" in q or "broker latency" in q or "gateway latency" in q:
@@ -1027,12 +1102,15 @@ def answer_noc_copilot(question: str, *, telemetry: dict[str, Any] | None = None
             or "FAIL" in str(e.get("message") or "")
         ]
         if not fails:
-            answer_parts.append("No FAIL/critical events in the current NOC event stream window.")
+            answer_parts.append(
+                "No FAIL/critical events in the current NOC event stream window."
+            )
         else:
             answer_parts.append(f"{len(fails)} failure/critical events in stream:")
             for e in fails[:15]:
+                reason = e.get("reason") or "—"
                 answer_parts.append(
-                    f"- {e.get('timestamp')}: {e.get('message')} ({e.get('reason') or '—'})"
+                    f"- {e.get('timestamp')}: {e.get('message')} ({reason})"
                 )
                 evidence.append(str(e.get("message")))
 
