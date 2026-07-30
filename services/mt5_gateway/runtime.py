@@ -6,8 +6,10 @@ They are never written to Railway env, logs, or API responses.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import re
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -248,35 +250,95 @@ class GatewayDiagnostics:
 
 
 class LiveMT5Bridge:
-    """Thin wrapper over the MetaTrader5 package (Windows only)."""
+    """Thin wrapper over the MetaTrader5 package (Windows only).
+
+    ``bridge_available`` means the MetaTrader5 **module imported** in this
+    process. It does **not** mean ``initialize()`` succeeded.
+
+    Import is retried on demand so a package installed after process start can
+    be picked up without guessing; initialize failures record ``last_error()``.
+    """
 
     def __init__(self) -> None:
         self._mt5: Any | None = None
         self._import_error: str | None = None
-        try:
-            import MetaTrader5 as mt5
+        self._last_initialize_ok: bool | None = None
+        self._last_initialize_error: Any | None = None
+        self._last_initialize_path: str | None = None
+        self._ensure_module()
 
+    def _ensure_module(self) -> bool:
+        """Import (or re-import) MetaTrader5; update ``_import_error``."""
+        if self._mt5 is not None:
+            return True
+        name = "MetaTrader5"
+        try:
+            # Drop a prior failed/partial import so a later successful install
+            # can be loaded in the same process.
+            for key in list(sys.modules):
+                if key == name or key.startswith(name + "."):
+                    del sys.modules[key]
+            mt5 = importlib.import_module(name)
             self._mt5 = mt5
+            self._import_error = None
+            logger.info(
+                "mt5_bridge_import_ok file=%s",
+                getattr(mt5, "__file__", None),
+            )
+            return True
         except Exception as exc:
+            self._mt5 = None
             self._import_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("mt5_bridge_import_failed error=%s", self._import_error)
+            return False
 
     @property
     def available(self) -> bool:
-        return self._mt5 is not None
+        if self._mt5 is not None:
+            return True
+        return self._ensure_module()
 
     def require(self) -> Any:
-        if self._mt5 is None:
+        if not self._ensure_module() or self._mt5 is None:
             raise RuntimeError(
-                "MetaTrader5 package unavailable. "
-                f"Install on Windows host. ({self._import_error or 'no detail'})"
+                "MetaTrader5 package unavailable in this Python process. "
+                f"({self._import_error or 'no detail'})"
             )
         return self._mt5
 
     def initialize(self, path: str = "") -> bool:
         mt5 = self.require()
-        if path:
-            return bool(mt5.initialize(path=path))
-        return bool(mt5.initialize())
+        term_path = (path or "").strip()
+        self._last_initialize_path = term_path or None
+        logger.info("mt5_initialize_begin path=%r", term_path or None)
+        try:
+            if term_path:
+                ok = bool(mt5.initialize(path=term_path))
+            else:
+                ok = bool(mt5.initialize())
+        except Exception as exc:
+            self._last_initialize_ok = False
+            self._last_initialize_error = f"{type(exc).__name__}: {exc}"
+            logger.exception(
+                "mt5_initialize_exception path=%r error=%s",
+                term_path or None,
+                self._last_initialize_error,
+            )
+            return False
+        err: Any = None
+        try:
+            err = mt5.last_error()
+        except Exception as exc:
+            err = f"last_error_failed: {type(exc).__name__}: {exc}"
+        self._last_initialize_ok = ok
+        self._last_initialize_error = err
+        logger.info(
+            "mt5_initialize_end ok=%s path=%r last_error=%s",
+            ok,
+            term_path or None,
+            err,
+        )
+        return ok
 
     def login(self, login: int, password: str, server: str) -> bool:
         mt5 = self.require()
@@ -433,6 +495,10 @@ class MT5GatewayRuntime:
                     else self.bridge._import_error
                 )
                 msg = f"MT5 initialize failed: {err}"
+                if getattr(self.bridge, "_last_initialize_error", None) is not None:
+                    msg = (
+                        f"{msg}; last_error={self.bridge._last_initialize_error!r}"
+                    )
                 self._record_failure(msg)
                 raise RuntimeError(msg)
             if not self.bridge.login(login, password, server):
@@ -476,6 +542,10 @@ class MT5GatewayRuntime:
                     else self.bridge._import_error
                 )
                 msg = f"MT5 initialize failed: {err}"
+                if getattr(self.bridge, "_last_initialize_error", None) is not None:
+                    msg = (
+                        f"{msg}; last_error={self.bridge._last_initialize_error!r}"
+                    )
                 self._record_failure(msg)
                 raise RuntimeError(msg)
             info = self.bridge.account_info()
@@ -1340,10 +1410,19 @@ class MT5GatewayRuntime:
 
     def diagnostics_snapshot(self) -> dict[str, Any]:
         password_in_memory = bool(self._creds and self._creds.password)
+        # Refresh import status for diagnostics (may succeed after late install).
+        bridge_ok = self.bridge.available
         return {
             **self.diagnostics.to_dict(),
-            "bridge_available": self.bridge.available,
+            "bridge_available": bridge_ok,
             "import_error": self.bridge._import_error,
+            "last_initialize_ok": getattr(self.bridge, "_last_initialize_ok", None),
+            "last_initialize_error": getattr(
+                self.bridge, "_last_initialize_error", None
+            ),
+            "last_initialize_path": getattr(
+                self.bridge, "_last_initialize_path", None
+            ),
             "credentials_in_memory": self._creds is not None,
             "password_in_memory": password_in_memory,
             "auto_attach_enabled": self.settings.mt5_gateway_auto_attach,

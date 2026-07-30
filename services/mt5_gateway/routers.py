@@ -142,6 +142,17 @@ async def health(request: Request) -> dict[str, Any]:
         if not runtime.bridge.available:
             payload["bridge_import_error"] = runtime.bridge._import_error
             mt5_payload["bridge_import_error"] = runtime.bridge._import_error
+        else:
+            # Surface last initialize attempt when import works but session is down.
+            init_err = getattr(runtime.bridge, "_last_initialize_error", None)
+            init_ok = getattr(runtime.bridge, "_last_initialize_ok", None)
+            if init_ok is False or (
+                not mt5_payload.get("connected") and init_err is not None
+            ):
+                payload["bridge_initialize_ok"] = init_ok
+                payload["bridge_initialize_error"] = init_err
+                mt5_payload["bridge_initialize_ok"] = init_ok
+                mt5_payload["bridge_initialize_error"] = init_err
         # Top-level status stays "ok" while the gateway process is serving —
         # MT5 degradation lives under payload["mt5"] so live probes still see
         # a reachable gateway (HTTP 200 + status=ok).

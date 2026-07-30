@@ -19,12 +19,18 @@ class _FakeBridge(LiveMT5Bridge):
     def __init__(self, *, prelogged: bool = False) -> None:
         self._mt5 = object()
         self._import_error: str | None = None
+        self._last_initialize_ok: bool | None = None
+        self._last_initialize_error: Any | None = None
+        self._last_initialize_path: str | None = None
         self._initialized = False
         self._logged_in = prelogged
         self._login = 99901 if prelogged else 0
         self._server = "XMGlobal-Demo" if prelogged else ""
         self.selected: list[str] = []
         self.login_calls = 0
+
+    def _ensure_module(self) -> bool:
+        return self._mt5 is not None
 
     def initialize(self, path: str = "") -> bool:
         _ = path
@@ -261,7 +267,7 @@ class TestMT5Gateway:
         body = res.json()
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
-        assert body.get("gateway_version") == "1.1.1"
+        assert body.get("gateway_version") == "1.1.2"
         assert body["auto_attach_enabled"] is False
         mt5 = body.get("mt5") or {}
         # No session yet — capabilities not probed (never invent Enabled).
@@ -280,6 +286,12 @@ class TestMT5Gateway:
             def __init__(self) -> None:
                 self._mt5 = None
                 self._import_error = "ModuleNotFoundError: No module named 'MetaTrader5'"
+                self._last_initialize_ok = None
+                self._last_initialize_error = None
+                self._last_initialize_path = None
+
+            def _ensure_module(self) -> bool:
+                return False
 
         app = create_app()
         with TestClient(app) as test_client:
@@ -652,6 +664,59 @@ class TestFillingModeSelection:
 
         with pytest.raises(MT5CallTimeout):
             call_mt5_bounded(_hang, timeout_seconds=0.1, label="test")
+
+
+@pytest.mark.unit
+class TestLiveMT5BridgeImport:
+    def test_available_retries_import_after_initial_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import services.mt5_gateway.runtime as runtime_mod
+
+        calls = {"n": 0}
+        sentinel = object()
+
+        def fake_import(name: str) -> Any:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ModuleNotFoundError("No module named 'MetaTrader5'")
+            if name != "MetaTrader5":
+                raise ModuleNotFoundError(name)
+            return sentinel
+
+        monkeypatch.setattr(runtime_mod.importlib, "import_module", fake_import)
+        bridge = LiveMT5Bridge()
+        assert bridge._mt5 is None
+        assert bridge._import_error is not None
+        assert "ModuleNotFoundError" in (bridge._import_error or "")
+        # Second attempt (simulates package becoming importable later).
+        assert bridge.available is True
+        assert bridge._mt5 is sentinel
+        assert bridge._import_error is None
+
+    def test_initialize_records_last_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import services.mt5_gateway.runtime as runtime_mod
+
+        class _Mod:
+            @staticmethod
+            def initialize(path: str = "") -> bool:
+                _ = path
+                return False
+
+            @staticmethod
+            def last_error() -> tuple[int, str]:
+                return (1, "IPC timeout")
+
+        monkeypatch.setattr(
+            runtime_mod.importlib, "import_module", lambda name: _Mod()
+        )
+        bridge = LiveMT5Bridge()
+        assert bridge.available is True
+        assert bridge.initialize(path="") is False
+        assert bridge._last_initialize_ok is False
+        assert bridge._last_initialize_error == (1, "IPC timeout")
 
 
 @pytest.mark.unit
