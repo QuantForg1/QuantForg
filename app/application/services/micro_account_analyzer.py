@@ -77,17 +77,18 @@ def _try_live_broker_specs() -> tuple[BrokerLotSpecs, dict[str, Any]]:
         from dotenv import load_dotenv
 
         load_dotenv(Path.cwd() / ".env")
-        token = (os.getenv("MT5_GATEWAY_TOKEN") or "").strip()
+        from app.infrastructure.brokers.mt5.gateway_client import (
+            GatewayMT5Client,
+            resolve_gateway_caller_token,
+        )
+
+        token = resolve_gateway_caller_token()
         base = (
             os.getenv("MT5_GATEWAY_URL")
             or os.getenv("MT5_GATEWAY_BASE_URL")
             or "http://127.0.0.1:8765"
         )
         if token:
-            from app.infrastructure.brokers.mt5.gateway_client import (
-                GatewayMT5Client,
-            )
-
             client = GatewayMT5Client(base_url=base, token=token)
             if client.adopt_existing_session():
                 payload = client._request("GET", f"/symbols/{GOLD_SYMBOL}")
@@ -99,7 +100,7 @@ def _try_live_broker_specs() -> tuple[BrokerLotSpecs, dict[str, Any]]:
                     return specs, meta
             meta["error"] = "gateway_session_not_attached"
         else:
-            meta["error"] = "no_MT5_GATEWAY_TOKEN"
+            meta["error"] = "no_MT5_GATEWAY_CALLER_TOKEN"
     except Exception as exc:
         logger.warning("micro_analyzer_live_specs_failed", error=str(exc))
         meta["error"] = str(exc)
@@ -147,10 +148,13 @@ def _try_live_atr() -> tuple[Decimal, dict[str, Any]]:
 
         from dotenv import load_dotenv
 
-        from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
+        from app.infrastructure.brokers.mt5.gateway_client import (
+            GatewayMT5Client,
+            resolve_gateway_caller_token,
+        )
 
         load_dotenv(Path.cwd() / ".env")
-        token = (os.getenv("MT5_GATEWAY_TOKEN") or "").strip()
+        token = resolve_gateway_caller_token()
         base = (
             os.getenv("MT5_GATEWAY_URL")
             or os.getenv("MT5_GATEWAY_BASE_URL")
@@ -166,7 +170,7 @@ def _try_live_atr() -> tuple[Decimal, dict[str, Any]]:
                     return atr, atr_meta
             meta["error"] = "gateway_session_not_attached"
         else:
-            meta["error"] = "no_MT5_GATEWAY_TOKEN"
+            meta["error"] = "no_MT5_GATEWAY_CALLER_TOKEN"
     except Exception as exc:
         meta["error"] = str(exc)
 

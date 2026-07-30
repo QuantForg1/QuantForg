@@ -112,11 +112,40 @@ def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
     out: dict[str, str] = {}
     for key, value in headers.items():
         low = key.lower()
-        if low in {"authorization", "x-gateway-token"}:
+        if low in {
+            "authorization",
+            "x-gateway-token",
+            "x-quantforg-gateway-token",
+        }:
             out[key] = "***" if value else ""
         else:
             out[key] = value
     return out
+
+
+def resolve_gateway_caller_token(*raw_values: str | None) -> str:
+    """First non-empty gateway caller token from explicit values or process env.
+
+    Railway must send the shared secret; accept both
+    ``MT5_GATEWAY_CALLER_TOKEN`` (canonical) and ``MT5_GATEWAY_TOKEN``
+    (common misconfig matching the Windows host name).
+    """
+    import os
+
+    for value in raw_values:
+        text = (value or "").strip()
+        if text:
+            return text
+    for key in (
+        "MT5_GATEWAY_CALLER_TOKEN",
+        "MT5_GATEWAY_TOKEN",
+        "mt5_gateway_caller_token",
+        "mt5_gateway_token",
+    ):
+        text = (os.getenv(key) or "").strip()
+        if text:
+            return text
+    return ""
 
 
 def _clip(text: str, limit: int = _BODY_PREVIEW_LIMIT) -> str:
@@ -235,11 +264,20 @@ class GatewayMT5Client:
             "Accept-Encoding": "gzip, deflate",
             "User-Agent": "QuantForg-Railway-GatewayClient/1.1",
         }
-        if auth and self.token:
-            # Gateway accepts either header; send both for tunnel proxies that
-            # strip one of them.
-            headers["Authorization"] = f"Bearer {self.token}"
-            headers["X-Gateway-Token"] = self.token
+        if auth:
+            token = (self.token or "").strip()
+            if not token:
+                # Never send an authenticated call without the shared secret —
+                # that produces gateway_auth_rejected received=<empty>.
+                raise RuntimeError(
+                    "MT5_GATEWAY_CALLER_TOKEN is empty — cannot set "
+                    "Authorization / X-Gateway-Token for the Windows gateway"
+                )
+            # Gateway accepts any of these; send all three so Cloudflare /
+            # tunnel proxies that strip Authorization still authenticate.
+            headers["Authorization"] = f"Bearer {token}"
+            headers["X-Gateway-Token"] = token
+            headers["X-QuantForg-Gateway-Token"] = token
         return headers
 
     def _timeout(self) -> httpx.Timeout:
@@ -309,6 +347,16 @@ class GatewayMT5Client:
         t0 = time.perf_counter()
         cloudflare = is_cloudflare_tunnel_url(url) or self.is_cloudflare
 
+        auth_header_keys = sorted(
+            k
+            for k in headers
+            if k.lower()
+            in {
+                "authorization",
+                "x-gateway-token",
+                "x-quantforg-gateway-token",
+            }
+        )
         logger.info(
             "gateway_http_request",
             method=method,
@@ -317,6 +365,8 @@ class GatewayMT5Client:
             path=path,
             auth=auth,
             token_configured=bool(self.token),
+            token_len=len(self.token or ""),
+            auth_header_keys=auth_header_keys,
             headers=safe_headers,
             timeout_seconds=self.timeout_seconds,
             cloudflare=cloudflare,

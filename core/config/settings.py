@@ -365,6 +365,10 @@ class Settings(BaseSettings):
             validation_alias=AliasChoices(
                 "MT5_GATEWAY_CALLER_TOKEN",
                 "mt5_gateway_caller_token",
+                # Operators often set the Windows name on Railway by mistake.
+                # Accept it so Authorization / X-Gateway-Token are actually sent.
+                "MT5_GATEWAY_TOKEN",
+                "mt5_gateway_token",
             ),
         ),
     ] = ""

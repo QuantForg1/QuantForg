@@ -142,6 +142,11 @@ async def health(request: Request) -> dict[str, Any]:
         if not runtime.bridge.available:
             payload["bridge_import_error"] = runtime.bridge._import_error
             mt5_payload["bridge_import_error"] = runtime.bridge._import_error
+            # Interpreter mismatch evidence (sys.executable vs pip target).
+            import_ctx = getattr(runtime.bridge, "_import_context", None)
+            if isinstance(import_ctx, dict):
+                payload["bridge_import_context"] = import_ctx
+                mt5_payload["bridge_import_context"] = import_ctx
         else:
             # Surface last initialize attempt when import works but session is down.
             init_err = getattr(runtime.bridge, "_last_initialize_error", None)

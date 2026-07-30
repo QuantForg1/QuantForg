@@ -267,7 +267,7 @@ class TestMT5Gateway:
         body = res.json()
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
-        assert body.get("gateway_version") == "1.1.2"
+        assert body.get("gateway_version") == "1.1.3"
         assert body["auto_attach_enabled"] is False
         mt5 = body.get("mt5") or {}
         # No session yet — capabilities not probed (never invent Enabled).
@@ -689,6 +689,8 @@ class TestLiveMT5BridgeImport:
         assert bridge._mt5 is None
         assert bridge._import_error is not None
         assert "ModuleNotFoundError" in (bridge._import_error or "")
+        assert isinstance(bridge._import_context, dict)
+        assert "executable" in (bridge._import_context or {})
         # Second attempt (simulates package becoming importable later).
         assert bridge.available is True
         assert bridge._mt5 is sentinel

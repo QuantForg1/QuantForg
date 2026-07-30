@@ -28,7 +28,9 @@ async def gateway_ws(websocket: WebSocket) -> None:
         return
 
     # Prefer headers over query-string tokens (query tokens leak into proxies/logs).
-    raw = websocket.headers.get("x-gateway-token", "")
+    raw = websocket.headers.get("x-gateway-token", "") or websocket.headers.get(
+        "x-quantforg-gateway-token", ""
+    )
     if not raw:
         auth = websocket.headers.get("authorization", "")
         if auth.lower().startswith("bearer "):

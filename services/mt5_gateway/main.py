@@ -76,7 +76,7 @@ def create_app() -> FastAPI:
     settings = get_gateway_settings()
     app = FastAPI(
         title="QuantForg MT5 Gateway",
-        version="1.1.2",
+        version="1.1.3",
         description=(
             "Windows MetaTrader 5 runtime gateway. "
             "Broker credentials stay in gateway memory — not Railway. "

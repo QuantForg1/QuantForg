@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from services.mt5_gateway.settings import get_gateway_settings
@@ -20,17 +20,26 @@ logger = logging.getLogger("quantforg.mt5_gateway.auth")
 
 _bearer = HTTPBearer(auto_error=False)
 
+# Tunnel/proxy-safe auth headers (Authorization is sometimes stripped).
+_TOKEN_HEADER_NAMES = (
+    "x-gateway-token",
+    "x-quantforg-gateway-token",
+)
+
 
 def _token_candidates(
     *,
     authorization: str | None,
     credentials: HTTPAuthorizationCredentials | None,
     x_gateway_token: str | None,
+    x_quantforg_gateway_token: str | None,
+    request: Request | None = None,
 ) -> list[tuple[str, str]]:
     """Collect unique normalized secrets from every supported header.
 
-    Prefer ``X-Gateway-Token`` first: Railway sends it alongside Authorization
-    because tunnels/proxies may rewrite Bearer while leaving this header intact.
+    Prefer custom gateway headers first: Railway sends them alongside
+    Authorization because tunnels/proxies may rewrite Bearer while leaving
+    these headers intact.
     """
     candidates: list[tuple[str, str]] = []
     seen: set[str] = set()
@@ -42,6 +51,10 @@ def _token_candidates(
         candidates.append((token, source))
 
     add(normalize_gateway_token(x_gateway_token), "x_gateway_token")
+    add(
+        normalize_gateway_token(x_quantforg_gateway_token),
+        "x_quantforg_gateway_token",
+    )
     add(parse_authorization_bearer(authorization), "authorization_bearer")
 
     if credentials is not None and credentials.scheme.lower() == "bearer":
@@ -51,16 +64,42 @@ def _token_candidates(
     if auth_stripped and not auth_stripped.lower().startswith("bearer"):
         add(normalize_gateway_token(authorization), "authorization_raw")
 
+    # Last resort: read raw ASGI headers. FastAPI Header()/HTTPBearer can miss
+    # values when a proxy rewrites casing or duplicates Authorization.
+    if request is not None and not candidates:
+        headers = request.headers
+        for name in _TOKEN_HEADER_NAMES:
+            add(normalize_gateway_token(headers.get(name)), f"raw_{name}")
+        add(
+            parse_authorization_bearer(headers.get("authorization")),
+            "raw_authorization_bearer",
+        )
+
     return candidates
 
 
+def _present_auth_header_names(request: Request | None) -> list[str]:
+    if request is None:
+        return []
+    names: list[str] = []
+    for key in request.headers.keys():
+        low = key.lower()
+        if low in {"authorization", *_TOKEN_HEADER_NAMES}:
+            names.append(low)
+    return sorted(set(names))
+
+
 def require_gateway_token(
+    request: Request,
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer)
     ],
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     x_gateway_token: Annotated[
         str | None, Header(alias="X-Gateway-Token")
+    ] = None,
+    x_quantforg_gateway_token: Annotated[
+        str | None, Header(alias="X-QuantForg-Gateway-Token")
     ] = None,
 ) -> str:
     """Validate shared gateway token. Broker passwords are never involved."""
@@ -84,22 +123,32 @@ def require_gateway_token(
         authorization=authorization,
         credentials=credentials,
         x_gateway_token=x_gateway_token,
+        x_quantforg_gateway_token=x_quantforg_gateway_token,
+        request=request,
     )
+
+    client = request.client.host if request.client else None
+    path = request.url.path
+    present = _present_auth_header_names(request)
 
     for provided, header_source in candidates:
         equal = tokens_equal(provided, expected)
         logger.info(
             "gateway_auth_check token_source=%s expected_len=%s expected=%s "
             "authorization_present=%s header_source=%s received_len=%s "
-            "received=%s equal=%s meta=%s",
+            "received=%s equal=%s path=%s client=%s present_headers=%s meta=%s",
             getattr(cfg, "token_source", meta.get("source")),
             len(expected),
             mask_gateway_token(expected),
-            bool((authorization or "").strip()),
+            bool((authorization or "").strip())
+            or bool((request.headers.get("authorization") or "").strip()),
             header_source,
             len(provided),
             mask_gateway_token(provided),
             equal,
+            path,
+            client,
+            present,
             meta,
         )
         if cfg.mt5_gateway_auth_debug:
@@ -120,11 +169,13 @@ def require_gateway_token(
     logger.warning(
         "gateway_auth_rejected token_source=%s expected=%s received=%s "
         "expected_len=%s received_len=%s header_source=%s candidates=%s "
-        "(hint: len 32 often means example placeholder "
+        "path=%s client=%s present_headers=%s user_agent=%r "
+        "(hint: present_headers=[] means Railway/frontend never sent "
+        "Authorization / X-Gateway-Token / X-QuantForg-Gateway-Token — "
+        "set MT5_GATEWAY_CALLER_TOKEN on Railway to match Windows "
+        "MT5_GATEWAY_TOKEN; len 32 often means example placeholder "
         "'replace-with-strong-random-token' is still loaded from "
-        "process_env/NSSM instead of the repo .env; "
-        "matching masks with equal=false usually means the middle differs "
-        "— compare Railway MT5_GATEWAY_CALLER_TOKEN to Windows MT5_GATEWAY_TOKEN)",
+        "process_env/NSSM instead of the repo .env)",
         getattr(cfg, "token_source", meta.get("source")),
         mask_gateway_token(expected),
         mask_gateway_token(provided),
@@ -132,6 +183,10 @@ def require_gateway_token(
         len(provided),
         header_source,
         [(src, mask_gateway_token(tok), len(tok)) for tok, src in candidates],
+        path,
+        client,
+        present,
+        request.headers.get("user-agent"),
     )
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
