@@ -1,8 +1,8 @@
 # QuantForg v7.1 Production Acceptance Test (PAT)
 
-Generated: `2026-07-27T19:45:28.397188+00:00`
+Generated: `2026-07-30T14:18:58.924469+00:00`
 
-**Declaration:** QUANTFORG v7.1 PRODUCTION NOT ACCEPTED — BLOCKED live/operator verifications remain (reconnect soak, 24h run, browser/PC restart).
+**Declaration:** QUANTFORG v7.1 PRODUCTION NOT ACCEPTED — FAIL items must be fixed.
 
 ## Results
 
@@ -16,16 +16,16 @@ Generated: `2026-07-27T19:45:28.397188+00:00`
 | TEST_6_MAX_OPEN | **PASS** | — |
 | TEST_7_POSITION_MANAGEMENT | **BLOCKED** | PME feature presence verified; live reconnect continuity not physically verified |
 | TEST_8_SESSION | **BLOCKED** | browser refresh/restart/PC restart not executed in this harness |
-| TEST_9_LONG_RUN | **BLOCKED** | 24-hour continuous live run not executed — requires operator soak with witness/heartbeat evidence |
+| TEST_9_LONG_RUN | **FAIL** | soak duration 23.99h < required 24h (first=2026-07-27T18:35:38.2499607Z, last=2026-07-28T18:35:18.1603001Z, samples=908); soak evidence STALE — last sample age 43.72h > 2.0h (last_ts=2026-07-28T18:35:18.1603001Z). Claimed longer soaks on operator hosts are not present in accessible git/workspace evidence. |
 | TEST_10_PERFORMANCE | **PASS** | — |
 
 ## Summary
 
 - PASS: 4
-- FAIL: 0
-- BLOCKED: 6
+- FAIL: 1
+- BLOCKED: 5
 
-Evidence JSON: `docs/production/reports/v7_1_pat_20260727T194528Z.json`
+Evidence JSON: `docs/production/reports/v7_1_pat_20260730T141858Z.json`
 
 Acceptance rule: **all ten tests must be PASS** (no BLOCKED, no FAIL)
 before declaring PRODUCTION ACCEPTED.
