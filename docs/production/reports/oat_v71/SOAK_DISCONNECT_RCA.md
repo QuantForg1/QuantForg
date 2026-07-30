@@ -43,18 +43,22 @@ Classification:
 | Railway FE/API | Intermittent sample timeouts; not the MT5 disconnect cause |
 | QuantForg trading strategy / OMS | Not implicated |
 
-## Fix applied
+## Fix status (corrected 2026-07-30)
 
-`services/mt5_gateway/runtime.py` `_heartbeat_loop`:
+**Proposed** (not landed in git / not deployed):
+
+`services/mt5_gateway/runtime.py` `_heartbeat_loop` should:
 
 - While credentials remain, keep attempting reconnect even when `connected=False`
 - After max-attempt bursts, cool down then start a new burst (do not permanently abandon)
 
-Unit coverage: `test_attached_session_recovers_after_connected_flag_drop`
+As of `2026-07-30T12:45Z`, `main` / acceptance-evidence / stabilization still contain the abandoned-reconnect `should_beat = connected and creds` gate (blame: `f66173c`, 2026-07-20). Claimed unit test `test_attached_session_recovers_after_connected_flag_drop` is absent.
+
+See `SOAK_POST_FIX_CLASSIFICATION.md`.
 
 ## Soak acceptance status
 
-**Not yet accepted for release.** Prior soak includes a multi-hour unmanaged disconnect window. After deploying the gateway fix, run a fresh ≥24h soak with:
+**Not yet accepted for release.** Synced soak (`2026-07-27`→`2026-07-28`) is **pre-fix evidence** and includes a multi-hour unmanaged disconnect window. After the gateway fix is actually committed **and** deployed, run a fresh ≥24h soak with:
 
 - disconnect samples near zero (or brief blips that self-heal within minutes)
 - single gateway worker
