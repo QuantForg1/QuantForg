@@ -1,0 +1,58 @@
+{
+  "validated_at": "2026-07-30T12:08:59.325732+00:00",
+  "path": "docs/production/reports/oat_v71/soak_24h_metrics.jsonl",
+  "repo_bytes": 139021,
+  "windows_claimed_bytes": 250073,
+  "size_mismatch": true,
+  "samples": 505,
+  "first_ts": "2026-07-27T18:35:38.2499607Z",
+  "last_ts": "2026-07-28T10:45:19.9132149Z",
+  "duration_hours": 16.162,
+  "age_hours_since_last_sample": 49.394,
+  "meets_24h_duration": false,
+  "meets_freshness_2h": false,
+  "gateway_ok": 504,
+  "gateway_bad": 1,
+  "mt5_connected": 504,
+  "mt5_disconnected": 0,
+  "session_attached": 504,
+  "railway_ok": 238,
+  "railway_bad": 267,
+  "reconnect_count_connected_false_to_true": 0,
+  "reconnect_timestamps": [],
+  "sampling_gaps_gt_3min": [
+    {
+      "from": "2026-07-28T04:30:46.979293+00:00",
+      "to": "2026-07-28T10:35:54.060844+00:00",
+      "seconds": 21907.1
+    }
+  ],
+  "pat_oat_soak_satisfied": false,
+  "blocker": "Windows host reports soak file size 250073 bytes, but this git workspace / all remotes still have 139021 bytes ending 2026-07-28T10:45:19.9132149Z. Cloud verifier cannot read the Windows filesystem; normal git add/commit/push from Windows is required to synchronize.",
+  "live_gateway_now": {
+    "reachable": true,
+    "connected": true,
+    "session": "attached",
+    "heartbeat": "2026-07-30T12:09:00.135339+00:00",
+    "server": "Weltrade-Real"
+  },
+  "latest_sample": {
+    "ts": "2026-07-28T10:45:19.9132149Z",
+    "gateway": {
+      "latency_ms": 0,
+      "hb": "2026-07-28T10:45:17.254328+00:00",
+      "ok": true,
+      "connected": true,
+      "session": "attached",
+      "mt5_latency_ms": 0.885
+    },
+    "railway": {
+      "latency_ms": 13353.35,
+      "ok": true,
+      "status": "ok"
+    },
+    "cpu": 37.12,
+    "ram_mb": 65.09,
+    "err": null
+  }
+}
