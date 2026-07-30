@@ -58,3 +58,11 @@ That is a genuine production defect **during this soak**, but it is **not** post
 1. Land and deploy the reconnect-loop fix to the Windows gateway.
 2. Run a **new** ≥24h soak after that deploy.
 3. Re-run PAT/OAT only against that post-fix soak.
+
+## Update 2026-07-30T14:15Z (verified)
+
+- Reconnect fix is on `cursor/v7-1-acceptance-evidence` at `a60715e` / gateway package **1.1.1**.
+- Live `https://gateway.quantforg.com/health` reports `gateway_version=1.1.1` (deploy verified).
+- Operator reports post-fix soak started. Git workspace still has **pre-fix** `soak_24h_metrics.jsonl` until Windows syncs new metrics.
+- PAT/OAT remain **NOT ACCEPTED** until a post-fix ≥24h soak is verified.
+
