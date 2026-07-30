@@ -1,0 +1,125 @@
+{
+  "role": "release_engineer",
+  "recorded_at": "2026-07-30T13:51:26.551934+00:00",
+  "branch": "cursor/v7-1-acceptance-evidence",
+  "head": "d35c48b0c0fa71f2c00e1bac973ccd8a22fc9efe",
+  "pat_oat_accepted": false,
+  "main_push_performed": false,
+  "steps": [
+    {
+      "id": 1,
+      "task": "Verify reconnect fix present",
+      "status": "COMPLETED",
+      "evidence": {
+        "head": "d35c48b0c0fa71f2c00e1bac973ccd8a22fc9efe",
+        "gateway_package_version": "1.1.1",
+        "runtime_has_cooldown_reconnect": true,
+        "health_exposes_gateway_version_field_in_code": true,
+        "deploy_script_present": "docs/production/reports/oat_v71/deploy_reconnect_fix_and_start_soak.ps1",
+        "soak_script_present": "docs/production/reports/oat_v71/soak_24h.ps1"
+      }
+    },
+    {
+      "id": 2,
+      "task": "Deployment preparation",
+      "status": "COMPLETED",
+      "evidence": {
+        "fix_on_origin_acceptance_evidence": true,
+        "gateway_unit_tests": [
+          ".........................................                                [100%]",
+          "41 passed in 2.05s"
+        ],
+        "operator_deploy_script_on_branch": true
+      }
+    },
+    {
+      "id": 3,
+      "task": "Verify production gateway ready (post-fix process)",
+      "status": "NOT_COMPLETED",
+      "evidence": {
+        "live_url": "https://gateway.quantforg.com/health",
+        "live_gateway_version": null,
+        "expected": "1.1.1",
+        "reason": "Live process does not expose gateway_version; still running pre-1.1.1 code.",
+        "mt5_connected_on_old_process": true
+      }
+    },
+    {
+      "id": 4,
+      "task": "Start production deployment (Windows gateway restart on d35c48b)",
+      "status": "NOT_COMPLETED",
+      "missing_access": [
+        "Windows host shell",
+        "WinRM",
+        "SSH to Windows",
+        "NSSM/service manager",
+        "ability to kill/restart port 8765 process"
+      ],
+      "required_operator_action": "On Windows host after git pull of d35c48b: run docs/production/reports/oat_v71/deploy_reconnect_fix_and_start_soak.ps1 (elevated), or manually restart python -m services.mt5_gateway.main from the updated repo."
+    },
+    {
+      "id": 5,
+      "task": "Start post-fix soak",
+      "status": "NOT_COMPLETED",
+      "missing_access": [
+        "Windows host PowerShell to run soak_24h.ps1"
+      ],
+      "required_operator_action": "After gateway_version=1.1.1 verified, ensure soak_24h.ps1 is running (deploy script starts it) writing docs/production/reports/oat_v71/soak_24h_metrics.jsonl"
+    },
+    {
+      "id": 6,
+      "task": "Verify gateway health endpoint",
+      "status": "COMPLETED_WITH_FINDING",
+      "evidence": {
+        "gateway_reachable": true,
+        "gateway_version": null,
+        "is_1_1_1": false,
+        "mt5_connected": true,
+        "session_mode": "attached",
+        "server": "Weltrade-Real",
+        "degraded": false,
+        "last_heartbeat_at": "2026-07-30T13:50:42.527726+00:00",
+        "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env"
+      },
+      "finding": "Gateway reachable; MT5 attached Weltrade-Real; gateway_version missing (not 1.1.1)."
+    },
+    {
+      "id": 7,
+      "task": "Railway API health (non-Windows)",
+      "status": "COMPLETED",
+      "evidence": {
+        "health": {
+          "ok": true,
+          "status": 200,
+          "body": {
+            "status": "ok"
+          }
+        },
+        "status": {
+          "status": "healthy",
+          "version": "1.0.0",
+          "environment": "production",
+          "dependencies": [
+            {
+              "name": "postgres",
+              "status": "healthy",
+              "latency_ms": 209.24
+            },
+            {
+              "name": "redis",
+              "status": "disabled",
+              "latency_ms": 0.04
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "release_gate": {
+    "pat_accepted": false,
+    "oat_accepted": false,
+    "gateway_version_1_1_1_live": false,
+    "post_fix_soak_started": false,
+    "eligible_for_main_push": false
+  }
+}
