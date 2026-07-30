@@ -12,7 +12,7 @@ Generated: `2026-07-30T17:40Z`
 | Field | Value |
 |-------|-------|
 | Production Version | API `1.0.0` / env `production` |
-| Deployment SHA | `2bd96cb` (wiring+hardening); prior `974324a` (#38/#39) |
+| Deployment SHA | `main` tip `2bd96cb` (wiring+hardening). **Railway GitHub env still last Success on `ded3625`** — no new `QuantForg / production` deploy for `2bd96cb` observed; operator Redeploy may be required. Prior code Success: `974324a` (#38/#39) |
 | Gateway Status | Live **1.1.3** (Windows). Repo **1.1.4** pending Windows redeploy |
 | MT5 Status | connected / attached / AutoTrading true / DLLs true / bridge true |
 | Execution Status | Unverified (ops 401) |
