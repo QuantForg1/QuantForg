@@ -93,6 +93,66 @@ def _client_of(mt5_adapter: Any) -> Any:
     return getattr(mt5_adapter, "client", None) or getattr(mt5_adapter, "_client", None)
 
 
+def _read_mt5_autotrading_enabled(mt5_adapter: Any, diag: dict[str, Any]) -> bool | None:
+    """Read terminal AutoTrading from gateway /health — never invent True.
+
+    Returns None when unknown (caller may fail-closed). Live gateway exposes
+    ``mt5.mt5_autotrading_enabled`` / ``mt5.terminal_trade_allowed``.
+    """
+    client = _client_of(mt5_adapter)
+    payload: dict[str, Any] | None = None
+    health_fn = getattr(client, "gateway_health", None)
+    if callable(health_fn):
+        try:
+            raw = health_fn()
+            if isinstance(raw, dict):
+                payload = raw
+        except Exception as exc:
+            diag["autotrading_health_error"] = str(exc)
+    if payload is None:
+        try:
+            from core.config.settings import get_settings
+
+            from app.application.services.institutional_live_probes import (
+                _http_get_json,
+            )
+
+            base = (get_settings().mt5_gateway_base_url or "").rstrip("/")
+            if base:
+                _ok, _lat, _code, body, _cf = _http_get_json(f"{base}/health")
+                if isinstance(body, dict):
+                    payload = body
+                    diag["autotrading_health_via"] = "public_/health"
+        except Exception as exc:
+            diag["autotrading_public_health_error"] = str(exc)
+    if payload is None:
+        return None
+    mt5_raw = payload.get("mt5")
+    mt5 = mt5_raw if isinstance(mt5_raw, dict) else {}
+    for key in (
+        "mt5_autotrading_enabled",
+        "terminal_trade_allowed",
+        "autotrading_enabled",
+        "autotrading",
+    ):
+        if key in mt5 and mt5.get(key) is not None:
+            val = bool(mt5.get(key))
+            diag["mt5_autotrading_enabled"] = val
+            diag["mt5_autotrading_source"] = f"mt5.{key}"
+            return val
+        if key in payload and payload.get(key) is not None:
+            val = bool(payload.get(key))
+            diag["mt5_autotrading_enabled"] = val
+            diag["mt5_autotrading_source"] = key
+            return val
+    if mt5.get("trade_allowed") is not None:
+        val = bool(mt5.get("trade_allowed"))
+        diag["mt5_autotrading_enabled"] = val
+        diag["mt5_autotrading_source"] = "mt5.trade_allowed"
+        return val
+    return None
+
+
 def _ensure_gateway_session(mt5_adapter: Any, diag: dict[str, Any]) -> str | None:
     """Adopt live gateway session into this process if needed.
 
@@ -532,6 +592,13 @@ async def build_ite_cycle_market_context(
 
     diag["reason"] = "market context ready"
     diag["snapshot"] = "OK"
+    # Terminal AutoTrading — must not hardcode False when /health reports true.
+    mt5_at = _read_mt5_autotrading_enabled(mt5_adapter, diag)
+    if mt5_at is None:
+        # Unknown → fail-closed for safety gate (same as orchestrator).
+        diag["mt5_autotrading_enabled"] = False
+        diag["mt5_autotrading_source"] = "unknown_fail_closed"
+        mt5_at = False
     return IteCycleMarketContext(
         ok=True,
         snapshot=snapshot,
@@ -539,7 +606,7 @@ async def build_ite_cycle_market_context(
         reason="market context ready",
         market_data_live=market_data_live,
         account_trading_enabled=account_trading_enabled,
-        mt5_autotrading_enabled=False,
+        mt5_autotrading_enabled=bool(mt5_at),
         symbol_tradable=market_data_live,
         # Known account + trading enabled ⇒ no restriction evidence; else fail closed
         no_broker_restrictions=bool(account_trading_enabled),

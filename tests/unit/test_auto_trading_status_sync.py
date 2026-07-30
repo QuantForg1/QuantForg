@@ -117,6 +117,32 @@ class TestAutoTradingStatusLiveProbes:
 
 
 @pytest.mark.unit
+class TestEnrichFromPublicHealth:
+    def test_uses_last_health_payload_when_client_has_no_gateway_health(self) -> None:
+        from app.application.services.auto_trading_status import _enrich_from_adapter
+
+        collector = MagicMock()
+        collector.mt5_adapter = MagicMock()
+        collector.mt5_adapter.client = object()  # no gateway_health
+        collector.settings = MagicMock()
+        collector.settings.mt5_gateway_base_url = ""
+        collector.last_health_payload = {
+            "status": "ok",
+            "mt5": {
+                "connected": True,
+                "mt5_autotrading_enabled": True,
+                "terminal_trade_allowed": True,
+            },
+        }
+        collector.mt5_adapter.latest_tick.side_effect = RuntimeError("no tick")
+        collector.mt5_adapter.account_info.side_effect = RuntimeError("no acct")
+
+        out = _enrich_from_adapter(collector)
+        assert out["mt5_autotrading_enabled"] is True
+        assert out["health_payload"] is not None
+
+
+@pytest.mark.unit
 class TestStatusSnapshotGates:
     def test_unevaluated_risk_does_not_block_status(self) -> None:
         result = evaluate_auto_trade_safety(

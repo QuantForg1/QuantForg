@@ -115,6 +115,7 @@ class LiveProbeCollector:
     settings: Settings
     mt5_adapter: Any | None = None
     supabase: Any | None = None
+    last_health_payload: dict[str, Any] | None = None
 
     def collect(self) -> ProbeInputs:
         gateway_url = (self.settings.mt5_gateway_base_url or "").rstrip("/")
@@ -150,6 +151,12 @@ class LiveProbeCollector:
                 except Exception as exc:
                     logger.info("live_probe_gateway_health_failed", error=str(exc))
 
+            # Persist for Auto Trading enrich — public /health already has
+            # terminal_trade_allowed / mt5_autotrading_enabled without auth.
+            self.last_health_payload = (
+                dict(health_payload) if isinstance(health_payload, dict) else None
+            )
+
             if health_payload is not None:
                 mt5_ok = mt5_connected_from_gateway_health(health_payload)
 
@@ -176,6 +183,7 @@ class LiveProbeCollector:
             gateway_ok = False
             tunnel_ok = False
             mt5_ok = False
+            self.last_health_payload = None
 
         railway_ok = False
         railway_lat = 0.0

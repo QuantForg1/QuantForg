@@ -122,3 +122,73 @@ async def test_market_context_adopts_then_loads(
     assert ctx.diagnostics.get("snapshot") == "OK"
     assert ctx.diagnostics.get("account") == "OK"
     assert ctx.bars_loaded and ctx.bars_loaded.get("M5", 0) >= 50
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_market_context_reads_autotrading_from_gateway_health(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: must not hardcode mt5_autotrading_enabled=False when health says true."""
+    gw = MagicMock()
+    gw.is_connected = True
+    gw.session_mode = "attached"
+    gw.gateway_health.return_value = {
+        "status": "ok",
+        "mt5": {
+            "connected": True,
+            "session_mode": "attached",
+            "mt5_autotrading_enabled": True,
+            "terminal_trade_allowed": True,
+        },
+    }
+    adapter = MagicMock()
+    adapter.client = gw
+
+    def _bars(symbol, tf, start, count):
+        return [_rate(tf, i) for i in range(count)]
+
+    adapter.copy_rates_from_pos.side_effect = _bars
+    adapter.latest_tick.return_value = SimpleNamespace(
+        bid=Decimal("2300"),
+        ask=Decimal("2300.4"),
+        mid=Decimal("2300.2"),
+        volume=Decimal("1"),
+        timestamp=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+    adapter.account_info.return_value = MT5AccountInfo(
+        login=12260878,
+        name="live",
+        server="Weltrade-Real",
+        equity=Decimal("10000"),
+        balance=Decimal("10000"),
+        free_margin=Decimal("9000"),
+        margin=Decimal("1000"),
+        leverage=100,
+        trade_mode="full",
+    )
+    adapter.list_positions.return_value = []
+
+    async def _fake_analyze(*_a, **_k):
+        return SimpleNamespace(
+            symbol="XAUUSD",
+            atr=Decimal("1"),
+            spread=Decimal("0.4"),
+            session=SimpleNamespace(
+                session=SimpleNamespace(value="london"),
+                allowed=True,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "app.application.services.ite_cycle_market_context."
+        "InstitutionalTradingAnalysisService.analyze_bars",
+        _fake_analyze,
+    )
+
+    ctx = await build_ite_cycle_market_context(adapter)
+    assert ctx.ok is True
+    assert ctx.mt5_autotrading_enabled is True
+    assert ctx.diagnostics.get("mt5_autotrading_source") == (
+        "mt5.mt5_autotrading_enabled"
+    )
