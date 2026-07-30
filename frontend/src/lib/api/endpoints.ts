@@ -698,6 +698,12 @@ export const iteOpsApi = {
     }),
   autoTrading: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/auto-trading"),
+  productionValidationMode: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/production-validation-mode"),
+  productionValidationAttempts: (limit = 20) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/production-validation-mode/attempts?limit=${limit}`,
+    ),
   strategyDiagnostics: (limit = 100) =>
     apiFetch<Record<string, unknown>>(
       `/ite/ops/strategy-diagnostics?limit=${limit}`,

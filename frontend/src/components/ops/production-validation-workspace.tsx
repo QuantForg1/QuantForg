@@ -9,7 +9,7 @@ import {
   iteOpsApi,
   mt5Api,
 } from "@/lib/api/endpoints";
-import { asRecord, str } from "@/lib/desk";
+import { asList, asRecord, str } from "@/lib/desk";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import {
   buildProductionValidationModel,
@@ -147,6 +147,12 @@ export function ProductionValidationWorkspace() {
     retry: false,
     refetchInterval: 30_000,
   });
+  const pvmQ = useQuery({
+    queryKey: ["ite-ops-production-validation-mode", "pv"],
+    queryFn: iteOpsApi.productionValidationMode,
+    retry: false,
+    refetchInterval: 5_000,
+  });
 
   const loading = autoQ.isLoading || centerQ.isLoading;
   const err = autoQ.error || centerQ.error;
@@ -176,6 +182,10 @@ export function ProductionValidationWorkspace() {
   const { system, market, strategy, decision, risk, safety, execution, journal, stats, lights } =
     model;
 
+  const pvm = asRecord(pvmQ.data);
+  const pvmLast = asRecord(pvm.last_validation);
+  const pvmPipeline = asList(pvmLast.pipeline);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
@@ -193,6 +203,120 @@ export function ProductionValidationWorkspace() {
           Live polls · never mutates trading rules
         </span>
       </div>
+
+      <Panel title="Production Validation Mode · Live">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div>
+            <Row
+              label="Current Session"
+              value={str(pvm.current_session, "—")}
+            />
+            <Row
+              label="Execution State"
+              value={str(pvm.execution_state, "—")}
+              tone={toneConn(str(pvm.execution_state, ""))}
+            />
+            <Row label="Last Signal" value={str(pvm.last_signal, "—")} />
+            <Row
+              label="Last Quality"
+              value={
+                pvm.last_quality == null || pvm.last_quality === ""
+                  ? "—"
+                  : String(pvm.last_quality)
+              }
+            />
+            <Row
+              label="Current Blocker"
+              value={str(pvm.current_blocker, "—")}
+              tone={pvm.current_blocker ? "warn" : "ok"}
+            />
+          </div>
+          <div>
+            <Row
+              label="Gateway Status"
+              value={str(pvm.gateway_status, "UNKNOWN")}
+              tone={toneConn(str(pvm.gateway_status, ""))}
+            />
+            <Row
+              label="OMS Status"
+              value={str(pvm.oms_status, "UNKNOWN")}
+              tone={toneConn(str(pvm.oms_status, ""))}
+            />
+            <Row
+              label="MT5 Status"
+              value={str(pvm.mt5_status, "UNKNOWN")}
+              tone={toneConn(str(pvm.mt5_status, ""))}
+            />
+            <Row
+              label="Broker Status"
+              value={str(pvm.broker_status, "UNKNOWN")}
+              tone={toneConn(str(pvm.broker_status, ""))}
+            />
+            <Row
+              label="Last Validation"
+              value={str(pvm.last_validation_id, "—")}
+            />
+          </div>
+          <div>
+            <Row
+              label="Final Result"
+              value={str(pvmLast.final_result, "—")}
+              tone={
+                str(pvmLast.final_result) === "ACCEPTED"
+                  ? "ok"
+                  : str(pvmLast.final_result) === "BLOCKED"
+                    ? "warn"
+                    : undefined
+              }
+            />
+            <Row
+              label="AI Action"
+              value={str(pvmLast.ai_action, "—")}
+            />
+            <Row
+              label="Ticket"
+              value={str(asRecord(pvmLast.mt5).ticket, "—")}
+              tone={asRecord(pvmLast.mt5).ticket ? "ok" : undefined}
+            />
+            <p className="mt-2 text-[11px] text-[var(--fg-subtle)]">
+              Observe-only · exports under docs/production/validation/
+            </p>
+          </div>
+        </div>
+        {pvmPipeline.length > 0 ? (
+          <ul className="mt-3 max-h-36 space-y-1 overflow-auto border-t border-[var(--border)] pt-2 text-[11px] text-[var(--fg-muted)]">
+            {pvmPipeline.map((row) => {
+              const r = asRecord(row);
+              const status = str(r.status, "PENDING");
+              return (
+                <li key={str(r.stage, Math.random().toString())}>
+                  <span
+                    className={cn(
+                      "font-mono",
+                      status === "PASS" && "text-[var(--success)]",
+                      status === "FAIL" && "text-[var(--danger)]",
+                    )}
+                  >
+                    {status}
+                  </span>{" "}
+                  {str(r.stage, "—")}
+                  {r.reason ? ` · ${str(r.reason)}` : ""}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        {asList(pvmLast.no_trade_reasons).length > 0 ? (
+          <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-[11px] text-[var(--fg-muted)]">
+            {asList(pvmLast.no_trade_reasons)
+              .map(String)
+              .slice(0, 12)
+              .map((r) => (
+                <li key={r}>· {r}</li>
+              ))}
+          </ul>
+        ) : null}
+      </Panel>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {lights.map((light) => (

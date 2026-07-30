@@ -812,6 +812,49 @@ def get_strategy_diagnostics(
     return payload
 
 
+@router.get("/production-validation-mode")
+def get_production_validation_mode(_user: OperatorUser) -> dict[str, Any]:
+    """Live Production Validation Mode dashboard — observe-only evidence.
+
+    Never mutates strategy, risk, safety, OMS, gateway, or MT5.
+    Never fabricates trades or lowers quality gates.
+    """
+    from app.application.services.production_validation_mode import (
+        build_production_validation_dashboard,
+    )
+
+    return build_production_validation_dashboard()
+
+
+@router.get("/production-validation-mode/attempts")
+def list_production_validation_attempts(
+    _user: OperatorUser,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Recent validation attempts (JSON evidence packages)."""
+    from app.application.services.production_validation_mode import (
+        list_production_validation_attempts as _list,
+    )
+
+    return _list(limit=max(1, min(int(limit or 20), 100)))
+
+
+@router.get("/production-validation-mode/attempts/{validation_id}")
+def get_production_validation_attempt(
+    validation_id: str,
+    _user: OperatorUser,
+) -> dict[str, Any]:
+    """Single validation attempt by Validation ID."""
+    from app.application.services.production_validation_mode import (
+        get_production_validation_attempt as _get,
+    )
+
+    payload = _get(validation_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="validation_id not found")
+    return payload
+
+
 @router.get("/live-execution-explain")
 def get_live_execution_explain(
     _user: OperatorUser,

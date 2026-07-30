@@ -1,0 +1,229 @@
+{
+  "report": {
+    "validation_id": "val_5d9b5b5a094344e7",
+    "timestamp": "2026-07-30T21:39:28.306965Z",
+    "signal_id": null,
+    "symbol": "XAUUSD",
+    "market_session": "new_york",
+    "execution_mode": "live",
+    "ai_confidence": null,
+    "quality_score": null,
+    "confluence": null,
+    "mtf_alignment": null,
+    "risk_score": null,
+    "expected_rr": null,
+    "spread": null,
+    "atr": null,
+    "liquidity": null,
+    "order_blocks": null,
+    "fvg": null,
+    "bos": null,
+    "choch": null,
+    "ai_action": null,
+    "stages": {
+      "Scheduler": {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.306992Z",
+        "latency_ms": 1.0,
+        "reason": "tick"
+      },
+      "Market Data": {
+        "stage": "Market Data",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.307002Z",
+        "latency_ms": 12.0,
+        "reason": "bars ok"
+      },
+      "Context": {
+        "stage": "Context",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.307008Z",
+        "latency_ms": null,
+        "reason": "snapshot ok"
+      },
+      "AI": {
+        "stage": "AI",
+        "status": "FAIL",
+        "timestamp": "2026-07-30T21:39:28.307012Z",
+        "latency_ms": null,
+        "reason": "quality below threshold"
+      },
+      "Risk": {
+        "stage": "Risk",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.307015Z",
+        "latency_ms": null,
+        "reason": "risk ok"
+      },
+      "Eligibility": {
+        "stage": "Eligibility",
+        "status": "FAIL",
+        "timestamp": "2026-07-30T21:39:28.307018Z",
+        "latency_ms": null,
+        "reason": "Quality below threshold"
+      }
+    },
+    "pipeline": [
+      {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.306992Z",
+        "latency_ms": 1.0,
+        "reason": "tick"
+      },
+      {
+        "stage": "Market Data",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.307002Z",
+        "latency_ms": 12.0,
+        "reason": "bars ok"
+      },
+      {
+        "stage": "Context",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.307008Z",
+        "latency_ms": null,
+        "reason": "snapshot ok"
+      },
+      {
+        "stage": "AI",
+        "status": "FAIL",
+        "timestamp": "2026-07-30T21:39:28.307012Z",
+        "latency_ms": null,
+        "reason": "quality below threshold"
+      },
+      {
+        "stage": "Risk",
+        "status": "PASS",
+        "timestamp": "2026-07-30T21:39:28.307015Z",
+        "latency_ms": null,
+        "reason": "risk ok"
+      },
+      {
+        "stage": "Eligibility",
+        "status": "FAIL",
+        "timestamp": "2026-07-30T21:39:28.307018Z",
+        "latency_ms": null,
+        "reason": "Quality below threshold"
+      },
+      {
+        "stage": "Execution Bridge",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "OMS",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Gateway",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "MT5",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Broker",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Open",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Close",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      }
+    ],
+    "no_trade_reasons": [
+      "Quality below threshold",
+      "Spread",
+      "Session blocked",
+      "Risk"
+    ],
+    "oms": null,
+    "gateway": null,
+    "mt5": null,
+    "first_blocker": "AI: quality below threshold",
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "export_paths": {},
+    "closed": true
+  },
+  "summary": {
+    "validation_id": "val_5d9b5b5a094344e7",
+    "pipeline_summary": [
+      {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "latency_ms": 1.0,
+        "reason": "tick"
+      },
+      {
+        "stage": "Market Data",
+        "status": "PASS",
+        "latency_ms": 12.0,
+        "reason": "bars ok"
+      },
+      {
+        "stage": "Context",
+        "status": "PASS",
+        "latency_ms": null,
+        "reason": "snapshot ok"
+      },
+      {
+        "stage": "AI",
+        "status": "FAIL",
+        "latency_ms": null,
+        "reason": "quality below threshold"
+      },
+      {
+        "stage": "Risk",
+        "status": "PASS",
+        "latency_ms": null,
+        "reason": "risk ok"
+      },
+      {
+        "stage": "Eligibility",
+        "status": "FAIL",
+        "latency_ms": null,
+        "reason": "Quality below threshold"
+      }
+    ],
+    "execution_latency_ms": null,
+    "broker_ticket": null,
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "first_blocker": "AI: quality below threshold",
+    "ai_action": null,
+    "no_trade_reasons": [
+      "Quality below threshold",
+      "Spread",
+      "Session blocked",
+      "Risk"
+    ]
+  },
+  "observe_only": true
+}

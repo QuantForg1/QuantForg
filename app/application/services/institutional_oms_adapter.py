@@ -34,6 +34,22 @@ class InstitutionalOmsAdapter:
         connected: bool,
         login: int | None,
     ) -> OmsSubmitResult:
+        import time
+
+        t0 = time.perf_counter()
+        payload: dict[str, Any] = {}
+        try:
+            payload = {
+                "user_id": str(user_id),
+                "request_id": request_id,
+                "intent": intent.to_dict() if hasattr(intent, "to_dict") else str(intent),
+                "connected": bool(
+                    connected if connected is not None else self.connected
+                ),
+                "login": login if login is not None else self.login,
+            }
+        except Exception:
+            payload = {"request_id": request_id}
         pipeline, _decision = self.engine.run_submit(
             user_id=user_id,
             request_id=request_id,
@@ -45,7 +61,42 @@ class InstitutionalOmsAdapter:
             skip_broker=False,
             action="submit",
         )
-        return map_pipeline_to_oms_result(pipeline)
+        result = map_pipeline_to_oms_result(pipeline)
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                record_oms,
+            )
+            from core.logging import get_logger as _get_logger
+
+            response: dict[str, Any]
+            if hasattr(result, "to_dict") and callable(result.to_dict):
+                response = dict(result.to_dict())
+            else:
+                response = {
+                    "outcome": getattr(result, "outcome", None),
+                    "message": getattr(result, "message", None),
+                    "retcode": getattr(result, "retcode", None),
+                    "order_ticket": getattr(result, "order_ticket", None),
+                    "deal_ticket": getattr(result, "deal_ticket", None),
+                    "oms_status": getattr(result, "oms_status", None),
+                    "gateway_status": getattr(result, "gateway_status", None),
+                    "latency_ms": getattr(result, "latency_ms", None),
+                    "retryable": getattr(result, "retryable", None),
+                }
+            record_oms(
+                payload=payload,
+                response=response,
+                latency_ms=round((time.perf_counter() - t0) * 1000.0, 2),
+                retry_count=0,
+            )
+        except Exception:
+            try:
+                from core.logging import get_logger as _get_logger
+
+                _get_logger(__name__).exception("pvm_oms_adapter_record_failed")
+            except Exception:
+                pass
+        return result
 
 
 def map_pipeline_to_oms_result(pipeline: PipelineResult) -> OmsSubmitResult:
