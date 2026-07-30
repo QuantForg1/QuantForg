@@ -12,7 +12,9 @@ Auth persistence design (unchanged contract):
 
 Fix applied for a verified soft defect:
 
-- Token refresh now preserves Remember Me preference via `isRememberMeEnabled()` in `frontend/src/lib/api/client.ts` (previously `saveSession(session)` always defaulted to localStorage semantics on refresh, which could desync preference handling).
+- Token refresh now preserves Remember Me preference via `isRememberMeEnabled()` in
+  `frontend/src/lib/api/client.ts` when calling `saveSession` (avoids forcing localStorage
+  on refresh when the operator chose session-only).
 
 The earlier OAT FAIL (agent browser at `/login`) is **expected for a clean automation profile**, not proof that production Remember Me is broken.
 
