@@ -54,9 +54,8 @@ New-Item -ItemType File -Force -Path $SoakOut | Out-Null
 Write-Log "starting gateway"
 $outLog = Join-Path $ReportDir "gateway_post_fix.out.log"
 $errLog = Join-Path $ReportDir "gateway_post_fix.err.log"
-Start-Process -FilePath $Python -ArgumentList "-m","services.mt5_gateway.main" `
-  -WorkingDirectory $RepoRoot -WindowStyle Hidden `
-  -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+$gatewayArgs = @("-m", "services.mt5_gateway.main")
+Start-Process -FilePath $Python -ArgumentList $gatewayArgs -WorkingDirectory $RepoRoot -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog
 Start-Sleep -Seconds 8
 
 $health = $null
@@ -94,11 +93,10 @@ $soakStart = (Get-Date).ToUniversalTime().ToString("o")
 
 Write-Log "starting soak_24h.ps1"
 $soakScript = Join-Path $ReportDir "soak_24h.ps1"
-Start-Process -FilePath "powershell.exe" -ArgumentList `
-  "-NoProfile","-ExecutionPolicy","Bypass","-File",$soakScript `
-  -WorkingDirectory $RepoRoot -WindowStyle Hidden
+$soakArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $soakScript)
+Start-Process -FilePath "powershell.exe" -ArgumentList $soakArgs -WorkingDirectory $RepoRoot -WindowStyle Hidden
 
 Write-Log ("soak started at {0}" -f $soakStart)
-Write-Log "done — PAT/OAT remain NOT ACCEPTED until post-fix soak completes"
+Write-Log "done - PAT/OAT remain NOT ACCEPTED until post-fix soak completes"
 Write-Host "Deploy JSON: $DeployJson"
 Write-Host "Soak start JSON: $SoakMeta"
