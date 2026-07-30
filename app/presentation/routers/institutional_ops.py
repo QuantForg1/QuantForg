@@ -826,6 +826,34 @@ def get_production_validation_mode(_user: OperatorUser) -> dict[str, Any]:
     return build_production_validation_dashboard()
 
 
+@router.get("/noc-command-center")
+def get_noc_command_center(_user: OperatorUser) -> dict[str, Any]:
+    """Institutional NOC Command Center — observe-only production telemetry.
+
+    Aggregates existing health, validation, diagnostics, and ops facts.
+    Never mutates trading, risk, safety, OMS, gateway, or MT5.
+    Never fabricates metrics. Never returns secrets/tokens.
+    """
+    from app.application.services.noc_command_center import build_noc_command_center
+
+    return build_noc_command_center()
+
+
+class NocCopilotBody(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+
+
+@router.post("/noc-copilot")
+def post_noc_copilot(body: NocCopilotBody, _user: OperatorUser) -> dict[str, Any]:
+    """AI Operations Copilot — grounded answers from live NOC telemetry only.
+
+    Rule-based; never hallucinates trading outcomes or invents metrics.
+    """
+    from app.application.services.noc_command_center import answer_noc_copilot
+
+    return answer_noc_copilot(body.question)
+
+
 @router.get("/production-validation-mode/attempts")
 def list_production_validation_attempts(
     _user: OperatorUser,

@@ -547,6 +547,12 @@ export const appNav: NavGroup[] = [
         hint: "Multi-symbol ranking · correlation · adaptive risk",
       },
       {
+        href: "/admin/noc",
+        label: "NOC Command Center",
+        icon: Gauge,
+        hint: "Production ops · real telemetry · OWNER/ADMIN",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,
@@ -985,6 +991,12 @@ export const commandItems: NavItem[] = (() => {
       label: "Ops control",
       icon: Gauge,
       hint: "ITE control plane · kill switch",
+    },
+    {
+      href: "/admin/noc",
+      label: "NOC Command Center",
+      icon: Gauge,
+      hint: "Institutional production operations desk",
     },
   ];
   for (const item of extras) map.set(item.href, item);

@@ -704,6 +704,13 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/production-validation-mode/attempts?limit=${limit}`,
     ),
+  nocCommandCenter: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/noc-command-center"),
+  nocCopilot: (question: string) =>
+    apiFetch<Record<string, unknown>>("/ite/ops/noc-copilot", {
+      method: "POST",
+      body: { question },
+    }),
   strategyDiagnostics: (limit = 100) =>
     apiFetch<Record<string, unknown>>(
       `/ite/ops/strategy-diagnostics?limit=${limit}`,
