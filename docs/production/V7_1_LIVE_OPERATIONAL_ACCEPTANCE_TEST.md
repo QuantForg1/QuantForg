@@ -29,8 +29,9 @@ Evidence under `docs/production/reports/oat_v71/`.
 
 ## Remaining blockers (must clear for acceptance)
 
-1. Deploy gateway 1.1.1 on Windows and complete **post-fix** ≥24h soak with disconnect self-heal verified
-2. Operator completes Remember Me checklist after **PC restart** with evidence files
-3. Re-declare PAT + OAT **ACCEPTED** only when steps above PASS
+1. Windows: restore MT5 (`connected=true`) — see `WINDOWS_OPERATOR_REMAINING_GATES.md`
+2. Windows: complete **post-fix** ≥24h soak and sync metrics via `scripts/sync_windows_soak_evidence.ps1`
+3. Operator: Remember Me Step 4 evidence files (`step4_remember_me_*.json`)
+4. Re-declare PAT + OAT **ACCEPTED** only when steps above PASS with verified evidence
 
 **Acceptance rule:** all OAT steps must be **PASS**. Until then, do **not** declare LIVE PRODUCTION ACCEPTED / do not push release to `main`.
