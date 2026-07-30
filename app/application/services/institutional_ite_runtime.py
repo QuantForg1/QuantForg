@@ -403,8 +403,41 @@ class InstitutionalIteRuntime:
         market_context_diagnostics: dict[str, Any] | None = None,
     ) -> ShadowCycleResult:
         """CANARY/LIVE auto-trade cycle — submits only when safety gate passes."""
+        # Production Validation Mode — observe only (never changes decisions).
+        _pvm_vid: str | None = None
+        _pvm_token = None
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                ensure_validation,
+                get_production_validation_recorder,
+            )
+
+            session_hint = ""
+            if snapshot is not None:
+                sess = getattr(snapshot, "session", None)
+                sess_v = getattr(sess, "session", None) if sess else None
+                session_hint = str(getattr(sess_v, "value", None) or sess_v or "")
+            _pvm_vid = ensure_validation(
+                symbol=str(getattr(snapshot, "symbol", "") or "") if snapshot else "",
+                market_session=session_hint,
+                execution_mode=self.plane.mode.value,
+            )
+            if _pvm_vid:
+                _pvm_token = get_production_validation_recorder().bind_context(_pvm_vid)
+        except Exception:
+            logger.exception("pvm_run_auto_cycle_begin_failed")
+
         health = self.tick_health()
         if self.plane.mode is OpsExecutionMode.SHADOW:
+            try:
+                if _pvm_token is not None:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        get_production_validation_recorder as _pvm_rec,
+                    )
+
+                    _pvm_rec().unbind_context(_pvm_token)
+            except Exception:
+                logger.exception("pvm_unbind_shadow_handoff_failed")
             return self.run_shadow_cycle(snapshot=snapshot, account=account)
 
         live_probes: dict[str, Any] = {}
@@ -495,6 +528,32 @@ class InstitutionalIteRuntime:
                 detail=result.detail,
                 mode=result.mode,
             )
+            try:
+                from app.domain.institutional_trading.production_validation_mode import (
+                    ValidationStage,
+                    finalize as pvm_finalize,
+                    stage as pvm_stage,
+                )
+
+                pvm_stage(
+                    ValidationStage.CONTEXT,
+                    ok=False,
+                    reason=result.market_context_reason or "NO_SNAPSHOT",
+                    validation_id=_pvm_vid,
+                )
+                pvm_finalize(validation_id=_pvm_vid)
+            except Exception:
+                logger.exception("pvm_no_snapshot_finalize_failed")
+            finally:
+                try:
+                    if _pvm_token is not None:
+                        from app.domain.institutional_trading.production_validation_mode import (
+                            get_production_validation_recorder as _pvm_rec2,
+                        )
+
+                        _pvm_rec2().unbind_context(_pvm_token)
+                except Exception:
+                    logger.exception("pvm_unbind_no_snapshot_failed")
             return result
 
         free = account.free_margin
@@ -670,29 +729,84 @@ class InstitutionalIteRuntime:
                         getattr(self.position_management.engine, "_positions", {}) or {}
                     ),
                 )
+                try:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        ValidationStage,
+                        capture_signal as pvm_capture,
+                        finalize as pvm_finalize,
+                        stage as pvm_stage,
+                    )
+                    from app.domain.institutional_trading.production_validation_mode.recorder import (
+                        get_production_validation_recorder as _pvm_get,
+                    )
+
+                    pvm_capture(
+                        snapshot=snapshot,
+                        execution_mode=self.plane.mode.value,
+                        validation_id=_pvm_vid,
+                    )
+                    blocker = (
+                        safety.failed_reasons[0]
+                        if safety.failed_reasons
+                        else "SAFETY_BLOCKED"
+                    )
+                    pvm_stage(
+                        ValidationStage.ELIGIBILITY,
+                        ok=False,
+                        reason=str(blocker),
+                        validation_id=_pvm_vid,
+                    )
+                    _pvm_get().record_no_trade_reasons(
+                        list(safety.failed_reasons),
+                        validation_id=_pvm_vid,
+                    )
+                    pvm_finalize(validation_id=_pvm_vid)
+                except Exception:
+                    logger.exception("pvm_safety_blocked_finalize_failed")
+                finally:
+                    try:
+                        if _pvm_token is not None:
+                            from app.domain.institutional_trading.production_validation_mode import (
+                                get_production_validation_recorder as _pvm_rec3,
+                            )
+
+                            _pvm_rec3().unbind_context(_pvm_token)
+                    except Exception:
+                        logger.exception("pvm_unbind_safety_blocked_failed")
                 return result
             logger.warning(
                 "FORCE_FIRST_TRADE proceeding despite safety blockers: %s",
                 "; ".join(safety.failed_reasons) or "unknown",
             )
 
-        return self._run_cycle(
-            snapshot=snapshot,
-            account=account,
-            health=health,
-            execution_enabled=execution_on,
-            force_shadow=False,
-            gateway_connected=gw,
-            broker_connected=mt5,
-            market_data_live=market_data_live or bool(account.market_open),
-            account_trading_enabled=account_trading_enabled,
-            mt5_autotrading_enabled=mt5_autotrading_enabled,
-            symbol_tradable=symbol_tradable,
-            no_broker_restrictions=no_broker_restrictions,
-            risk_allowed=risk_allowed,
-            risk_reasons=risk_reasons,
-            market_context_diagnostics=market_context_diagnostics,
-        )
+        try:
+            return self._run_cycle(
+                snapshot=snapshot,
+                account=account,
+                health=health,
+                execution_enabled=execution_on,
+                force_shadow=False,
+                gateway_connected=gw,
+                broker_connected=mt5,
+                market_data_live=market_data_live or bool(account.market_open),
+                account_trading_enabled=account_trading_enabled,
+                mt5_autotrading_enabled=mt5_autotrading_enabled,
+                symbol_tradable=symbol_tradable,
+                no_broker_restrictions=no_broker_restrictions,
+                risk_allowed=risk_allowed,
+                risk_reasons=risk_reasons,
+                market_context_diagnostics=market_context_diagnostics,
+            )
+        finally:
+            try:
+                if _pvm_token is not None:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        get_production_validation_recorder as _pvm_rec4,
+                    )
+
+                    _pvm_rec4().unbind_context(_pvm_token)
+            except Exception:
+                logger.exception("pvm_unbind_run_auto_cycle_failed")
 
     def _sync_and_manage_open_positions(
         self,
@@ -727,6 +841,22 @@ class InstitutionalIteRuntime:
                         tickets=recovery.get("tickets"),
                         reason=reason,
                     )
+                    try:
+                        from app.domain.institutional_trading.production_validation_mode import (
+                            ValidationStage,
+                            stage as pvm_stage,
+                        )
+
+                        pvm_stage(
+                            ValidationStage.POSITION_OPEN,
+                            ok=True,
+                            reason=(
+                                f"registered={recovery.get('registered')} "
+                                f"tickets={recovery.get('tickets')}"
+                            ),
+                        )
+                    except Exception:
+                        logger.exception("pvm_position_open_stage_failed")
         except Exception:
             logger.exception("pme_recover_before_manage_failed", reason=reason)
 
@@ -774,6 +904,22 @@ class InstitutionalIteRuntime:
                             getattr(result, "record", None), "reason", ""
                         ),
                     )
+                    try:
+                        from app.domain.institutional_trading.production_validation_mode import (
+                            ValidationStage,
+                            stage as pvm_stage,
+                        )
+
+                        pvm_stage(
+                            ValidationStage.POSITION_CLOSE,
+                            ok=True,
+                            reason=(
+                                f"ticket={ticket} "
+                                f"exit={getattr(getattr(result, 'record', None), 'reason', '')}"
+                            ),
+                        )
+                    except Exception:
+                        logger.exception("pvm_position_close_stage_failed")
                     try:
                         from app.domain.institutional_trading.ai_scalping.config import (
                             DEFAULT_AI_SCALPING_CONFIG,
@@ -891,6 +1037,38 @@ class InstitutionalIteRuntime:
             logger.exception("hardening_signal_lifecycle_failed")
 
         decision = self.decision_pipeline.run(snapshot, account)
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                ValidationStage,
+                capture_signal as pvm_capture,
+                ensure_validation,
+                stage as pvm_stage,
+            )
+
+            ensure_validation(
+                symbol=str(getattr(snapshot, "symbol", "") or ""),
+                execution_mode=(
+                    OpsExecutionMode.SHADOW.value
+                    if force_shadow
+                    else self.plane.mode.value
+                ),
+            )
+            pvm_capture(
+                snapshot=snapshot,
+                decision=decision,
+                execution_mode=(
+                    OpsExecutionMode.SHADOW.value
+                    if force_shadow
+                    else self.plane.mode.value
+                ),
+            )
+            pvm_stage(
+                ValidationStage.CONTEXT,
+                ok=True,
+                reason="snapshot+account present",
+            )
+        except Exception:
+            logger.exception("pvm_pre_decision_capture_failed")
         # Temporary Force First Trade override — before signal rejection only.
         forced_override = False
         try:
@@ -1225,6 +1403,50 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("hardening_decision_lifecycle_failed")
 
+        # Production Validation Mode — AI / Risk / Eligibility + every NO_TRADE reason.
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                ValidationStage,
+                capture_signal as pvm_capture,
+                record_decision_reasons as pvm_reasons,
+                stage as pvm_stage,
+            )
+
+            pvm_capture(snapshot=snapshot, decision=decision)
+            action_s = str(getattr(decision.action, "value", decision.action) or "")
+            ai_ok = action_s in {"BUY", "SELL"}
+            pvm_stage(
+                ValidationStage.AI,
+                ok=ai_ok,
+                reason=(
+                    f"action={action_s} conf={getattr(decision, 'confidence', '')}"
+                    if ai_ok
+                    else (
+                        "; ".join(decision_reasons)
+                        or f"action={action_s} (not BUY/SELL)"
+                    )
+                ),
+                latency_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+            risk_ok = bool(decision.eligibility.checks.get("risk_available", True))
+            risk_reason = "; ".join(decision.risk_reasons or risk_reasons or ())
+            pvm_stage(
+                ValidationStage.RISK,
+                ok=risk_ok if ai_ok or decision.eligibility.eligible else risk_ok,
+                reason=risk_reason or ("risk ok" if risk_ok else "risk rejected"),
+            )
+            pvm_stage(
+                ValidationStage.ELIGIBILITY,
+                ok=bool(decision.eligibility.eligible),
+                reason=(
+                    "; ".join(decision.eligibility.rejection_reasons)
+                    or ("eligible" if decision.eligibility.eligible else "not eligible")
+                ),
+            )
+            pvm_reasons(decision)
+        except Exception:
+            logger.exception("pvm_decision_stages_failed")
+
         # Enrich diagnostics with live ATR sizing facts (observational only).
         sizing_diag: dict[str, Any] = dict(market_context_diagnostics or {})
         atr_val = getattr(account, "atr", None)
@@ -1325,6 +1547,93 @@ class InstitutionalIteRuntime:
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
         with self._lock:
             self._last_bridge_result = bridge_result
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                ValidationStage,
+                record_oms as pvm_oms,
+                stage as pvm_stage,
+            )
+
+            forwarded = bool(getattr(bridge_result, "forwarded_to_oms", False))
+            abort = getattr(bridge_result, "abort_reason", None)
+            abort_val = str(getattr(abort, "value", abort) or "")
+            oms = getattr(bridge_result, "oms_result", None)
+            # Bridge PASS only when BUY/SELL reached OMS, or intentional ignore of NO_TRADE.
+            action_s = str(getattr(decision.action, "value", decision.action) or "")
+            if action_s in {"BUY", "SELL"}:
+                bridge_ok = forwarded and not bool(
+                    getattr(bridge_result, "aborted", False)
+                )
+                pvm_stage(
+                    ValidationStage.EXECUTION_BRIDGE,
+                    ok=bridge_ok,
+                    reason=(
+                        "forwarded_to_oms"
+                        if forwarded
+                        else (abort_val or "bridge aborted")
+                    ),
+                    latency_ms=float(getattr(bridge_result, "latency_ms", 0) or 0)
+                    or None,
+                )
+                if oms is not None:
+                    outcome = str(getattr(oms, "outcome", "") or "").lower()
+                    oms_ok = outcome in {"success", "filled", "done"}
+                    pvm_stage(
+                        ValidationStage.OMS,
+                        ok=oms_ok,
+                        reason=str(getattr(oms, "message", "") or outcome or "oms"),
+                        latency_ms=float(getattr(oms, "latency_ms", 0) or 0) or None,
+                    )
+                    pvm_oms(
+                        response={
+                            "outcome": outcome,
+                            "message": getattr(oms, "message", None),
+                            "retcode": getattr(oms, "retcode", None),
+                            "order_ticket": getattr(oms, "order_ticket", None),
+                            "deal_ticket": getattr(oms, "deal_ticket", None),
+                            "gateway_status": getattr(oms, "gateway_status", None),
+                        },
+                        latency_ms=float(getattr(oms, "latency_ms", 0) or 0) or None,
+                        retry_count=int(
+                            getattr(self.guarded_submit, "retry_count", 0) or 0
+                        ),
+                    )
+                    ticket = getattr(oms, "order_ticket", None) or getattr(
+                        oms, "deal_ticket", None
+                    )
+                    if oms_ok and ticket:
+                        pvm_stage(
+                            ValidationStage.BROKER,
+                            ok=True,
+                            reason=f"ticket={ticket}",
+                        )
+                        pvm_stage(
+                            ValidationStage.POSITION_OPEN,
+                            ok=True,
+                            reason=f"ticket={ticket}",
+                        )
+                    elif forwarded:
+                        pvm_stage(
+                            ValidationStage.BROKER,
+                            ok=False,
+                            reason=str(getattr(oms, "message", "") or outcome),
+                        )
+                elif forwarded is False and action_s in {"BUY", "SELL"}:
+                    pvm_stage(
+                        ValidationStage.OMS,
+                        ok=False,
+                        reason=abort_val or "OMS not reached",
+                        skip=False,
+                    )
+            else:
+                pvm_stage(
+                    ValidationStage.EXECUTION_BRIDGE,
+                    ok=True,
+                    reason=f"ignored_action {action_s}",
+                    skip=False,
+                )
+        except Exception:
+            logger.exception("pvm_bridge_stages_failed")
         try:
             from app.application.services.market_closed_cooldown import (
                 note_oms_reject,
@@ -1738,6 +2047,14 @@ class InstitutionalIteRuntime:
             )
         except Exception:
             logger.exception("execution_path_pass_fail_log_failed")
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                finalize as pvm_finalize,
+            )
+
+            pvm_finalize()
+        except Exception:
+            logger.exception("pvm_cycle_finalize_failed")
         return result
 
     def _log_post_ai_execution_chain(
@@ -2391,6 +2708,27 @@ class InstitutionalIteRuntime:
         t0 = time.perf_counter()
         self._manual_execution = True
         logger.warning("MANUAL EXECUTION STARTED")
+        _pvm_vid = None
+        _pvm_token = None
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                ValidationStage,
+                begin_validation,
+                get_production_validation_recorder,
+                stage as pvm_stage,
+            )
+
+            _pvm_vid = begin_validation(execution_mode=self.plane.mode.value)
+            if _pvm_vid:
+                _pvm_token = get_production_validation_recorder().bind_context(_pvm_vid)
+            pvm_stage(
+                ValidationStage.SCHEDULER,
+                ok=True,
+                reason="execute_now",
+                validation_id=_pvm_vid,
+            )
+        except Exception:
+            logger.exception("pvm_execute_now_begin_failed")
         try:
             from app.application.services.auto_trading_status import (
                 _enrich_from_adapter,
@@ -2438,6 +2776,30 @@ class InstitutionalIteRuntime:
                 symbol=symbol,
                 position_engine=self.position_management.engine,
             )
+            try:
+                from app.domain.institutional_trading.production_validation_mode import (
+                    ValidationStage,
+                    stage as pvm_stage,
+                )
+
+                market_ok = bool(ctx.ok) and ctx.snapshot is not None
+                pvm_stage(
+                    ValidationStage.MARKET_DATA,
+                    ok=market_ok,
+                    reason=ctx.reason or ("market data ok" if market_ok else "fail"),
+                    latency_ms=getattr(ctx, "latency_ms", None),
+                    validation_id=_pvm_vid,
+                )
+                pvm_stage(
+                    ValidationStage.CONTEXT,
+                    ok=bool(
+                        ctx.ok and ctx.snapshot is not None and ctx.account is not None
+                    ),
+                    reason=ctx.reason or "context built",
+                    validation_id=_pvm_vid,
+                )
+            except Exception:
+                logger.exception("pvm_execute_now_market_stages_failed")
             if not ctx.ok or ctx.snapshot is None or ctx.account is None:
                 health = self.tick_health()
                 result = ShadowCycleResult(
@@ -2456,6 +2818,14 @@ class InstitutionalIteRuntime:
                 with self._lock:
                     self._last_cycle = result
                     self._cycles += 1
+                try:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        finalize as pvm_finalize,
+                    )
+
+                    pvm_finalize(validation_id=_pvm_vid)
+                except Exception:
+                    logger.exception("pvm_execute_now_no_context_finalize_failed")
                 payload = self.build_execute_now_payload(
                     result,
                     execution_ms=(time.perf_counter() - t0) * 1000.0,
@@ -2534,6 +2904,14 @@ class InstitutionalIteRuntime:
             ms = (time.perf_counter() - t0) * 1000.0
             reason = f"cycle exception: {exc}"
             logger.warning("Execution Finished", success=False, status="REJECTED")
+            try:
+                from app.domain.institutional_trading.production_validation_mode import (
+                    finalize as pvm_finalize,
+                )
+
+                pvm_finalize(validation_id=_pvm_vid)
+            except Exception:
+                logger.exception("pvm_execute_now_exception_finalize_failed")
             return {
                 "success": False,
                 "status": "REJECTED",
@@ -2550,6 +2928,15 @@ class InstitutionalIteRuntime:
             }
         finally:
             self._manual_execution = False
+            try:
+                if _pvm_token is not None:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        get_production_validation_recorder as _pvm_rec_en,
+                    )
+
+                    _pvm_rec_en().unbind_context(_pvm_token)
+            except Exception:
+                logger.exception("pvm_execute_now_unbind_failed")
 
     def stop(self) -> None:
         self._stop.set()
@@ -2593,6 +2980,8 @@ class InstitutionalIteRuntime:
         )
         while not self._stop.is_set():
             cycle_t0 = time.perf_counter()
+            _pvm_vid = None
+            _pvm_token = None
             try:
                 ensure_auto_trading_running(
                     self.plane,
@@ -2615,6 +3004,34 @@ class InstitutionalIteRuntime:
 
                 enrich = _enrich_from_adapter(self.probes)
                 from app.domain.trading.gold_only import GOLD_SYMBOL
+
+                try:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        ValidationStage,
+                        begin_validation,
+                        get_production_validation_recorder,
+                        stage as pvm_stage,
+                        update_live_status,
+                    )
+
+                    _pvm_vid = begin_validation(
+                        execution_mode=self.plane.mode.value,
+                    )
+                    if _pvm_vid:
+                        _pvm_token = get_production_validation_recorder().bind_context(
+                            _pvm_vid
+                        )
+                    pvm_stage(
+                        ValidationStage.SCHEDULER,
+                        ok=True,
+                        reason=f"interval={self.interval_seconds}s",
+                        validation_id=_pvm_vid,
+                    )
+                    update_live_status(
+                        execution_state=str(self.plane.auto_trading_run_state),
+                    )
+                except Exception:
+                    logger.exception("pvm_scheduler_stage_failed")
 
                 symbol = self._pick_executable_symbol()
                 manage_only = False
@@ -2643,6 +3060,36 @@ class InstitutionalIteRuntime:
                     symbol=symbol,
                     position_engine=self.position_management.engine,
                 )
+                try:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        ValidationStage,
+                        finalize as pvm_finalize,
+                        stage as pvm_stage,
+                        update_live_status,
+                    )
+
+                    market_ok = bool(ctx.ok) and ctx.snapshot is not None
+                    pvm_stage(
+                        ValidationStage.MARKET_DATA,
+                        ok=market_ok,
+                        reason=ctx.reason or ("market data ok" if market_ok else "fail"),
+                        latency_ms=getattr(ctx, "latency_ms", None),
+                        validation_id=_pvm_vid,
+                    )
+                    pvm_stage(
+                        ValidationStage.CONTEXT,
+                        ok=bool(
+                            ctx.ok and ctx.snapshot is not None and ctx.account is not None
+                        ),
+                        reason=ctx.reason or "context built",
+                        validation_id=_pvm_vid,
+                    )
+                    update_live_status(
+                        gateway_status="PASS" if market_ok else "FAIL",
+                        mt5_status="PASS" if market_ok else "UNKNOWN",
+                    )
+                except Exception:
+                    logger.exception("pvm_market_context_stages_failed")
                 if (
                     manage_only
                     and ctx.ok
@@ -2663,6 +3110,39 @@ class InstitutionalIteRuntime:
                         reason="no_executable_symbol",
                     )
                     logger.warning("Waiting Next Cycle", reason="no_executable_symbol")
+                    try:
+                        from app.domain.institutional_trading.production_validation_mode import (
+                            ValidationStage,
+                            finalize as pvm_finalize,
+                            stage as pvm_stage,
+                        )
+                        from app.domain.institutional_trading.production_validation_mode.recorder import (
+                            get_production_validation_recorder as _pvm_get,
+                        )
+
+                        pvm_stage(
+                            ValidationStage.AI,
+                            ok=False,
+                            reason="no_executable_symbol",
+                            validation_id=_pvm_vid,
+                        )
+                        _pvm_get().record_no_trade_reasons(
+                            ["no_executable_symbol"], validation_id=_pvm_vid
+                        )
+                        pvm_finalize(validation_id=_pvm_vid)
+                    except Exception:
+                        logger.exception("pvm_manage_only_finalize_failed")
+                    finally:
+                        try:
+                            if _pvm_token is not None:
+                                from app.domain.institutional_trading.production_validation_mode import (
+                                    get_production_validation_recorder as _pvm_rec,
+                                )
+
+                                _pvm_rec().unbind_context(_pvm_token)
+                                _pvm_token = None
+                        except Exception:
+                            logger.exception("pvm_unbind_manage_only_failed")
                     await asyncio.sleep(self.interval_seconds)
                     continue
 
@@ -2723,6 +3203,29 @@ class InstitutionalIteRuntime:
                         diagnostics=ctx.diagnostics,
                         mode=self.plane.mode.value,
                     )
+                    try:
+                        from app.domain.institutional_trading.production_validation_mode import (
+                            ValidationStage,
+                            finalize as pvm_finalize,
+                            stage as pvm_stage,
+                        )
+                        from app.domain.institutional_trading.production_validation_mode.recorder import (
+                            get_production_validation_recorder as _pvm_get,
+                        )
+
+                        pvm_stage(
+                            ValidationStage.AI,
+                            ok=False,
+                            reason=ctx.reason or "NO_MARKET_CONTEXT",
+                            validation_id=_pvm_vid,
+                        )
+                        _pvm_get().record_no_trade_reasons(
+                            [ctx.reason or "NO_MARKET_CONTEXT"],
+                            validation_id=_pvm_vid,
+                        )
+                        pvm_finalize(validation_id=_pvm_vid)
+                    except Exception:
+                        logger.exception("pvm_no_market_context_finalize_failed")
                 else:
                     mt5_at = _cycle_flag_prefer_context(
                         ctx_value=bool(ctx.mt5_autotrading_enabled),
@@ -2831,6 +3334,32 @@ class InstitutionalIteRuntime:
                         abort_reason="CYCLE_EXCEPTION",
                     )
                     self._cycles += 1
+                try:
+                    from app.domain.institutional_trading.production_validation_mode import (
+                        ValidationStage,
+                        finalize as pvm_finalize,
+                        stage as pvm_stage,
+                    )
+
+                    pvm_stage(
+                        ValidationStage.SCHEDULER,
+                        ok=False,
+                        reason=f"cycle exception: {exc}",
+                        validation_id=_pvm_vid,
+                    )
+                    pvm_finalize(validation_id=_pvm_vid)
+                except Exception:
+                    logger.exception("pvm_cycle_exception_finalize_failed")
+            finally:
+                try:
+                    if _pvm_token is not None:
+                        from app.domain.institutional_trading.production_validation_mode import (
+                            get_production_validation_recorder as _pvm_rec_end,
+                        )
+
+                        _pvm_rec_end().unbind_context(_pvm_token)
+                except Exception:
+                    logger.exception("pvm_unbind_orchestrator_cycle_failed")
             logger.warning(
                 "Waiting Next Cycle",
                 interval_seconds=self.interval_seconds,

@@ -1317,24 +1317,26 @@ class GatewayMT5Client:
             log_mt5_order_send_exchange,
         )
 
+        order_send_t0 = time.perf_counter()
+        json_body = {
+            "symbol": request.symbol,
+            "action": request.action,
+            "volume": float(request.volume),
+            "price": float(request.price),
+            "sl": float(request.stop_loss),
+            "tp": float(request.take_profit),
+            "deviation": int(request.deviation),
+            "magic": int(request.magic),
+            "comment": request.comment or "quantforg",
+            "position": int(request.position or 0),
+            "order_ticket": int(request.order_ticket or 0),
+            "oms_kind": request.oms_kind or "",
+        }
         try:
             data = self._request(
                 "POST",
                 "/trade/order_send",
-                json_body={
-                    "symbol": request.symbol,
-                    "action": request.action,
-                    "volume": float(request.volume),
-                    "price": float(request.price),
-                    "sl": float(request.stop_loss),
-                    "tp": float(request.take_profit),
-                    "deviation": int(request.deviation),
-                    "magic": int(request.magic),
-                    "comment": request.comment or "quantforg",
-                    "position": int(request.position or 0),
-                    "order_ticket": int(request.order_ticket or 0),
-                    "oms_kind": request.oms_kind or "",
-                },
+                json_body=json_body,
             )
         except Exception as exc:
             # Never swallow — surface the transport failure as an explicit reject.
@@ -1351,6 +1353,46 @@ class GatewayMT5Client:
                 order=0,
                 ticket=0,
             )
+            try:
+                from app.domain.institutional_trading.production_validation_mode import (
+                    ValidationStage,
+                    record_gateway,
+                    record_mt5,
+                    stage as pvm_stage,
+                )
+
+                order_send_ms = round(
+                    (time.perf_counter() - order_send_t0) * 1000.0, 2
+                )
+                upstream = getattr(self, "_last_upstream", None) or {}
+                record_gateway(
+                    request={"path": "/trade/order_send", **json_body},
+                    response={"error": str(exc), "upstream": upstream},
+                    http_code=int(upstream.get("status_code") or 0) or None,
+                    gateway_latency_ms=upstream.get("latency_ms"),
+                    order_send_latency_ms=order_send_ms,
+                )
+                record_mt5(
+                    ticket=0,
+                    retcode=-1,
+                    comment=f"gateway/transport error before broker result: {exc}",
+                    execution_time_ms=order_send_ms,
+                    broker_response={"error": str(exc)},
+                )
+                pvm_stage(
+                    ValidationStage.GATEWAY,
+                    ok=False,
+                    reason=str(exc),
+                    latency_ms=order_send_ms,
+                )
+                pvm_stage(
+                    ValidationStage.MT5,
+                    ok=False,
+                    reason=str(exc),
+                    latency_ms=order_send_ms,
+                )
+            except Exception:
+                logger.exception("pvm_order_send_transport_record_failed")
             raise
         self._positions_cache = None
         self._positions_cache_at = 0.0
@@ -1399,6 +1441,68 @@ class GatewayMT5Client:
             deal_ticket=result.deal_ticket,
             raw_keys=sorted(str(k) for k in data) if isinstance(data, dict) else [],
         )
+        try:
+            from app.domain.institutional_trading.production_validation_mode import (
+                ValidationStage,
+                record_gateway,
+                record_mt5,
+                stage as pvm_stage,
+            )
+
+            order_send_ms = round((time.perf_counter() - order_send_t0) * 1000.0, 2)
+            upstream = getattr(self, "_last_upstream", None) or {}
+            http_code = upstream.get("status_code")
+            record_gateway(
+                request={"path": "/trade/order_send", **json_body},
+                response=dict(data) if isinstance(data, dict) else {"raw": str(data)},
+                http_code=int(http_code) if http_code is not None else None,
+                gateway_latency_ms=upstream.get("latency_ms"),
+                order_send_latency_ms=order_send_ms,
+            )
+            fill_price = str(result.price) if result.price is not None else None
+            slippage = None
+            try:
+                if result.price is not None and request.price is not None:
+                    slippage = str(result.price - request.price)
+            except Exception:
+                slippage = None
+            ok_codes = {10008, 10009, 10010}
+            mt5_ok = result.retcode in ok_codes and bool(
+                result.order_ticket or result.deal_ticket
+            )
+            record_mt5(
+                ticket=result.order_ticket or result.deal_ticket or None,
+                retcode=result.retcode,
+                comment=result.comment,
+                execution_time_ms=order_send_ms,
+                fill_price=fill_price,
+                slippage=slippage,
+                broker_response=dict(data) if isinstance(data, dict) else {},
+            )
+            pvm_stage(
+                ValidationStage.GATEWAY,
+                ok=bool(http_code is None or (200 <= int(http_code) < 300)),
+                reason=f"http={http_code}",
+                latency_ms=float(upstream.get("latency_ms") or order_send_ms),
+            )
+            pvm_stage(
+                ValidationStage.MT5,
+                ok=mt5_ok,
+                reason=f"retcode={result.retcode} comment={result.comment}",
+                latency_ms=order_send_ms,
+            )
+            pvm_stage(
+                ValidationStage.BROKER,
+                ok=mt5_ok,
+                reason=(
+                    f"ticket={result.order_ticket or result.deal_ticket}"
+                    if mt5_ok
+                    else (result.comment or f"retcode={result.retcode}")
+                ),
+                latency_ms=order_send_ms,
+            )
+        except Exception:
+            logger.exception("pvm_order_send_record_failed")
         return result
 
     def order_cancel(self, ticket: int) -> MT5OrderSendResult:
