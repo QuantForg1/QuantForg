@@ -179,6 +179,7 @@ class Container:
                             "mt5_gateway_client_configured",
                             base_url=client.base_url,
                             token_configured=True,
+                            token_len=len(gateway_token),
                             timeout_seconds=float(
                                 self.settings.mt5_connect_timeout_seconds
                             ),
@@ -192,12 +193,29 @@ class Container:
                         client = MockMT5Client()
                 else:
                     client = MockMT5Client()
-                    logger.info(
-                        "mt5_gateway_client_not_configured",
-                        base_url_set=bool(gateway_url),
-                        token_set=bool(gateway_token),
-                        using="MockMT5Client",
-                    )
+                    # Empty caller token is the root cause of
+                    # gateway_auth_rejected received=<empty> when something
+                    # still reaches the Windows host without Authorization.
+                    if gateway_url and not gateway_token:
+                        logger.error(
+                            "mt5_gateway_caller_token_missing",
+                            base_url_set=True,
+                            token_set=False,
+                            using="MockMT5Client",
+                            hint=(
+                                "Set Railway MT5_GATEWAY_CALLER_TOKEN (or "
+                                "MT5_GATEWAY_TOKEN) to the same value as Windows "
+                                "MT5_GATEWAY_TOKEN so GatewayMT5Client sends "
+                                "Authorization + X-Gateway-Token"
+                            ),
+                        )
+                    else:
+                        logger.info(
+                            "mt5_gateway_client_not_configured",
+                            base_url_set=bool(gateway_url),
+                            token_set=bool(gateway_token),
+                            using="MockMT5Client",
+                        )
                 # Never enable live send on MockMT5Client — that invents tickets.
                 live_enabled = execution_enabled and using_gateway
                 if execution_enabled and not using_gateway:

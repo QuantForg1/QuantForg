@@ -7,6 +7,7 @@ They are never written to Railway env, logs, or API responses.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import logging
 import re
 import sys
@@ -249,6 +250,44 @@ class GatewayDiagnostics:
         }
 
 
+def _bridge_import_context() -> dict[str, Any]:
+    """Interpreter facts for diagnosing ModuleNotFoundError (no guessing)."""
+    ctx: dict[str, Any] = {
+        "executable": sys.executable,
+        "version": sys.version.split()[0],
+        "prefix": sys.prefix,
+        "path_head": list(sys.path[:8]),
+    }
+    try:
+        import site
+
+        ctx["site_packages"] = list(site.getsitepackages())
+        ctx["user_site"] = site.getusersitepackages()
+        ctx["enable_user_site"] = bool(site.ENABLE_USER_SITE)
+    except Exception as exc:  # pragma: no cover - platform edge
+        ctx["site_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        spec = importlib.util.find_spec("MetaTrader5")
+        ctx["find_spec"] = None if spec is None else {
+            "name": spec.name,
+            "origin": getattr(spec, "origin", None),
+            "submodule_search_locations": list(spec.submodule_search_locations or []),
+        }
+    except Exception as exc:
+        ctx["find_spec_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        from importlib import metadata as importlib_metadata
+
+        dist = importlib_metadata.distribution("MetaTrader5")
+        ctx["distribution"] = {
+            "version": dist.version,
+            "locate_file": str(dist.locate_file("")),
+        }
+    except Exception as exc:
+        ctx["distribution_error"] = f"{type(exc).__name__}: {exc}"
+    return ctx
+
+
 class LiveMT5Bridge:
     """Thin wrapper over the MetaTrader5 package (Windows only).
 
@@ -262,6 +301,7 @@ class LiveMT5Bridge:
     def __init__(self) -> None:
         self._mt5: Any | None = None
         self._import_error: str | None = None
+        self._import_context: dict[str, Any] | None = None
         self._last_initialize_ok: bool | None = None
         self._last_initialize_error: Any | None = None
         self._last_initialize_path: str | None = None
@@ -272,24 +312,45 @@ class LiveMT5Bridge:
         if self._mt5 is not None:
             return True
         name = "MetaTrader5"
+        ctx = _bridge_import_context()
+        self._import_context = ctx
         try:
-            # Drop a prior failed/partial import so a later successful install
-            # can be loaded in the same process.
+            # Drop a prior failed/partial import + invalidate path caches so a
+            # package installed after process start can be loaded without restart
+            # when the *same* interpreter gained the wheel.
             for key in list(sys.modules):
                 if key == name or key.startswith(name + "."):
                     del sys.modules[key]
+            importlib.invalidate_caches()
             mt5 = importlib.import_module(name)
             self._mt5 = mt5
             self._import_error = None
             logger.info(
-                "mt5_bridge_import_ok file=%s",
+                "mt5_bridge_import_ok file=%s executable=%s version=%s",
                 getattr(mt5, "__file__", None),
+                ctx.get("executable"),
+                ctx.get("version"),
             )
             return True
         except Exception as exc:
             self._mt5 = None
             self._import_error = f"{type(exc).__name__}: {exc}"
-            logger.warning("mt5_bridge_import_failed error=%s", self._import_error)
+            # Never hide the exception — log full interpreter evidence.
+            logger.warning(
+                "mt5_bridge_import_failed error=%s executable=%s version=%s "
+                "prefix=%s find_spec=%s distribution=%s distribution_error=%s "
+                "site_packages=%s user_site=%s path_head=%s",
+                self._import_error,
+                ctx.get("executable"),
+                ctx.get("version"),
+                ctx.get("prefix"),
+                ctx.get("find_spec"),
+                ctx.get("distribution"),
+                ctx.get("distribution_error"),
+                ctx.get("site_packages"),
+                ctx.get("user_site"),
+                ctx.get("path_head"),
+            )
             return False
 
     @property
@@ -300,9 +361,10 @@ class LiveMT5Bridge:
 
     def require(self) -> Any:
         if not self._ensure_module() or self._mt5 is None:
+            exe = (self._import_context or {}).get("executable") or sys.executable
             raise RuntimeError(
                 "MetaTrader5 package unavailable in this Python process. "
-                f"({self._import_error or 'no detail'})"
+                f"executable={exe!r} ({self._import_error or 'no detail'})"
             )
         return self._mt5
 

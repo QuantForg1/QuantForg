@@ -143,6 +143,9 @@ class TestGatewayHttpTransport:
         def handler(request: httpx.Request) -> httpx.Response:
             seen["authorization"] = request.headers.get("authorization", "")
             seen["x-gateway-token"] = request.headers.get("x-gateway-token", "")
+            seen["x-quantforg-gateway-token"] = request.headers.get(
+                "x-quantforg-gateway-token", ""
+            )
             return httpx.Response(
                 200,
                 json={
@@ -179,6 +182,7 @@ class TestGatewayHttpTransport:
         assert snap.connected is True
         assert seen["authorization"] == "Bearer caller-secret"
         assert seen["x-gateway-token"] == "caller-secret"
+        assert seen["x-quantforg-gateway-token"] == "caller-secret"
 
     def test_health_route_has_no_auth_header(self) -> None:
         seen_auth = {"present": False}

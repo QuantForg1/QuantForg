@@ -127,6 +127,24 @@ class TestGatewayAuthHardening:
         )
         assert res.status_code == 200
 
+    def test_accepts_quantforg_gateway_token_header_alone(
+        self, client: tuple[TestClient, str]
+    ) -> None:
+        http, token = client
+        res = http.get(
+            "/session/status",
+            headers={"X-QuantForg-Gateway-Token": token},
+        )
+        assert res.status_code == 200
+
+    def test_missing_auth_headers_rejected(
+        self, client: tuple[TestClient, str]
+    ) -> None:
+        http, _token = client
+        res = http.get("/session/status")
+        assert res.status_code == 401
+        assert res.json()["detail"] == "Invalid or missing gateway token"
+
     def test_bearer_with_trailing_whitespace(
         self, client: tuple[TestClient, str]
     ) -> None:

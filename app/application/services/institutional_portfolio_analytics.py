@@ -142,15 +142,18 @@ def _load_deals_and_account(
         from dotenv import load_dotenv
 
         load_dotenv(Path.cwd() / ".env")
-        token = (os.getenv("MT5_GATEWAY_TOKEN") or "").strip()
+        from app.infrastructure.brokers.mt5.gateway_client import (
+            GatewayMT5Client,
+            resolve_gateway_caller_token,
+        )
+
+        token = resolve_gateway_caller_token()
         base = (
             os.getenv("MT5_GATEWAY_URL")
             or os.getenv("MT5_GATEWAY_BASE_URL")
             or "http://127.0.0.1:8765"
         )
         if token:
-            from app.infrastructure.brokers.mt5.gateway_client import GatewayMT5Client
-
             client = GatewayMT5Client(base_url=base, token=token)
             if client.adopt_existing_session():
                 date_to = datetime.now(UTC)
