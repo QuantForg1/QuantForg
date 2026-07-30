@@ -491,28 +491,126 @@ def check_test8_session() -> dict[str, Any]:
 
 
 def check_test9_long_run() -> dict[str, Any]:
-    issues = [
-        "24-hour continuous live run not executed — requires operator soak "
-        "with witness/heartbeat evidence"
-    ]
-    evidence: dict[str, Any] = {"required_hours": 24, "executed_hours": 0}
-    witness = (
+    """Evaluate wall-clock soak evidence under docs/production/reports/oat_v71."""
+    issues: list[str] = []
+    evidence: dict[str, Any] = {
+        "required_hours": 24,
+        "executed_hours": 0,
+        "freshness_max_age_hours": 2.0,
+    }
+    soak_path = (
         ROOT
         / "docs"
         / "production"
         / "reports"
-        / "live_execution_witness_latest.json"
+        / "oat_v71"
+        / "soak_24h_metrics.jsonl"
     )
-    if witness.exists():
+    latest_path = (
+        ROOT
+        / "docs"
+        / "production"
+        / "reports"
+        / "oat_v71"
+        / "soak_24h_latest.json"
+    )
+    evidence["soak_metrics_path"] = str(soak_path)
+    evidence["soak_latest_path"] = str(latest_path)
+    if not soak_path.is_file():
+        issues.append("soak_24h_metrics.jsonl missing — no wall-clock soak evidence")
+        return {
+            "id": "TEST_9_LONG_RUN",
+            "status": "BLOCKED",
+            "issues": issues,
+            "evidence": evidence,
+        }
+
+    rows: list[dict[str, Any]] = []
+    for line in soak_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
         try:
-            evidence["witness_latest_keys"] = list(
-                json.loads(witness.read_text(encoding="utf-8")).keys()
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    if len(rows) < 2:
+        issues.append("soak metrics have fewer than 2 samples")
+        return {
+            "id": "TEST_9_LONG_RUN",
+            "status": "FAIL",
+            "issues": issues,
+            "evidence": evidence,
+        }
+
+    def _parse(ts: str) -> datetime:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+    first_ts = str(rows[0].get("ts") or "")
+    last_ts = str(rows[-1].get("ts") or "")
+    t0 = _parse(first_ts)
+    t1 = _parse(last_ts)
+    now = datetime.now(UTC)
+    duration_h = (t1 - t0).total_seconds() / 3600.0
+    age_h = (now - t1).total_seconds() / 3600.0
+    gateway_ok = sum(
+        1 for r in rows if (r.get("gateway") or {}).get("ok") is True
+    )
+    gateway_bad = sum(
+        1 for r in rows if (r.get("gateway") or {}).get("ok") is False
+    )
+    connected = sum(
+        1 for r in rows if (r.get("gateway") or {}).get("connected") is True
+    )
+    evidence.update(
+        {
+            "samples": len(rows),
+            "first_ts": first_ts,
+            "last_ts": last_ts,
+            "executed_hours": round(duration_h, 3),
+            "age_hours_since_last_sample": round(age_h, 3),
+            "gateway_ok_samples": gateway_ok,
+            "gateway_bad_samples": gateway_bad,
+            "mt5_connected_samples": connected,
+            "stale": age_h > float(evidence["freshness_max_age_hours"]),
+            "meets_24h": duration_h >= 24.0,
+        }
+    )
+    if latest_path.is_file():
+        try:
+            evidence["latest_snapshot"] = json.loads(
+                latest_path.read_text(encoding="utf-8")
             )
         except Exception as exc:  # noqa: BLE001
-            evidence["witness_error"] = str(exc)
+            evidence["latest_snapshot_error"] = str(exc)
+
+    if duration_h < 24.0:
+        issues.append(
+            f"soak duration {duration_h:.2f}h < required 24h "
+            f"(first={first_ts}, last={last_ts}, samples={len(rows)})"
+        )
+    if age_h > float(evidence["freshness_max_age_hours"]):
+        issues.append(
+            f"soak evidence STALE — last sample age {age_h:.2f}h "
+            f"> {evidence['freshness_max_age_hours']}h "
+            f"(last_ts={last_ts}). Claimed longer soaks on operator hosts "
+            "are not present in accessible git/workspace evidence."
+        )
+    if gateway_bad > max(3, len(rows) // 20):
+        issues.append(
+            f"excessive gateway failures during soak: {gateway_bad}/{len(rows)}"
+        )
+
+    if not issues:
+        status: Status = "PASS"
+    elif evidence["stale"] or duration_h < 24.0:
+        # Incomplete or stale wall-clock evidence is a hard fail for acceptance.
+        status = "FAIL"
+    else:
+        status = "FAIL"
     return {
         "id": "TEST_9_LONG_RUN",
-        "status": "BLOCKED",
+        "status": status,
         "issues": issues,
         "evidence": evidence,
     }

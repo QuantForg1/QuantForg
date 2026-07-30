@@ -1,54 +1,54 @@
 # QuantForg v7.1 Live Operational Acceptance Test (OAT)
 
-Generated: `2026-07-27T18:36:00Z` (approx)
+Generated: `2026-07-30T11:47:23.511007+00:00`
 
-**Declaration: QUANTFORG v7.1 LIVE PRODUCTION NOT ACCEPTED**
+**Declaration: QUANTFORG v7.1 LIVE PRODUCTION NOT ACCEPTED — see FAIL steps with live evidence.**
 
-No product code was changed. Evidence under `docs/production/reports/oat_v71/`.
+Re-audited against **live** Railway/FE probes and accessible soak artifacts.
+Do not treat prior Jul 27 markdown as current.
 
 ## Results
 
 | Step | Item | Status | Evidence / notes |
 |---|---|---|---|
-| 1 | Full restart (FE/BE/Gateway/MT5) | **FAIL** | Production FE `www.quantforg.com` = 200; Railway API = ok; broker profile present; MT5 attached on Weltrade-Real. **Gateway process restart failed** — PID 8052 is elevated (`Access is denied` on `taskkill` / `schtasks /RL HIGHEST`). Soft `Stop-Process` left same PID. Local ports 3000/8000 down (prod uses www + Railway). |
-| 2 | MT5 reconnect | **PASS** | Live `POST /session/disconnect` → mid `connected=false`; `POST /session/attach` → poll0 `connected=true` / `session=attached` without manual broker setup. Logs: `step2_*.json`. |
-| 3 | Gateway restart | **FAIL** | Cannot terminate elevated gateway from this agent session. Elevated scheduled task create also `Access is denied`. Heartbeat remained healthy on existing process; **process-level stop/start not proven**. |
-| 4 | Browser / PC restart | **FAIL** | Agent browser opened `https://www.quantforg.com/login` (Remember Me UI present) — **session not restored** in this browser profile (login form shown). PC restart **not executed**. |
-| 5 | 24h long run | **BLOCKED** | Read-only soak logger **started** (PID in `soak_24h.pid`), first samples written to `soak_24h_metrics.jsonl` / `soak_24h_latest.json`. **24 hours not elapsed** — cannot PASS yet. |
+| 1 | Full restart (FE/BE/Gateway/MT5) | **FAIL** | Live FE ok=True; Railway ok=True; gateway :8765 from auditor ok=False. Full FE/BE/Gateway/MT5 restart cycle still not proven. |
+| 2 | MT5 reconnect | **PASS** | {"prior_live_logs": ["step2_disconnect.json", "step2_attach.json", "step2_recovered.json"], "note": "Prior live disconnect\u2192attach PASS retained; cannot re-run without gateway access."} |
+| 3 | Gateway restart | **FAIL** | {"gateway_reachable_from_auditor": false, "prior_oat": "Access denied on taskkill/schtasks for elevated gateway PID", "note": "Process-level stop/start still not proven in accessible evidence."} |
+| 4 | Browser / PC restart | **FAIL** | {"prior_oat": "agent browser showed /login; PC restart not executed", "note": "No new Remember-Me / PC-restart witness in accessible evidence."} |
+| 5 | 24h long run | **FAIL** | Accessible soak duration **16.162h** (first=2026-07-27T18:35:38.2499607Z, last=2026-07-28T10:45:19.9132149Z, n=505); last sample age **49.034h** (STALE). Claimed ~48h Windows soak is **not present** in git/workspace evidence. |
 
 ## Summary
 
-- PASS: 1 (MT5 session reconnect)
-- FAIL: 3 (full stack restart, gateway process restart, browser/PC session)
-- BLOCKED: 1 (24h soak in progress)
+- PASS: 1
+- FAIL: 4
+- BLOCKED: 0
 
-## Live metrics (sample)
+## Live probes (this audit)
 
-From `soak_24h_latest.json` at `2026-07-27T18:36:46Z`:
+- Collected at: `2026-07-30T11:47:23.511007+00:00`
+- Railway `/api/v1/health`: **ok**
+- Railway `/api/v1/health/status`: **healthy**
+- Frontend `www.quantforg.com`: **200**
+- Local gateway `127.0.0.1:8765`: **unreachable from auditor**
 
-- Gateway HTTP latency: **104.53 ms**
-- MT5 probe latency: **0.607 ms**
-- MT5 connected / attached: **true**
-- Heartbeat: present
-- CPU sample: **72.98%**
-- Gateway+terminal RAM sample: **38.21 MB**
-- Railway health that sample: **timeout** (intermittent; earlier direct probe was `ok`)
-- Soak process: **PID 5476** running (`soak_24h.pid`)
+## Soak evidence (accessible)
 
-## Remaining blockers (must clear for acceptance)
+- Duration: **16.162 hours** (required ≥ 24)
+- Samples: 505
+- Window: `2026-07-27T18:35:38.2499607Z` → `2026-07-28T10:45:19.9132149Z`
+- Age of last sample: **49.034 hours**
+- Meets 24h: **False**; Meets 48h: **False**; Stale: **True**
+- Gateway ok/bad: 504/1; MT5 connected samples: 504
+- Railway ok/bad during soak: 238/267
 
-1. **Admin restart of elevated gateway** — run as Administrator: stop PID on :8765, start `python -m services.mt5_gateway.main`, confirm auto-attach + heartbeat.
-2. **Full stack restart proof** — confirm Railway backend recycle (Railway dashboard/CLI) and production FE deploy health after recycle; confirm no duplicate workers/orders.
-3. **Operator browser session** — in the real browser profile with Remember Me: refresh, close/reopen, then **PC restart**; confirm still logged in + broker restore.
-4. **Complete 24h soak** — leave `soak_24h.ps1` running; after 24h inspect `soak_24h_metrics.jsonl` for disconnects, memory growth, duplicate-order incidents (ops logs).
+## Remaining verified blockers
 
-## What already passed live
+1. **OAT Step 1 FAIL** — full stack restart not proven; gateway unreachable from this auditor.
+2. **OAT Step 3 FAIL** — elevated gateway process recycle still not proven.
+3. **OAT Step 4 FAIL** — browser/PC Remember-Me restore still not proven.
+4. **OAT Step 5 FAIL** — accessible soak is **16.16h** and **~49h stale**; claimed 48h soak not in accessible evidence.
 
-- MT5 disconnect → attach recovery without manual login/setup
-- Gateway + MT5 heartbeat healthy on Weltrade-Real after session reconnect
-- Production FE and Railway API reachable
-- Encrypted broker profile present on disk
-
----
+JSON: `docs/production/reports/oat_v71/oat_latest.json`
 
 **Acceptance rule:** all OAT steps must be **PASS**. Until then, do **not** declare LIVE PRODUCTION ACCEPTED.
+

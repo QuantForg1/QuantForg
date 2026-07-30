@@ -1,0 +1,149 @@
+{
+  "title": "QuantForg v7.1 Live Operational Acceptance Test (OAT)",
+  "generated_at": "2026-07-30T11:47:23.511007+00:00",
+  "auditor": "cloud-agent live audit",
+  "live_probes": {
+    "railway_health": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok"
+      },
+      "url": "https://quantforg-production.up.railway.app/api/v1/health"
+    },
+    "railway_status": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 176.95
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.04
+          }
+        ]
+      },
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/status"
+    },
+    "railway_ready": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok"
+      },
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/ready"
+    },
+    "frontend": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "raw_len": 8013,
+        "status_code": 200
+      },
+      "url": "https://www.quantforg.com/"
+    },
+    "gateway_local": {
+      "ok": false,
+      "error": "<urlopen error [Errno 111] Connection refused>",
+      "url": "http://127.0.0.1:8765/health"
+    }
+  },
+  "soak_analysis": {
+    "samples": 505,
+    "first_ts": "2026-07-27T18:35:38.2499607Z",
+    "last_ts": "2026-07-28T10:45:19.9132149Z",
+    "duration_hours": 16.162,
+    "age_hours_since_last_sample": 49.034,
+    "meets_24h": false,
+    "meets_48h": false,
+    "stale": true,
+    "gateway_ok": 504,
+    "gateway_bad": 1,
+    "mt5_connected": 504,
+    "railway_ok": 238,
+    "railway_bad": 267,
+    "note": "Accessible evidence only. Windows-host soak beyond last_ts is not in git/workspace."
+  },
+  "steps": [
+    {
+      "id": 1,
+      "item": "Full restart (FE/BE/Gateway/MT5)",
+      "status": "FAIL",
+      "evidence": {
+        "frontend_live": true,
+        "railway_live": true,
+        "gateway_reachable_from_auditor": false,
+        "prior_oat": "elevated gateway Access denied \u2014 process recycle not proven",
+        "note": "Cannot prove full stack restart from this cloud auditor; gateway :8765 unreachable here."
+      }
+    },
+    {
+      "id": 2,
+      "item": "MT5 reconnect",
+      "status": "PASS",
+      "evidence": {
+        "prior_live_logs": [
+          "step2_disconnect.json",
+          "step2_attach.json",
+          "step2_recovered.json"
+        ],
+        "note": "Prior live disconnect\u2192attach PASS retained; cannot re-run without gateway access."
+      }
+    },
+    {
+      "id": 3,
+      "item": "Gateway restart",
+      "status": "FAIL",
+      "evidence": {
+        "gateway_reachable_from_auditor": false,
+        "prior_oat": "Access denied on taskkill/schtasks for elevated gateway PID",
+        "note": "Process-level stop/start still not proven in accessible evidence."
+      }
+    },
+    {
+      "id": 4,
+      "item": "Browser / PC restart",
+      "status": "FAIL",
+      "evidence": {
+        "prior_oat": "agent browser showed /login; PC restart not executed",
+        "note": "No new Remember-Me / PC-restart witness in accessible evidence."
+      }
+    },
+    {
+      "id": 5,
+      "item": "24h long run",
+      "status": "FAIL",
+      "evidence": {
+        "samples": 505,
+        "first_ts": "2026-07-27T18:35:38.2499607Z",
+        "last_ts": "2026-07-28T10:45:19.9132149Z",
+        "duration_hours": 16.162,
+        "age_hours_since_last_sample": 49.034,
+        "meets_24h": false,
+        "meets_48h": false,
+        "stale": true,
+        "gateway_ok": 504,
+        "gateway_bad": 1,
+        "mt5_connected": 504,
+        "railway_ok": 238,
+        "railway_bad": 267,
+        "note": "Accessible evidence only. Windows-host soak beyond last_ts is not in git/workspace."
+      }
+    }
+  ],
+  "summary": {
+    "PASS": 1,
+    "FAIL": 4,
+    "BLOCKED": 0
+  },
+  "production_accepted": false,
+  "declaration": "QUANTFORG v7.1 LIVE PRODUCTION NOT ACCEPTED \u2014 see FAIL steps with live evidence."
+}
