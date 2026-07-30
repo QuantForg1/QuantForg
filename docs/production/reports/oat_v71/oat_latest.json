@@ -1,7 +1,8 @@
 {
   "title": "QuantForg v7.1 Live Operational Acceptance Test (OAT)",
-  "generated_at": "2026-07-30T11:47:23.511007+00:00",
-  "auditor": "cloud-agent live audit",
+  "generated_at": "2026-07-30T11:56:24.631109+00:00",
+  "declaration": "QUANTFORG v7.1 LIVE PRODUCTION NOT ACCEPTED \u2014 see FAIL steps with live evidence.",
+  "production_accepted": false,
   "live_probes": {
     "railway_health": {
       "ok": true,
@@ -22,7 +23,7 @@
           {
             "name": "postgres",
             "status": "healthy",
-            "latency_ms": 176.95
+            "latency_ms": 181.7
           },
           {
             "name": "redis",
@@ -33,22 +34,58 @@
       },
       "url": "https://quantforg-production.up.railway.app/api/v1/health/status"
     },
-    "railway_ready": {
-      "ok": true,
-      "status": 200,
-      "body": {
-        "status": "ok"
-      },
-      "url": "https://quantforg-production.up.railway.app/api/v1/health/ready"
-    },
     "frontend": {
       "ok": true,
       "status": 200,
       "body": {
-        "raw_len": 8013,
-        "status_code": 200
+        "raw_len": 8013
       },
       "url": "https://www.quantforg.com/"
+    },
+    "gateway_public": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok",
+        "service": "mt5-gateway",
+        "token_configured": true,
+        "websocket_enabled": true,
+        "auto_attach_enabled": true,
+        "token_fingerprint": {
+          "length": 43,
+          "preview": "QuantF******Qw8Rt5",
+          "source": "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+          "process_env_len": 0,
+          "dotenv_len": 43,
+          "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+          "process_is_placeholder": true
+        },
+        "mt5": {
+          "connected": true,
+          "session_mode": "attached",
+          "latency_ms": 0.497,
+          "terminal_build": 6061,
+          "build_date": "24 Jul 2026",
+          "server": "Weltrade-Real",
+          "login_status": "connected",
+          "last_heartbeat_at": "2026-07-30T11:56:43.029048+00:00",
+          "version": "500.6061 (24 Jul 2026)",
+          "bridge_available": true,
+          "degraded": false,
+          "probe": "live",
+          "terminal_trade_allowed": true,
+          "mt5_autotrading_enabled": true,
+          "dlls_allowed": true,
+          "dll_allowed": true,
+          "capability_support": {
+            "autotrading": "SUPPORTED",
+            "dll": "SUPPORTED"
+          },
+          "capability_note": "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+        },
+        "bridge_available": true
+      },
+      "url": "https://gateway.quantforg.com/health"
     },
     "gateway_local": {
       "ok": false,
@@ -61,16 +98,14 @@
     "first_ts": "2026-07-27T18:35:38.2499607Z",
     "last_ts": "2026-07-28T10:45:19.9132149Z",
     "duration_hours": 16.162,
-    "age_hours_since_last_sample": 49.034,
+    "age_hours_since_last_sample": 49.185,
     "meets_24h": false,
     "meets_48h": false,
     "stale": true,
-    "gateway_ok": 504,
-    "gateway_bad": 1,
-    "mt5_connected": 504,
-    "railway_ok": 238,
-    "railway_bad": 267,
-    "note": "Accessible evidence only. Windows-host soak beyond last_ts is not in git/workspace."
+    "windows_expected_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\docs\\production\\reports\\oat_v71\\soak_24h_metrics.jsonl",
+    "import_status": "NOT_IMPORTED \u2014 Windows JSONL not present in git beyond 2026-07-28T10:45Z",
+    "live_gateway_proves_host_up": true,
+    "live_gateway_heartbeat": "2026-07-30T11:56:43.029048+00:00"
   },
   "steps": [
     {
@@ -78,11 +113,10 @@
       "item": "Full restart (FE/BE/Gateway/MT5)",
       "status": "FAIL",
       "evidence": {
-        "frontend_live": true,
-        "railway_live": true,
-        "gateway_reachable_from_auditor": false,
-        "prior_oat": "elevated gateway Access denied \u2014 process recycle not proven",
-        "note": "Cannot prove full stack restart from this cloud auditor; gateway :8765 unreachable here."
+        "frontend": true,
+        "railway": true,
+        "gateway_public": true,
+        "note": "Services healthy now; full restart cycle still not proven."
       }
     },
     {
@@ -90,12 +124,10 @@
       "item": "MT5 reconnect",
       "status": "PASS",
       "evidence": {
-        "prior_live_logs": [
-          "step2_disconnect.json",
-          "step2_attach.json",
-          "step2_recovered.json"
+        "prior_logs": [
+          "step2_*.json"
         ],
-        "note": "Prior live disconnect\u2192attach PASS retained; cannot re-run without gateway access."
+        "live_attached": "attached"
       }
     },
     {
@@ -103,9 +135,7 @@
       "item": "Gateway restart",
       "status": "FAIL",
       "evidence": {
-        "gateway_reachable_from_auditor": false,
-        "prior_oat": "Access denied on taskkill/schtasks for elevated gateway PID",
-        "note": "Process-level stop/start still not proven in accessible evidence."
+        "note": "Process-level recycle still not proven (prior Access denied)."
       }
     },
     {
@@ -113,8 +143,7 @@
       "item": "Browser / PC restart",
       "status": "FAIL",
       "evidence": {
-        "prior_oat": "agent browser showed /login; PC restart not executed",
-        "note": "No new Remember-Me / PC-restart witness in accessible evidence."
+        "note": "Remember-Me / PC restart witness still absent."
       }
     },
     {
@@ -126,16 +155,14 @@
         "first_ts": "2026-07-27T18:35:38.2499607Z",
         "last_ts": "2026-07-28T10:45:19.9132149Z",
         "duration_hours": 16.162,
-        "age_hours_since_last_sample": 49.034,
+        "age_hours_since_last_sample": 49.185,
         "meets_24h": false,
         "meets_48h": false,
         "stale": true,
-        "gateway_ok": 504,
-        "gateway_bad": 1,
-        "mt5_connected": 504,
-        "railway_ok": 238,
-        "railway_bad": 267,
-        "note": "Accessible evidence only. Windows-host soak beyond last_ts is not in git/workspace."
+        "windows_expected_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\docs\\production\\reports\\oat_v71\\soak_24h_metrics.jsonl",
+        "import_status": "NOT_IMPORTED \u2014 Windows JSONL not present in git beyond 2026-07-28T10:45Z",
+        "live_gateway_proves_host_up": true,
+        "live_gateway_heartbeat": "2026-07-30T11:56:43.029048+00:00"
       }
     }
   ],
@@ -144,6 +171,5 @@
     "FAIL": 4,
     "BLOCKED": 0
   },
-  "production_accepted": false,
-  "declaration": "QUANTFORG v7.1 LIVE PRODUCTION NOT ACCEPTED \u2014 see FAIL steps with live evidence."
+  "evidence_gap": "docs/production/WINDOWS_SOAK_EVIDENCE_GAP.md"
 }

@@ -36,10 +36,34 @@ EXPECTED_UNIVERSE = {
     "ETHUSD",
 }
 
+# Production Windows gateway is published via Cloudflare. Localhost is used only
+# when the verifier runs on the Windows host itself.
+DEFAULT_PUBLIC_GATEWAY = "https://gateway.quantforg.com"
+
+
+def _gateway_base_urls() -> list[str]:
+    """Ordered gateway bases: env override → localhost → public production host."""
+    urls: list[str] = []
+    for key in ("QUANTFORG_GATEWAY_URL", "MT5_GATEWAY_BASE_URL"):
+        raw = (os.environ.get(key) or "").strip().rstrip("/")
+        if raw and raw not in urls:
+            urls.append(raw)
+    for raw in ("http://127.0.0.1:8765", DEFAULT_PUBLIC_GATEWAY):
+        if raw not in urls:
+            urls.append(raw)
+    return urls
+
 
 def _http_json(url: str, timeout: float = 8.0) -> tuple[bool, Any]:
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                # Cloudflare blocks some default Python UA signatures (error 1010).
+                "User-Agent": "QuantForg-PAT/7.1",
+            },
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
             raw = resp.read().decode("utf-8", errors="replace")
             try:
@@ -48,6 +72,22 @@ def _http_json(url: str, timeout: float = 8.0) -> tuple[bool, Any]:
                 return True, {"raw": raw[:500], "status": getattr(resp, "status", None)}
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+
+
+def _gateway_health(timeout: float = 8.0) -> tuple[bool, Any, str | None]:
+    """Probe gateway /health across known bases; return first success."""
+    last_err: Any = None
+    last_url: str | None = None
+    for base in _gateway_base_urls():
+        url = f"{base}/health"
+        last_url = url
+        ok, body = _http_json(url, timeout=timeout)
+        if ok and isinstance(body, dict) and (
+            body.get("status") == "ok" or body.get("service") == "mt5-gateway"
+        ):
+            return True, body, url
+        last_err = body
+    return False, last_err, last_url
 
 
 def _port_open(host: str, port: int, timeout: float = 1.5) -> bool:
@@ -111,7 +151,7 @@ def check_test1_startup() -> dict[str, Any]:
     issues: list[str] = []
     evidence: dict[str, Any] = {}
 
-    gw_ok, gw = _http_json("http://127.0.0.1:8765/health")
+    gw_ok, gw, gw_url = _gateway_health()
     api_ok, api = _http_json(
         "https://quantforg-production.up.railway.app/api/v1/health", timeout=15
     )
@@ -119,8 +159,10 @@ def check_test1_startup() -> dict[str, Any]:
     fe = _port_open("127.0.0.1", 3000)
     evidence["gateway_local"] = {
         "ok": gw_ok,
+        "url": gw_url,
         "body": gw if gw_ok else None,
         "err": None if gw_ok else gw,
+        "candidates": _gateway_base_urls(),
     }
     evidence["api_prod"] = {
         "ok": api_ok,
@@ -214,8 +256,8 @@ def check_test2_mt5_reconnect() -> dict[str, Any]:
     except AttributeError:
         evidence["order_send_retry_forbidden"] = "no retry_order_send (safe)"
 
-    gw_ok, gw = _http_json("http://127.0.0.1:8765/health")
-    evidence["gateway"] = {"ok": gw_ok, "body": gw if gw_ok else gw}
+    gw_ok, gw, gw_url = _gateway_health()
+    evidence["gateway"] = {"ok": gw_ok, "url": gw_url, "body": gw if gw_ok else gw}
     issues.append(
         "automatic reconnect code path verified; physical MT5 disconnect/"
         "reconnect not executed"
@@ -251,8 +293,12 @@ def check_test3_gateway_failure() -> dict[str, Any]:
     if "gateway" not in hits:
         issues.append("gateway reconnect callback not invoked")
 
-    live_ok, live = _http_json("http://127.0.0.1:8765/health")
-    evidence["gateway_live"] = {"ok": live_ok, "body": live if live_ok else live}
+    live_ok, live, live_url = _gateway_health()
+    evidence["gateway_live"] = {
+        "ok": live_ok,
+        "url": live_url,
+        "body": live if live_ok else live,
+    }
     issues.append("gateway stop/start not executed by harness")
     structural = [i for i in issues if "not executed" not in i]
     status: Status = "FAIL" if structural else "BLOCKED"
@@ -635,15 +681,18 @@ def check_test10_performance() -> dict[str, Any]:
     )
 
     latencies: list[float] = []
+    gw_url_used: str | None = None
     for _ in range(5):
         t0 = time.perf_counter()
-        ok, _ = _http_json("http://127.0.0.1:8765/health", timeout=5)
+        ok, _, url = _gateway_health(timeout=5)
         if ok:
             latencies.append((time.perf_counter() - t0) * 1000.0)
+            gw_url_used = url
     evidence["gateway_latency_ms"] = (
         round(statistics.mean(latencies), 2) if latencies else None
     )
     evidence["gateway_reachable"] = bool(latencies)
+    evidence["gateway_url"] = gw_url_used
 
     try:
         import psutil  # type: ignore
