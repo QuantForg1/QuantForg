@@ -508,16 +508,28 @@ def _oms_dashboard(*, pvm: dict[str, Any], attempts: list[dict[str, Any]]) -> di
 
 def _gateway_dashboard(*, pvm: dict[str, Any], services: dict[str, Any], live: dict[str, Any]) -> dict[str, Any]:
     last = pvm.get("last_validation") if isinstance(pvm.get("last_validation"), dict) else {}
-    gw = last.get("gateway") if isinstance(last.get("gateway"), dict) else {}
-    svc = {}
+    raw_gw = last.get("gateway")
+    gw: dict[str, Any] = raw_gw if isinstance(raw_gw, dict) else {}
+    svc: dict[str, Any] = {}
     for row in services.get("services") or []:
         if isinstance(row, dict) and str(row.get("name", "")).lower() == "gateway":
             svc = row
             break
+    connected = pvm.get("gateway_status") in {"PASS", "OK"} or svc.get("status") in {
+        "healthy",
+        "ok",
+        "up",
+    }
     return {
         "gateway_version": live.get("gateway_version") or svc.get("version"),
-        "connection": "connected" if pvm.get("gateway_status") in {"PASS", "OK"} or svc.get("status") in {"healthy", "ok", "up"} else str(pvm.get("gateway_status") or svc.get("status") or "unknown"),
-        "ping_ms": gw.get("gateway_latency_ms") or svc.get("latency_ms") or live.get("gateway_latency_ms"),
+        "connection": (
+            "connected"
+            if connected
+            else str(pvm.get("gateway_status") or svc.get("status") or "unknown")
+        ),
+        "ping_ms": gw.get("gateway_latency_ms")
+        or svc.get("latency_ms")
+        or live.get("gateway_latency_ms"),
         "reconnect_count": live.get("reconnect_attempts") or svc.get("reconnect_count"),
         "last_error": svc.get("last_error") or live.get("gateway_last_error"),
         "order_send_latency_ms": gw.get("order_send_latency_ms"),
@@ -528,7 +540,8 @@ def _gateway_dashboard(*, pvm: dict[str, Any], services: dict[str, Any], live: d
 
 def _broker_dashboard(*, auto: Any, live: dict[str, Any]) -> dict[str, Any]:
     facts = getattr(auto, "facts", None)
-    account = live.get("account") if isinstance(live.get("account"), dict) else {}
+    raw_account = live.get("account")
+    account: dict[str, Any] = raw_account if isinstance(raw_account, dict) else {}
     return {
         "broker_connected": bool(getattr(facts, "broker_connected", False)) if facts else None,
         "account": account.get("login") or live.get("login"),
@@ -543,23 +556,29 @@ def _broker_dashboard(*, auto: Any, live: dict[str, Any]) -> dict[str, Any]:
 
 
 def _performance(*, diagnostics: dict[str, Any]) -> dict[str, Any]:
-    stats = diagnostics.get("statistics") if isinstance(diagnostics.get("statistics"), dict) else {}
+    raw_stats = diagnostics.get("statistics")
+    stats: dict[str, Any] = raw_stats if isinstance(raw_stats, dict) else {}
     # Only surface fields that diagnostics actually provides — never invent win rate/PF.
+    weekly = stats.get("weekly")
+    monthly = stats.get("monthly")
     return {
         "today": {
-            "trades": stats.get("forwarded_count") or stats.get("trades") or stats.get("oms_requests"),
+            "trades": stats.get("forwarded_count")
+            or stats.get("trades")
+            or stats.get("oms_requests"),
             "signals": stats.get("signals_generated") or stats.get("cycle_count"),
             "rejected": stats.get("signals_rejected") or stats.get("no_trade_count"),
             "win_rate": stats.get("win_rate"),  # may be null
             "profit_factor": stats.get("profit_factor"),
             "expectancy": stats.get("expectancy"),
             "average_rr": stats.get("average_rr"),
-            "average_latency_ms": stats.get("average_latency_ms") or stats.get("avg_latency_ms"),
+            "average_latency_ms": stats.get("average_latency_ms")
+            or stats.get("avg_latency_ms"),
             "net_profit": stats.get("net_profit"),
             "drawdown": stats.get("drawdown") or stats.get("max_drawdown"),
         },
-        "weekly": stats.get("weekly") if isinstance(stats.get("weekly"), dict) else None,
-        "monthly": stats.get("monthly") if isinstance(stats.get("monthly"), dict) else None,
+        "weekly": weekly if isinstance(weekly, dict) else None,
+        "monthly": monthly if isinstance(monthly, dict) else None,
         "source": "strategy_diagnostics",
     }
 
@@ -620,10 +639,17 @@ def _alert_center(*, plane: Any, pvm: dict[str, Any], auto: Any) -> list[dict[st
         alert_svc = getattr(plane, "alerts", None)
         if alert_svc is not None and hasattr(alert_svc, "list"):
             raw = alert_svc.list(unacked_only=False, limit=100)
-            for a in raw or []:
-                d = a.to_dict() if hasattr(a, "to_dict") else (a if isinstance(a, dict) else None)
-                if d:
-                    alerts.append(d)
+            for item in raw or []:
+                row: dict[str, Any] | None
+                if hasattr(item, "to_dict"):
+                    converted = item.to_dict()
+                    row = converted if isinstance(converted, dict) else None
+                elif isinstance(item, dict):
+                    row = item
+                else:
+                    row = None
+                if row:
+                    alerts.append(row)
     except Exception:
         logger.exception("noc_alerts_read_failed")
 
@@ -653,7 +679,10 @@ def _alert_center(*, plane: Any, pvm: dict[str, Any], auto: Any) -> list[dict[st
                     "acknowledged": False,
                 }
             )
-    return _redact(alerts)[:80]
+    redacted = _redact(alerts)
+    if not isinstance(redacted, list):
+        return alerts[:80]
+    return [row for row in redacted if isinstance(row, dict)][:80]
 
 
 def _collect_ops_metrics_safe(
@@ -820,8 +849,8 @@ def build_noc_command_center() -> dict[str, Any]:
         class _Empty:
             facts = None
             safety = None
-            live = {}
-            execution_state = {}
+            live: dict[str, Any] = {}
+            execution_state: dict[str, Any] = {}
             primary_blocker = None
 
         auto = _Empty()
@@ -852,7 +881,8 @@ def build_noc_command_center() -> dict[str, Any]:
     for a in attempts:
         if not isinstance(a, dict):
             continue
-        pipe = a.get("pipeline") if isinstance(a.get("pipeline"), list) else []
+        raw_pipe = a.get("pipeline")
+        pipe: list[Any] = raw_pipe if isinstance(raw_pipe, list) else []
         latencies = [
             float(s["latency_ms"])
             for s in pipe
@@ -876,7 +906,13 @@ def build_noc_command_center() -> dict[str, Any]:
                 ),
                 "latency_ms": round(sum(latencies), 2) if latencies else None,
                 "final_result": a.get("final_result"),
-                "result": "PASS" if a.get("accepted") else "FAIL" if fails else a.get("final_result"),
+                "result": (
+                    "PASS"
+                    if a.get("accepted")
+                    else "FAIL"
+                    if fails
+                    else a.get("final_result")
+                ),
                 "reason": a.get("first_blocker") or (fails[0] if fails else None),
                 "first_blocker": a.get("first_blocker"),
                 "ai_action": a.get("ai_action"),
@@ -885,7 +921,8 @@ def build_noc_command_center() -> dict[str, Any]:
             }
         )
 
-    payload = {
+    live_for_broker: dict[str, Any] = live_map if isinstance(live_map, dict) else {}
+    payload: dict[str, Any] = {
         "header": header,
         "global_health": _health_cards(
             plane=plane,
@@ -901,9 +938,7 @@ def build_noc_command_center() -> dict[str, Any]:
         "closed_trades": _closed_trades_read_only(limit=25),
         "oms": oms,
         "gateway": gateway,
-        "broker": _broker_dashboard(
-            auto=auto, live=live_map if isinstance(live_map, dict) else {}
-        ),
+        "broker": _broker_dashboard(auto=auto, live=live_for_broker),
         "performance": _performance(diagnostics=diagnostics),
         "event_stream": _event_stream(
             pipeline=pipeline, attempts=attempts, alerts=alerts
@@ -912,7 +947,8 @@ def build_noc_command_center() -> dict[str, Any]:
         "validation_history": history,
         "system_metrics": _system_metrics(ops_metrics=ops_metrics),
         "execution_state": getattr(auto, "execution_state", {}) or {},
-        "primary_blocker": getattr(auto, "primary_blocker", None) or pvm.get("current_blocker"),
+        "primary_blocker": getattr(auto, "primary_blocker", None)
+        or pvm.get("current_blocker"),
         "flags": {
             "observe_only": True,
             "never_modifies_trading": True,
@@ -920,7 +956,8 @@ def build_noc_command_center() -> dict[str, Any]:
             "never_exposes_secrets": True,
         },
     }
-    return _redact(payload)
+    redacted = _redact(payload)
+    return redacted if isinstance(redacted, dict) else payload
 
 
 def answer_noc_copilot(question: str, *, telemetry: dict[str, Any] | None = None) -> dict[str, Any]:
