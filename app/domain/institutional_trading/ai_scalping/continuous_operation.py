@@ -235,7 +235,20 @@ class ContinuousOperationController:
             failed_deps.append("mt5")
         if not oms_ok:
             failed_deps.append("oms")
-        missing_hb = tuple(failed_deps)
+        # Also respect age-based registry staleness (publisher forgot to refresh).
+        # Components just published above will not appear here.
+        age_missing = [
+            c.value
+            for c in self.heartbeats.missing(
+                (
+                    ComponentName.GATEWAY,
+                    ComponentName.MT5,
+                    ComponentName.OMS,
+                ),
+                now=now,
+            )
+        ]
+        missing_hb = tuple(dict.fromkeys([*failed_deps, *age_missing]))
         pause = self.evaluate_new_entry_pause(
             daily_loss_exceeded=daily_loss_exceeded,
             broker_available=broker_available and mt5_ok,

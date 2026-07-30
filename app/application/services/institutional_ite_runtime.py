@@ -86,6 +86,21 @@ def _cycle_flag_prefer_context(
     return ctx_bool
 
 
+def _oms_submit_path_healthy(probes: Any) -> bool:
+    """OMS heartbeat reflects the submit path (gateway), not Railway self-probe.
+
+    Historically OMS was gated on ``railway_api_up AND gateway_available``.
+    When ``RAILWAY_PUBLIC_DOMAIN`` is unset or the in-process self-GET to
+    ``/health`` fails (common inside the same container), that falsely marks
+    OMS stale → ``continuous_ops_pause_new_entries`` / ``stale heartbeat:oms``
+    while Gateway Connectivity already PASSes and OMS is never called.
+
+    OMS posts to the Windows gateway — so gateway reachability is the correct
+    liveness signal. Railway API health remains its own component heartbeat.
+    """
+    return bool(getattr(probes, "gateway_available", False))
+
+
 @dataclass
 class ShadowCycleResult:
     ok: bool
@@ -163,9 +178,7 @@ class InstitutionalIteRuntime:
         # Heartbeats only for components that are currently healthy — never
         # refresh a failed dependency as alive (stale-heartbeat pause must work).
         now = datetime.now(UTC)
-        oms_ok_probe = bool(
-            getattr(probes, "railway_api_up", True) and probes.gateway_available
-        )
+        oms_ok_probe = _oms_submit_path_healthy(probes)
         healthy_map = {
             ComponentName.GATEWAY: bool(probes.gateway_available),
             ComponentName.MT5: bool(probes.mt5_connected),
@@ -244,12 +257,33 @@ class InstitutionalIteRuntime:
                             return False
 
                     ctrl.bind_reconnects(gateway=_gw, mt5=_mt5, oms=_gw, feed=_gw)
+                    # Heartbeat timeout must outlive the scheduler interval or
+                    # age-based missing() falsely reports OMS/gateway stale
+                    # between ticks (default interval 60s vs registry 30s).
+                    ctrl.heartbeats.timeout_seconds = max(
+                        float(ctrl.heartbeats.timeout_seconds),
+                        float(self.interval_seconds) * 2.0 + 5.0,
+                    )
+                    self.reliability.heartbeats.timeout_seconds = max(
+                        float(self.reliability.heartbeats.timeout_seconds),
+                        float(self.interval_seconds) * 2.0 + 5.0,
+                    )
                     self._continuous_ops_bound = True  # type: ignore[attr-defined]
                 # Derive live pause inputs — never hardcode market/portfolio as always-ok
-                oms_ok = bool(
-                    getattr(probes, "railway_api_up", True)
-                    and probes.gateway_available
-                )
+                oms_ok = _oms_submit_path_healthy(probes)
+                if not oms_ok:
+                    logger.warning(
+                        "oms_heartbeat_unhealthy",
+                        gateway_available=bool(probes.gateway_available),
+                        mt5_connected=bool(probes.mt5_connected),
+                        railway_api_up=bool(
+                            getattr(probes, "railway_api_up", False)
+                        ),
+                        note=(
+                            "OMS heartbeat follows gateway submit path; "
+                            "railway_api_up is reported separately"
+                        ),
+                    )
                 market_open = True
                 try:
                     from app.application.services.market_closed_cooldown import (
