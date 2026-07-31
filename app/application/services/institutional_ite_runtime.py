@@ -1052,7 +1052,19 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("hardening_signal_lifecycle_failed")
 
-        decision = self.decision_pipeline.run(snapshot, account)
+        live_positions: list[Any] = []
+        try:
+            if self.mt5_adapter is not None and hasattr(
+                self.mt5_adapter, "list_positions"
+            ):
+                live_positions = list(self.mt5_adapter.list_positions() or [])
+        except Exception:
+            logger.exception("ite_runtime_list_positions_for_pre_failed")
+            live_positions = []
+
+        decision = self.decision_pipeline.run(
+            snapshot, account, positions=live_positions or None
+        )
         try:
             from app.domain.institutional_trading.production_validation_mode import (
                 ValidationStage,

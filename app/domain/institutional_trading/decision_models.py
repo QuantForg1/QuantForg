@@ -156,6 +156,11 @@ class AccountRiskState:
     best_open_confidence: int | None = None
     open_directions: tuple[str, ...] = ()
     open_entries: tuple[Decimal, ...] = ()
+    # Portfolio Risk Engine v2 optional book facts (backward compatible)
+    balance: Decimal | None = None
+    used_margin: Decimal | None = None
+    floating_pnl: Decimal | None = None
+    leverage: Decimal | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -175,4 +180,12 @@ class AccountRiskState:
             "best_open_confidence": self.best_open_confidence,
             "open_directions": list(self.open_directions),
             "open_entries": [str(e) for e in self.open_entries],
+            "balance": str(self.balance) if self.balance is not None else None,
+            "used_margin": (
+                str(self.used_margin) if self.used_margin is not None else None
+            ),
+            "floating_pnl": (
+                str(self.floating_pnl) if self.floating_pnl is not None else None
+            ),
+            "leverage": str(self.leverage) if self.leverage is not None else None,
         }
