@@ -90,8 +90,7 @@ class PostgresExecutionAuditRepository:
     async def add(self, audit: ExecutionAudit) -> ExecutionAudit:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO execution_audits (
                     id, user_id, request_id, stage, symbol, side, volume, outcome,
                     retcode, order_ticket, deal_ticket, latency_ms,
@@ -111,8 +110,7 @@ class PostgresExecutionAuditRepository:
                 )
                 ON CONFLICT (user_id, request_id, stage) DO NOTHING
                 RETURNING *
-                """
-            ),
+                """),
             {
                 "id": str(audit.id),
                 "user_id": str(audit.user_id),
@@ -151,15 +149,13 @@ class PostgresExecutionAuditRepository:
         if row is not None:
             return _audit_from_row(row)
         existing = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM execution_audits
                 WHERE user_id = :user_id
                   AND request_id = :request_id
                   AND stage = :stage
                 LIMIT 1
-                """
-            ),
+                """),
             {
                 "user_id": str(audit.user_id),
                 "request_id": audit.request_id,
@@ -176,14 +172,12 @@ class PostgresExecutionAuditRepository:
     ) -> list[ExecutionAudit]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM execution_audits
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"user_id": str(user_id), "limit": max(1, min(limit, 500))},
         )
         return [_audit_from_row(r) for r in result.mappings().all()]
@@ -193,13 +187,11 @@ class PostgresExecutionAuditRepository:
     ) -> list[ExecutionAudit]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM execution_audits
                 WHERE user_id = :user_id AND request_id = :request_id
                 ORDER BY created_at ASC
-                """
-            ),
+                """),
             {"user_id": str(user_id), "request_id": request_id.strip()},
         )
         return [_audit_from_row(r) for r in result.mappings().all()]
@@ -207,13 +199,11 @@ class PostgresExecutionAuditRepository:
     async def list_recent(self, *, limit: int = 500) -> list[ExecutionAudit]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM execution_audits
                 ORDER BY created_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": max(1, min(limit, 2000))},
         )
         return [_audit_from_row(r) for r in result.mappings().all()]
