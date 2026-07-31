@@ -7,11 +7,12 @@ permanent veto despite lower-TF agreement.
 Policies
 --------
 Trending (H4 UP/DOWN):
-  Require H4 + H1 + M15 directional agreement. M5 is confirmation bonus.
+  Require H4 + H1 + M15 directional agreement. M5 is confirmation bonus only.
 
 Ranging (H4 RANGE/UNKNOWN):
-  H4 is context only (never a veto). Require H1 structure + M15 agreement
-  + M5 entry confirmation (all same direction).
+  H4 is context only (never a veto). Require H1 + M15 directional lock.
+  M5 is execution timing only — never required for alignment and never
+  redefines H1 direction (M15 Trend Semantics v2).
 """
 
 from __future__ import annotations
@@ -22,20 +23,20 @@ from typing import Any, Literal
 from app.domain.market_structure.enums import TrendDirection
 
 MarketRegimeMTF = Literal["trending", "ranging"]
-MtfPolicyId = Literal["v2_trending", "v2_ranging"]
+MtfPolicyId = Literal["v2_trending", "v2_ranging", "v2_ranging_h1_m15"]
 
 # Contribution weights for telemetry / score composition (sum = 100).
 _TRENDING_WEIGHTS = {
     "h4": 40,
     "h1": 30,
     "m15": 20,
-    "m5": 10,
+    "m5": 10,  # bonus only
 }
 _RANGING_WEIGHTS = {
     "h4": 0,  # context only — never blocks
-    "h1": 40,
-    "m15": 35,
-    "m5": 25,
+    "h1": 50,
+    "m15": 50,
+    "m5": 0,  # execution timing — not part of directional lock
 }
 
 
@@ -141,38 +142,48 @@ def evaluate_mtf_v2(
             h4_is_context=False,
         )
 
-    # --- Ranging: H4 is context only ---
-    bias = h1 if h1 in {TrendDirection.UP, TrendDirection.DOWN} else TrendDirection.UNKNOWN
+    # --- Ranging: H4 is context only; H1+M15 directional lock ---
+    bias = (
+        h1 if h1 in {TrendDirection.UP, TrendDirection.DOWN} else TrendDirection.UNKNOWN
+    )
     weights = _RANGING_WEIGHTS
     contributions = {
         "h4": 0,  # context — never contributes to veto/score gate
-        "h1": _contrib(h1, bias, weights["h1"]) if bias != TrendDirection.UNKNOWN else 0,
-        "m15": _contrib(m15, bias, weights["m15"]) if bias != TrendDirection.UNKNOWN else 0,
-        "m5": _contrib(m5, bias, weights["m5"]) if bias != TrendDirection.UNKNOWN else 0,
+        "h1": (
+            _contrib(h1, bias, weights["h1"]) if bias != TrendDirection.UNKNOWN else 0
+        ),
+        "m15": (
+            _contrib(m15, bias, weights["m15"]) if bias != TrendDirection.UNKNOWN else 0
+        ),
+        # M5 timing bonus (soft) — never required for lock / never vetoes H1
+        "m5_timing_bonus": (
+            10 if bias in {TrendDirection.UP, TrendDirection.DOWN} and m5 == bias else 0
+        ),
         "h4_context": h4.value,
     }
-    score = int(contributions["h1"]) + int(contributions["m15"]) + int(contributions["m5"])
+    # Directional lock score is H1+M15 only (weights sum 100).
+    score = int(contributions["h1"]) + int(contributions["m15"])
+    # Soft timing bonus may lift score but cannot create alignment alone.
+    score_with_timing = min(100, score + int(contributions["m5_timing_bonus"]))
 
-    # Require H1 structure + M15 agreement + M5 entry confirmation (same direction).
-    lower_tf_lock = (
-        bias in {TrendDirection.UP, TrendDirection.DOWN}
-        and h1 == bias
-        and m15 == bias
-        and m5 == bias
+    # H1 + M15 directional lock. M5 never required; never redefines H1.
+    h1_m15_lock = (
+        bias in {TrendDirection.UP, TrendDirection.DOWN} and h1 == bias and m15 == bias
     )
-    aligned = lower_tf_lock and score >= min_score
+    aligned = h1_m15_lock and score >= min_score
 
     why = (
-        f"MTF v2 ranging (H4={h4.value} context): H1={h1.value} M15={m15.value} "
-        f"M5={m5.value} score={score}"
+        f"MTF v2 ranging H1+M15 lock (H4={h4.value} context): "
+        f"H1={h1.value} M15={m15.value} M5={m5.value}(timing) "
+        f"score={score_with_timing}"
         + (" aligned" if aligned else " not aligned")
         + (" [scalping]" if scalping else "")
     )
     return MtfV2Assessment(
         regime="ranging",
-        policy="v2_ranging",
+        policy="v2_ranging_h1_m15",
         bias=bias,
-        alignment_score=int(score),
+        alignment_score=int(score_with_timing),
         aligned=aligned,
         contributions={k: v for k, v in contributions.items() if k != "h4_context"},
         why=why,
@@ -243,7 +254,11 @@ def evaluate_mtf_v1_legacy(
     return MtfV2Assessment(
         regime=regime,
         policy="v2_trending" if regime == "trending" else "v2_ranging",
-        bias=bias if bias in {TrendDirection.UP, TrendDirection.DOWN} else TrendDirection.UNKNOWN,
+        bias=(
+            bias
+            if bias in {TrendDirection.UP, TrendDirection.DOWN}
+            else TrendDirection.UNKNOWN
+        ),
         alignment_score=int(score),
         aligned=bool(confluence_mtf_pass),
         contributions=contributions,

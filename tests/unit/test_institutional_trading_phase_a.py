@@ -85,7 +85,7 @@ class TestITEPhaseAPipeline:
         snap = await pipe.analyze(as_of=as_of, spread=Decimal("0.30"))
 
         assert snap.symbol == "XAUUSD"
-        assert snap.config_version == "ite-v2.0.0"
+        assert snap.config_version == "ite-v2.1.0"
         assert snap.schema_version == "1.0.0"
         assert set(snap.structure_by_tf.keys()) == {"H4", "H1", "M15", "M5"}
         assert snap.primary_structure is not None
