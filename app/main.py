@@ -68,6 +68,7 @@ _ROUTER_SPECS: tuple[tuple[str, str], ...] = (
     ("replay_evidence_lab", "app.presentation.routers.replay_evidence_lab"),
     ("trading_operations_center", "app.presentation.routers.trading_operations_center"),
     ("audit_governance", "app.presentation.routers.audit_governance"),
+    ("customer_operations", "app.presentation.routers.customer_operations"),
     (
         "institutional_data_warehouse",
         "app.presentation.routers.institutional_data_warehouse",

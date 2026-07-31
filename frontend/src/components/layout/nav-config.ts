@@ -553,6 +553,12 @@ export const appNav: NavGroup[] = [
         hint: "Production ops · real telemetry · OWNER/ADMIN",
       },
       {
+        href: "/admin/customer-ops",
+        label: "Customer Operations",
+        icon: Building2,
+        hint: "Fleet · licenses · brokers · support · OWNER/ADMIN",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,

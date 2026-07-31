@@ -23,6 +23,9 @@ export default function AdminNocPage() {
             <Button asChild size="sm" variant="outline">
               <Link href="/ops">Ops Control</Link>
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/admin/customer-ops">Customer Ops</Link>
+            </Button>
           </div>
         }
       />

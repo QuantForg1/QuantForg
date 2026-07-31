@@ -394,6 +394,67 @@ export const auditGovernanceApi = {
   exportUrl: "/audit-governance/export",
 };
 
+/** Institutional Customer Operations Platform — OWNER/ADMIN, never trading. */
+export const customerOpsApi = {
+  platform: () => apiFetch<Record<string, unknown>>("/customer-ops/platform"),
+  nocPanels: () => apiFetch<Record<string, unknown>>("/customer-ops/noc-panels"),
+  fleet: (params?: {
+    country?: string;
+    broker?: string;
+    status?: string;
+    license?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.country) sp.set("country", params.country);
+    if (params?.broker) sp.set("broker", params.broker);
+    if (params?.status) sp.set("status", params.status);
+    if (params?.license) sp.set("license", params.license);
+    const qs = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/customer-ops/fleet${qs ? `?${qs}` : ""}`,
+    );
+  },
+  customer: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/customer-ops/customers/${id}`),
+  licenses: () => apiFetch<Record<string, unknown>>("/customer-ops/licenses"),
+  licenseNote: (id: string, note: string) =>
+    apiFetch<Record<string, unknown>>(`/customer-ops/licenses/${id}/notes`, {
+      method: "POST",
+      body: { note },
+    }),
+  licenseAction: (id: string, action: string, reason = "") =>
+    apiFetch<Record<string, unknown>>(`/customer-ops/licenses/${id}/action`, {
+      method: "POST",
+      body: { action, reason },
+    }),
+  brokers: () => apiFetch<Record<string, unknown>>("/customer-ops/brokers"),
+  support: () => apiFetch<Record<string, unknown>>("/customer-ops/support"),
+  createTicket: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/customer-ops/support/tickets", {
+      method: "POST",
+      body,
+    }),
+  updateTicket: (id: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(`/customer-ops/support/tickets/${id}`, {
+      method: "POST",
+      body,
+    }),
+  notifications: (channel?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/customer-ops/notifications${
+        channel ? `?channel=${encodeURIComponent(channel)}` : ""
+      }`,
+    ),
+  publishNotification: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/customer-ops/notifications", {
+      method: "POST",
+      body,
+    }),
+  analytics: () => apiFetch<Record<string, unknown>>("/customer-ops/analytics"),
+  audit: (limit = 200) =>
+    apiFetch<Record<string, unknown>>(`/customer-ops/audit?limit=${limit}`),
+};
+
 export const institutionalDataWarehouseApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/institutional-data-warehouse/dashboard"),

@@ -277,6 +277,16 @@ export function NocCommandCenter() {
     : [];
   const periodReports = asRecord(intelligence.period_reports);
   const periodMap = asRecord(periodReports.periods);
+  const customerOps = asRecord(data.customer_operations);
+  const copFleet = asRecord(customerOps.customer_fleet);
+  const copFleetRows = Array.isArray(copFleet.rows) ? copFleet.rows : [];
+  const copLicenseHealth = asRecord(customerOps.license_health);
+  const copBrokerFleet = asRecord(customerOps.broker_fleet);
+  const copBrokerRows = Array.isArray(copBrokerFleet.rows)
+    ? copBrokerFleet.rows
+    : [];
+  const copSupport = asRecord(customerOps.support);
+  const copAnalytics = asRecord(customerOps.enterprise_analytics);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -1451,6 +1461,131 @@ export function NocCommandCenter() {
           <NocRow
             label="Auto-applies"
             value={fmt(periodReports.auto_applies, "false")}
+            tone="ok"
+          />
+        </NocPanel>
+
+        {/* §4z COP — Customer Operations (observe-only) */}
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel
+            id="noc-cop-fleet"
+            title="4z · Customer Fleet"
+            action={
+              <Badge tone="neutral">{fmt(copFleet.count, "0")} customers</Badge>
+            }
+          >
+            {copFleetRows.length === 0 ? (
+              <p className="text-[12px] text-[var(--fg-muted)]">
+                No fleet rows yet.
+              </p>
+            ) : (
+              <DeskTable
+                columns={["Customer", "License", "MT5", "Health"]}
+                rows={copFleetRows.slice(0, 8).map((row) => {
+                  const r = asRecord(row);
+                  return [
+                    fmt(r.email || r.display_name || r.customer_id).slice(0, 24),
+                    fmt(r.license),
+                    fmt(r.mt5),
+                    fmt(r.health),
+                  ];
+                })}
+              />
+            )}
+          </NocPanel>
+
+          <NocPanel id="noc-cop-license-health" title="4z · License Health">
+            <NocRow
+              label="Active"
+              value={fmt(asRecord(copLicenseHealth.counts).active, "0")}
+            />
+            <NocRow
+              label="Pending"
+              value={fmt(
+                copLicenseHealth.pending ??
+                  asRecord(copLicenseHealth.counts).pending,
+                "0",
+              )}
+            />
+            <NocRow
+              label="Suspended"
+              value={fmt(asRecord(copLicenseHealth.counts).suspended, "0")}
+            />
+            <NocRow label="Health" value={fmt(copLicenseHealth.health, "—")} />
+          </NocPanel>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel
+            id="noc-cop-broker-fleet"
+            title="4z · Broker Fleet"
+            action={
+              <Badge tone="success">
+                creds · {fmt(copBrokerFleet.credentials_exposed, "false")}
+              </Badge>
+            }
+          >
+            <NocRow
+              label="Connected"
+              value={`${fmt(copBrokerFleet.connected, "0")} / ${fmt(copBrokerFleet.count, "0")}`}
+            />
+            {copBrokerRows.length === 0 ? (
+              <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
+                No broker connections.
+              </p>
+            ) : (
+              <DeskTable
+                columns={["Server", "Login", "Health", "Latency"]}
+                rows={copBrokerRows.slice(0, 6).map((row) => {
+                  const r = asRecord(row);
+                  return [
+                    fmt(r.server),
+                    fmt(r.login),
+                    fmt(r.connection_health),
+                    fmt(r.latency_ms),
+                  ];
+                })}
+              />
+            )}
+          </NocPanel>
+
+          <NocPanel id="noc-cop-support" title="4z · Support">
+            <NocRow label="Pending" value={fmt(copSupport.pending, "0")} />
+            <NocRow label="Total" value={fmt(copSupport.total, "0")} />
+          </NocPanel>
+        </div>
+
+        <NocPanel id="noc-cop-analytics" title="4z · Enterprise Analytics">
+          <NocRow
+            label="Active customers"
+            value={fmt(copAnalytics.active_customers, "0")}
+          />
+          <NocRow
+            label="Active robots"
+            value={fmt(copAnalytics.active_robots, "0")}
+          />
+          <NocRow
+            label="Connected brokers"
+            value={fmt(copAnalytics.connected_brokers, "0")}
+          />
+          <NocRow
+            label="Countries"
+            value={fmt(copAnalytics.countries_count, "0")}
+          />
+          <NocRow
+            label="Revenue"
+            value={fmt(copAnalytics.revenue, "not fabricated")}
+          />
+          <NocRow
+            label="Support pending"
+            value={fmt(copAnalytics.support_pending, "0")}
+          />
+          <NocRow
+            label="Trading untouched"
+            value={fmt(
+              asRecord(customerOps.flags).never_modifies_trading,
+              "true",
+            )}
             tone="ok"
           />
         </NocPanel>

@@ -989,6 +989,38 @@ def _continuous_protection_panel() -> dict[str, Any]:
         return {"continuous_operation": None, "live_health": None, "observe_only": True}
 
 
+def _build_cop_noc_panels_sync() -> dict[str, Any]:
+    """Sync wrapper for COP NOC panels — never blocks trading on failure."""
+    import asyncio
+    import concurrent.futures
+
+    async def _run() -> dict[str, Any]:
+        from app.application.services.customer_operations_platform import (
+            build_customer_ops_noc_panels,
+        )
+
+        return await build_customer_ops_noc_panels()
+
+    try:
+        try:
+            asyncio.get_running_loop()
+            running = True
+        except RuntimeError:
+            running = False
+        if running:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(lambda: asyncio.run(_run())).result(timeout=12)
+        return asyncio.run(_run())
+    except Exception:
+        logger.exception("cop_noc_panels_sync_failed")
+        return {
+            "fabricated": False,
+            "observe_only": True,
+            "error": "cop_panels_unavailable",
+            "flags": {"never_modifies_trading": True, "cop_version": "v1.0.0"},
+        }
+
+
 def build_noc_command_center() -> dict[str, Any]:
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.production_validation_mode import (
@@ -1192,6 +1224,12 @@ def build_noc_command_center() -> dict[str, Any]:
                 "app.application.services.noc_intelligence_panels",
                 fromlist=["build_intelligence_panels"],
             ).build_intelligence_panels(runtime_scan=runtime_scan),
+            {},
+        )
+        or {},
+        "customer_operations": _safe_call(
+            "customer_operations",
+            _build_cop_noc_panels_sync,
             {},
         )
         or {},
