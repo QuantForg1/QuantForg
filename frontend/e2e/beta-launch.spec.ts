@@ -8,34 +8,15 @@ test.describe("QuantForg beta E2E", () => {
       { ignoreCase: true },
     );
     await expect(page.getByRole("link", { name: /sign in/i }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /start free|open terminal|create/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /contact sales/i }).first()).toBeVisible();
   });
 
-  test("register requires verification message path", async ({ page }) => {
-    const email = `beta.pw.${Date.now()}@mailinator.com`;
+  test("public register redirects to contact sales", async ({ page }) => {
     await page.goto("/register");
-    await page.getByLabel(/display name/i).fill("Beta Playwright");
-    await page.getByLabel(/^email$/i).fill(email);
-    await page.getByLabel(/^password$/i).fill("BetaLaunchTest1!");
-    await page.getByRole("button", { name: /create account/i }).click();
-    // Prefer Promise.any so a timed-out waitForURL does not fail a visible toast.
-    await Promise.any([
-      page.waitForURL(/verify-email|dashboard/, { timeout: 45_000 }),
-      page
-        .getByText(
-          /verify|successful|too many|attempts|try again|exists|failed|registration/i,
-        )
-        .first()
-        .waitFor({ timeout: 45_000 }),
-    ]);
-    const url = page.url();
-    const body = await page.locator("body").innerText();
-    expect(
-      /verify-email|dashboard/.test(url) ||
-        /verify|successful|too many|attempts|try again|exists|failed|registration/i.test(
-          body,
-        ),
-    ).toBeTruthy();
+    await expect(page).toHaveURL(/contact/, { timeout: 15_000 });
+    await expect(
+      page.getByRole("heading", { name: /contact support to purchase/i }),
+    ).toBeVisible();
   });
 
   test("login rejects invalid credentials", async ({ page }) => {
@@ -90,23 +71,24 @@ test.describe("QuantForg beta E2E", () => {
     await expect(page).toHaveURL(/login/, { timeout: 45_000 });
   });
 
-  test("forgot password page submits request", async ({ page }) => {
+  test("forgot password routes to support contact", async ({ page }) => {
     await page.goto("/forgot-password");
-    await expect(page.getByRole("heading", { name: /reset password/i })).toBeVisible();
-    await page.getByLabel(/^email$/i).fill("reset.probe@example.com");
-    await page.getByRole("button", { name: /send reset link/i }).click();
     await expect(
-      page.getByText(/if the email exists|reset link|sent|failed/i).first(),
-    ).toBeVisible({ timeout: 20_000 });
+      page.getByRole("heading", { name: /need help accessing your account/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /contact quantforg support/i }),
+    ).toBeVisible();
   });
 
-  test("reset password without token shows expired path", async ({ page }) => {
+  test("reset password routes to support contact", async ({ page }) => {
     await page.goto("/reset-password");
-    await expect(page.getByRole("heading", { name: /choose a new password/i })).toBeVisible();
-    await expect(page.getByText(/invalid|expired|missing|request a new/i).first()).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByRole("link", { name: /request a new reset link/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /need help accessing your account/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /contact quantforg support/i }),
+    ).toBeVisible();
   });
 
   test("organizations requires auth", async ({ page }) => {

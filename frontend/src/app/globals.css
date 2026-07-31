@@ -518,6 +518,40 @@ body {
     background-color var(--duration-os) var(--ease-os);
 }
 
+.qf-contact-input {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  color: var(--fg);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  padding: 0.65rem 0.85rem;
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-os),
+    box-shadow var(--duration-fast) var(--ease-os);
+}
+
+.qf-contact-input::placeholder {
+  color: var(--fg-subtle);
+}
+
+.qf-contact-input:hover {
+  border-color: var(--border-strong);
+}
+
+.qf-contact-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.qf-contact-input option {
+  background: var(--bg-elevated);
+  color: var(--fg);
+}
+
 .qf-glass-card--hero {
   border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
   box-shadow: var(--shadow-elevated);

@@ -160,10 +160,10 @@ export default function PricingPage() {
                 ))}
               </ul>
               <Link
-                href="/purchase"
+                href="/contact"
                 className={`${pricingBtnPrimary} qf-btn-elevate mt-7 h-12 w-full text-base`}
               >
-                Get Lifetime Access
+                Contact Support to Purchase
               </Link>
             </div>
           </div>
@@ -321,10 +321,10 @@ export default function PricingPage() {
                 <p className="mt-2 text-sm font-medium text-[var(--fg)]">Pay Once</p>
                 <p className="text-sm text-[var(--accent)]">Own Forever</p>
                 <Link
-                  href="/purchase"
+                  href="/contact"
                   className={`${pricingBtnPrimary} qf-btn-elevate mt-6 h-11 w-full`}
                 >
-                  Get Lifetime Access
+                  Contact Support to Purchase
                 </Link>
               </div>
             </article>
@@ -383,10 +383,10 @@ export default function PricingPage() {
                 ))}
               </ul>
               <Link
-                href="/purchase"
+                href="/contact"
                 className={`${pricingBtnPrimary} qf-btn-elevate mt-8 h-12 w-full text-base`}
               >
-                Get Lifetime Access
+                Contact Support to Purchase
               </Link>
               <Link href="/login" className={`${pricingBtnSecondary} mt-3 w-full`}>
                 Already licensed? Sign in

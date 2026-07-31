@@ -25,12 +25,16 @@ const faqs = [
     a: "Access is intended for a single professional operator. You may sign in from the devices you use for desk work; concurrent multi-seat sharing is not included.",
   },
   {
-    q: "What happens after payment?",
-    a: "You land on a confirmation screen where you create your QuantForg account. After registration, you sign in and enter the institutional workspace.",
+    q: "How do I purchase?",
+    a: "There is no online checkout. Contact QuantForg Support via the purchase request form. After your request is approved, our team sends payment instructions and creates your account manually after payment verification.",
   },
   {
-    q: "Can I access all features immediately?",
-    a: "Yes. One license unlocks the complete QuantForg ecosystem — no tiers, no feature gates, no upsells after purchase.",
+    q: "Can I create an account myself?",
+    a: "No. Public registration is not available. Only the QuantForg team provisions accounts after payment verification.",
+  },
+  {
+    q: "Can I access all features after activation?",
+    a: "Yes. One license unlocks the complete QuantForg ecosystem — no tiers, no feature gates, no upsells after activation.",
   },
 ];
 

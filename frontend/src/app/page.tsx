@@ -65,10 +65,10 @@ export default function LandingPage() {
         </nav>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2" aria-label="Primary">
           <Link href="/login" className={`${btnGhost} max-sm:px-3`}>
-            Sign in
+            Sign In
           </Link>
-          <Link href="/pricing" className={`${btnOutline} max-sm:px-3`}>
-            Get Lifetime Access
+          <Link href="/contact" className={`${btnOutline} max-sm:px-3`}>
+            Contact Sales
           </Link>
         </div>
       </header>
@@ -88,11 +88,11 @@ export default function LandingPage() {
               designed like a product, measured like a desk.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/pricing" className={btnPrimary}>
-                Get Lifetime Access
+              <Link href="/contact" className={btnPrimary}>
+                Contact Support to Purchase
               </Link>
               <Link href="/login" className={btnSecondary}>
-                Sign in to workspace
+                Sign In
               </Link>
             </div>
           </div>
@@ -185,7 +185,8 @@ export default function LandingPage() {
           <div className="max-w-xs space-y-3">
             <BrandLogo size={32} />
             <p className="text-sm text-[var(--fg-muted)]">
-              Institutional trading operating system — terminal, book, research, and counsel.
+              Institutional trading operating system — licenses activated manually after payment
+              verification.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-3">
@@ -202,29 +203,53 @@ export default function LandingPage() {
                     Pricing
                   </Link>
                 </li>
-              </ul>
-            </div>
-            <div>
-              <p className="mb-3 font-medium text-[var(--fg)]">Workspace</p>
-              <ul className="space-y-2 text-[var(--fg-muted)]">
                 <li>
-                  <Link href="/login" className="hover:text-[var(--fg)]">
-                    Sign in
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/forgot-password" className="hover:text-[var(--fg)]">
-                    Reset password
-                  </Link>
+                  <a
+                    href="mailto:support@quantforg.com?subject=QuantForg%20Documentation"
+                    className="hover:text-[var(--fg)]"
+                  >
+                    Documentation
+                  </a>
                 </li>
               </ul>
             </div>
             <div>
-              <p className="mb-3 font-medium text-[var(--fg)]">Company</p>
+              <p className="mb-3 font-medium text-[var(--fg)]">Sales</p>
               <ul className="space-y-2 text-[var(--fg-muted)]">
+                <li>
+                  <Link href="/contact" className="hover:text-[var(--fg)]">
+                    Contact Sales
+                  </Link>
+                </li>
                 <li>
                   <a href="mailto:support@quantforg.com" className="hover:text-[var(--fg)]">
                     Support
+                  </a>
+                </li>
+                <li>
+                  <Link href="/login" className="hover:text-[var(--fg)]">
+                    Sign In
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="mb-3 font-medium text-[var(--fg)]">Legal</p>
+              <ul className="space-y-2 text-[var(--fg-muted)]">
+                <li>
+                  <a
+                    href="mailto:support@quantforg.com?subject=Privacy%20Policy"
+                    className="hover:text-[var(--fg)]"
+                  >
+                    Privacy
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="mailto:support@quantforg.com?subject=Terms%20of%20Service"
+                    className="hover:text-[var(--fg)]"
+                  >
+                    Terms
                   </a>
                 </li>
               </ul>

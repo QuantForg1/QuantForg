@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { pricingBtnPrimary } from "@/components/pricing/marketing-chrome";
 
-/**
- * Floating purchase CTA — appears after scrolling past the hero price card.
- */
+/** Floating CTA — appears after scrolling past the hero price card. */
 export function StickyPurchaseBar() {
   const [visible, setVisible] = useState(false);
 
@@ -17,8 +15,7 @@ export function StickyPurchaseBar() {
         setVisible(window.scrollY > 480);
         return;
       }
-      const bottom = hero.getBoundingClientRect().bottom;
-      setVisible(bottom < 0);
+      setVisible(hero.getBoundingClientRect().bottom < 0);
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -47,11 +44,11 @@ export function StickyPurchaseBar() {
           </p>
         </div>
         <Link
-          href="/purchase"
-          className={`${pricingBtnPrimary} h-11 shrink-0 px-4 text-sm sm:px-6`}
+          href="/contact"
+          className={`${pricingBtnPrimary} h-11 shrink-0 px-3 text-sm sm:px-5`}
           tabIndex={visible ? 0 : -1}
         >
-          Get Lifetime Access
+          Contact Support to Purchase
         </Link>
       </div>
     </div>

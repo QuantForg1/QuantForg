@@ -12,7 +12,7 @@ export const pricingBtnOutline = `${btn} h-10 px-4 border border-[var(--border)]
 export function PricingHeader({
   active = "pricing",
 }: {
-  active?: "home" | "pricing" | "purchase";
+  active?: "home" | "pricing" | "purchase" | "contact";
 }) {
   return (
     <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:px-6">
@@ -28,18 +28,29 @@ export function PricingHeader({
         </Link>
         <Link
           href="/pricing"
-          className={active === "pricing" || active === "purchase" ? "text-[var(--fg)]" : "hover:text-[var(--fg)]"}
+          className={active === "pricing" ? "text-[var(--fg)]" : "hover:text-[var(--fg)]"}
           aria-current={active === "pricing" ? "page" : undefined}
         >
           Pricing
         </Link>
+        <Link
+          href="/contact"
+          className={
+            active === "contact" || active === "purchase"
+              ? "text-[var(--fg)]"
+              : "hover:text-[var(--fg)]"
+          }
+          aria-current={active === "contact" ? "page" : undefined}
+        >
+          Contact Sales
+        </Link>
       </nav>
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2" aria-label="Primary">
         <Link href="/login" className={`${pricingBtnGhost} max-sm:px-3`}>
-          Sign in
+          Sign In
         </Link>
-        <Link href="/pricing" className={`${pricingBtnOutline} max-sm:px-3`}>
-          Get Lifetime Access
+        <Link href="/contact" className={`${pricingBtnOutline} max-sm:px-3`}>
+          Contact Sales
         </Link>
       </div>
     </header>
@@ -53,7 +64,8 @@ export function PricingFooter() {
         <div className="max-w-xs space-y-3">
           <BrandLogo size={32} />
           <p className="text-sm text-[var(--fg-muted)]">
-            Institutional trading operating system — one lifetime license.
+            Institutional trading operating system — licenses activated manually after payment
+            verification.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-3">
@@ -70,29 +82,53 @@ export function PricingFooter() {
                   Features
                 </Link>
               </li>
-            </ul>
-          </div>
-          <div>
-            <p className="mb-3 font-medium text-[var(--fg)]">Workspace</p>
-            <ul className="space-y-2 text-[var(--fg-muted)]">
               <li>
-                <Link href="/login" className="hover:text-[var(--fg)]">
-                  Sign in
-                </Link>
-              </li>
-              <li>
-                <Link href="/pricing" className="hover:text-[var(--fg)]">
-                  Purchase access
-                </Link>
+                <a
+                  href="mailto:support@quantforg.com?subject=QuantForg%20Documentation"
+                  className="hover:text-[var(--fg)]"
+                >
+                  Documentation
+                </a>
               </li>
             </ul>
           </div>
           <div>
-            <p className="mb-3 font-medium text-[var(--fg)]">Company</p>
+            <p className="mb-3 font-medium text-[var(--fg)]">Sales</p>
             <ul className="space-y-2 text-[var(--fg-muted)]">
+              <li>
+                <Link href="/contact" className="hover:text-[var(--fg)]">
+                  Contact Sales
+                </Link>
+              </li>
               <li>
                 <a href="mailto:support@quantforg.com" className="hover:text-[var(--fg)]">
                   Support
+                </a>
+              </li>
+              <li>
+                <Link href="/login" className="hover:text-[var(--fg)]">
+                  Sign In
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-3 font-medium text-[var(--fg)]">Legal</p>
+            <ul className="space-y-2 text-[var(--fg-muted)]">
+              <li>
+                <a
+                  href="mailto:support@quantforg.com?subject=Privacy%20Policy"
+                  className="hover:text-[var(--fg)]"
+                >
+                  Privacy
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:support@quantforg.com?subject=Terms%20of%20Service"
+                  className="hover:text-[var(--fg)]"
+                >
+                  Terms
                 </a>
               </li>
             </ul>

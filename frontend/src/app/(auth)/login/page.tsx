@@ -75,12 +75,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link href="/forgot-password" className="text-xs text-[var(--accent)]">
-              Forgot password?
-            </Link>
-          </div>
+          <Label htmlFor="password">Password</Label>
           <div className="relative">
             <Lock
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--fg-subtle)]"
@@ -109,9 +104,9 @@ export default function LoginPage() {
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-[var(--fg-muted)]">
-        Need access?{" "}
-        <Link href="/pricing" className="text-[var(--accent)]">
-          Purchase Institutional License
+        Need help accessing your account?{" "}
+        <Link href="/contact" className="text-[var(--accent)]">
+          Contact QuantForg Support
         </Link>
       </p>
     </AuthShell>

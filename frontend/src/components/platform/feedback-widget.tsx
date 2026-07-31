@@ -24,8 +24,10 @@ export function FeedbackWidget() {
       pathname.startsWith("/login") ||
       pathname.startsWith("/register") ||
       pathname.startsWith("/forgot-password") ||
+      pathname.startsWith("/reset-password") ||
       pathname.startsWith("/pricing") ||
-      pathname.startsWith("/purchase")
+      pathname.startsWith("/purchase") ||
+      pathname.startsWith("/contact")
     );
   }, [pathname]);
 
