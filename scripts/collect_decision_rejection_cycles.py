@@ -245,13 +245,22 @@ def main() -> None:
                 token = login()
                 token_at = time.time()
             payload = fetch(token)
+            # Reload disk store each poll so a parallel log miner can co-append.
+            if STORE.exists():
+                try:
+                    cycles.update(json.loads(STORE.read_text()))
+                except json.JSONDecodeError:
+                    pass
             for cycle in payload.get("cycles") or []:
                 tid = str(cycle.get("trace_id") or cycle.get("signal_id") or "")
                 if not tid:
                     q = (cycle.get("quality") or {}).get("score")
                     m = (cycle.get("trend") or {}).get("score")
                     tid = f"{cycle.get('recorded_at')}|{q}|{m}"
-                cycles[tid] = cycle
+                # Prefer richer API diagnostics records over log-mined stubs.
+                prev = cycles.get(tid)
+                if prev is None or cycle.get("confluence") or cycle.get("explain"):
+                    cycles[tid] = cycle
             STORE.write_text(json.dumps(cycles))
             status = summarize(cycles)
             META.write_text(json.dumps(status, indent=2))
