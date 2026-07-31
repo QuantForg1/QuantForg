@@ -121,6 +121,7 @@ def collect_trading_component_health(
     collector = LiveProbeCollector(settings=settings)
     live = probes or collector.collect()
 
+    ai_error: str | None = None
     if ite_runtime_present is None:
         try:
             from app.application.services.institutional_ite_runtime import (
@@ -131,8 +132,6 @@ def collect_trading_component_health(
         except Exception as exc:
             ite_runtime_present = False
             ai_error = f"{type(exc).__name__}"
-        else:
-            ai_error = None
     else:
         ai_error = None
 
