@@ -186,6 +186,16 @@ def extract_cycle_diagnostics(
             "m5": _trend_value(t.execution),
             "aligned": bool(t.aligned),
             "score": int(t.alignment_score),
+            "market_regime": getattr(t, "market_regime", "unknown"),
+            "mtf_policy": getattr(t, "mtf_policy", "v1"),
+            "mtf_contributions": dict(getattr(t, "mtf_contributions", {}) or {}),
+            "h4_is_context": bool(getattr(t, "h4_is_context", False)),
+            "trade_bias": (
+                t.trade_bias.value
+                if getattr(t, "trade_bias", None) is not None
+                else None
+            ),
+            "m15_semantics": dict(getattr(t, "m15_semantics", {}) or {}),
         }
         quality_total = int(snapshot.trade_quality.total)
         bos_s, choch_s, smc_s = _structure_component_scores(snapshot)
@@ -556,6 +566,133 @@ class StrategyDiagnosticsStore:
                 sizing=sizing,
             )
         except Exception:  # noqa: S110  # best-effort evidence path
+            pass
+        # AI Decision Engine v2 rejection telemetry (advisory; never mutates gates)
+        try:
+            if cycle.get("rejected"):
+                from app.application.services.decision_v2_telemetry import (
+                    record_rejection_telemetry,
+                )
+                from types import SimpleNamespace
+
+                trend = (
+                    cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
+                )
+                conf = (
+                    cycle.get("confluence")
+                    if isinstance(cycle.get("confluence"), dict)
+                    else {}
+                )
+                factors = (
+                    conf.get("engine_factors")
+                    if isinstance(conf.get("engine_factors"), dict)
+                    else {}
+                )
+                rejection = (
+                    cycle.get("rejection")
+                    if isinstance(cycle.get("rejection"), dict)
+                    else {}
+                )
+                trend_ns = SimpleNamespace(
+                    macro_bias=trend.get("h4"),
+                    primary=trend.get("h1"),
+                    entry=trend.get("m15"),
+                    execution=trend.get("m5"),
+                    alignment_score=trend.get("score"),
+                    aligned=trend.get("aligned"),
+                    market_regime=trend.get("market_regime"),
+                    mtf_contributions=trend.get("mtf_contributions") or {},
+                    h4_is_context=trend.get("h4_is_context", False),
+                )
+                record_rejection_telemetry(
+                    trend=trend_ns,
+                    quality_score=(
+                        (cycle.get("quality") or {}).get("score")
+                        if isinstance(cycle.get("quality"), dict)
+                        else None
+                    ),
+                    confidence_score=conf.get("total"),
+                    liquidity_score=factors.get("liquidity"),
+                    rejected_rules=list(rejection.get("all_codes") or []),
+                    primary_reason=(
+                        str(rejection.get("primary"))
+                        if rejection.get("primary")
+                        else None
+                    ),
+                    min_quality=int(self._config.min_trade_quality_score),
+                    min_confidence=int(self._config.min_confluence_score),
+                    scalping=self._config.is_scalping(),
+                    trace_id=(
+                        str(cycle.get("trace_id")) if cycle.get("trace_id") else None
+                    ),
+                )
+        except Exception:  # noqa: S110  # best-effort telemetry path
+            pass
+        # M15 Trend Semantics v2 telemetry (advisory; never mutates gates)
+        try:
+            from app.application.services.m15_semantics_telemetry import (
+                build_m15_semantics_telemetry,
+                get_m15_semantics_telemetry_store,
+            )
+            import re
+
+            trend = cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
+            conf = (
+                cycle.get("confluence")
+                if isinstance(cycle.get("confluence"), dict)
+                else {}
+            )
+            factors = (
+                conf.get("engine_factors")
+                if isinstance(conf.get("engine_factors"), dict)
+                else {}
+            )
+            rejection = (
+                cycle.get("rejection")
+                if isinstance(cycle.get("rejection"), dict)
+                else {}
+            )
+            reasons = list(rejection.get("decision_reasons") or [])
+            latest_bos = None
+            for r in reasons:
+                m = re.search(r"Latest BOS trend=(\w+)", str(r), re.I)
+                if m:
+                    latest_bos = m.group(1)
+                    break
+            has_ob = int(factors.get("order_block") or 0) >= 80 or any(
+                "active order blocks=" in str(r).lower() for r in reasons
+            )
+            has_fvg = int(factors.get("fvg") or 0) >= 70 or any(
+                "open fvgs=" in str(r).lower() for r in reasons
+            )
+            has_bos = any("structure events" in str(r).lower() for r in reasons) or (
+                latest_bos is not None
+            )
+            event = build_m15_semantics_telemetry(
+                h4=trend.get("h4"),
+                h1=trend.get("h1"),
+                m15=trend.get("m15"),
+                m5=trend.get("m5"),
+                latest_bos=latest_bos,
+                has_ob=has_ob,
+                has_fvg=has_fvg,
+                has_bos=has_bos,
+                quality_score=(
+                    (cycle.get("quality") or {}).get("score")
+                    if isinstance(cycle.get("quality"), dict)
+                    else None
+                ),
+                confidence_score=conf.get("total"),
+                min_quality=int(self._config.min_trade_quality_score),
+                min_confidence=int(self._config.min_confluence_score),
+                scalping=self._config.is_scalping(),
+                trace_id=(
+                    str(cycle.get("trace_id")) if cycle.get("trace_id") else None
+                ),
+                live_semantics=trend.get("m15_semantics") or None,
+            )
+            get_m15_semantics_telemetry_store().record(event)
+        except Exception:  # noqa: S110  # best-effort telemetry path
             pass
         # Post-promotion monitor (warning only; never auto-rollback).
         try:

@@ -165,7 +165,11 @@ class InstitutionalAnalysisPipeline:
         fvg_result = await fvg_engine.analyze(code, primary_tf, as_of=moment)
 
         typed_structure = dict(structure_by_tf.items())
-        trend = TrendEngine(config=cfg).analyze(typed_structure)  # type: ignore[arg-type]
+        trend = TrendEngine(config=cfg).analyze(
+            typed_structure,  # type: ignore[arg-type]
+            order_blocks=ob_result.snapshot,
+            fair_value_gaps=fvg_result.snapshot,
+        )
 
         # Prefer deterministic UTC classifier (no tzdata / DST variance in v1)
         session = SessionFilter(

@@ -858,6 +858,60 @@ def get_strategy_diagnostics(
     return payload
 
 
+@router.get("/decision-v2-telemetry")
+def get_decision_v2_telemetry(
+    _user: OperatorUser,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """AI Decision Engine v2 rejection telemetry (observe-only).
+
+    Includes market regime, TF contributions, and counterfactual v2 pass flags.
+    Never mutates thresholds, risk, safety, OMS, or MT5.
+    """
+    from app.application.services.decision_v2_telemetry import (
+        get_decision_telemetry_store,
+    )
+
+    window = max(1, min(int(limit or 100), 2000))
+    recent = get_decision_telemetry_store().recent(limit=window)
+    return {
+        "advisory_only": True,
+        "mutates_engines": False,
+        "thresholds_changed": False,
+        "window": window,
+        "count": len(recent),
+        "events": recent,
+    }
+
+
+@router.get("/m15-semantics-telemetry")
+def get_m15_semantics_telemetry(
+    _user: OperatorUser,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """M15 Trend Semantics v2 telemetry (observe-only).
+
+    Previous vs new classification, reason, and H1+M15 lock counterfactual.
+    Never mutates thresholds, risk, safety, OMS, or MT5.
+    """
+    from app.application.services.m15_semantics_telemetry import (
+        get_m15_semantics_telemetry_store,
+    )
+
+    window = max(1, min(int(limit or 100), 2000))
+    recent = get_m15_semantics_telemetry_store().recent(limit=window)
+    return {
+        "advisory_only": True,
+        "mutates_engines": False,
+        "thresholds_changed": False,
+        "m5_execution_only": True,
+        "directional_lock": "H1+M15",
+        "window": window,
+        "count": len(recent),
+        "events": recent,
+    }
+
+
 @router.get("/production-validation-mode")
 def get_production_validation_mode(_user: OperatorUser) -> dict[str, Any]:
     """Live Production Validation Mode dashboard — observe-only evidence.

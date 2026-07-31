@@ -1,5 +1,11 @@
 """Canonical ConfluenceEngine — institutional final judge before risk.
 
+Score Pipeline Integration (ite-v2.2.0):
+  - M15 semantics contribute when H1+M15 lock holds (m15 not permanently zero)
+  - Structural facts scored in Quality are not re-penalized here (dedup)
+  - Liquidity v2 remains the liquidity context source
+  - Weights unchanged; thresholds unchanged (min_confluence_score)
+
 Deterministic. No randomness. No OMS. No AI.
 """
 
@@ -14,9 +20,17 @@ from app.domain.institutional_trading.decision_models import (
     ConfluenceResult,
     TradeDirection,
 )
+from app.domain.institutional_trading.liquidity_v2 import evaluate_liquidity_v2
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.market_structure.enums import StructureBreakKind, TrendDirection
 from app.domain.order_block.enums import OrderBlockState
+
+# Classifications that mean M15 agrees with structural bias after semantics.
+_M15_ALIGNED_LABELS = {
+    "TREND_CONTINUATION",
+    "PULLBACK_WITHIN_TREND",
+    "CONSOLIDATION",
+}
 
 
 def _band(score: int, *, min_pass: int, high: int) -> str:
@@ -33,6 +47,36 @@ def _dir_to_trade(d: TrendDirection) -> TradeDirection:
     if d is TrendDirection.DOWN:
         return TradeDirection.SELL
     return TradeDirection.NONE
+
+
+def _quality_factor_score(quality: object, code: str) -> int | None:
+    for factor in getattr(quality, "factors", ()) or ():
+        if getattr(factor, "code", None) == code:
+            try:
+                return int(getattr(factor, "score", 0) or 0)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _dedup_passthrough(
+    *,
+    quality_score: int | None,
+    observed: int,
+    present: bool,
+    min_quality_bar: int,
+) -> tuple[int, bool]:
+    """Avoid a second independent penalty for a fact already scored in Quality.
+
+    When Quality already graded the fact at/above ``min_quality_bar``, confidence
+    reuses that Quality score (single source — no re-scoring, no inflation to 100).
+    Otherwise use the confluence observation score.
+    """
+    if present and quality_score is not None and quality_score >= min_quality_bar:
+        return int(quality_score), True
+    if present and quality_score is None:
+        return observed, False
+    return observed, False
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,67 +96,90 @@ class ConfluenceEngine:
         reasons: list[str] = []
         rejected: list[str] = []
         factors: dict[str, int] = {}
+        dedup_notes: list[str] = []
 
         trend = snapshot.trend
         quality = snapshot.trade_quality
         session = snapshot.session
         news = snapshot.news
         structure = snapshot.primary_structure
+        sem = getattr(trend, "m15_semantics", None) or {}
 
-        # --- Direction from configured MTF hierarchy ---
-        # Scalping: H1 direction filter (never require H4). Swing: H4/H1 alignment.
+        # --- Direction from MTF v2 (regime-aware) ---
+        # Trending: H4+H1+M15 lock. Ranging: H4 context; H1+M15 lock.
+        # M5 is execution timing only — never redefines H1 direction.
         direction = TradeDirection.NONE
-        if cfg.is_scalping():
-            if trend.aligned and trend.macro_bias in {
-                TrendDirection.UP,
-                TrendDirection.DOWN,
-            }:
-                direction = _dir_to_trade(trend.macro_bias)
-                reasons.append(
-                    f"Scalping MTF aligned {trend.macro_bias.value} "
-                    f"({cfg.macro_bias_tf.value}/{cfg.primary_structure_tf.value}; "
-                    f"{cfg.entry_confirmation_tf.value}={trend.entry.value} "
-                    f"{cfg.execution_management_tf.value}={trend.execution.value})"
-                )
-                factors["mtf"] = trend.alignment_score
-            elif trend.macro_bias in {TrendDirection.UP, TrendDirection.DOWN}:
-                direction = _dir_to_trade(trend.macro_bias)
-                factors["mtf"] = max(40, trend.alignment_score)
-                reasons.append(
-                    f"Scalping direction {cfg.macro_bias_tf.value}="
-                    f"{trend.macro_bias.value} (soft structure)"
-                )
-            else:
-                rejected.append("mtf_not_aligned")
-                factors["mtf"] = max(0, trend.alignment_score // 2)
-                reasons.append(trend.why or "Scalping MTF not aligned")
-        elif (
-            trend.macro_bias in {TrendDirection.UP, TrendDirection.DOWN}
-            and trend.macro_bias == trend.primary
-        ):
-            direction = _dir_to_trade(trend.macro_bias)
-            reasons.append(
-                f"{cfg.macro_bias_tf.value}/{cfg.primary_structure_tf.value} "
-                f"aligned {trend.macro_bias.value} "
-                f"({cfg.entry_confirmation_tf.value}={trend.entry.value} "
-                f"{cfg.execution_management_tf.value}={trend.execution.value})"
-            )
+        bias = trend.effective_bias
+        if trend.aligned and bias in {TrendDirection.UP, TrendDirection.DOWN}:
+            direction = _dir_to_trade(bias)
             factors["mtf"] = trend.alignment_score
+            regime = getattr(trend, "market_regime", "unknown")
+            reasons.append(
+                f"MTF v2 {regime}: aligned bias={bias.value} "
+                f"(H4={trend.macro_bias.value}"
+                f"{' context' if getattr(trend, 'h4_is_context', False) else ''} "
+                f"H1={trend.primary.value} M15={trend.entry.value} "
+                f"M5={trend.execution.value} score={trend.alignment_score})"
+            )
+        elif (
+            cfg.is_scalping()
+            and bias in {TrendDirection.UP, TrendDirection.DOWN}
+            and trend.alignment_score >= 40
+        ):
+            # Soft structure path — directional bias without full lock.
+            direction = _dir_to_trade(bias)
+            factors["mtf"] = max(40, trend.alignment_score)
+            reasons.append(
+                f"MTF v2 soft bias={bias.value} "
+                f"(score={trend.alignment_score}; awaiting full lock)"
+            )
         else:
             rejected.append("mtf_not_aligned")
             factors["mtf"] = max(0, trend.alignment_score // 2)
-            reasons.append(trend.why or "MTF not aligned")
+            reasons.append(trend.why or "MTF v2 not aligned")
 
-        # Entry TF confirmation soft bonus / penalty
+        # --- M15 / entry confirmation (semantics-aware) ---
+        # After successful H1+M15 lock, M15 must contribute positively — not stay 0.
         entry_key = cfg.entry_confirmation_tf.value.lower()
-        if direction is TradeDirection.BUY and trend.entry is TrendDirection.UP:
-            factors[entry_key] = 100
-            factors["m15"] = 100  # legacy factor key for weights
-            reasons.append(f"{cfg.entry_confirmation_tf.value} confirms bullish")
-        elif direction is TradeDirection.SELL and trend.entry is TrendDirection.DOWN:
+        entry_confirms = (
+            direction is TradeDirection.BUY and trend.entry is TrendDirection.UP
+        ) or (direction is TradeDirection.SELL and trend.entry is TrendDirection.DOWN)
+        sem_label = str(sem.get("new_classification") or "")
+        sem_effective = str(sem.get("effective_direction") or "").lower()
+        sem_supports = (
+            sem_label in _M15_ALIGNED_LABELS
+            and bias in {TrendDirection.UP, TrendDirection.DOWN}
+            and sem_effective == bias.value
+        )
+
+        if trend.aligned and entry_confirms:
             factors[entry_key] = 100
             factors["m15"] = 100
-            reasons.append(f"{cfg.entry_confirmation_tf.value} confirms bearish")
+            reasons.append(
+                f"{cfg.entry_confirmation_tf.value} confirms {bias.value} "
+                f"(H1+M15 lock"
+                + (f"; M15 semantics={sem_label}" if sem_label else "")
+                + ")"
+            )
+        elif trend.aligned and sem_supports:
+            # Lock held via semantics rewrite — credit M15 explicitly
+            factors[entry_key] = 100
+            factors["m15"] = 100
+            reasons.append(
+                f"M15 semantics {sem_label} contributes to H1+M15 lock "
+                f"(effective={sem_effective})"
+            )
+        elif entry_confirms and direction is not TradeDirection.NONE:
+            factors[entry_key] = 100
+            factors["m15"] = 100
+            reasons.append(f"{cfg.entry_confirmation_tf.value} confirms {bias.value}")
+        elif direction is not TradeDirection.NONE and sem_supports:
+            factors[entry_key] = 100
+            factors["m15"] = 100
+            reasons.append(
+                f"M15 semantics {sem_label} soft-path contribution "
+                f"(effective={sem_effective})"
+            )
         elif direction is not TradeDirection.NONE:
             factors[entry_key] = 40
             factors["m15"] = 40
@@ -121,33 +188,72 @@ class ConfluenceEngine:
             factors[entry_key] = 0
             factors["m15"] = 0
 
-        # Structure events on primary structure TF
+        # Execution TF — timing soft score only; never a directional veto.
+        exec_key = cfg.execution_management_tf.value.lower()
+        if exec_key != entry_key:
+            if direction is not TradeDirection.NONE and trend.execution == bias:
+                factors[exec_key] = 100
+                if exec_key == "m5" or "m5" not in factors:
+                    factors["m5"] = 100
+                reasons.append(
+                    f"{cfg.execution_management_tf.value} timing confirms "
+                    f"{bias.value} (execution only)"
+                )
+            elif direction is not TradeDirection.NONE:
+                factors[exec_key] = 50
+                if exec_key == "m5" or "m5" not in factors:
+                    factors["m5"] = 50
+                reasons.append(
+                    f"{cfg.execution_management_tf.value} timing soft — "
+                    "does not redefine H1+M15 lock"
+                )
+            else:
+                factors.setdefault(exec_key, 0)
+
+        # Structure events — scored in Quality (market_structure); dedup here
         bos = len(structure.breaks_of_structure) if structure else 0
         choch = len(structure.changes_of_character) if structure else 0
-        if structure and (bos or choch):
-            factors["structure"] = 90 if (bos and choch) else 75
+        struct_present = bool(structure and (bos or choch))
+        struct_observed = 90 if (bos and choch) else (75 if struct_present else 25)
+        q_struct = _quality_factor_score(quality, "market_structure")
+        factors["structure"], struct_deduped = _dedup_passthrough(
+            quality_score=q_struct,
+            observed=struct_observed,
+            present=struct_present,
+            min_quality_bar=70,
+        )
+        if struct_present:
             reasons.append(
                 f"{cfg.primary_structure_tf.value} structure events "
                 f"bos={bos} choch={choch}"
             )
-            if structure.breaks_of_structure:
+            if structure and structure.breaks_of_structure:
                 last = structure.breaks_of_structure[-1]
                 if last.kind is StructureBreakKind.BOS:
                     reasons.append(f"Latest BOS trend={last.trend_direction.value}")
+            if struct_deduped:
+                dedup_notes.append("structure")
         else:
-            factors["structure"] = 25
             rejected.append("no_structure_event")
-        # Liquidity
-        liq = snapshot.liquidity
-        if liq and (liq.sweeps or liq.pools or liq.equal_highs or liq.equal_lows):
-            sweep_n = len(liq.sweeps)
-            factors["liquidity"] = 85 if sweep_n else 65
-            reasons.append(f"Liquidity present sweeps={sweep_n} pools={len(liq.pools)}")
-        else:
-            factors["liquidity"] = 20
-            rejected.append("no_liquidity_context")
 
-        # Order blocks
+        # Liquidity v2 — context reject flag kept; score deduped vs Quality
+        liq_v2 = evaluate_liquidity_v2(snapshot)
+        q_liq = _quality_factor_score(quality, "liquidity")
+        factors["liquidity"], liq_deduped = _dedup_passthrough(
+            quality_score=q_liq,
+            observed=liq_v2.score,
+            present=liq_v2.has_context,
+            min_quality_bar=65,
+        )
+        reasons.extend(liq_v2.reasons)
+        if liq_v2.rejected:
+            rejected.append("no_liquidity_context")
+        elif liq_v2.sources:
+            reasons.append("Liquidity v2 sources=" + ",".join(liq_v2.sources))
+        if liq_deduped:
+            dedup_notes.append("liquidity")
+
+        # Order blocks — zone quality lives in Quality; dedup here
         ob = snapshot.order_blocks
         active_ob = 0
         if ob:
@@ -156,30 +262,55 @@ class ConfluenceEngine:
                 for b in ob.order_blocks
                 if b.state in {OrderBlockState.ACTIVE, OrderBlockState.VALIDATED}
             )
+        ob_observed = 85 if active_ob else 20
+        q_ob = _quality_factor_score(quality, "order_block")
+        factors["order_block"], ob_deduped = _dedup_passthrough(
+            quality_score=q_ob,
+            observed=ob_observed,
+            present=bool(active_ob),
+            min_quality_bar=70,
+        )
         if active_ob:
-            factors["order_block"] = 85
             reasons.append(f"Active order blocks={active_ob}")
+            if ob_deduped:
+                dedup_notes.append("order_block")
         else:
-            factors["order_block"] = 20
             rejected.append("no_active_order_block")
 
-        # FVG
+        # FVG — zone quality lives in Quality; dedup here
         fvg = snapshot.fair_value_gaps
         open_fvg = len(getattr(fvg, "active_gaps", ()) or ()) if fvg else 0
+        fvg_observed = 80 if open_fvg else 25
+        q_fvg = _quality_factor_score(quality, "fair_value_gap")
+        factors["fvg"], fvg_deduped = _dedup_passthrough(
+            quality_score=q_fvg,
+            observed=fvg_observed,
+            present=bool(open_fvg),
+            min_quality_bar=70,
+        )
         if open_fvg:
-            factors["fvg"] = 80
             reasons.append(f"Open FVGs={open_fvg}")
+            if fvg_deduped:
+                dedup_notes.append("fvg")
         else:
-            factors["fvg"] = 25
             rejected.append("no_open_fvg")
 
-        # Trade quality (already composite)
-        factors["quality"] = quality.total
+        # Quality gate — when passed, do not re-drag confidence with component deficits
         if quality.passed:
-            reasons.append(f"Trade quality {quality.total} ({quality.band})")
+            factors["quality"] = 100
+            reasons.append(
+                f"Trade quality {quality.total} ({quality.band}) — "
+                "confidence quality slot passthrough (dedup)"
+            )
         else:
+            factors["quality"] = quality.total
             rejected.append("quality_below_threshold")
             reasons.append(f"Trade quality {quality.total} below gate")
+
+        if dedup_notes:
+            reasons.append(
+                "Score dedup (fact counted in Quality once): " + ",".join(dedup_notes)
+            )
 
         # Session
         if session.allowed:
@@ -272,7 +403,7 @@ class ConfluenceEngine:
         if hard & set(rejected):
             direction = TradeDirection.NONE
 
-        # Weighted confidence
+        # Weighted confidence — weights preserved (sum 100), no inflation
         weights = {
             "mtf": 22,
             "m15": 8,
