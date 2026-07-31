@@ -35,6 +35,8 @@ class TrendSnapshot:
     trade_bias: TrendDirection | None = None  # regime-aware bias (may differ from H4)
     mtf_contributions: dict[str, int] = field(default_factory=dict)
     h4_is_context: bool = False
+    # M15 Trend Semantics v2 telemetry (optional)
+    m15_semantics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -53,6 +55,7 @@ class TrendSnapshot:
             ),
             "mtf_contributions": dict(self.mtf_contributions),
             "h4_is_context": self.h4_is_context,
+            "m15_semantics": dict(self.m15_semantics),
         }
 
     @property
