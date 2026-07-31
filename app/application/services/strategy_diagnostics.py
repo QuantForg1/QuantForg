@@ -494,9 +494,13 @@ def generate_smart_insights(
 
 @dataclass
 class StrategyDiagnosticsStore:
-    """In-memory ring buffer of the last 100 diagnostic cycles."""
+    """In-memory ring buffer of diagnostic cycles (observation only).
 
-    maxlen: int = 100
+    Sized for Pareto / rejection analysis windows (default 2000 ≈ ~2.5h at 5s).
+    Never mutates strategy, risk, safety, OMS, or MT5.
+    """
+
+    maxlen: int = 2000
     _cycles: deque[dict[str, Any]] = field(default_factory=deque, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
     _config: ITEConfig = field(default_factory=lambda: DEFAULT_ITE_CONFIG)
@@ -521,6 +525,35 @@ class StrategyDiagnosticsStore:
             sizing = (
                 cycle.get("sizing") if isinstance(cycle.get("sizing"), dict) else None
             )
+            confluence = (
+                cycle.get("confluence")
+                if isinstance(cycle.get("confluence"), dict)
+                else {}
+            )
+            factors = (
+                confluence.get("engine_factors")
+                if isinstance(confluence.get("engine_factors"), dict)
+                else {}
+            )
+            trend = cycle.get("trend") if isinstance(cycle.get("trend"), dict) else {}
+            # Observation scalars for durable rejection analysis (no threshold change).
+            diagnostics = {
+                "risk_pct": (sizing or {}).get("risk_pct"),
+                "raw_lots": (sizing or {}).get("raw_lots"),
+                "calculated_lots": (sizing or {}).get("calculated_lots"),
+                "broker_min_lot": (sizing or {}).get("broker_min_lot"),
+                "broker_lot_step": (sizing or {}).get("broker_lot_step"),
+                "sizing_status": (sizing or {}).get("sizing_status"),
+                "trading_session": cycle.get("market_session"),
+                "session_allowed": cycle.get("session_allowed"),
+                "atr": cycle.get("atr") or (sizing or {}).get("atr"),
+                "mtf_score": trend.get("score"),
+                "mtf_aligned": trend.get("aligned"),
+                "liquidity_score": factors.get("liquidity"),
+                "spread_score": factors.get("spread"),
+                "session_score": factors.get("session"),
+                "news_score": factors.get("news"),
+            }
             record_cycle_evidence(
                 cycle_outcome=str(cycle.get("cycle_outcome") or ""),
                 decision_action=(
@@ -545,15 +578,14 @@ class StrategyDiagnosticsStore:
                     else None
                 ),
                 confluence_score=(
-                    (cycle.get("confluence") or {}).get("total")
-                    if isinstance(cycle.get("confluence"), dict)
-                    else None
+                    confluence.get("total") if isinstance(confluence, dict) else None
                 ),
                 forwarded_to_oms=bool(cycle.get("forwarded_to_oms")),
                 trace_id=(
                     str(cycle.get("trace_id")) if cycle.get("trace_id") else None
                 ),
                 sizing=sizing,
+                diagnostics=diagnostics,
             )
         except Exception:  # noqa: S110  # best-effort evidence path
             pass
