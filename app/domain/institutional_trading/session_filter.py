@@ -1,16 +1,26 @@
-"""Session filter — London / New York / overlap only by default.
+"""Session filter — 24/7 named sessions with soft quality/risk weighting.
 
 Uses a deterministic UTC-hour classifier for ITE (reproducible, no tzdata
 dependency). Optional MarketContextEngine can override when available.
+
+Hard blocks apply only to weekend / off-hours / closed market windows.
+Sydney, Tokyo, London, New York, and Overlap are tradable when configured;
+session quality influences scoring and risk weight, not an absolute reject.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 
 from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.models import SessionFilterResult
+from app.domain.institutional_trading.session_policy import (
+    quality_score_for_stars,
+    risk_multiplier_for_stars,
+    stars_for_session,
+)
 from app.domain.market_context.engine import MarketContextEngine
 from app.domain.market_context.enums import MarketSession
 
@@ -36,7 +46,7 @@ def classify_session_utc(as_of: datetime) -> MarketSession:
 
         moment = moment.astimezone(UTC)
 
-    # Weekends → off hours
+    # Weekends → off hours (market closed — not a session-preference block)
     if moment.weekday() >= 5:
         return MarketSession.OFF_HOURS
 
@@ -56,7 +66,7 @@ def classify_session_utc(as_of: datetime) -> MarketSession:
 
 @dataclass(frozen=True, slots=True)
 class SessionFilter:
-    """Gate entries to approved high-liquidity sessions."""
+    """Gate entries to open market sessions; soft-weight by session quality."""
 
     config: ITEConfig
     context_engine: MarketContextEngine | None = None
@@ -83,12 +93,27 @@ class SessionFilter:
         if active is None:
             active = classify_session_utc(as_of)
 
+        stars = stars_for_session(active)
+        quality = quality_score_for_stars(stars)
+        # Absolute block only when session is not in the 24/7 tradable set
+        # (weekend / off-hours / closed). Named sessions soft-weight only.
         allowed = active in self.config.allowed_sessions
+        risk_mult = risk_multiplier_for_stars(stars) if allowed else Decimal("0")
         if allowed:
-            reason = f"Session {active.value} is approved for trading."
+            reason = (
+                f"Session {active.value} open for 24/7 desk "
+                f"(*{stars}, quality={quality}, riskx={risk_mult})."
+            )
         else:
             reason = (
-                f"Session {active.value} is low-liquidity / outside "
-                f"London-New York window — avoid new entries."
+                f"Session {active.value} is outside tradable market windows "
+                f"(weekend/off-hours/closed) - no new entries."
             )
-        return SessionFilterResult(session=active, allowed=allowed, reason=reason)
+        return SessionFilterResult(
+            session=active,
+            allowed=allowed,
+            reason=reason,
+            quality_score=quality,
+            risk_multiplier=risk_mult,
+            stars=stars,
+        )

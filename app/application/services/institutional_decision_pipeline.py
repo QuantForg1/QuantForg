@@ -401,6 +401,9 @@ class InstitutionalDecisionPipeline:
             from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
                 may_add_scalping_trade,
             )
+            from app.domain.institutional_trading.ai_scalping.session_intelligence import (  # noqa: E501
+                assess_session,
+            )
             from app.domain.institutional_trading.ai_scalping.sizing import (
                 calculate_scalping_lots,
             )
@@ -410,6 +413,20 @@ class InstitutionalDecisionPipeline:
                 broker_min_lot=live_min,
                 broker_lot_step=live_step,
             )
+            session_assess = assess_session(
+                str(
+                    getattr(
+                        snapshot.session.session,
+                        "value",
+                        snapshot.session.session,
+                    )
+                ),
+                config=scalp_cfg,
+            )
+            # Prefer filter risk_multiplier when present (same soft policy)
+            sess_risk = getattr(snapshot.session, "risk_multiplier", None)
+            if sess_risk is None or sess_risk <= 0:
+                sess_risk = session_assess.risk_multiplier
             sized = calculate_scalping_lots(
                 equity=account.equity,
                 stop_distance=stop_distance,
@@ -418,6 +435,7 @@ class InstitutionalDecisionPipeline:
                 peak_equity=account.peak_equity,
                 compounding_enabled=scalp_cfg.compounding_enabled,
                 contract_size=live_cs,
+                session_risk_multiplier=sess_risk,
                 config=scalp_cfg,
             )
             if sized.valid:
@@ -425,6 +443,35 @@ class InstitutionalDecisionPipeline:
             else:
                 risk_allowed = False
                 risk_reasons.append(sized.reason)
+                if sized.method == "below_min_lot":
+                    risk_reasons.append(
+                        "below_min_lot:"
+                        f"calculated_lot={sized.calculated_lot},"
+                        f"broker_minimum={sized.broker_min_lot},"
+                        f"account_balance={sized.account_balance},"
+                        f"risk_percentage={sized.risk_percentage}"
+                    )
+                    try:
+                        from app.application.services.cycle_evidence import (
+                            log_trade_rejection,
+                        )
+
+                        log_trade_rejection(
+                            reasons=(sized.reason,),
+                            stage="lot_sizing",
+                            code="below_min_lot",
+                            symbol=str(getattr(snapshot, "symbol", "") or ""),
+                            session=str(
+                                getattr(
+                                    snapshot.session.session,
+                                    "value",
+                                    snapshot.session.session,
+                                )
+                            ),
+                            sizing=sized.to_dict(),
+                        )
+                    except Exception:
+                        logger.exception("below_min_lot_reject_log_failed")
                 approved_lots = Decimal("0")
 
             min_entry_distance: Decimal | None = None

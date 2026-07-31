@@ -28,20 +28,26 @@ _REASON_LABELS: dict[str, str] = {
     "no_active_order_block": "No active order block",
     "no_open_fvg": "No open fair value gap",
     "no_smc_zone": "No SMC zone (OB + FVG)",
-    "session_blocked": "Session blocked",
+    "session_blocked": "Market window closed (weekend/off-hours)",
+    "market_window_closed": "Market window closed (weekend/off-hours)",
     "news_blackout": "News blackout",
     "spread_too_wide": "Spread too wide",
     "atr_elevated": "ATR elevated",
     "atr_too_low": "ATR too low",
     "drawdown_elevated": "Drawdown elevated",
+    "below_min_lot": "Lot size below broker minimum",
+    "SAFETY_BLOCKED": "Auto-trade safety gate blocked",
     "NO_SNAPSHOT": "No market snapshot",
     "NO_MARKET_CONTEXT": "No market context",
 }
 
 _REASON_PRIORITY: tuple[str, ...] = (
+    "SAFETY_BLOCKED",
+    "market_window_closed",
     "session_blocked",
     "news_blackout",
     "spread_too_wide",
+    "below_min_lot",
     "mtf_not_aligned",
     "quality_below_threshold",
     "confidence_below_threshold",
@@ -244,6 +250,8 @@ def extract_cycle_diagnostics(
     for raw in decision_reasons:
         s = str(raw)
         low = s.lower()
+        if "below_min_lot" in low or "below broker min" in low:
+            rejected_codes.append("below_min_lot")
         for code in _REASON_LABELS:
             if code.replace("_", " ") in low or code in low:
                 rejected_codes.append(code)
@@ -320,7 +328,13 @@ def extract_cycle_diagnostics(
             "risk_pct": diag.get("risk_pct"),
             "raw_lots": diag.get("raw_lots"),
             "calculated_lots": diag.get("calculated_lots"),
+            "calculated_lot": diag.get("raw_lots") or diag.get("calculated_lots"),
+            "broker_min_lot": diag.get("broker_min_lot"),
+            "broker_minimum": diag.get("broker_min_lot"),
+            "account_balance": diag.get("equity") or diag.get("balance"),
+            "risk_percentage": diag.get("risk_pct"),
             "approved_lots": diag.get("approved_lots"),
+            "sizing_status": diag.get("sizing_status"),
         },
         "atr": diag.get("atr"),
         "stop_distance": diag.get("stop_distance"),
@@ -493,6 +507,56 @@ class StrategyDiagnosticsStore:
     def record(self, cycle: dict[str, Any]) -> None:
         with self._lock:
             self._cycles.append(dict(cycle))
+        # Durable per-cycle evidence (every scan — including NO_TRADE rejects)
+        try:
+            from app.application.services.cycle_evidence import record_cycle_evidence
+
+            rejection = cycle.get("rejection") if isinstance(cycle, dict) else None
+            reasons: list[str] = []
+            if isinstance(rejection, dict):
+                reasons.extend(str(r) for r in (rejection.get("all_codes") or []))
+                reasons.extend(
+                    str(r) for r in (rejection.get("decision_reasons") or [])
+                )
+            sizing = (
+                cycle.get("sizing") if isinstance(cycle.get("sizing"), dict) else None
+            )
+            record_cycle_evidence(
+                cycle_outcome=str(cycle.get("cycle_outcome") or ""),
+                decision_action=(
+                    str(cycle.get("decision_action"))
+                    if cycle.get("decision_action") is not None
+                    else None
+                ),
+                reasons=reasons,
+                abort_reason=(
+                    str(rejection.get("primary"))
+                    if isinstance(rejection, dict) and rejection.get("primary")
+                    else None
+                ),
+                session=(
+                    str(cycle.get("market_session"))
+                    if cycle.get("market_session") not in {None, "—"}
+                    else None
+                ),
+                quality_score=(
+                    (cycle.get("quality") or {}).get("score")
+                    if isinstance(cycle.get("quality"), dict)
+                    else None
+                ),
+                confluence_score=(
+                    (cycle.get("confluence") or {}).get("total")
+                    if isinstance(cycle.get("confluence"), dict)
+                    else None
+                ),
+                forwarded_to_oms=bool(cycle.get("forwarded_to_oms")),
+                trace_id=(
+                    str(cycle.get("trace_id")) if cycle.get("trace_id") else None
+                ),
+                sizing=sizing,
+            )
+        except Exception:  # noqa: S110  # best-effort evidence path
+            pass
         # Post-promotion monitor (warning only; never auto-rollback).
         try:
             from app.application.services.threshold_promotion import observe_cycle

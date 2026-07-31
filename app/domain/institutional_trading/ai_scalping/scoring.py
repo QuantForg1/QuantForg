@@ -240,9 +240,7 @@ def score_scalping_setup(
         str(getattr(snapshot.session.session, "value", snapshot.session.session)),
         config=cfg,
     )
-    factors["session"] = (
-        100 if session.aggressive else max(15, 100 - session.confidence_penalty * 6)
-    )
+    factors["session"] = session.quality_score
     reasons.append(session.reason)
 
     spread_a = assess_spread(snapshot.spread, atr=atr, config=cfg)

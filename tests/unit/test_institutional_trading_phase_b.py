@@ -274,7 +274,7 @@ class TestExtendedRiskEngine:
             entry_price=Decimal("2300"),
             stop_loss_distance=Decimal("5"),
             session_allowed=False,
-            session_name="tokyo",
+            session_name="off_hours",
         )
         result = engine.evaluate(check, account=self._acct(), positions=[])
         assert result.decision is RiskDecision.REJECT
@@ -351,7 +351,8 @@ class TestEligibilityAndDecision:
         assert any("news" in r.lower() for r in elig.rejection_reasons)
 
     def test_wrong_session(self) -> None:
-        snap = _snapshot(session=MarketSession.TOKYO, session_allowed=False)
+        # Off-hours remains a market-window block (not a named-session preference)
+        snap = _snapshot(session=MarketSession.OFF_HOURS, session_allowed=False)
         conf = ConfluenceResult(
             confidence=90,
             direction=TradeDirection.SELL,
@@ -369,6 +370,27 @@ class TestEligibilityAndDecision:
             risk_allowed=True,
         )
         assert elig.eligible is False
+
+    def test_tokyo_session_eligible_when_allowed(self) -> None:
+        snap = _snapshot(session=MarketSession.TOKYO, session_allowed=True)
+        conf = ConfluenceResult(
+            confidence=90,
+            direction=TradeDirection.SELL,
+            reasons=(),
+            rejected_rules=(),
+            input_hash="h3b",
+            band="high_confidence",
+            passed=True,
+            factors={},
+        )
+        elig = PositionEligibilityEngine(config=ITEConfig()).evaluate(
+            snapshot=snap,
+            confluence=conf,
+            account=_account(),
+            risk_allowed=True,
+        )
+        assert elig.eligible is True
+        assert elig.checks.get("session_valid") is True
 
     def test_quality_below_threshold(self) -> None:
         snap = _snapshot(quality=60)

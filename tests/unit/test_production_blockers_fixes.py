@@ -189,10 +189,20 @@ class TestSessionAutoResume:
         filt = SessionFilter(config=DEFAULT_ITE_CONFIG)
         tokyo = filt.evaluate(as_of=datetime(2026, 7, 31, 2, 0, tzinfo=UTC))
         london = filt.evaluate(as_of=datetime(2026, 7, 31, 8, 30, tzinfo=UTC))
-        assert tokyo.allowed is False
+        assert tokyo.allowed is True
         assert tokyo.session is MarketSession.TOKYO
+        assert tokyo.quality_score < london.quality_score
         assert london.allowed is True
         assert london.session is MarketSession.LONDON
+
+    def test_sydney_and_overlap_allowed(self) -> None:
+        filt = SessionFilter(config=DEFAULT_ITE_CONFIG)
+        sydney = filt.evaluate(as_of=datetime(2026, 7, 31, 22, 0, tzinfo=UTC))
+        overlap = filt.evaluate(as_of=datetime(2026, 7, 31, 14, 0, tzinfo=UTC))
+        assert sydney.allowed is True
+        assert sydney.session is MarketSession.SYDNEY
+        assert overlap.allowed is True
+        assert overlap.session is MarketSession.LONDON_NY_OVERLAP
 
 
 @pytest.mark.unit

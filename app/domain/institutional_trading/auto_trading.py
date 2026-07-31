@@ -38,6 +38,8 @@ class AutoTradePolicy:
     risk_per_trade_pct: Decimal = Decimal("1.0")
     max_daily_loss_pct: Decimal = Decimal("3.0")
     allowed_sessions: tuple[str, ...] = (
+        "sydney",
+        "tokyo",
         "london",
         "new_york",
         "london_ny_overlap",

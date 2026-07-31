@@ -31,6 +31,8 @@ class RobotV1Config:
     max_atr_pct_of_price: Decimal = Decimal("3.0")
     min_atr_pct_of_price: Decimal = Decimal("0.05")
     allowed_sessions: tuple[str, ...] = (
+        "sydney",
+        "tokyo",
         "london",
         "new_york",
         "london_ny_overlap",

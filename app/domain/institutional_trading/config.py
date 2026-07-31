@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from app.domain.institutional_trading.session_policy import TRADABLE_SESSIONS_24_7
 from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
@@ -45,12 +46,8 @@ class ITEConfig:
     partial_close_pct: Decimal = Decimal("50")
     trail_after_r: Decimal = Decimal("2.0")
 
-    # Session filter
-    allowed_sessions: tuple[MarketSession, ...] = (
-        MarketSession.LONDON,
-        MarketSession.NEW_YORK,
-        MarketSession.LONDON_NY_OVERLAP,
-    )
+    # Session filter — 24/7 named windows; off-hours/weekend still blocked
+    allowed_sessions: tuple[MarketSession, ...] = TRADABLE_SESSIONS_24_7
 
     # News protection — off until a reliable calendar feed is wired
     news_protection_enabled: bool = False

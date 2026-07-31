@@ -96,7 +96,8 @@ class AiScalpingConfig:
     require_momentum_confirm: bool = True
     require_tight_spread: bool = True
     require_valid_volatility: bool = True
-    require_session_quality: bool = True
+    # Soft weight only — weak sessions reduce confidence/risk, never hard-block
+    require_session_quality: bool = False
     require_pa_confluence: bool = True
     min_structure_score: int = 70
     min_momentum_score: int = 65
@@ -172,8 +173,10 @@ class AiScalpingConfig:
     )
     aggressive_session_min_stars: int = 5
     weak_session_confidence_penalty: int = 10
-    # Configurable session allow-list (maps onto ITE when applying scalping mode)
+    # Configurable session allow-list — 24/7 named windows (soft-weighted)
     allowed_sessions: tuple[str, ...] = (
+        MarketSession.SYDNEY.value,
+        MarketSession.TOKYO.value,
         MarketSession.LONDON.value,
         MarketSession.NEW_YORK.value,
         MarketSession.LONDON_NY_OVERLAP.value,

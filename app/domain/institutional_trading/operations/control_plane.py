@@ -66,6 +66,8 @@ class OperationsControlPlane:
     auto_trading_enabled: bool = False
     auto_trading_run_state: AutoTradeRunState = "off"
     allowed_sessions: tuple[str, ...] = (
+        "sydney",
+        "tokyo",
         "london",
         "new_york",
         "london_ny_overlap",
@@ -423,7 +425,17 @@ class OperationsControlPlane:
                 )
                 if not cleaned:
                     raise ValueError("allowed_sessions must not be empty")
-                self.allowed_sessions = cleaned
+                # 24/7 autonomy: always keep named market windows tradable.
+                # Session soft-weights scoring/risk; weekend/off-hours stay out.
+                from app.domain.institutional_trading.session_policy import (
+                    TRADABLE_SESSION_NAMES,
+                )
+
+                merged = list(cleaned)
+                for name in TRADABLE_SESSION_NAMES:
+                    if name not in merged:
+                        merged.append(name)
+                self.allowed_sessions = tuple(merged)
             if allowed_symbols is not None:
                 cleaned_sym = tuple(
                     s.strip().upper() for s in allowed_symbols if s and s.strip()

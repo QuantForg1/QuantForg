@@ -136,11 +136,22 @@ class TestITEPhaseAPipeline:
         )
         assert h1 == h2
 
-    def test_session_filter_rejects_tokyo(self) -> None:
+    def test_session_filter_allows_tokyo_soft_weight(self) -> None:
         cfg = ITEConfig()
         result = SessionFilter(config=cfg).evaluate(
             as_of=datetime(2026, 3, 10, 3, 0, tzinfo=UTC),
             session=MarketSession.TOKYO,
+        )
+        assert result.allowed is True
+        assert result.stars == 2
+        assert result.quality_score < 100
+        assert result.risk_multiplier < 1
+
+    def test_session_filter_blocks_off_hours_weekend(self) -> None:
+        cfg = ITEConfig()
+        result = SessionFilter(config=cfg).evaluate(
+            as_of=datetime(2026, 3, 14, 12, 0, tzinfo=UTC),  # Saturday
+            session=MarketSession.OFF_HOURS,
         )
         assert result.allowed is False
 
