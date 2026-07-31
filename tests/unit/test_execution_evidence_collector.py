@@ -184,9 +184,7 @@ def test_eligible_buy_exports_and_certificate(tmp_path: Path) -> None:
     assert latest["latest"]["mt5"]["ticket"] == 991122
     assert latest["status"] == "VERIFIED"
 
-    status = build_acceptance_status(
-        export_dir=exec_dir, certificate_dir=cert_dir
-    )
+    status = build_acceptance_status(export_dir=exec_dir, certificate_dir=cert_dir)
     assert status["verified"] is True
     assert status["status"] == "VERIFIED"
     assert status["latest_broker_ticket"] == 991122

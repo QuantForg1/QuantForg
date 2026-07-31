@@ -116,7 +116,9 @@ class SymbolStateBook:
     ) -> AdaptiveCooldownDecision:
         return self.get(symbol)._cooldown.evaluate(decision)
 
-    def snapshot(self, symbols: tuple[str, ...] | list[str] | None = None) -> dict[str, Any]:
+    def snapshot(
+        self, symbols: tuple[str, ...] | list[str] | None = None
+    ) -> dict[str, Any]:
         with self._lock:
             if symbols is None:
                 rows = list(self._states.values())

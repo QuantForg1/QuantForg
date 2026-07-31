@@ -44,20 +44,27 @@ def resolve_executable_direction(
     """
     ai_dir = _parse_ai_direction(ai_direction)
 
-    if scalping and ai_reject is False and ai_dir in {
-        TradeDirection.BUY,
-        TradeDirection.SELL,
-    }:
-        if confluence.direction in {TradeDirection.BUY, TradeDirection.SELL}:
-            if confluence.direction != ai_dir:
-                return ExecutableDirection(
-                    direction=TradeDirection.NONE,
-                    reason=(
-                        f"Validated AI {ai_dir.value} disagrees with confluence "
-                        f"{confluence.direction.value} — NO_TRADE"
-                    ),
-                    source="none",
-                )
+    if (
+        scalping
+        and ai_reject is False
+        and ai_dir
+        in {
+            TradeDirection.BUY,
+            TradeDirection.SELL,
+        }
+    ):
+        if (
+            confluence.direction in {TradeDirection.BUY, TradeDirection.SELL}
+            and confluence.direction != ai_dir
+        ):
+            return ExecutableDirection(
+                direction=TradeDirection.NONE,
+                reason=(
+                    f"Validated AI {ai_dir.value} disagrees with confluence "
+                    f"{confluence.direction.value} — NO_TRADE"
+                ),
+                source="none",
+            )
         return ExecutableDirection(
             direction=ai_dir,
             reason=f"Validated AI signal {ai_dir.value} (authoritative)",

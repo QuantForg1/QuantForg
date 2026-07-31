@@ -24,7 +24,6 @@ from app.domain.institutional_trading.ai_scalping.symbol_state import (
     get_symbol_state_book,
 )
 
-
 EXPECTED_UNIVERSE = {
     "XAUUSD",
     "EURUSD",
@@ -114,7 +113,14 @@ def test_rank_all_symbols_execute_best_only() -> None:
     assert result.best is not None
     assert result.best["symbol"] == "NAS100"
     assert len(result.ranked) >= 3
-    assert all(r["symbol"] != result.best["symbol"] or i == 0 for i, r in enumerate(result.ranked) if False) or True
+    assert (
+        all(
+            r["symbol"] != result.best["symbol"] or i == 0
+            for i, r in enumerate(result.ranked)
+            if False
+        )
+        or True
+    )
 
 
 @pytest.mark.unit

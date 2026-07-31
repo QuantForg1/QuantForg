@@ -154,13 +154,9 @@ def _markdown_report(package: ExecutionEvidencePackage) -> str:
         "| --- | --- | --- | --- |",
     ]
     for stage in package.timeline:
-        lat_s = (
-            f"{stage.latency_ms:.2f}" if stage.latency_ms is not None else "—"
-        )
+        lat_s = f"{stage.latency_ms:.2f}" if stage.latency_ms is not None else "—"
         reason = (stage.reason or "—").replace("|", "/")
-        lines.append(
-            f"| {stage.stage} | {stage.status} | {lat_s} | {reason} |"
-        )
+        lines.append(f"| {stage.stage} | {stage.status} | {lat_s} | {reason} |")
     lines.extend(
         [
             "",
@@ -183,33 +179,36 @@ def _certificate_markdown(package: ExecutionEvidencePackage) -> str:
     def gate(name: str) -> str:
         return "PASS" if stage_map.get(name) == "PASS" else stage_map.get(name, "—")
 
-    return "\n".join(
-        [
-            "# Production Acceptance Certificate",
-            "",
-            "> Issued only after a complete successful real production execution.",
-            "> Observe-only evidence. Never fabricated.",
-            "",
-            f"- **Commit SHA:** {_fmt(package.commit_sha)}",
-            f"- **Deployment ID:** {_fmt(package.deployment_id)}",
-            f"- **Validation ID:** {package.validation_id}",
-            f"- **Broker Ticket:** {_fmt(package.mt5_ticket)}",
-            f"- **Execution latency (ms):** {_fmt(lat)}",
-            f"- **OMS:** {gate('OMS')}",
-            f"- **Gateway:** {gate('Gateway')}",
-            f"- **MT5:** {gate('MT5')}",
-            f"- **Broker:** {gate('Broker')}",
-            f"- **Generated timestamp:** {_now_iso()}",
-            f"- **Symbol:** {_fmt(package.symbol)}",
-            f"- **Decision:** {_fmt(package.decision)}",
-            f"- **Environment:** {_fmt(package.environment)}",
-            "",
-            "## Status",
-            "",
-            "**VERIFIED**",
-            "",
-        ]
-    ) + "\n"
+    return (
+        "\n".join(
+            [
+                "# Production Acceptance Certificate",
+                "",
+                "> Issued only after a complete successful real production execution.",
+                "> Observe-only evidence. Never fabricated.",
+                "",
+                f"- **Commit SHA:** {_fmt(package.commit_sha)}",
+                f"- **Deployment ID:** {_fmt(package.deployment_id)}",
+                f"- **Validation ID:** {package.validation_id}",
+                f"- **Broker Ticket:** {_fmt(package.mt5_ticket)}",
+                f"- **Execution latency (ms):** {_fmt(lat)}",
+                f"- **OMS:** {gate('OMS')}",
+                f"- **Gateway:** {gate('Gateway')}",
+                f"- **MT5:** {gate('MT5')}",
+                f"- **Broker:** {gate('Broker')}",
+                f"- **Generated timestamp:** {_now_iso()}",
+                f"- **Symbol:** {_fmt(package.symbol)}",
+                f"- **Decision:** {_fmt(package.decision)}",
+                f"- **Environment:** {_fmt(package.environment)}",
+                "",
+                "## Status",
+                "",
+                "**VERIFIED**",
+                "",
+            ]
+        )
+        + "\n"
+    )
 
 
 def _history_row(package: ExecutionEvidencePackage) -> dict[str, Any]:
@@ -223,25 +222,29 @@ def _history_row(package: ExecutionEvidencePackage) -> dict[str, Any]:
         "decision": package.decision or "",
         "symbol": package.symbol or "",
         "session": package.session or "",
-        "quality_score": package.quality_score
-        if package.quality_score is not None
-        else "",
+        "quality_score": (
+            package.quality_score if package.quality_score is not None else ""
+        ),
         "confidence": package.confidence if package.confidence is not None else "",
         "risk_score": package.risk_score if package.risk_score is not None else "",
         "rr": package.rr or "",
         "position_size": package.position_size or "",
         "eligibility_result": package.eligibility_result or "",
         "oms_payload_hash": package.oms_payload_hash or "",
-        "oms_latency_ms": package.oms_latency_ms
-        if package.oms_latency_ms is not None
-        else "",
+        "oms_latency_ms": (
+            package.oms_latency_ms if package.oms_latency_ms is not None else ""
+        ),
         "gateway_request_id": package.gateway_request_id or "",
-        "gateway_http_status": package.gateway_http_status
-        if package.gateway_http_status is not None
-        else "",
-        "order_send_latency_ms": package.order_send_latency_ms
-        if package.order_send_latency_ms is not None
-        else "",
+        "gateway_http_status": (
+            package.gateway_http_status
+            if package.gateway_http_status is not None
+            else ""
+        ),
+        "order_send_latency_ms": (
+            package.order_send_latency_ms
+            if package.order_send_latency_ms is not None
+            else ""
+        ),
         "mt5_ticket": package.mt5_ticket if package.mt5_ticket is not None else "",
         "mt5_retcode": package.mt5_retcode if package.mt5_retcode is not None else "",
         "fill_price": package.fill_price or "",
@@ -259,9 +262,11 @@ def _history_row(package: ExecutionEvidencePackage) -> dict[str, Any]:
         "final_result": package.final_result,
         "accepted": package.accepted,
         "certificate_eligible": package.certificate_eligible,
-        "execution_latency_ms": package.execution_latency_ms()
-        if package.execution_latency_ms() is not None
-        else "",
+        "execution_latency_ms": (
+            package.execution_latency_ms()
+            if package.execution_latency_ms() is not None
+            else ""
+        ),
     }
 
 
@@ -443,10 +448,7 @@ def export_evidence_package(
             # Also stamp a dated copy for audit trail
             stamp = package.timestamp.replace(":", "").replace("-", "")[:15]
             vid = package.validation_id
-            dated = (
-                cert_dir
-                / f"Production_Acceptance_Certificate_{stamp}_{vid}.md"
-            )
+            dated = cert_dir / f"Production_Acceptance_Certificate_{stamp}_{vid}.md"
             dated.write_text(_certificate_markdown(package), encoding="utf-8")
             paths["certificate"] = str(cert_path)
             paths["certificate_dated"] = str(dated)
@@ -479,11 +481,15 @@ def load_latest_evidence(*, export_dir: Path | None = None) -> dict[str, Any]:
         }
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {
-            "status": "NOT_VERIFIED",
-            "message": WAITING_MESSAGE,
-            "latest": None,
-        }
+        return (
+            data
+            if isinstance(data, dict)
+            else {
+                "status": "NOT_VERIFIED",
+                "message": WAITING_MESSAGE,
+                "latest": None,
+            }
+        )
     except Exception:
         logger.exception("execution_evidence_latest_read_failed")
         return {
@@ -517,9 +523,7 @@ def build_acceptance_status(
     pkg = latest.get("latest") if isinstance(latest.get("latest"), dict) else None
     cert_ok = certificate_exists(certificate_dir=certificate_dir)
     eligible = bool(pkg and pkg.get("certificate_eligible"))
-    verified = bool(
-        (latest.get("status") == "VERIFIED" or eligible) and cert_ok
-    )
+    verified = bool((latest.get("status") == "VERIFIED" or eligible) and cert_ok)
     if pkg is None:
         return {
             "status": "NOT VERIFIED",
@@ -551,12 +555,16 @@ def build_acceptance_status(
         "latest_execution": {
             "validation_id": pkg.get("validation_id"),
             "timestamp": pkg.get("timestamp"),
-            "decision": (pkg.get("ai") or {}).get("decision")
-            if isinstance(pkg.get("ai"), dict)
-            else None,
-            "symbol": (pkg.get("ai") or {}).get("symbol")
-            if isinstance(pkg.get("ai"), dict)
-            else pkg.get("symbol"),
+            "decision": (
+                (pkg.get("ai") or {}).get("decision")
+                if isinstance(pkg.get("ai"), dict)
+                else None
+            ),
+            "symbol": (
+                (pkg.get("ai") or {}).get("symbol")
+                if isinstance(pkg.get("ai"), dict)
+                else pkg.get("symbol")
+            ),
             "final_result": pkg.get("final_result"),
             "accepted": pkg.get("accepted"),
             "entry": trade.get("entry") if isinstance(trade, dict) else None,

@@ -22,6 +22,7 @@ from app.domain.institutional_trading.ai_scalping.pa_confluence import (
 from app.domain.institutional_trading.ai_scalping.structure_targets import (
     compute_structure_targets,
 )
+from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.execution.decision_hash_store import (
     load_executed_hashes,
@@ -36,7 +37,6 @@ from app.domain.institutional_trading.management.models import (
 )
 from app.domain.institutional_trading.management.policies import plan_action
 from app.domain.institutional_trading.news_protection import NewsProtection
-from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
 from app.domain.market_structure.enums import TrendDirection
 
 
@@ -99,7 +99,10 @@ def test_v6_version_and_risk_locks() -> None:
 def test_pme_maps_v6_execution_knobs() -> None:
     pme = pme_config_for_scalping()
     assert "scalping-v6" in pme.config_version
-    assert pme.absolute_max_hold_minutes == DEFAULT_AI_SCALPING_CONFIG.absolute_max_hold_minutes
+    assert (
+        pme.absolute_max_hold_minutes
+        == DEFAULT_AI_SCALPING_CONFIG.absolute_max_hold_minutes
+    )
     assert pme.structure_trail_enabled is True
     assert pme.liquidity_trail_enabled is True
     assert pme.atr_trail_enabled is True
@@ -211,7 +214,9 @@ def test_ema_rsi_pa_confluence() -> None:
     assert score >= 40
     assert "EMA" in reason
 
-    rsi_score, ind, rsi_reason = assess_rsi_confirm(closes, direction=TradeDirection.BUY)
+    rsi_score, ind, rsi_reason = assess_rsi_confirm(
+        closes, direction=TradeDirection.BUY
+    )
     assert ind.get("rsi_ready") is True
     assert rsi_score >= 25
     assert "RSI" in rsi_reason
@@ -264,13 +269,17 @@ def test_news_fail_closed_optional(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_decision_hash_persistence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_decision_hash_persistence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("QUANTFORG_DATA_DIR", str(tmp_path))
 
     # Point store at tmp via settings mock path helper
     import app.domain.institutional_trading.execution.decision_hash_store as store
 
-    monkeypatch.setattr(store, "_path", lambda: tmp_path / "execution_decision_hashes.json")
+    monkeypatch.setattr(
+        store, "_path", lambda: tmp_path / "execution_decision_hashes.json"
+    )
     persist_executed_hashes(["abc", "def"])
     loaded, order = load_executed_hashes()
     assert loaded == {"abc", "def"}

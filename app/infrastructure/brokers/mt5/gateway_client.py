@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urljoin, urlparse, urlunparse
 from uuid import uuid4
 
@@ -245,9 +245,9 @@ class GatewayMT5Client:
         client = self._http
         self._http = None
         if client is not None:
-            try:
+            try:  # noqa: SIM105
                 client.close()
-            except Exception:  # noqa: S110 — shutdown best-effort
+            except Exception:  # noqa: S110
                 pass
 
     def _http_client(self) -> httpx.Client:
@@ -256,7 +256,7 @@ class GatewayMT5Client:
         if client is None or getattr(client, "is_closed", False):
             client = self._build_http_client()
             self._http = client
-        return client
+        return cast("httpx.Client", client)
 
     @property
     def session_token(self) -> str:
@@ -1354,16 +1354,14 @@ class GatewayMT5Client:
                 ticket=0,
             )
             try:
-                from app.domain.institutional_trading.production_validation_mode import (
+                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                     ValidationStage,
                     record_gateway,
                     record_mt5,
                     stage as pvm_stage,
                 )
 
-                order_send_ms = round(
-                    (time.perf_counter() - order_send_t0) * 1000.0, 2
-                )
+                order_send_ms = round((time.perf_counter() - order_send_t0) * 1000.0, 2)
                 upstream = getattr(self, "_last_upstream", None) or {}
                 record_gateway(
                     request={"path": "/trade/order_send", **json_body},

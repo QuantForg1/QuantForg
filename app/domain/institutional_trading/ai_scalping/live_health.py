@@ -203,9 +203,7 @@ class LiveHealthMonitor:
             self._trim(self._gateway_fails, 180)
             self._protection.gateway_instability = len(self._gateway_fails)
             if len(self._gateway_fails) >= self.gateway_fail_threshold:
-                self._pause(
-                    f"Gateway instability ({len(self._gateway_fails)} events)"
-                )
+                self._pause(f"Gateway instability ({len(self._gateway_fails)} events)")
 
     def record_drawdown(self, drawdown_pct: Decimal) -> None:
         with self._lock:
@@ -293,9 +291,7 @@ class LiveHealthMonitor:
             # Keep dependency/slippage/drawdown/gateway pauses only — strip reject noise
             self._protection.new_entries_paused = False
             self._protection.reasons = [
-                r
-                for r in self._protection.reasons
-                if "Excessive rejects" not in r
+                r for r in self._protection.reasons if "Excessive rejects" not in r
             ]
             self._protection.paused_at = None
             if self._protection.reasons:

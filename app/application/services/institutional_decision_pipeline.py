@@ -227,9 +227,7 @@ class InstitutionalDecisionPipeline:
             confluence = replace(
                 confluence,
                 direction=exe.direction,
-                reasons=tuple(
-                    dict.fromkeys((*confluence.reasons, exe.reason))
-                ),
+                reasons=tuple(dict.fromkeys((*confluence.reasons, exe.reason))),
             )
             side = "buy" if exe.direction is TradeDirection.BUY else "sell"
         else:
@@ -378,9 +376,7 @@ class InstitutionalDecisionPipeline:
                 and not account.open_entries
             ):
                 risk_allowed = False
-                risk_reasons.append(
-                    "open_book_facts_incomplete — blocking add-on"
-                )
+                risk_reasons.append("open_book_facts_incomplete — blocking add-on")
                 approved_lots = Decimal("0")
 
             add = may_add_scalping_trade(
@@ -413,10 +409,10 @@ class InstitutionalDecisionPipeline:
             # Portfolio-wide exposure + daily loss (all symbols combined)
             if DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled:
                 try:
-                    from app.domain.institutional_trading.ai_scalping.portfolio_risk import (
+                    from app.domain.institutional_trading.ai_scalping.portfolio_risk import (  # noqa: E501
                         aggregate_portfolio_risk,
                     )
-                    from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
+                    from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (  # noqa: E501
                         check_portfolio_limits,
                     )
 

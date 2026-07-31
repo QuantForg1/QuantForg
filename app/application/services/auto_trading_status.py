@@ -87,9 +87,7 @@ def _sync_ops_health(plane: OperationsControlPlane, *, probes: Any) -> None:
     )
 
 
-def _apply_health_payload_flags(
-    out: dict[str, Any], payload: dict[str, Any]
-) -> None:
+def _apply_health_payload_flags(out: dict[str, Any], payload: dict[str, Any]) -> None:
     """Map gateway /health fields into enrich destinations — never invent True."""
     out["health_payload"] = payload
     mt5_raw = payload.get("mt5")

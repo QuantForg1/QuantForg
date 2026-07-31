@@ -187,9 +187,7 @@ def _certificate_eligible(
     return not (package.mt5_ticket is None or int(package.mt5_ticket) <= 0)
 
 
-def _extract_volume(
-    oms_payload: dict[str, Any], broker: dict[str, Any]
-) -> str | None:
+def _extract_volume(oms_payload: dict[str, Any], broker: dict[str, Any]) -> str | None:
     for key in ("volume", "lots", "qty", "quantity", "size"):
         if oms_payload.get(key) is not None:
             return str(oms_payload[key])
@@ -202,11 +200,7 @@ def _extract_sl_tp(
     oms_payload: dict[str, Any], broker: dict[str, Any]
 ) -> tuple[str | None, str | None]:
     sl = oms_payload.get("sl") or oms_payload.get("stop_loss") or broker.get("sl")
-    tp = (
-        oms_payload.get("tp")
-        or oms_payload.get("take_profit")
-        or broker.get("tp")
-    )
+    tp = oms_payload.get("tp") or oms_payload.get("take_profit") or broker.get("tp")
     return (
         str(sl) if sl is not None else None,
         str(tp) if tp is not None else None,

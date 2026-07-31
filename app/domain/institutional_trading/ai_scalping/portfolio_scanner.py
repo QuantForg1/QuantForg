@@ -240,9 +240,7 @@ def check_portfolio_limits(
             f"Max open positions reached ({open_positions}>={max_open_positions})"
         )
     if daily_loss_pct >= max_daily_loss_pct > 0:
-        return True, (
-            f"Daily loss limit ({daily_loss_pct}% >= {max_daily_loss_pct}%)"
-        )
+        return True, (f"Daily loss limit ({daily_loss_pct}% >= {max_daily_loss_pct}%)")
     if exposure_pct >= max_exposure_pct > 0:
         return True, (
             f"Portfolio exposure limit ({exposure_pct}% >= {max_exposure_pct}%)"
@@ -297,9 +295,7 @@ def scan_multi_asset_portfolio(
             else agg.daily_loss_pct
         )
         exp = (
-            _as_decimal(exposure_pct)
-            if exposure_pct is not None
-            else agg.exposure_pct
+            _as_decimal(exposure_pct) if exposure_pct is not None else agg.exposure_pct
         )
         max_open = int(
             max_open_positions
@@ -312,9 +308,7 @@ def scan_multi_asset_portfolio(
             else agg.max_daily_loss_pct
         )
         max_exp = _as_decimal(
-            max_exposure_pct
-            if max_exposure_pct is not None
-            else agg.max_exposure_pct
+            max_exposure_pct if max_exposure_pct is not None else agg.max_exposure_pct
         )
     else:
         open_n = int(open_positions or 0)

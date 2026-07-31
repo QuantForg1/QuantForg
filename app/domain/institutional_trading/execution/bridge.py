@@ -95,7 +95,7 @@ class ExecutionBridge:
             if self._hashes_hydrated:
                 return
             try:
-                from app.domain.institutional_trading.execution.decision_hash_store import (
+                from app.domain.institutional_trading.execution.decision_hash_store import (  # noqa: E501
                     load_executed_hashes,
                 )
 
@@ -282,7 +282,7 @@ class ExecutionBridge:
             from app.domain.institutional_trading.ai_scalping.live_health import (
                 get_live_health_monitor,
             )
-            from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
+            from app.domain.institutional_trading.ai_scalping.spread_intelligence import (  # noqa: E501
                 assess_spread,
             )
 
@@ -304,20 +304,29 @@ class ExecutionBridge:
             health = get_live_health_monitor()
             if scalp_cfg.self_protection_enabled:
                 health.update_dependencies(
-                    gateway_ok=context.gateway_connected
-                    if context.gateway_connected is not None
-                    else context.connected,
+                    gateway_ok=(
+                        context.gateway_connected
+                        if context.gateway_connected is not None
+                        else context.connected
+                    ),
                     broker_ok=context.broker_connected,
                     mt5_ok=context.connected,
                     market_data_ok=context.market_data_live,
-                    oms_ok=context.gateway_connected
-                    if context.gateway_connected is not None
-                    else context.connected,
+                    oms_ok=(
+                        context.gateway_connected
+                        if context.gateway_connected is not None
+                        else context.connected
+                    ),
                 )
                 # Drawdown pause from account equity vs peak
                 peak = context.account.peak_equity
                 equity = context.account.equity
-                if peak is not None and peak > 0 and equity is not None and equity < peak:
+                if (
+                    peak is not None
+                    and peak > 0
+                    and equity is not None
+                    and equity < peak
+                ):
                     dd = ((peak - equity) / peak * Decimal("100")).quantize(
                         Decimal("0.01")
                     )
@@ -331,9 +340,11 @@ class ExecutionBridge:
                         decision=decision,
                         context=context,
                         decision_hash=d_hash,
-                        reason=BridgeAbortReason.SELF_PROTECTION
-                        if "Dependency" not in why
-                        else BridgeAbortReason.HEALTH_DEGRADED,
+                        reason=(
+                            BridgeAbortReason.SELF_PROTECTION
+                            if "Dependency" not in why
+                            else BridgeAbortReason.HEALTH_DEGRADED
+                        ),
                         comment=f"New entries paused: {why}",
                         t0=t0,
                     )
@@ -612,7 +623,7 @@ class ExecutionBridge:
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
-            from app.domain.institutional_trading.ai_scalping.slippage_protection import (
+            from app.domain.institutional_trading.ai_scalping.slippage_protection import (  # noqa: E501
                 extract_fill_price,
                 measure_slippage,
             )
@@ -697,7 +708,7 @@ class ExecutionBridge:
                 )
                 health.record_reject(symbol=str(decision.symbol or "") or None)
                 try:
-                    from app.domain.institutional_trading.ai_scalping.symbol_state import (
+                    from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
                         get_symbol_state_book,
                     )
 
@@ -941,9 +952,7 @@ class ExecutionBridge:
         account_daily = False
         if context.account.equity > 0 and context.account.daily_pnl < 0:
             loss_pct = (
-                abs(context.account.daily_pnl)
-                / context.account.equity
-                * Decimal("100")
+                abs(context.account.daily_pnl) / context.account.equity * Decimal("100")
             )
             account_daily = loss_pct >= Decimal(str(self.ite_config.max_daily_loss_pct))
         daily_loss_exceeded = plane_daily or account_daily
@@ -1091,9 +1100,7 @@ class ExecutionBridge:
             ),
             slippage=slippage,
             rejection_reason=(
-                comment
-                if abort_reason is not BridgeAbortReason.NONE
-                else None
+                comment if abort_reason is not BridgeAbortReason.NONE else None
             ),
         )
         return self.journal.append(entry)

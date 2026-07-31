@@ -197,9 +197,7 @@ def test_continuous_tick_production_simulation() -> None:
     assert snap.pause["manage_open_positions"] is True
     assert snap.pause["pause_new_entries"] is True
     reasons = snap.pause["reasons"]
-    assert (
-        "broker unavailable" in reasons or "gateway unavailable" in reasons
-    )
+    assert "broker unavailable" in reasons or "gateway unavailable" in reasons
     assert any("stale heartbeat" in str(r) for r in reasons)
 
 

@@ -53,7 +53,7 @@ class SetupScanResult:
             "best": self.best.to_dict() if self.best else None,
             "selected_family": self.selected_family,
             "reasons": list(self.reasons),
-            "note": "Highest-quality setup only — failed families do not poison others.",
+            "note": "Best setup only - failed families do not poison others.",
         }
 
 
@@ -304,7 +304,9 @@ def _score_breakout(
     direction = _dir_str(buy, sell) if score >= min_pass else TradeDirection.NONE.value
     passed = score >= min_pass and direction != TradeDirection.NONE.value
     if not passed:
-        reasons.append(f"Breakout continuation score {score} < {min_pass} or no direction")
+        reasons.append(
+            f"Breakout continuation score {score} < {min_pass} or no direction"
+        )
     return SetupCandidate(
         family="breakout_continuation",
         score=score,

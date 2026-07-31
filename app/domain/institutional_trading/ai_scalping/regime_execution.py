@@ -1,7 +1,7 @@
 """Regime-aware execution profiles — hold / trail / partial / cooldown (v6.3).
 
 Never loosens quality floors or raises risk. High-vol and ranging/compression
-regimes tighten behaviour; strong trends may allow holds up to the 2–15m
+regimes tighten behaviour; strong trends may allow holds up to the 2-15m
 target window within absolute max.
 """
 
@@ -135,7 +135,7 @@ def build_regime_execution_profile(
             trail_after = max(trail_after, cfg.trail_after_r)
             hold_hi = min(cfg.typical_hold_max_minutes, max(hold_hi, 12))
             cooldown_scale = min(cooldown_scale, Decimal("0.85"))
-        reasons.append(f"{regime} → structure trail preferred, hold within 2–15m")
+        reasons.append(f"{regime} → structure trail preferred, hold within 2-15m")
     elif regime == "expansion":
         min_rr = max(min_rr, cfg.min_expected_rr + Decimal("0.15"))
         abs_hold = min(abs_hold, 12)

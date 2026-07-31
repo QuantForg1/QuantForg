@@ -14,11 +14,11 @@ from app.domain.institutional_trading.ai_scalping.config import (
     AiScalpingConfig,
 )
 from app.domain.institutional_trading.ai_scalping.direction import DirectionDecision
-from app.domain.institutional_trading.ai_scalping.session_intelligence import (
-    SessionAssessment,
-)
 from app.domain.institutional_trading.ai_scalping.pa_confluence import (
     PaConfluenceResult,
+)
+from app.domain.institutional_trading.ai_scalping.session_intelligence import (
+    SessionAssessment,
 )
 from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     SpreadAssessment,

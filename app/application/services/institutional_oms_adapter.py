@@ -42,7 +42,9 @@ class InstitutionalOmsAdapter:
             payload = {
                 "user_id": str(user_id),
                 "request_id": request_id,
-                "intent": intent.to_dict() if hasattr(intent, "to_dict") else str(intent),
+                "intent": (
+                    intent.to_dict() if hasattr(intent, "to_dict") else str(intent)
+                ),
                 "connected": bool(
                     connected if connected is not None else self.connected
                 ),
@@ -94,7 +96,7 @@ class InstitutionalOmsAdapter:
                 from core.logging import get_logger as _get_logger
 
                 _get_logger(__name__).exception("pvm_oms_adapter_record_failed")
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         return result
 

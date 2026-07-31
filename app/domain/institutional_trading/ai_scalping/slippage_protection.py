@@ -91,6 +91,6 @@ def extract_fill_price(raw: dict[str, Any] | None) -> Decimal | None:
             d = Decimal(str(val))
             if d > 0:
                 return d
-        except Exception:
+        except Exception:  # noqa: S112
             continue
     return None

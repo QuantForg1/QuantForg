@@ -30,7 +30,6 @@ _SECRET_PARTS = frozenset(
 )
 
 
-
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
@@ -188,9 +187,7 @@ def _health_cards(
     oms_ok = (
         True
         if oms_status in {"PASS", "OK", "HEALTHY"}
-        else False
-        if oms_status in {"FAIL", "CRITICAL"}
-        else None
+        else False if oms_status in {"FAIL", "CRITICAL"} else None
     )
 
     return [
@@ -347,13 +344,17 @@ def _ai_engine(*, diagnostics: dict[str, Any], pvm: dict[str, Any]) -> dict[str,
         "current_session": pvm.get("current_session") or latest.get("session") or "—",
         "symbol": last.get("symbol") or latest.get("symbol") or "—",
         "decision": last.get("ai_action") or latest.get("decision_action") or "—",
-        "quality_score": last.get("quality_score")
-        if last.get("quality_score") is not None
-        else latest.get("quality"),
+        "quality_score": (
+            last.get("quality_score")
+            if last.get("quality_score") is not None
+            else latest.get("quality")
+        ),
         "threshold": thresholds.get("required_quality"),
-        "confidence": last.get("ai_confidence")
-        if last.get("ai_confidence") is not None
-        else latest.get("confidence"),
+        "confidence": (
+            last.get("ai_confidence")
+            if last.get("ai_confidence") is not None
+            else latest.get("confidence")
+        ),
         "confluence": last.get("confluence"),
         "mtf_alignment": last.get("mtf_alignment"),
         "liquidity": last.get("liquidity"),
@@ -388,9 +389,9 @@ def _market_context(
         "spread": last.get("spread") or diag.get("spread"),
         "atr": last.get("atr") or diag.get("atr"),
         "liquidity": last.get("liquidity"),
-        "market_data_live": bool(getattr(facts, "market_data_live", False))
-        if facts
-        else None,
+        "market_data_live": (
+            bool(getattr(facts, "market_data_live", False)) if facts else None
+        ),
         "snapshot_present": latest.get("snapshot_present"),
     }
 
@@ -581,9 +582,9 @@ def _broker_dashboard(*, auto: Any, live: dict[str, Any]) -> dict[str, Any]:
     facts = getattr(auto, "facts", None)
     account = _as_dict(live.get("account"))
     return {
-        "broker_connected": bool(getattr(facts, "broker_connected", False))
-        if facts
-        else None,
+        "broker_connected": (
+            bool(getattr(facts, "broker_connected", False)) if facts else None
+        ),
         "account": account.get("login") or live.get("login"),
         "balance": account.get("balance") or live.get("balance"),
         "equity": account.get("equity") or live.get("equity"),
@@ -636,11 +637,11 @@ def _event_stream(
         events.append(
             {
                 "kind": "pipeline",
-                "level": "critical"
-                if st == "FAIL"
-                else "info"
-                if st == "PASS"
-                else "warning",
+                "level": (
+                    "critical"
+                    if st == "FAIL"
+                    else "info" if st == "PASS" else "warning"
+                ),
                 "message": f"{node.get('stage')} {st}",
                 "reason": node.get("reason"),
                 "timestamp": node.get("timestamp"),
@@ -821,12 +822,16 @@ def _production_acceptance_widget() -> dict[str, Any]:
         )
 
         status = build_execution_evidence_status()
-        return status if isinstance(status, dict) else {
-            "status": "NOT VERIFIED",
-            "verified": False,
-            "message": "Waiting for first eligible production execution.",
-            "observe_only": True,
-        }
+        return (
+            status
+            if isinstance(status, dict)
+            else {
+                "status": "NOT VERIFIED",
+                "verified": False,
+                "message": "Waiting for first eligible production execution.",
+                "observe_only": True,
+            }
+        )
     except Exception:
         logger.exception("noc_production_acceptance_failed")
         return {
@@ -899,9 +904,12 @@ def build_noc_command_center() -> dict[str, Any]:
             "services": [
                 {
                     "name": "gateway",
-                    "status": "healthy"
-                    if getattr(probes, "gateway_ok", False) or facts.gateway_connected
-                    else "unhealthy",
+                    "status": (
+                        "healthy"
+                        if getattr(probes, "gateway_ok", False)
+                        or facts.gateway_connected
+                        else "unhealthy"
+                    ),
                     "latency_ms": getattr(probes, "gateway_latency_ms", None),
                     "last_error": getattr(probes, "gateway_error", None),
                     "heartbeat_at": getattr(probes, "as_of", None),
@@ -987,18 +995,18 @@ def build_noc_command_center() -> dict[str, Any]:
                 "pipeline_status": (
                     "FAIL"
                     if fails
-                    else "PASS"
-                    if a.get("accepted")
-                    else str(a.get("final_result") or "IN_PROGRESS")
+                    else (
+                        "PASS"
+                        if a.get("accepted")
+                        else str(a.get("final_result") or "IN_PROGRESS")
+                    )
                 ),
                 "latency_ms": round(sum(latencies), 2) if latencies else None,
                 "final_result": a.get("final_result"),
                 "result": (
                     "PASS"
                     if a.get("accepted")
-                    else "FAIL"
-                    if fails
-                    else a.get("final_result")
+                    else "FAIL" if fails else a.get("final_result")
                 ),
                 "reason": a.get("first_blocker") or (fails[0] if fails else None),
                 "first_blocker": a.get("first_blocker"),

@@ -18,7 +18,6 @@ from app.domain.institutional_trading.executable_direction import (
 from app.domain.institutional_trading.execution.bridge import ExecutionBridge
 from app.domain.institutional_trading.execution.config import ExecutionBridgeConfig
 from app.domain.institutional_trading.execution.models import (
-    ExecutionBridgeContext,
     ExecutionMode,
 )
 from app.domain.institutional_trading.force_first_trade import resolve_force_direction
@@ -122,7 +121,9 @@ def test_swing_uses_confluence_sell() -> None:
 @pytest.mark.unit
 def test_bridge_sell_action_builds_sell_intent() -> None:
     oms = MagicMock()
-    bridge = ExecutionBridge(oms=oms, config=ExecutionBridgeConfig(mode=ExecutionMode.SHADOW))
+    bridge = ExecutionBridge(
+        oms=oms, config=ExecutionBridgeConfig(mode=ExecutionMode.SHADOW)
+    )
     decision = MagicMock()
     decision.action = DecisionAction.SELL
     decision.stop_zone = MagicMock(low=Decimal("2310"), high=Decimal("2315"))
@@ -132,7 +133,9 @@ def test_bridge_sell_action_builds_sell_intent() -> None:
     decision.input_hash = "abcdefghijklmnop"
     decision.reasons = ()
     intent = bridge._build_intent(decision, MagicMock())
-    assert str(intent.side.value if hasattr(intent.side, "value") else intent.side).lower() in {
+    assert str(
+        intent.side.value if hasattr(intent.side, "value") else intent.side
+    ).lower() in {
         "sell",
         "OrderSide.SELL".lower(),
     }
@@ -144,7 +147,9 @@ def test_bridge_sell_action_builds_sell_intent() -> None:
 @pytest.mark.unit
 def test_bridge_buy_action_builds_buy_intent() -> None:
     oms = MagicMock()
-    bridge = ExecutionBridge(oms=oms, config=ExecutionBridgeConfig(mode=ExecutionMode.SHADOW))
+    bridge = ExecutionBridge(
+        oms=oms, config=ExecutionBridgeConfig(mode=ExecutionMode.SHADOW)
+    )
     decision = MagicMock()
     decision.action = DecisionAction.BUY
     decision.stop_zone = MagicMock(low=Decimal("2290"), high=Decimal("2295"))

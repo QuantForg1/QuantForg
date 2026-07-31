@@ -38,7 +38,9 @@ def _path() -> Path:
     return base / name
 
 
-def load_executed_hashes(*, max_hashes: int = _DEFAULT_MAX) -> tuple[set[str], list[str]]:
+def load_executed_hashes(
+    *, max_hashes: int = _DEFAULT_MAX
+) -> tuple[set[str], list[str]]:
     """Load persisted decision hashes (order preserved for eviction)."""
     path = _path()
     if not path.exists():

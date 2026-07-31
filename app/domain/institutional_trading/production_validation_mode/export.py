@@ -19,6 +19,11 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_EXPORT_DIR = Path("docs/production/validation")
+_DASH = "—"
+
+
+def _or_dash(val: Any) -> Any:
+    return val if val is not None else _DASH
 
 
 def _repo_export_dir(base: Path | None = None) -> Path:
@@ -32,28 +37,26 @@ def _repo_export_dir(base: Path | None = None) -> Path:
     return alt if alt.parent.exists() else cwd
 
 
-def _markdown_report(
-    attempt: ValidationAttempt, summary: dict[str, Any]
-) -> str:
+def _markdown_report(attempt: ValidationAttempt, summary: dict[str, Any]) -> str:
     lines = [
         f"# Production Validation Report — `{attempt.validation_id}`",
         "",
         "> Observability only. No fabricated trades. Real production events.",
         "",
         f"- **Timestamp:** {attempt.timestamp}",
-        f"- **Symbol:** {attempt.symbol or '—'}",
-        f"- **Session:** {attempt.market_session or '—'}",
-        f"- **Execution mode:** {attempt.execution_mode or '—'}",
-        f"- **Signal ID:** {attempt.signal_id or '—'}",
-        f"- **AI action:** {attempt.ai_action or '—'}",
-        f"- **AI confidence:** {attempt.ai_confidence if attempt.ai_confidence is not None else '—'}",
-        f"- **Quality score:** {attempt.quality_score if attempt.quality_score is not None else '—'}",
-        f"- **Confluence:** {attempt.confluence if attempt.confluence is not None else '—'}",
-        f"- **MTF alignment:** {attempt.mtf_alignment if attempt.mtf_alignment is not None else '—'}",
-        f"- **Risk score:** {attempt.risk_score if attempt.risk_score is not None else '—'}",
-        f"- **Expected RR:** {attempt.expected_rr or '—'}",
-        f"- **Spread:** {attempt.spread or '—'}",
-        f"- **ATR:** {attempt.atr or '—'}",
+        f"- **Symbol:** {attempt.symbol or _DASH}",
+        f"- **Session:** {attempt.market_session or _DASH}",
+        f"- **Execution mode:** {attempt.execution_mode or _DASH}",
+        f"- **Signal ID:** {attempt.signal_id or _DASH}",
+        f"- **AI action:** {attempt.ai_action or _DASH}",
+        f"- **AI confidence:** {_or_dash(attempt.ai_confidence)}",
+        f"- **Quality score:** {_or_dash(attempt.quality_score)}",
+        f"- **Confluence:** {_or_dash(attempt.confluence)}",
+        f"- **MTF alignment:** {_or_dash(attempt.mtf_alignment)}",
+        f"- **Risk score:** {_or_dash(attempt.risk_score)}",
+        f"- **Expected RR:** {attempt.expected_rr or _DASH}",
+        f"- **Spread:** {attempt.spread or _DASH}",
+        f"- **ATR:** {attempt.atr or _DASH}",
         "",
         "## Pipeline Summary",
         "",
@@ -63,17 +66,12 @@ def _markdown_report(
     for stage in PIPELINE_ORDER:
         rec = attempt.stages.get(stage.value)
         if rec is None:
-            lines.append(f"| {stage.value} | PENDING | — | — |")
+            lines.append(f"| {stage.value} | PENDING | {_DASH} | {_DASH} |")
         else:
-            lat = (
-                f"{rec.latency_ms:.2f}"
-                if rec.latency_ms is not None
-                else "—"
-            )
-            reason = (rec.reason or "—").replace("|", "/")
-            lines.append(
-                f"| {stage.value} | {rec.status.value} | {lat} | {reason} |"
-            )
+            lat = f"{rec.latency_ms:.2f}" if rec.latency_ms is not None else _DASH
+            reason = (rec.reason or _DASH).replace("|", "/")
+            lines.append(f"| {stage.value} | {rec.status.value} | {lat} | {reason} |")
+    exec_latency_ms = _or_dash(summary.get("execution_latency_ms"))
     lines.extend(
         [
             "",
@@ -81,9 +79,9 @@ def _markdown_report(
             "",
             f"- **Final result:** {attempt.final_result}",
             f"- **Accepted:** {attempt.accepted}",
-            f"- **Broker ticket:** {summary.get('broker_ticket') or '—'}",
-            f"- **Execution latency (ms):** {summary.get('execution_latency_ms') if summary.get('execution_latency_ms') is not None else '—'}",
-            f"- **First blocker:** {attempt.first_blocker or '—'}",
+            f"- **Broker ticket:** {summary.get('broker_ticket') or _DASH}",
+            f"- **Execution latency (ms):** {exec_latency_ms}",
+            f"- **First blocker:** {attempt.first_blocker or _DASH}",
             "",
         ]
     )
@@ -98,7 +96,7 @@ def _markdown_report(
             [
                 "## OMS",
                 "",
-                f"- **Latency (ms):** {attempt.oms.latency_ms if attempt.oms.latency_ms is not None else '—'}",
+                f"- **Latency (ms):** {_or_dash(attempt.oms.latency_ms)}",
                 f"- **Retry count:** {attempt.oms.retry_count}",
                 "",
                 "```json",
@@ -115,13 +113,15 @@ def _markdown_report(
             ]
         )
     if attempt.gateway:
+        gw_latency_ms = _or_dash(attempt.gateway.gateway_latency_ms)
+        order_send_latency_ms = _or_dash(attempt.gateway.order_send_latency_ms)
         lines.extend(
             [
                 "## Gateway",
                 "",
-                f"- **HTTP code:** {attempt.gateway.http_code if attempt.gateway.http_code is not None else '—'}",
-                f"- **Gateway latency (ms):** {attempt.gateway.gateway_latency_ms if attempt.gateway.gateway_latency_ms is not None else '—'}",
-                f"- **order_send latency (ms):** {attempt.gateway.order_send_latency_ms if attempt.gateway.order_send_latency_ms is not None else '—'}",
+                f"- **HTTP code:** {_or_dash(attempt.gateway.http_code)}",
+                f"- **Gateway latency (ms):** {gw_latency_ms}",
+                f"- **order_send latency (ms):** {order_send_latency_ms}",
                 "",
             ]
         )
@@ -130,12 +130,12 @@ def _markdown_report(
             [
                 "## MT5",
                 "",
-                f"- **Ticket:** {attempt.mt5.ticket if attempt.mt5.ticket is not None else '—'}",
-                f"- **Retcode:** {attempt.mt5.retcode if attempt.mt5.retcode is not None else '—'}",
-                f"- **Comment:** {attempt.mt5.comment or '—'}",
-                f"- **Fill price:** {attempt.mt5.fill_price or '—'}",
-                f"- **Slippage:** {attempt.mt5.slippage or '—'}",
-                f"- **Execution time (ms):** {attempt.mt5.execution_time_ms if attempt.mt5.execution_time_ms is not None else '—'}",
+                f"- **Ticket:** {_or_dash(attempt.mt5.ticket)}",
+                f"- **Retcode:** {_or_dash(attempt.mt5.retcode)}",
+                f"- **Comment:** {attempt.mt5.comment or _DASH}",
+                f"- **Fill price:** {attempt.mt5.fill_price or _DASH}",
+                f"- **Slippage:** {attempt.mt5.slippage or _DASH}",
+                f"- **Execution time (ms):** {_or_dash(attempt.mt5.execution_time_ms)}",
                 "",
             ]
         )
@@ -153,13 +153,15 @@ def _csv_rows(attempt: ValidationAttempt) -> list[dict[str, Any]]:
                 "symbol": attempt.symbol,
                 "market_session": attempt.market_session,
                 "ai_action": attempt.ai_action or "",
-                "quality_score": attempt.quality_score
-                if attempt.quality_score is not None
-                else "",
+                "quality_score": (
+                    attempt.quality_score if attempt.quality_score is not None else ""
+                ),
                 "stage": stage.value,
                 "status": rec.status.value if rec else "PENDING",
                 "stage_timestamp": rec.timestamp if rec else "",
-                "latency_ms": rec.latency_ms if rec and rec.latency_ms is not None else "",
+                "latency_ms": (
+                    rec.latency_ms if rec and rec.latency_ms is not None else ""
+                ),
                 "reason": rec.reason if rec else "",
                 "first_blocker": attempt.first_blocker or "",
                 "final_result": attempt.final_result,
@@ -202,7 +204,10 @@ def export_validation_report(
             "summary": summary,
             "observe_only": True,
         }
-        stem = f"{attempt.timestamp.replace(':', '').replace('-', '')}_{attempt.validation_id}"
+        stem = (
+            f"{attempt.timestamp.replace(':', '').replace('-', '')}_"
+            f"{attempt.validation_id}"
+        )
         # Keep filename filesystem-safe
         stem = stem.replace("/", "_")[:120]
 

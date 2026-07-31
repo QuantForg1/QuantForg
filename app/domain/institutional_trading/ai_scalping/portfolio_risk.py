@@ -70,7 +70,7 @@ def portfolio_exposure_pct(
     """Combined exposure across ALL symbols (not per-symbol).
 
     Prefer explicit per-position risk contributions when provided; otherwise
-    estimate from fixed-risk model: open_count × risk_per_trade_pct.
+    estimate from fixed-risk model: open_count x risk_per_trade_pct.
     """
     if position_risk_pcts:
         total = sum(

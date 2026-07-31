@@ -284,7 +284,8 @@ def score_scalping_setup(
             if best_dir in {TradeDirection.BUY.value, TradeDirection.SELL.value}:
                 if direction_dec.direction is TradeDirection.NONE:
                     reasons.append(
-                        f"Setup {setup_family} suggests {best_dir} but AI direction NONE"
+                        f"Setup {setup_family} suggests {best_dir} "
+                        "but AI direction NONE"
                     )
                 elif best_dir != direction_dec.direction.value:
                     reasons.append(
@@ -319,9 +320,13 @@ def score_scalping_setup(
     confidence = round(weighted / total_w) if total_w else 0
     confidence -= session.confidence_penalty
     confidence -= spread_a.confidence_penalty
-    if setup_scan and setup_scan.best and setup_scan.best.passed:
-        if setup_scan.best.direction == direction_dec.direction.value:
-            confidence = min(100, confidence + min(4, setup_scan.best.score // 30))
+    if (
+        setup_scan
+        and setup_scan.best
+        and setup_scan.best.passed
+        and setup_scan.best.direction == direction_dec.direction.value
+    ):
+        confidence = min(100, confidence + min(4, setup_scan.best.score // 30))
     confidence = max(0, min(100, confidence))
 
     trade_quality = int(quality.total)
@@ -368,7 +373,8 @@ def score_scalping_setup(
     reasons.extend(cd_decision.reasons)
     if not cooldown_eval.allow_new_entry:
         reasons.append(
-            f"Adaptive cooldown active ({cooldown_eval.remaining_seconds:.0f}s remaining)"
+            f"Adaptive cooldown active "
+            f"({cooldown_eval.remaining_seconds:.0f}s remaining)"
             + (f" symbol={sym_key}" if sym_key else "")
         )
 
@@ -404,9 +410,7 @@ def score_scalping_setup(
 
     reject_list: list[str] = list(gates.rejects)
     # Setup scan ranks opportunities — absence does not poison global quality gates.
-    if cfg.multi_setup_scan_enabled and (
-        setup_scan is None or setup_scan.best is None
-    ):
+    if cfg.multi_setup_scan_enabled and (setup_scan is None or setup_scan.best is None):
         reasons.append(
             "No setup family cleared local evidence — global gates still authoritative"
         )
@@ -418,7 +422,8 @@ def score_scalping_setup(
         and not cooldown_eval.allow_new_entry
     ):
         reject_list.append(
-            f"Adaptive cooldown active ({cooldown_eval.remaining_seconds:.0f}s remaining)"
+            f"Adaptive cooldown active "
+            f"({cooldown_eval.remaining_seconds:.0f}s remaining)"
         )
 
     reject_list = list(dict.fromkeys(reject_list))

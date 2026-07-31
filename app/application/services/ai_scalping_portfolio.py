@@ -52,7 +52,9 @@ def run_multi_asset_scan(
     result: PortfolioScanResult = scan_multi_asset_portfolio(
         scored,
         account=account,
-        open_positions=open_positions if open_positions is not None else risk.open_positions,
+        open_positions=(
+            open_positions if open_positions is not None else risk.open_positions
+        ),
         daily_loss_pct=(
             daily_loss_pct if daily_loss_pct is not None else risk.daily_loss_pct
         ),

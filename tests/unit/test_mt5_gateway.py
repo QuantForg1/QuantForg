@@ -285,7 +285,9 @@ class TestMT5Gateway:
         class _BrokenBridge(LiveMT5Bridge):
             def __init__(self) -> None:
                 self._mt5 = None
-                self._import_error = "ModuleNotFoundError: No module named 'MetaTrader5'"
+                self._import_error = (
+                    "ModuleNotFoundError: No module named 'MetaTrader5'"
+                )
                 self._last_initialize_ok = None
                 self._last_initialize_error = None
                 self._last_initialize_path = None
@@ -712,7 +714,7 @@ class TestLiveMT5BridgeImport:
                 return (1, "IPC timeout")
 
         monkeypatch.setattr(
-            runtime_mod.importlib, "import_module", lambda name: _Mod()
+            runtime_mod.importlib, "import_module", lambda _name: _Mod()
         )
         bridge = LiveMT5Bridge()
         assert bridge.available is True
@@ -773,9 +775,7 @@ class TestMT5GatewayReconnectLoop:
         settings = self._fast_settings(gateway_env)
         bridge = _FakeBridge(prelogged=False)
         runtime = MT5GatewayRuntime(settings=settings, bridge=bridge)
-        runtime.connect(
-            login=4242, password="secret", server="Weltrade-Demo", path=""
-        )
+        runtime.connect(login=4242, password="secret", server="Weltrade-Demo", path="")
         assert runtime._creds is not None
         assert runtime._creds.password == "secret"
         assert runtime._creds.login == 4242
