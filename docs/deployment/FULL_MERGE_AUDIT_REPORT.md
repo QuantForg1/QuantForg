@@ -13,7 +13,7 @@
 
 | Check | Result |
 |---|---|
-| `origin/main` HEAD | `f1ab8444e7de90057e700f260af0a73f056c8809` |
+| `origin/main` HEAD (pre-audit-docs) | `f1ab8444e7de90057e700f260af0a73f056c8809` |
 | Approved work missing from main | **None** |
 | Branches merged in this consolidation | **None required** (already on main) |
 | Intentionally skipped open PRs | All remaining open PRs (draft / experimental / dependabot / superseded STOP docs) |
@@ -195,6 +195,8 @@ Experimental AI/MT5/dependabot tips remain open by design and are **not** classi
 ---
 
 ## Final statement
+
+**Final production SHA (after docs-only audit merge):** `d4eca8c25edfa968018568f8fed939440b417259`
 
 **1. Production fully synchronized with main**
 
