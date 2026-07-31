@@ -866,6 +866,38 @@ def get_m15_semantics_telemetry(
     }
 
 
+@router.get("/score-calibration")
+def get_score_calibration(
+    _user: OperatorUser,
+    limit: int = 1000,
+    include_per_cycle: bool = False,
+) -> dict[str, Any]:
+    """AI Score Calibration audit — Quality/Confidence decomposition (observe-only).
+
+    Evidence only. Never mutates thresholds, weights, risk, OMS, or MT5.
+    Never auto-recalibrates.
+    """
+    from app.application.services.score_calibration_audit import (
+        run_calibration_audit,
+    )
+    from app.application.services.strategy_diagnostics import (
+        get_strategy_diagnostics_store,
+    )
+
+    window = max(1, min(int(limit or 1000), 2000))
+    snap = get_strategy_diagnostics_store().snapshot(limit=window)
+    cycles = list(snap.get("cycles") or [])
+    report = run_calibration_audit(cycles)
+    if not include_per_cycle:
+        report = {k: v for k, v in report.items() if k != "per_cycle_decompositions"}
+        report["per_cycle_omitted"] = True
+        report["per_cycle_available_via"] = "include_per_cycle=true"
+    report["source"] = "strategy_diagnostics_store"
+    report["window_requested"] = window
+    report["mutates_engines"] = False
+    return report
+
+
 @router.get("/production-validation-mode")
 def get_production_validation_mode(_user: OperatorUser) -> dict[str, Any]:
     """Live Production Validation Mode dashboard — observe-only evidence.
