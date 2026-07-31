@@ -628,8 +628,10 @@ async def build_ite_cycle_market_context(
             plane_risk = getattr(get_control_plane(), "risk_per_trade_pct", None)
             if plane_risk is not None and Decimal(str(plane_risk)) > 0:
                 risk_pct = Decimal(str(plane_risk))
-        except Exception:
-            pass
+        except Exception as plane_exc:
+            logger.debug(
+                "ite_cycle_active_risk_fallback_failed", error=str(plane_exc)
+            )
     risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.01"))
     contract_size = CONTRACT_SIZE
     lot_step = VOLUME_STEP
