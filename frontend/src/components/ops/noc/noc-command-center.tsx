@@ -227,6 +227,20 @@ export function NocCommandCenter() {
   const protection = asRecord(data.protection);
   const liveHealth = asRecord(protection.live_health);
   const continuousOp = asRecord(protection.continuous_operation);
+  const intelligence = asRecord(data.intelligence);
+  const oppRanking = asRecord(intelligence.opportunity_ranking);
+  const oppRows = Array.isArray(oppRanking.rows) ? oppRanking.rows : [];
+  const tradeQueue = asRecord(intelligence.trade_queue);
+  const queueCandidates = Array.isArray(tradeQueue.candidates)
+    ? tradeQueue.candidates
+    : [];
+  const portfolioExposure = asRecord(intelligence.portfolio_exposure);
+  const perfAnalytics = asRecord(intelligence.performance_analytics);
+  const replayLibrary = asRecord(intelligence.replay_library);
+  const replayItems = Array.isArray(replayLibrary.items)
+    ? replayLibrary.items
+    : [];
+  const execProbability = asRecord(intelligence.execution_probability);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -702,6 +716,256 @@ export function NocCommandCenter() {
             <NocRow label="Win rate" value={fmt(learning.win_rate)} />
           </NocPanel>
         </div>
+
+        {/* §4f Institutional Intelligence */}
+        <NocPanel
+          id="noc-opportunity-ranking"
+          title="4f · Opportunity Ranking"
+          action={
+            <Badge tone="neutral">
+              best · {fmt(oppRanking.best_symbol, "none")}
+            </Badge>
+          }
+        >
+          {oppRows.length === 0 ? (
+            <p className="text-[12px] text-[var(--fg-muted)]">
+              Awaiting live opportunity ranking from multi-asset scan.
+            </p>
+          ) : (
+            <DeskTable
+              columns={[
+                "Symbol",
+                "Score",
+                "Quality",
+                "Confidence",
+                "P(success)",
+                "Eligible",
+                "Gate",
+              ]}
+              rows={oppRows.slice(0, 13).map((row) => {
+                const r = asRecord(row);
+                return [
+                  fmt(r.symbol),
+                  fmt(r.opportunity_score),
+                  fmt(r.quality),
+                  fmt(r.confidence),
+                  fmt(r.estimated_probability),
+                  r.eligible ? "yes" : "no",
+                  fmt(r.blocking_gate, "—"),
+                ];
+              })}
+            />
+          )}
+        </NocPanel>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel
+            id="noc-trade-queue"
+            title="4g · Trade Queue"
+            action={
+              <Badge tone="neutral">
+                {fmt(tradeQueue.size ?? queueCandidates.length, "0")} · one-to-Risk
+              </Badge>
+            }
+          >
+            <NocRow
+              label="Selected"
+              value={fmt(tradeQueue.selected_symbol, "none")}
+            />
+            <NocRow
+              label="Eligible"
+              value={fmt(tradeQueue.eligible_count, "0")}
+            />
+            {queueCandidates.length === 0 ? (
+              <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
+                Queue empty — no eligible candidates this scan window.
+              </p>
+            ) : (
+              <div className="mt-2">
+                <DeskTable
+                  columns={["Symbol", "Score", "Q", "C", "P", "Gate"]}
+                  rows={queueCandidates.slice(0, 8).map((row) => {
+                    const r = asRecord(row);
+                    return [
+                      fmt(r.symbol),
+                      fmt(r.score ?? r.opportunity_score),
+                      fmt(r.quality),
+                      fmt(r.confidence),
+                      fmt(r.estimated_probability),
+                      fmt(r.blocking_gate, "—"),
+                    ];
+                  })}
+                />
+              </div>
+            )}
+          </NocPanel>
+
+          <NocPanel id="noc-exec-probability" title="4h · Execution Probability">
+            <NocRow label="Symbol" value={fmt(execProbability.symbol)} />
+            <NocRow
+              label="P(success)"
+              value={fmt(execProbability.probability_of_success)}
+            />
+            <NocRow
+              label="P(failure)"
+              value={fmt(execProbability.probability_of_failure)}
+            />
+            <NocRow
+              label="Estimated RR"
+              value={fmt(execProbability.estimated_rr)}
+            />
+            <NocRow
+              label="Hold (min)"
+              value={fmt(execProbability.expected_holding_time_minutes)}
+            />
+            <NocRow
+              label="CI"
+              value={
+                asRecord(execProbability.confidence_interval).low != null
+                  ? `${fmt(asRecord(execProbability.confidence_interval).low)}–${fmt(
+                      asRecord(execProbability.confidence_interval).high,
+                    )}`
+                  : "—"
+              }
+            />
+            <NocRow
+              label="Source"
+              value={fmt(execProbability.source, "existing_ai_outputs_only")}
+              tone="ok"
+            />
+          </NocPanel>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel id="noc-portfolio-exposure" title="4i · Portfolio Exposure">
+            <NocRow
+              label="Net"
+              value={fmt(portfolioExposure.net_exposure, "0")}
+            />
+            <NocRow
+              label="Long"
+              value={fmt(portfolioExposure.long_exposure, "0")}
+            />
+            <NocRow
+              label="Short"
+              value={fmt(portfolioExposure.short_exposure, "0")}
+            />
+            <NocRow
+              label="Open positions"
+              value={fmt(portfolioExposure.open_positions, "0")}
+            />
+            <NocRow
+              label="Sectors"
+              value={
+                Object.keys(asRecord(portfolioExposure.sector_exposure)).length
+                  ? Object.entries(asRecord(portfolioExposure.sector_exposure))
+                      .map(([k, v]) => `${k}:${String(v)}`)
+                      .join(" · ")
+                  : "—"
+              }
+            />
+            <NocRow
+              label="Correlation risk"
+              value={
+                Object.keys(asRecord(portfolioExposure.correlation_risk)).length
+                  ? Object.entries(asRecord(portfolioExposure.correlation_risk))
+                      .map(([k, v]) => `${k}:${String(v)}`)
+                      .join(" · ")
+                  : "—"
+              }
+            />
+            <NocRow
+              label="Enforcement"
+              value={fmt(
+                portfolioExposure.enforcement,
+                "existing_PRE_and_risk_limits",
+              )}
+              tone="ok"
+            />
+          </NocPanel>
+
+          <NocPanel
+            id="noc-perf-analytics"
+            title="4j · Performance Analytics"
+          >
+            <NocRow label="Trades" value={fmt(perfAnalytics.trades, "0")} />
+            <NocRow label="Win rate" value={fmt(perfAnalytics.win_rate)} />
+            <NocRow label="Avg RR" value={fmt(perfAnalytics.average_rr)} />
+            <NocRow
+              label="Avg hold (min)"
+              value={fmt(perfAnalytics.average_hold_time_minutes)}
+            />
+            <NocRow
+              label="Profit factor"
+              value={fmt(perfAnalytics.profit_factor)}
+            />
+            <NocRow label="Sharpe" value={fmt(perfAnalytics.sharpe)} />
+            <NocRow label="Expectancy" value={fmt(perfAnalytics.expectancy)} />
+            <NocRow
+              label="Avg quality"
+              value={fmt(perfAnalytics.average_quality)}
+            />
+            <NocRow
+              label="Avg confidence"
+              value={fmt(perfAnalytics.average_confidence)}
+            />
+            <NocRow
+              label="Best / worst session"
+              value={`${fmt(perfAnalytics.best_session)} / ${fmt(
+                perfAnalytics.worst_session,
+              )}`}
+            />
+            <NocRow
+              label="Best / worst symbol"
+              value={`${fmt(perfAnalytics.best_symbol)} / ${fmt(
+                perfAnalytics.worst_symbol,
+              )}`}
+            />
+            <NocRow
+              label="Source"
+              value={fmt(perfAnalytics.source, "real_completed_trades_only")}
+              tone="ok"
+            />
+          </NocPanel>
+        </div>
+
+        <NocPanel
+          id="noc-replay-library"
+          title="4k · Replay Library"
+          action={
+            <Badge tone="neutral">{fmt(replayLibrary.count, "0")} replays</Badge>
+          }
+        >
+          {replayItems.length === 0 ? (
+            <p className="text-[12px] text-[var(--fg-muted)]">
+              No completed trade replays recorded yet.
+            </p>
+          ) : (
+            <DeskTable
+              columns={[
+                "Symbol",
+                "Dir",
+                "Ticket",
+                "Entry",
+                "Exit",
+                "Close",
+                "AI",
+              ]}
+              rows={replayItems.slice(0, 12).map((row) => {
+                const r = asRecord(row);
+                return [
+                  fmt(r.symbol),
+                  fmt(r.direction),
+                  fmt(r.ticket),
+                  fmt(r.entry),
+                  fmt(r.exit),
+                  fmt(r.close_reason, "—"),
+                  fmt(r.ai_decision, "—").slice(0, 48),
+                ];
+              })}
+            />
+          )}
+        </NocPanel>
 
         {/* §5 Pipeline */}
         <NocPanel

@@ -55,6 +55,16 @@ class PositionManagementConfig:
     volatility_collapse_exit: bool = True
     volatility_collapse_threshold: int = 25
 
+    # Session-aware management (soft — does not change entry strategy)
+    session_aware_management: bool = True
+    session_profit_protect_at_r: Decimal = Decimal("1.5")
+    # When session is weak (e.g. sydney/tokyo), tighten trail multiplier
+    weak_session_trail_scale: Decimal = Decimal("0.85")
+    # Second partial rung (scale-out) after first partial — optional
+    second_partial_enabled: bool = True
+    second_partial_at_r: Decimal = Decimal("3.0")
+    second_partial_close_pct: Decimal = Decimal("25")
+
     # Spread emergency
     emergency_spread_max: Decimal = Decimal("5.00")
 
@@ -86,6 +96,12 @@ class PositionManagementConfig:
             "momentum_fade_threshold": self.momentum_fade_threshold,
             "volatility_collapse_exit": self.volatility_collapse_exit,
             "volatility_collapse_threshold": self.volatility_collapse_threshold,
+            "session_aware_management": self.session_aware_management,
+            "session_profit_protect_at_r": str(self.session_profit_protect_at_r),
+            "weak_session_trail_scale": str(self.weak_session_trail_scale),
+            "second_partial_enabled": self.second_partial_enabled,
+            "second_partial_at_r": str(self.second_partial_at_r),
+            "second_partial_close_pct": str(self.second_partial_close_pct),
             "emergency_spread_max": str(self.emergency_spread_max),
         }
 

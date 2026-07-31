@@ -58,6 +58,14 @@ def _pick_trail_stop(
             ),
             config,
         )
+        # Session-aware: soften trail distance in weak sessions (profit protection)
+        if getattr(config, "session_aware_management", False):
+            sess = str(getattr(context, "market_session", "") or "").lower()
+            if sess in {"sydney", "tokyo", "asian"}:
+                scale = Decimal(
+                    str(getattr(config, "weak_session_trail_scale", "0.85") or "0.85")
+                )
+                dist = (dist * scale).quantize(Decimal("0.0001"))
         atr_sl = trail_stop_price(position, context.current_price, dist)
         tiers.append((2, atr_sl, f"ATR trail ({regime_label}) dist={dist}"))
 
@@ -271,10 +279,23 @@ def plan_action(
     mid = context.mid_price or context.current_price
     regime = volatility_regime(context.atr, mid, config)
 
+    be_at = config.break_even_at_r
+    if getattr(config, "session_aware_management", False):
+        sess = str(getattr(context, "market_session", "") or "").lower()
+        if sess in {"sydney", "tokyo", "asian"}:
+            # Earlier break-even timing in thin sessions (profit protection)
+            protect = Decimal(
+                str(getattr(config, "session_profit_protect_at_r", "1.5") or "1.5")
+            )
+            if protect < be_at:
+                be_at = protect
+            else:
+                be_at = (be_at * Decimal("0.8")).quantize(Decimal("0.01"))
+
     if (
         position.state is PositionLifecycleState.OPEN
         and not position.be_moved
-        and r >= config.break_even_at_r
+        and r >= be_at
     ):
         new_sl = break_even_stop(position, config)
         if not is_stop_improvement(position, new_sl):
@@ -319,6 +340,29 @@ def plan_action(
             volume=Decimal("0"),
             target_state=PositionLifecycleState.PARTIAL,
         )
+
+    # Second scale-out rung (optional) — after first partial, still in PARTIAL
+    if (
+        position.state is PositionLifecycleState.PARTIAL
+        and position.partial_done
+        and not bool(getattr(position, "second_partial_done", False))
+        and bool(getattr(config, "second_partial_enabled", False))
+        and r >= Decimal(str(getattr(config, "second_partial_at_r", "3.0") or "3.0"))
+    ):
+        pct = Decimal(
+            str(getattr(config, "second_partial_close_pct", "25") or "25")
+        )
+        # Reuse partial_close_volume math with temporary pct via remaining * pct/100
+        vol = (position.remaining_volume * pct / Decimal("100")).quantize(
+            config.volume_step
+        )
+        if vol >= config.min_volume:
+            return PlannedAction(
+                ManageActionKind.PARTIAL_CLOSE,
+                f"Second partial {pct}% at {r}R (scale-out)",
+                volume=vol,
+                target_state=PositionLifecycleState.PARTIAL,
+            )
 
     if (
         position.state

@@ -893,6 +893,16 @@ class InstitutionalIteRuntime:
                 kill_switch_armed=self.plane.kill_switch_armed,
                 daily_loss_exceeded=self.plane.daily_loss_exceeded,
                 user_id=self.user_id,
+                market_session=str(
+                    getattr(
+                        getattr(getattr(snapshot, "session", None), "session", None),
+                        "value",
+                        None,
+                    )
+                    or getattr(getattr(snapshot, "session", None), "session", None)
+                    or ""
+                )
+                or None,
             )
             result = self.position_management.evaluate(ticket, pctx)
             managed += 1
@@ -1920,6 +1930,34 @@ class InstitutionalIteRuntime:
                             else None
                         ),
                     )
+                    # Attach live institutional artefacts when present (never fabricate)
+                    try:
+                        inst: dict[str, Any] = {
+                            "ai_decision": replay.ai_reasoning,
+                            "risk_sizing": {"risk_pct": str(risk_pct)},
+                            "oms": {
+                                "forwarded": bool(
+                                    getattr(bridge_result, "forwarded_to_oms", False)
+                                ),
+                                "ticket": str(ticket) if ticket is not None else None,
+                            },
+                            "mt5": {"trace_id": tid},
+                        }
+                        last_scan = getattr(self, "_last_multi_asset_scan", None)
+                        if isinstance(last_scan, dict):
+                            inst["scanner_ranking"] = {
+                                "best_symbol": last_scan.get("best_symbol"),
+                                "opportunity_ranked": (
+                                    last_scan.get("opportunity_ranked") or []
+                                )[:5],
+                                "as_of": last_scan.get("as_of"),
+                            }
+                        replay.market_snapshot = {
+                            **(replay.market_snapshot or {}),
+                            "institutional": inst,
+                        }
+                    except Exception:
+                        logger.exception("institutional_replay_enrich_failed")
                     get_trade_replay_store().record(replay)
                     get_opportunity_outcome_store().record_evaluation(
                         symbol=str(getattr(decision, "symbol", "") or ""),

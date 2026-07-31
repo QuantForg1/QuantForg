@@ -96,6 +96,7 @@ class ManagedPosition:
     be_moved: bool = False
     partial_done: bool = False
     trailing_active: bool = False
+    second_partial_done: bool = False
     max_favorable_r: Decimal = Decimal("0")
     last_manage_fingerprint: str | None = None
     exit_reason: str | None = None
@@ -119,6 +120,7 @@ class ManagedPosition:
             "be_moved": self.be_moved,
             "partial_done": self.partial_done,
             "trailing_active": self.trailing_active,
+            "second_partial_done": self.second_partial_done,
             "max_favorable_r": str(self.max_favorable_r),
             "exit_reason": self.exit_reason,
             "magic": self.magic,
@@ -162,6 +164,8 @@ class PositionManageContext:
     liquidity_stop: Decimal | None = None
     spread_at_entry: Decimal | None = None
     entry_slippage: Decimal | None = None
+    # Session label for session-aware management (soft)
+    market_session: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

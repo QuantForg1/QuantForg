@@ -73,5 +73,16 @@ class InstitutionalPositionManagement:
                 request_id=context.request_id,
                 connected=context.connected,
                 login=context.login,
+                ai_entry_confidence=context.ai_entry_confidence,
+                ai_current_confidence=context.ai_current_confidence,
+                ai_momentum=context.ai_momentum,
+                ai_volatility=context.ai_volatility,
+                ai_liquidity=context.ai_liquidity,
+                ai_trend_strength=context.ai_trend_strength,
+                structure_stop=context.structure_stop,
+                liquidity_stop=context.liquidity_stop,
+                spread_at_entry=context.spread_at_entry,
+                entry_slippage=context.entry_slippage,
+                market_session=context.market_session,
             )
         return self.engine.evaluate(ticket, context)

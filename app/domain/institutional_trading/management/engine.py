@@ -333,7 +333,10 @@ class PositionManagementEngine:
             position.remaining_volume = (
                 position.remaining_volume - plan.volume
             ).quantize(Decimal("0.01"))
-            position.partial_done = True
+            if position.partial_done:
+                position.second_partial_done = True
+            else:
+                position.partial_done = True
         if plan.kind is ManageActionKind.TRAIL:
             position.trailing_active = True
         if plan.target_state is PositionLifecycleState.EXITED:

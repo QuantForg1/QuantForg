@@ -1186,6 +1186,15 @@ def build_noc_command_center() -> dict[str, Any]:
         ),
         "learning": _learning_panel(),
         "protection": _continuous_protection_panel(),
+        "intelligence": _safe_call(
+            "intelligence",
+            lambda: __import__(
+                "app.application.services.noc_intelligence_panels",
+                fromlist=["build_intelligence_panels"],
+            ).build_intelligence_panels(runtime_scan=runtime_scan),
+            {},
+        )
+        or {},
         "open_positions": _positions_read_only(),
         "closed_trades": _closed_trades_read_only(limit=25),
         "oms": oms,

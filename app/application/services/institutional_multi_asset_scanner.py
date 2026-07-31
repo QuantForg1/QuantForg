@@ -270,6 +270,30 @@ async def run_institutional_multi_asset_scan(
             reason=row.get("reject_reason"),
         )
 
+    # Opportunity Ranking + Execution Probability + Trade Queue
+    try:
+        from app.domain.institutional_trading.ai_scalping.execution_probability import (
+            estimate_execution_probability,
+        )
+        from app.domain.institutional_trading.ai_scalping.institutional_trade_queue import (
+            rebuild_trade_queue,
+        )
+        from app.domain.institutional_trading.ai_scalping.opportunity_ranking import (
+            enrich_scores_with_opportunity,
+            rank_by_opportunity_score,
+        )
+
+        for row in scored:
+            row["probability"] = estimate_execution_probability(row)
+            row["estimated_probability"] = row["probability"]["probability_of_success"]
+        scored = enrich_scores_with_opportunity(scored)
+        opportunity_ranked = rank_by_opportunity_score(scored)
+        queue_snap = rebuild_trade_queue(scored)
+    except Exception:
+        logger.exception("opportunity_ranking_queue_failed")
+        opportunity_ranked = scored
+        queue_snap = {"candidates": [], "size": 0}
+
     open_n = open_positions
     if open_n is None and position_engine is not None:
         try:
@@ -284,7 +308,27 @@ async def run_institutional_multi_asset_scan(
         ite_config=ite_config,
         config=cfg,
     )
+    ranked = scan.get("ranked") if isinstance(scan.get("ranked"), list) else []
     best = scan.get("best") if isinstance(scan.get("best"), dict) else None
+    # Portfolio-ranked eligible set — never promote a portfolio-rejected symbol
+    portfolio_eligible = {
+        str(r.get("symbol") or "").upper()
+        for r in ranked
+        if isinstance(r, dict) and not r.get("reject")
+    }
+    # Prefer opportunity-ranked winner among portfolio-eligible only
+    if not bool(scan.get("blocked_by_portfolio")) and portfolio_eligible:
+        for row in opportunity_ranked:
+            sym = str(row.get("symbol") or "").upper()
+            if (
+                sym in portfolio_eligible
+                and row.get("opportunity_eligible")
+                and not row.get("reject")
+            ):
+                best = {**(best or {}), **row}
+                best["symbol"] = sym
+                best["opportunity_score"] = row.get("opportunity_score")
+                break
     best_symbol = (
         str(best.get("symbol") or "").upper()
         if best and not bool(scan.get("blocked_by_portfolio"))
@@ -293,9 +337,41 @@ async def run_institutional_multi_asset_scan(
     if best and bool(scan.get("blocked_by_portfolio")):
         best_symbol = None
 
+    # If current best disappears, evaluate next ranked eligible from queue
+    if best_symbol is None and not bool(scan.get("blocked_by_portfolio")):
+        try:
+            from app.domain.institutional_trading.ai_scalping.institutional_trade_queue import (
+                peek_next_eligible,
+                select_for_risk,
+            )
+
+            excluded: set[str] = set()
+            nxt = peek_next_eligible(exclude_symbols=excluded)
+            while nxt is not None:
+                cand_sym = str(nxt.get("symbol") or "").upper()
+                if portfolio_eligible and cand_sym not in portfolio_eligible:
+                    excluded.add(cand_sym)
+                    nxt = peek_next_eligible(exclude_symbols=excluded)
+                    continue
+                selected = select_for_risk(cand_sym)
+                if selected:
+                    best_symbol = cand_sym or None
+                    best = {**(best or {}), **selected}
+                break
+        except Exception:
+            logger.exception("trade_queue_next_eligible_failed")
+    elif best_symbol:
+        try:
+            from app.domain.institutional_trading.ai_scalping.institutional_trade_queue import (
+                select_for_risk,
+            )
+
+            select_for_risk(best_symbol)
+        except Exception:
+            logger.exception("trade_queue_select_failed")
+
     noc_rows = [_noc_row_from_score(r) for r in scored]
     # Prefer ranked portfolio rows for richer reject/cooldown annotations
-    ranked = scan.get("ranked") if isinstance(scan.get("ranked"), list) else []
     by_sym = {
         str(r.get("symbol") or "").upper(): r
         for r in (scan.get("rows") or [])
@@ -306,6 +382,9 @@ async def run_institutional_multi_asset_scan(
         sym = base["symbol"]
         port = by_sym.get(sym) or {}
         enriched = dict(base)
+        raw = next((r for r in scored if str(r.get("symbol") or "").upper() == sym), {})
+        enriched["opportunity_score"] = raw.get("opportunity_score")
+        enriched["estimated_probability"] = raw.get("estimated_probability")
         if port.get("reject_reason"):
             enriched["blocking_gate"] = port.get("reject_reason") or enriched.get(
                 "blocking_gate"
@@ -324,6 +403,20 @@ async def run_institutional_multi_asset_scan(
         "rows": list(scan.get("rows") or []),
         "noc_rows": enriched_noc,
         "ranked": ranked,
+        "opportunity_ranked": [
+            {
+                "symbol": r.get("symbol"),
+                "opportunity_score": r.get("opportunity_score"),
+                "quality": r.get("trade_quality") or r.get("quality"),
+                "confidence": r.get("ai_confidence") or r.get("confidence"),
+                "direction": r.get("direction"),
+                "eligible": r.get("opportunity_eligible"),
+                "blocking_gate": r.get("reject_reason"),
+                "estimated_probability": r.get("estimated_probability"),
+            }
+            for r in opportunity_ranked[:20]
+        ],
+        "trade_queue": queue_snap,
         "best": best,
         "best_symbol": best_symbol,
         "eligible_count": len(ranked),
