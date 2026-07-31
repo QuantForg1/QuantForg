@@ -154,7 +154,7 @@ These tips are ancestors of / already represented on `main` (behind main only):
 | Frontend `tsc --noEmit` | **PASS** |
 | Frontend `eslint .` | **PASS** |
 | Frontend `npm run build` | **PASS** |
-| Backend unit tests | Runner not available in this environment (`pytest` module missing); not used as a merge gate because **no code was merged** |
+| Backend unit tests | **PASS** — 1421 passed (`.venv/bin/pytest tests/unit -o addopts=''`) |
 | Live production landing vs main HTML | **Exact match** |
 | Brand assets on production | `/brand/quantforg-mark-256.png`, favicon, OG, manifest → **200** |
 
