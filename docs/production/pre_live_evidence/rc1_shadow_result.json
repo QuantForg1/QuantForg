@@ -39,7 +39,7 @@
     },
     "expected_broker_submissions": [
       {
-        "trade_id": "trd_865e5e9b470842de",
+        "trade_id": "trd_7eef65aae0654416",
         "symbol": "XAUUSD",
         "side": "buy",
         "lots": "0.01",
@@ -50,7 +50,7 @@
         "submitted": false
       },
       {
-        "trade_id": "trd_4fb642805ece4453",
+        "trade_id": "trd_36fb4e13a0144f65",
         "symbol": "XAUUSD",
         "side": "sell",
         "lots": "0.01",
@@ -61,7 +61,7 @@
         "submitted": false
       },
       {
-        "trade_id": "trd_06a0a9bc5be54ac7",
+        "trade_id": "trd_3711e578f6724e5e",
         "symbol": "XAUUSD",
         "side": "buy",
         "lots": "0.01",
@@ -72,7 +72,7 @@
         "submitted": false
       },
       {
-        "trade_id": "trd_a646e7031cfa4983",
+        "trade_id": "trd_ce550c143cc44a72",
         "symbol": "XAUUSD",
         "side": "buy",
         "lots": "0.01",
@@ -83,7 +83,7 @@
         "submitted": false
       },
       {
-        "trade_id": "trd_5e817c7c87b942f1",
+        "trade_id": "trd_4ac9a3aef6fb45df",
         "symbol": "XAUUSD",
         "side": "buy",
         "lots": "0.01",
@@ -94,7 +94,7 @@
         "submitted": false
       },
       {
-        "trade_id": "trd_f9e45e9b41684308",
+        "trade_id": "trd_b3495d2731384d74",
         "symbol": "XAUUSD",
         "side": "buy",
         "lots": "0.01",
@@ -105,7 +105,7 @@
         "submitted": false
       },
       {
-        "trade_id": "trd_fa16860c0bec4f33",
+        "trade_id": "trd_9e8b9fe848f84e6d",
         "symbol": "XAUUSD",
         "side": "sell",
         "lots": "0.01",
@@ -148,8 +148,8 @@
     "confidence_floor": 80,
     "eligible_sample": [
       {
-        "trade_id": "trd_865e5e9b470842de",
-        "timestamp": "2026-07-31T12:20:10.293847Z",
+        "trade_id": "trd_7eef65aae0654416",
+        "timestamp": "2026-07-31T12:31:16.216682Z",
         "symbol": "XAUUSD",
         "market_regime": "trending",
         "session": "london",
@@ -183,8 +183,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_4fb642805ece4453",
-        "timestamp": "2026-07-31T12:20:10.293865Z",
+        "trade_id": "trd_36fb4e13a0144f65",
+        "timestamp": "2026-07-31T12:31:16.216699Z",
         "symbol": "XAUUSD",
         "market_regime": "trending",
         "session": "new_york",
@@ -218,8 +218,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_06a0a9bc5be54ac7",
-        "timestamp": "2026-07-31T12:20:10.293877Z",
+        "trade_id": "trd_3711e578f6724e5e",
+        "timestamp": "2026-07-31T12:31:16.216709Z",
         "symbol": "XAUUSD",
         "market_regime": "ranging",
         "session": "tokyo",
@@ -253,8 +253,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_a646e7031cfa4983",
-        "timestamp": "2026-07-31T12:20:10.293897Z",
+        "trade_id": "trd_ce550c143cc44a72",
+        "timestamp": "2026-07-31T12:31:16.216728Z",
         "symbol": "XAUUSD",
         "market_regime": "high_volatility",
         "session": "new_york",
@@ -288,8 +288,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_5e817c7c87b942f1",
-        "timestamp": "2026-07-31T12:20:10.293917Z",
+        "trade_id": "trd_4ac9a3aef6fb45df",
+        "timestamp": "2026-07-31T12:31:16.216749Z",
         "symbol": "XAUUSD",
         "market_regime": "low_volatility",
         "session": "tokyo",
@@ -323,8 +323,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_f9e45e9b41684308",
-        "timestamp": "2026-07-31T12:20:10.293935Z",
+        "trade_id": "trd_b3495d2731384d74",
+        "timestamp": "2026-07-31T12:31:16.216768Z",
         "symbol": "XAUUSD",
         "market_regime": "trending",
         "session": "mixed",
@@ -358,8 +358,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_fa16860c0bec4f33",
-        "timestamp": "2026-07-31T12:20:10.293945Z",
+        "trade_id": "trd_9e8b9fe848f84e6d",
+        "timestamp": "2026-07-31T12:31:16.216780Z",
         "symbol": "XAUUSD",
         "market_regime": "ranging",
         "session": "mixed",
@@ -395,8 +395,8 @@
     ],
     "rejected_sample": [
       {
-        "trade_id": "trd_026f961b59c34c9b",
-        "timestamp": "2026-07-31T12:20:10.293888Z",
+        "trade_id": "trd_46ddc12b3ee24e12",
+        "timestamp": "2026-07-31T12:31:16.216720Z",
         "symbol": "XAUUSD",
         "market_regime": "ranging",
         "session": "london",
@@ -430,8 +430,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_6e91220d98e3489d",
-        "timestamp": "2026-07-31T12:20:10.293905Z",
+        "trade_id": "trd_47c1061b88d34bbf",
+        "timestamp": "2026-07-31T12:31:16.216740Z",
         "symbol": "XAUUSD",
         "market_regime": "high_volatility",
         "session": "mixed",
@@ -465,8 +465,8 @@
         "extras": {}
       },
       {
-        "trade_id": "trd_fbc5113a999f473a",
-        "timestamp": "2026-07-31T12:20:10.293928Z",
+        "trade_id": "trd_f2582da00f7f4e3c",
+        "timestamp": "2026-07-31T12:31:16.216760Z",
         "symbol": "XAUUSD",
         "market_regime": "low_volatility",
         "session": "london",
@@ -697,7 +697,7 @@
     "strategy_unchanged": true
   },
   "dashboard": {
-    "timestamp": "2026-07-31T12:20:10.294077Z",
+    "timestamp": "2026-07-31T12:31:16.216914Z",
     "mode": {
       "PRODUCTION_VALIDATION_MODE": true,
       "VALIDATION_EXECUTION_MODE": "shadow",
@@ -806,7 +806,7 @@
       },
       "expected_broker_submissions": [
         {
-          "trade_id": "trd_865e5e9b470842de",
+          "trade_id": "trd_7eef65aae0654416",
           "symbol": "XAUUSD",
           "side": "buy",
           "lots": "0.01",
@@ -817,7 +817,7 @@
           "submitted": false
         },
         {
-          "trade_id": "trd_4fb642805ece4453",
+          "trade_id": "trd_36fb4e13a0144f65",
           "symbol": "XAUUSD",
           "side": "sell",
           "lots": "0.01",
@@ -828,7 +828,7 @@
           "submitted": false
         },
         {
-          "trade_id": "trd_06a0a9bc5be54ac7",
+          "trade_id": "trd_3711e578f6724e5e",
           "symbol": "XAUUSD",
           "side": "buy",
           "lots": "0.01",
@@ -839,7 +839,7 @@
           "submitted": false
         },
         {
-          "trade_id": "trd_a646e7031cfa4983",
+          "trade_id": "trd_ce550c143cc44a72",
           "symbol": "XAUUSD",
           "side": "buy",
           "lots": "0.01",
@@ -850,7 +850,7 @@
           "submitted": false
         },
         {
-          "trade_id": "trd_5e817c7c87b942f1",
+          "trade_id": "trd_4ac9a3aef6fb45df",
           "symbol": "XAUUSD",
           "side": "buy",
           "lots": "0.01",
@@ -861,7 +861,7 @@
           "submitted": false
         },
         {
-          "trade_id": "trd_f9e45e9b41684308",
+          "trade_id": "trd_b3495d2731384d74",
           "symbol": "XAUUSD",
           "side": "buy",
           "lots": "0.01",
@@ -872,7 +872,7 @@
           "submitted": false
         },
         {
-          "trade_id": "trd_fa16860c0bec4f33",
+          "trade_id": "trd_9e8b9fe848f84e6d",
           "symbol": "XAUUSD",
           "side": "sell",
           "lots": "0.01",
@@ -915,8 +915,8 @@
       "confidence_floor": 80,
       "eligible_sample": [
         {
-          "trade_id": "trd_865e5e9b470842de",
-          "timestamp": "2026-07-31T12:20:10.293847Z",
+          "trade_id": "trd_7eef65aae0654416",
+          "timestamp": "2026-07-31T12:31:16.216682Z",
           "symbol": "XAUUSD",
           "market_regime": "trending",
           "session": "london",
@@ -950,8 +950,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_4fb642805ece4453",
-          "timestamp": "2026-07-31T12:20:10.293865Z",
+          "trade_id": "trd_36fb4e13a0144f65",
+          "timestamp": "2026-07-31T12:31:16.216699Z",
           "symbol": "XAUUSD",
           "market_regime": "trending",
           "session": "new_york",
@@ -985,8 +985,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_06a0a9bc5be54ac7",
-          "timestamp": "2026-07-31T12:20:10.293877Z",
+          "trade_id": "trd_3711e578f6724e5e",
+          "timestamp": "2026-07-31T12:31:16.216709Z",
           "symbol": "XAUUSD",
           "market_regime": "ranging",
           "session": "tokyo",
@@ -1020,8 +1020,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_a646e7031cfa4983",
-          "timestamp": "2026-07-31T12:20:10.293897Z",
+          "trade_id": "trd_ce550c143cc44a72",
+          "timestamp": "2026-07-31T12:31:16.216728Z",
           "symbol": "XAUUSD",
           "market_regime": "high_volatility",
           "session": "new_york",
@@ -1055,8 +1055,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_5e817c7c87b942f1",
-          "timestamp": "2026-07-31T12:20:10.293917Z",
+          "trade_id": "trd_4ac9a3aef6fb45df",
+          "timestamp": "2026-07-31T12:31:16.216749Z",
           "symbol": "XAUUSD",
           "market_regime": "low_volatility",
           "session": "tokyo",
@@ -1090,8 +1090,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_f9e45e9b41684308",
-          "timestamp": "2026-07-31T12:20:10.293935Z",
+          "trade_id": "trd_b3495d2731384d74",
+          "timestamp": "2026-07-31T12:31:16.216768Z",
           "symbol": "XAUUSD",
           "market_regime": "trending",
           "session": "mixed",
@@ -1125,8 +1125,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_fa16860c0bec4f33",
-          "timestamp": "2026-07-31T12:20:10.293945Z",
+          "trade_id": "trd_9e8b9fe848f84e6d",
+          "timestamp": "2026-07-31T12:31:16.216780Z",
           "symbol": "XAUUSD",
           "market_regime": "ranging",
           "session": "mixed",
@@ -1162,8 +1162,8 @@
       ],
       "rejected_sample": [
         {
-          "trade_id": "trd_026f961b59c34c9b",
-          "timestamp": "2026-07-31T12:20:10.293888Z",
+          "trade_id": "trd_46ddc12b3ee24e12",
+          "timestamp": "2026-07-31T12:31:16.216720Z",
           "symbol": "XAUUSD",
           "market_regime": "ranging",
           "session": "london",
@@ -1197,8 +1197,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_6e91220d98e3489d",
-          "timestamp": "2026-07-31T12:20:10.293905Z",
+          "trade_id": "trd_47c1061b88d34bbf",
+          "timestamp": "2026-07-31T12:31:16.216740Z",
           "symbol": "XAUUSD",
           "market_regime": "high_volatility",
           "session": "mixed",
@@ -1232,8 +1232,8 @@
           "extras": {}
         },
         {
-          "trade_id": "trd_fbc5113a999f473a",
-          "timestamp": "2026-07-31T12:20:10.293928Z",
+          "trade_id": "trd_f2582da00f7f4e3c",
+          "timestamp": "2026-07-31T12:31:16.216760Z",
           "symbol": "XAUUSD",
           "market_regime": "low_volatility",
           "session": "london",

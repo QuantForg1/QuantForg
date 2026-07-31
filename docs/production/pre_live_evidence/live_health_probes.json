@@ -1,7 +1,7 @@
 {
   "api_base": "https://quantforg-production.up.railway.app",
   "frontend": "https://www.quantforg.com",
-  "collected_at": "2026-07-31T12:20:10.292493Z",
+  "collected_at": "2026-07-31T12:31:16.215362Z",
   "gateway_status": "UNKNOWN",
   "oms_status": "UNKNOWN",
   "mt5_status": "UNKNOWN",
@@ -60,7 +60,7 @@
           {
             "name": "postgres",
             "status": "healthy",
-            "latency_ms": 182.36
+            "latency_ms": 176.71
           },
           {
             "name": "redis",
@@ -108,7 +108,7 @@
           "message": "Missing bearer access token",
           "details": {}
         },
-        "request_id": "req_2da0362b6cff4eb68f5f49ba0f5e4474"
+        "request_id": "req_a3d146e2a4f44f3baf05e8f64dde62c0"
       },
       "error": "Unauthorized"
     },
@@ -122,7 +122,7 @@
           "message": "Missing bearer access token",
           "details": {}
         },
-        "request_id": "req_58e552ec826c4620a95ec4fbd11c4c92"
+        "request_id": "req_b1e9051108674f2e8ec58b44f7e97ed2"
       },
       "error": "Unauthorized"
     },
@@ -136,7 +136,7 @@
           "message": "Not Found",
           "details": {}
         },
-        "request_id": "req_eebf6715208349be971c9f3ce130960f"
+        "request_id": "req_db258d2d76a74418a19b286a77da1ea2"
       },
       "error": "Not Found"
     },
@@ -150,7 +150,7 @@
           "message": "Missing bearer access token",
           "details": {}
         },
-        "request_id": "req_ca03c7878cff4f10bd683d04d5a641d6"
+        "request_id": "req_f9d30274e3464893b6a7f71a6ca62606"
       },
       "error": "Unauthorized"
     },
@@ -164,7 +164,7 @@
           "message": "Missing bearer access token",
           "details": {}
         },
-        "request_id": "req_857ea6a64ebd4439bf394f91801368fd"
+        "request_id": "req_ce1fcec921a2436d9940080ee6c244bb"
       },
       "error": "Unauthorized"
     },

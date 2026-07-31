@@ -1,0 +1,103 @@
+{
+  "collected_at": "2026-07-31T12:31:02.213734Z",
+  "source": "railway_run_live_probe_collector",
+  "gateway": {
+    "configured": true,
+    "available": false,
+    "latency_ms": 1102.5423190003494,
+    "status": "DOWN"
+  },
+  "mt5": {
+    "enabled": true,
+    "use_mock": true,
+    "connected": false,
+    "status": "DISCONNECTED"
+  },
+  "oms": {
+    "execution_enabled": true,
+    "latency_ms": 0.0,
+    "status": "ENABLED"
+  },
+  "ai": {
+    "status": "SETTINGS_ONLY",
+    "decision_latency_ms": 0.0
+  },
+  "platform": {
+    "railway_api_up": true,
+    "supabase_up": true,
+    "cloudflare_tunnel_up": false,
+    "database_latency_ms": 1.0
+  },
+  "health_endpoints": [
+    {
+      "url": "https://quantforg-production.up.railway.app/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/status",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 174.94
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.03
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/rc1-production-validation",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"error\":{\"code\":\"http_error\",\"message\":\"Not Found\",\"details\":{}},\"request_id\":\"req_6aaa5a9047274c199a024c7f41407413\"}"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/services-health",
+      "http_status": 401,
+      "ok": false,
+      "body": "[REDACTED]"
+    }
+  ],
+  "gateway_http": {
+    "http_status": 502,
+    "ok": false,
+    "content_type": "text/html; charset=UTF-8"
+  },
+  "last_gateway_health_payload": null,
+  "unknown_states": [
+    {
+      "component": "gateway",
+      "status": "DOWN"
+    },
+    {
+      "component": "mt5",
+      "status": "DISCONNECTED"
+    },
+    {
+      "component": "ai",
+      "status": "SETTINGS_ONLY"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # RC1 Validation Report
 
-Generated: `2026-07-31T12:20:10.294403Z`
+Generated: `2026-07-31T12:31:16.217260Z`
 
 Institutional Production Validation Pipeline for QuantForg ITE.
 This report does **not** modify strategy, Quality/Confidence floors, weights, or risk logic.
@@ -16,7 +16,7 @@ This report does **not** modify strategy, Quality/Confidence floors, weights, or
 
 - **api_base:** `https://quantforg-production.up.railway.app`
 - **frontend:** `https://www.quantforg.com`
-- **collected_at:** `2026-07-31T12:20:10.292493Z`
+- **collected_at:** `2026-07-31T12:31:16.215362Z`
 - **gateway_status:** `UNKNOWN`
 - **oms_status:** `UNKNOWN`
 - **mt5_status:** `UNKNOWN`
@@ -206,7 +206,7 @@ This report does **not** modify strategy, Quality/Confidence floors, weights, or
 
 ## Live Evidence Attachment
 
-- Collected at: `2026-07-31T12:20:10.292493Z`
+- Collected at: `2026-07-31T12:31:16.215362Z`
 - API base: `https://quantforg-production.up.railway.app`
 - Process health: `HEALTHY`
 - Postgres: `healthy`

@@ -1,0 +1,12 @@
+{
+  "collected_at": "2026-07-31T12:28:13.913819Z",
+  "mode": "local_testclient_operator_override",
+  "path": "/api/v1/ite/ops/rc1-production-validation",
+  "http_status": 200,
+  "ok": true,
+  "body_keys": [
+    "dashboard",
+    "status"
+  ],
+  "note": "Proves route is wired and returns 200 for OperatorUser. Does not prove production/staging deployment."
+}
