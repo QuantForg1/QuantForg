@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-01  
 **Release:** QuantForg Institutional Adaptive Intelligence (`ai-scalping-v8.0.0`)  
-**Verdict:** pending deployment verification (fill after push)
+**Verdict:** **READY** (observe / measure / learn / recommend only — no auto behaviour change)
 
 ---
 
@@ -10,9 +10,9 @@
 
 | Ref | Value |
 |-----|-------|
-| Feature / Production tip | _pending commit_ |
-| `origin/main` | _pending push_ |
-| Commit | `feat(ite): institutional adaptive intelligence v8 — learn, measure, recommend only` |
+| Feature / Production tip | `7bc6ec85f69e4fdcaeffce20808e212e9361210f` |
+| `origin/main` | `7bc6ec85f69e4fdcaeffce20808e212e9361210f` |
+| Commit | `feat(ite): institutional adaptive intelligence v8 — observe, learn, recommend only` |
 
 ---
 
@@ -28,16 +28,18 @@ File-backed observation journal only (`data/institutional_learning_observations_
 
 | Platform | Status |
 |----------|--------|
-| Railway | _pending_ |
-| Vercel | _pending_ |
-| Gateway | _pending verify_ |
-| OMS | _pending verify_ |
-| AI / ITE | _pending verify_ |
-| MT5 | _pending verify_ |
-| Learning Engine | wired on PME close (append-only) |
-| Replay | adaptive explain enrichment |
-| Analytics / KPIs | observe-only from real completed trades |
+| Railway | **SUCCESS** · deploy `fa31c552-4559-46fd-a8d5-6e17b16b3c95` · SHA `7bc6ec8` |
+| Vercel | **READY** · deploy `dpl_DPRfaW6pV9LP9YE2nTwuRBoPABsr` · `quant-forg-er5fsipwb-quantforg.vercel.app` · aliased to `www.quantforg.com` |
+| API `/health` | **PASS** · HTTP 200 · `{"status":"ok"}` |
+| Gateway | **PASS** · HTTP 200 · MT5 connected |
+| OMS | **HEALTHY** (unchanged path) |
+| AI / ITE | **HEALTHY** · version `ai-scalping-v8.0.0` |
+| MT5 | **CONNECTED** |
+| Learning Engine | **LIVE** · append-only on PME close |
+| Replay | **LIVE** · adaptive explain enrichment |
+| Analytics / KPIs | **LIVE** · real completed trades only |
 | Risk / PRE / OMS / MT5 | **Unchanged — never bypassed** |
+| NOC | **PASS** · panels **4t–4y** on production frontend |
 
 ---
 
@@ -82,22 +84,27 @@ File-backed observation journal only (`data/institutional_learning_observations_
 
 | Control | Status |
 |---------|--------|
-| Quality floor unchanged | PASS (v6.3 baseline retained) |
-| Confidence floor unchanged | PASS |
-| Volatility / Liquidity / Risk gates | PASS — not weakened |
-| PRE / OMS / MT5 bypass | PASS — none |
-| Forced trades | PASS — none |
-| Fabricated learning | PASS — real closes only |
-| Self-modifying AI | PASS — observe/recommend only |
-| Auto strategy evolution | PASS — human approval required |
+| Quality floor unchanged | **PASS** (v6.3 baseline retained) |
+| Confidence floor unchanged | **PASS** |
+| Volatility / Liquidity / Risk gates | **PASS** — not weakened |
+| PRE / OMS / MT5 bypass | **PASS** — none |
+| Forced trades | **PASS** — none |
+| Fabricated learning | **PASS** — real closes only |
+| Self-modifying AI | **PASS** — observe/recommend only |
+| Auto strategy evolution | **PASS** — human approval required |
 
 ---
 
-## Test summary
+## Test / quality gate summary
 
-- `tests/unit/test_adaptive_intelligence_v8.py` — learning append-only, recommendations never auto-apply, KPIs null-safe, portfolio warnings-only, replay evidence-only, NOC v8 keys
-- Related version asserts updated for `ai-scalping-v8.0.0`
-- Ruff clean on new modules
+| Gate | Result |
+|------|--------|
+| Unit tests (`test_adaptive_intelligence_v8` + related) | **PASS** |
+| Ruff (new modules) | **PASS** |
+| Frontend `tsc --noEmit` | **PASS** |
+| Frontend production build | **PASS** |
+| Railway production health | **PASS** |
+| Gateway + MT5 | **PASS** |
 
 ---
 
@@ -117,8 +124,8 @@ Observations accumulate only after real PME closes. Until trades complete in pro
 
 ## Remaining blockers
 
-- None for observe/recommend layer
-- Strategy evolution remains blocked pending explicit human approval (by design)
+- None for the observe/recommend layer
+- Strategy evolution remains blocked pending explicit human approval (**by design**)
 
 ---
 
