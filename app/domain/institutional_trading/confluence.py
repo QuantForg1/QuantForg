@@ -14,6 +14,7 @@ from app.domain.institutional_trading.decision_models import (
     ConfluenceResult,
     TradeDirection,
 )
+from app.domain.institutional_trading.liquidity_v2 import evaluate_liquidity_v2
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 from app.domain.market_structure.enums import StructureBreakKind, TrendDirection
 from app.domain.order_block.enums import OrderBlockState
@@ -59,49 +60,39 @@ class ConfluenceEngine:
         news = snapshot.news
         structure = snapshot.primary_structure
 
-        # --- Direction from configured MTF hierarchy ---
-        # Scalping: H1 direction filter (never require H4). Swing: H4/H1 alignment.
+        # --- Direction from MTF v2 (regime-aware) ---
+        # Trending: H4+H1+M15 lock. Ranging: H4 context; H1+M15+M5 lock.
+        # Never use raw H4 RANGE as a permanent veto when lower TFs lock.
         direction = TradeDirection.NONE
-        if cfg.is_scalping():
-            if trend.aligned and trend.macro_bias in {
-                TrendDirection.UP,
-                TrendDirection.DOWN,
-            }:
-                direction = _dir_to_trade(trend.macro_bias)
-                reasons.append(
-                    f"Scalping MTF aligned {trend.macro_bias.value} "
-                    f"({cfg.macro_bias_tf.value}/{cfg.primary_structure_tf.value}; "
-                    f"{cfg.entry_confirmation_tf.value}={trend.entry.value} "
-                    f"{cfg.execution_management_tf.value}={trend.execution.value})"
-                )
-                factors["mtf"] = trend.alignment_score
-            elif trend.macro_bias in {TrendDirection.UP, TrendDirection.DOWN}:
-                direction = _dir_to_trade(trend.macro_bias)
-                factors["mtf"] = max(40, trend.alignment_score)
-                reasons.append(
-                    f"Scalping direction {cfg.macro_bias_tf.value}="
-                    f"{trend.macro_bias.value} (soft structure)"
-                )
-            else:
-                rejected.append("mtf_not_aligned")
-                factors["mtf"] = max(0, trend.alignment_score // 2)
-                reasons.append(trend.why or "Scalping MTF not aligned")
-        elif (
-            trend.macro_bias in {TrendDirection.UP, TrendDirection.DOWN}
-            and trend.macro_bias == trend.primary
-        ):
-            direction = _dir_to_trade(trend.macro_bias)
-            reasons.append(
-                f"{cfg.macro_bias_tf.value}/{cfg.primary_structure_tf.value} "
-                f"aligned {trend.macro_bias.value} "
-                f"({cfg.entry_confirmation_tf.value}={trend.entry.value} "
-                f"{cfg.execution_management_tf.value}={trend.execution.value})"
-            )
+        bias = trend.effective_bias
+        if trend.aligned and bias in {TrendDirection.UP, TrendDirection.DOWN}:
+            direction = _dir_to_trade(bias)
             factors["mtf"] = trend.alignment_score
+            regime = getattr(trend, "market_regime", "unknown")
+            reasons.append(
+                f"MTF v2 {regime}: aligned bias={bias.value} "
+                f"(H4={trend.macro_bias.value}"
+                f"{' context' if getattr(trend, 'h4_is_context', False) else ''} "
+                f"H1={trend.primary.value} M15={trend.entry.value} "
+                f"M5={trend.execution.value} score={trend.alignment_score})"
+            )
+        elif (
+            cfg.is_scalping()
+            and bias in {TrendDirection.UP, TrendDirection.DOWN}
+            and trend.alignment_score >= 40
+        ):
+            # Soft structure path — directional bias without full lock.
+            # Still does NOT lower quality/confidence floors downstream.
+            direction = _dir_to_trade(bias)
+            factors["mtf"] = max(40, trend.alignment_score)
+            reasons.append(
+                f"MTF v2 soft bias={bias.value} "
+                f"(score={trend.alignment_score}; awaiting full lock)"
+            )
         else:
             rejected.append("mtf_not_aligned")
             factors["mtf"] = max(0, trend.alignment_score // 2)
-            reasons.append(trend.why or "MTF not aligned")
+            reasons.append(trend.why or "MTF v2 not aligned")
 
         # Entry TF confirmation soft bonus / penalty
         entry_key = cfg.entry_confirmation_tf.value.lower()
@@ -114,6 +105,8 @@ class ConfluenceEngine:
             factors["m15"] = 100
             reasons.append(f"{cfg.entry_confirmation_tf.value} confirms bearish")
         elif direction is not TradeDirection.NONE:
+            # In ranging v2, M15 agreement is already required for aligned=True.
+            # Soft penalty only when direction came from soft path.
             factors[entry_key] = 40
             factors["m15"] = 40
             rejected.append("entry_tf_not_confirming")
@@ -137,15 +130,17 @@ class ConfluenceEngine:
         else:
             factors["structure"] = 25
             rejected.append("no_structure_event")
-        # Liquidity
-        liq = snapshot.liquidity
-        if liq and (liq.sweeps or liq.pools or liq.equal_highs or liq.equal_lows):
-            sweep_n = len(liq.sweeps)
-            factors["liquidity"] = 85 if sweep_n else 65
-            reasons.append(f"Liquidity present sweeps={sweep_n} pools={len(liq.pools)}")
-        else:
-            factors["liquidity"] = 20
+
+        # Liquidity v2 — expanded institutional context (no score inflation)
+        liq_v2 = evaluate_liquidity_v2(snapshot)
+        factors["liquidity"] = liq_v2.score
+        reasons.extend(liq_v2.reasons)
+        if liq_v2.rejected:
             rejected.append("no_liquidity_context")
+        elif liq_v2.sources:
+            reasons.append(
+                "Liquidity v2 sources=" + ",".join(liq_v2.sources)
+            )
 
         # Order blocks
         ob = snapshot.order_blocks
