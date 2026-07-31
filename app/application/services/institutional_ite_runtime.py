@@ -728,6 +728,25 @@ class InstitutionalIteRuntime:
                     ),
                 )
                 try:
+                    from app.application.services.strategy_diagnostics import (
+                        get_strategy_diagnostics_store,
+                    )
+
+                    get_strategy_diagnostics_store().record_from_artefacts(
+                        snapshot=snapshot,
+                        decision=None,
+                        cycle_outcome="safety_blocked",
+                        decision_action="NO_TRADE",
+                        abort_reason="SAFETY_BLOCKED",
+                        decision_reasons=tuple(safety.failed_reasons),
+                        market_context_diagnostics=None,
+                        signal_id=None,
+                        forwarded_to_oms=False,
+                        trace_id=None,
+                    )
+                except Exception:
+                    logger.exception("strategy_diagnostics_safety_blocked_failed")
+                try:
                     from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         ValidationStage,
                         capture_signal as pvm_capture,
@@ -2971,7 +2990,24 @@ class InstitutionalIteRuntime:
             interval_seconds=self.interval_seconds,
             mode=self.plane.mode.value,
             run_state=self.plane.auto_trading_run_state,
+            autonomous=True,
+            continuous_24_7=True,
         )
+        # Mark open-book resume after process start / reconnect path.
+        try:
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_AI_SCALPING_CONFIG,
+            )
+            from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
+                get_continuous_operation_controller,
+            )
+
+            if DEFAULT_AI_SCALPING_CONFIG.continuous_operation_enabled:
+                get_continuous_operation_controller(
+                    DEFAULT_AI_SCALPING_CONFIG
+                ).mark_startup_resume()
+        except Exception:
+            logger.exception("continuous_ops_startup_resume_failed")
         while not self._stop.is_set():
             cycle_t0 = time.perf_counter()
             _pvm_vid = None
@@ -3332,6 +3368,19 @@ class InstitutionalIteRuntime:
                     )
                     self._cycles += 1
                 try:
+                    from app.application.services.cycle_evidence import (
+                        record_cycle_evidence,
+                    )
+
+                    record_cycle_evidence(
+                        cycle_outcome="error",
+                        decision_action="NO_TRADE",
+                        reasons=[f"cycle exception: {exc}"],
+                        abort_reason="CYCLE_EXCEPTION",
+                    )
+                except Exception:
+                    logger.exception("cycle_evidence_exception_record_failed")
+                try:
                     from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         ValidationStage,
                         finalize as pvm_finalize,
@@ -3347,6 +3396,12 @@ class InstitutionalIteRuntime:
                     pvm_finalize(validation_id=_pvm_vid)
                 except Exception:
                     logger.exception("pvm_cycle_exception_finalize_failed")
+                # Never stop the autonomous engine — self-heal and continue scanning.
+                logger.warning(
+                    "Autonomous engine continuing after cycle error",
+                    error=str(exc),
+                    run_state=self.plane.auto_trading_run_state,
+                )
             finally:
                 try:
                     if _pvm_token is not None:

@@ -19,6 +19,11 @@ class LotSizingResult:
     method: str
     reason: str
     valid: bool
+    # Structured fields for reject evidence (especially below_min_lot)
+    calculated_lot: Decimal = Decimal("0")
+    broker_min_lot: Decimal = Decimal("0")
+    account_balance: Decimal = Decimal("0")
+    risk_percentage: Decimal = Decimal("0")
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -28,6 +33,22 @@ class LotSizingResult:
             "method": self.method,
             "reason": self.reason,
             "valid": self.valid,
+            "calculated_lot": str(self.calculated_lot),
+            "broker_min_lot": str(self.broker_min_lot),
+            "broker_minimum": str(self.broker_min_lot),
+            "account_balance": str(self.account_balance),
+            "equity": str(self.account_balance),
+            "risk_percentage": str(self.risk_percentage),
+            "risk_pct": str(self.risk_percentage),
+            "raw_lots": str(self.calculated_lot),
+        }
+
+    def below_min_lot_detail(self) -> dict[str, str]:
+        return {
+            "calculated_lot": str(self.calculated_lot),
+            "broker_minimum": str(self.broker_min_lot),
+            "account_balance": str(self.account_balance),
+            "risk_percentage": str(self.risk_percentage),
         }
 
 
@@ -70,6 +91,9 @@ def calculate_scalping_lots(
             method="blocked",
             reason="Unsafe sizing modes are permanently disabled",
             valid=False,
+            account_balance=equity,
+            risk_percentage=risk_pct or cfg.risk_per_trade_pct,
+            broker_min_lot=min_lot or cfg.broker_min_lot,
         )
 
     base_risk = risk_pct if risk_pct is not None else cfg.risk_per_trade_pct
@@ -94,6 +118,9 @@ def calculate_scalping_lots(
                 f"{cfg.max_daily_exposure_pct}%"
             ),
             valid=False,
+            account_balance=equity,
+            risk_percentage=base_risk,
+            broker_min_lot=min_lot or cfg.broker_min_lot,
         )
 
     remaining_exposure = cfg.max_daily_exposure_pct - daily_exposure_used_pct
@@ -146,6 +173,9 @@ def calculate_scalping_lots(
                 method="no_stop",
                 reason="Stop distance unavailable — refusing fixed lots",
                 valid=False,
+                account_balance=equity,
+                risk_percentage=base_risk,
+                broker_min_lot=min_lot or cfg.broker_min_lot,
             )
 
     cs = (
@@ -166,6 +196,9 @@ def calculate_scalping_lots(
             method="invalid_inputs",
             reason="Equity / risk% / contract size invalid",
             valid=False,
+            account_balance=equity,
+            risk_percentage=base_risk,
+            broker_min_lot=broker_min,
         )
 
     risk_amount = (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
@@ -178,13 +211,21 @@ def calculate_scalping_lots(
         max_lot=cfg.broker_max_lot,
     )
     if lots <= 0:
+        detail = (
+            f"below_min_lot calculated_lot={raw} broker_minimum={broker_min} "
+            f"account_balance={equity} risk_percentage={base_risk}"
+        )
         return LotSizingResult(
             lots=Decimal("0"),
             risk_amount=risk_amount,
             stop_distance=dist,
             method="below_min_lot",
-            reason=(f"Calculated lot below broker min {broker_min} (raw={raw})"),
+            reason=detail,
             valid=False,
+            calculated_lot=raw,
+            broker_min_lot=broker_min,
+            account_balance=equity,
+            risk_percentage=base_risk,
         )
     return LotSizingResult(
         lots=lots,
@@ -196,4 +237,8 @@ def calculate_scalping_lots(
             f"→ lots={lots} (min={broker_min} step={broker_step})"
         ),
         valid=True,
+        calculated_lot=raw,
+        broker_min_lot=broker_min,
+        account_balance=equity,
+        risk_percentage=base_risk,
     )
