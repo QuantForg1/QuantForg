@@ -61,9 +61,7 @@ def evaluate_session_filter(
     name_l = str(name).lower().replace(" ", "_")
     allowed = {s.lower().replace(" ", "_") for s in config.allowed_sessions}
     # Asia aliases map onto Tokyo/Sydney 24/7 windows
-    if name_l in {"tokyo", "sydney"} and (
-        "asian" in allowed or "asia" in allowed
-    ):
+    if name_l in {"tokyo", "sydney"} and ("asian" in allowed or "asia" in allowed):
         ok = True
     else:
         ok = name_l in allowed or any(a in name_l or name_l in a for a in allowed)

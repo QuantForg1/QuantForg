@@ -519,9 +519,7 @@ class StrategyDiagnosticsStore:
                     str(r) for r in (rejection.get("decision_reasons") or [])
                 )
             sizing = (
-                cycle.get("sizing")
-                if isinstance(cycle.get("sizing"), dict)
-                else None
+                cycle.get("sizing") if isinstance(cycle.get("sizing"), dict) else None
             )
             record_cycle_evidence(
                 cycle_outcome=str(cycle.get("cycle_outcome") or ""),

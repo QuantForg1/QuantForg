@@ -98,9 +98,7 @@ class SessionFilter:
         # Absolute block only when session is not in the 24/7 tradable set
         # (weekend / off-hours / closed). Named sessions soft-weight only.
         allowed = active in self.config.allowed_sessions
-        risk_mult = (
-            risk_multiplier_for_stars(stars) if allowed else Decimal("0")
-        )
+        risk_mult = risk_multiplier_for_stars(stars) if allowed else Decimal("0")
         if allowed:
             reason = (
                 f"Session {active.value} open for 24/7 desk "
