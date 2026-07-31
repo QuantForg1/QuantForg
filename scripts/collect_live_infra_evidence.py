@@ -3,6 +3,10 @@
 
 Intended to run via: railway run python scripts/collect_live_infra_evidence.py
 Writes sanitized JSON only — never prints tokens, DSNs, or passwords.
+
+OMS/AI statuses are derived from runtime evidence via
+``production_component_health``. Prefer production
+``/api/v1/health/trading-components`` for AI (ITE runtime lives in API process).
 """
 
 from __future__ import annotations
@@ -22,7 +26,6 @@ def _safe(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        # Never emit credential-like strings
         lower = value.lower()
         if any(
             k in lower
@@ -57,9 +60,13 @@ def main() -> int:
     settings = get_settings()
 
     from app.application.services.institutional_live_probes import LiveProbeCollector
+    from app.application.services.production_component_health import (
+        collect_trading_component_health,
+    )
 
     collector = LiveProbeCollector(settings=settings)
     probes = collector.collect()
+    local_trading = collect_trading_component_health(settings, probes=probes)
 
     gateway_url = str(getattr(settings, "mt5_gateway_base_url", "") or "")
     gateway_configured = bool(gateway_url.strip())
@@ -67,44 +74,7 @@ def main() -> int:
     mt5_enabled = bool(getattr(settings, "mt5_enabled", False))
     mt5_use_mock = bool(getattr(settings, "mt5_use_mock", True))
 
-    # AI / OMS: outside API process use settings flags (never fabricate HEALTHY)
-    ai_status = "SETTINGS_ONLY"
-    oms_status = "ENABLED" if execution_enabled else "DISABLED"
-    try:
-        from app.application.services.institutional_ite_runtime import get_ite_runtime
-
-        runtime = get_ite_runtime()
-        if runtime is not None:
-            ai_status = "RUNTIME_PRESENT"
-            oms_status = "RUNTIME_PRESENT"
-    except Exception as exc:
-        ai_status = f"ERROR:{type(exc).__name__}"
-
-    # Direct gateway HTTP probe (sanitized)
-    gateway_http: dict[str, Any] = {}
-    try:
-        import os
-
-        import httpx
-
-        base = (
-            gateway_url.strip()
-            or os.environ.get("MT5_GATEWAY_BASE_URL", "")
-        ).rstrip("/")
-        token = os.environ.get("MT5_GATEWAY_CALLER_TOKEN", "")
-        if base:
-            headers = {"Authorization": f"Bearer {token}"} if token else {}
-            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
-                resp = client.get(f"{base}/health", headers=headers)
-                gateway_http = {
-                    "http_status": int(resp.status_code),
-                    "ok": 200 <= resp.status_code < 300,
-                    "content_type": resp.headers.get("content-type"),
-                }
-    except Exception as exc:
-        gateway_http = {"error": type(exc).__name__}
-
-    # Public API health (no auth)
+    # Prefer production API component health for AI (runtime only in API process)
     import urllib.error
     import urllib.request
 
@@ -138,10 +108,69 @@ def main() -> int:
             }
 
     api = "https://quantforg-production.up.railway.app"
+    trading_comp_probe = http_get(f"{api}/api/v1/health/trading-components")
+    prod_trading = (
+        trading_comp_probe.get("body")
+        if trading_comp_probe.get("ok")
+        and isinstance(trading_comp_probe.get("body"), dict)
+        else None
+    )
+
+    # OMS: local derivation from live gateway/MT5 evidence is authoritative
+    oms_status = str(local_trading["statuses"]["oms"])
+    # AI: prefer production process status; else local (usually NOT_READY off-process)
+    if prod_trading and isinstance(prod_trading.get("statuses"), dict):
+        ai_status = str(prod_trading["statuses"].get("ai") or "UNKNOWN")
+        ai_source = "production_trading_components"
+        # Also prefer production OMS if present and HEALTHY
+        prod_oms = str(prod_trading["statuses"].get("oms") or "")
+        if prod_oms:
+            oms_status = prod_oms
+            oms_source = "production_trading_components"
+        else:
+            oms_source = "local_derivation"
+        gateway_status = str(
+            prod_trading["statuses"].get("gateway")
+            or local_trading["statuses"]["gateway"]
+        )
+        mt5_status = str(
+            prod_trading["statuses"].get("mt5") or local_trading["statuses"]["mt5"]
+        )
+    else:
+        ai_status = str(local_trading["statuses"]["ai"])
+        ai_source = "local_derivation_no_prod_endpoint"
+        oms_source = "local_derivation"
+        gateway_status = str(local_trading["statuses"]["gateway"])
+        mt5_status = str(local_trading["statuses"]["mt5"])
+
+    # Direct gateway HTTP probe (sanitized)
+    gateway_http: dict[str, Any] = {}
+    try:
+        import os
+
+        import httpx
+
+        base = (
+            gateway_url.strip() or os.environ.get("MT5_GATEWAY_BASE_URL", "")
+        ).rstrip("/")
+        token = os.environ.get("MT5_GATEWAY_CALLER_TOKEN", "")
+        if base:
+            headers = {"Authorization": f"Bearer {token}"} if token else {}
+            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+                resp = client.get(f"{base}/health", headers=headers)
+                gateway_http = {
+                    "http_status": int(resp.status_code),
+                    "ok": 200 <= resp.status_code < 300,
+                    "content_type": resp.headers.get("content-type"),
+                }
+    except Exception as exc:
+        gateway_http = {"error": type(exc).__name__}
+
     health_probes = [
         http_get(f"{api}/health"),
         http_get(f"{api}/api/v1/health"),
         http_get(f"{api}/api/v1/health/status"),
+        trading_comp_probe,
         http_get(f"{api}/api/v1/ite/ops/rc1-production-validation"),
         http_get(f"{api}/api/v1/ite/ops/services-health"),
     ]
@@ -153,22 +182,30 @@ def main() -> int:
             "configured": gateway_configured,
             "available": bool(probes.gateway_available),
             "latency_ms": probes.gateway_latency_ms,
-            "status": "HEALTHY" if probes.gateway_available else "DOWN",
+            "status": gateway_status,
         },
         "mt5": {
             "enabled": mt5_enabled,
             "use_mock": mt5_use_mock,
             "connected": bool(probes.mt5_connected),
-            "status": "CONNECTED" if probes.mt5_connected else "DISCONNECTED",
+            "status": mt5_status,
         },
         "oms": {
             "execution_enabled": execution_enabled,
             "latency_ms": probes.oms_latency_ms,
             "status": oms_status,
+            "source": oms_source,
+            "detail": local_trading["oms"].get("detail"),
         },
         "ai": {
             "status": ai_status,
+            "source": ai_source,
             "decision_latency_ms": probes.decision_latency_ms,
+            "detail": (
+                (prod_trading or {}).get("ai", {}).get("detail")
+                if prod_trading
+                else local_trading["ai"].get("detail")
+            ),
         },
         "platform": {
             "railway_api_up": bool(probes.railway_api_up),
@@ -176,34 +213,35 @@ def main() -> int:
             "cloudflare_tunnel_up": bool(probes.cloudflare_tunnel_up),
             "database_latency_ms": probes.database_latency_ms,
         },
+        "local_trading_components": _safe(local_trading),
+        "production_trading_components": _safe(prod_trading),
         "health_endpoints": health_probes,
         "gateway_http": gateway_http,
         "last_gateway_health_payload": _safe(collector.last_health_payload),
         "unknown_states": [],
     }
 
-    # Record residual UNKNOWN / DOWN / incomplete for acceptance honesty
+    bad = {
+        "UNKNOWN",
+        "DOWN",
+        "DISCONNECTED",
+        "RUNTIME_ABSENT",
+        "SETTINGS_ONLY",
+        "NOT_READY",
+        "DISABLED",
+        "ENABLED",
+    }
     for label, status in (
         ("gateway", evidence["gateway"]["status"]),
         ("mt5", evidence["mt5"]["status"]),
         ("oms", evidence["oms"]["status"]),
         ("ai", evidence["ai"]["status"]),
     ):
-        bad = {
-            "UNKNOWN",
-            "DOWN",
-            "DISCONNECTED",
-            "RUNTIME_ABSENT",
-            "SETTINGS_ONLY",
-        }
         if status in bad or str(status).startswith("ERROR"):
-            evidence["unknown_states"].append(
-                {"component": label, "status": status}
-            )
+            evidence["unknown_states"].append({"component": label, "status": status})
 
     path = out_dir / "authenticated_infra_probes.json"
     path.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
-    # Print summary only
     print(
         json.dumps(
             {

@@ -117,6 +117,27 @@ async def liveness() -> dict[str, str]:
 
 
 @router.get(
+    "/health/trading-components",
+    summary="Trading component health (Gateway/OMS/MT5/AI)",
+    description=(
+        "Observe-only component statuses derived from live gateway probes and "
+        "ITE runtime presence. Never fabricates HEALTHY. Does not enable "
+        "execution or change strategy."
+    ),
+    status_code=status.HTTP_200_OK,
+)
+async def trading_components_health() -> dict[str, object]:
+    """Return Gateway / OMS / MT5 / AI health for production readiness."""
+    from app.application.services.production_component_health import (
+        collect_trading_component_health,
+    )
+
+    payload = collect_trading_component_health(get_settings())
+    payload["status"] = "ok"
+    return payload
+
+
+@router.get(
     "/metrics",
     response_model=MetricsResponse,
     summary="Operational metrics",

@@ -47,9 +47,11 @@ def main() -> int:
         )
 
     app.dependency_overrides[get_current_user] = _operator
-    client = TestClient(app)
+    # TrustedHostMiddleware rejects default TestClient host "testserver"
+    # when Railway ALLOWED_HOSTS are injected into the process env.
+    client = TestClient(app, base_url="http://localhost")
     path = "/api/v1/ite/ops/rc1-production-validation"
-    resp = client.get(path)
+    resp = client.get(path, headers={"Host": "localhost"})
     body: object
     try:
         body = resp.json()
@@ -63,6 +65,11 @@ def main() -> int:
         "ok": resp.status_code == 200,
         "body_keys": (
             sorted(body.keys()) if isinstance(body, dict) else None
+        ),
+        "body_error_snippet": (
+            None
+            if resp.status_code == 200
+            else (body if isinstance(body, str) else str(body)[:300])
         ),
         "note": (
             "Proves route is wired and returns 200 for OperatorUser. "

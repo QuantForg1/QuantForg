@@ -320,6 +320,17 @@ def services_health(_user: OperatorUser) -> dict[str, Any]:
     now = datetime.now(UTC).isoformat()
     gateway_ok = bool(live.get("gateway_connected"))
     broker_ok = bool(live.get("broker_connected"))
+    from app.application.services.production_component_health import (
+        collect_trading_component_health,
+    )
+
+    trading = collect_trading_component_health(
+        settings,
+        probes=probes,
+        ite_runtime_present=runtime is not None,
+    )
+    oms_comp = trading["oms"]
+    ai_comp = trading["ai"]
     services = [
         {
             "name": "api",
@@ -340,6 +351,7 @@ def services_health(_user: OperatorUser) -> dict[str, Any]:
             "last_successful_operation": "gateway_probe" if gateway_ok else None,
             "last_error": None if gateway_ok else "gateway offline",
             "reconnect_count": 0,
+            "component_status": trading["gateway"]["status"],
         },
         {
             "name": "mt5_terminal",
@@ -350,6 +362,39 @@ def services_health(_user: OperatorUser) -> dict[str, Any]:
             "last_successful_operation": "mt5_probe" if broker_ok else None,
             "last_error": None if broker_ok else "mt5 disconnected",
             "reconnect_count": 0,
+            "component_status": trading["mt5"]["status"],
+        },
+        {
+            "name": "oms",
+            "status": "up" if oms_comp["status"] == "HEALTHY" else "down",
+            "uptime": "derived",
+            "heartbeat_at": now,
+            "latency_ms": float(probes.oms_latency_ms or 0.0),
+            "last_successful_operation": (
+                "oms_path_ready" if oms_comp["status"] == "HEALTHY" else None
+            ),
+            "last_error": (
+                None if oms_comp["status"] == "HEALTHY" else oms_comp.get("detail")
+            ),
+            "reconnect_count": 0,
+            "component_status": oms_comp["status"],
+            "detail": oms_comp.get("detail"),
+        },
+        {
+            "name": "ai",
+            "status": "up" if ai_comp["status"] == "HEALTHY" else "down",
+            "uptime": "process" if runtime is not None else "absent",
+            "heartbeat_at": now,
+            "latency_ms": float(probes.decision_latency_ms or 0.0),
+            "last_successful_operation": (
+                "ite_runtime" if ai_comp["status"] == "HEALTHY" else None
+            ),
+            "last_error": (
+                None if ai_comp["status"] == "HEALTHY" else ai_comp.get("detail")
+            ),
+            "reconnect_count": 0,
+            "component_status": ai_comp["status"],
+            "detail": ai_comp.get("detail"),
         },
         {
             "name": "database",
@@ -377,6 +422,7 @@ def services_health(_user: OperatorUser) -> dict[str, Any]:
         "as_of": now,
         "ops_health": health.to_dict() if health else None,
         "live": live,
+        "trading_components": trading,
         "services": services,
         "alerts": [a.to_dict() for a in plane.alerts.list(limit=50, unacked_only=True)],
     }
