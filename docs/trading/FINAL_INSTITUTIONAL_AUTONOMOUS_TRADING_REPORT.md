@@ -10,8 +10,8 @@
 
 | Ref | Value |
 |-----|-------|
-| Feature tip (pre-report) | *filled at deploy* |
-| `origin/main` | *filled at deploy* |
+| Feature / Production tip | `1e4289083049d3929dd75235d0ea1c1e6832521c` |
+| `origin/main` | `1e4289083049d3929dd75235d0ea1c1e6832521c` |
 
 ---
 
@@ -93,10 +93,13 @@ Score-all → rank → **one** winner → existing Risk/PRE/OMS/MT5 path only.
 
 | Platform | Status |
 |----------|--------|
-| Railway | *filled at deploy* |
-| Vercel | *filled at deploy* |
-| Gateway | *filled at verify* |
-| OMS / AI / MT5 | *filled at verify* |
+| Railway | **SUCCESS** · deploy `57f2c2b5-7d21-4163-b6ca-1555831032d4` · Online · SHA `1e42890` |
+| Vercel | **LIVE** · `www.quantforg.com` /admin/noc serves Institutional Execution Trace + Emergency Protection UI |
+| Gateway | **PASS** · HTTP 200 · health ok |
+| OMS | **HEALTHY** |
+| AI | **HEALTHY** |
+| MT5 | **CONNECTED** |
+| NOC | **PASS** · HTTP 200 + scanner/trace assets live |
 
 ---
 
