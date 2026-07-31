@@ -328,6 +328,14 @@ def build_evidence_from_attempt(
     if oms_stage is not None:
         oms_ts = oms_stage.timestamp
 
+    broker_stage = attempt.stages.get(ValidationStage.BROKER.value)
+    if _pass(attempt, ValidationStage.BROKER):
+        broker_status: str | None = "PASS"
+    elif broker_stage is not None:
+        broker_status = broker_stage.status.value
+    else:
+        broker_status = None
+
     package = ExecutionEvidencePackage(
         validation_id=attempt.validation_id,
         signal_id=attempt.signal_id,
@@ -362,15 +370,7 @@ def build_evidence_from_attempt(
         mt5_comment=attempt.mt5.comment if attempt.mt5 else None,
         fill_price=fill,
         volume=volume,
-        broker_execution_status=(
-            "PASS"
-            if _pass(attempt, ValidationStage.BROKER)
-            else (
-                attempt.stages.get(ValidationStage.BROKER.value).status.value
-                if attempt.stages.get(ValidationStage.BROKER.value)
-                else None
-            )
-        ),
+        broker_execution_status=broker_status,
         slippage=attempt.mt5.slippage if attempt.mt5 else None,
         final_fill=fill,
         entry=fill,
