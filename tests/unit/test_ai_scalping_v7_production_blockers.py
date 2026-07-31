@@ -55,7 +55,7 @@ def _opp(symbol: str, **kwargs: object) -> dict:
 @pytest.mark.unit
 def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
     """Exposure is portfolio-combined, not per-symbol silos."""
-    # Two open positions → 2 × risk_per_trade_pct
+    # Two open positions → 2 x risk_per_trade_pct
     exp = portfolio_exposure_pct(
         open_positions=2,
         risk_per_trade_pct=DEFAULT_AI_SCALPING_CONFIG.risk_per_trade_pct,
@@ -104,9 +104,7 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
 
 @pytest.mark.unit
 def test_blocker2_daily_loss_from_account_ite_ceiling() -> None:
-    dd = portfolio_daily_loss_pct(
-        equity=Decimal("10000"), daily_pnl=Decimal("-300")
-    )
+    dd = portfolio_daily_loss_pct(equity=Decimal("10000"), daily_pnl=Decimal("-300"))
     assert dd == Decimal("3.00")
     account = AccountRiskState(
         equity=Decimal("10000"),

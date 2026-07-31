@@ -180,7 +180,7 @@ class AdaptiveCooldownGate:
                     seconds=decision.seconds,
                     allow_new_entry=True,
                     remaining_seconds=0.0,
-                    reasons=decision.reasons + ("No prior entry — cooldown clear",),
+                    reasons=(*decision.reasons, "No prior entry — cooldown clear"),
                     conditions=decision.conditions,
                 )
             elapsed = time.monotonic() - self._last_entry_mono
@@ -196,7 +196,7 @@ class AdaptiveCooldownGate:
                 seconds=decision.seconds,
                 allow_new_entry=allow,
                 remaining_seconds=remaining,
-                reasons=decision.reasons + (extra,),
+                reasons=(*decision.reasons, extra),
                 conditions={
                     **decision.conditions,
                     "evaluated_at": datetime.now(UTC).isoformat(),

@@ -29,7 +29,7 @@ class ValidationStage(StrEnum):
 
 
 class StageStatus(StrEnum):
-    PASS = "PASS"
+    PASS = "PASS"  # noqa: S105
     FAIL = "FAIL"
     SKIP = "SKIP"
     PENDING = "PENDING"
@@ -204,15 +204,17 @@ class ValidationAttempt:
             "ai_action": self.ai_action,
             "stages": {k: v.to_dict() for k, v in self.stages.items()},
             "pipeline": [
-                self.stages[s.value].to_dict()
-                if s.value in self.stages
-                else {
-                    "stage": s.value,
-                    "status": StageStatus.PENDING.value,
-                    "timestamp": None,
-                    "latency_ms": None,
-                    "reason": "",
-                }
+                (
+                    self.stages[s.value].to_dict()
+                    if s.value in self.stages
+                    else {
+                        "stage": s.value,
+                        "status": StageStatus.PENDING.value,
+                        "timestamp": None,
+                        "latency_ms": None,
+                        "reason": "",
+                    }
+                )
                 for s in PIPELINE_ORDER
             ],
             "no_trade_reasons": list(self.no_trade_reasons),

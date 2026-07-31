@@ -68,9 +68,7 @@ class MultiAssetScanScheduler:
         eligible_count: int,
     ) -> dict[str, Any]:
         with self._lock:
-            self.last_best_symbol = (
-                str(best_symbol).upper() if best_symbol else None
-            )
+            self.last_best_symbol = str(best_symbol).upper() if best_symbol else None
             self.last_eligible_count = int(eligible_count)
             return self.snapshot()
 

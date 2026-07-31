@@ -100,8 +100,14 @@ def calculate_scalping_lots(
     # Optional volatility-adjusted sizing — may REDUCE risk only, never raise
     method_suffix = ""
     if cfg.volatility_adjusted_sizing and atr is not None and atr > 0:
-        if stop_distance and stop_distance > 0 and atr >= stop_distance * Decimal("1.5"):
-            base_risk = (base_risk * cfg.high_vol_risk_scale).quantize(Decimal("0.0001"))
+        if (
+            stop_distance
+            and stop_distance > 0
+            and atr >= stop_distance * Decimal("1.5")
+        ):
+            base_risk = (base_risk * cfg.high_vol_risk_scale).quantize(
+                Decimal("0.0001")
+            )
             method_suffix = "+high_vol_scale"
         elif (
             stop_distance

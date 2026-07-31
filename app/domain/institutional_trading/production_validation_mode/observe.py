@@ -100,9 +100,7 @@ def stage(
 ) -> None:
     try:
         status = (
-            StageStatus.SKIP
-            if skip
-            else (StageStatus.PASS if ok else StageStatus.FAIL)
+            StageStatus.SKIP if skip else (StageStatus.PASS if ok else StageStatus.FAIL)
         )
         get_production_validation_recorder().record_stage(
             name,
@@ -257,9 +255,7 @@ def finalize(
 
                 evidence_collector.collect_after_finalize(attempt)
             except Exception:
-                logger.exception(
-                    "execution_evidence_collect_after_finalize_failed"
-                )
+                logger.exception("execution_evidence_collect_after_finalize_failed")
         return recorder.report_summary(attempt)
     except Exception:
         logger.exception("pvm_finalize_failed")

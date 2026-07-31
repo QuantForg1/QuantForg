@@ -140,7 +140,9 @@ class PostTradeJournal:
                 self._records = self._records[-self.max_records :]
         return analytics
 
-    def recent(self, *, limit: int = 50, symbol: str | None = None) -> list[dict[str, Any]]:
+    def recent(
+        self, *, limit: int = 50, symbol: str | None = None
+    ) -> list[dict[str, Any]]:
         with self._lock:
             rows = list(self._records[-max(1, limit * 4) :])
         if symbol:
@@ -172,7 +174,9 @@ class PostTradeJournal:
         losses = [r for r in closed if r.win is False]
         rs = [float(r.r_multiple or 0) for r in closed]
         avg_r = sum(rs) / len(rs)
-        gross_win = sum(float(r.r_multiple or 0) for r in wins if (r.r_multiple or 0) > 0)
+        gross_win = sum(
+            float(r.r_multiple or 0) for r in wins if (r.r_multiple or 0) > 0
+        )
         gross_loss = abs(
             sum(float(r.r_multiple or 0) for r in losses if (r.r_multiple or 0) < 0)
         )

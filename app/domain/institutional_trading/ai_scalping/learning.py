@@ -118,8 +118,12 @@ class ScalpingLearningStore:
                             if row.get("r_multiple") is not None
                             else None
                         ),
-                        mae_r=str(row["mae_r"]) if row.get("mae_r") is not None else None,
-                        mfe_r=str(row["mfe_r"]) if row.get("mfe_r") is not None else None,
+                        mae_r=(
+                            str(row["mae_r"]) if row.get("mae_r") is not None else None
+                        ),
+                        mfe_r=(
+                            str(row["mfe_r"]) if row.get("mfe_r") is not None else None
+                        ),
                         holding_time_minutes=(
                             float(row["holding_time_minutes"])
                             if row.get("holding_time_minutes") is not None

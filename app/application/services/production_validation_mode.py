@@ -15,7 +15,9 @@ def build_production_validation_dashboard() -> dict[str, Any]:
     payload.update(
         {
             "mode": "production_validation",
-            "purpose": "Capture complete execution evidence for natural eligible trades",
+            "purpose": (
+                "Capture complete execution evidence for natural eligible trades"
+            ),
             "observe_only": True,
             "never_modifies_strategy": True,
             "never_bypasses_safety": True,

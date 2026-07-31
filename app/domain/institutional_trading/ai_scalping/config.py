@@ -1,4 +1,4 @@
-"""Institutional AI Scalping v6 - execution-quality config (never raise risk casually)."""
+"""AI Scalping v6 execution-quality config (never raise risk casually)."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class AiScalpingConfig:
     # EMA / RSI / candle PA composite — never below prior quality floors
     min_pa_confluence_score: int = 55
 
-    # Real scalping hold window (target 2–15m when conditions support)
+    # Real scalping hold window (target 2-15m when conditions support)
     typical_hold_min_minutes: int = 2
     typical_hold_max_minutes: int = 15
     max_hold_minutes_if_confident: int = 15

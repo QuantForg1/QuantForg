@@ -215,7 +215,7 @@ class InstitutionalIteRuntime:
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
-            from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+            from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
                 get_continuous_operation_controller,
             )
 
@@ -244,7 +244,7 @@ class InstitutionalIteRuntime:
 
                     def _mt5() -> bool:
                         try:
-                            if hasattr(adapter, "attach"):
+                            if adapter is not None and hasattr(adapter, "attach"):
                                 adapter.attach(path="")
                             client = getattr(adapter, "client", None) or getattr(
                                 adapter, "_client", None
@@ -268,17 +268,15 @@ class InstitutionalIteRuntime:
                         float(self.reliability.heartbeats.timeout_seconds),
                         float(self.interval_seconds) * 2.0 + 5.0,
                     )
-                    self._continuous_ops_bound = True  # type: ignore[attr-defined]
-                # Derive live pause inputs — never hardcode market/portfolio as always-ok
+                    self._continuous_ops_bound = True
+                # Live pause inputs; never hardcode market/portfolio as always-ok
                 oms_ok = _oms_submit_path_healthy(probes)
                 if not oms_ok:
                     logger.warning(
                         "oms_heartbeat_unhealthy",
                         gateway_available=bool(probes.gateway_available),
                         mt5_connected=bool(probes.mt5_connected),
-                        railway_api_up=bool(
-                            getattr(probes, "railway_api_up", False)
-                        ),
+                        railway_api_up=bool(getattr(probes, "railway_api_up", False)),
                         note=(
                             "OMS heartbeat follows gateway submit path; "
                             "railway_api_up is reported separately"
@@ -307,8 +305,8 @@ class InstitutionalIteRuntime:
                     last_acct = getattr(self, "_last_account_risk", None)
                     if last_acct is not None:
                         from app.domain.institutional_trading.ai_scalping import (
-                            check_portfolio_limits,
                             aggregate_portfolio_risk,
+                            check_portfolio_limits,
                         )
 
                         risk_snap = aggregate_portfolio_risk(
@@ -340,7 +338,7 @@ class InstitutionalIteRuntime:
                     portfolio_risk_exceeded=portfolio_risk_exceeded,
                 )
                 result["continuous_operation"] = snap.to_dict()
-                self._last_continuous_op = snap.to_dict()  # type: ignore[attr-defined]
+                self._last_continuous_op = snap.to_dict()
         except Exception:
             logger.exception("continuous_operation_tick_failed")
             # Fail closed: pause new entries until the next healthy tick.
@@ -352,7 +350,7 @@ class InstitutionalIteRuntime:
                 },
                 "error": True,
             }
-            self._last_continuous_op = fail_closed  # type: ignore[attr-defined]
+            self._last_continuous_op = fail_closed
             result["continuous_operation"] = fail_closed
         return result
 
@@ -431,7 +429,7 @@ class InstitutionalIteRuntime:
         if self.plane.mode is OpsExecutionMode.SHADOW:
             try:
                 if _pvm_token is not None:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         get_production_validation_recorder as _pvm_rec,
                     )
 
@@ -529,7 +527,7 @@ class InstitutionalIteRuntime:
                 mode=result.mode,
             )
             try:
-                from app.domain.institutional_trading.production_validation_mode import (
+                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                     ValidationStage,
                     finalize as pvm_finalize,
                     stage as pvm_stage,
@@ -547,7 +545,7 @@ class InstitutionalIteRuntime:
             finally:
                 try:
                     if _pvm_token is not None:
-                        from app.domain.institutional_trading.production_validation_mode import (
+                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             get_production_validation_recorder as _pvm_rec2,
                         )
 
@@ -730,13 +728,13 @@ class InstitutionalIteRuntime:
                     ),
                 )
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         ValidationStage,
                         capture_signal as pvm_capture,
                         finalize as pvm_finalize,
                         stage as pvm_stage,
                     )
-                    from app.domain.institutional_trading.production_validation_mode.recorder import (
+                    from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
                         get_production_validation_recorder as _pvm_get,
                     )
 
@@ -766,7 +764,7 @@ class InstitutionalIteRuntime:
                 finally:
                     try:
                         if _pvm_token is not None:
-                            from app.domain.institutional_trading.production_validation_mode import (
+                            from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                                 get_production_validation_recorder as _pvm_rec3,
                             )
 
@@ -800,7 +798,7 @@ class InstitutionalIteRuntime:
         finally:
             try:
                 if _pvm_token is not None:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         get_production_validation_recorder as _pvm_rec4,
                     )
 
@@ -842,7 +840,7 @@ class InstitutionalIteRuntime:
                         reason=reason,
                     )
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (
+                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             ValidationStage,
                             stage as pvm_stage,
                         )
@@ -905,26 +903,25 @@ class InstitutionalIteRuntime:
                         ),
                     )
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (
+                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             ValidationStage,
                             stage as pvm_stage,
                         )
 
+                        _close_record = getattr(result, "record", None)
+                        _close_reason = getattr(_close_record, "reason", "")
                         pvm_stage(
                             ValidationStage.POSITION_CLOSE,
                             ok=True,
-                            reason=(
-                                f"ticket={ticket} "
-                                f"exit={getattr(getattr(result, 'record', None), 'reason', '')}"
-                            ),
+                            reason=f"ticket={ticket} exit={_close_reason}",
                         )
                     except Exception:
                         logger.exception("pvm_position_close_stage_failed")
                     try:
-                        from app.domain.institutional_trading.ai_scalping.config import (
+                        from app.domain.institutional_trading.ai_scalping.config import (  # noqa: E501
                             DEFAULT_AI_SCALPING_CONFIG,
                         )
-                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501  # noqa: E501
                             get_continuous_operation_controller,
                         )
 
@@ -972,7 +969,7 @@ class InstitutionalIteRuntime:
         mt5_autotrading_enabled: bool = False,
         symbol_tradable: bool = False,
         no_broker_restrictions: bool = False,
-        risk_allowed: bool = True,
+        risk_allowed: bool = True,  # noqa: ARG002
         risk_reasons: tuple[str, ...] = (),
         market_context_diagnostics: dict[str, Any] | None = None,
     ) -> ShadowCycleResult:
@@ -1013,10 +1010,10 @@ class InstitutionalIteRuntime:
 
         tid = new_trace_id()
         t0 = time.perf_counter()
-        try:
+        try:  # noqa: SIM105
             # Cache for continuous-ops portfolio pause probes on health ticks
-            self._last_account_risk = account  # type: ignore[attr-defined]
-        except Exception:
+            self._last_account_risk = account
+        except Exception:  # noqa: S110
             pass
         self.reliability.traces.start(
             trace_id=tid, decision_id=None, symbol=getattr(snapshot, "symbol", "XAUUSD")
@@ -1100,16 +1097,12 @@ class InstitutionalIteRuntime:
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG as _scalp_cfg,
             )
-            from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+            from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
                 get_continuous_operation_controller as _get_co,
             )
             from app.domain.institutional_trading.decision_models import (
                 DecisionAction as _DA,
-            )
-            from app.domain.institutional_trading.decision_models import (
                 EligibilityResult as _Elig,
-            )
-            from app.domain.institutional_trading.decision_models import (
                 TradeDirection as _TD,
             )
 
@@ -1118,7 +1111,7 @@ class InstitutionalIteRuntime:
                 # After close: clear entry spacing so a NEW valid setup can scan
                 if _scalp_cfg.post_close_rescan_enabled and ctrl.consume_rescan():
                     try:
-                        from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
+                        from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (  # noqa: E501
                             get_adaptive_cooldown_gate,
                         )
 
@@ -1148,8 +1141,8 @@ class InstitutionalIteRuntime:
                     portfolio_risk_exceeded = False
                     try:
                         from app.domain.institutional_trading.ai_scalping import (
-                            check_portfolio_limits,
                             aggregate_portfolio_risk,
+                            check_portfolio_limits,
                         )
 
                         risk_snap = aggregate_portfolio_risk(
@@ -1186,18 +1179,22 @@ class InstitutionalIteRuntime:
                         decision,
                         action=_DA.NO_TRADE,
                         direction=_TD.NONE,
-                        reasons=decision.reasons
-                        + ("continuous_ops_pause_new_entries",)
-                        + why,
+                        reasons=(
+                            *decision.reasons,
+                            "continuous_ops_pause_new_entries",
+                            *why,
+                        ),
                         eligibility=_Elig(
                             eligible=False,
                             checks={
                                 **dict(decision.eligibility.checks),
                                 "continuous_ops_new_entries": False,
                             },
-                            rejection_reasons=decision.eligibility.rejection_reasons
-                            + ("continuous_ops_pause_new_entries",)
-                            + why,
+                            rejection_reasons=(
+                                *decision.eligibility.rejection_reasons,
+                                "continuous_ops_pause_new_entries",
+                                *why,
+                            ),
                         ),
                         approved_lots=_Dec("0"),
                     )
@@ -1215,11 +1212,7 @@ class InstitutionalIteRuntime:
 
                 from app.domain.institutional_trading.decision_models import (
                     DecisionAction as _DA_fc,
-                )
-                from app.domain.institutional_trading.decision_models import (
                     EligibilityResult as _Elig_fc,
-                )
-                from app.domain.institutional_trading.decision_models import (
                     TradeDirection as _TD_fc,
                 )
 
@@ -1228,16 +1221,17 @@ class InstitutionalIteRuntime:
                         decision,
                         action=_DA_fc.NO_TRADE,
                         direction=_TD_fc.NONE,
-                        reasons=decision.reasons
-                        + ("continuous_ops_pause_eval_failed",),
+                        reasons=(*decision.reasons, "continuous_ops_pause_eval_failed"),
                         eligibility=_Elig_fc(
                             eligible=False,
                             checks={
                                 **dict(decision.eligibility.checks),
                                 "continuous_ops_new_entries": False,
                             },
-                            rejection_reasons=decision.eligibility.rejection_reasons
-                            + ("continuous_ops_pause_eval_failed",),
+                            rejection_reasons=(
+                                *decision.eligibility.rejection_reasons,
+                                "continuous_ops_pause_eval_failed",
+                            ),
                         ),
                         approved_lots=_Dec_fc("0"),
                     )
@@ -1432,7 +1426,7 @@ class InstitutionalIteRuntime:
             risk_reason = "; ".join(decision.risk_reasons or risk_reasons or ())
             pvm_stage(
                 ValidationStage.RISK,
-                ok=risk_ok if ai_ok or decision.eligibility.eligible else risk_ok,
+                ok=risk_ok,
                 reason=risk_reason or ("risk ok" if risk_ok else "risk rejected"),
             )
             pvm_stage(
@@ -1558,7 +1552,7 @@ class InstitutionalIteRuntime:
             abort = getattr(bridge_result, "abort_reason", None)
             abort_val = str(getattr(abort, "value", abort) or "")
             oms = getattr(bridge_result, "oms_result", None)
-            # Bridge PASS only when BUY/SELL reached OMS, or intentional ignore of NO_TRADE.
+            # Bridge PASS when BUY/SELL reached OMS, or intentional ignore of NO_TRADE.
             action_s = str(getattr(decision.action, "value", decision.action) or "")
             if action_s in {"BUY", "SELL"}:
                 bridge_ok = forwarded and not bool(
@@ -2777,7 +2771,7 @@ class InstitutionalIteRuntime:
                 position_engine=self.position_management.engine,
             )
             try:
-                from app.domain.institutional_trading.production_validation_mode import (
+                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                     ValidationStage,
                     stage as pvm_stage,
                 )
@@ -2819,7 +2813,7 @@ class InstitutionalIteRuntime:
                     self._last_cycle = result
                     self._cycles += 1
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         finalize as pvm_finalize,
                     )
 
@@ -2905,7 +2899,7 @@ class InstitutionalIteRuntime:
             reason = f"cycle exception: {exc}"
             logger.warning("Execution Finished", success=False, status="REJECTED")
             try:
-                from app.domain.institutional_trading.production_validation_mode import (
+                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                     finalize as pvm_finalize,
                 )
 
@@ -2930,7 +2924,7 @@ class InstitutionalIteRuntime:
             self._manual_execution = False
             try:
                 if _pvm_token is not None:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         get_production_validation_recorder as _pvm_rec_en,
                     )
 
@@ -3006,7 +3000,7 @@ class InstitutionalIteRuntime:
                 from app.domain.trading.gold_only import GOLD_SYMBOL
 
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         ValidationStage,
                         begin_validation,
                         get_production_validation_recorder,
@@ -3061,7 +3055,7 @@ class InstitutionalIteRuntime:
                     position_engine=self.position_management.engine,
                 )
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         ValidationStage,
                         finalize as pvm_finalize,
                         stage as pvm_stage,
@@ -3072,14 +3066,17 @@ class InstitutionalIteRuntime:
                     pvm_stage(
                         ValidationStage.MARKET_DATA,
                         ok=market_ok,
-                        reason=ctx.reason or ("market data ok" if market_ok else "fail"),
+                        reason=ctx.reason
+                        or ("market data ok" if market_ok else "fail"),
                         latency_ms=getattr(ctx, "latency_ms", None),
                         validation_id=_pvm_vid,
                     )
                     pvm_stage(
                         ValidationStage.CONTEXT,
                         ok=bool(
-                            ctx.ok and ctx.snapshot is not None and ctx.account is not None
+                            ctx.ok
+                            and ctx.snapshot is not None
+                            and ctx.account is not None
                         ),
                         reason=ctx.reason or "context built",
                         validation_id=_pvm_vid,
@@ -3111,12 +3108,12 @@ class InstitutionalIteRuntime:
                     )
                     logger.warning("Waiting Next Cycle", reason="no_executable_symbol")
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (
+                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             ValidationStage,
                             finalize as pvm_finalize,
                             stage as pvm_stage,
                         )
-                        from app.domain.institutional_trading.production_validation_mode.recorder import (
+                        from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
                             get_production_validation_recorder as _pvm_get,
                         )
 
@@ -3135,7 +3132,7 @@ class InstitutionalIteRuntime:
                     finally:
                         try:
                             if _pvm_token is not None:
-                                from app.domain.institutional_trading.production_validation_mode import (
+                                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                                     get_production_validation_recorder as _pvm_rec,
                                 )
 
@@ -3204,12 +3201,12 @@ class InstitutionalIteRuntime:
                         mode=self.plane.mode.value,
                     )
                     try:
-                        from app.domain.institutional_trading.production_validation_mode import (
+                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             ValidationStage,
                             finalize as pvm_finalize,
                             stage as pvm_stage,
                         )
-                        from app.domain.institutional_trading.production_validation_mode.recorder import (
+                        from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
                             get_production_validation_recorder as _pvm_get,
                         )
 
@@ -3335,7 +3332,7 @@ class InstitutionalIteRuntime:
                     )
                     self._cycles += 1
                 try:
-                    from app.domain.institutional_trading.production_validation_mode import (
+                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         ValidationStage,
                         finalize as pvm_finalize,
                         stage as pvm_stage,
@@ -3353,7 +3350,7 @@ class InstitutionalIteRuntime:
             finally:
                 try:
                     if _pvm_token is not None:
-                        from app.domain.institutional_trading.production_validation_mode import (
+                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             get_production_validation_recorder as _pvm_rec_end,
                         )
 

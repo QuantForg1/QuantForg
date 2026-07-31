@@ -114,9 +114,7 @@ def build_ai_scalping_dashboard() -> dict[str, Any]:
     }
 
     performance_by_symbol = (
-        post_trade.get("performance_by_symbol")
-        if isinstance(post_trade, dict)
-        else {}
+        post_trade.get("performance_by_symbol") if isinstance(post_trade, dict) else {}
     )
     if not isinstance(performance_by_symbol, dict):
         performance_by_symbol = {}

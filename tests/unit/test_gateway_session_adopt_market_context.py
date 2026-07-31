@@ -129,7 +129,7 @@ async def test_market_context_adopts_then_loads(
 async def test_market_context_reads_autotrading_from_gateway_health(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: must not hardcode mt5_autotrading_enabled=False when health says true."""
+    """Regression: must not hardcode mt5_autotrading_enabled=False when true."""
     gw = MagicMock()
     gw.is_connected = True
     gw.session_mode = "attached"

@@ -99,7 +99,9 @@ def test_validation_id_and_stage_timeline(tmp_path: Path) -> None:
 
 def test_acceptance_requires_ticket_and_buy_sell(tmp_path: Path) -> None:
     reset_production_validation_recorder_for_tests()
-    vid = begin_validation(symbol="XAUUSD", market_session="london", execution_mode="live")
+    vid = begin_validation(
+        symbol="XAUUSD", market_session="london", execution_mode="live"
+    )
     assert vid
 
     for s in (
@@ -130,7 +132,16 @@ def test_acceptance_requires_ticket_and_buy_sell(tmp_path: Path) -> None:
         reasons = ("setup ok",)
         eligibility = _Elig()
         risk_reasons = ()
-        confluence = type("C", (), {"confidence": 82, "factors": {"mtf": 80}, "rejected_rules": (), "reasons": ()})()
+        confluence = type(
+            "C",
+            (),
+            {
+                "confidence": 82,
+                "factors": {"mtf": 80},
+                "rejected_rules": (),
+                "reasons": (),
+            },
+        )()
         confidence = 82
         quality = 88
         risk_score = 20

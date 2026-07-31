@@ -259,7 +259,8 @@ class PostgresAuditLogRepository:
     async def add(self, entry: AuditLog) -> AuditLog:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO audit_logs (
                     id, action, outcome, resource_type, resource_id, actor_user_id,
                     occurred_at, ip_address, user_agent, message, metadata,
@@ -270,7 +271,8 @@ class PostgresAuditLogRepository:
                     :message, CAST(:metadata AS jsonb), :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO NOTHING
-                """),
+                """
+            ),
             {
                 "id": str(entry.id),
                 "action": entry.action.value,
@@ -294,11 +296,13 @@ class PostgresAuditLogRepository:
     async def list_recent(self, *, limit: int = 200) -> list[AuditLog]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM audit_logs
                 ORDER BY COALESCE(occurred_at, created_at) DESC
                 LIMIT :limit
-                """),
+                """
+            ),
             {"limit": limit},
         )
         return [_audit_from_row(r) for r in result.mappings().all()]
@@ -338,7 +342,8 @@ class PostgresUserRepository:
     async def add(self, user: User) -> User:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO users (
                     id, auth_user_id, email, display_name, role, status,
                     password_hash, last_login_at, deactivated_at,
@@ -358,7 +363,8 @@ class PostgresUserRepository:
                     last_login_at = EXCLUDED.last_login_at,
                     deactivated_at = EXCLUDED.deactivated_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(user.id),
                 "auth_user_id": (str(user.auth_user_id) if user.auth_user_id else None),
@@ -395,11 +401,13 @@ class PostgresProfileRepository:
     async def get_by_username(self, username: str) -> UserProfile | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM user_profiles
                 WHERE lower(username) = lower(:username)
                 LIMIT 1
-                """),
+                """
+            ),
             {"username": username},
         )
         row = result.mappings().first()
@@ -408,7 +416,8 @@ class PostgresProfileRepository:
     async def add(self, profile: UserProfile) -> UserProfile:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO user_profiles (
                     user_id, avatar_url, avatar_path, full_name, username, bio,
                     country_code, timezone, preferred_language, trading_experience,
@@ -430,7 +439,8 @@ class PostgresProfileRepository:
                     trading_experience = EXCLUDED.trading_experience,
                     risk_level = EXCLUDED.risk_level,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "user_id": str(profile.user_id),
                 "avatar_url": profile.avatar_url,
@@ -469,7 +479,8 @@ class PostgresSettingsRepository:
     async def add(self, settings: UserSettings) -> UserSettings:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO user_settings (
                     user_id, theme, notifications_enabled, email_marketing,
                     email_security, email_product, security_login_alerts,
@@ -491,7 +502,8 @@ class PostgresSettingsRepository:
                     security_require_reauth = EXCLUDED.security_require_reauth,
                     session_timeout_minutes = EXCLUDED.session_timeout_minutes,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "user_id": str(settings.user_id),
                 "theme": settings.theme.value,
@@ -519,11 +531,13 @@ class PostgresDeviceRepository:
     async def list_for_user(self, user_id: UUID) -> list[UserDevice]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM user_devices
                 WHERE user_id = :user_id
                 ORDER BY last_seen_at DESC
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_device_from_row(r) for r in result.mappings().all()]
@@ -531,7 +545,8 @@ class PostgresDeviceRepository:
     async def add(self, device: UserDevice) -> UserDevice:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO user_devices (
                     id, user_id, device_label, user_agent, last_seen_at,
                     created_at, updated_at
@@ -545,7 +560,8 @@ class PostgresDeviceRepository:
                     user_agent = EXCLUDED.user_agent,
                     last_seen_at = EXCLUDED.last_seen_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(device.id),
                 "user_id": str(device.user_id),
@@ -561,10 +577,12 @@ class PostgresDeviceRepository:
     async def delete(self, device_id: UUID, user_id: UUID) -> None:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 DELETE FROM user_devices
                 WHERE id = :id AND user_id = :user_id
-                """),
+                """
+            ),
             {"id": str(device_id), "user_id": str(user_id)},
         )
 
@@ -576,11 +594,13 @@ class PostgresSessionRepository:
     async def list_active_for_user(self, user_id: UUID) -> list[UserSession]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM user_sessions
                 WHERE user_id = :user_id AND is_active = true
                 ORDER BY last_active_at DESC
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_session_from_row(r) for r in result.mappings().all()]
@@ -588,7 +608,8 @@ class PostgresSessionRepository:
     async def add(self, user_session: UserSession) -> UserSession:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO user_sessions (
                     id, user_id, device_id, ip_address, user_agent, is_active,
                     created_at, last_active_at, revoked_at, updated_at
@@ -605,7 +626,8 @@ class PostgresSessionRepository:
                     last_active_at = EXCLUDED.last_active_at,
                     revoked_at = EXCLUDED.revoked_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(user_session.id),
                 "user_id": str(user_session.user_id),
@@ -645,10 +667,12 @@ class PostgresOrganizationMemberRepository:
     ) -> list[OrganizationMember]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM organization_members
                 WHERE organization_id = :organization_id
-                """),
+                """
+            ),
             {"organization_id": str(organization_id)},
         )
         return [_member_from_row(r) for r in result.mappings().all()]
@@ -658,11 +682,13 @@ class PostgresOrganizationMemberRepository:
     ) -> OrganizationMember | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM organization_members
                 WHERE organization_id = :organization_id AND user_id = :user_id
                 LIMIT 1
-                """),
+                """
+            ),
             {
                 "organization_id": str(organization_id),
                 "user_id": str(user_id),
@@ -674,7 +700,8 @@ class PostgresOrganizationMemberRepository:
     async def add(self, member: OrganizationMember) -> OrganizationMember:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO organization_members (
                     id, organization_id, user_id, role, status, joined_at,
                     created_at, updated_at
@@ -689,7 +716,8 @@ class PostgresOrganizationMemberRepository:
                     status = EXCLUDED.status,
                     joined_at = EXCLUDED.joined_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(member.id),
                 "organization_id": str(member.organization_id),
@@ -724,11 +752,13 @@ class PostgresOrganizationRepository:
     async def get_by_slug(self, slug: str) -> Organization | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM organizations
                 WHERE lower(slug) = lower(:slug)
                 LIMIT 1
-                """),
+                """
+            ),
             {"slug": slug},
         )
         row = result.mappings().first()
@@ -737,12 +767,14 @@ class PostgresOrganizationRepository:
     async def list_for_user(self, user_id: UUID) -> list[Organization]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT o.* FROM organizations o
                 INNER JOIN organization_members m ON m.organization_id = o.id
                 WHERE m.user_id = :user_id
                 ORDER BY o.created_at DESC
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_org_from_row(r) for r in result.mappings().all()]
@@ -750,7 +782,8 @@ class PostgresOrganizationRepository:
     async def add(self, organization: Organization) -> Organization:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO organizations (
                     id, name, slug, org_type, owner_user_id, created_at, updated_at
                 ) VALUES (
@@ -763,7 +796,8 @@ class PostgresOrganizationRepository:
                     org_type = EXCLUDED.org_type,
                     owner_user_id = EXCLUDED.owner_user_id,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(organization.id),
                 "name": organization.name,
@@ -784,7 +818,8 @@ class PostgresInvitationRepository:
     async def add(self, invitation: OrganizationInvitation) -> OrganizationInvitation:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO organization_invitations (
                     id, organization_id, email, role, invited_by, token_hash,
                     status, expires_at, accepted_at, created_at, updated_at
@@ -802,7 +837,8 @@ class PostgresInvitationRepository:
                     expires_at = EXCLUDED.expires_at,
                     accepted_at = EXCLUDED.accepted_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(invitation.id),
                 "organization_id": str(invitation.organization_id),
@@ -831,11 +867,13 @@ class PostgresInvitationRepository:
     async def list_pending(self, organization_id: UUID) -> list[OrganizationInvitation]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM organization_invitations
                 WHERE organization_id = :organization_id AND status = 'pending'
                 ORDER BY created_at DESC
-                """),
+                """
+            ),
             {"organization_id": str(organization_id)},
         )
         return [_invitation_from_row(r) for r in result.mappings().all()]
@@ -853,7 +891,8 @@ class PostgresActivityRepository:
     async def add(self, event: ActivityEvent) -> ActivityEvent:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO activity_events (
                     id, user_id, category, action, message, metadata,
                     ip_address, user_agent, created_at, updated_at
@@ -863,7 +902,8 @@ class PostgresActivityRepository:
                     :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO NOTHING
-                """),
+                """
+            ),
             {
                 "id": str(event.id),
                 "user_id": str(event.user_id),
@@ -884,12 +924,14 @@ class PostgresActivityRepository:
     ) -> list[ActivityEvent]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM activity_events
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT :limit
-                """),
+                """
+            ),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_activity_from_row(r) for r in result.mappings().all()]
@@ -902,7 +944,8 @@ class PostgresNotificationRepository:
     async def add(self, notification: Notification) -> Notification:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO notifications (
                     id, user_id, category, title, body, is_read, read_at,
                     metadata, created_at, updated_at
@@ -919,7 +962,8 @@ class PostgresNotificationRepository:
                     read_at = EXCLUDED.read_at,
                     metadata = EXCLUDED.metadata,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(notification.id),
                 "user_id": str(notification.user_id),
@@ -941,22 +985,26 @@ class PostgresNotificationRepository:
         session = self._uow._require_session()
         if unread_only:
             result = await session.execute(
-                text("""
+                text(
+                    """
                     SELECT * FROM notifications
                     WHERE user_id = :user_id AND is_read = false
                     ORDER BY created_at DESC
                     LIMIT :limit
-                    """),
+                    """
+                ),
                 {"user_id": str(user_id), "limit": limit},
             )
         else:
             result = await session.execute(
-                text("""
+                text(
+                    """
                     SELECT * FROM notifications
                     WHERE user_id = :user_id
                     ORDER BY created_at DESC
                     LIMIT :limit
-                    """),
+                    """
+                ),
                 {"user_id": str(user_id), "limit": limit},
             )
         return [_notification_from_row(r) for r in result.mappings().all()]
@@ -981,11 +1029,13 @@ class PostgresNotificationPreferenceRepository:
     async def list_for_user(self, user_id: UUID) -> list[NotificationPreference]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM notification_preferences
                 WHERE user_id = :user_id
                 ORDER BY category
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_pref_from_row(r) for r in result.mappings().all()]
@@ -995,7 +1045,8 @@ class PostgresNotificationPreferenceRepository:
     ) -> NotificationPreference:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO notification_preferences (
                     user_id, category, in_app, email, created_at, updated_at
                 ) VALUES (
@@ -1005,7 +1056,8 @@ class PostgresNotificationPreferenceRepository:
                     in_app = EXCLUDED.in_app,
                     email = EXCLUDED.email,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "user_id": str(preference.user_id),
                 "category": preference.category.value,
@@ -1025,7 +1077,8 @@ class PostgresStorageObjectRepository:
     async def add(self, obj: StorageObject) -> StorageObject:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO storage_objects (
                     id, user_id, bucket, object_path, content_type, size_bytes,
                     purpose, public_url, created_at, updated_at
@@ -1042,7 +1095,8 @@ class PostgresStorageObjectRepository:
                     purpose = EXCLUDED.purpose,
                     public_url = EXCLUDED.public_url,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(obj.id),
                 "user_id": str(obj.user_id),
@@ -1061,11 +1115,13 @@ class PostgresStorageObjectRepository:
     async def list_for_user(self, user_id: UUID) -> list[StorageObject]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM storage_objects
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_storage_from_row(r) for r in result.mappings().all()]

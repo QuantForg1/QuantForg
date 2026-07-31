@@ -93,7 +93,9 @@ def _client_of(mt5_adapter: Any) -> Any:
     return getattr(mt5_adapter, "client", None) or getattr(mt5_adapter, "_client", None)
 
 
-def _read_mt5_autotrading_enabled(mt5_adapter: Any, diag: dict[str, Any]) -> bool | None:
+def _read_mt5_autotrading_enabled(
+    mt5_adapter: Any, diag: dict[str, Any]
+) -> bool | None:
     """Read terminal AutoTrading from gateway /health — never invent True.
 
     Returns None when unknown (caller may fail-closed). Live gateway exposes
@@ -111,11 +113,10 @@ def _read_mt5_autotrading_enabled(mt5_adapter: Any, diag: dict[str, Any]) -> boo
             diag["autotrading_health_error"] = str(exc)
     if payload is None:
         try:
-            from core.config.settings import get_settings
-
             from app.application.services.institutional_live_probes import (
                 _http_get_json,
             )
+            from core.config.settings import get_settings
 
             base = (get_settings().mt5_gateway_base_url or "").rstrip("/")
             if base:
@@ -345,11 +346,7 @@ async def build_ite_cycle_market_context(
         account_trading_enabled = trade_mode not in {"", "disabled", "0"}
         # Equity fallback only when trade_mode is unknown/empty — never when the
         # broker reports trading explicitly disabled.
-        if (
-            not account_trading_enabled
-            and equity > 0
-            and trade_mode in {"", "unknown"}
-        ):
+        if not account_trading_enabled and equity > 0 and trade_mode in {"", "unknown"}:
             account_trading_enabled = True
             diag["account_trading_source"] = "equity_fallback_unknown_mode"
         else:

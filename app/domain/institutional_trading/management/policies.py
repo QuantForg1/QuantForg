@@ -240,7 +240,10 @@ def plan_action(
     ):
         return PlannedAction(
             ManageActionKind.EMERGENCY_EXIT,
-            f"Momentum faded ({context.ai_momentum}<{fade_threshold}) — exit scalping trade",
+            (
+                f"Momentum faded ({context.ai_momentum}<{fade_threshold}) "
+                "- exit scalping trade"
+            ),
             volume=position.remaining_volume,
             target_state=PositionLifecycleState.EXITED,
         )
@@ -334,10 +337,10 @@ def plan_action(
                 ManageActionKind.NOOP,
                 "Trailing disabled by config",
             )
-        new_sl, trail_reason = _pick_trail_stop(
+        trail_sl, trail_reason = _pick_trail_stop(
             position, context, config, regime_label=regime.value
         )
-        if new_sl is None:
+        if trail_sl is None:
             return PlannedAction(
                 ManageActionKind.NOOP,
                 f"Trail would not improve SL ({trail_reason})",
@@ -345,7 +348,7 @@ def plan_action(
         return PlannedAction(
             ManageActionKind.TRAIL,
             f"{trail_reason} at {r}R",
-            new_sl=new_sl,
+            new_sl=trail_sl,
             new_tp=position.current_tp if position.current_tp > 0 else None,
             target_state=PositionLifecycleState.TRAILING,
         )

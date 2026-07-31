@@ -54,9 +54,7 @@ def test_regimes_cover_adaptive_taxonomy() -> None:
         classify_scalping_regime(
             alignment_score=80, bos=1, atr_pct=Decimal("0.8")
         ).regime,
-        classify_scalping_regime(
-            alignment_score=60, atr_pct=Decimal("0.8")
-        ).regime,
+        classify_scalping_regime(alignment_score=60, atr_pct=Decimal("0.8")).regime,
         classify_scalping_regime(
             alignment_score=40, range_like=True, atr_pct=Decimal("0.8")
         ).regime,
@@ -66,9 +64,7 @@ def test_regimes_cover_adaptive_taxonomy() -> None:
             volume_expanding=True,
             atr_pct=Decimal("2.0"),
         ).regime,
-        classify_scalping_regime(
-            alignment_score=55, atr_pct=Decimal("2.0")
-        ).regime,
+        classify_scalping_regime(alignment_score=55, atr_pct=Decimal("2.0")).regime,
         classify_scalping_regime(
             alignment_score=40, range_like=True, atr_pct=Decimal("0.2")
         ).regime,
@@ -119,7 +115,9 @@ def test_setup_scan_failed_family_does_not_poison_others() -> None:
         sell_score=30,
         atr_band="high",
     )
-    assert any(c.family == "liquidity_sweep_reversal" and not c.passed for c in scan.candidates)
+    assert any(
+        c.family == "liquidity_sweep_reversal" and not c.passed for c in scan.candidates
+    )
     assert scan.best is not None
     assert scan.best.passed is True
     assert scan.best.family in {

@@ -6,8 +6,9 @@ score_scalping_setup core logic. Does not lower institutional safety floors.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 from app.domain.indicators import ema, rsi
 from app.domain.institutional_trading.ai_scalping.config import (
@@ -151,13 +152,17 @@ def assess_candle_pa(
     if n < 3:
         return 50, {"candle_ready": False}, "Candle PA insufficient history"
     o1, h1, l1, c1 = opens[-1], highs[-1], lows[-1], closes[-1]
-    o0, h0, l0, c0 = opens[-2], highs[-2], lows[-2], closes[-2]
+    o0, _h0, _l0, c0 = opens[-2], highs[-2], lows[-2], closes[-2]
     body1 = abs(c1 - o1)
     range1 = max(h1 - l1, 1e-12)
     upper_wick = h1 - max(o1, c1)
     lower_wick = min(o1, c1) - l1
-    bullish_engulf = c1 > o1 and c0 < o0 and c1 >= o0 and o1 <= c0 and body1 > abs(c0 - o0)
-    bearish_engulf = c1 < o1 and c0 > o0 and c1 <= o0 and o1 >= c0 and body1 > abs(c0 - o0)
+    bullish_engulf = (
+        c1 > o1 and c0 < o0 and c1 >= o0 and o1 <= c0 and body1 > abs(c0 - o0)
+    )
+    bearish_engulf = (
+        c1 < o1 and c0 > o0 and c1 <= o0 and o1 >= c0 and body1 > abs(c0 - o0)
+    )
     bull_reject = lower_wick >= body1 * 1.5 and lower_wick >= upper_wick and c1 >= o1
     bear_reject = upper_wick >= body1 * 1.5 and upper_wick >= lower_wick and c1 <= o1
     strong_body = body1 / range1 >= 0.55
@@ -306,7 +311,11 @@ def evaluate_pa_confluence(
     if not passed:
         reasons.append(
             f"PA confluence {score} < minimum {cfg.min_pa_confluence_score}"
-            + ("" if data_ready else f" (soft floor {max(40, cfg.min_pa_confluence_score - 15)})")
+            + (
+                ""
+                if data_ready
+                else f" (soft floor {max(40, cfg.min_pa_confluence_score - 15)})"
+            )
         )
     else:
         reasons.append(f"PA confluence {score} ≥ gate (ready={data_ready})")

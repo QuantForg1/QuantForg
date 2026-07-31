@@ -181,7 +181,8 @@ class PostgresBrokerCatalogueRepository:
     async def add(self, broker: Broker) -> Broker:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO brokers (
                     id, name, slug, broker_type, status, platform_code,
                     country_code, website, description, created_at, updated_at
@@ -199,7 +200,8 @@ class PostgresBrokerCatalogueRepository:
                     website = EXCLUDED.website,
                     description = EXCLUDED.description,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(broker.id),
                 "name": str(broker.name),
@@ -234,11 +236,13 @@ class PostgresBrokerCapabilityRepository:
     async def list_for_broker(self, broker_id: UUID) -> list[BrokerCapability]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_capabilities
                 WHERE broker_id = :broker_id
                 ORDER BY code
-                """),
+                """
+            ),
             {"broker_id": str(broker_id)},
         )
         return [_capability_from_row(r) for r in result.mappings().all()]
@@ -248,11 +252,13 @@ class PostgresBrokerCapabilityRepository:
     ) -> BrokerCapability | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_capabilities
                 WHERE broker_id = :broker_id AND code = :code
                 LIMIT 1
-                """),
+                """
+            ),
             {"broker_id": str(broker_id), "code": code.value},
         )
         row = result.mappings().first()
@@ -261,7 +267,8 @@ class PostgresBrokerCapabilityRepository:
     async def add(self, capability: BrokerCapability) -> BrokerCapability:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO broker_capabilities (
                     id, broker_id, code, enabled, notes, created_at, updated_at
                 ) VALUES (
@@ -273,7 +280,8 @@ class PostgresBrokerCapabilityRepository:
                     enabled = EXCLUDED.enabled,
                     notes = EXCLUDED.notes,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(capability.id),
                 "broker_id": str(capability.broker_id),
@@ -318,11 +326,13 @@ class PostgresBrokerAccountRepository:
     async def list_for_user(self, user_id: UUID) -> list[BrokerAccount]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_accounts
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_account_from_row(r) for r in result.mappings().all()]
@@ -335,13 +345,15 @@ class PostgresBrokerAccountRepository:
     ) -> BrokerAccount | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_accounts
                 WHERE user_id = :user_id
                   AND broker_id = :broker_id
                   AND lower(external_account_id) = lower(:external_account_id)
                 LIMIT 1
-                """),
+                """
+            ),
             {
                 "user_id": str(user_id),
                 "broker_id": str(broker_id),
@@ -354,7 +366,8 @@ class PostgresBrokerAccountRepository:
     async def add(self, account: BrokerAccount) -> BrokerAccount:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO broker_accounts (
                     id, user_id, broker_id, external_account_id, label, environment,
                     status, server, metadata, created_at, updated_at
@@ -373,7 +386,8 @@ class PostgresBrokerAccountRepository:
                     server = EXCLUDED.server,
                     metadata = EXCLUDED.metadata,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(account.id),
                 "user_id": str(account.user_id),
@@ -417,10 +431,12 @@ class PostgresBrokerCredentialRepository:
     async def list_for_account(self, broker_account_id: UUID) -> list[BrokerCredential]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_credentials
                 WHERE broker_account_id = :broker_account_id
-                """),
+                """
+            ),
             {"broker_account_id": str(broker_account_id)},
         )
         return [_credential_from_row(r) for r in result.mappings().all()]
@@ -432,12 +448,14 @@ class PostgresBrokerCredentialRepository:
     ) -> BrokerCredential | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_credentials
                 WHERE broker_account_id = :broker_account_id
                   AND credential_type = :credential_type
                 LIMIT 1
-                """),
+                """
+            ),
             {
                 "broker_account_id": str(broker_account_id),
                 "credential_type": credential_type.value,
@@ -449,7 +467,8 @@ class PostgresBrokerCredentialRepository:
     async def add(self, credential: BrokerCredential) -> BrokerCredential:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO broker_credentials (
                     id, broker_account_id, credential_type, encrypted_payload,
                     key_hint, status, encryption_key_version, rotated_at,
@@ -468,7 +487,8 @@ class PostgresBrokerCredentialRepository:
                     encryption_key_version = EXCLUDED.encryption_key_version,
                     rotated_at = EXCLUDED.rotated_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(credential.id),
                 "broker_account_id": str(credential.broker_account_id),
@@ -518,11 +538,13 @@ class PostgresBrokerConnectionRepository:
     async def get_for_account(self, broker_account_id: UUID) -> BrokerConnection | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_connections
                 WHERE broker_account_id = :broker_account_id
                 LIMIT 1
-                """),
+                """
+            ),
             {"broker_account_id": str(broker_account_id)},
         )
         row = result.mappings().first()
@@ -531,12 +553,14 @@ class PostgresBrokerConnectionRepository:
     async def list_for_user(self, user_id: UUID) -> list[BrokerConnection]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT c.* FROM broker_connections c
                 INNER JOIN broker_accounts a ON a.id = c.broker_account_id
                 WHERE a.user_id = :user_id
                 ORDER BY c.updated_at DESC
-                """),
+                """
+            ),
             {"user_id": str(user_id)},
         )
         return [_connection_from_row(r) for r in result.mappings().all()]
@@ -544,7 +568,8 @@ class PostgresBrokerConnectionRepository:
     async def add(self, connection: BrokerConnection) -> BrokerConnection:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO broker_connections (
                     id, broker_account_id, status, last_connected_at, last_error,
                     adapter_session_ref, created_at, updated_at
@@ -559,7 +584,8 @@ class PostgresBrokerConnectionRepository:
                     last_error = EXCLUDED.last_error,
                     adapter_session_ref = EXCLUDED.adapter_session_ref,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(connection.id),
                 "broker_account_id": str(connection.broker_account_id),
@@ -602,13 +628,15 @@ class PostgresBrokerSessionRepository:
     ) -> BrokerSession | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_sessions
                 WHERE broker_account_id = :broker_account_id
                   AND status = 'connected'
                 ORDER BY updated_at DESC
                 LIMIT 1
-                """),
+                """
+            ),
             {"broker_account_id": str(broker_account_id)},
         )
         row = result.mappings().first()
@@ -617,11 +645,13 @@ class PostgresBrokerSessionRepository:
     async def list_for_account(self, broker_account_id: UUID) -> list[BrokerSession]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_sessions
                 WHERE broker_account_id = :broker_account_id
                 ORDER BY created_at DESC
-                """),
+                """
+            ),
             {"broker_account_id": str(broker_account_id)},
         )
         return [_session_from_row(r) for r in result.mappings().all()]
@@ -629,7 +659,8 @@ class PostgresBrokerSessionRepository:
     async def add(self, broker_session: BrokerSession) -> BrokerSession:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO broker_sessions (
                     id, broker_account_id, connection_id, session_ref, status,
                     expires_at, last_refreshed_at, created_at, updated_at
@@ -645,7 +676,8 @@ class PostgresBrokerSessionRepository:
                     expires_at = EXCLUDED.expires_at,
                     last_refreshed_at = EXCLUDED.last_refreshed_at,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(broker_session.id),
                 "broker_account_id": str(broker_session.broker_account_id),
@@ -680,11 +712,13 @@ class PostgresBrokerConnectionHealthRepository:
     ) -> BrokerConnectionHealth | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_connection_health
                 WHERE connection_id = :connection_id
                 LIMIT 1
-                """),
+                """
+            ),
             {"connection_id": str(connection_id)},
         )
         row = result.mappings().first()
@@ -693,10 +727,12 @@ class PostgresBrokerConnectionHealthRepository:
     async def list_for_broker(self, broker_id: UUID) -> list[BrokerConnectionHealth]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_connection_health
                 WHERE broker_id = :broker_id
-                """),
+                """
+            ),
             {"broker_id": str(broker_id)},
         )
         return [_health_from_row(r) for r in result.mappings().all()]
@@ -706,10 +742,12 @@ class PostgresBrokerConnectionHealthRepository:
     ) -> list[BrokerConnectionHealth]:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT * FROM broker_connection_health
                 WHERE broker_account_id = :broker_account_id
-                """),
+                """
+            ),
             {"broker_account_id": str(broker_account_id)},
         )
         return [_health_from_row(r) for r in result.mappings().all()]
@@ -717,7 +755,8 @@ class PostgresBrokerConnectionHealthRepository:
     async def add(self, health: BrokerConnectionHealth) -> BrokerConnectionHealth:
         session = self._uow._require_session()
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO broker_connection_health (
                     id, connection_id, broker_account_id, broker_id, status,
                     latency_ms, last_heartbeat_at, last_successful_connection_at,
@@ -743,7 +782,8 @@ class PostgresBrokerConnectionHealthRepository:
                     last_error = EXCLUDED.last_error,
                     uptime_seconds = EXCLUDED.uptime_seconds,
                     updated_at = EXCLUDED.updated_at
-                """),
+                """
+            ),
             {
                 "id": str(health.id),
                 "connection_id": str(health.connection_id),
@@ -769,7 +809,8 @@ class PostgresBrokerConnectionHealthRepository:
     async def upsert(self, health: BrokerConnectionHealth) -> BrokerConnectionHealth:
         session = self._uow._require_session()
         result = await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO broker_connection_health (
                     id, connection_id, broker_account_id, broker_id, status,
                     latency_ms, last_heartbeat_at, last_successful_connection_at,
@@ -795,7 +836,8 @@ class PostgresBrokerConnectionHealthRepository:
                     uptime_seconds = EXCLUDED.uptime_seconds,
                     updated_at = EXCLUDED.updated_at
                 RETURNING id
-                """),
+                """
+            ),
             {
                 "id": str(health.id),
                 "connection_id": str(health.connection_id),

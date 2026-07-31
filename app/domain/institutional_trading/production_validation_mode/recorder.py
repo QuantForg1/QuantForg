@@ -194,7 +194,10 @@ class ProductionValidationRecorder:
                     attempt.bos = _safe_dict(bos)
                     attempt.choch = _safe_dict(choch)
                 trend = getattr(snapshot, "trend", None)
-                if trend is not None and getattr(trend, "alignment_score", None) is not None:
+                if (
+                    trend is not None
+                    and getattr(trend, "alignment_score", None) is not None
+                ):
                     attempt.mtf_alignment = int(trend.alignment_score)
                 tq = getattr(snapshot, "trade_quality", None)
                 if tq is not None:
@@ -380,7 +383,7 @@ class ProductionValidationRecorder:
     def classify_and_close(
         self, *, validation_id: str | None = None
     ) -> ValidationAttempt | None:
-        """Accept only natural BUY/SELL with ticket through broker; else first blocker."""
+        """Accept only natural BUY/SELL with ticket through broker; else blocker."""
         vid = validation_id or self.current_id()
         if not vid:
             return None
@@ -472,9 +475,7 @@ class ProductionValidationRecorder:
     def recent(self, *, limit: int = 20) -> list[dict[str, Any]]:
         with self._lock:
             ids = list(reversed(self._order))[: max(1, min(limit, 100))]
-            return [
-                self._attempts[i].to_dict() for i in ids if i in self._attempts
-            ]
+            return [self._attempts[i].to_dict() for i in ids if i in self._attempts]
 
     def report_summary(self, attempt: ValidationAttempt) -> dict[str, Any]:
         ticket = attempt.mt5.ticket if attempt.mt5 else None
