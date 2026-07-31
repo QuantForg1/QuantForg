@@ -1,11 +1,15 @@
 """MT5 Gateway single-instance protection (port 8765).
 
-Prevents WinError 10048 by never binding when a healthy QuantForg gateway
-already owns the listen port. Supports ``--restart`` for clean recycle.
+Fail-closed gate that MUST run before ``uvicorn.run`` / socket bind.
+
+Primary occupancy signal is an exclusive TCP bind attempt (not a client
+connect). On Windows this uses ``SO_EXCLUSIVEADDRUSE`` so we detect the same
+conflict that would otherwise surface as WinError 10048.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -22,16 +26,15 @@ logger = logging.getLogger("quantforg.mt5_gateway.single_instance")
 
 StartupAction = Literal["start", "already_running"]
 
-_HEALTH_TIMEOUT_SEC = 2.5
-_PORT_RELEASE_TIMEOUT_SEC = 20.0
+_HEALTH_TIMEOUT_SEC = 3.0
+_PORT_RELEASE_TIMEOUT_SEC = 25.0
 _PORT_RELEASE_POLL_SEC = 0.25
 _POST_START_HEALTH_TIMEOUT_SEC = 30.0
+_DEFAULT_PORT = 8765
 
 
 @dataclass(frozen=True, slots=True)
 class GatewayHealthSnapshot:
-    """Normalized fields from a live ``GET /health`` response."""
-
     ok: bool
     gateway_version: str = "unknown"
     mt5_status: str = "unknown"
@@ -41,33 +44,70 @@ class GatewayHealthSnapshot:
     error: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class ListenerProbe:
-    listening: bool
-    pid: int | None = None
-    health: GatewayHealthSnapshot | None = None
+def resolve_bind_host(host: str) -> str:
+    if host in {"0.0.0.0", "::", "[::]", ""}:
+        return "0.0.0.0"
+    return host
+
+
+def resolve_probe_host(host: str) -> str:
+    """Host used for client connect /health (never 0.0.0.0)."""
+    if host in {"0.0.0.0", "::", "[::]", ""}:
+        return "127.0.0.1"
+    return host
 
 
 def health_url(host: str, port: int) -> str:
-    # Bind host 0.0.0.0 / :: is not a connect target — probe loopback.
-    connect_host = host
-    if host in {"0.0.0.0", "::", "[::]", ""}:
-        connect_host = "127.0.0.1"
-    return f"http://{connect_host}:{int(port)}/health"
+    return f"http://{resolve_probe_host(host)}:{int(port)}/health"
 
 
-def port_is_listening(host: str, port: int, *, timeout: float = 0.5) -> bool:
-    """Return True if something accepts TCP connections on host:port."""
-    connect_host = "127.0.0.1" if host in {"0.0.0.0", "::", "[::]", ""} else host
+def port_can_bind_exclusively(host: str, port: int) -> bool:
+    """Return True only if this process can exclusively own host:port.
+
+    This is the authoritative pre-uvicorn gate. A successful exclusive bind
+    means starting uvicorn will not raise WinError 10048 for address-in-use.
+    """
+    bind_host = resolve_bind_host(host)
+    port = int(port)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        with socket.create_connection((connect_host, int(port)), timeout=timeout):
+        # Windows: exclusive use matches the conflict uvicorn would hit.
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            # POSIX: ensure we do not inherit a misleading REUSEADDR success.
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
+            except OSError:
+                pass
+        sock.bind((bind_host, port))
+        return True
+    except OSError as exc:
+        logger.info(
+            "Exclusive bind failed on %s:%s (%s) — port occupied or unavailable",
+            bind_host,
+            port,
+            exc,
+        )
+        return False
+    finally:
+        try:
+            sock.close()
+        except OSError:
+            pass
+
+
+def port_is_listening(host: str, port: int, *, timeout: float = 0.75) -> bool:
+    """Best-effort client connect probe (secondary signal only)."""
+    probe_host = resolve_probe_host(host)
+    try:
+        with socket.create_connection((probe_host, int(port)), timeout=timeout):
             return True
     except OSError:
         return False
 
 
 def find_listening_pid(port: int) -> int | None:
-    """Best-effort owning PID for a TCP LISTEN on ``port`` (Windows + POSIX)."""
     port = int(port)
     if sys.platform.startswith("win"):
         return _find_pid_windows(port)
@@ -75,7 +115,6 @@ def find_listening_pid(port: int) -> int | None:
 
 
 def _find_pid_windows(port: int) -> int | None:
-    # Prefer netstat — available on all supported Windows gateway hosts.
     try:
         completed = subprocess.run(  # noqa: S603
             ["netstat", "-ano", "-p", "tcp"],
@@ -91,7 +130,7 @@ def _find_pid_windows(port: int) -> int | None:
     needle = f":{port}"
     for line in (completed.stdout or "").splitlines():
         upper = line.upper()
-        if "LISTENING" not in upper and "LISTEN" not in upper:
+        if "LISTENING" not in upper:
             continue
         if needle not in line:
             continue
@@ -108,7 +147,8 @@ def _find_pid_windows(port: int) -> int | None:
 
 
 def _find_pid_posix(port: int) -> int | None:
-    # ss is common; fall back to lsof.
+    import re
+
     for cmd in (
         ["ss", "-ltnp", f"sport = :{port}"],
         ["lsof", f"-iTCP:{port}", "-sTCP:LISTEN", "-n", "-P"],
@@ -124,16 +164,11 @@ def _find_pid_posix(port: int) -> int | None:
         except (OSError, subprocess.SubprocessError):
             continue
         text = (completed.stdout or "") + "\n" + (completed.stderr or "")
-        # ss: users:(("python",pid=1234,fd=3))
-        import re
-
         m = re.search(r"pid=(\d+)", text)
         if m:
             return int(m.group(1))
-        m = re.search(r"\b(\d+)\b", text)
-        # lsof COMMAND PID ...
         for line in text.splitlines():
-            if "LISTEN" not in line.upper() and "IPv" not in line:
+            if "LISTEN" not in line.upper():
                 continue
             cols = line.split()
             if len(cols) >= 2 and cols[1].isdigit():
@@ -147,11 +182,10 @@ def fetch_gateway_health(
     *,
     timeout: float = _HEALTH_TIMEOUT_SEC,
 ) -> GatewayHealthSnapshot:
-    """GET /health and normalize QuantForg gateway identity fields."""
     url = health_url(host, port)
     try:
-        req = Request(url, method="GET", headers={"Accept": "application/json"})
-        with urlopen(req, timeout=timeout) as resp:  # noqa: S310 — local gateway only
+        req = Request(url, headers={"Accept": "application/json"})
+        with urlopen(req, timeout=timeout) as resp:  # noqa: S310 — local only
             status = getattr(resp, "status", None) or resp.getcode()
             body = resp.read().decode("utf-8", errors="replace")
     except HTTPError as exc:
@@ -163,8 +197,6 @@ def fetch_gateway_health(
         return GatewayHealthSnapshot(ok=False, error=f"HTTP {status}")
 
     try:
-        import json
-
         payload = json.loads(body)
     except Exception as exc:  # noqa: BLE001
         return GatewayHealthSnapshot(ok=False, error=f"invalid JSON: {exc}")
@@ -221,14 +253,6 @@ def fetch_gateway_health(
     )
 
 
-def probe_listener(host: str, port: int) -> ListenerProbe:
-    if not port_is_listening(host, port):
-        return ListenerProbe(listening=False)
-    pid = find_listening_pid(port)
-    health = fetch_gateway_health(host, port)
-    return ListenerProbe(listening=True, pid=pid, health=health)
-
-
 def format_already_running_message(
     *,
     pid: int | None,
@@ -246,8 +270,7 @@ def format_already_running_message(
     )
 
 
-def stop_gateway_process(pid: int, *, timeout: float = 10.0) -> None:
-    """Stop a gateway PID safely (terminate → wait → kill if needed)."""
+def stop_gateway_process(pid: int, *, timeout: float = 12.0) -> None:
     if pid <= 0:
         raise ValueError("invalid pid")
     if pid == os.getpid():
@@ -255,7 +278,6 @@ def stop_gateway_process(pid: int, *, timeout: float = 10.0) -> None:
 
     logger.info("Stopping existing gateway pid=%s", pid)
     if sys.platform.startswith("win"):
-        # Soft request first
         subprocess.run(  # noqa: S603
             ["taskkill", "/PID", str(pid)],
             check=False,
@@ -275,6 +297,13 @@ def stop_gateway_process(pid: int, *, timeout: float = 10.0) -> None:
             text=True,
             timeout=8,
         )
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if not _pid_alive(pid):
+                return
+            time.sleep(0.2)
+        if _pid_alive(pid):
+            raise RuntimeError(f"Failed to terminate gateway PID {pid}")
         return
 
     try:
@@ -290,6 +319,9 @@ def stop_gateway_process(pid: int, *, timeout: float = 10.0) -> None:
         os.kill(pid, signal.SIGKILL)
     except ProcessLookupError:
         return
+    time.sleep(0.3)
+    if _pid_alive(pid):
+        raise RuntimeError(f"Failed to terminate gateway PID {pid}")
 
 
 def _pid_alive(pid: int) -> bool:
@@ -321,15 +353,15 @@ def wait_for_port_release(
     *,
     timeout: float = _PORT_RELEASE_TIMEOUT_SEC,
 ) -> bool:
+    """Wait until exclusive bind succeeds (true socket release)."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not port_is_listening(host, port):
-            # Brief settle — Windows can report free then briefly reclaim.
-            time.sleep(0.35)
-            if not port_is_listening(host, port):
+        if port_can_bind_exclusively(host, port):
+            time.sleep(0.2)
+            if port_can_bind_exclusively(host, port):
                 return True
         time.sleep(_PORT_RELEASE_POLL_SEC)
-    return not port_is_listening(host, port)
+    return port_can_bind_exclusively(host, port)
 
 
 def wait_for_healthy_gateway(
@@ -341,10 +373,9 @@ def wait_for_healthy_gateway(
     deadline = time.monotonic() + timeout
     last = GatewayHealthSnapshot(ok=False, error="not checked")
     while time.monotonic() < deadline:
-        if port_is_listening(host, port):
-            last = fetch_gateway_health(host, port)
-            if last.ok:
-                return last
+        last = fetch_gateway_health(host, port)
+        if last.ok:
+            return last
         time.sleep(0.4)
     return last
 
@@ -355,24 +386,26 @@ def ensure_single_instance(
     port: int,
     restart: bool = False,
 ) -> StartupAction:
-    """Gate gateway startup.
+    """Fail-closed pre-bind gate. Never returns ``start`` while port is owned.
 
     Returns
     -------
-    ``already_running``
-        Healthy instance owns the port — caller must exit 0 (do not bind).
-    ``start``
-        Safe to start uvicorn (port free, or unhealthy peer stopped).
+    already_running
+        Healthy QuantForg gateway owns the port — caller MUST exit 0 and MUST
+        NOT call ``uvicorn.run``.
+    start
+        Exclusive bind is available — safe to start uvicorn.
     """
-    probe = probe_listener(host, port)
+    port = int(port)
+    can_bind = port_can_bind_exclusively(host, port)
 
     if restart:
-        if probe.listening:
-            pid = probe.pid
+        if not can_bind:
+            pid = find_listening_pid(port)
             if pid is None:
-                # Last resort: cannot identify PID — refuse silent double-bind.
+                # Port occupied but PID unknown — still refuse to double-bind.
                 raise RuntimeError(
-                    f"Port {port} is listening but PID could not be resolved. "
+                    f"Port {port} is in use but PID could not be resolved. "
                     "Stop the process manually, then retry --restart."
                 )
             print("Restarting QuantForg MT5 Gateway…", flush=True)
@@ -384,56 +417,80 @@ def ensure_single_instance(
                 )
             logger.info("Gateway socket released on port %s", port)
         else:
-            logger.info("Gateway --restart: no listener on port %s", port)
-        return "start"
-
-    if not probe.listening:
-        logger.info("No listener on port %s — starting gateway", port)
-        return "start"
-
-    health = probe.health
-    if health is not None and health.ok:
-        # Verify /health again before exiting (requirement 3).
-        verified = fetch_gateway_health(host, port)
-        if not verified.ok:
-            logger.warning(
-                "Initial health ok but re-verify failed (%s) — treating unhealthy",
-                verified.error,
+            logger.info("Gateway --restart: port %s already free", port)
+        # Final fail-closed check
+        if not port_can_bind_exclusively(host, port):
+            raise RuntimeError(
+                f"Port {port} still cannot be bound exclusively after --restart"
             )
-            health = verified
-        else:
-            msg = format_already_running_message(pid=probe.pid, health=verified)
+        return "start"
+
+    # --- Normal start ---
+    if can_bind:
+        logger.info("Port %s exclusively available — safe to start gateway", port)
+        return "start"
+
+    # Port occupied: require healthy /health to exit cleanly; else recycle.
+    logger.info("Port %s occupied (exclusive bind failed) — probing /health", port)
+    health = fetch_gateway_health(host, port)
+    pid = find_listening_pid(port)
+
+    if health.ok:
+        # Re-verify before exit (requirement).
+        verified = fetch_gateway_health(host, port)
+        if verified.ok:
+            msg = format_already_running_message(pid=pid, health=verified)
             print(msg, flush=True)
             print("Gateway already running", flush=True)
             logger.info(
-                "Gateway already running pid=%s version=%s",
-                probe.pid,
+                "Gateway already running pid=%s version=%s — skipping uvicorn",
+                pid,
                 verified.gateway_version,
             )
             return "already_running"
+        health = verified
 
-    # Unhealthy listener — stop safely and allow restart.
-    pid = probe.pid
-    err = health.error if health else "unknown"
-    logger.warning(
-        "Unhealthy gateway on port %s pid=%s error=%s — stopping for restart",
-        port,
-        pid,
-        err,
-    )
+    # Unhealthy / non-QuantForg occupant
+    err = health.error or "health check failed"
     print(
-        f"Unhealthy QuantForg MT5 Gateway detected on port {port} "
-        f"(PID: {pid if pid is not None else 'unknown'}). Restarting…",
+        f"Unhealthy process on port {port} "
+        f"(PID: {pid if pid is not None else 'unknown'}): {err}. Restarting…",
         flush=True,
     )
+    logger.warning("Unhealthy occupant on port %s pid=%s error=%s", port, pid, err)
     if pid is None:
         raise RuntimeError(
-            f"Port {port} is occupied by an unhealthy process but PID is unknown. "
-            "Stop it manually, then start the gateway again."
+            f"Port {port} is occupied but PID is unknown and /health failed "
+            f"({err}). Stop the process manually, then start the gateway."
         )
     stop_gateway_process(pid)
     if not wait_for_port_release(host, port):
         raise RuntimeError(
             f"Port {port} did not release after stopping unhealthy PID {pid}"
         )
+    if not port_can_bind_exclusively(host, port):
+        raise RuntimeError(
+            f"Port {port} still cannot be bound exclusively after cleanup"
+        )
     return "start"
+
+
+def read_gateway_bind_settings() -> tuple[str, int]:
+    """Resolve host/port without importing uvicorn/FastAPI."""
+    host = os.environ.get("MT5_GATEWAY_HOST") or "0.0.0.0"
+    port_raw = os.environ.get("MT5_GATEWAY_PORT") or str(_DEFAULT_PORT)
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = _DEFAULT_PORT
+    # Prefer settings module when available (dotenv), but never require uvicorn.
+    try:
+        from services.mt5_gateway.settings import get_gateway_settings
+
+        get_gateway_settings.cache_clear()
+        settings = get_gateway_settings()
+        host = settings.mt5_gateway_host or host
+        port = int(settings.mt5_gateway_port or port)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Using env/default bind settings (%s)", exc)
+    return host, port

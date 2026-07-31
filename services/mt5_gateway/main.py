@@ -2,8 +2,9 @@
 
 Does not replace QuantForg `/api/v1/mt5`. Credentials stay on this host.
 
-Single-instance protection: refuses to bind when a healthy gateway already
-owns the listen port (prevents WinError 10048). Use ``--restart`` to recycle.
+Single-instance protection runs in ``run()`` *before* any ``uvicorn`` import
+or ``uvicorn.run()`` call, so a healthy existing gateway never reaches
+socket bind / "Application startup complete".
 """
 
 from __future__ import annotations
@@ -11,20 +12,16 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-import uvicorn
 from fastapi import FastAPI
 
 from services.mt5_gateway import __version__ as gateway_version
 from services.mt5_gateway.routers import router
 from services.mt5_gateway.runtime import MT5GatewayRuntime
 from services.mt5_gateway.settings import get_gateway_settings
-from services.mt5_gateway.single_instance import (
-    ensure_single_instance,
-    wait_for_healthy_gateway,
-)
 from services.mt5_gateway.websocket import ws_router
 
 logger = logging.getLogger("quantforg.mt5_gateway")
@@ -101,6 +98,8 @@ def create_app() -> FastAPI:
     return app
 
 
+# ASGI app object for ``uvicorn services.mt5_gateway.main:app`` (external launcher).
+# Direct ``python -m services.mt5_gateway.main`` uses ``run()`` which gates first.
 app = create_app()
 
 
@@ -120,16 +119,40 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _run_uvicorn(*, host: str, port: int) -> None:
+    """Import and start uvicorn only after the single-instance gate passes."""
+    import uvicorn
+
+    uvicorn.run(
+        "services.mt5_gateway.main:app",
+        host=host,
+        port=port,
+        reload=False,
+    )
+
+
 def run(argv: list[str] | None = None) -> None:
-    """Entrypoint for ``python -m services.mt5_gateway.main``."""
+    """CLI entrypoint — single-instance gate BEFORE uvicorn bind.
+
+    Validation contract:
+    - Healthy existing gateway → print banner, exit 0, never call uvicorn.run
+    - Never reach "Application startup complete" / WinError 10048 in that case
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
     args = _parse_args(argv)
-    settings = get_gateway_settings()
-    host = settings.mt5_gateway_host
-    port = int(settings.mt5_gateway_port)
+
+    # Import gate helpers only here (stdlib + settings) — not uvicorn.
+    from services.mt5_gateway.single_instance import (
+        ensure_single_instance,
+        port_can_bind_exclusively,
+        read_gateway_bind_settings,
+        wait_for_healthy_gateway,
+    )
+
+    host, port = read_gateway_bind_settings()
 
     try:
         action = ensure_single_instance(
@@ -141,8 +164,18 @@ def run(argv: list[str] | None = None) -> None:
         raise SystemExit(1) from exc
 
     if action == "already_running":
-        # Already printed identity banner + verified /health. Success exit.
+        # Banner + /health already verified. Do NOT import/start uvicorn.
         raise SystemExit(0)
+
+    # Fail-closed: refuse to start unless exclusive bind is available now.
+    if not port_can_bind_exclusively(host, port):
+        print(
+            f"Gateway startup aborted: port {port} is not exclusively available. "
+            "Another process still owns the socket.",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise SystemExit(1)
 
     logger.info(
         "Starting QuantForg MT5 Gateway version=%s host=%s port=%s restart=%s",
@@ -152,18 +185,7 @@ def run(argv: list[str] | None = None) -> None:
         bool(args.restart),
     )
 
-    # When --restart, verify /health in a child-friendly way after bind by
-    # running uvicorn programmatically is blocking — operators typically
-    # verify externally. For --restart we still start here; a short post-bind
-    # note is logged. Full verify for --restart stop/start path that returns
-    # after spawning is handled when this process itself becomes the server.
-    #
-    # If this process is the new instance, success logging after listen is the
-    # uvicorn access log; we emit the operator line when restart was requested
-    # once the server thread is up via a callback.
     if args.restart:
-        # uvicorn.run blocks; use a background poller for the success line.
-        import threading
 
         def _announce_restart() -> None:
             snap = wait_for_healthy_gateway(host, port, timeout=30.0)
@@ -189,13 +211,9 @@ def run(argv: list[str] | None = None) -> None:
             target=_announce_restart, name="qf-gw-restart-verify", daemon=True
         ).start()
 
-    uvicorn.run(
-        "services.mt5_gateway.main:app",
-        host=host,
-        port=port,
-        reload=False,
-    )
+    _run_uvicorn(host=host, port=port)
 
 
 if __name__ == "__main__":
+    # Earliest CLI hook for ``py -m services.mt5_gateway.main``.
     run()
