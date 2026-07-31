@@ -812,6 +812,32 @@ def get_strategy_diagnostics(
     return payload
 
 
+@router.get("/decision-v2-telemetry")
+def get_decision_v2_telemetry(
+    _user: OperatorUser,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """AI Decision Engine v2 rejection telemetry (observe-only).
+
+    Includes market regime, TF contributions, and counterfactual v2 pass flags.
+    Never mutates thresholds, risk, safety, OMS, or MT5.
+    """
+    from app.application.services.decision_v2_telemetry import (
+        get_decision_telemetry_store,
+    )
+
+    window = max(1, min(int(limit or 100), 2000))
+    recent = get_decision_telemetry_store().recent(limit=window)
+    return {
+        "advisory_only": True,
+        "mutates_engines": False,
+        "thresholds_changed": False,
+        "window": window,
+        "count": len(recent),
+        "events": recent,
+    }
+
+
 @router.get("/production-validation-mode")
 def get_production_validation_mode(_user: OperatorUser) -> dict[str, Any]:
     """Live Production Validation Mode dashboard — observe-only evidence.

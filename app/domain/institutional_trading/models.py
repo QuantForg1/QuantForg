@@ -29,6 +29,12 @@ class TrendSnapshot:
     aligned: bool
     frames: dict[str, str] = field(default_factory=dict)
     why: str = ""
+    # AI Decision Engine v2 — optional telemetry (defaults preserve v1 callers)
+    market_regime: str = "unknown"  # trending | ranging
+    mtf_policy: str = "v1"
+    trade_bias: TrendDirection | None = None  # regime-aware bias (may differ from H4)
+    mtf_contributions: dict[str, int] = field(default_factory=dict)
+    h4_is_context: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -40,7 +46,25 @@ class TrendSnapshot:
             "aligned": self.aligned,
             "frames": dict(self.frames),
             "why": self.why,
+            "market_regime": self.market_regime,
+            "mtf_policy": self.mtf_policy,
+            "trade_bias": (
+                self.trade_bias.value if self.trade_bias is not None else None
+            ),
+            "mtf_contributions": dict(self.mtf_contributions),
+            "h4_is_context": self.h4_is_context,
         }
+
+    @property
+    def effective_bias(self) -> TrendDirection:
+        """Directional bias used for confluence — regime-aware when present."""
+        if self.trade_bias is not None:
+            return self.trade_bias
+        if self.macro_bias in {TrendDirection.UP, TrendDirection.DOWN}:
+            return self.macro_bias
+        if self.primary in {TrendDirection.UP, TrendDirection.DOWN}:
+            return self.primary
+        return TrendDirection.UNKNOWN
 
 
 @dataclass(frozen=True, slots=True)
