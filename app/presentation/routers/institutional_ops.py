@@ -839,6 +839,25 @@ def get_noc_command_center(_user: OperatorUser) -> dict[str, Any]:
     return build_noc_command_center()
 
 
+@router.get("/execution-evidence")
+def get_execution_evidence(_user: OperatorUser) -> dict[str, Any]:
+    """Production Execution Evidence — latest real trade package (observe-only).
+
+    Never fabricates trades, tickets, or fills. Waiting state when none exist.
+    """
+    from app.application.services import execution_evidence as evidence_svc
+
+    return evidence_svc.get_latest_execution_evidence()
+
+
+@router.get("/production-acceptance")
+def get_production_acceptance(_user: OperatorUser) -> dict[str, Any]:
+    """Production Acceptance status for NOC widget (VERIFIED / NOT VERIFIED)."""
+    from app.application.services import execution_evidence as evidence_svc
+
+    return evidence_svc.build_execution_evidence_status()
+
+
 class NocCopilotBody(BaseModel):
     question: str = Field(min_length=1, max_length=500)
 
