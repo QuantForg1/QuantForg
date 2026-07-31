@@ -44,6 +44,14 @@ from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
     AddTradeDecision,
     may_add_scalping_trade,
 )
+from app.domain.institutional_trading.ai_scalping.dynamic_sizing_v2 import (
+    DynamicSizingDecision,
+    EquityTierPreference,
+    calculate_dynamic_lots_v2,
+    check_portfolio_sizing_limits,
+    classify_quality_band,
+    interpolate_equity_tier,
+)
 from app.domain.institutional_trading.ai_scalping.execution_quality import (
     ExecutionQualityStore,
     get_execution_quality_store,
@@ -149,6 +157,8 @@ __all__ = [
     "ContinuousOpSnapshot",
     "ContinuousOperationController",
     "DirectionDecision",
+    "DynamicSizingDecision",
+    "EquityTierPreference",
     "ExecutionQualityStore",
     "LearningTradeRecord",
     "LiveHealthMonitor",
@@ -179,8 +189,11 @@ __all__ = [
     "assess_session",
     "assess_spread",
     "build_regime_execution_profile",
+    "calculate_dynamic_lots_v2",
     "calculate_scalping_lots",
     "check_portfolio_limits",
+    "check_portfolio_sizing_limits",
+    "classify_quality_band",
     "classify_scalping_regime",
     "classify_volatility_band",
     "compare_backtest_vs_live",
@@ -199,6 +212,7 @@ __all__ = [
     "get_scalping_diagnostics_store",
     "get_scalping_learning_store",
     "get_symbol_state_book",
+    "interpolate_equity_tier",
     "may_add_scalping_trade",
     "measure_slippage",
     "portfolio_daily_loss_pct",

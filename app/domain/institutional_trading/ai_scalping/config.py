@@ -198,6 +198,14 @@ class AiScalpingConfig:
     high_vol_risk_scale: Decimal = Decimal("0.75")  # reduce risk in high vol
     low_vol_risk_scale: Decimal = Decimal("1.00")  # never above base risk
 
+    # Dynamic Position Sizing Engine v2 — equity-tier + quality-weighted lots
+    dynamic_sizing_v2_enabled: bool = True
+    max_margin_usage_pct: Decimal = Decimal("30")
+    # Soft caps for multi-order / portfolio (reduce-only; never raise risk %)
+    max_symbol_exposure_pct: Decimal = Decimal("1.00")
+    max_correlated_exposure_pct: Decimal = Decimal("1.50")
+    lot_growth_max_step_pct: Decimal = Decimal("0.35")
+
     # Self-protection (pause NEW entries only)
     self_protection_enabled: bool = True
     pause_drawdown_pct: Decimal = Decimal("3.0")
@@ -336,6 +344,11 @@ class AiScalpingConfig:
             "max_entry_slippage": str(self.max_entry_slippage),
             "slippage_protection_enabled": self.slippage_protection_enabled,
             "volatility_adjusted_sizing": self.volatility_adjusted_sizing,
+            "dynamic_sizing_v2_enabled": self.dynamic_sizing_v2_enabled,
+            "max_margin_usage_pct": str(self.max_margin_usage_pct),
+            "max_symbol_exposure_pct": str(self.max_symbol_exposure_pct),
+            "max_correlated_exposure_pct": str(self.max_correlated_exposure_pct),
+            "lot_growth_max_step_pct": str(self.lot_growth_max_step_pct),
             "self_protection_enabled": self.self_protection_enabled,
             "pause_drawdown_pct": str(self.pause_drawdown_pct),
             "never_prefer_buy_only": True,
