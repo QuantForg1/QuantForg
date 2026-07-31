@@ -83,6 +83,12 @@
         height: 2.75rem; padding: 0 1.5rem;
         transition: filter 160ms ease, background-color 160ms ease, border-color 160ms ease;
       }
+      @media (max-width: 379px) {
+        .btn { height: 2.5rem; padding: 0 0.85rem; font-size: 0.8125rem; }
+        .btn-ghost, .btn-outline { height: 2.5rem; padding: 0 0.75rem; }
+        header { gap: 0.5rem; }
+        .name { font-size: 0.95rem; }
+      }
       .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
       .btn-primary {
         background-image: var(--accent-gradient);

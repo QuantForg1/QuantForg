@@ -24,7 +24,7 @@ export function AuthShell({
         <Link href="/" className="mb-8 flex justify-center">
           <BrandLogo size={40} priority />
         </Link>
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/90 p-7 shadow-[var(--shadow-elevated)] backdrop-blur-sm">
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 p-7 shadow-[var(--shadow-elevated)] backdrop-blur-sm">
           <h1 className="text-center font-[family-name:var(--font-display)] text-[1.65rem] font-semibold leading-tight tracking-tight text-[var(--fg)]">
             {title}
           </h1>

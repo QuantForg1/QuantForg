@@ -326,7 +326,7 @@ export default function ResearchLabPage() {
                   <motion.section
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="relative overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[linear-gradient(150deg,rgba(18,32,40,0.96),rgba(6,10,16,0.94))] p-5"
+                    className="relative overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[linear-gradient(150deg,var(--surface),var(--bg))] p-5"
                   >
                     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(70,140,120,0.12),transparent_55%)]" />
                     <div className="relative">

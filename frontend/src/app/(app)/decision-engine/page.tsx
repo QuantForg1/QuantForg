@@ -132,7 +132,7 @@ export default function DecisionEnginePage() {
           <motion.section
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[linear-gradient(150deg,rgba(16,28,36,0.96),rgba(6,10,16,0.94))] p-5"
+            className="relative overflow-hidden rounded-[var(--radius-os)] border border-[var(--border)] bg-[linear-gradient(150deg,var(--surface),var(--bg))] p-5"
           >
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(80,160,140,0.1),transparent_50%)]" />
             <div className="relative flex flex-wrap items-start justify-between gap-3">

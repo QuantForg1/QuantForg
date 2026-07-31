@@ -182,10 +182,10 @@ export const WorkspaceChart = memo(function WorkspaceChart({
       if (chartType === "candles") {
         const s = chart.addSeries(CandlestickSeries, {
           upColor: "#2f9e7a",
-          downColor: "#d45d5d",
+          downColor: "#e05d5d",
           borderVisible: false,
           wickUpColor: "#2f9e7a",
-          wickDownColor: "#d45d5d",
+          wickDownColor: "#e05d5d",
         });
         s.setData(
           data.map((c) => ({
@@ -199,14 +199,14 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         mainRef.current = s;
       } else if (chartType === "line") {
         const s = chart.addSeries(LineSeries, {
-          color: "#6b8cff",
+          color: "#00d4e0",
           lineWidth: 2,
         });
         s.setData(data.map((c) => ({ time: c.time, value: c.close })));
         mainRef.current = s;
       } else {
         const s = chart.addSeries(AreaSeries, {
-          lineColor: "#6b8cff",
+          lineColor: "#00d4e0",
           topColor: "rgba(107, 140, 255, 0.22)",
           bottomColor: "rgba(107, 140, 255, 0.02)",
           lineWidth: 2,

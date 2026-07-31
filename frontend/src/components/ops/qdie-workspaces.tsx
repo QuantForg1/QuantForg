@@ -146,7 +146,7 @@ export function QdieDecisionCenterWorkspace() {
           {recs.slice(0, 8).map((r) => (
             <div
               key={str(r.decision_id)}
-              className="border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2"
+              className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={priorityTone(str(r.priority))}>
@@ -216,7 +216,7 @@ export function QdieRecommendationsWorkspace() {
                   focus === str(r.decision_id) ||
                     (!focus && selected && str(selected.decision_id) === str(r.decision_id))
                     ? "border-[var(--border-strong)] bg-[var(--surface-2)]"
-                    : "border-[var(--border)] bg-[var(--surface-1)]",
+                    : "border-[var(--border)] bg-[var(--surface)]",
                 )}
               >
                 <div className="flex gap-2">
@@ -375,7 +375,7 @@ export function QdieTradeoffWorkspace() {
           {rows.map((r) => (
             <div
               key={str(r.decision_id)}
-              className="border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2"
+              className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
             >
               <div className="text-[13px] text-[var(--fg)]">{str(r.title)}</div>
               <div className="mt-1 text-[11px] text-[var(--fg-muted)]">

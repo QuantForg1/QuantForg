@@ -7,6 +7,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { useAuth } from "@/providers/auth-provider";
+import { BrandMark } from "@/components/brand/brand-logo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OfflineBanner } from "@/components/system/offline-banner";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -111,10 +112,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
-        <div className="w-full max-w-sm space-y-3 p-6">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 p-6">
+          <BrandMark size={48} className="opacity-90" />
+          <div className="w-full space-y-3">
+            <Skeleton className="mx-auto h-8 w-40" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+          <span className="sr-only">Loading QuantForg</span>
         </div>
       </div>
     );

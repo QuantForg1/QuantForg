@@ -47,8 +47,8 @@ const btnOutline = `${btn} h-10 px-4 border border-[var(--border)] text-[var(--f
 export default function LandingPage() {
   return (
     <div className="min-h-screen overflow-x-clip">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
-        <BrandLogo size={36} priority />
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:px-6">
+        <BrandLogo size={32} className="min-w-0" priority />
         <nav
           className="hidden items-center gap-6 text-sm text-[var(--fg-muted)] md:flex"
           aria-label="Marketing"
@@ -62,11 +62,11 @@ export default function LandingPage() {
           <span className="text-[var(--fg-subtle)]">Pricing</span>
           <span className="text-[var(--fg-subtle)]">Resources</span>
         </nav>
-        <div className="flex items-center gap-2" aria-label="Primary">
-          <Link href="/login" className={btnGhost}>
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2" aria-label="Primary">
+          <Link href="/login" className={`${btnGhost} max-sm:px-3`}>
             Sign in
           </Link>
-          <Link href="/register" className={btnOutline}>
+          <Link href="/register" className={`${btnOutline} max-sm:px-3`}>
             Open terminal
           </Link>
         </div>

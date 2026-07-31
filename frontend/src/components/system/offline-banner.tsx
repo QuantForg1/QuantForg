@@ -44,7 +44,7 @@ export function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="bg-[var(--warning)] px-4 py-2 text-center text-sm font-medium text-black"
+      className="bg-[var(--warning)] px-4 py-2 text-center text-sm font-medium text-[var(--accent-fg)]"
     >
       {message}
     </div>

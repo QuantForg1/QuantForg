@@ -36,7 +36,6 @@
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.28);
   --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 48px rgba(0, 0, 0, 0.36);
   --shadow-elevated: 0 24px 64px rgba(0, 0, 0, 0.45);
-  --grid-line: transparent;
   --ring: rgba(0, 212, 224, 0.55);
   --radius-os: 0.625rem;
   --radius-sm: 0.5rem;

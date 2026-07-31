@@ -11,14 +11,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "qf-btn-primary hover:brightness-110",
+          "qf-btn-primary",
         secondary:
           "bg-[var(--surface-2)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--surface-3)] hover:border-[var(--border-strong)]",
         ghost:
           "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
         outline:
           "border border-[var(--border)] bg-transparent text-[var(--fg)] hover:bg-[var(--surface-2)] hover:border-[var(--border-strong)]",
-        danger: "bg-[var(--danger)] text-white hover:brightness-110",
+        danger: "bg-[var(--danger)] text-[#f4f7fb] hover:brightness-110",
       },
       size: {
         default: "h-9 px-4 py-2",

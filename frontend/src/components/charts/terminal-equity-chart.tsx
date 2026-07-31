@@ -69,7 +69,7 @@ export function TerminalEquityChart({
     canvas.height = h * 2;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.fillStyle = "#0f1620";
+    ctx.fillStyle = "#111827";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.scale(2, 2);
     ctx.drawImage(img, 0, 0, w, h);

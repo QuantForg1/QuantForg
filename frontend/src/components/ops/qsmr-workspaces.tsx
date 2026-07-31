@@ -183,13 +183,13 @@ export function QsmrExplorerWorkspace() {
       <OpsPanel title="Strategy explorer">
         <div className="mb-3 flex flex-wrap gap-2">
           <input
-            className="border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
+            className="border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
             placeholder="Search…"
             value={qText}
             onChange={(e) => setQText(e.target.value)}
           />
           <select
-            className="border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
+            className="border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
