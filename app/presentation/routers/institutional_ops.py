@@ -797,7 +797,8 @@ def get_strategy_diagnostics(
         get_strategy_diagnostics_store,
     )
 
-    window = max(1, min(int(limit or 100), 100))
+    # Cap matches StrategyDiagnosticsStore.maxlen (observation window for analysis).
+    window = max(1, min(int(limit or 100), 2000))
     payload = get_strategy_diagnostics_store().snapshot(limit=window)
     try:
         from app.application.services.institutional_ite_runtime import get_ite_runtime
@@ -810,6 +811,23 @@ def get_strategy_diagnostics(
         payload["orchestrator_cycles"] = None
         payload["orchestrator_last_cycle"] = None
     return payload
+
+
+@router.get("/decision-rejection-analysis")
+def get_decision_rejection_analysis(
+    _user: OperatorUser,
+    limit: int = 1000,
+) -> dict[str, Any]:
+    """AI Decision Engine rejection Pareto — evidence only.
+
+    Aggregates durable cycle evidence + Strategy Diagnostics + AI Scalping
+    diagnostics. Never mutates thresholds, risk, safety, OMS, or MT5.
+    """
+    from app.application.services.decision_rejection_analysis import (
+        analyze_decision_rejections,
+    )
+
+    return analyze_decision_rejections(limit=max(1, min(int(limit or 1000), 5000)))
 
 
 @router.get("/production-validation-mode")

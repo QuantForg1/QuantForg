@@ -211,8 +211,16 @@ def record_cycle_evidence(
                 "session_allowed",
                 "spread",
                 "atr",
+                "atr_pct",
+                "mtf_score",
+                "mtf_aligned",
+                "liquidity_score",
+                "spread_score",
+                "session_score",
+                "news_score",
+                "ai_confidence",
             )
-            if k in diagnostics
+            if k in diagnostics and diagnostics[k] is not None
         }
         if slim:
             row["market_context"] = slim
