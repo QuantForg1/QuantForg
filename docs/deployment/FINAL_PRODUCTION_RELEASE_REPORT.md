@@ -18,10 +18,11 @@ Production is synchronized with `origin/main`. No approved work from this releas
 
 | Ref | SHA |
 |-----|-----|
-| Local `HEAD` (`main`) | `1c66fcc4243352635038a5f610f7715519016670` |
-| `origin/main` | `1c66fcc4243352635038a5f610f7715519016670` |
-| Railway Production (`meta.commitHash` / deploy) | `1c66fcc4243352635038a5f610f7715519016670` |
-| Match `HEAD` ↔ `origin/main` ↔ Railway | **YES** |
+| Functional release tip (NOC + trading docs) | `1c66fcc4243352635038a5f610f7715519016670` |
+| Release report commit | `0bce58b9c6e07da465fdad6bb2a595ea6adbbeba` |
+| `origin/main` / local `HEAD` | Synchronized (no approved work unpushed; tip may include this SHA-sync docs commit) |
+| Railway Production at report verify | `0bce58b9c6e07da465fdad6bb2a595ea6adbbeba` via deploy `bbd0195c-1bdc-410b-89a3-079213b45e79` **SUCCESS** |
+| Match functional work ↔ Production | **YES** |
 
 ---
 
@@ -31,6 +32,8 @@ Production is synchronized with `origin/main`. No approved work from this releas
 |-----|---------|
 | `8d5690a51f344e278c9c662e1c458fe797c04e99` | `feat(frontend): institutional Trading Command Center NOC (observe-only)` |
 | `1c66fcc4243352635038a5f610f7715519016670` | `docs(trading): add approved live trading investigation reports` |
+| `0bce58b9c6e07da465fdad6bb2a595ea6adbbeba` | `docs(deployment): add final production release report` |
+| *(follow-up)* | `docs(deployment): align final release report with Railway tip` |
 
 **Push:** `origin/main` — **SUCCESS** (`main` tracks `origin/main` with no ahead/behind).
 
@@ -54,7 +57,7 @@ Production is synchronized with `origin/main`. No approved work from this releas
 
 **No migrations pending.**
 
-Release commits `8d5690a`..`1c66fcc` contain **zero** Alembic / Supabase / schema migration paths. No migrations were created or applied as part of this release.
+Release commits `8d5690a`..`0bce58b` (and this report’s SHA-sync follow-up) contain **zero** Alembic / Supabase / schema migration paths. No migrations were created or applied as part of this release.
 
 ---
 
@@ -65,9 +68,10 @@ Release commits `8d5690a`..`1c66fcc` contain **zero** Alembic / Supabase / schem
 | Workspace / Project | Quant Forg / QuantForg |
 | Environment | `production` |
 | Service | QuantForg — **Online** |
-| Deployment ID | `21e78b58-6bc0-4c47-908a-40e1fcd1f483` |
+| Deployment ID | `bbd0195c-1bdc-410b-89a3-079213b45e79` |
 | State | **SUCCESS** |
-| Commit | `1c66fcc4243352635038a5f610f7715519016670` |
+| Commit | `0bce58b9c6e07da465fdad6bb2a595ea6adbbeba` |
+| Prior SUCCESS (functional release tip) | `21e78b58-6bc0-4c47-908a-40e1fcd1f483` @ `1c66fcc` |
 | URL | `https://quantforg-production.up.railway.app` |
 | Region | sfo |
 
@@ -104,7 +108,7 @@ Checkout AI Scalping config (same SHA as Railway tip): `ai-scalping-v7.2.0` with
 | Exact `dpl_*` / commit meta via API this run | **Not queried** (no Vercel/GitHub CLI token in this environment) |
 | Frontend release evidence | **PASS** — production `/admin/noc` JS chunks contain unique post-`8d5690a` strings: `Observe-only`, `NOC Command Center`, `noc-command-center` |
 
-Conclusion: Vercel Production is serving the approved NOC frontend from `main`. Docs-only tip `1c66fcc` does not change frontend bundles; Railway tip SHA remains the authoritative backend SHA.
+Conclusion: Vercel Production is serving the approved NOC frontend from `main`. Docs-only tip commits (`1c66fcc`, `0bce58b`) do not change frontend bundles; Railway tip SHA remains the authoritative backend SHA.
 
 ---
 
@@ -151,5 +155,5 @@ Trading Engine, AI logic (beyond already-deployed Vol Gate v2), OMS, MT5, Risk E
 
 ## Final statement
 
-**Production is synchronized with `origin/main` at `1c66fcc`.**  
+**Production is synchronized with `origin/main`.** Tip includes release report docs at/after `0bce58b`.  
 Approved session work is released. **No migrations pending.** Railway deploy **SUCCESS**. Vercel Production hosts the released frontend with verified NOC assets. **Verdict: READY.**
