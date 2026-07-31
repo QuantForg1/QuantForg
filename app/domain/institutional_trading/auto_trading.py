@@ -50,6 +50,7 @@ class AutoTradePolicy:
     trading_mode: str = "swing"  # swing | scalping | alpha
     compounding_enabled: bool = False
     alpha_engine_enabled: bool = False
+    risk_profile_id: str = "STANDARD"
 
     def __post_init__(self) -> None:
         from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
@@ -60,6 +61,13 @@ class AutoTradePolicy:
         if mode not in {"swing", "scalping", "alpha"}:
             mode = "swing"
         object.__setattr__(self, "trading_mode", mode)
+        from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+            normalize_risk_profile_id,
+        )
+
+        object.__setattr__(
+            self, "risk_profile_id", normalize_risk_profile_id(self.risk_profile_id)
+        )
         if gold_only_enabled() and mode != "alpha":
             object.__setattr__(self, "allowed_symbols", (GOLD_SYMBOL,))
         else:
@@ -84,6 +92,7 @@ class AutoTradePolicy:
             "compounding_enabled": self.compounding_enabled,
             "alpha_engine_enabled": self.alpha_engine_enabled
             or self.trading_mode == "alpha",
+            "risk_profile_id": self.risk_profile_id,
             "may_open_new_trades": state == "running",
             "may_manage_positions": state in {"running", "paused"},
         }

@@ -112,6 +112,7 @@ class AutoTradeControlsBody(ConfirmBody):
     trading_mode: str | None = None
     compounding_enabled: bool | None = None
     alpha_engine_enabled: bool | None = None
+    risk_profile_id: str | None = None
 
 
 class AutoTradeEvaluateBody(BaseModel):
@@ -746,7 +747,19 @@ def _ai_scalping_payload() -> dict[str, Any]:
             "learning": None,
         }
     snap["compounding_enabled"] = bool(getattr(plane, "compounding_enabled", False))
-    snap["config"] = DEFAULT_AI_SCALPING_CONFIG.to_dict()
+    snap["risk_profile_id"] = str(getattr(plane, "risk_profile_id", "STANDARD"))
+    try:
+        from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+            get_active_ai_scalping_config,
+            profile_summary,
+        )
+
+        active = get_active_ai_scalping_config()
+        snap["config"] = active.to_dict()
+        snap["risk_profile"] = profile_summary(active.risk_profile_id)
+    except Exception:
+        snap["config"] = DEFAULT_AI_SCALPING_CONFIG.to_dict()
+        snap["risk_profile"] = {"risk_profile_id": "STANDARD"}
     return snap
 
 
@@ -1373,6 +1386,7 @@ def update_auto_trading(
             trading_mode=body.trading_mode,
             compounding_enabled=body.compounding_enabled,
             alpha_engine_enabled=body.alpha_engine_enabled,
+            risk_profile_id=body.risk_profile_id,
             reason=body.reason,
         )
     except PermissionDenied as exc:
@@ -1381,19 +1395,19 @@ def update_auto_trading(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Apply Scalping / Swing mode to live ITE runtime (same pipeline, different knobs)
     try:
-        from dataclasses import replace
-
         from app.application.services.ai_scalping_mode import (
             apply_trading_mode_to_runtime,
         )
         from app.application.services.institutional_ite_runtime import get_ite_runtime
-        from app.domain.institutional_trading.ai_scalping.config import (
-            DEFAULT_AI_SCALPING_CONFIG,
+        from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+            apply_risk_profile,
+            profile_summary,
         )
 
-        scalp = DEFAULT_AI_SCALPING_CONFIG
-        if policy.compounding_enabled:
-            scalp = replace(scalp, compounding_enabled=True)
+        scalp = apply_risk_profile(
+            policy.risk_profile_id,
+            compounding_enabled=policy.compounding_enabled,
+        )
         apply_mode = (
             "alpha"
             if (policy.trading_mode == "alpha" or policy.alpha_engine_enabled)
@@ -1404,6 +1418,8 @@ def update_auto_trading(
             mode=apply_mode,
             scalp=scalp,
         )
+        if isinstance(mode_payload, dict):
+            mode_payload["risk_profile"] = profile_summary(policy.risk_profile_id)
     except Exception as exc:
         from core.logging import get_logger
 

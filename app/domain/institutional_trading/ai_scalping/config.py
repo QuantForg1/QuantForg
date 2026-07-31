@@ -64,6 +64,8 @@ class AiScalpingConfig:
     quality_baseline: str = "ai-scalping-v6.3.0"
     portfolio_version: str = "ai-scalping-v7.1.0"
     continuous_version: str = "ai-scalping-v7.1.0"
+    # Named aggression profile — STANDARD keeps 0.75% hard ceiling
+    risk_profile_id: str = "STANDARD"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"
     universe: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE
@@ -246,9 +248,20 @@ class AiScalpingConfig:
         object.__setattr__(self, "allow_grid", False)
         object.__setattr__(self, "allow_unlimited_averaging", False)
         object.__setattr__(self, "never_prefer_buy_only", True)
-        # Cap risk - quality upgrade must not silently raise risk
-        if self.risk_per_trade_pct > Decimal("0.75"):
-            object.__setattr__(self, "risk_per_trade_pct", Decimal("0.75"))
+        # Profile-aware risk ceiling — STANDARD 0.75%; ULTRA_AGGRESSIVE 8.00%
+        # Keep this inline to avoid circular import with risk_profiles.py.
+        raw_pid = (self.risk_profile_id or "STANDARD").strip().upper().replace("-", "_")
+        pid = (
+            "ULTRA_AGGRESSIVE"
+            if raw_pid in {"ULTRA", "ULTRA_AGGRESSIVE"}
+            else "STANDARD"
+        )
+        object.__setattr__(self, "risk_profile_id", pid)
+        ceiling = (
+            Decimal("8.00") if pid == "ULTRA_AGGRESSIVE" else Decimal("0.75")
+        )
+        if self.risk_per_trade_pct > ceiling:
+            object.__setattr__(self, "risk_per_trade_pct", ceiling)
         # Never loosen hold beyond absolute max
         if self.absolute_max_hold_minutes < self.typical_hold_max_minutes:
             object.__setattr__(
@@ -269,6 +282,7 @@ class AiScalpingConfig:
             "quality_baseline": self.quality_baseline,
             "portfolio_version": self.portfolio_version,
             "continuous_version": self.continuous_version,
+            "risk_profile_id": self.risk_profile_id,
             "symbol": self.symbol,
             "trading_mode": self.trading_mode,
             "universe": list(self.universe),
