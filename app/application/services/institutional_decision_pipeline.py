@@ -67,11 +67,23 @@ def risk_config_from_ite(
     )
 
 
-def _live_broker_lot_specs(symbol: str) -> tuple[Decimal, Decimal, Decimal]:
-    """Read live volume_min / volume_step / contract_size; fall back to XAU specs."""
-    from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
+def _live_broker_lot_specs(
+    symbol: str,
+) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Read live volume_min / step / max / contract_size; fall back to XAU specs."""
+    from app.domain.trading.xauusd_specs import (
+        CONTRACT_SIZE,
+        VOLUME_MAX,
+        VOLUME_MIN,
+        VOLUME_STEP,
+    )
 
-    min_lot, lot_step, contract_size = VOLUME_MIN, VOLUME_STEP, CONTRACT_SIZE
+    min_lot, lot_step, max_lot, contract_size = (
+        VOLUME_MIN,
+        VOLUME_STEP,
+        VOLUME_MAX,
+        CONTRACT_SIZE,
+    )
     try:
         from core.di.container import get_container
 
@@ -86,16 +98,61 @@ def _live_broker_lot_specs(symbol: str) -> tuple[Decimal, Decimal, Decimal]:
             if info is not None:
                 vmin = Decimal(str(getattr(info, "volume_min", None) or min_lot))
                 vstep = Decimal(str(getattr(info, "volume_step", None) or lot_step))
+                vmax = Decimal(str(getattr(info, "volume_max", None) or max_lot))
                 cs = Decimal(str(getattr(info, "contract_size", None) or contract_size))
                 if vmin > 0:
                     min_lot = vmin
                 if vstep > 0:
                     lot_step = vstep
+                if vmax > 0:
+                    max_lot = vmax
                 if cs > 0:
                     contract_size = cs
+                # Optional freeze/stops for callers that need them later
+                _ = getattr(info, "stops_level", None)
+                _ = getattr(info, "freeze_level", None)
     except Exception:
         logger.debug("live_broker_lot_specs_unavailable", symbol=symbol, exc_info=True)
-    return min_lot, lot_step, contract_size
+    return min_lot, lot_step, max_lot, contract_size
+
+
+def _resolve_live_positions(
+    positions: list[MT5Position] | None,
+) -> list[MT5Position]:
+    """Prefer caller-supplied positions; else read live MT5 book (fail soft)."""
+    if positions:
+        return list(positions)
+    try:
+        from core.di.container import get_container
+
+        adapter = getattr(get_container(), "mt5_adapter", None)
+        if adapter is None or not hasattr(adapter, "list_positions"):
+            return []
+        rows = adapter.list_positions() or []
+        out: list[MT5Position] = []
+        for p in rows:
+            if isinstance(p, MT5Position):
+                out.append(p)
+                continue
+            try:
+                out.append(
+                    MT5Position(
+                        ticket=int(getattr(p, "ticket", 0) or 0),
+                        symbol=str(getattr(p, "symbol", "") or ""),
+                        side=str(getattr(p, "side", "buy") or "buy"),
+                        volume=Decimal(str(getattr(p, "volume", 0) or 0)),
+                        open_price=Decimal(str(getattr(p, "open_price", 0) or 0)),
+                        current_price=Decimal(str(getattr(p, "current_price", 0) or 0)),
+                        profit=Decimal(str(getattr(p, "profit", 0) or 0)),
+                    )
+                )
+            except Exception:
+                logger.debug("resolve_live_position_row_skipped", exc_info=True)
+                continue
+        return out
+    except Exception:
+        logger.debug("resolve_live_positions_failed", exc_info=True)
+        return []
 
 
 def _account_snapshot(
@@ -367,7 +424,9 @@ class InstitutionalDecisionPipeline:
 
         assert self.risk_engine is not None
         # Keep risk engine limits in sync with adaptive / scalping + live broker specs.
-        live_min, live_step, live_cs = _live_broker_lot_specs(snapshot.symbol)
+        live_min, live_step, live_max, live_cs = _live_broker_lot_specs(snapshot.symbol)
+        live_positions = _resolve_live_positions(positions)
+        risk_engine_lots_cap = Decimal("0")
         self.risk_engine = RiskEngine(
             config=risk_config_from_ite(
                 cfg,
@@ -390,6 +449,8 @@ class InstitutionalDecisionPipeline:
         risk_allowed = assessment.decision is not RiskDecision.REJECT
         risk_reasons = list(assessment.reasons)
         approved_lots = assessment.approved_lots if risk_allowed else Decimal("0")
+        if risk_allowed and approved_lots > 0:
+            risk_engine_lots_cap = approved_lots
 
         # Broker-aware scalping lot overlay (never invent fixed lots)
         if cfg.is_scalping() and risk_allowed:
@@ -467,109 +528,130 @@ class InstitutionalDecisionPipeline:
                 broker_spec = BrokerComplianceSpec(
                     min_lot=live_min,
                     lot_step=live_step,
-                    max_lot=scalp_cfg.broker_max_lot,
+                    max_lot=min(live_max, scalp_cfg.broker_max_lot),
                     contract_size=live_cs,
                 )
-                alloc = evaluate_portfolio_allocation(
-                    account=account,
-                    symbol=str(getattr(snapshot, "symbol", "") or ""),
-                    stop_distance=stop_distance,
-                    positions=list(positions or []),
-                    new_direction=confluence.direction.value,
-                    new_confidence=confluence.confidence,
-                    entry=entry,
-                    atr=account.atr,
-                    mid_price=account.mid_price,
-                    leverage=account.leverage,
-                    risk_pct=cfg.risk_per_trade_pct,
-                    session_risk_multiplier=sess_risk,
-                    quality_score=(
-                        int(ai_score.trade_quality) if ai_score is not None else None
-                    ),
-                    confidence=(
-                        int(ai_score.confidence) if ai_score is not None else None
-                    ),
-                    liquidity_score=(
-                        int(ai_score.liquidity) if ai_score is not None else None
-                    ),
-                    spread_score=(
-                        int(ai_score.spread_score) if ai_score is not None else None
-                    ),
-                    trend_confidence=(
-                        int(ai_score.confidence) if ai_score is not None else None
-                    ),
-                    quality_reject=(
-                        bool(ai_score.reject) if ai_score is not None else False
-                    ),
-                    broker=broker_spec,
-                    balance=account.balance,
-                    used_margin=account.used_margin,
-                    floating_pnl=account.floating_pnl,
-                    best_open_confidence=account.best_open_confidence,
-                    open_directions=account.open_directions,
-                    open_entries=account.open_entries,
-                    min_entry_distance=min_entry_distance,
-                    require_probability_improvement=(
-                        scalp_cfg.require_probability_improvement
-                        and account.open_positions > 0
-                    ),
-                    config=scalp_cfg,
-                    ite_config=cfg,
-                )
-                self._last_ai_score = self._last_ai_score or {}
-                if isinstance(self._last_ai_score, dict):
-                    self._last_ai_score["portfolio_risk_v2"] = alloc.to_dict()
-                if alloc.allow:
-                    approved_lots = alloc.approved_lots
-                else:
+                # Fail closed: open book without position rows cannot validate
+                # winner-only pyramiding / symbol exposure accurately.
+                if account.open_positions > 0 and not live_positions:
                     risk_allowed = False
                     risk_reasons.append(
-                        alloc.rejection_reason or "portfolio_risk_engine_v2_reject"
+                        "open_positions_without_book — PRE v2 fail-closed"
                     )
                     approved_lots = Decimal("0")
-                    method = (
-                        alloc.sizing.method
-                        if alloc.sizing is not None
-                        else "portfolio_reject"
-                    )
-                    if "below_min_lot" in method or (
-                        alloc.rejection_reason
-                        and "below_min_lot" in alloc.rejection_reason
-                    ):
-                        sized = (
-                            alloc.sizing.to_lot_result()
-                            if alloc.sizing is not None
+                else:
+                    alloc = evaluate_portfolio_allocation(
+                        account=account,
+                        symbol=str(getattr(snapshot, "symbol", "") or ""),
+                        stop_distance=stop_distance,
+                        positions=live_positions,
+                        new_direction=confluence.direction.value,
+                        new_confidence=confluence.confidence,
+                        entry=entry,
+                        atr=account.atr,
+                        mid_price=account.mid_price,
+                        leverage=account.leverage,
+                        risk_pct=cfg.risk_per_trade_pct,
+                        session_risk_multiplier=sess_risk,
+                        quality_score=(
+                            int(ai_score.trade_quality)
+                            if ai_score is not None
                             else None
+                        ),
+                        confidence=(
+                            int(ai_score.confidence) if ai_score is not None else None
+                        ),
+                        liquidity_score=(
+                            int(ai_score.liquidity) if ai_score is not None else None
+                        ),
+                        spread_score=(
+                            int(ai_score.spread_score) if ai_score is not None else None
+                        ),
+                        trend_confidence=(
+                            int(ai_score.confidence) if ai_score is not None else None
+                        ),
+                        quality_reject=(
+                            bool(ai_score.reject) if ai_score is not None else False
+                        ),
+                        broker=broker_spec,
+                        balance=account.balance,
+                        used_margin=account.used_margin,
+                        floating_pnl=account.floating_pnl,
+                        best_open_confidence=account.best_open_confidence,
+                        open_directions=account.open_directions,
+                        open_entries=account.open_entries,
+                        min_entry_distance=min_entry_distance,
+                        require_probability_improvement=(
+                            scalp_cfg.require_probability_improvement
+                            and account.open_positions > 0
+                        ),
+                        config=scalp_cfg,
+                        ite_config=cfg,
+                    )
+                    self._last_ai_score = self._last_ai_score or {}
+                    if isinstance(self._last_ai_score, dict):
+                        self._last_ai_score["portfolio_risk_v2"] = alloc.to_dict()
+                    if alloc.allow:
+                        # Never exceed RiskEngine REDUCE_SIZE / caps — take stricter
+                        pre_lots = alloc.approved_lots
+                        if risk_engine_lots_cap > 0:
+                            approved_lots = min(pre_lots, risk_engine_lots_cap)
+                            if approved_lots < pre_lots:
+                                risk_reasons.append(
+                                    "risk_engine_lot_cap:"
+                                    f"pre={pre_lots},cap={risk_engine_lots_cap}"
+                                )
+                        else:
+                            approved_lots = pre_lots
+                    else:
+                        risk_allowed = False
+                        risk_reasons.append(
+                            alloc.rejection_reason or "portfolio_risk_engine_v2_reject"
                         )
-                        if sized is not None:
-                            risk_reasons.append(
-                                "below_min_lot:"
-                                f"calculated_lot={sized.calculated_lot},"
-                                f"broker_minimum={sized.broker_min_lot},"
-                                f"account_balance={sized.account_balance},"
-                                f"risk_percentage={sized.risk_percentage}"
+                        approved_lots = Decimal("0")
+                        method = (
+                            alloc.sizing.method
+                            if alloc.sizing is not None
+                            else "portfolio_reject"
+                        )
+                        if "below_min_lot" in method or (
+                            alloc.rejection_reason
+                            and "below_min_lot" in alloc.rejection_reason
+                        ):
+                            sized = (
+                                alloc.sizing.to_lot_result()
+                                if alloc.sizing is not None
+                                else None
                             )
-                        try:
-                            from app.application.services.cycle_evidence import (
-                                log_trade_rejection,
-                            )
+                            if sized is not None:
+                                risk_reasons.append(
+                                    "below_min_lot:"
+                                    f"calculated_lot={sized.calculated_lot},"
+                                    f"broker_minimum={sized.broker_min_lot},"
+                                    f"account_balance={sized.account_balance},"
+                                    f"risk_percentage={sized.risk_percentage}"
+                                )
+                            try:
+                                from app.application.services.cycle_evidence import (
+                                    log_trade_rejection,
+                                )
 
-                            log_trade_rejection(
-                                reasons=(alloc.rejection_reason or method,),
-                                stage="lot_sizing",
-                                code="below_min_lot",
-                                symbol=str(getattr(snapshot, "symbol", "") or ""),
-                                session=str(
-                                    getattr(
-                                        snapshot.session.session,
-                                        "value",
-                                        snapshot.session.session,
-                                    )
-                                ),
-                                sizing=alloc.to_dict(),
-                            )
-                        except Exception:
-                            logger.exception("below_min_lot_reject_log_failed")
+                                log_trade_rejection(
+                                    reasons=(alloc.rejection_reason or method,),
+                                    stage="lot_sizing",
+                                    code="below_min_lot",
+                                    symbol=str(getattr(snapshot, "symbol", "") or ""),
+                                    session=str(
+                                        getattr(
+                                            snapshot.session.session,
+                                            "value",
+                                            snapshot.session.session,
+                                        )
+                                    ),
+                                    sizing=alloc.to_dict(),
+                                )
+                            except Exception:
+                                logger.exception("below_min_lot_reject_log_failed")
             elif risk_allowed:
                 # Legacy / sizing-v2-only path (PRE v2 disabled)
                 portfolio_exp = Decimal("0")

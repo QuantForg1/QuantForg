@@ -283,6 +283,14 @@ class TestPortfolioBookAndAllocation:
                 max_lot=Decimal("50"),
                 contract_size=Decimal("100"),
             ),
+            config=AiScalpingConfig(
+                max_symbol_exposure_pct=Decimal("5.00"),
+                max_correlated_exposure_pct=Decimal("5.00"),
+                max_daily_exposure_pct=Decimal("5.00"),
+                max_sector_exposure_pct=Decimal("5.00"),
+                max_currency_exposure_pct=Decimal("5.00"),
+                pyramid_winners_only=True,
+            ),
             log=False,
         )
         assert alloc.allow is False

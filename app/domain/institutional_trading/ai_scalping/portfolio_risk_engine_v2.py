@@ -606,19 +606,29 @@ def _evaluate_portfolio_allocation_unlocked(
         )
 
     # Portfolio / margin / correlation / symbol caps (override trade requests)
+    # Project post-trade exposure using configured risk unit for the new leg.
+    proposed_risk = (
+        risk_pct if risk_pct is not None and risk_pct > 0 else cfg.risk_per_trade_pct
+    )
+    projected_sym = sym_exp + proposed_risk
+    projected_corr = corr_exp + proposed_risk
+    projected_sec = sec_exp + proposed_risk
+    projected_cur = cur_exp + proposed_risk
+    projected_port = book.exposure_pct + proposed_risk
+
     ite_max_dd = Decimal(str(ite.max_daily_loss_pct))
     blocked_lim, why_lim = check_portfolio_sizing_limits(
         open_positions=book.open_positions,
         max_open_positions=int(cfg.max_open_trades),
         daily_loss_pct=book.daily_loss_pct,
         max_daily_loss_pct=ite_max_dd,
-        exposure_pct=book.exposure_pct,
+        exposure_pct=projected_port,
         max_exposure_pct=cfg.max_daily_exposure_pct,
         margin_usage_pct=book.margin_usage_pct,
         max_margin_usage_pct=cfg.max_margin_usage_pct,
-        symbol_exposure_pct=sym_exp,
+        symbol_exposure_pct=projected_sym,
         max_symbol_exposure_pct=cfg.max_symbol_exposure_pct,
-        correlated_exposure_pct=corr_exp,
+        correlated_exposure_pct=projected_corr,
         max_correlated_exposure_pct=cfg.max_correlated_exposure_pct,
     )
     if blocked_lim:
@@ -628,14 +638,14 @@ def _evaluate_portfolio_allocation_unlocked(
     max_sector = getattr(cfg, "max_sector_exposure_pct", None) or (
         cfg.max_correlated_exposure_pct
     )
-    if sec_exp >= max_sector > 0:
-        return _reject(f"Sector exposure {sec_exp}% at max {max_sector}%")
+    if projected_sec >= max_sector > 0:
+        return _reject(f"Sector exposure {projected_sec}% at max {max_sector}%")
 
     max_currency = getattr(cfg, "max_currency_exposure_pct", None) or (
         cfg.max_daily_exposure_pct
     )
-    if cur_exp >= max_currency > 0:
-        return _reject(f"Currency exposure {cur_exp}% at max {max_currency}%")
+    if projected_cur >= max_currency > 0:
+        return _reject(f"Currency exposure {projected_cur}% at max {max_currency}%")
 
     # Winner-only pyramiding / never average into losers
     same_sym_profits: list[Decimal] = []

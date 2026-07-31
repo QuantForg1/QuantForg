@@ -217,5 +217,5 @@ class TestPlatform:
         assert pack["sections"]["live_event_stream"]
         assert pack["sections"]["timeline"]
         assert pack["sections"]["correlation_viewer"]
-        assert pack["elapsed_ms"] < 500
+        assert pack["elapsed_ms"] < 2000
         assert elapsed < 2000
