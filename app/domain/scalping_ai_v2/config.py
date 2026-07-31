@@ -23,6 +23,8 @@ class ScalpingAiV2Config:
     min_atr_pct: Decimal = Decimal("0.05")
     max_atr_pct: Decimal = Decimal("3.0")
     allowed_sessions: tuple[str, ...] = (
+        "sydney",
+        "tokyo",
         "london",
         "new_york",
         "london_ny_overlap",

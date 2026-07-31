@@ -57,6 +57,7 @@ def calculate_scalping_lots(
     compounding_enabled: bool = False,
     peak_equity: Decimal | None = None,
     daily_exposure_used_pct: Decimal = Decimal("0"),
+    session_risk_multiplier: Decimal | None = None,
     config: AiScalpingConfig | None = None,
 ) -> LotSizingResult:
     """Size lots from risk% — never martingale / grid / invalid broker lots."""
@@ -120,6 +121,17 @@ def calculate_scalping_lots(
             base_risk = (base_risk * scale).quantize(Decimal("0.0001"))
             method_suffix = "+low_vol_scale"
         if base_risk > cfg.risk_per_trade_pct:
+            base_risk = cfg.risk_per_trade_pct
+
+    # Session soft risk weight — may REDUCE only, never increase above base
+    if session_risk_multiplier is not None:
+        sess_scale = min(Decimal("1"), max(Decimal("0"), session_risk_multiplier))
+        if sess_scale < Decimal("1"):
+            base_risk = (base_risk * sess_scale).quantize(Decimal("0.0001"))
+            method_suffix += "+session_risk_scale"
+        if risk_pct is not None and base_risk > risk_pct:
+            base_risk = risk_pct
+        elif risk_pct is None and base_risk > cfg.risk_per_trade_pct:
             base_risk = cfg.risk_per_trade_pct
 
     dist = stop_distance

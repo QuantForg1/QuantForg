@@ -50,6 +50,8 @@ from app.domain.value_objects.identity import SymbolCode
 
 ALLOWED_SESSIONS: frozenset[MarketSession] = frozenset(
     {
+        MarketSession.SYDNEY,
+        MarketSession.TOKYO,
         MarketSession.LONDON,
         MarketSession.NEW_YORK,
         MarketSession.LONDON_NY_OVERLAP,

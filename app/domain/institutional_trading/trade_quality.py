@@ -211,7 +211,12 @@ class TradeQualityEvaluator:
         )
 
     def _session(self, session: SessionFilterResult) -> TradeQualityFactor:
-        score = 100 if session.allowed else 15
+        # Soft weight by session liquidity stars — not a binary allow/deny score
+        score = int(getattr(session, "quality_score", 0) or 0)
+        if score <= 0:
+            score = 100 if session.allowed else 15
+        if not session.allowed:
+            score = min(score, 15)
         return TradeQualityFactor(
             code="session",
             weight=_WEIGHTS["session"],

@@ -96,12 +96,19 @@ class SessionFilterResult:
     session: MarketSession
     allowed: bool
     reason: str
+    # Soft weighting — never an absolute reject by itself when allowed=True
+    quality_score: int = 100
+    risk_multiplier: Decimal = Decimal("1")
+    stars: int = 5
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "session": self.session.value,
             "allowed": self.allowed,
             "reason": self.reason,
+            "quality_score": self.quality_score,
+            "risk_multiplier": str(self.risk_multiplier),
+            "stars": self.stars,
         }
 
 

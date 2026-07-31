@@ -74,12 +74,19 @@ def evaluate_market_quality(
     if inp.session is not None:
         parts += 1
         sess = str(inp.session).lower()
-        if sess in {s.lower() for s in config.allowed_sessions}:
-            score += Decimal("80")
-            reasons.append(f"Session {inp.session} allowed")
+        allowed = {s.lower() for s in config.allowed_sessions}
+        # Soft weight: named sessions score by liquidity, not binary reject
+        if sess in allowed or sess in {"tokyo", "sydney", "asian", "asia"}:
+            if sess in {"london", "new_york", "london_ny_overlap"}:
+                score += Decimal("90")
+            elif sess in {"tokyo", "sydney", "asian", "asia"}:
+                score += Decimal("55")
+            else:
+                score += Decimal("80")
+            reasons.append(f"Session {inp.session} soft-weighted (allowed)")
         else:
             score += Decimal("20")
-            reasons.append(f"Session {inp.session} outside allowed set")
+            reasons.append(f"Session {inp.session} outside tradable windows")
     if inp.trend is not None:
         parts += 1
         score += Decimal("70")

@@ -377,7 +377,7 @@ export function AutoTradingWorkspace() {
         allowed_symbols: ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
           ? asList(policy.allowed_sessions).map(String)
-          : ["london", "new_york", "london_ny_overlap"],
+          : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
         news_filter_enabled: Boolean(policy.news_filter_enabled),
         trading_mode: tradingMode,
         compounding_enabled: compoundingEnabled,
@@ -410,7 +410,7 @@ export function AutoTradingWorkspace() {
             : ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
           ? asList(policy.allowed_sessions).map(String)
-          : ["london", "new_york", "london_ny_overlap"],
+          : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
         news_filter_enabled: Boolean(policy.news_filter_enabled),
         compounding_enabled: compoundingEnabled,
         run_state: runState === "off" ? undefined : runState,
@@ -444,7 +444,7 @@ export function AutoTradingWorkspace() {
         allowed_symbols: ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
           ? asList(policy.allowed_sessions).map(String)
-          : ["london", "new_york", "london_ny_overlap"],
+          : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
         news_filter_enabled: Boolean(policy.news_filter_enabled),
       }),
     onSuccess: (_d, on) => {

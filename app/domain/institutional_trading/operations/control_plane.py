@@ -66,6 +66,8 @@ class OperationsControlPlane:
     auto_trading_enabled: bool = False
     auto_trading_run_state: AutoTradeRunState = "off"
     allowed_sessions: tuple[str, ...] = (
+        "sydney",
+        "tokyo",
         "london",
         "new_york",
         "london_ny_overlap",

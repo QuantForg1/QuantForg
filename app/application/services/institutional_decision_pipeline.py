@@ -401,6 +401,9 @@ class InstitutionalDecisionPipeline:
             from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
                 may_add_scalping_trade,
             )
+            from app.domain.institutional_trading.ai_scalping.session_intelligence import (
+                assess_session,
+            )
             from app.domain.institutional_trading.ai_scalping.sizing import (
                 calculate_scalping_lots,
             )
@@ -410,6 +413,20 @@ class InstitutionalDecisionPipeline:
                 broker_min_lot=live_min,
                 broker_lot_step=live_step,
             )
+            session_assess = assess_session(
+                str(
+                    getattr(
+                        snapshot.session.session,
+                        "value",
+                        snapshot.session.session,
+                    )
+                ),
+                config=scalp_cfg,
+            )
+            # Prefer filter risk_multiplier when present (same soft policy)
+            sess_risk = getattr(snapshot.session, "risk_multiplier", None)
+            if sess_risk is None or sess_risk <= 0:
+                sess_risk = session_assess.risk_multiplier
             sized = calculate_scalping_lots(
                 equity=account.equity,
                 stop_distance=stop_distance,
@@ -418,6 +435,7 @@ class InstitutionalDecisionPipeline:
                 peak_equity=account.peak_equity,
                 compounding_enabled=scalp_cfg.compounding_enabled,
                 contract_size=live_cs,
+                session_risk_multiplier=sess_risk,
                 config=scalp_cfg,
             )
             if sized.valid:

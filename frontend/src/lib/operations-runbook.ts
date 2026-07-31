@@ -279,7 +279,7 @@ export function buildOperationsRunbookModel(input: {
 
     // Template examples for non-active states (operator education)
     const templateEvidence: Record<RunbookState, string[]> = {
-      WAITING: ["Session 'tokyo' not allowed"],
+      WAITING: ["Session 'off_hours' outside tradable market windows"],
       READY: ["Allowed session", "Risk PASS", "Safety PASS"],
       BLOCKED: ["Safety or risk rejection observed"],
       EXECUTING: ["OMS Forward", "Awaiting broker / MT5"],

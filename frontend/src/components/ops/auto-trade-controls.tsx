@@ -67,6 +67,8 @@ export function AutoTradeControls() {
   const [dailyLoss, setDailyLoss] = useState("3.0");
   const [maxSpread, setMaxSpread] = useState("2.00");
   const [sessions, setSessions] = useState<string[]>([
+    "sydney",
+    "tokyo",
     "london",
     "new_york",
     "london_ny_overlap",
@@ -97,7 +99,7 @@ export function AutoTradeControls() {
     setSessions(
       asList(policy.allowed_sessions).map(String).length
         ? asList(policy.allowed_sessions).map(String)
-        : ["london", "new_york", "london_ny_overlap"],
+        : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
     );
     setNewsFilter(Boolean(policy.news_filter_enabled));
   }, [autoQ.data]);
