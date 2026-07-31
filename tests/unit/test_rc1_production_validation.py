@@ -141,11 +141,11 @@ def test_shadow_hook_never_submits() -> None:
     assert out is not None
     assert out["broker_submitted"] is False
     assert out["execution_mode"] == "shadow"
-    from app.domain.institutional_trading.rc1_production_validation.shadow_engine import (
-        get_shadow_journal,
+    from app.domain.institutional_trading.rc1_production_validation import (
+        shadow_engine as shadow_mod,
     )
 
-    assert get_shadow_journal().stats()["broker_submissions"] == 0
+    assert shadow_mod.get_shadow_journal().stats()["broker_submissions"] == 0
     clear_validation_runtime_override_for_tests()
 
 

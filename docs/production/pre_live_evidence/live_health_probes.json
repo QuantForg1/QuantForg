@@ -1,0 +1,184 @@
+{
+  "api_base": "https://quantforg-production.up.railway.app",
+  "frontend": "https://www.quantforg.com",
+  "collected_at": "2026-07-31T12:20:10.292493Z",
+  "gateway_status": "UNKNOWN",
+  "oms_status": "UNKNOWN",
+  "mt5_status": "UNKNOWN",
+  "ai_status": "UNKNOWN",
+  "gateway_health": "UNKNOWN",
+  "process_health": "HEALTHY",
+  "postgres": "healthy",
+  "redis": "disabled",
+  "environment": "production",
+  "api_version": "1.0.0",
+  "crashes": 0,
+  "auth_blocked_endpoints": [
+    "https://quantforg-production.up.railway.app/api/v1/ite/ops/services-health",
+    "https://quantforg-production.up.railway.app/api/v1/ite/ops/production-validation-mode",
+    "https://quantforg-production.up.railway.app/api/v1/ite/reliability/rc1",
+    "https://quantforg-production.up.railway.app/api/v1/ops/rc1-telemetry"
+  ],
+  "rc1_endpoint_deployed": false,
+  "probes": [
+    {
+      "url": "https://quantforg-production.up.railway.app/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "error": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "error": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ready",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "error": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/status",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 182.36
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.03
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/ready",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "error": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/live",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "error": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/healthz",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "error": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/services-health",
+      "http_status": 401,
+      "ok": false,
+      "body": {
+        "error": {
+          "code": "missing_token",
+          "message": "Missing bearer access token",
+          "details": {}
+        },
+        "request_id": "req_2da0362b6cff4eb68f5f49ba0f5e4474"
+      },
+      "error": "Unauthorized"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/production-validation-mode",
+      "http_status": 401,
+      "ok": false,
+      "body": {
+        "error": {
+          "code": "missing_token",
+          "message": "Missing bearer access token",
+          "details": {}
+        },
+        "request_id": "req_58e552ec826c4620a95ec4fbd11c4c92"
+      },
+      "error": "Unauthorized"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/rc1-production-validation",
+      "http_status": 404,
+      "ok": false,
+      "body": {
+        "error": {
+          "code": "http_error",
+          "message": "Not Found",
+          "details": {}
+        },
+        "request_id": "req_eebf6715208349be971c9f3ce130960f"
+      },
+      "error": "Not Found"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/reliability/rc1",
+      "http_status": 401,
+      "ok": false,
+      "body": {
+        "error": {
+          "code": "missing_token",
+          "message": "Missing bearer access token",
+          "details": {}
+        },
+        "request_id": "req_ca03c7878cff4f10bd683d04d5a641d6"
+      },
+      "error": "Unauthorized"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ops/rc1-telemetry",
+      "http_status": 401,
+      "ok": false,
+      "body": {
+        "error": {
+          "code": "missing_token",
+          "message": "Missing bearer access token",
+          "details": {}
+        },
+        "request_id": "req_857ea6a64ebd4439bf394f91801368fd"
+      },
+      "error": "Unauthorized"
+    },
+    {
+      "url": "https://www.quantforg.com",
+      "http_status": 200,
+      "ok": true,
+      "body": "<!doctype html>\n<html lang=\"en\" class=\"dark\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>QuantForg</title>\n    <meta\n      name=\"description\"\n      content=\"Enterprise quantitative trading terminal \u2014 portfolio, risk, MT5, and research.\"\n    />\n    <meta name=\"robots\" content=\"index,follow\" />\n    <style>\n      :root {\n        --bg: #0b1016;\n        --surface: #141c27;\n        --surface-2: #1a2433;\n        --border: ",
+      "error": null
+    }
+  ],
+  "evidence_integrity": {
+    "never_fabricated_gateway_oms_mt5_ai": true,
+    "auth_required_for_ops_health": true,
+    "note": "Gateway / OMS / MT5 / AI detailed health requires operator bearer token. Public probes only prove process + postgres."
+  }
+}

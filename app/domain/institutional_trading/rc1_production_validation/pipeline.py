@@ -121,10 +121,16 @@ def run_rc1_validation_pipeline(
     trade_stats = get_trade_recorder().stats()
 
     # Conservative trading/risk defaults for offline pipeline — UNKNOWN unless given
-    trading_ev = dict(trading or {})
-    risk_ev = dict(risk or {})
+    trading_ev = dict(trading) if trading is not None else {}
+    risk_ev = dict(risk) if risk is not None else {}
     # Offline synthetic path can affirm structural integrity of validation tooling
-    if use_synthetic_replay_if_empty and events is None:
+    # only when caller did not supply trading/risk evidence maps at all.
+    if (
+        use_synthetic_replay_if_empty
+        and events is None
+        and trading is None
+        and risk is None
+    ):
         trading_ev.setdefault("orders_valid", True)
         trading_ev.setdefault("lot_sizing_correct", True)
         trading_ev.setdefault("risk_limits_respected", True)

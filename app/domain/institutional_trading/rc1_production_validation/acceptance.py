@@ -13,7 +13,7 @@ from app.domain.institutional_trading.rc1_production_validation.config import (
 
 
 class GateStatus(StrEnum):
-    PASS = "PASS"
+    PASS = "PASS"  # noqa: S105
     FAIL = "FAIL"
     WARN = "WARN"
     UNKNOWN = "UNKNOWN"
@@ -41,7 +41,13 @@ class GateResult:
         }
 
 
-def _gate(name: str, ok: bool | None, *, detail: str = "", **evidence: Any) -> GateResult:
+def _gate(
+    name: str,
+    ok: bool | None,
+    *,
+    detail: str = "",
+    **evidence: Any,
+) -> GateResult:
     if ok is None:
         status = GateStatus.UNKNOWN
     elif ok:
@@ -85,10 +91,11 @@ def evaluate_acceptance_gates(
             gateway=gw,
         )
     )
+    oms_ok_set = {"PASS", "HEALTHY", "OK", "UP", "REACHED", "SHADOW"}
     gates.append(
         _gate(
             "oms_healthy",
-            oms in {"PASS", "HEALTHY", "OK", "UP", "REACHED", "SHADOW"} if oms else None,
+            oms in oms_ok_set if oms else None,
             detail=f"oms={oms or 'UNKNOWN'}",
             oms=oms,
         )
@@ -239,9 +246,11 @@ def evaluate_acceptance_gates(
 
     if failed == 0 and unknown == 0 and passed >= 12:
         recommendation = Rc1Recommendation.FULL_PRODUCTION
-    elif failed == 0 and hard_fails == [] and passed >= 6:
-        recommendation = Rc1Recommendation.LIMITED_LIVE_PILOT
-    elif not hard_fails and failed <= 2 and passed >= 4:
+    elif (
+        failed == 0
+        and not hard_fails
+        and (passed >= 6 or (failed <= 2 and passed >= 4))
+    ):
         recommendation = Rc1Recommendation.LIMITED_LIVE_PILOT
     else:
         recommendation = Rc1Recommendation.NOT_READY
@@ -250,6 +259,14 @@ def evaluate_acceptance_gates(
     if unknown >= 5 and recommendation is Rc1Recommendation.FULL_PRODUCTION:
         recommendation = Rc1Recommendation.LIMITED_LIVE_PILOT
     if hard_fails:
+        recommendation = Rc1Recommendation.NOT_READY
+    # Infrastructure UNKNOWN blocks any live recommendation
+    infra_unknown = any(
+        g.name in {"gateway_healthy", "oms_healthy", "mt5_connected"}
+        and g.status is GateStatus.UNKNOWN
+        for g in gates
+    )
+    if infra_unknown and recommendation is not Rc1Recommendation.NOT_READY:
         recommendation = Rc1Recommendation.NOT_READY
 
     return {
@@ -260,6 +277,7 @@ def evaluate_acceptance_gates(
             "unknown": unknown,
             "total": len(gates),
             "hard_fails": hard_fails,
+            "infra_unknown": infra_unknown,
         },
         "quality_floor": QUALITY_FLOOR,
         "confidence_floor": CONFIDENCE_FLOOR,

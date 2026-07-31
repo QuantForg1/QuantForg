@@ -1,6 +1,6 @@
 # RC1 Validation Report
 
-Generated: `2026-07-31T12:06:00.700032Z`
+Generated: `2026-07-31T12:20:10.294403Z`
 
 Institutional Production Validation Pipeline for QuantForg ITE.
 This report does **not** modify strategy, Quality/Confidence floors, weights, or risk logic.
@@ -14,12 +14,27 @@ This report does **not** modify strategy, Quality/Confidence floors, weights, or
 
 ## Infrastructure Health
 
+- **api_base:** `https://quantforg-production.up.railway.app`
+- **frontend:** `https://www.quantforg.com`
+- **collected_at:** `2026-07-31T12:20:10.292493Z`
 - **gateway_status:** `UNKNOWN`
 - **oms_status:** `UNKNOWN`
 - **mt5_status:** `UNKNOWN`
 - **ai_status:** `UNKNOWN`
+- **gateway_health:** `UNKNOWN`
+- **process_health:** `HEALTHY`
+- **postgres:** `healthy`
+- **redis:** `disabled`
+- **environment:** `production`
+- **api_version:** `1.0.0`
 - **crashes:** `0`
-- **note:** `offline_pipeline_infrastructure_not_live_probed`
+- **auth_blocked_endpoints:** 4 items
+- **rc1_endpoint_deployed:** `False`
+- **probes:** 13 items
+- **evidence_integrity:**
+  - **never_fabricated_gateway_oms_mt5_ai:** `True`
+  - **auth_required_for_ops_health:** `True`
+  - **note:** `Gateway / OMS / MT5 / AI detailed health requires operator bearer token. Public probes only prove process + postgres.`
 
 ## Replay Results
 
@@ -84,26 +99,24 @@ This report does **not** modify strategy, Quality/Confidence floors, weights, or
 
 ## Shadow Trading Results
 
-- **shadow_orders_recorded:** `0`
+- **shadow_orders_recorded:** `7`
 - **broker_submissions:** `0`
 - **mt5_calls:** `0`
 
 ## OMS Statistics
 
 - **status:** `UNKNOWN`
-- **latency_note:** `from trade journal`
+- **auth_required:** `True`
 
 ## Gateway Statistics
 
 - **status:** `UNKNOWN`
-- **latency_note:** `from trade journal`
+- **auth_required:** `True`
 
 ## Risk Statistics
 
-- **daily_loss_enforced:** `True`
-- **portfolio_caps_enforced:** `True`
-- **correlation_enforced:** `True`
-- **emergency_stop_verified:** `True`
+- **status:** `UNKNOWN`
+- **note:** `requires authenticated ops probe`
 
 ## Performance Statistics
 
@@ -134,11 +147,20 @@ This report does **not** modify strategy, Quality/Confidence floors, weights, or
 ## Acceptance Criteria
 
 - **summary:**
-  - **passed:** `17`
-  - **failed:** `3`
-  - **unknown:** `0`
-  - **total:** `20`
-  - **hard_fails:** 0 items
+  - **paper:**
+    - **passed:** `8`
+    - **failed:** `3`
+    - **unknown:** `9`
+    - **total:** `20`
+    - **hard_fails:** 0 items
+    - **infra_unknown:** `False`
+  - **shadow:**
+    - **passed:** `8`
+    - **failed:** `3`
+    - **unknown:** `9`
+    - **total:** `20`
+    - **hard_fails:** 0 items
+    - **infra_unknown:** `False`
 - **recommendation:** `NOT READY`
 - **gates:** 20 items
 - **quality_floor:** `80`
@@ -181,3 +203,27 @@ This report does **not** modify strategy, Quality/Confidence floors, weights, or
 - Weights unmodified
 - Risk logic unmodified
 - Institutional safety preserved
+
+## Live Evidence Attachment
+
+- Collected at: `2026-07-31T12:20:10.292493Z`
+- API base: `https://quantforg-production.up.railway.app`
+- Process health: `HEALTHY`
+- Postgres: `healthy`
+- Redis: `disabled`
+- Gateway: `UNKNOWN` (auth required — not fabricated)
+- OMS: `UNKNOWN` (auth required — not fabricated)
+- MT5: `UNKNOWN` (auth required — not fabricated)
+- AI: `UNKNOWN` (auth required — not fabricated)
+- RC1 ops endpoint deployed on production: `False`
+
+Probe artifacts:
+- `docs/production/pre_live_evidence/live_health_probes.json`
+- `docs/production/pre_live_evidence/rc1_paper_result.json`
+- `docs/production/pre_live_evidence/rc1_shadow_result.json`
+
+## Pre-Live Checklist Outcome
+
+**Final recommendation: NOT READY**
+
+Deployment must STOP while any acceptance gate remains UNKNOWN/FAIL.

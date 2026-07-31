@@ -168,7 +168,10 @@ def handle_validation_execution(
         if not cfg.enabled or not cfg.blocks_broker_submit:
             return None
 
-        payload = intent.to_dict() if hasattr(intent, "to_dict") else {"intent": str(intent)}
+        if hasattr(intent, "to_dict"):
+            payload = intent.to_dict()
+        else:
+            payload = {"intent": str(intent)}
         side = str(payload.get("side") or "").lower()
         broker_request = {
             "action": "order_send",
