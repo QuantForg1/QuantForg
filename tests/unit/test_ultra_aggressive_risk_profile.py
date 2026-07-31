@@ -198,3 +198,61 @@ class TestUltraAggressiveSizing:
         )
         assert d.configured_max_risk_pct <= Decimal("0.75")
         assert d.risk_pct <= Decimal("0.75")
+
+    def test_pre_allows_empty_book_at_symbol_cap(self) -> None:
+        """ULTRA max_symbol == risk/trade (8%); landing on cap must not reject."""
+        from app.domain.institutional_trading.ai_scalping import (
+            portfolio_risk_engine_v2 as pre,
+        )
+        from app.domain.institutional_trading.decision_models import AccountRiskState
+
+        cfg = ai_scalping_config_for_profile("ULTRA_AGGRESSIVE")
+        account = AccountRiskState(
+            balance=Decimal("5000"),
+            equity=Decimal("5000"),
+            free_margin=Decimal("4500"),
+            used_margin=Decimal("0"),
+            floating_pnl=Decimal("0"),
+            leverage=Decimal("1000"),
+            open_positions=0,
+            daily_pnl=Decimal("0"),
+            atr=Decimal("2.5"),
+            mid_price=Decimal("2400"),
+        )
+        alloc = pre.evaluate_portfolio_allocation(
+            account=account,
+            symbol="XAUUSD",
+            stop_distance=Decimal("2.0"),
+            positions=[],
+            new_direction="buy",
+            new_confidence=92,
+            entry=Decimal("2400"),
+            atr=Decimal("2.5"),
+            mid_price=Decimal("2400"),
+            leverage=Decimal("1000"),
+            risk_pct=cfg.risk_per_trade_pct,
+            session_risk_multiplier=Decimal("1"),
+            quality_score=95,
+            confidence=92,
+            liquidity_score=85,
+            spread_score=85,
+            trend_confidence=92,
+            mtf_score=90,
+            news_risk_multiplier=Decimal("1"),
+            quality_reject=False,
+            broker=pre.BrokerComplianceSpec(
+                min_lot=Decimal("0.01"),
+                lot_step=Decimal("0.01"),
+                max_lot=Decimal("50"),
+                contract_size=Decimal("100"),
+            ),
+            balance=Decimal("5000"),
+            used_margin=Decimal("0"),
+            floating_pnl=Decimal("0"),
+            config=cfg,
+            log=False,
+        )
+        assert alloc.allow is True
+        assert alloc.approved_lots > 0
+        assert alloc.sizing is not None
+        assert alloc.sizing.risk_pct == Decimal("8.0000")

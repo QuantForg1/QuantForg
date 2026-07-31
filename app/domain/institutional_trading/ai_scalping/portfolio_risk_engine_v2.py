@@ -391,8 +391,7 @@ def _stop_distance_ok(
     min_dist = point * Decimal(max(stops, freeze, 0))
     if min_dist > 0 and stop_distance < min_dist:
         return (
-            f"Stop distance {stop_distance} below broker min "
-            f"{min_dist} (stops/freeze)"
+            f"Stop distance {stop_distance} below broker min {min_dist} (stops/freeze)"
         )
     return None
 
@@ -613,6 +612,7 @@ def _evaluate_portfolio_allocation_unlocked(
 
     # Portfolio / margin / correlation / symbol caps (override trade requests)
     # Project post-trade exposure using configured risk unit for the new leg.
+    # Landing exactly on a cap is allowed; only exceeding the cap blocks.
     proposed_risk = (
         risk_pct if risk_pct is not None and risk_pct > 0 else cfg.risk_per_trade_pct
     )
@@ -623,35 +623,53 @@ def _evaluate_portfolio_allocation_unlocked(
     projected_port = book.exposure_pct + proposed_risk
 
     ite_max_dd = Decimal(str(ite.max_daily_loss_pct))
+    # Hard gates on current book (positions / daily loss / margin) — not projected.
     blocked_lim, why_lim = check_portfolio_sizing_limits(
         open_positions=book.open_positions,
         max_open_positions=int(cfg.max_open_trades),
         daily_loss_pct=book.daily_loss_pct,
         max_daily_loss_pct=ite_max_dd,
-        exposure_pct=projected_port,
+        exposure_pct=book.exposure_pct,
         max_exposure_pct=cfg.max_daily_exposure_pct,
         margin_usage_pct=book.margin_usage_pct,
         max_margin_usage_pct=cfg.max_margin_usage_pct,
-        symbol_exposure_pct=projected_sym,
-        max_symbol_exposure_pct=cfg.max_symbol_exposure_pct,
-        correlated_exposure_pct=projected_corr,
-        max_correlated_exposure_pct=cfg.max_correlated_exposure_pct,
     )
     if blocked_lim:
         return _reject(f"portfolio_limit:{why_lim or 'caps'}")
 
-    # Sector soft cap (same budget as correlated unless tighter)
+    if cfg.max_daily_exposure_pct > 0 and projected_port > cfg.max_daily_exposure_pct:
+        return _reject(
+            "portfolio_limit:Portfolio exposure limit "
+            f"({projected_port}% > {cfg.max_daily_exposure_pct}%)"
+        )
+    if cfg.max_symbol_exposure_pct > 0 and projected_sym > cfg.max_symbol_exposure_pct:
+        return _reject(
+            "portfolio_limit:Symbol exposure limit "
+            f"({projected_sym}% > {cfg.max_symbol_exposure_pct}%)"
+        )
+    if (
+        cfg.max_correlated_exposure_pct > 0
+        and projected_corr > cfg.max_correlated_exposure_pct
+    ):
+        return _reject(
+            "portfolio_limit:Correlation exposure limit "
+            f"({projected_corr}% > {cfg.max_correlated_exposure_pct}%)"
+        )
+
+    # Sector / currency caps — landing on cap allowed
     max_sector = getattr(cfg, "max_sector_exposure_pct", None) or (
         cfg.max_correlated_exposure_pct
     )
-    if projected_sec >= max_sector > 0:
-        return _reject(f"Sector exposure {projected_sec}% at max {max_sector}%")
+    if max_sector > 0 and projected_sec > max_sector:
+        return _reject(f"Sector exposure {projected_sec}% exceeds max {max_sector}%")
 
     max_currency = getattr(cfg, "max_currency_exposure_pct", None) or (
         cfg.max_daily_exposure_pct
     )
-    if projected_cur >= max_currency > 0:
-        return _reject(f"Currency exposure {projected_cur}% at max {max_currency}%")
+    if max_currency > 0 and projected_cur > max_currency:
+        return _reject(
+            f"Currency exposure {projected_cur}% exceeds max {max_currency}%"
+        )
 
     # Winner-only pyramiding / never average into losers
     same_sym_profits: list[Decimal] = []
