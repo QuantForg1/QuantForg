@@ -1,0 +1,28 @@
+{
+  "collected_at": "2026-07-31T12:38:23.703224Z",
+  "gateway_base_configured": true,
+  "token_configured": true,
+  "probes": [
+    {
+      "url": "https://gateway.quantforg.com/health",
+      "http_status": 403,
+      "error": "HTTPError",
+      "body_snippet": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/\",\"title\":\"Error 1010: Access denied\",\"status\":403,\"detail\":\"The site owner has blocked access based on your browser's signature.\",\"instance\":\"a23ca8ee48a34afe\",\"error_code\":1010,\"error_name\":\"browser_signature_banned\",\"error_category\":\"access_denied\",\"ray_id\":\"a23ca8ee48a34afe\",\"",
+      "message": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://gateway.quantforg.com/account",
+      "http_status": 403,
+      "error": "HTTPError",
+      "body_snippet": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/\",\"title\":\"Error 1010: Access denied\",\"status\":403,\"detail\":\"The site owner has blocked access based on your browser's signature.\",\"instance\":\"a23ca8ee7cfe3e6d\",\"error_code\":1010,\"error_name\":\"browser_signature_banned\",\"error_category\":\"access_denied\",\"ray_id\":\"a23ca8ee7cfe3e6d\",\"",
+      "message": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://gateway.quantforg.com/heartbeat",
+      "http_status": 403,
+      "error": "HTTPError",
+      "body_snippet": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/\",\"title\":\"Error 1010: Access denied\",\"status\":403,\"detail\":\"The site owner has blocked access based on your browser's signature.\",\"instance\":\"a23ca8eeac0d4b48\",\"error_code\":1010,\"error_name\":\"browser_signature_banned\",\"error_category\":\"access_denied\",\"ray_id\":\"a23ca8eeac0d4b48\",\"",
+      "message": "HTTP Error 403: Forbidden"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "collected_at": "2026-07-31T12:37:45.694575Z",
+  "probes": [
+    {
+      "url": "https://gateway.quantforg.com/health",
+      "http_status": 502,
+      "ok": false,
+      "body": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.\",\"instance\":\"a23ca800debcb18c\",\"error_code\":502,\"error_name\":\"origin_bad_gateway\",\"error_category\":\"origin\",\"ray_id\":\"a23ca800debcb18c\",\"timestamp\":\"2026-07-31T12:37:46Z\",\"zone\"",
+      "error": "HTTPError",
+      "server": "cloudflare"
+    },
+    {
+      "url": "https://gateway.quantforg.com/",
+      "http_status": 502,
+      "ok": false,
+      "body": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.\",\"instance\":\"a23ca808db48659c\",\"error_code\":502,\"error_name\":\"origin_bad_gateway\",\"error_category\":\"origin\",\"ray_id\":\"a23ca808db48659c\",\"timestamp\":\"2026-07-31T12:37:48Z\",\"zone\"",
+      "error": "HTTPError",
+      "server": "cloudflare"
+    },
+    {
+      "url": "https://gateway.quantforg.com/status",
+      "http_status": 502,
+      "ok": false,
+      "body": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.\",\"instance\":\"a23ca8119dd8cb73\",\"error_code\":502,\"error_name\":\"origin_bad_gateway\",\"error_category\":\"origin\",\"ray_id\":\"a23ca8119dd8cb73\",\"timestamp\":\"2026-07-31T12:37:49Z\",\"zone\"",
+      "error": "HTTPError",
+      "server": "cloudflare"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "server": "railway-hikari",
+      "cf_ray": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/status",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 181.86
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.04
+          }
+        ]
+      },
+      "server": "railway-hikari",
+      "cf_ray": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/rc1-production-validation",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"error\":{\"code\":\"http_error\",\"message\":\"Not Found\",\"details\":{}},\"request_id\":\"req_fc852f3bf63b4b41badc80fd64d7adab\"}",
+      "error": "HTTPError",
+      "server": "railway-hikari"
+    },
+    {
+      "url": "https://quantforg-staging.up.railway.app/health",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"status\":\"error\",\"code\":404,\"message\":\"Application not found\",\"request_id\":\"nnUaIugtTVihj8acLPU1MQ\"}",
+      "error": "HTTPError",
+      "server": "railway-hikari"
+    },
+    {
+      "url": "https://www.quantforg.com/",
+      "http_status": 200,
+      "ok": true,
+      "body": "<!doctype html>\n<html lang=\"en\" class=\"dark\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>QuantForg</title>\n    <meta\n      name=\"description\"\n      content=\"Enterprise quantitative trading terminal \u2014 portfolio, risk, MT5, and research.\"\n    />\n    <meta name=\"robots\" content=\"index,follow\" />\n    <style>\n      :root {\n        --bg: #0b1016;\n        --surface: #141c27;\n        --surface-2: #1a2433;\n        --border: ",
+      "server": "Vercel",
+      "cf_ray": null
+    }
+  ]
+}
