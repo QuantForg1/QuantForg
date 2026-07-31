@@ -812,6 +812,33 @@ def get_strategy_diagnostics(
     return payload
 
 
+@router.get("/mtf-alignment-diagnostic")
+def get_mtf_alignment_diagnostic(
+    _user: OperatorUser,
+    limit: int = 1000,
+) -> dict[str, Any]:
+    """MTF H1/M15/M5 alignment diagnostic — evidence only.
+
+    Explains which timeframe prevents full lower-TF lock. Never mutates
+    thresholds, risk, safety, OMS, or MT5.
+    """
+    from app.application.services.mtf_alignment_diagnostic import (
+        diagnose_mtf_alignment,
+        propose_improvements,
+    )
+    from app.application.services.strategy_diagnostics import (
+        get_strategy_diagnostics_store,
+    )
+
+    window = max(1, min(int(limit or 1000), 2000))
+    snap = get_strategy_diagnostics_store().snapshot(limit=window)
+    cycles = list(snap.get("cycles") or [])
+    report = diagnose_mtf_alignment(cycles)
+    report["proposed_improvements"] = propose_improvements(report)
+    report["source"] = "strategy_diagnostics_memory"
+    return report
+
+
 @router.get("/production-validation-mode")
 def get_production_validation_mode(_user: OperatorUser) -> dict[str, Any]:
     """Live Production Validation Mode dashboard — observe-only evidence.
