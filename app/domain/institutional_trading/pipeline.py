@@ -213,6 +213,10 @@ class InstitutionalAnalysisPipeline:
         # ATR on entry confirmation TF (M15) — sizing input only; not a strategy gate.
         entry_bars = list(self.bars.as_mapping().get(cfg.entry_confirmation_tf, []))
         atr = compute_atr(entry_bars)
+        entry_opens = tuple(float(c.open.value) for c in entry_bars)
+        entry_highs = tuple(float(c.high.value) for c in entry_bars)
+        entry_lows = tuple(float(c.low.value) for c in entry_bars)
+        entry_closes = tuple(float(c.close.value) for c in entry_bars)
 
         return MarketAnalysisSnapshot(
             symbol=code_str,
@@ -230,4 +234,8 @@ class InstitutionalAnalysisPipeline:
             trade_quality=quality,
             spread=spread,
             atr=atr,
+            entry_opens=entry_opens,
+            entry_highs=entry_highs,
+            entry_lows=entry_lows,
+            entry_closes=entry_closes,
         )

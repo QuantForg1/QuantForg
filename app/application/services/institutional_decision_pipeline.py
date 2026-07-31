@@ -36,8 +36,16 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def risk_config_from_ite(cfg: ITEConfig) -> RiskEngineConfig:
-    """Map ITE defaults onto RiskEngineConfig (XAU contract size)."""
+def risk_config_from_ite(
+    cfg: ITEConfig,
+    *,
+    min_lot: Decimal | None = None,
+    lot_step: Decimal | None = None,
+    contract_size: Decimal | None = None,
+) -> RiskEngineConfig:
+    """Map ITE defaults onto RiskEngineConfig (live broker specs when provided)."""
+    from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
+
     return RiskEngineConfig(
         max_risk_per_trade_pct=cfg.risk_per_trade_pct,
         max_daily_loss_pct=cfg.max_daily_loss_pct,
@@ -45,12 +53,49 @@ def risk_config_from_ite(cfg: ITEConfig) -> RiskEngineConfig:
         max_open_positions=cfg.max_open_trades,
         max_consecutive_losses=cfg.max_consecutive_losses,
         max_spread=cfg.max_spread_reject,
-        contract_size=Decimal("100"),
+        min_lot=min_lot if min_lot is not None and min_lot > 0 else VOLUME_MIN,
+        lot_step=lot_step if lot_step is not None and lot_step > 0 else VOLUME_STEP,
+        contract_size=(
+            contract_size
+            if contract_size is not None and contract_size > 0
+            else CONTRACT_SIZE
+        ),
         max_atr_pct_of_price=Decimal("3.0"),
         enforce_session=True,
         enforce_spread=True,
         enforce_atr=True,
     )
+
+
+def _live_broker_lot_specs(symbol: str) -> tuple[Decimal, Decimal, Decimal]:
+    """Read live volume_min / volume_step / contract_size; fall back to XAU specs."""
+    from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
+
+    min_lot, lot_step, contract_size = VOLUME_MIN, VOLUME_STEP, CONTRACT_SIZE
+    try:
+        from core.di.container import get_container
+
+        adapter = getattr(get_container(), "mt5_adapter", None)
+        client = None
+        if adapter is not None:
+            client = getattr(adapter, "client", None) or getattr(
+                adapter, "_client", None
+            )
+        if client is not None and hasattr(client, "symbol_info"):
+            info = client.symbol_info(symbol)
+            if info is not None:
+                vmin = Decimal(str(getattr(info, "volume_min", None) or min_lot))
+                vstep = Decimal(str(getattr(info, "volume_step", None) or lot_step))
+                cs = Decimal(str(getattr(info, "contract_size", None) or contract_size))
+                if vmin > 0:
+                    min_lot = vmin
+                if vstep > 0:
+                    lot_step = vstep
+                if cs > 0:
+                    contract_size = cs
+    except Exception:
+        logger.debug("live_broker_lot_specs_unavailable", symbol=symbol, exc_info=True)
+    return min_lot, lot_step, contract_size
 
 
 def _account_snapshot(
@@ -182,6 +227,10 @@ class InstitutionalDecisionPipeline:
                     config=DEFAULT_AI_SCALPING_CONFIG,
                     enforce_adaptive_cooldown=True,
                     symbol=str(getattr(snapshot, "symbol", "") or ""),
+                    opens=tuple(getattr(snapshot, "entry_opens", ()) or ()),
+                    highs=tuple(getattr(snapshot, "entry_highs", ()) or ()),
+                    lows=tuple(getattr(snapshot, "entry_lows", ()) or ()),
+                    closes=tuple(getattr(snapshot, "entry_closes", ()) or ()),
                 )
                 self._last_ai_score = ai_score.to_dict()
                 diag = get_scalping_diagnostics_store()
@@ -317,8 +366,16 @@ class InstitutionalDecisionPipeline:
             )
 
         assert self.risk_engine is not None
-        # Keep risk engine limits in sync with adaptive / scalping config.
-        self.risk_engine = RiskEngine(config=risk_config_from_ite(cfg))
+        # Keep risk engine limits in sync with adaptive / scalping + live broker specs.
+        live_min, live_step, live_cs = _live_broker_lot_specs(snapshot.symbol)
+        self.risk_engine = RiskEngine(
+            config=risk_config_from_ite(
+                cfg,
+                min_lot=live_min,
+                lot_step=live_step,
+                contract_size=live_cs,
+            )
+        )
         assessment = self.risk_engine.evaluate(
             check,
             account=_account_snapshot(
@@ -336,6 +393,8 @@ class InstitutionalDecisionPipeline:
 
         # Broker-aware scalping lot overlay (never invent fixed lots)
         if cfg.is_scalping() and risk_allowed:
+            from dataclasses import replace as dc_replace
+
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
             )
@@ -346,14 +405,20 @@ class InstitutionalDecisionPipeline:
                 calculate_scalping_lots,
             )
 
+            scalp_cfg = dc_replace(
+                DEFAULT_AI_SCALPING_CONFIG,
+                broker_min_lot=live_min,
+                broker_lot_step=live_step,
+            )
             sized = calculate_scalping_lots(
                 equity=account.equity,
                 stop_distance=stop_distance,
                 atr=account.atr,
                 risk_pct=cfg.risk_per_trade_pct,
                 peak_equity=account.peak_equity,
-                compounding_enabled=DEFAULT_AI_SCALPING_CONFIG.compounding_enabled,
-                config=DEFAULT_AI_SCALPING_CONFIG,
+                compounding_enabled=scalp_cfg.compounding_enabled,
+                contract_size=live_cs,
+                config=scalp_cfg,
             )
             if sized.valid:
                 approved_lots = sized.lots

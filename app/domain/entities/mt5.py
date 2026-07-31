@@ -81,7 +81,8 @@ class MT5AccountInfo:
     margin_level: Decimal = Decimal("0")
     profit: Decimal = Decimal("0")
     company: str = ""
-    trade_mode: str = ""
+    trade_mode: str = ""  # demo | contest | real | unknown
+    trade_allowed: bool | None = None  # MT5 AccountInfo.trade_allowed
 
     def __post_init__(self) -> None:
         if self.login <= 0:
@@ -111,6 +112,7 @@ class MT5AccountInfo:
             "profit": str(self.profit),
             "company": self.company,
             "trade_mode": self.trade_mode,
+            "trade_allowed": self.trade_allowed,
         }
 
 

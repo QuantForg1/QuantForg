@@ -51,7 +51,9 @@ def calculate_scalping_lots(
     stop_distance: Decimal | None,
     atr: Decimal | None = None,
     risk_pct: Decimal | None = None,
-    contract_size: Decimal = Decimal("100"),
+    contract_size: Decimal | None = None,
+    min_lot: Decimal | None = None,
+    lot_step: Decimal | None = None,
     compounding_enabled: bool = False,
     peak_equity: Decimal | None = None,
     daily_exposure_used_pct: Decimal = Decimal("0"),
@@ -134,7 +136,17 @@ def calculate_scalping_lots(
                 valid=False,
             )
 
-    if equity <= 0 or base_risk <= 0 or contract_size <= 0:
+    cs = (
+        contract_size
+        if contract_size is not None and contract_size > 0
+        else Decimal("100")
+    )
+    broker_min = min_lot if min_lot is not None and min_lot > 0 else cfg.broker_min_lot
+    broker_step = (
+        lot_step if lot_step is not None and lot_step > 0 else cfg.broker_lot_step
+    )
+
+    if equity <= 0 or base_risk <= 0 or cs <= 0:
         return LotSizingResult(
             lots=Decimal("0"),
             risk_amount=Decimal("0"),
@@ -146,11 +158,11 @@ def calculate_scalping_lots(
 
     risk_amount = (equity * base_risk / Decimal("100")).quantize(Decimal("0.01"))
     # XAU: risk ≈ lots * contract_size * stop_distance
-    raw = risk_amount / (contract_size * dist)
+    raw = risk_amount / (cs * dist)
     lots = _quantize_lot(
         raw,
-        step=cfg.broker_lot_step,
-        min_lot=cfg.broker_min_lot,
+        step=broker_step,
+        min_lot=broker_min,
         max_lot=cfg.broker_max_lot,
     )
     if lots <= 0:
@@ -159,9 +171,7 @@ def calculate_scalping_lots(
             risk_amount=risk_amount,
             stop_distance=dist,
             method="below_min_lot",
-            reason=(
-                f"Calculated lot below broker min {cfg.broker_min_lot} " f"(raw={raw})"
-            ),
+            reason=(f"Calculated lot below broker min {broker_min} (raw={raw})"),
             valid=False,
         )
     return LotSizingResult(
@@ -171,7 +181,7 @@ def calculate_scalping_lots(
         method=f"percentage_risk{method_suffix}",
         reason=(
             f"risk={base_risk}% equity={equity} stop={dist} "
-            f"→ lots={lots} (min={cfg.broker_min_lot} step={cfg.broker_lot_step})"
+            f"→ lots={lots} (min={broker_min} step={broker_step})"
         ),
         valid=True,
     )

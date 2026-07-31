@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from typing import Annotated, Any
 
@@ -54,6 +55,11 @@ def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         ) from exc
 
 
+async def _call_async(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    """Run blocking MT5 bridge work off the event loop (candles/ticks/account)."""
+    return await asyncio.to_thread(_call, fn)
+
+
 @router.get("/health")
 async def health(request: Request) -> dict[str, Any]:
     """Liveness/readiness — open without token (auth intentionally bypassed).
@@ -64,7 +70,10 @@ async def health(request: Request) -> dict[str, Any]:
     import asyncio
 
     from services.mt5_gateway.settings import token_load_meta
-    from services.mt5_gateway.token_util import mask_gateway_token, normalize_gateway_token
+    from services.mt5_gateway.token_util import (
+        mask_gateway_token,
+        normalize_gateway_token,
+    )
 
     settings = get_gateway_settings()
     runtime = getattr(request.app.state, "runtime", None)
@@ -114,9 +123,7 @@ async def health(request: Request) -> dict[str, Any]:
                 "latency_ms": None,
                 "terminal_build": None,
                 "build_date": None,
-                "server": getattr(
-                    getattr(runtime, "diagnostics", None), "server", None
-                )
+                "server": getattr(getattr(runtime, "diagnostics", None), "server", None)
                 or None,
                 "login_status": "timeout",
                 "last_heartbeat_at": getattr(
@@ -203,32 +210,28 @@ async def session_status(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
 
 @router.get("/heartbeat")
 async def heartbeat(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return _call(runtime.heartbeat)
+    return await _call_async(runtime.heartbeat)
 
 
 @router.get("/account")
 async def account(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return _call(runtime.account)
+    return await _call_async(runtime.account)
 
 
 @router.get("/symbols")
 async def symbols(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return _call(runtime.symbols)
+    return await _call_async(runtime.symbols)
 
 
 @router.get("/symbols/{symbol}")
-async def symbol_specs(
-    symbol: str, _: TokenDep, runtime: RuntimeDep
-) -> dict[str, Any]:
+async def symbol_specs(symbol: str, _: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
     """Live MT5 constraints: volume_step, stops_level, filling_mode, trade_mode, …"""
-    return _call(lambda: runtime.symbol_specs(symbol))
+    return await _call_async(lambda: runtime.symbol_specs(symbol))
 
 
 @router.get("/quotes/{symbol}")
-async def quotes(
-    symbol: str, _: TokenDep, runtime: RuntimeDep
-) -> dict[str, Any]:
-    return _call(lambda: runtime.quote(symbol))
+async def quotes(symbol: str, _: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
+    return await _call_async(lambda: runtime.quote(symbol))
 
 
 @router.get("/candles/{symbol}")
@@ -239,19 +242,19 @@ async def candles(
     timeframe: str = Query(default="H1"),
     count: int = Query(default=100, ge=1, le=5000),
 ) -> dict[str, Any]:
-    return _call(
+    return await _call_async(
         lambda: runtime.candles(symbol, timeframe=timeframe, count=count)
     )
 
 
 @router.get("/positions")
 async def positions(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return _call(runtime.positions)
+    return await _call_async(runtime.positions)
 
 
 @router.get("/orders")
 async def orders(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return _call(runtime.orders)
+    return await _call_async(runtime.orders)
 
 
 @router.get("/history/orders")
@@ -260,7 +263,7 @@ async def history_orders(
     runtime: RuntimeDep,
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict[str, Any]:
-    return _call(lambda: runtime.history_orders(days=days))
+    return await _call_async(lambda: runtime.history_orders(days=days))
 
 
 @router.get("/history/deals")
@@ -269,28 +272,28 @@ async def history_deals(
     runtime: RuntimeDep,
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict[str, Any]:
-    return _call(lambda: runtime.history_deals(days=days))
+    return await _call_async(lambda: runtime.history_deals(days=days))
 
 
 @router.post("/trade/order_check")
 async def trade_order_check(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return _call(lambda: runtime.order_check(body.as_runtime_dict()))
+    return await _call_async(lambda: runtime.order_check(body.as_runtime_dict()))
 
 
 @router.post("/trade/order_calc_margin")
 async def trade_order_calc_margin(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return _call(lambda: runtime.order_calc_margin(body.as_runtime_dict()))
+    return await _call_async(lambda: runtime.order_calc_margin(body.as_runtime_dict()))
 
 
 @router.post("/trade/order_calc_profit")
 async def trade_order_calc_profit(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return _call(lambda: runtime.order_calc_profit(body.as_runtime_dict()))
+    return await _call_async(lambda: runtime.order_calc_profit(body.as_runtime_dict()))
 
 
 @router.post("/trade/order_send")
@@ -298,11 +301,11 @@ async def trade_order_send(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
     """Live MetaTrader5.order_send — never invents tickets."""
-    return _call(lambda: runtime.order_send(body.as_runtime_dict()))
+    return await _call_async(lambda: runtime.order_send(body.as_runtime_dict()))
 
 
 @router.post("/trade/order_cancel")
 async def trade_order_cancel(
     body: CancelRequest, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return _call(lambda: runtime.order_cancel(body.ticket))
+    return await _call_async(lambda: runtime.order_cancel(body.ticket))

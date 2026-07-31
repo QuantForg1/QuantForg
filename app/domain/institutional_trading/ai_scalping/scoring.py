@@ -180,15 +180,17 @@ def score_scalping_setup(
     if bos or choch:
         reasons.append(f"Structure bos={bos} choch={choch}")
 
+    from app.domain.institutional_trading.quality_components import (
+        quality_components,
+    )
+
     liq = snapshot.liquidity
     sweeps = len(liq.sweeps) if liq else 0
+    q_components = quality_components(quality)
     liquidity_score = (
         88
         if sweeps
-        else max(
-            20,
-            int((getattr(quality, "components", {}) or {}).get("liquidity", 40) or 40),
-        )
+        else max(20, int(q_components.get("liquidity", 40) or 40))
     )
     factors["liquidity_sweep"] = liquidity_score
     if sweeps:
@@ -214,10 +216,19 @@ def score_scalping_setup(
         85 if resolved.band == "high" else (70 if resolved.band == "normal" else 50)
     )
 
-    q_components = getattr(quality, "components", None) or {}
-    vol_score = int(q_components.get("volume", q_components.get("vol", 55)) or 55)
+    # Momentum tracks real trend alignment — never a silent 55 default that
+    # fails min_momentum_score=65 even when trend is strong.
     mom_score = int(
-        q_components.get("momentum", q_components.get("trend_strength", 55)) or 55
+        q_components.get("momentum")
+        or q_components.get("trend_strength")
+        or trend.alignment_score
+        or 0
+    )
+    vol_score = int(
+        q_components.get("volume")
+        or q_components.get("vol")
+        or q_components.get("liquidity")
+        or 40
     )
     factors["volume"] = max(0, min(100, vol_score))
     factors["momentum"] = max(0, min(100, mom_score))
