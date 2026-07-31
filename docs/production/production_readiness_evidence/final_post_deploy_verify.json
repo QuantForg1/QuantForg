@@ -1,0 +1,16 @@
+{
+  "collected_at": "2026-07-31T13:26:51.932845Z",
+  "trading_components_http": 200,
+  "statuses": {
+    "gateway": "HEALTHY",
+    "oms": "HEALTHY",
+    "mt5": "CONNECTED",
+    "ai": "HEALTHY"
+  },
+  "all_ready": true,
+  "api_health": 200,
+  "api_health_status": 200,
+  "gateway_health": 200,
+  "gateway_mt5_connected": true,
+  "rc1_unauth_http": 401
+}

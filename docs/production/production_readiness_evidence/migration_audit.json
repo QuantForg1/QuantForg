@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-07-31T13:26:53.564665Z",
+  "applied_migrations": false,
+  "remote_count": 49,
+  "repo_count": 49,
+  "pending": [],
+  "dsn_redacted": "postgresql://***@aws-0-eu-central-1.pooler.supabase.com/postgres"
+}

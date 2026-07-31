@@ -1,0 +1,90 @@
+{
+  "gateway": {
+    "name": "gateway",
+    "status": "HEALTHY",
+    "detail": "gateway_available=True latency_ms=477.7176044881344",
+    "evidence": {
+      "available": true,
+      "latency_ms": 477.7176044881344,
+      "cloudflare_tunnel_up": true
+    }
+  },
+  "oms": {
+    "name": "oms",
+    "status": "HEALTHY",
+    "detail": "EXECUTION_ENABLED with gateway+MT5 live and mock disabled (OMS submit path ready)",
+    "evidence": {
+      "execution_enabled": true,
+      "gateway_available": true,
+      "mt5_connected": true,
+      "mt5_use_mock": false
+    }
+  },
+  "mt5": {
+    "name": "mt5",
+    "status": "CONNECTED",
+    "detail": "mt5_connected=True enabled=True mock=False",
+    "evidence": {
+      "connected": true,
+      "enabled": true,
+      "use_mock": false
+    }
+  },
+  "ai": {
+    "name": "ai",
+    "status": "HEALTHY",
+    "detail": "ITE runtime present in process (DI bootstrap)",
+    "evidence": {
+      "ite_runtime_present": true
+    }
+  },
+  "components": [
+    {
+      "name": "gateway",
+      "status": "HEALTHY",
+      "detail": "gateway_available=True latency_ms=477.7176044881344",
+      "evidence": {
+        "available": true,
+        "latency_ms": 477.7176044881344,
+        "cloudflare_tunnel_up": true
+      }
+    },
+    {
+      "name": "oms",
+      "status": "HEALTHY",
+      "detail": "EXECUTION_ENABLED with gateway+MT5 live and mock disabled (OMS submit path ready)",
+      "evidence": {
+        "execution_enabled": true,
+        "gateway_available": true,
+        "mt5_connected": true,
+        "mt5_use_mock": false
+      }
+    },
+    {
+      "name": "mt5",
+      "status": "CONNECTED",
+      "detail": "mt5_connected=True enabled=True mock=False",
+      "evidence": {
+        "connected": true,
+        "enabled": true,
+        "use_mock": false
+      }
+    },
+    {
+      "name": "ai",
+      "status": "HEALTHY",
+      "detail": "ITE runtime present in process (DI bootstrap)",
+      "evidence": {
+        "ite_runtime_present": true
+      }
+    }
+  ],
+  "statuses": {
+    "gateway": "HEALTHY",
+    "oms": "HEALTHY",
+    "mt5": "CONNECTED",
+    "ai": "HEALTHY"
+  },
+  "all_ready_for_limited_pilot": true,
+  "status": "ok"
+}

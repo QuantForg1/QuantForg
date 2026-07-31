@@ -1,0 +1,10 @@
+{
+  "rc1_http_status": 200,
+  "rc1_body_keys": [
+    "dashboard",
+    "status"
+  ],
+  "rc1_has_status": true,
+  "rc1_has_dashboard": true,
+  "auth_role_path": "owner_password_grant"
+}

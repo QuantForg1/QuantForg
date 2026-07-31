@@ -1,6 +1,6 @@
 # RC1 Migration Report
 
-Generated: `2026-07-31T12:30:00Z`
+Generated: `2026-07-31T13:22:08.320464Z`
 
 ## Policy
 
@@ -11,21 +11,19 @@ Generated: `2026-07-31T12:30:00Z`
 
 - Supabase up migrations: `49`
 - Alembic revisions: `['0001_baseline.py']`
-- DSN present: `True` (via Railway service variables)
+- DSN present: `True`
 - DSN (redacted): `postgresql://***@db.otqyhlmwaifokrczryrc.supabase.co:5432/postgres`
 
 ## Remote
 
-- Source: unavailable from agent egress
-- Error: `OSError: Network is unreachable` to Supabase DB host
-- Version count: unverified
-- Tables sampled: unverified
+- Source: `None`
+- Version count: `None`
+- Tables sampled: `None`
 
 ## Pending (best-effort vs repo)
 
-- Remote catalog unavailable — treat pending as **unverified**, not empty.
+- None detected (or remote catalog unavailable).
 
 ## Notes
 
-- No staging Railway environment exists to apply migrations safely first.
-- Production apply remains blocked.
+- db_connect_failed:gaierror
