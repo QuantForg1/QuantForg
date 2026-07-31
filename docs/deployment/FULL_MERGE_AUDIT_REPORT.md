@@ -196,7 +196,7 @@ Experimental AI/MT5/dependabot tips remain open by design and are **not** classi
 
 ## Final statement
 
-**Final production SHA (after docs-only audit merge):** `9dbe400b2cf6cd9e0ee603774fe98da634fdb1c0`
+**Final production SHA (after docs-only audit merge):** `f669ab7a8a774d1c0e4a12cf3c8b10df4e79b09d`
 
 **1. Production fully synchronized with main**
 
