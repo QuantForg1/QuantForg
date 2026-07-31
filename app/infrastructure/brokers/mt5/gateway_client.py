@@ -958,16 +958,20 @@ class GatewayMT5Client:
             return self._account_cache
         gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/account")
-        # Prefer gateway-mapped account_mode (demo|contest|real). Never invent
-        # "demo" when the broker omits the field — that caused Weltrade-Real
-        # accounts to be mislabeled.
+        # Prefer gateway-mapped account_mode / trade_mode_raw from MT5.
+        # Never invent "demo" when omitted — that mislabeled Weltrade-Real.
         account_mode = (
             str(data.get("account_mode") or data.get("trade_mode") or "")
             .strip()
             .lower()
         )
         if account_mode not in {"demo", "contest", "real"}:
-            account_mode = "unknown"
+            raw = data.get("trade_mode_raw")
+            try:
+                raw_i = int(raw) if raw is not None and str(raw).strip() != "" else -1
+            except (TypeError, ValueError):
+                raw_i = -1
+            account_mode = {0: "demo", 1: "contest", 2: "real"}.get(raw_i, "unknown")
         trade_allowed_raw = data.get("trade_allowed")
         trade_allowed = None if trade_allowed_raw is None else bool(trade_allowed_raw)
         info = MT5AccountInfo(

@@ -268,11 +268,17 @@ def _bridge_import_context() -> dict[str, Any]:
         ctx["site_error"] = f"{type(exc).__name__}: {exc}"
     try:
         spec = importlib.util.find_spec("MetaTrader5")
-        ctx["find_spec"] = None if spec is None else {
-            "name": spec.name,
-            "origin": getattr(spec, "origin", None),
-            "submodule_search_locations": list(spec.submodule_search_locations or []),
-        }
+        ctx["find_spec"] = (
+            None
+            if spec is None
+            else {
+                "name": spec.name,
+                "origin": getattr(spec, "origin", None),
+                "submodule_search_locations": list(
+                    spec.submodule_search_locations or []
+                ),
+            }
+        )
     except Exception as exc:
         ctx["find_spec_error"] = f"{type(exc).__name__}: {exc}"
     try:
@@ -558,9 +564,7 @@ class MT5GatewayRuntime:
                 )
                 msg = f"MT5 initialize failed: {err}"
                 if getattr(self.bridge, "_last_initialize_error", None) is not None:
-                    msg = (
-                        f"{msg}; last_error={self.bridge._last_initialize_error!r}"
-                    )
+                    msg = f"{msg}; last_error={self.bridge._last_initialize_error!r}"
                 self._record_failure(msg)
                 raise RuntimeError(msg)
             if not self.bridge.login(login, password, server):
@@ -605,9 +609,7 @@ class MT5GatewayRuntime:
                 )
                 msg = f"MT5 initialize failed: {err}"
                 if getattr(self.bridge, "_last_initialize_error", None) is not None:
-                    msg = (
-                        f"{msg}; last_error={self.bridge._last_initialize_error!r}"
-                    )
+                    msg = f"{msg}; last_error={self.bridge._last_initialize_error!r}"
                 self._record_failure(msg)
                 raise RuntimeError(msg)
             info = self.bridge.account_info()
@@ -683,7 +685,9 @@ class MT5GatewayRuntime:
         version = ""
         degraded = False
         probe = "skipped"
-        caps = _empty_capability_fields(reason="MT5 session not connected — capabilities not probed")
+        caps = _empty_capability_fields(
+            reason="MT5 session not connected — capabilities not probed"
+        )
         if not (self.bridge.available and self.diagnostics.connected):
             if not self.bridge.available:
                 caps = _empty_capability_fields(
@@ -706,6 +710,10 @@ class MT5GatewayRuntime:
             }
 
         timeout = float(self.settings.mt5_health_probe_timeout_seconds)
+        account_mode: str | None = None
+        trade_mode_raw: int | None = None
+        trade_allowed: bool | None = None
+        login: int | None = self.diagnostics.login
         try:
             t0 = time.perf_counter()
             info = call_mt5_bounded(
@@ -718,7 +726,15 @@ class MT5GatewayRuntime:
             login_status = "connected" if connected else "error"
             probe = "live"
             if info is not None:
+                from services.mt5_gateway.account_mode import map_account_trade_mode
+
                 server = str(getattr(info, "server", server) or server)
+                login = _safe_int(getattr(info, "login", 0), 0) or login
+                account_mode, trade_mode_raw = map_account_trade_mode(
+                    getattr(info, "trade_mode", None)
+                )
+                ta = getattr(info, "trade_allowed", None)
+                trade_allowed = bool(ta) if ta is not None else None
         except MT5CallTimeout as exc:
             logger.warning(
                 "mt5_gateway_health_probe_timeout: %s",
@@ -790,9 +806,7 @@ class MT5GatewayRuntime:
                 terminal_build = _safe_int(getattr(term, "build", 0), 0)
                 caps = _terminal_capability_fields(term)
             else:
-                caps = _empty_capability_fields(
-                    reason="terminal_info returned None"
-                )
+                caps = _empty_capability_fields(reason="terminal_info returned None")
         except Exception as exc:
             logger.info(
                 "mt5_gateway_health_terminal_skipped: %s",
@@ -830,12 +844,17 @@ class MT5GatewayRuntime:
             "terminal_build": terminal_build,
             "build_date": build_date or None,
             "server": server or None,
+            "login": login,
             "login_status": login_status,
             "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
             "version": version,
             "bridge_available": self.bridge.available,
             "degraded": degraded,
             "probe": probe,
+            "account_mode": account_mode,
+            "trade_mode": account_mode,
+            "trade_mode_raw": trade_mode_raw,
+            "trade_allowed": trade_allowed,
             **caps,
         }
 
@@ -1022,14 +1041,11 @@ class MT5GatewayRuntime:
 
     def account(self) -> dict[str, Any]:
         info = self._require_account()
+        from services.mt5_gateway.account_mode import map_account_trade_mode
+
         # MetaTrader5 ACCOUNT_TRADE_MODE: 0=demo, 1=contest, 2=real
-        trade_mode_raw = getattr(info, "trade_mode", None)
-        try:
-            trade_mode_int = int(trade_mode_raw) if trade_mode_raw is not None else -1
-        except (TypeError, ValueError):
-            trade_mode_int = -1
-        account_mode = {0: "demo", 1: "contest", 2: "real"}.get(
-            trade_mode_int, "unknown"
+        account_mode, trade_mode_int = map_account_trade_mode(
+            getattr(info, "trade_mode", None)
         )
         trade_allowed_raw = getattr(info, "trade_allowed", None)
         trade_allowed = (
@@ -1051,7 +1067,7 @@ class MT5GatewayRuntime:
             "session_mode": self.diagnostics.session_mode,
             "account_mode": account_mode,
             "trade_mode": account_mode,
-            "trade_mode_raw": trade_mode_int if trade_mode_int >= 0 else None,
+            "trade_mode_raw": trade_mode_int,
             "trade_allowed": trade_allowed,
         }
 
@@ -1416,9 +1432,7 @@ class MT5GatewayRuntime:
                     "ORDER REJECTED"
                 )
                 return payload
-            request = apply_filling_mode(
-                request, int(request.get("type_filling") or 0)
-            )
+            request = apply_filling_mode(request, int(request.get("type_filling") or 0))
             logger.info(
                 "mt5_order_send_after_check symbol=%s filling=%s",
                 symbol,
@@ -1515,9 +1529,7 @@ class MT5GatewayRuntime:
             "last_initialize_error": getattr(
                 self.bridge, "_last_initialize_error", None
             ),
-            "last_initialize_path": getattr(
-                self.bridge, "_last_initialize_path", None
-            ),
+            "last_initialize_path": getattr(self.bridge, "_last_initialize_path", None),
             "credentials_in_memory": self._creds is not None,
             "password_in_memory": password_in_memory,
             "auto_attach_enabled": self.settings.mt5_gateway_auto_attach,
