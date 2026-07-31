@@ -2,10 +2,10 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-export const size = { width: 32, height: 32 };
+export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
-export default async function Icon() {
+export default async function AppleIcon() {
   const bytes = await readFile(join(process.cwd(), "public", "brand", "quantforg-mark.png"));
   const src = `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`;
 
@@ -19,11 +19,11 @@ export default async function Icon() {
           alignItems: "center",
           justifyContent: "center",
           background: "#0F1419",
-          borderRadius: 6,
+          borderRadius: 36,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} width={28} height={28} alt="" />
+        <img src={src} width={148} height={148} alt="" />
       </div>
     ),
     { ...size },

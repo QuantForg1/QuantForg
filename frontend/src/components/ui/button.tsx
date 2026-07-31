@@ -11,7 +11,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[var(--accent)] text-[var(--accent-fg)] hover:brightness-110",
+          "qf-btn-primary hover:brightness-110",
         secondary:
           "bg-[var(--surface-2)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--surface-3)] hover:border-[var(--border-strong)]",
         ghost:

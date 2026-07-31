@@ -8,24 +8,29 @@
 
 1. **Use CSS variables** — do not hard-code one-off hex in product UI.  
 2. **Extend tokens in globals.css** — then document here.  
-3. **No neon / atmosphere gradients** on product surfaces.  
+3. **No neon / atmosphere noise** on product surfaces — RC4 allows subtle cyan ambient gradients only.  
 4. Light and dark (`.light`) must both remain readable.
 
-## Color (steel)
+## Color (RC4 — logo-derived charcoal + cyan)
 
-| Token | Role |
-|---|---|
-| `--bg` | App background |
-| `--bg-elevated` | Chrome / rails |
-| `--surface` / `--surface-2` / `--surface-3` | Panels |
-| `--border` / `--border-strong` | Dividers |
-| `--fg` / `--fg-muted` / `--fg-subtle` | Text hierarchy |
-| `--accent` / `--accent-fg` / `--accent-soft` | Focus / primary action |
-| `--success` / `--warning` / `--danger` (+ soft) | Status |
-| `--buy` / `--sell` | Side semantics |
-| `--ring` | Focus ring |
+| Token | Example | Role |
+|---|---|---|
+| `--bg` | `#111827` | App background (never pure black) |
+| `--bg-elevated` | `#151B23` | Chrome / rails |
+| `--surface` / `--surface-2` / `--surface-3` | `#1A2330` … `#283344` | Panels |
+| `--border` / `--border-strong` | `#2F3B4D` … | Dividers |
+| `--fg` / `--fg-muted` / `--fg-subtle` | white → muted | Text hierarchy |
+| `--accent` | `#00D4E0` | Logo turquoise / primary |
+| `--accent-gradient` | cyan → teal | Primary buttons (`.qf-btn-primary`) |
+| `--accent-fg` / `--accent-soft` / `--accent-glow` | — | On-accent / soft / glow |
+| `--success` / `--warning` / `--danger` (+ soft) | — | Status |
+| `--buy` / `--sell` | — | Side semantics |
+| `--ring` | cyan | Focus ring |
+| `--bg-ambient` | soft radials | Page atmosphere (no grid) |
 
-Forbidden in product UI: purple-on-white fintech gradients, glow stacks, cream+terracotta cliché themes as default brand.
+Brand assets: `frontend/public/brand/quantforg-mark.png` (official mark).
+
+Forbidden in product UI: purple-on-white fintech gradients, heavy glow stacks, cream+terracotta cliché themes, hacker/gaming/crypto chrome.
 
 ## Spacing
 
@@ -68,7 +73,7 @@ No decorative looping animations on trading desks. Always respect `prefers-reduc
 
 ## Elevation
 
-`--shadow-card` / `--shadow-card-hover` default to **none**. Prefer border separation.
+`--shadow-card` / `--shadow-card-hover` / `--shadow-elevated` provide soft institutional depth on charcoal. Prefer borders first; shadows second.
 
 ## Changing tokens
 

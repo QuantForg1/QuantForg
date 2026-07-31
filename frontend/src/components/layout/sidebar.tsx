@@ -25,6 +25,7 @@ import {
   SHELL_SIDEBAR_MIN,
   type ShellChromeState,
 } from "@/lib/workspace/shell-chrome";
+import { BrandLogo, BrandMark } from "@/components/brand/brand-logo";
 
 function PrimaryLink({
   item,
@@ -145,21 +146,13 @@ function Brand({ collapsed }: { collapsed?: boolean }) {
         collapsed ? "justify-center px-2" : "gap-2.5 px-3",
       )}
     >
-      <div
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--accent-fg)]"
-        aria-hidden
-      >
-        <span className="text-xs font-semibold tracking-tight">QF</span>
-      </div>
-      {!collapsed ? (
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold tracking-tight text-[var(--fg)]">
-            QuantForg
-          </p>
-          <p className="qf-caption truncate">Trading OS</p>
-        </div>
+      {collapsed ? (
+        <>
+          <BrandMark size={28} />
+          <span className="sr-only">QuantForg Trading OS</span>
+        </>
       ) : (
-        <span className="sr-only">QuantForg Trading OS</span>
+        <BrandLogo size={28} caption="Trading OS" />
       )}
     </div>
   );
@@ -311,7 +304,7 @@ export function MobileNav() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-[color-mix(in_srgb,var(--bg)_50%,#000)]"
             aria-label="Dismiss menu"
             onClick={() => setOpen(false)}
           />

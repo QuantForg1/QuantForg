@@ -17,7 +17,7 @@ export function DialogContent({
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 qf-motion-overlay" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--bg)_55%,#000)] qf-motion-overlay" />
       <DialogPrimitive.Content
         className={cn(
           "fixed left-1/2 top-1/2 z-50 max-h-[min(92dvh,920px)] w-[min(96vw,1100px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] p-[var(--space-4)] shadow-[var(--shadow-elevated)] qf-motion-pop focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",

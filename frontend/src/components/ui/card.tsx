@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-/** Phase 1 card language — steel surface, border separation, no blur stacks. */
+/** RC4 card language — charcoal surface, cyan-aware borders, soft elevation. */
 export function Card({
   className,
   ...props

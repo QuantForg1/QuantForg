@@ -92,7 +92,8 @@ Never regress without an explicit ADR and release plan:
 ## Visual & motion law (summary)
 
 - **No** neon, glow stacks, purple fintech gradients, atmosphere mesh backgrounds  
-- **Yes** steel tokens in `frontend/src/app/globals.css`  
+- **Yes** RC4 charcoal + cyan tokens in `frontend/src/app/globals.css`  
+- **Yes** official QuantForg mark (`public/brand/quantforg-mark.png`) everywhere branding appears  
 - Motion: **180–220ms**, functional only (`--duration-os`, `--ease-os`)  
 - Numbers: **tabular** everywhere (`font-variant-numeric` / `.tabular` / mono)  
 - Fonts: **IBM Plex Sans** + **IBM Plex Mono** only for product UI  
