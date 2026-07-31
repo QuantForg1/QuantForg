@@ -43,7 +43,7 @@ def _http_get(url: str, *, timeout: float = 15.0) -> dict[str, Any]:
             "body": None,
             "error": "only_https_allowed",
         }
-    req = urllib.request.Request(url, method="GET")
+    req = urllib.request.Request(url, method="GET")  # noqa: S310
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
             body = resp.read().decode("utf-8", errors="replace")
