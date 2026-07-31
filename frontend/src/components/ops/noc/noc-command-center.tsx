@@ -261,6 +261,22 @@ export function NocCommandCenter() {
   const opsIntel = asRecord(intelligence.operational_intelligence);
   const opsWarnings = Array.isArray(opsIntel.warnings) ? opsIntel.warnings : [];
   const dailyExecReport = asRecord(intelligence.daily_execution_report);
+  const learningDashboard = asRecord(intelligence.learning_dashboard);
+  const learningRecent = Array.isArray(learningDashboard.recent)
+    ? learningDashboard.recent
+    : [];
+  const patternLibrary = asRecord(intelligence.pattern_library);
+  const adaptiveRecs = asRecord(intelligence.adaptive_recommendations);
+  const adaptiveRecList = Array.isArray(adaptiveRecs.recommendations)
+    ? adaptiveRecs.recommendations
+    : [];
+  const institutionalKpis = asRecord(intelligence.institutional_kpis);
+  const portfolioForecast = asRecord(intelligence.portfolio_forecast);
+  const forecastWarnings = Array.isArray(portfolioForecast.warnings)
+    ? portfolioForecast.warnings
+    : [];
+  const periodReports = asRecord(intelligence.period_reports);
+  const periodMap = asRecord(periodReports.periods);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -1222,6 +1238,221 @@ export function NocCommandCenter() {
               })}
             />
           )}
+        </NocPanel>
+
+        {/* §4t–4y AI v8 Adaptive Intelligence (observe / recommend only) */}
+        <NocPanel
+          id="noc-learning-dashboard"
+          title="4t · Learning Dashboard"
+          action={
+            <Badge tone="neutral">
+              {fmt(learningDashboard.count, "0")} obs · no auto-apply
+            </Badge>
+          }
+        >
+          <NocRow
+            label="Overwrite forbidden"
+            value={fmt(learningDashboard.overwrite_forbidden, "true")}
+            tone="ok"
+          />
+          <NocRow
+            label="Auto-applies"
+            value={fmt(learningDashboard.auto_applies_to_strategy, "false")}
+            tone="ok"
+          />
+          {learningRecent.length === 0 ? (
+            <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
+              No learning observations yet.
+            </p>
+          ) : (
+            <DeskTable
+              columns={["Symbol", "Dir", "Win", "Q", "C", "Session", "Regime"]}
+              rows={learningRecent.slice(0, 10).map((row) => {
+                const r = asRecord(row);
+                return [
+                  fmt(r.symbol),
+                  fmt(r.direction),
+                  r.win ? "yes" : "no",
+                  fmt(r.quality),
+                  fmt(r.confidence),
+                  fmt(r.session, "—"),
+                  fmt(r.market_regime, "—"),
+                ];
+              })}
+            />
+          )}
+        </NocPanel>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel id="noc-pattern-library" title="4u · Pattern Library">
+            <NocRow label="Trades" value={fmt(patternLibrary.trades, "0")} />
+            <NocRow
+              label="Best / worst regime"
+              value={`${fmt(patternLibrary.best_market_regimes)} / ${fmt(
+                patternLibrary.worst_market_regimes,
+              )}`}
+            />
+            <NocRow
+              label="Best / worst session"
+              value={`${fmt(patternLibrary.best_sessions)} / ${fmt(
+                patternLibrary.worst_sessions,
+              )}`}
+            />
+            <NocRow
+              label="Best / worst symbol"
+              value={`${fmt(patternLibrary.best_symbols)} / ${fmt(
+                patternLibrary.worst_symbols,
+              )}`}
+            />
+            <NocRow
+              label="Best weekday"
+              value={fmt(patternLibrary.best_weekdays)}
+            />
+            <NocRow
+              label="Best hold range"
+              value={fmt(patternLibrary.best_holding_times)}
+            />
+            <NocRow
+              label="Modifies strategy"
+              value={fmt(patternLibrary.modifies_strategy, "false")}
+              tone="ok"
+            />
+          </NocPanel>
+
+          <NocPanel
+            id="noc-adaptive-recommendations"
+            title="4v · Adaptive Recommendations"
+            action={
+              <Badge tone="neutral">
+                {fmt(adaptiveRecs.count ?? adaptiveRecList.length, "0")} · human
+                approval
+              </Badge>
+            }
+          >
+            <NocRow
+              label="Auto-applies"
+              value={fmt(adaptiveRecs.auto_applies, "false")}
+              tone="ok"
+            />
+            {adaptiveRecList.length === 0 ? (
+              <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
+                No recommendations.
+              </p>
+            ) : (
+              <DeskTable
+                columns={["Code", "Severity", "Message"]}
+                rows={adaptiveRecList.slice(0, 8).map((row) => {
+                  const r = asRecord(row);
+                  return [fmt(r.code), fmt(r.severity), fmt(r.message)];
+                })}
+              />
+            )}
+          </NocPanel>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel id="noc-institutional-kpis" title="4w · Institutional KPIs">
+            <NocRow label="Trades" value={fmt(institutionalKpis.trades, "0")} />
+            <NocRow
+              label="Expectancy"
+              value={fmt(institutionalKpis.expectancy)}
+            />
+            <NocRow label="Sharpe" value={fmt(institutionalKpis.sharpe)} />
+            <NocRow label="Sortino" value={fmt(institutionalKpis.sortino)} />
+            <NocRow label="Calmar" value={fmt(institutionalKpis.calmar)} />
+            <NocRow
+              label="Profit factor"
+              value={fmt(institutionalKpis.profit_factor)}
+            />
+            <NocRow
+              label="Recovery factor"
+              value={fmt(institutionalKpis.recovery_factor)}
+            />
+            <NocRow
+              label="Ulcer index"
+              value={fmt(institutionalKpis.ulcer_index)}
+            />
+            <NocRow
+              label="Avg MAE / MFE"
+              value={`${fmt(institutionalKpis.average_mae)} / ${fmt(
+                institutionalKpis.average_mfe,
+              )}`}
+            />
+            <NocRow
+              label="EQI"
+              value={fmt(institutionalKpis.execution_quality_index)}
+            />
+            <NocRow
+              label="Institutional score"
+              value={fmt(institutionalKpis.institutional_score)}
+            />
+          </NocPanel>
+
+          <NocPanel
+            id="noc-portfolio-forecast"
+            title="4x · Portfolio Forecast"
+            action={
+              <Badge tone={forecastWarnings.length ? "warning" : "neutral"}>
+                {fmt(portfolioForecast.warning_count ?? forecastWarnings.length, "0")}{" "}
+                warns
+              </Badge>
+            }
+          >
+            <NocRow
+              label="Heat"
+              value={fmt(portfolioForecast.portfolio_heat, "0")}
+            />
+            <NocRow
+              label="Blocks Risk Engine"
+              value={fmt(portfolioForecast.blocks_risk_engine, "false")}
+              tone="ok"
+            />
+            {forecastWarnings.length === 0 ? (
+              <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
+                No portfolio forecast warnings.
+              </p>
+            ) : (
+              <DeskTable
+                columns={["Code", "Severity", "Message"]}
+                rows={forecastWarnings.slice(0, 8).map((row) => {
+                  const r = asRecord(row);
+                  return [fmt(r.code), fmt(r.severity), fmt(r.message)];
+                })}
+              />
+            )}
+          </NocPanel>
+        </div>
+
+        <NocPanel id="noc-period-reports" title="4y · Performance Intelligence">
+          <NocRow
+            label="Daily trades"
+            value={fmt(asRecord(periodMap.daily).trades, "0")}
+          />
+          <NocRow
+            label="Weekly WR"
+            value={fmt(asRecord(periodMap.weekly).win_rate)}
+          />
+          <NocRow
+            label="Monthly net"
+            value={fmt(asRecord(periodMap.monthly).net_pnl)}
+          />
+          <NocRow
+            label="Quarterly PF"
+            value={fmt(asRecord(periodMap.quarterly).profit_factor)}
+          />
+          <NocRow
+            label="Yearly trades"
+            value={fmt(asRecord(periodMap.yearly).trades, "0")}
+          />
+          <NocRow
+            label="All-time score"
+            value={fmt(asRecord(periodReports.kpis_all_time).institutional_score)}
+          />
+          <NocRow
+            label="Auto-applies"
+            value={fmt(periodReports.auto_applies, "false")}
+            tone="ok"
+          />
         </NocPanel>
 
         {/* §5 Pipeline */}

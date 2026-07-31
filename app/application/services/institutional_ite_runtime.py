@@ -1038,8 +1038,7 @@ class InstitutionalIteRuntime:
                             why=explain.get("why"),
                             ticket=ticket,
                         )
-                        get_scalping_learning_store().record(
-                            LearningTradeRecord(
+                        trade_rec = LearningTradeRecord(
                                 closed_at=datetime.now(UTC).isoformat(),
                                 symbol=str(
                                     getattr(pos, "symbol", None)
@@ -1099,12 +1098,52 @@ class InstitutionalIteRuntime:
                                 exit_reason=str(_close_reason or reason or "closed"),
                                 rejection_reason=ai_d.get("reject_reason"),
                                 setup_family=ai_d.get("setup_family"),
+                                holding_time_minutes=(
+                                    float(getattr(pos, "holding_time_minutes", None))
+                                    if getattr(pos, "holding_time_minutes", None)
+                                    is not None
+                                    else None
+                                ),
+                                r_multiple=(
+                                    str(getattr(pos, "r_multiple", None))
+                                    if getattr(pos, "r_multiple", None) is not None
+                                    else None
+                                ),
                                 indicators={
                                     "explain": explain,
                                     "management_reason": reason,
+                                    "mtf": ai_d.get("mtf_alignment")
+                                    or ai_d.get("mtf"),
+                                    "liquidity": ai_d.get("liquidity"),
                                 },
                             )
-                        )
+                        get_scalping_learning_store().record(trade_rec)
+                        # AI v8 — append-only observation (never auto-applies)
+                        try:
+                            from app.domain.institutional_trading.ai_scalping.institutional_learning_engine import (  # noqa: E501
+                                observe_from_learning_trade,
+                            )
+
+                            observe_from_learning_trade(
+                                trade_rec,
+                                management_phase=str(reason or "closed"),
+                                liquidity=(
+                                    float(ai_d["liquidity"])
+                                    if ai_d.get("liquidity") is not None
+                                    else None
+                                ),
+                                mtf=(
+                                    int(
+                                        ai_d.get("mtf_alignment")
+                                        or ai_d.get("mtf")
+                                        or 0
+                                    )
+                                    or None
+                                ),
+                                extras={"auto_applies": False, "ai_version": "v8"},
+                            )
+                        except Exception:
+                            logger.exception("institutional_learning_observe_failed")
                     except Exception:
                         logger.exception("ai_scalping_learning_record_failed")
                     try:

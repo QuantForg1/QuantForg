@@ -73,7 +73,7 @@ def _opp(
 @pytest.mark.unit
 def test_v7_universe_and_quality_risk_locked() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.version.startswith("ai-scalping-v7")
+    assert cfg.version.startswith("ai-scalping-v8")
     assert cfg.quality_baseline == "ai-scalping-v6.3.0"
     assert set(DEFAULT_SCALPING_UNIVERSE) == EXPECTED_UNIVERSE
     assert set(cfg.universe) == EXPECTED_UNIVERSE

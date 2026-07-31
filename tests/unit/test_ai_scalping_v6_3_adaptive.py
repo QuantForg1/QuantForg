@@ -36,7 +36,7 @@ from app.domain.institutional_trading.management.policies import plan_action
 def test_v63_version_preserves_quality_and_risk() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.quality_baseline == "ai-scalping-v6.3.0"
-    assert cfg.version.startswith("ai-scalping-v7")
+    assert cfg.version.startswith("ai-scalping-v8")
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False

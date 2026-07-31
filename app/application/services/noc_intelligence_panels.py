@@ -9,6 +9,20 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _safe_v8(label: str, fn: Any) -> dict[str, Any]:
+    try:
+        out = fn()
+        return out if isinstance(out, dict) else {"fabricated": False}
+    except Exception:
+        logger.exception("noc_ai_v8_%s_failed", label)
+        return {
+            "fabricated": False,
+            "observe_only": True,
+            "auto_applies": False,
+            "error": label,
+        }
+
+
 def build_intelligence_panels(
     *,
     runtime_scan: dict[str, Any] | None = None,
@@ -91,14 +105,26 @@ def build_intelligence_panels(
         logger.exception("noc_analytics_failed")
         analytics = {"trades": 0, "fabricated": False}
 
-    # Replay Library
+    # Replay Library (adaptive explain when available)
     replay: dict[str, Any] = {"items": [], "count": 0}
     try:
         from app.domain.institutional_trading.ai_scalping import (
             institutional_replay_viewer as irv,
         )
 
-        replay = irv.list_institutional_replays(limit=25)
+        base_replay = irv.list_institutional_replays(limit=25)
+        try:
+            from app.domain.institutional_trading.ai_scalping.adaptive_replay_explain import (  # noqa: E501
+                enrich_replay_library,
+            )
+            from app.domain.institutional_trading.performance_lab.trade_replay import (
+                get_trade_replay_store,
+            )
+
+            raw_items = get_trade_replay_store().list(limit=25)
+            replay = enrich_replay_library(raw_items, limit=25)
+        except Exception:
+            replay = base_replay
     except Exception:
         logger.exception("noc_replay_failed")
         try:
@@ -257,10 +283,69 @@ def build_intelligence_panels(
             "fabricated": False,
             "source": "execution_quality_store",
         },
+        # --- AI v8 Adaptive Intelligence (observe / recommend only) ---
+        "learning_dashboard": _safe_v8("learning_dashboard", _v8_learning_dashboard),
+        "pattern_library": _safe_v8("pattern_library", _v8_pattern_library),
+        "adaptive_recommendations": _safe_v8(
+            "adaptive_recommendations", _v8_adaptive_recommendations
+        ),
+        "institutional_kpis": _safe_v8("institutional_kpis", _v8_institutional_kpis),
+        "portfolio_forecast": _safe_v8("portfolio_forecast", _v8_portfolio_forecast),
+        "period_reports": _safe_v8("period_reports", _v8_period_reports),
         "flags": {
             "observe_only": True,
             "forced_trades": False,
             "fabricated": False,
             "governed_by_existing_ai_and_risk": True,
+            "adaptive_auto_applies": False,
+            "ai_version": "v8",
         },
     }
+
+
+def _v8_learning_dashboard() -> dict[str, Any]:
+    from app.domain.institutional_trading.ai_scalping.institutional_learning_engine import (  # noqa: E501
+        get_institutional_learning_engine,
+    )
+
+    return get_institutional_learning_engine().snapshot(limit=30)
+
+
+def _v8_pattern_library() -> dict[str, Any]:
+    from app.domain.institutional_trading.ai_scalping.pattern_intelligence import (
+        build_pattern_intelligence,
+    )
+
+    return build_pattern_intelligence()
+
+
+def _v8_adaptive_recommendations() -> dict[str, Any]:
+    from app.domain.institutional_trading.ai_scalping.adaptive_recommendations import (
+        build_adaptive_recommendations,
+    )
+
+    return build_adaptive_recommendations()
+
+
+def _v8_institutional_kpis() -> dict[str, Any]:
+    from app.domain.institutional_trading.ai_scalping.institutional_performance_kpis import (  # noqa: E501
+        build_institutional_performance_kpis,
+    )
+
+    return build_institutional_performance_kpis()
+
+
+def _v8_portfolio_forecast() -> dict[str, Any]:
+    from app.domain.institutional_trading.ai_scalping.portfolio_intelligence_v2 import (
+        build_portfolio_intelligence_v2,
+    )
+
+    return build_portfolio_intelligence_v2()
+
+
+def _v8_period_reports() -> dict[str, Any]:
+    from app.domain.institutional_trading.ai_scalping.institutional_period_reports import (  # noqa: E501
+        build_institutional_period_reports,
+    )
+
+    return build_institutional_period_reports()
