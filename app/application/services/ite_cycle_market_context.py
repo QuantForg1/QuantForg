@@ -611,7 +611,25 @@ async def build_ite_cycle_market_context(
     from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
 
     stop_dist = stop_distance_from_atr(atr_dec)
+    # Observational sizing must reflect the active risk profile (ULTRA 8% / STANDARD).
     risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct
+    try:
+        from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+            get_active_ai_scalping_config,
+        )
+
+        risk_pct = get_active_ai_scalping_config().risk_per_trade_pct
+    except Exception:
+        try:
+            from app.domain.institutional_trading.operations.control_plane import (
+                get_control_plane,
+            )
+
+            plane_risk = getattr(get_control_plane(), "risk_per_trade_pct", None)
+            if plane_risk is not None and Decimal(str(plane_risk)) > 0:
+                risk_pct = Decimal(str(plane_risk))
+        except Exception:
+            pass
     risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.01"))
     contract_size = CONTRACT_SIZE
     lot_step = VOLUME_STEP
