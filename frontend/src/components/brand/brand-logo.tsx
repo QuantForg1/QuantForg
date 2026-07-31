@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-/** Official RC4 mark — web-optimized for chrome; full-res for large watermarks. */
+/** Official RC4 mark — transparent web-optimized PNG. */
 const MARK_SRC = "/brand/quantforg-mark-256.png";
 const MARK_HIRES = "/brand/quantforg-mark.png";
 
