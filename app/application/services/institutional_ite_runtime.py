@@ -907,6 +907,40 @@ class InstitutionalIteRuntime:
             result = self.position_management.evaluate(ticket, pctx)
             managed += 1
             try:
+                from app.domain.institutional_trading.ai_scalping.institutional_position_monitor import (  # noqa: E501
+                    build_position_monitor,
+                )
+                from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
+                    get_trade_lifecycle_store,
+                )
+
+                build_position_monitor(
+                    getattr(engine, "_positions", {}),
+                    mid_price=float(account.mid_price)
+                    if getattr(account, "mid_price", None) is not None
+                    else None,
+                    atr=float(account.atr)
+                    if getattr(account, "atr", None) is not None
+                    else None,
+                    market_session=str(getattr(pctx, "market_session", "") or "")
+                    or None,
+                )
+                get_trade_lifecycle_store().mark(
+                    f"pos_{ticket}",
+                    "MANAGED",
+                    ok=True,
+                    reason=str(
+                        getattr(
+                            getattr(result, "action", None),
+                            "value",
+                            getattr(result, "action", ""),
+                        )
+                        or "manage"
+                    ),
+                )
+            except Exception:
+                logger.exception("position_monitor_update_failed")
+            try:
                 action_v = getattr(
                     getattr(result, "action", None),
                     "value",
@@ -932,6 +966,30 @@ class InstitutionalIteRuntime:
                             getattr(result, "record", None), "reason", ""
                         ),
                     )
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
+                            get_trade_lifecycle_store,
+                        )
+
+                        _cr = str(
+                            getattr(getattr(result, "record", None), "reason", "")
+                            or reason
+                            or "closed"
+                        )
+                        get_trade_lifecycle_store().mark(
+                            f"pos_{ticket}",
+                            "CLOSED",
+                            ok=True,
+                            reason=_cr,
+                        )
+                        get_trade_lifecycle_store().mark(
+                            f"pos_{ticket}",
+                            "ARCHIVED",
+                            ok=True,
+                            reason=_cr,
+                        )
+                    except Exception:
+                        logger.exception("lifecycle_close_mark_failed")
                     try:
                         from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             ValidationStage,
@@ -1682,6 +1740,138 @@ class InstitutionalIteRuntime:
                 direction=str(getattr(decision.direction, "value", decision.direction)),
                 lots=str(getattr(decision, "approved_lots", None) or ""),
             )
+
+        # --- Execution Intelligence: optimizer + SOR (pre-OMS, never changes AI) ---
+        defer_submit = False
+        optimizer_payload: dict[str, Any] | None = None
+        sor_payload: dict[str, Any] | None = None
+        action_for_exec = str(
+            getattr(decision.action, "value", decision.action) or ""
+        ).upper()
+        try:
+            from app.domain.institutional_trading.ai_scalping.execution_optimizer import (
+                clear_optimizer_defers,
+                evaluate_execution_moment,
+            )
+            from app.domain.institutional_trading.ai_scalping.smart_order_routing import (
+                estimate_smart_routing,
+            )
+            from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
+                get_trade_lifecycle_store,
+            )
+
+            lc = get_trade_lifecycle_store()
+            lc.begin(
+                lifecycle_id=tid,
+                symbol=str(
+                    getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "")
+                ),
+                direction=str(
+                    getattr(getattr(decision, "direction", None), "value", None)
+                    or getattr(decision, "direction", None)
+                    or ""
+                ),
+            )
+            if action_for_exec in {"BUY", "SELL"}:
+                lc.mark(tid, "AI_APPROVED", ok=True, reason=action_for_exec)
+            if bool(decision.eligibility.eligible):
+                lc.mark(tid, "RISK_APPROVED", ok=True)
+                lc.mark(tid, "PRE_APPROVED", ok=True, reason="eligibility_passed")
+            else:
+                lc.mark(
+                    tid,
+                    "RISK_APPROVED",
+                    ok=False,
+                    reason=";".join(decision.eligibility.rejection_reasons) or "ineligible",
+                )
+
+            if (
+                action_for_exec in {"BUY", "SELL"}
+                and bool(decision.eligibility.eligible)
+                and not forced_override
+                and not force_shadow
+            ):
+                optimizer_payload = evaluate_execution_moment(
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                    decision=decision,
+                    snapshot=snapshot,
+                    account=account,
+                    decision_key=str(getattr(decision, "input_hash", None) or tid),
+                )
+                sor_payload = estimate_smart_routing(
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                    side=action_for_exec,
+                    spread=getattr(snapshot, "spread", None),
+                    optimizer=optimizer_payload,
+                )
+                rec = str(optimizer_payload.get("recommendation") or "")
+                if rec == "DEFER_TICK" or (
+                    sor_payload.get("recommendation") == "WAIT_BETTER_TICK"
+                    and rec != "PROCEED_DEGRADED"
+                    and rec != "PROCEED"
+                ):
+                    # Soft defer only when optimizer agrees to wait within limits
+                    if rec == "DEFER_TICK":
+                        defer_submit = True
+                        logger.warning(
+                            "execution_optimizer_defer_tick",
+                            symbol=optimizer_payload.get("symbol"),
+                            score=optimizer_payload.get("execution_quality_score"),
+                            reason=optimizer_payload.get("reason"),
+                            defer_count=optimizer_payload.get("defer_count"),
+                        )
+                elif rec in {"PROCEED", "PROCEED_DEGRADED"}:
+                    clear_optimizer_defers(
+                        str(getattr(decision, "input_hash", None) or tid)
+                    )
+            if isinstance(market_context_diagnostics, dict):
+                if optimizer_payload:
+                    market_context_diagnostics["execution_optimizer"] = (
+                        optimizer_payload
+                    )
+                if sor_payload:
+                    market_context_diagnostics["smart_order_routing"] = sor_payload
+        except Exception:
+            logger.exception("execution_intelligence_pre_oms_failed")
+
+        if defer_submit:
+            try:
+                self._sync_and_manage_open_positions(
+                    snapshot=snapshot,
+                    account=account,
+                    reason="execution_optimizer_defer_manage",
+                )
+            except Exception:
+                logger.exception("execution_optimizer_defer_manage_failed")
+            detail = (
+                f"execution_optimizer_defer:"
+                f"{(optimizer_payload or {}).get('reason') or 'await_better_tick'}"
+            )
+            result = ShadowCycleResult(
+                ok=True,
+                trace_id=tid,
+                mode=self.plane.mode.value,
+                decision_action=decision.action.value,
+                forwarded_to_oms=False,
+                detail=detail,
+                health=health.get("health") if isinstance(health, dict) else None,
+                cycle_outcome="execution_deferred",
+                abort_reason="EXECUTION_OPTIMIZER_DEFER",
+                decision_reasons=decision_reasons,
+                snapshot_present=True,
+                market_context_diagnostics=(
+                    dict(market_context_diagnostics)
+                    if market_context_diagnostics
+                    else None
+                ),
+                signal_id=str(getattr(decision, "id", "") or "") or None,
+            )
+            with self._lock:
+                self._last_cycle = result
+                self._last_decision = decision
+                self._cycles += 1
+            return result
+
         bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
         with self._lock:
             self._last_bridge_result = bridge_result
@@ -1952,6 +2142,33 @@ class InstitutionalIteRuntime:
                                 )[:5],
                                 "as_of": last_scan.get("as_of"),
                             }
+                        # Execution intelligence artefacts
+                        try:
+                            from app.domain.institutional_trading.ai_scalping.execution_optimizer import (  # noqa: E501
+                                get_last_execution_optimizer,
+                            )
+                            from app.domain.institutional_trading.ai_scalping.smart_order_routing import (  # noqa: E501
+                                get_last_smart_routing,
+                            )
+
+                            opt = get_last_execution_optimizer()
+                            sor = get_last_smart_routing()
+                            if opt:
+                                inst["execution_decision"] = opt
+                            if sor:
+                                inst["smart_order_routing"] = sor
+                        except Exception:
+                            logger.exception("replay_exec_intel_attach_failed")
+                        oms_obj = getattr(bridge_result, "oms_result", None)
+                        if oms_obj is not None:
+                            inst["oms_payload"] = {
+                                "outcome": str(getattr(oms_obj, "outcome", None)),
+                                "message": str(getattr(oms_obj, "message", None) or "")[
+                                    :200
+                                ],
+                                "retcode": getattr(oms_obj, "retcode", None),
+                            }
+                            inst["broker_response"] = dict(inst["oms_payload"])
                         replay.market_snapshot = {
                             **(replay.market_snapshot or {}),
                             "institutional": inst,
@@ -1959,6 +2176,93 @@ class InstitutionalIteRuntime:
                     except Exception:
                         logger.exception("institutional_replay_enrich_failed")
                     get_trade_replay_store().record(replay)
+
+                    # Rich execution quality + lifecycle FILLED
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.execution_quality_analytics import (  # noqa: E501
+                            classify_fill_quality,
+                            get_execution_quality_analytics_store,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.slippage_protection import (  # noqa: E501
+                            extract_fill_price,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.smart_order_routing import (  # noqa: E501
+                            get_last_smart_routing,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
+                            get_trade_lifecycle_store,
+                        )
+
+                        get_trade_lifecycle_store().mark(
+                            tid, "OMS_SUBMITTED", ok=True
+                        )
+                        get_trade_lifecycle_store().mark(
+                            tid, "BROKER_ACCEPTED", ok=True
+                        )
+                        filled_px = None
+                        oms_obj = getattr(bridge_result, "oms_result", None)
+                        if oms_obj is not None:
+                            filled_px = extract_fill_price(
+                                getattr(oms_obj, "raw", None)
+                            )
+                        req_px = getattr(account, "mid_price", None)
+                        slip_v = None
+                        try:
+                            if filled_px is not None and req_px is not None:
+                                side_l = str(
+                                    getattr(
+                                        getattr(decision, "direction", None),
+                                        "value",
+                                        "",
+                                    )
+                                    or ""
+                                ).lower()
+                                if side_l in {"buy", "long"}:
+                                    slip_v = float(filled_px) - float(req_px)
+                                else:
+                                    slip_v = float(req_px) - float(filled_px)
+                        except Exception:
+                            slip_v = None
+                        fq = classify_fill_quality(
+                            slippage=slip_v, latency_ms=float(lat) if lat else None
+                        )
+                        get_execution_quality_analytics_store().record(
+                            symbol=str(getattr(decision, "symbol", "") or ""),
+                            side=str(
+                                getattr(
+                                    getattr(decision, "direction", None), "value", ""
+                                )
+                                or ""
+                            ),
+                            requested_price=float(req_px) if req_px is not None else None,
+                            executed_price=(
+                                float(filled_px) if filled_px is not None else None
+                            ),
+                            slippage=slip_v,
+                            latency_ms=float(lat) if lat else None,
+                            broker_execution_time_ms=float(lat) if lat else None,
+                            fill_quality=fq,
+                            execution_score=(
+                                int(
+                                    (
+                                        get_last_smart_routing() or {}
+                                    ).get("execution_quality_score")
+                                    or 0
+                                )
+                                or None
+                            ),
+                            outcome="success",
+                            ticket=str(ticket) if ticket is not None else None,
+                        )
+                        get_trade_lifecycle_store().mark(
+                            tid,
+                            "FILLED",
+                            ok=True,
+                            reason=fq,
+                            metrics={"slippage": slip_v, "latency_ms": lat},
+                        )
+                    except Exception:
+                        logger.exception("execution_quality_analytics_record_failed")
                     get_opportunity_outcome_store().record_evaluation(
                         symbol=str(getattr(decision, "symbol", "") or ""),
                         ai_confidence=int(getattr(decision, "confidence", 0) or 0),

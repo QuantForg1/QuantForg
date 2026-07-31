@@ -241,6 +241,26 @@ export function NocCommandCenter() {
     ? replayLibrary.items
     : [];
   const execProbability = asRecord(intelligence.execution_probability);
+  const executionOptimizer = asRecord(intelligence.execution_optimizer);
+  const smartRouting = asRecord(intelligence.smart_order_routing);
+  const executionQuality = asRecord(intelligence.execution_quality);
+  const eqRolling = asRecord(executionQuality.rolling);
+  const eqAnalytics = asRecord(executionQuality.analytics);
+  const brokerPerf = asRecord(intelligence.broker_performance);
+  const lifecycleTimeline = asRecord(intelligence.lifecycle_timeline);
+  const lifecycleActive = Array.isArray(lifecycleTimeline.active)
+    ? lifecycleTimeline.active
+    : [];
+  const lifecycleRecent = Array.isArray(lifecycleTimeline.recent)
+    ? lifecycleTimeline.recent
+    : [];
+  const positionMonitor = asRecord(intelligence.position_monitor);
+  const positionRows = Array.isArray(positionMonitor.rows)
+    ? positionMonitor.rows
+    : [];
+  const opsIntel = asRecord(intelligence.operational_intelligence);
+  const opsWarnings = Array.isArray(opsIntel.warnings) ? opsIntel.warnings : [];
+  const dailyExecReport = asRecord(intelligence.daily_execution_report);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -961,6 +981,243 @@ export function NocCommandCenter() {
                   fmt(r.exit),
                   fmt(r.close_reason, "—"),
                   fmt(r.ai_decision, "—").slice(0, 48),
+                ];
+              })}
+            />
+          )}
+        </NocPanel>
+
+        {/* §4l–4r Execution Intelligence */}
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel
+            id="noc-execution-optimizer"
+            title="4l · Execution Optimizer"
+            action={
+              <Badge tone="neutral">
+                {fmt(executionOptimizer.recommendation, "idle")}
+              </Badge>
+            }
+          >
+            <NocRow label="Symbol" value={fmt(executionOptimizer.symbol)} />
+            <NocRow
+              label="Quality score"
+              value={fmt(executionOptimizer.execution_quality_score)}
+            />
+            <NocRow
+              label="Recommendation"
+              value={fmt(executionOptimizer.recommendation)}
+            />
+            <NocRow label="Reason" value={fmt(executionOptimizer.reason)} />
+            <NocRow
+              label="Defer count"
+              value={`${fmt(executionOptimizer.defer_count, "0")} / ${fmt(
+                executionOptimizer.max_defers,
+                "3",
+              )}`}
+            />
+            <NocRow
+              label="Direction unchanged"
+              value={fmt(executionOptimizer.direction_unchanged, "true")}
+              tone="ok"
+            />
+          </NocPanel>
+
+          <NocPanel id="noc-smart-routing" title="4m · Smart Order Routing">
+            <NocRow
+              label="Expected slippage"
+              value={fmt(smartRouting.expected_slippage)}
+            />
+            <NocRow
+              label="Fill probability"
+              value={fmt(smartRouting.fill_probability)}
+            />
+            <NocRow
+              label="Execution quality"
+              value={fmt(smartRouting.execution_quality_score)}
+            />
+            <NocRow
+              label="Recommendation"
+              value={fmt(smartRouting.recommendation)}
+            />
+            <NocRow
+              label="AI unchanged"
+              value={fmt(smartRouting.ai_decision_unchanged, "true")}
+              tone="ok"
+            />
+          </NocPanel>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel id="noc-execution-quality" title="4n · Execution Quality">
+            <NocRow label="Samples" value={fmt(eqRolling.samples, "0")} />
+            <NocRow label="Fill rate" value={fmt(eqRolling.fill_rate)} />
+            <NocRow label="Reject rate" value={fmt(eqRolling.reject_rate)} />
+            <NocRow
+              label="Avg latency ms"
+              value={fmt(eqRolling.avg_latency_ms ?? eqAnalytics.avg_latency_ms)}
+            />
+            <NocRow
+              label="Avg slippage"
+              value={fmt(eqRolling.avg_slippage ?? eqAnalytics.avg_slippage)}
+            />
+            <NocRow
+              label="Avg exec score"
+              value={fmt(eqAnalytics.avg_execution_score)}
+            />
+          </NocPanel>
+
+          <NocPanel id="noc-broker-performance" title="4o · Broker Performance">
+            <NocRow label="Fill rate" value={fmt(brokerPerf.fill_rate)} />
+            <NocRow label="Reject rate" value={fmt(brokerPerf.reject_rate)} />
+            <NocRow label="Requote rate" value={fmt(brokerPerf.requote_rate)} />
+            <NocRow
+              label="Avg latency ms"
+              value={fmt(brokerPerf.avg_latency_ms)}
+            />
+            <NocRow label="Avg slippage" value={fmt(brokerPerf.avg_slippage)} />
+            <NocRow
+              label="Source"
+              value={fmt(brokerPerf.source, "execution_quality_store")}
+              tone="ok"
+            />
+          </NocPanel>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel id="noc-latency-slippage" title="4p · Latency / Slippage">
+            <NocRow
+              label="Latency ms"
+              value={fmt(eqRolling.avg_latency_ms ?? dailyExecReport.average_latency_ms)}
+            />
+            <NocRow
+              label="Slippage"
+              value={fmt(eqRolling.avg_slippage ?? dailyExecReport.average_slippage)}
+            />
+            <NocRow
+              label="Daily exec quality"
+              value={fmt(dailyExecReport.execution_quality)}
+            />
+            <NocRow
+              label="Trade execution rate"
+              value={fmt(dailyExecReport.trade_execution_rate)}
+            />
+            <NocRow
+              label="Best symbols"
+              value={
+                Array.isArray(dailyExecReport.best_symbols) &&
+                dailyExecReport.best_symbols.length
+                  ? dailyExecReport.best_symbols.map(String).join(" · ")
+                  : "—"
+              }
+            />
+            <NocRow
+              label="Worst symbols"
+              value={
+                Array.isArray(dailyExecReport.worst_symbols) &&
+                dailyExecReport.worst_symbols.length
+                  ? dailyExecReport.worst_symbols.map(String).join(" · ")
+                  : "—"
+              }
+            />
+          </NocPanel>
+
+          <NocPanel
+            id="noc-ops-intel"
+            title="4q · Operational Intelligence"
+            action={
+              <Badge tone={opsWarnings.length ? "warning" : "neutral"}>
+                {fmt(opsIntel.warning_count ?? opsWarnings.length, "0")} warns
+              </Badge>
+            }
+          >
+            <NocRow
+              label="Stops production"
+              value={fmt(opsIntel.stops_production, "false")}
+              tone="ok"
+            />
+            {opsWarnings.length === 0 ? (
+              <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
+                No operational warnings.
+              </p>
+            ) : (
+              <DeskTable
+                columns={["Code", "Severity", "Message"]}
+                rows={opsWarnings.slice(0, 8).map((row) => {
+                  const r = asRecord(row);
+                  return [fmt(r.code), fmt(r.severity), fmt(r.message)];
+                })}
+              />
+            )}
+          </NocPanel>
+        </div>
+
+        <NocPanel
+          id="noc-lifecycle-timeline"
+          title="4r · Lifecycle Timeline"
+          action={
+            <Badge tone="neutral">
+              {fmt(lifecycleTimeline.active_count, "0")} active
+            </Badge>
+          }
+        >
+          {lifecycleActive.length === 0 && lifecycleRecent.length === 0 ? (
+            <p className="text-[12px] text-[var(--fg-muted)]">
+              Awaiting live lifecycle events.
+            </p>
+          ) : (
+            <DeskTable
+              columns={["ID", "Symbol", "Stage", "Updated"]}
+              rows={[...lifecycleActive, ...lifecycleRecent]
+                .slice(0, 12)
+                .map((row) => {
+                  const r = asRecord(row);
+                  return [
+                    fmt(r.id).slice(0, 12),
+                    fmt(r.symbol),
+                    fmt(r.current_stage),
+                    fmt(r.updated_at ?? r.started_at),
+                  ];
+                })}
+            />
+          )}
+        </NocPanel>
+
+        <NocPanel
+          id="noc-position-monitor"
+          title="4s · Institutional Position Monitor"
+          action={
+            <Badge tone="neutral">
+              {fmt(positionMonitor.open_positions, "0")} open
+            </Badge>
+          }
+        >
+          {positionRows.length === 0 ? (
+            <p className="text-[12px] text-[var(--fg-muted)]">
+              No live managed positions.
+            </p>
+          ) : (
+            <DeskTable
+              columns={[
+                "Symbol",
+                "Side",
+                "Float",
+                "Heat",
+                "RR",
+                "Stop dist",
+                "Phase",
+                "Session",
+              ]}
+              rows={positionRows.slice(0, 12).map((row) => {
+                const r = asRecord(row);
+                return [
+                  fmt(r.symbol),
+                  fmt(r.side),
+                  fmt(r.floating_pnl),
+                  fmt(r.heat),
+                  fmt(r.remaining_rr),
+                  fmt(r.stop_distance),
+                  fmt(r.management_phase),
+                  fmt(r.session, "—"),
                 ];
               })}
             />

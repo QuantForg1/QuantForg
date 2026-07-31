@@ -147,3 +147,10 @@ def assess_spread(
         historical_median=med_s,
         abnormal_vs_history=False,
     )
+
+
+def spread_history_values(symbol: str | None) -> list[Decimal]:
+    """Observe-only copy of recent spreads for a symbol (never fabricates)."""
+    key = (symbol or "GLOBAL").strip().upper() or "GLOBAL"
+    with _LOCK:
+        return list(_HISTORY.get(key, ()))
