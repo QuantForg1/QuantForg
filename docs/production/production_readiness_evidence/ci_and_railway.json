@@ -1,0 +1,23 @@
+{
+  "collected_at": "2026-07-31T13:07:46.981565Z",
+  "pr61_ci": {
+    "rc": 0,
+    "stdout": "Design Governance Docs\tpass\t5s\thttps://github.com/QuantForg1/QuantForg/actions/runs/30632194237/job/91160958022\t\nFrontend Lint Typecheck Build\tpass\t2m5s\thttps://github.com/QuantForg1/QuantForg/actions/runs/30632194237/job/91160957986\t\nIntegration Tests\tpass\t1m53s\thttps://github.com/QuantForg1/QuantForg/actions/runs/30632194237/job/91161473531\t\nLint & Format\tpass\t42s\thttps://github.com/QuantForg1/QuantForg/actions/runs/30632194237/job/91160957940\t\nType Check\tpass\t44s\thttps://github.com/QuantForg1/QuantForg/actions/runs/30632194237/job/91160957949\t\nUnit Tests\tpass\t2m20s\thttps://github.com/QuantForg1/QuantForg/actions/runs/30632194237/job/91160957927\t\nVercel Preview Comments\tpass\t0\thttps://vercel.com/github\t\nSupabase Preview\tskipping\t0\thttps://supabase.com/dashboard/project/otqyhlmwaifokrczryrc/settings/integrations\t\nVercel\tpass\t0\thttps://vercel.com/quantforg/quant-forg/93SRfTeUzber3iNHzw4nwxE2rANP\tDeployment has completed\n",
+    "stderr": ""
+  },
+  "main_runs": {
+    "rc": 0,
+    "stdout": "[{\"conclusion\":\"success\",\"createdAt\":\"2026-07-31T03:59:47Z\",\"databaseId\":30602976841,\"displayTitle\":\"Merge pull request #47 from QuantForg1/cursor/portfolio-risk-engine-v\u2026\",\"status\":\"completed\"},{\"conclusion\":\"success\",\"createdAt\":\"2026-07-31T03:12:54Z\",\"databaseId\":30601009028,\"displayTitle\":\"merge: PR #45 24/7 autonomous session engine\",\"status\":\"completed\"},{\"conclusion\":\"success\",\"createdAt\":\"2026-07-31T02:25:01Z\",\"databaseId\":30598915912,\"displayTitle\":\"merge: fix Windows gateway deploy PowerShell script\",\"status\":\"completed\"}]\n",
+    "stderr": ""
+  },
+  "railway_status": {
+    "rc": 0,
+    "stdout": "\nWorkspace:       Quant Forg\n\nProject:         QuantForg\nProject ID:      76f9026d-362f-4e16-961d-44e7a090459a\n\nEnvironment:     production\nEnvironment ID:  cb96aa83-7ace-470a-9e98-d52a1634a446\n\nLinked service\n\n    Service:         None\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nAll resources\n\n    Services\n      - QuantForg: \u25cf Online \u00b7 https://quantforg-production.up.railway.app\n\n",
+    "stderr": ""
+  },
+  "railway_service": {
+    "rc": 0,
+    "stdout": "Service: QuantForg\nDeployment: 7831d7f4-524a-4b60-803a-12acabe57925\nStatus: SUCCESS\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,1466 @@
+{
+  "config": {
+    "PRODUCTION_VALIDATION_MODE": true,
+    "VALIDATION_EXECUTION_MODE": "shadow",
+    "quality_floor": 80,
+    "confidence_floor": 80,
+    "blocks_broker_submit": true,
+    "simulates_fills": false,
+    "never_modifies_strategy": true,
+    "never_lowers_thresholds": true,
+    "never_changes_weights": true,
+    "never_changes_risk_logic": true
+  },
+  "replay": {
+    "events_processed": 10,
+    "eligible_trades": 7,
+    "rejected_trades": 3,
+    "score_distribution": {
+      "quality": {
+        "80-84": 4,
+        "85-89": 2,
+        "90-94": 1
+      },
+      "confidence": {
+        "80-84": 4,
+        "85-89": 2,
+        "90-94": 1
+      }
+    },
+    "quality_histogram": {
+      "80-84": 4,
+      "85-89": 2,
+      "90-94": 1
+    },
+    "confidence_histogram": {
+      "80-84": 4,
+      "85-89": 2,
+      "90-94": 1
+    },
+    "expected_broker_submissions": [
+      {
+        "trade_id": "trd_ec28184906f24079",
+        "symbol": "XAUUSD",
+        "side": "buy",
+        "lots": "0.01",
+        "entry": "2350.0",
+        "SL": "2345.0",
+        "TP": "2360.0",
+        "would_submit": true,
+        "submitted": false
+      },
+      {
+        "trade_id": "trd_4af15d0dfee34807",
+        "symbol": "XAUUSD",
+        "side": "sell",
+        "lots": "0.01",
+        "entry": "2351.0",
+        "SL": "2346.0",
+        "TP": "2361.0",
+        "would_submit": true,
+        "submitted": false
+      },
+      {
+        "trade_id": "trd_7cd75cd35c9e4c37",
+        "symbol": "XAUUSD",
+        "side": "buy",
+        "lots": "0.01",
+        "entry": "2352.0",
+        "SL": "2347.0",
+        "TP": "2362.0",
+        "would_submit": true,
+        "submitted": false
+      },
+      {
+        "trade_id": "trd_3b4570371ce0444f",
+        "symbol": "XAUUSD",
+        "side": "buy",
+        "lots": "0.01",
+        "entry": "2354.0",
+        "SL": "2349.0",
+        "TP": "2364.0",
+        "would_submit": true,
+        "submitted": false
+      },
+      {
+        "trade_id": "trd_005399bf2d164acb",
+        "symbol": "XAUUSD",
+        "side": "buy",
+        "lots": "0.01",
+        "entry": "2356.0",
+        "SL": "2351.0",
+        "TP": "2366.0",
+        "would_submit": true,
+        "submitted": false
+      },
+      {
+        "trade_id": "trd_843ab18cd1e7483a",
+        "symbol": "XAUUSD",
+        "side": "buy",
+        "lots": "0.01",
+        "entry": "2358.0",
+        "SL": "2353.0",
+        "TP": "2368.0",
+        "would_submit": true,
+        "submitted": false
+      },
+      {
+        "trade_id": "trd_294d3e97a7614f92",
+        "symbol": "XAUUSD",
+        "side": "sell",
+        "lots": "0.01",
+        "entry": "2359.0",
+        "SL": "2354.0",
+        "TP": "2369.0",
+        "would_submit": true,
+        "submitted": false
+      }
+    ],
+    "coverage": {
+      "regimes_required": [
+        "trending",
+        "ranging",
+        "high_volatility",
+        "low_volatility"
+      ],
+      "regimes_seen": [
+        "high_volatility",
+        "low_volatility",
+        "ranging",
+        "trending"
+      ],
+      "regimes_missing": [],
+      "sessions_required": [
+        "london",
+        "new_york",
+        "tokyo",
+        "mixed"
+      ],
+      "sessions_seen": [
+        "london",
+        "mixed",
+        "new_york",
+        "tokyo"
+      ],
+      "sessions_missing": []
+    },
+    "quality_floor": 80,
+    "confidence_floor": 80,
+    "eligible_sample": [
+      {
+        "trade_id": "trd_ec28184906f24079",
+        "timestamp": "2026-07-31T13:07:26.320575Z",
+        "symbol": "XAUUSD",
+        "market_regime": "trending",
+        "session": "london",
+        "quality": 85,
+        "confidence": 85,
+        "risk_profile": "standard",
+        "entry": "2350.0",
+        "SL": "2345.0",
+        "TP": "2360.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "floors_met",
+        "reason_rejected": "",
+        "accepted": true,
+        "OMS_latency_ms": 12.0,
+        "AI_latency_ms": 40.0,
+        "gateway_latency_ms": 8.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_4af15d0dfee34807",
+        "timestamp": "2026-07-31T13:07:26.320599Z",
+        "symbol": "XAUUSD",
+        "market_regime": "trending",
+        "session": "new_york",
+        "quality": 82,
+        "confidence": 81,
+        "risk_profile": "standard",
+        "entry": "2351.0",
+        "SL": "2346.0",
+        "TP": "2361.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "floors_met",
+        "reason_rejected": "",
+        "accepted": true,
+        "OMS_latency_ms": 13.0,
+        "AI_latency_ms": 41.0,
+        "gateway_latency_ms": 9.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_7cd75cd35c9e4c37",
+        "timestamp": "2026-07-31T13:07:26.320611Z",
+        "symbol": "XAUUSD",
+        "market_regime": "ranging",
+        "session": "tokyo",
+        "quality": 83,
+        "confidence": 84,
+        "risk_profile": "standard",
+        "entry": "2352.0",
+        "SL": "2347.0",
+        "TP": "2362.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "floors_met",
+        "reason_rejected": "",
+        "accepted": true,
+        "OMS_latency_ms": 14.0,
+        "AI_latency_ms": 42.0,
+        "gateway_latency_ms": 10.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_3b4570371ce0444f",
+        "timestamp": "2026-07-31T13:07:26.320629Z",
+        "symbol": "XAUUSD",
+        "market_regime": "high_volatility",
+        "session": "new_york",
+        "quality": 88,
+        "confidence": 86,
+        "risk_profile": "standard",
+        "entry": "2354.0",
+        "SL": "2349.0",
+        "TP": "2364.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "floors_met",
+        "reason_rejected": "",
+        "accepted": true,
+        "OMS_latency_ms": 16.0,
+        "AI_latency_ms": 44.0,
+        "gateway_latency_ms": 12.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_005399bf2d164acb",
+        "timestamp": "2026-07-31T13:07:26.320648Z",
+        "symbol": "XAUUSD",
+        "market_regime": "low_volatility",
+        "session": "tokyo",
+        "quality": 84,
+        "confidence": 83,
+        "risk_profile": "standard",
+        "entry": "2356.0",
+        "SL": "2351.0",
+        "TP": "2366.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "floors_met",
+        "reason_rejected": "",
+        "accepted": true,
+        "OMS_latency_ms": 18.0,
+        "AI_latency_ms": 46.0,
+        "gateway_latency_ms": 14.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_843ab18cd1e7483a",
+        "timestamp": "2026-07-31T13:07:26.320672Z",
+        "symbol": "XAUUSD",
+        "market_regime": "trending",
+        "session": "mixed",
+        "quality": 90,
+        "confidence": 90,
+        "risk_profile": "standard",
+        "entry": "2358.0",
+        "SL": "2353.0",
+        "TP": "2368.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "floors_met",
+        "reason_rejected": "",
+        "accepted": true,
+        "OMS_latency_ms": 20.0,
+        "AI_latency_ms": 48.0,
+        "gateway_latency_ms": 16.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_294d3e97a7614f92",
+        "timestamp": "2026-07-31T13:07:26.320681Z",
+        "symbol": "XAUUSD",
+        "market_regime": "ranging",
+        "session": "mixed",
+        "quality": 80,
+        "confidence": 80,
+        "risk_profile": "standard",
+        "entry": "2359.0",
+        "SL": "2354.0",
+        "TP": "2369.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "floors_met",
+        "reason_rejected": "",
+        "accepted": true,
+        "OMS_latency_ms": 21.0,
+        "AI_latency_ms": 49.0,
+        "gateway_latency_ms": 17.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      }
+    ],
+    "rejected_sample": [
+      {
+        "trade_id": "trd_ebd80a752caf46f0",
+        "timestamp": "2026-07-31T13:07:26.320621Z",
+        "symbol": "XAUUSD",
+        "market_regime": "ranging",
+        "session": "london",
+        "quality": 70,
+        "confidence": 82,
+        "risk_profile": "standard",
+        "entry": "2353.0",
+        "SL": "2348.0",
+        "TP": "2363.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "",
+        "reason_rejected": "below_floor_or_tagged",
+        "accepted": false,
+        "OMS_latency_ms": 15.0,
+        "AI_latency_ms": 43.0,
+        "gateway_latency_ms": 11.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_ea97bba8ebf34ac7",
+        "timestamp": "2026-07-31T13:07:26.320639Z",
+        "symbol": "XAUUSD",
+        "market_regime": "high_volatility",
+        "session": "mixed",
+        "quality": 81,
+        "confidence": 75,
+        "risk_profile": "standard",
+        "entry": "2355.0",
+        "SL": "2350.0",
+        "TP": "2365.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "",
+        "reason_rejected": "below_floor_or_tagged",
+        "accepted": false,
+        "OMS_latency_ms": 17.0,
+        "AI_latency_ms": 45.0,
+        "gateway_latency_ms": 13.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      },
+      {
+        "trade_id": "trd_d762ba9d7a3c4486",
+        "timestamp": "2026-07-31T13:07:26.320665Z",
+        "symbol": "XAUUSD",
+        "market_regime": "low_volatility",
+        "session": "london",
+        "quality": 78,
+        "confidence": 78,
+        "risk_profile": "standard",
+        "entry": "2357.0",
+        "SL": "2352.0",
+        "TP": "2367.0",
+        "RR": "2.0",
+        "expected_lot_size": "0.01",
+        "portfolio_allocation": "1.0%",
+        "reason_accepted": "",
+        "reason_rejected": "below_floor_or_tagged",
+        "accepted": false,
+        "OMS_latency_ms": 19.0,
+        "AI_latency_ms": 47.0,
+        "gateway_latency_ms": 15.0,
+        "execution_mode": "shadow",
+        "order_payload": {
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "volume": "0.01"
+        },
+        "broker_request": {},
+        "broker_response": {},
+        "expected_execution": {},
+        "fill": {},
+        "pnl": null,
+        "notes": "replay_verification",
+        "extras": {}
+      }
+    ]
+  },
+  "paper": {
+    "fills_simulated": 0,
+    "open_positions": 0,
+    "closed_positions": 0,
+    "equity": 10000.0,
+    "drawdown_pct": 0.0,
+    "realized_pnl": 0.0,
+    "win_rate_pct": null,
+    "loss_rate_pct": null,
+    "profit_factor": null,
+    "expectancy": null,
+    "sharpe": null,
+    "sortino": null,
+    "account": {
+      "starting_equity": 10000.0,
+      "equity": 10000.0,
+      "peak_equity": 10000.0,
+      "max_drawdown_pct": 0.0,
+      "realized_pnl": 0.0,
+      "wins": 0,
+      "losses": 0,
+      "gross_profit": 0.0,
+      "gross_loss": 0.0
+    },
+    "broker_orders_submitted": 0
+  },
+  "shadow": {
+    "shadow_orders_recorded": 7,
+    "broker_submissions": 0,
+    "mt5_calls": 0
+  },
+  "trade_stats": {
+    "total": 10,
+    "eligible": 7,
+    "rejected": 3,
+    "accepted_quality_avg": 84.57,
+    "accepted_confidence_avg": 84.14
+  },
+  "acceptance": {
+    "gates": [
+      {
+        "name": "gateway_healthy",
+        "status": "PASS",
+        "detail": "gateway=HEALTHY",
+        "evidence": {
+          "gateway": "HEALTHY"
+        }
+      },
+      {
+        "name": "oms_healthy",
+        "status": "FAIL",
+        "detail": "oms=ENABLED",
+        "evidence": {
+          "oms": "ENABLED"
+        }
+      },
+      {
+        "name": "mt5_connected",
+        "status": "PASS",
+        "detail": "mt5=CONNECTED",
+        "evidence": {
+          "mt5": "CONNECTED"
+        }
+      },
+      {
+        "name": "no_crashes",
+        "status": "PASS",
+        "detail": "crashes=0",
+        "evidence": {
+          "crashes": 0
+        }
+      },
+      {
+        "name": "quality_floor_accepted",
+        "status": "PASS",
+        "detail": "avg_quality=84.57 floor=80",
+        "evidence": {
+          "avg_quality": 84.57,
+          "floor": 80
+        }
+      },
+      {
+        "name": "confidence_floor_accepted",
+        "status": "PASS",
+        "detail": "avg_confidence=84.14 floor=80",
+        "evidence": {
+          "avg_confidence": 84.14,
+          "floor": 80
+        }
+      },
+      {
+        "name": "no_duplicate_penalties",
+        "status": "PASS",
+        "detail": "duplicate_penalties=0",
+        "evidence": {
+          "duplicate_penalties": 0
+        }
+      },
+      {
+        "name": "orders_valid",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "lot_sizing_correct",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "risk_limits_respected",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "no_duplicate_positions",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "no_orphan_positions",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "daily_loss_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "portfolio_caps_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "correlation_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "emergency_stop_verified",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "paper_no_broker_orders",
+        "status": "PASS",
+        "detail": "paper engine reports zero broker submissions",
+        "evidence": {}
+      },
+      {
+        "name": "shadow_no_broker_submit",
+        "status": "PASS",
+        "detail": "shadow_broker_submissions=0",
+        "evidence": {}
+      },
+      {
+        "name": "replay_regime_coverage",
+        "status": "PASS",
+        "detail": "missing_regimes=[]",
+        "evidence": {
+          "missing": []
+        }
+      },
+      {
+        "name": "replay_session_coverage",
+        "status": "PASS",
+        "detail": "missing_sessions=[]",
+        "evidence": {
+          "missing": []
+        }
+      }
+    ],
+    "summary": {
+      "passed": 19,
+      "failed": 1,
+      "unknown": 0,
+      "total": 20,
+      "hard_fails": [],
+      "infra_unknown": false
+    },
+    "quality_floor": 80,
+    "confidence_floor": 80,
+    "recommendation": "NOT READY",
+    "thresholds_unchanged": true,
+    "strategy_unchanged": true
+  },
+  "dashboard": {
+    "timestamp": "2026-07-31T13:07:26.320814Z",
+    "mode": {
+      "PRODUCTION_VALIDATION_MODE": true,
+      "VALIDATION_EXECUTION_MODE": "shadow",
+      "quality_floor": 80,
+      "confidence_floor": 80,
+      "blocks_broker_submit": true,
+      "simulates_fills": false,
+      "never_modifies_strategy": true,
+      "never_lowers_thresholds": true,
+      "never_changes_weights": true,
+      "never_changes_risk_logic": true
+    },
+    "Gateway Health": "HEALTHY",
+    "MT5 Status": "CONNECTED",
+    "OMS Status": "ENABLED",
+    "AI Status": "SETTINGS_ONLY",
+    "Current Session": "\u2014",
+    "Current Regime": "\u2014",
+    "Quality": {
+      "floor": 80,
+      "accepted_avg": 84.5714,
+      "last": 80
+    },
+    "Confidence": {
+      "floor": 80,
+      "accepted_avg": 84.1429,
+      "last": 80
+    },
+    "Eligible Trades": 7,
+    "Rejected Trades": 3,
+    "Broker Submissions": 0,
+    "Fill Rate": null,
+    "Win Rate": null,
+    "Loss Rate": null,
+    "Profit Factor": null,
+    "Expectancy": null,
+    "Average RR": 2.0,
+    "Drawdown": 0.0,
+    "Current Equity": 10000.0,
+    "Open Positions": 0,
+    "Closed Positions": 0,
+    "Daily PnL": null,
+    "Weekly PnL": null,
+    "Monthly PnL": null,
+    "Latency": {
+      "OMS_ms_avg": 16.5,
+      "AI_ms_avg": 44.5,
+      "gateway_ms_avg": 12.5
+    },
+    "shadow": {
+      "shadow_orders_recorded": 7,
+      "broker_submissions": 0,
+      "mt5_calls": 0
+    },
+    "paper": {
+      "fills_simulated": 0,
+      "open_positions": 0,
+      "closed_positions": 0,
+      "equity": 10000.0,
+      "drawdown_pct": 0.0,
+      "realized_pnl": 0.0,
+      "win_rate_pct": null,
+      "loss_rate_pct": null,
+      "profit_factor": null,
+      "expectancy": null,
+      "sharpe": null,
+      "sortino": null,
+      "account": {
+        "starting_equity": 10000.0,
+        "equity": 10000.0,
+        "peak_equity": 10000.0,
+        "max_drawdown_pct": 0.0,
+        "realized_pnl": 0.0,
+        "wins": 0,
+        "losses": 0,
+        "gross_profit": 0.0,
+        "gross_loss": 0.0
+      },
+      "broker_orders_submitted": 0
+    },
+    "replay": {
+      "events_processed": 10,
+      "eligible_trades": 7,
+      "rejected_trades": 3,
+      "score_distribution": {
+        "quality": {
+          "80-84": 4,
+          "85-89": 2,
+          "90-94": 1
+        },
+        "confidence": {
+          "80-84": 4,
+          "85-89": 2,
+          "90-94": 1
+        }
+      },
+      "quality_histogram": {
+        "80-84": 4,
+        "85-89": 2,
+        "90-94": 1
+      },
+      "confidence_histogram": {
+        "80-84": 4,
+        "85-89": 2,
+        "90-94": 1
+      },
+      "expected_broker_submissions": [
+        {
+          "trade_id": "trd_ec28184906f24079",
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "lots": "0.01",
+          "entry": "2350.0",
+          "SL": "2345.0",
+          "TP": "2360.0",
+          "would_submit": true,
+          "submitted": false
+        },
+        {
+          "trade_id": "trd_4af15d0dfee34807",
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "lots": "0.01",
+          "entry": "2351.0",
+          "SL": "2346.0",
+          "TP": "2361.0",
+          "would_submit": true,
+          "submitted": false
+        },
+        {
+          "trade_id": "trd_7cd75cd35c9e4c37",
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "lots": "0.01",
+          "entry": "2352.0",
+          "SL": "2347.0",
+          "TP": "2362.0",
+          "would_submit": true,
+          "submitted": false
+        },
+        {
+          "trade_id": "trd_3b4570371ce0444f",
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "lots": "0.01",
+          "entry": "2354.0",
+          "SL": "2349.0",
+          "TP": "2364.0",
+          "would_submit": true,
+          "submitted": false
+        },
+        {
+          "trade_id": "trd_005399bf2d164acb",
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "lots": "0.01",
+          "entry": "2356.0",
+          "SL": "2351.0",
+          "TP": "2366.0",
+          "would_submit": true,
+          "submitted": false
+        },
+        {
+          "trade_id": "trd_843ab18cd1e7483a",
+          "symbol": "XAUUSD",
+          "side": "buy",
+          "lots": "0.01",
+          "entry": "2358.0",
+          "SL": "2353.0",
+          "TP": "2368.0",
+          "would_submit": true,
+          "submitted": false
+        },
+        {
+          "trade_id": "trd_294d3e97a7614f92",
+          "symbol": "XAUUSD",
+          "side": "sell",
+          "lots": "0.01",
+          "entry": "2359.0",
+          "SL": "2354.0",
+          "TP": "2369.0",
+          "would_submit": true,
+          "submitted": false
+        }
+      ],
+      "coverage": {
+        "regimes_required": [
+          "trending",
+          "ranging",
+          "high_volatility",
+          "low_volatility"
+        ],
+        "regimes_seen": [
+          "high_volatility",
+          "low_volatility",
+          "ranging",
+          "trending"
+        ],
+        "regimes_missing": [],
+        "sessions_required": [
+          "london",
+          "new_york",
+          "tokyo",
+          "mixed"
+        ],
+        "sessions_seen": [
+          "london",
+          "mixed",
+          "new_york",
+          "tokyo"
+        ],
+        "sessions_missing": []
+      },
+      "quality_floor": 80,
+      "confidence_floor": 80,
+      "eligible_sample": [
+        {
+          "trade_id": "trd_ec28184906f24079",
+          "timestamp": "2026-07-31T13:07:26.320575Z",
+          "symbol": "XAUUSD",
+          "market_regime": "trending",
+          "session": "london",
+          "quality": 85,
+          "confidence": 85,
+          "risk_profile": "standard",
+          "entry": "2350.0",
+          "SL": "2345.0",
+          "TP": "2360.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "floors_met",
+          "reason_rejected": "",
+          "accepted": true,
+          "OMS_latency_ms": 12.0,
+          "AI_latency_ms": 40.0,
+          "gateway_latency_ms": 8.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "buy",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_4af15d0dfee34807",
+          "timestamp": "2026-07-31T13:07:26.320599Z",
+          "symbol": "XAUUSD",
+          "market_regime": "trending",
+          "session": "new_york",
+          "quality": 82,
+          "confidence": 81,
+          "risk_profile": "standard",
+          "entry": "2351.0",
+          "SL": "2346.0",
+          "TP": "2361.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "floors_met",
+          "reason_rejected": "",
+          "accepted": true,
+          "OMS_latency_ms": 13.0,
+          "AI_latency_ms": 41.0,
+          "gateway_latency_ms": 9.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "sell",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_7cd75cd35c9e4c37",
+          "timestamp": "2026-07-31T13:07:26.320611Z",
+          "symbol": "XAUUSD",
+          "market_regime": "ranging",
+          "session": "tokyo",
+          "quality": 83,
+          "confidence": 84,
+          "risk_profile": "standard",
+          "entry": "2352.0",
+          "SL": "2347.0",
+          "TP": "2362.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "floors_met",
+          "reason_rejected": "",
+          "accepted": true,
+          "OMS_latency_ms": 14.0,
+          "AI_latency_ms": 42.0,
+          "gateway_latency_ms": 10.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "buy",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_3b4570371ce0444f",
+          "timestamp": "2026-07-31T13:07:26.320629Z",
+          "symbol": "XAUUSD",
+          "market_regime": "high_volatility",
+          "session": "new_york",
+          "quality": 88,
+          "confidence": 86,
+          "risk_profile": "standard",
+          "entry": "2354.0",
+          "SL": "2349.0",
+          "TP": "2364.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "floors_met",
+          "reason_rejected": "",
+          "accepted": true,
+          "OMS_latency_ms": 16.0,
+          "AI_latency_ms": 44.0,
+          "gateway_latency_ms": 12.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "buy",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_005399bf2d164acb",
+          "timestamp": "2026-07-31T13:07:26.320648Z",
+          "symbol": "XAUUSD",
+          "market_regime": "low_volatility",
+          "session": "tokyo",
+          "quality": 84,
+          "confidence": 83,
+          "risk_profile": "standard",
+          "entry": "2356.0",
+          "SL": "2351.0",
+          "TP": "2366.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "floors_met",
+          "reason_rejected": "",
+          "accepted": true,
+          "OMS_latency_ms": 18.0,
+          "AI_latency_ms": 46.0,
+          "gateway_latency_ms": 14.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "buy",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_843ab18cd1e7483a",
+          "timestamp": "2026-07-31T13:07:26.320672Z",
+          "symbol": "XAUUSD",
+          "market_regime": "trending",
+          "session": "mixed",
+          "quality": 90,
+          "confidence": 90,
+          "risk_profile": "standard",
+          "entry": "2358.0",
+          "SL": "2353.0",
+          "TP": "2368.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "floors_met",
+          "reason_rejected": "",
+          "accepted": true,
+          "OMS_latency_ms": 20.0,
+          "AI_latency_ms": 48.0,
+          "gateway_latency_ms": 16.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "buy",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_294d3e97a7614f92",
+          "timestamp": "2026-07-31T13:07:26.320681Z",
+          "symbol": "XAUUSD",
+          "market_regime": "ranging",
+          "session": "mixed",
+          "quality": 80,
+          "confidence": 80,
+          "risk_profile": "standard",
+          "entry": "2359.0",
+          "SL": "2354.0",
+          "TP": "2369.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "floors_met",
+          "reason_rejected": "",
+          "accepted": true,
+          "OMS_latency_ms": 21.0,
+          "AI_latency_ms": 49.0,
+          "gateway_latency_ms": 17.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "sell",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        }
+      ],
+      "rejected_sample": [
+        {
+          "trade_id": "trd_ebd80a752caf46f0",
+          "timestamp": "2026-07-31T13:07:26.320621Z",
+          "symbol": "XAUUSD",
+          "market_regime": "ranging",
+          "session": "london",
+          "quality": 70,
+          "confidence": 82,
+          "risk_profile": "standard",
+          "entry": "2353.0",
+          "SL": "2348.0",
+          "TP": "2363.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "",
+          "reason_rejected": "below_floor_or_tagged",
+          "accepted": false,
+          "OMS_latency_ms": 15.0,
+          "AI_latency_ms": 43.0,
+          "gateway_latency_ms": 11.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "sell",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_ea97bba8ebf34ac7",
+          "timestamp": "2026-07-31T13:07:26.320639Z",
+          "symbol": "XAUUSD",
+          "market_regime": "high_volatility",
+          "session": "mixed",
+          "quality": 81,
+          "confidence": 75,
+          "risk_profile": "standard",
+          "entry": "2355.0",
+          "SL": "2350.0",
+          "TP": "2365.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "",
+          "reason_rejected": "below_floor_or_tagged",
+          "accepted": false,
+          "OMS_latency_ms": 17.0,
+          "AI_latency_ms": 45.0,
+          "gateway_latency_ms": 13.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "sell",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        },
+        {
+          "trade_id": "trd_d762ba9d7a3c4486",
+          "timestamp": "2026-07-31T13:07:26.320665Z",
+          "symbol": "XAUUSD",
+          "market_regime": "low_volatility",
+          "session": "london",
+          "quality": 78,
+          "confidence": 78,
+          "risk_profile": "standard",
+          "entry": "2357.0",
+          "SL": "2352.0",
+          "TP": "2367.0",
+          "RR": "2.0",
+          "expected_lot_size": "0.01",
+          "portfolio_allocation": "1.0%",
+          "reason_accepted": "",
+          "reason_rejected": "below_floor_or_tagged",
+          "accepted": false,
+          "OMS_latency_ms": 19.0,
+          "AI_latency_ms": 47.0,
+          "gateway_latency_ms": 15.0,
+          "execution_mode": "shadow",
+          "order_payload": {
+            "symbol": "XAUUSD",
+            "side": "sell",
+            "volume": "0.01"
+          },
+          "broker_request": {},
+          "broker_response": {},
+          "expected_execution": {},
+          "fill": {},
+          "pnl": null,
+          "notes": "replay_verification",
+          "extras": {}
+        }
+      ]
+    },
+    "acceptance": {
+      "gates": [
+        {
+          "name": "gateway_healthy",
+          "status": "PASS",
+          "detail": "gateway=HEALTHY",
+          "evidence": {
+            "gateway": "HEALTHY"
+          }
+        },
+        {
+          "name": "oms_healthy",
+          "status": "FAIL",
+          "detail": "oms=ENABLED",
+          "evidence": {
+            "oms": "ENABLED"
+          }
+        },
+        {
+          "name": "mt5_connected",
+          "status": "PASS",
+          "detail": "mt5=CONNECTED",
+          "evidence": {
+            "mt5": "CONNECTED"
+          }
+        },
+        {
+          "name": "no_crashes",
+          "status": "PASS",
+          "detail": "crashes=0",
+          "evidence": {
+            "crashes": 0
+          }
+        },
+        {
+          "name": "quality_floor_accepted",
+          "status": "PASS",
+          "detail": "avg_quality=84.57 floor=80",
+          "evidence": {
+            "avg_quality": 84.57,
+            "floor": 80
+          }
+        },
+        {
+          "name": "confidence_floor_accepted",
+          "status": "PASS",
+          "detail": "avg_confidence=84.14 floor=80",
+          "evidence": {
+            "avg_confidence": 84.14,
+            "floor": 80
+          }
+        },
+        {
+          "name": "no_duplicate_penalties",
+          "status": "PASS",
+          "detail": "duplicate_penalties=0",
+          "evidence": {
+            "duplicate_penalties": 0
+          }
+        },
+        {
+          "name": "orders_valid",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "lot_sizing_correct",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "risk_limits_respected",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "no_duplicate_positions",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "no_orphan_positions",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "daily_loss_enforced",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "portfolio_caps_enforced",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "correlation_enforced",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "emergency_stop_verified",
+          "status": "PASS",
+          "detail": "True",
+          "evidence": {}
+        },
+        {
+          "name": "paper_no_broker_orders",
+          "status": "PASS",
+          "detail": "paper engine reports zero broker submissions",
+          "evidence": {}
+        },
+        {
+          "name": "shadow_no_broker_submit",
+          "status": "PASS",
+          "detail": "shadow_broker_submissions=0",
+          "evidence": {}
+        },
+        {
+          "name": "replay_regime_coverage",
+          "status": "PASS",
+          "detail": "missing_regimes=[]",
+          "evidence": {
+            "missing": []
+          }
+        },
+        {
+          "name": "replay_session_coverage",
+          "status": "PASS",
+          "detail": "missing_sessions=[]",
+          "evidence": {
+            "missing": []
+          }
+        }
+      ],
+      "summary": {
+        "passed": 19,
+        "failed": 1,
+        "unknown": 0,
+        "total": 20,
+        "hard_fails": [],
+        "infra_unknown": false
+      },
+      "quality_floor": 80,
+      "confidence_floor": 80,
+      "recommendation": "NOT READY",
+      "thresholds_unchanged": true,
+      "strategy_unchanged": true
+    },
+    "observe_only_flags": {
+      "never_modifies_strategy": true,
+      "never_lowers_quality_gates": true,
+      "never_changes_weights": true,
+      "never_changes_risk_logic": true
+    },
+    "metrics_snake": {
+      "gateway_health": "HEALTHY",
+      "mt5_status": "CONNECTED",
+      "oms_status": "ENABLED",
+      "ai_status": "SETTINGS_ONLY",
+      "current_session": "\u2014",
+      "current_regime": "\u2014",
+      "eligible_trades": 7,
+      "rejected_trades": 3,
+      "broker_submissions": 0,
+      "fill_rate": null,
+      "win_rate": null,
+      "loss_rate": null,
+      "profit_factor": null,
+      "expectancy": null,
+      "average_rr": 2.0,
+      "drawdown": 0.0,
+      "current_equity": 10000.0,
+      "open_positions": 0,
+      "closed_positions": 0,
+      "daily_pnl": null,
+      "weekly_pnl": null,
+      "monthly_pnl": null,
+      "latency": {
+        "oms_ms_avg": 16.5,
+        "ai_ms_avg": 44.5,
+        "gateway_ms_avg": 12.5
+      }
+    }
+  },
+  "recommendation": "NOT READY",
+  "report_path": "/workspace/docs/production/production_readiness_evidence/RC1_SHADOW_VALIDATION.md"
+}

@@ -1,0 +1,469 @@
+{
+  "collected_at": "2026-07-31T13:07:26.321511Z",
+  "infrastructure": {
+    "gateway_health": "HEALTHY",
+    "gateway_status": "HEALTHY",
+    "oms_status": "ENABLED",
+    "mt5_status": "CONNECTED",
+    "ai_status": "SETTINGS_ONLY",
+    "crashes": 0,
+    "mt5_use_mock": false,
+    "rc1_endpoint_http": 404,
+    "source": "live_gateway_and_settings_probes"
+  },
+  "gateway_account": {
+    "login": 12260878,
+    "server": "Weltrade-Real",
+    "account_mode": "real",
+    "trade_allowed": true,
+    "trade_mode": "real",
+    "company": "Weltrade Ltd."
+  },
+  "gateway_mt5": {
+    "connected": true,
+    "session_mode": "attached",
+    "latency_ms": 1.237,
+    "terminal_build": 6061,
+    "build_date": "24 Jul 2026",
+    "server": "Weltrade-Real",
+    "login": 12260878,
+    "login_status": "connected",
+    "last_heartbeat_at": "2026-07-31T13:07:14.108908+00:00",
+    "version": "500.6061 (24 Jul 2026)",
+    "bridge_available": true,
+    "degraded": false,
+    "probe": "live",
+    "account_mode": "real",
+    "trade_mode": "real",
+    "trade_mode_raw": 2,
+    "trade_allowed": true,
+    "terminal_trade_allowed": true,
+    "mt5_autotrading_enabled": true,
+    "dlls_allowed": true,
+    "dll_allowed": true,
+    "capability_support": {
+      "autotrading": "SUPPORTED",
+      "dll": "SUPPORTED"
+    },
+    "capability_note": "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+  },
+  "prod_rc1_http": 404,
+  "prod_services_health_http": 401,
+  "paper_recommendation": "NOT READY",
+  "shadow_recommendation": "NOT READY",
+  "paper_acceptance": {
+    "gates": [
+      {
+        "name": "gateway_healthy",
+        "status": "PASS",
+        "detail": "gateway=HEALTHY",
+        "evidence": {
+          "gateway": "HEALTHY"
+        }
+      },
+      {
+        "name": "oms_healthy",
+        "status": "FAIL",
+        "detail": "oms=ENABLED",
+        "evidence": {
+          "oms": "ENABLED"
+        }
+      },
+      {
+        "name": "mt5_connected",
+        "status": "PASS",
+        "detail": "mt5=CONNECTED",
+        "evidence": {
+          "mt5": "CONNECTED"
+        }
+      },
+      {
+        "name": "no_crashes",
+        "status": "PASS",
+        "detail": "crashes=0",
+        "evidence": {
+          "crashes": 0
+        }
+      },
+      {
+        "name": "quality_floor_accepted",
+        "status": "PASS",
+        "detail": "avg_quality=84.57 floor=80",
+        "evidence": {
+          "avg_quality": 84.57,
+          "floor": 80
+        }
+      },
+      {
+        "name": "confidence_floor_accepted",
+        "status": "PASS",
+        "detail": "avg_confidence=84.14 floor=80",
+        "evidence": {
+          "avg_confidence": 84.14,
+          "floor": 80
+        }
+      },
+      {
+        "name": "no_duplicate_penalties",
+        "status": "PASS",
+        "detail": "duplicate_penalties=0",
+        "evidence": {
+          "duplicate_penalties": 0
+        }
+      },
+      {
+        "name": "orders_valid",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "lot_sizing_correct",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "risk_limits_respected",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "no_duplicate_positions",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "no_orphan_positions",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "daily_loss_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "portfolio_caps_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "correlation_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "emergency_stop_verified",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "paper_no_broker_orders",
+        "status": "PASS",
+        "detail": "paper engine reports zero broker submissions",
+        "evidence": {}
+      },
+      {
+        "name": "shadow_no_broker_submit",
+        "status": "PASS",
+        "detail": "shadow_broker_submissions=0",
+        "evidence": {}
+      },
+      {
+        "name": "replay_regime_coverage",
+        "status": "PASS",
+        "detail": "missing_regimes=[]",
+        "evidence": {
+          "missing": []
+        }
+      },
+      {
+        "name": "replay_session_coverage",
+        "status": "PASS",
+        "detail": "missing_sessions=[]",
+        "evidence": {
+          "missing": []
+        }
+      }
+    ],
+    "summary": {
+      "passed": 19,
+      "failed": 1,
+      "unknown": 0,
+      "total": 20,
+      "hard_fails": [],
+      "infra_unknown": false
+    },
+    "quality_floor": 80,
+    "confidence_floor": 80,
+    "recommendation": "NOT READY",
+    "thresholds_unchanged": true,
+    "strategy_unchanged": true
+  },
+  "shadow_acceptance": {
+    "gates": [
+      {
+        "name": "gateway_healthy",
+        "status": "PASS",
+        "detail": "gateway=HEALTHY",
+        "evidence": {
+          "gateway": "HEALTHY"
+        }
+      },
+      {
+        "name": "oms_healthy",
+        "status": "FAIL",
+        "detail": "oms=ENABLED",
+        "evidence": {
+          "oms": "ENABLED"
+        }
+      },
+      {
+        "name": "mt5_connected",
+        "status": "PASS",
+        "detail": "mt5=CONNECTED",
+        "evidence": {
+          "mt5": "CONNECTED"
+        }
+      },
+      {
+        "name": "no_crashes",
+        "status": "PASS",
+        "detail": "crashes=0",
+        "evidence": {
+          "crashes": 0
+        }
+      },
+      {
+        "name": "quality_floor_accepted",
+        "status": "PASS",
+        "detail": "avg_quality=84.57 floor=80",
+        "evidence": {
+          "avg_quality": 84.57,
+          "floor": 80
+        }
+      },
+      {
+        "name": "confidence_floor_accepted",
+        "status": "PASS",
+        "detail": "avg_confidence=84.14 floor=80",
+        "evidence": {
+          "avg_confidence": 84.14,
+          "floor": 80
+        }
+      },
+      {
+        "name": "no_duplicate_penalties",
+        "status": "PASS",
+        "detail": "duplicate_penalties=0",
+        "evidence": {
+          "duplicate_penalties": 0
+        }
+      },
+      {
+        "name": "orders_valid",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "lot_sizing_correct",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "risk_limits_respected",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "no_duplicate_positions",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "no_orphan_positions",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "daily_loss_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "portfolio_caps_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "correlation_enforced",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "emergency_stop_verified",
+        "status": "PASS",
+        "detail": "True",
+        "evidence": {}
+      },
+      {
+        "name": "paper_no_broker_orders",
+        "status": "PASS",
+        "detail": "paper engine reports zero broker submissions",
+        "evidence": {}
+      },
+      {
+        "name": "shadow_no_broker_submit",
+        "status": "PASS",
+        "detail": "shadow_broker_submissions=0",
+        "evidence": {}
+      },
+      {
+        "name": "replay_regime_coverage",
+        "status": "PASS",
+        "detail": "missing_regimes=[]",
+        "evidence": {
+          "missing": []
+        }
+      },
+      {
+        "name": "replay_session_coverage",
+        "status": "PASS",
+        "detail": "missing_sessions=[]",
+        "evidence": {
+          "missing": []
+        }
+      }
+    ],
+    "summary": {
+      "passed": 19,
+      "failed": 1,
+      "unknown": 0,
+      "total": 20,
+      "hard_fails": [],
+      "infra_unknown": false
+    },
+    "quality_floor": 80,
+    "confidence_floor": 80,
+    "recommendation": "NOT READY",
+    "thresholds_unchanged": true,
+    "strategy_unchanged": true
+  },
+  "mission_gates": [
+    {
+      "id": "gateway_health_200",
+      "pass": true,
+      "observed": 200
+    },
+    {
+      "id": "mt5_connected",
+      "pass": true,
+      "observed": true
+    },
+    {
+      "id": "trade_allowed",
+      "pass": true,
+      "observed": true
+    },
+    {
+      "id": "broker_weltrade",
+      "pass": true,
+      "observed": "Weltrade-Real"
+    },
+    {
+      "id": "account_mode_real",
+      "pass": true,
+      "observed": "real"
+    },
+    {
+      "id": "autotrading_enabled",
+      "pass": true,
+      "observed": true
+    },
+    {
+      "id": "bridge_available",
+      "pass": true,
+      "observed": true
+    },
+    {
+      "id": "mt5_use_mock_false",
+      "pass": true,
+      "observed": false
+    },
+    {
+      "id": "gateway_component_healthy",
+      "pass": true,
+      "observed": "HEALTHY"
+    },
+    {
+      "id": "oms_healthy",
+      "pass": false,
+      "observed": "ENABLED"
+    },
+    {
+      "id": "mt5_component_connected",
+      "pass": true,
+      "observed": "CONNECTED"
+    },
+    {
+      "id": "ai_healthy",
+      "pass": false,
+      "observed": "SETTINGS_ONLY"
+    },
+    {
+      "id": "rc1_endpoint_http_200",
+      "pass": false,
+      "observed": 404
+    },
+    {
+      "id": "prod_api_health",
+      "pass": true,
+      "observed": {
+        "health": 200,
+        "status": 200
+      }
+    },
+    {
+      "id": "paper_recommendation_ready",
+      "pass": false,
+      "observed": "NOT READY"
+    },
+    {
+      "id": "shadow_recommendation_ready",
+      "pass": false,
+      "observed": "NOT READY"
+    },
+    {
+      "id": "railway_online",
+      "pass": true,
+      "observed": "QuantForg Online SUCCESS deployment"
+    }
+  ],
+  "mission_pass_count": 12,
+  "mission_total": 17,
+  "all_mission_gates_pass": false,
+  "final_recommendation": "NOT READY",
+  "stop": true,
+  "actions_blocked": [
+    "merge",
+    "push_main",
+    "production_deploy",
+    "migrations"
+  ]
+}
