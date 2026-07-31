@@ -188,9 +188,7 @@ def score_scalping_setup(
     sweeps = len(liq.sweeps) if liq else 0
     q_components = quality_components(quality)
     liquidity_score = (
-        88
-        if sweeps
-        else max(20, int(q_components.get("liquidity", 40) or 40))
+        88 if sweeps else max(20, int(q_components.get("liquidity", 40) or 40))
     )
     factors["liquidity_sweep"] = liquidity_score
     if sweeps:
