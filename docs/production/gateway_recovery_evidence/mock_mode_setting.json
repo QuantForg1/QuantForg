@@ -1,0 +1,9 @@
+{
+  "collected_at": "2026-07-31T12:49:49.744268Z",
+  "env_MT5_USE_MOCK": "false",
+  "settings_mt5_use_mock": false,
+  "mt5_enabled": true,
+  "execution_enabled": true,
+  "mt5_gateway_base_url": "https://gateway.quantforg.com",
+  "note": "MT5_USE_MOCK set false via railway variable --skip-deploys; running prod process may still have old env until approved restart/redeploy"
+}

@@ -1,0 +1,140 @@
+{
+  "collected_at": "2026-07-31T13:06:00.173142Z",
+  "source": "railway_run_live_probe_collector",
+  "gateway": {
+    "configured": true,
+    "available": true,
+    "latency_ms": 730.6374580075499,
+    "status": "HEALTHY"
+  },
+  "mt5": {
+    "enabled": true,
+    "use_mock": false,
+    "connected": true,
+    "status": "CONNECTED"
+  },
+  "oms": {
+    "execution_enabled": true,
+    "latency_ms": 0.0,
+    "status": "ENABLED"
+  },
+  "ai": {
+    "status": "SETTINGS_ONLY",
+    "decision_latency_ms": 0.0
+  },
+  "platform": {
+    "railway_api_up": false,
+    "supabase_up": true,
+    "cloudflare_tunnel_up": true,
+    "database_latency_ms": 1.0
+  },
+  "health_endpoints": [
+    {
+      "url": "https://quantforg-production.up.railway.app/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/status",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 175.62
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.03
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/rc1-production-validation",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"error\":{\"code\":\"http_error\",\"message\":\"Not Found\",\"details\":{}},\"request_id\":\"req_da59cac79230448e9acf8a86ac31bfe5\"}"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/services-health",
+      "http_status": 401,
+      "ok": false,
+      "body": "[REDACTED]"
+    }
+  ],
+  "gateway_http": {
+    "http_status": 200,
+    "ok": true,
+    "content_type": "application/json"
+  },
+  "last_gateway_health_payload": {
+    "status": "ok",
+    "service": "mt5-gateway",
+    "gateway_version": "1.1.6",
+    "token_configured": true,
+    "websocket_enabled": true,
+    "auto_attach_enabled": true,
+    "token_fingerprint": {
+      "length": 43,
+      "preview": "QuantF******Qw8Rt5",
+      "source": "dotenv:C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+      "process_env_len": 0,
+      "dotenv_len": 43,
+      "dotenv_path": "C:\\Users\\P7 PROVIDER\\QuantForg\\.env",
+      "process_is_placeholder": true
+    },
+    "mt5": {
+      "connected": true,
+      "session_mode": "attached",
+      "latency_ms": 1.282,
+      "terminal_build": 6061,
+      "build_date": "24 Jul 2026",
+      "server": "Weltrade-Real",
+      "login": 12260878,
+      "login_status": "connected",
+      "last_heartbeat_at": "2026-07-31T13:05:44.267812+00:00",
+      "version": "500.6061 (24 Jul 2026)",
+      "bridge_available": true,
+      "degraded": false,
+      "probe": "live",
+      "account_mode": "real",
+      "trade_mode": "real",
+      "trade_mode_raw": 2,
+      "trade_allowed": true,
+      "terminal_trade_allowed": true,
+      "mt5_autotrading_enabled": true,
+      "dlls_allowed": true,
+      "dll_allowed": true,
+      "capability_support": {
+        "autotrading": "SUPPORTED",
+        "dll": "SUPPORTED"
+      },
+      "capability_note": "From MetaTrader5.terminal_info() (trade_allowed=AutoTrading, dlls_allowed=DLL imports)"
+    },
+    "bridge_available": true
+  },
+  "unknown_states": [
+    {
+      "component": "ai",
+      "status": "SETTINGS_ONLY"
+    }
+  ]
+}

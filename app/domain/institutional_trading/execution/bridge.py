@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 from threading import Lock
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.application.services.institutional_execution_engine import parse_order_intent
 from app.domain.entities.mt5_order import OrderIntent
@@ -514,21 +514,57 @@ class ExecutionBridge:
                     t0=t0,
                 )
 
-        # --- Shadow mode: journal only, never OMS ---
-        if mode is ExecutionMode.SHADOW:
+        # --- RC1 validation paper/shadow OR ops SHADOW: never live broker ---
+        # PRODUCTION_VALIDATION_MODE + paper|shadow builds OMS intent, records
+        # evidence, simulates/shadows — never order_send. Strategy/floors untouched.
+        validation_intercept: dict[str, Any] | None = None
+        try:
+            from app.domain.institutional_trading.rc1_production_validation.config import (  # noqa: E501
+                resolve_validation_runtime,
+            )
+            from app.domain.institutional_trading.rc1_production_validation.hooks import (  # noqa: E501
+                handle_validation_execution,
+            )
+
+            vrt = resolve_validation_runtime()
+            if vrt.blocks_broker_submit:
+                intent_v = self._build_intent(decision, context)
+                latency_v = (time.perf_counter() - t0) * 1000.0
+                validation_intercept = handle_validation_execution(
+                    decision=decision,
+                    intent=intent_v,
+                    latency_ms=latency_v,
+                )
+        except Exception:
+            logger.exception("rc1_validation_intercept_probe_failed")
+            validation_intercept = None
+
+        if validation_intercept or mode is ExecutionMode.SHADOW:
             latency = (time.perf_counter() - t0) * 1000.0
             self._mark_executed(d_hash)
+            comment = "Shadow mode — journal only, OMS not called"
+            exec_result = "shadow"
+            oms_status = "shadow"
+            if validation_intercept:
+                comment = str(
+                    validation_intercept.get("message")
+                    or f"RC1 validation {validation_intercept.get('execution_mode')}"
+                )
+                exec_result = str(
+                    validation_intercept.get("execution_mode") or "validation"
+                )
+                oms_status = f"validation_{exec_result}"
             entry = self._record(
                 decision=decision,
                 context=context,
                 decision_hash=d_hash,
                 abort_reason=BridgeAbortReason.NONE,
-                comment="Shadow mode — journal only, OMS not called",
+                comment=comment,
                 latency_ms=latency,
                 status=ExecutionAttemptStatus.SHADOW,
-                oms_status="shadow",
+                oms_status=oms_status,
                 gateway_status="not_called",
-                execution_result="shadow",
+                execution_result=exec_result,
                 mode=mode,
             )
             self.metrics.record_executed(latency)

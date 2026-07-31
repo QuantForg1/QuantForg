@@ -1,0 +1,76 @@
+{
+  "collected_at": "2026-07-31T12:51:31.625023Z",
+  "overall": "NOT READY",
+  "pass_count": 2,
+  "total": 11,
+  "gates": [
+    {
+      "id": "gateway_health_200",
+      "pass": false,
+      "observed": 502
+    },
+    {
+      "id": "cloudflare_tunnel_healthy",
+      "pass": false,
+      "observed": "edge up; origin 502"
+    },
+    {
+      "id": "windows_service_running",
+      "pass": false,
+      "observed": "not verifiable from cloud agent"
+    },
+    {
+      "id": "mt5_connected",
+      "pass": false,
+      "observed": {
+        "enabled": true,
+        "use_mock": false,
+        "connected": false,
+        "status": "DISCONNECTED"
+      }
+    },
+    {
+      "id": "mt5_trade_allowed_broker_account",
+      "pass": false,
+      "observed": "unreachable"
+    },
+    {
+      "id": "mt5_use_mock_false",
+      "pass": true,
+      "observed": {
+        "env": "false",
+        "settings": false
+      }
+    },
+    {
+      "id": "services_all_healthy",
+      "pass": false,
+      "observed": {
+        "gateway": "DOWN",
+        "oms": "ENABLED",
+        "mt5": "DISCONNECTED",
+        "ai": "SETTINGS_ONLY"
+      }
+    },
+    {
+      "id": "rc1_endpoint_deployed_http_200",
+      "pass": false,
+      "observed": 404
+    },
+    {
+      "id": "rc1_endpoint_local_wiring_200",
+      "pass": true,
+      "observed": 200
+    },
+    {
+      "id": "paper_validation",
+      "pass": false,
+      "observed": "NOT READY"
+    },
+    {
+      "id": "shadow_validation",
+      "pass": false,
+      "observed": "NOT READY"
+    }
+  ]
+}
