@@ -26,10 +26,15 @@ EXPECTED_UNIVERSE = {
     "EURUSD",
     "GBPUSD",
     "USDJPY",
+    "USDCHF",
+    "USDCAD",
     "AUDUSD",
+    "NZDUSD",
+    "BTCUSD",
+    "ETHUSD",
     "NAS100",
     "US30",
-    "BTCUSD",
+    "GER40",
 }
 
 
@@ -37,7 +42,8 @@ EXPECTED_UNIVERSE = {
 def test_institutional_watchlist_matches_approved_universe() -> None:
     assert set(DEFAULT_SCALPING_UNIVERSE) == EXPECTED_UNIVERSE
     assert set(DEFAULT_AI_SCALPING_CONFIG.universe) == EXPECTED_UNIVERSE
-    assert "ETHUSD" not in DEFAULT_SCALPING_UNIVERSE
+    assert "ETHUSD" in DEFAULT_SCALPING_UNIVERSE
+    assert "GER40" in DEFAULT_SCALPING_UNIVERSE
     assert DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled is True
     # Floors locked
     assert DEFAULT_AI_SCALPING_CONFIG.normal_vol.quality == 82

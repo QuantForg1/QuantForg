@@ -938,10 +938,112 @@ class InstitutionalIteRuntime:
                     except Exception:
                         logger.exception("pvm_position_close_stage_failed")
                     try:
+                        from app.domain.institutional_trading.ai_scalping.decision_explain import (  # noqa: E501
+                            explain_decision,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.learning import (  # noqa: E501
+                            LearningTradeRecord,
+                            get_scalping_learning_store,
+                        )
+
+                        ai = getattr(self.decision_pipeline, "_last_ai_score", None)
+                        ai_d = ai if isinstance(ai, dict) else {}
+                        pnl_raw = getattr(pos, "profit", None)
+                        try:
+                            pnl_f = float(pnl_raw) if pnl_raw is not None else 0.0
+                        except Exception:
+                            pnl_f = 0.0
+                        direction = str(
+                            getattr(getattr(pos, "direction", None), "value", None)
+                            or getattr(pos, "side", None)
+                            or ai_d.get("direction")
+                            or ""
+                        )
+                        explain = explain_decision(
+                            direction=direction,
+                            manage_action="close",
+                            manage_reason=str(_close_reason or reason or "closed"),
+                        )
+                        logger.warning(
+                            "AI Decision Explained",
+                            action=explain.get("action"),
+                            why=explain.get("why"),
+                            ticket=ticket,
+                        )
+                        get_scalping_learning_store().record(
+                            LearningTradeRecord(
+                                closed_at=datetime.now(UTC).isoformat(),
+                                symbol=str(
+                                    getattr(pos, "symbol", None)
+                                    or getattr(snapshot, "symbol", "")
+                                    or "XAUUSD"
+                                ),
+                                direction=direction,
+                                session=str(
+                                    getattr(
+                                        getattr(
+                                            getattr(snapshot, "session", None),
+                                            "session",
+                                            None,
+                                        ),
+                                        "value",
+                                        None,
+                                    )
+                                    or getattr(
+                                        getattr(snapshot, "session", None),
+                                        "session",
+                                        "",
+                                    )
+                                    or ""
+                                ),
+                                win=pnl_f > 0,
+                                pnl=str(pnl_raw if pnl_raw is not None else "0"),
+                                confidence=int(
+                                    ai_d.get("ai_confidence")
+                                    or ai_d.get("confidence")
+                                    or 0
+                                ),
+                                quality=int(
+                                    ai_d.get("trade_quality")
+                                    or ai_d.get("quality")
+                                    or 0
+                                ),
+                                confluence=int(ai_d.get("confluence") or 0),
+                                spread=(
+                                    str(getattr(snapshot, "spread", None))
+                                    if getattr(snapshot, "spread", None) is not None
+                                    else None
+                                ),
+                                atr_pct=(
+                                    str(ai_d.get("atr_pct"))
+                                    if ai_d.get("atr_pct") is not None
+                                    else None
+                                ),
+                                regime=ai_d.get("market_regime") or ai_d.get("regime"),
+                                execution_ms=None,
+                                ticket=str(ticket),
+                                entry_reason=ai_d.get("entry_reason")
+                                or (
+                                    "; ".join(ai_d.get("reasons") or [])
+                                    if isinstance(ai_d.get("reasons"), list)
+                                    else None
+                                ),
+                                exit_reason=str(_close_reason or reason or "closed"),
+                                rejection_reason=ai_d.get("reject_reason"),
+                                setup_family=ai_d.get("setup_family"),
+                                indicators={
+                                    "explain": explain,
+                                    "management_reason": reason,
+                                },
+                            )
+                        )
+                    except Exception:
+                        logger.exception("ai_scalping_learning_record_failed")
+                    try:
                         from app.domain.institutional_trading.ai_scalping.config import (  # noqa: E501
                             DEFAULT_AI_SCALPING_CONFIG,
                         )
-                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501  # noqa: E501
+                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
                             get_continuous_operation_controller,
                         )
 

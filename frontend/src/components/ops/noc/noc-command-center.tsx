@@ -219,6 +219,14 @@ export function NocCommandCenter() {
   const scanUniverse = Array.isArray(symbolScan.universe)
     ? symbolScan.universe.map((s) => String(s))
     : [];
+  const executionTrace = asRecord(data.execution_trace);
+  const traceStages = Array.isArray(executionTrace.stages)
+    ? executionTrace.stages
+    : [];
+  const learning = asRecord(asRecord(data.learning).summary);
+  const protection = asRecord(data.protection);
+  const liveHealth = asRecord(protection.live_health);
+  const continuousOp = asRecord(protection.continuous_operation);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -624,6 +632,76 @@ export function NocCommandCenter() {
             </div>
           )}
         </NocPanel>
+
+        {/* §4c Execution Trace */}
+        <NocPanel
+          id="noc-execution-trace"
+          title="4c · Institutional Execution Trace"
+          action={
+            <Badge tone="neutral">
+              {fmt(asRecord(executionTrace.first_blocker).stage, "clear")}
+            </Badge>
+          }
+        >
+          {traceStages.length === 0 ? (
+            <p className="text-[12px] text-[var(--fg-muted)]">
+              Awaiting live pipeline artefacts.
+            </p>
+          ) : (
+            <DeskTable
+              columns={["Stage", "Status", "Blocking Gate", "Reason"]}
+              rows={traceStages.map((row) => {
+                const r = asRecord(row);
+                return [
+                  fmt(r.stage),
+                  fmt(r.status),
+                  fmt(r.blocking_gate, "—"),
+                  fmt(r.reason, "—"),
+                ];
+              })}
+            />
+          )}
+        </NocPanel>
+
+        {/* §4d Protection + Learning */}
+        <div className="grid gap-3 lg:grid-cols-2">
+          <NocPanel id="noc-protection" title="4d · Emergency Protection">
+            <NocRow
+              label="New entries paused"
+              value={fmt(
+                asRecord(liveHealth.self_protection).new_entries_paused ??
+                  continuousOp.pause_new_entries
+              )}
+              tone={
+                asRecord(liveHealth.self_protection).new_entries_paused ||
+                continuousOp.pause_new_entries
+                  ? "warn"
+                  : "ok"
+              }
+            />
+            <NocRow
+              label="Pause reasons"
+              value={fmt(
+                (
+                  asList(asRecord(liveHealth.self_protection).reasons).length
+                    ? asList(asRecord(liveHealth.self_protection).reasons).join("; ")
+                    : asList(continuousOp.reasons).join("; ")
+                ) || "none"
+              )}
+            />
+            <NocRow
+              label="Manage open positions"
+              value={fmt(continuousOp.manage_open_positions, "true")}
+              tone="ok"
+            />
+          </NocPanel>
+          <NocPanel id="noc-learning" title="4e · AI Learning Dataset">
+            <NocRow label="Trades recorded" value={fmt(learning.trades, "0")} />
+            <NocRow label="Wins" value={fmt(learning.wins, "0")} />
+            <NocRow label="Losses" value={fmt(learning.losses, "0")} />
+            <NocRow label="Win rate" value={fmt(learning.win_rate)} />
+          </NocPanel>
+        </div>
 
         {/* §5 Pipeline */}
         <NocPanel

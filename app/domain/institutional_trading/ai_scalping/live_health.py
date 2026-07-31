@@ -196,6 +196,21 @@ class LiveHealthMonitor:
                     f"{self.slippage_window_seconds}s)"
                 )
 
+    def record_abnormal_spread(self, detail: str | None = None) -> None:
+        """Pause new entries on abnormal spread — manage open positions continues."""
+        with self._lock:
+            self._pause(detail or "Abnormal spread protection")
+
+    def record_flash_move(self, detail: str | None = None) -> None:
+        """Pause new entries on flash-crash style moves."""
+        with self._lock:
+            self._pause(detail or "Flash crash protection")
+
+    def record_margin_danger(self, detail: str | None = None) -> None:
+        """Pause new entries when free margin / margin level is critical."""
+        with self._lock:
+            self._pause(detail or "Margin danger")
+
     def record_gateway_instability(self) -> None:
         now = datetime.now(UTC)
         with self._lock:

@@ -45,6 +45,9 @@ def test_noc_dashboard_shape_and_flags() -> None:
     assert isinstance(payload["symbol_scan"], dict)
     assert "universe" in payload["symbol_scan"]
     assert payload["symbol_scan"]["governed_by_existing_ai_and_risk"] is True
+    assert "execution_trace" in payload
+    assert "learning" in payload
+    assert "protection" in payload
     assert "validation_history" in payload
     assert isinstance(payload["alerts"], list)
     assert isinstance(payload["system_metrics"], dict)

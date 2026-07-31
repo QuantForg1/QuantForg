@@ -11,10 +11,15 @@ DEFAULT_ALPHA_UNIVERSE: tuple[str, ...] = (
     "EURUSD",
     "GBPUSD",
     "USDJPY",
+    "USDCHF",
+    "USDCAD",
     "AUDUSD",
+    "NZDUSD",
+    "BTCUSD",
+    "ETHUSD",
     "NAS100",
     "US30",
-    "BTCUSD",
+    "GER40",
 )
 
 # Highly correlated pairs — never hold both when protection is on.

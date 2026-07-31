@@ -43,6 +43,45 @@ class InstitutionalTradingAnalysisService:
                 inferred = str(raw or "").strip().upper() or None
                 break
         pipeline = InstitutionalAnalysisPipeline(bars=store, config=self.config)
+        # Wire configured economic calendar when available (symbol-scoped blackouts).
+        try:
+            from dataclasses import replace
+
+            from app.domain.institutional_trading.ai_scalping.economic_calendar_adapter import (  # noqa: E501
+                build_configured_news_calendar,
+            )
+            from app.domain.institutional_trading.news_protection import NewsProtection
+
+            calendar = build_configured_news_calendar()
+            cfg = self.config
+            if calendar is not None and not bool(
+                getattr(cfg, "news_protection_enabled", False)
+            ):
+                cfg = replace(cfg, news_protection_enabled=True)
+            if calendar is not None:
+                fail_closed = False
+                try:
+                    from app.domain.institutional_trading.ai_scalping.config import (
+                        DEFAULT_AI_SCALPING_CONFIG,
+                    )
+
+                    fail_closed = bool(
+                        DEFAULT_AI_SCALPING_CONFIG.news_fail_closed_without_feed
+                    )
+                except Exception:
+                    fail_closed = False
+                pipeline = InstitutionalAnalysisPipeline(
+                    bars=store,
+                    config=cfg,
+                    news=NewsProtection(
+                        config=cfg,
+                        calendar=calendar,
+                        fail_closed_without_feed=fail_closed,
+                    ),
+                )
+        except Exception:
+            pipeline = InstitutionalAnalysisPipeline(bars=store, config=self.config)
+
         return await pipeline.analyze(
             as_of=as_of,
             spread=spread,

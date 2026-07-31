@@ -29,10 +29,15 @@ EXPECTED_UNIVERSE = {
     "EURUSD",
     "GBPUSD",
     "USDJPY",
+    "USDCHF",
+    "USDCAD",
     "AUDUSD",
+    "NZDUSD",
+    "BTCUSD",
+    "ETHUSD",
     "NAS100",
     "US30",
-    "BTCUSD",
+    "GER40",
 }
 
 
@@ -173,7 +178,7 @@ def test_scheduler_simultaneous_universe() -> None:
     cycle = sched.begin_cycle()
     assert set(cycle["symbols"]) == EXPECTED_UNIVERSE
     assert cycle["mode"] == "simultaneous"
-    assert len(sched.symbols_for_cycle()) == 8
+    assert len(sched.symbols_for_cycle()) == 13
     done = sched.complete_cycle(best_symbol="EURUSD", eligible_count=3)
     assert done["last_best_symbol"] == "EURUSD"
     assert done["last_eligible_count"] == 3

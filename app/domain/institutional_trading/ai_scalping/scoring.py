@@ -245,9 +245,23 @@ def score_scalping_setup(
     factors["session"] = session.quality_score
     reasons.append(session.reason)
 
-    spread_a = assess_spread(snapshot.spread, atr=atr, config=cfg)
+    spread_a = assess_spread(
+        snapshot.spread,
+        atr=atr,
+        config=cfg,
+        symbol=str(symbol or getattr(snapshot, "symbol", "") or ""),
+    )
     factors["spread"] = spread_a.score
     reasons.append(spread_a.reason)
+    if spread_a.reject and getattr(spread_a, "abnormal_vs_history", False):
+        try:
+            from app.domain.institutional_trading.ai_scalping.live_health import (
+                get_live_health_monitor,
+            )
+
+            get_live_health_monitor().record_abnormal_spread(spread_a.reason)
+        except Exception:
+            pass
 
     hist = int(historical_similarity) if historical_similarity is not None else 50
     factors["historical_similar"] = max(0, min(100, hist))

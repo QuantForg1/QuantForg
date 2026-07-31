@@ -116,6 +116,11 @@ class ContinuousOperationController:
         market_open: bool = True,
         portfolio_risk_exceeded: bool = False,
         missing_heartbeats: tuple[str, ...] = (),
+        margin_danger: bool = False,
+        abnormal_spread: bool = False,
+        flash_crash: bool = False,
+        network_failure: bool = False,
+        mt5_connected: bool = True,
     ) -> NewEntryPauseDecision:
         """Pause NEW entries only — open positions always continue."""
         reasons: list[str] = []
@@ -125,10 +130,20 @@ class ContinuousOperationController:
             reasons.append("broker unavailable")
         if not gateway_available:
             reasons.append("gateway unavailable")
+        if not mt5_connected:
+            reasons.append("mt5 disconnected")
         if not market_open:
             reasons.append("market closed")
         if portfolio_risk_exceeded:
             reasons.append("portfolio risk exceeded")
+        if margin_danger:
+            reasons.append("margin danger")
+        if abnormal_spread:
+            reasons.append("abnormal spread")
+        if flash_crash:
+            reasons.append("flash crash protection")
+        if network_failure:
+            reasons.append("network failure")
         # Missing critical heartbeats → treat as unavailable (recoverable)
         critical = {"gateway", "mt5", "oms"}
         miss = {m.lower() for m in missing_heartbeats}

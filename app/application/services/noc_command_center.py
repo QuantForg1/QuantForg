@@ -907,6 +907,88 @@ def _symbol_scan(*, runtime_scan: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _execution_trace_panel(
+    *,
+    diagnostics: dict[str, Any],
+    pvm: dict[str, Any],
+    runtime_scan: dict[str, Any] | None,
+) -> dict[str, Any]:
+    try:
+        from app.domain.institutional_trading.ai_scalping.execution_trace import (
+            build_institutional_execution_trace,
+        )
+
+        latest = _as_dict(diagnostics.get("latest"))
+        last = _as_dict(pvm.get("last_validation"))
+        ai_score = _as_dict(latest.get("ai_score") or latest.get("details"))
+        return build_institutional_execution_trace(
+            symbol=str(last.get("symbol") or latest.get("symbol") or "") or None,
+            decision_id=str(
+                last.get("validation_id") or pvm.get("last_validation_id") or ""
+            )
+            or None,
+            ai_score=ai_score or {
+                "trade_quality": last.get("quality_score"),
+                "ai_confidence": last.get("ai_confidence"),
+                "reject": str(last.get("ai_action") or "").upper()
+                in {"", "NONE", "NO_TRADE"},
+                "reject_reason": last.get("first_blocker") or pvm.get("current_blocker"),
+                "direction": last.get("ai_action"),
+                "liquidity": last.get("liquidity"),
+                "mtf_alignment": last.get("mtf_alignment"),
+                "volatility_decision": {"reason": _as_dict(latest).get("volatility")},
+            },
+            scanner=runtime_scan,
+            decision_action=str(last.get("ai_action") or latest.get("decision_action")),
+            market_ok=bool(latest.get("snapshot_present"))
+            if latest.get("snapshot_present") is not None
+            else None,
+        )
+    except Exception:
+        logger.exception("noc_execution_trace_failed")
+        return {
+            "stages": [],
+            "first_blocker": None,
+            "observe_only": True,
+            "error": "trace_unavailable",
+        }
+
+
+def _learning_panel() -> dict[str, Any]:
+    try:
+        from app.domain.institutional_trading.ai_scalping.learning import (
+            get_scalping_learning_store,
+        )
+
+        return {
+            "summary": get_scalping_learning_store().summary(),
+            "observe_only": True,
+        }
+    except Exception:
+        return {"summary": {"trades": 0}, "observe_only": True}
+
+
+def _continuous_protection_panel() -> dict[str, Any]:
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+        from app.domain.institutional_trading.ai_scalping.live_health import (
+            get_live_health_monitor,
+        )
+
+        runtime = get_ite_runtime()
+        co = None
+        if runtime is not None:
+            co = getattr(runtime, "_last_continuous_op", None)
+        health = get_live_health_monitor().snapshot()
+        return {
+            "continuous_operation": co if isinstance(co, dict) else None,
+            "live_health": health,
+            "observe_only": True,
+        }
+    except Exception:
+        return {"continuous_operation": None, "live_health": None, "observe_only": True}
+
+
 def build_noc_command_center() -> dict[str, Any]:
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.production_validation_mode import (
@@ -1099,6 +1181,11 @@ def build_noc_command_center() -> dict[str, Any]:
         "ai_engine": _ai_engine(diagnostics=diagnostics, pvm=pvm),
         "market_context": _market_context(diagnostics=diagnostics, pvm=pvm, auto=auto),
         "symbol_scan": _symbol_scan(runtime_scan=runtime_scan),
+        "execution_trace": _execution_trace_panel(
+            diagnostics=diagnostics, pvm=pvm, runtime_scan=runtime_scan
+        ),
+        "learning": _learning_panel(),
+        "protection": _continuous_protection_panel(),
         "open_positions": _positions_read_only(),
         "closed_trades": _closed_trades_read_only(limit=25),
         "oms": oms,
