@@ -42,26 +42,18 @@ def main(argv: list[str] | None = None) -> int:
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-    from app.domain.institutional_trading.rc1_production_validation.config import (
-        set_validation_runtime_for_tests,
-    )
-    from app.domain.institutional_trading.rc1_production_validation.paper_engine import (
-        reset_paper_engine_for_tests,
-    )
-    from app.domain.institutional_trading.rc1_production_validation.pipeline import (
-        run_rc1_validation_pipeline,
-    )
-    from app.domain.institutional_trading.rc1_production_validation.shadow_engine import (
-        reset_shadow_journal_for_tests,
-    )
-    from app.domain.institutional_trading.rc1_production_validation.trade_recorder import (
-        reset_trade_recorder_for_tests,
+    from app.domain.institutional_trading.rc1_production_validation import (
+        config as cfg_mod,
+        paper_engine as paper_mod,
+        pipeline as pipe_mod,
+        shadow_engine as shadow_mod,
+        trade_recorder as trade_mod,
     )
 
-    reset_trade_recorder_for_tests()
-    reset_paper_engine_for_tests()
-    reset_shadow_journal_for_tests()
-    set_validation_runtime_for_tests(
+    trade_mod.reset_trade_recorder_for_tests()
+    paper_mod.reset_paper_engine_for_tests()
+    shadow_mod.reset_shadow_journal_for_tests()
+    cfg_mod.set_validation_runtime_for_tests(
         enabled=True, execution_mode=args.execution_mode
     )
 
@@ -69,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.events_json:
         events = json.loads(Path(args.events_json).read_text(encoding="utf-8"))
 
-    result = run_rc1_validation_pipeline(
+    result = pipe_mod.run_rc1_validation_pipeline(
         events=events,
         write_report=True,
         report_path=Path(args.report),

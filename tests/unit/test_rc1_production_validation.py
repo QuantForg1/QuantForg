@@ -178,9 +178,7 @@ def test_paper_hook_simulates_fill() -> None:
                 "take_profit": "2335",
             }
 
-    out = handle_validation_execution(
-        decision=_Dec(), intent=_Intent(), latency_ms=9.0
-    )
+    out = handle_validation_execution(decision=_Dec(), intent=_Intent(), latency_ms=9.0)
     assert out is not None
     assert out["execution_mode"] == "paper"
     assert out["fill"]["simulated"] is True

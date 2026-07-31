@@ -64,9 +64,7 @@ def _decision_fields(decision: Any) -> dict[str, Any]:
         trend = getattr(snap, "trend", None)
         if trend is not None:
             regime = str(
-                getattr(trend, "regime", None)
-                or getattr(trend, "state", None)
-                or ""
+                getattr(trend, "regime", None) or getattr(trend, "state", None) or ""
             )
     session = ""
     if snap is not None:
@@ -119,13 +117,9 @@ def record_decision_outcome(
             symbol=fields["symbol"],
             market_regime=str(fields["regime"] or ""),
             session=str(fields["session"] or ""),
-            quality=(
-                int(fields["quality"]) if fields["quality"] is not None else None
-            ),
+            quality=(int(fields["quality"]) if fields["quality"] is not None else None),
             confidence=(
-                int(fields["confidence"])
-                if fields["confidence"] is not None
-                else None
+                int(fields["confidence"]) if fields["confidence"] is not None else None
             ),
             risk_profile=_safe_str(fields["risk_score"]) or "",
             entry=_safe_str(fields["entry"]),

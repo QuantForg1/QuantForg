@@ -54,9 +54,7 @@ def build_validation_dashboard(
 
     oms_lats = [t.oms_latency_ms for t in trades if t.oms_latency_ms is not None]
     ai_lats = [t.ai_latency_ms for t in trades if t.ai_latency_ms is not None]
-    gw_lats = [
-        t.gateway_latency_ms for t in trades if t.gateway_latency_ms is not None
-    ]
+    gw_lats = [t.gateway_latency_ms for t in trades if t.gateway_latency_ms is not None]
     rrs: list[float] = []
     for t in accepted:
         if t.risk_reward is None:
@@ -89,9 +87,7 @@ def build_validation_dashboard(
         "MT5 Status": infra.get("mt5_status") or "UNKNOWN",
         "OMS Status": infra.get("oms_status") or "UNKNOWN",
         "AI Status": ai_status or infra.get("ai_status") or "UNKNOWN",
-        "Current Session": current_session
-        or infra.get("current_session")
-        or "—",
+        "Current Session": current_session or infra.get("current_session") or "—",
         "Current Regime": current_regime or infra.get("current_regime") or "—",
         "Quality": {
             "floor": QUALITY_FLOOR,
@@ -106,9 +102,7 @@ def build_validation_dashboard(
         "Eligible Trades": len(accepted),
         "Rejected Trades": len(rejected),
         "Broker Submissions": (
-            0
-            if cfg.blocks_broker_submit
-            else int(infra.get("broker_submissions") or 0)
+            0 if cfg.blocks_broker_submit else int(infra.get("broker_submissions") or 0)
         ),
         "Fill Rate": fill_rate,
         "Win Rate": paper_perf.get("win_rate_pct"),
@@ -145,9 +139,7 @@ def build_validation_dashboard(
             "mt5_status": infra.get("mt5_status") or "UNKNOWN",
             "oms_status": infra.get("oms_status") or "UNKNOWN",
             "ai_status": ai_status or infra.get("ai_status") or "UNKNOWN",
-            "current_session": current_session
-            or infra.get("current_session")
-            or "—",
+            "current_session": current_session or infra.get("current_session") or "—",
             "current_regime": current_regime or infra.get("current_regime") or "—",
             "eligible_trades": len(accepted),
             "rejected_trades": len(rejected),
