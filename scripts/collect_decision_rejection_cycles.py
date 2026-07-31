@@ -43,12 +43,15 @@ FAMILY_MAP = {
     "market_window_closed": "session",
     "news_blackout": "news",
     "below_min_lot": "risk_sizing",
+    "SAFETY_BLOCKED": "risk_sizing",
     "atr_elevated": "atr_volatility",
     "atr_too_low": "atr_volatility",
     "no_structure_event": "structure_pa",
     "no_smc_zone": "structure_pa",
     "no_active_order_block": "structure_pa",
     "no_open_fvg": "structure_pa",
+    "NO_SNAPSHOT": "other",
+    "NO_MARKET_CONTEXT": "other",
 }
 
 

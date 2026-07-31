@@ -53,6 +53,8 @@ _CODE_TO_FAMILY: dict[str, str] = {
     "below_min_lot": "risk_sizing",
     "SAFETY_BLOCKED": "risk_sizing",
     "safety_blocked": "risk_sizing",
+    "NO_SNAPSHOT": "other",
+    "NO_MARKET_CONTEXT": "other",
     "no_structure_event": "structure_pa",
     "no_active_order_block": "structure_pa",
     "no_open_fvg": "structure_pa",
