@@ -386,6 +386,37 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- RC1 Production Validation Pipeline ----------------------------------
+    production_validation_mode: Annotated[
+        bool,
+        Field(
+            description=(
+                "Enable RC1 Production Validation Mode. AI / Quality / Confidence "
+                "/ Risk / Portfolio / OMS build paths run normally; broker "
+                "submission is governed by VALIDATION_EXECUTION_MODE. "
+                "Never changes strategy, thresholds, or risk logic."
+            ),
+            validation_alias=AliasChoices(
+                "PRODUCTION_VALIDATION_MODE",
+                "production_validation_mode",
+            ),
+        ),
+    ] = False
+    validation_execution_mode: Annotated[
+        str,
+        Field(
+            description=(
+                "Broker execution under Production Validation Mode: "
+                "paper (simulate fills, no MT5), shadow (build + record, no send), "
+                "live (current production behavior)."
+            ),
+            validation_alias=AliasChoices(
+                "VALIDATION_EXECUTION_MODE",
+                "validation_execution_mode",
+            ),
+        ),
+    ] = "paper"
+
     # -- Force First Trade (temporary live pipeline test; auto-disarms) ------
     force_first_trade: Annotated[
         bool,

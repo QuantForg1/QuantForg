@@ -1,0 +1,34 @@
+{
+  "collected_at": "2026-07-31T12:39:41.203063Z",
+  "attempts": [
+    {
+      "label": "as_is",
+      "ok": true,
+      "tables_public": 83,
+      "versions": [
+        {
+          "table": "supabase_migrations.schema_migrations",
+          "sample_count": 5,
+          "cols": [
+            "version",
+            "statements",
+            "name",
+            "created_by",
+            "idempotency_key",
+            "rollback"
+          ]
+        },
+        {
+          "table": "schema_migrations",
+          "error": "UndefinedTableError"
+        },
+        {
+          "table": "alembic_version",
+          "error": "UndefinedTableError"
+        }
+      ]
+    }
+  ],
+  "host_only": "aws-0-eu-central-1.pooler.supabase.com",
+  "uses_pooler_user": true
+}

@@ -12,6 +12,15 @@ from app.domain.institutional_trading.production_validation_mode.recorder import
 def build_production_validation_dashboard() -> dict[str, Any]:
     recorder = get_production_validation_recorder()
     payload = recorder.dashboard()
+    rc1_flags: dict[str, Any] = {}
+    try:
+        from app.domain.institutional_trading.rc1_production_validation.config import (
+            resolve_validation_runtime,
+        )
+
+        rc1_flags = resolve_validation_runtime().to_dict()
+    except Exception:
+        rc1_flags = {}
     payload.update(
         {
             "mode": "production_validation",
@@ -24,6 +33,8 @@ def build_production_validation_dashboard() -> dict[str, Any]:
             "never_lowers_quality_gates": True,
             "never_fabricates_trades": True,
             "export_dir": "docs/production/validation/",
+            "rc1_production_validation": rc1_flags,
+            "rc1_dashboard_path": "/ite/ops/rc1-production-validation",
         }
     )
     return payload

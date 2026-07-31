@@ -1,0 +1,37 @@
+{
+  "collected_at": "2026-07-31T12:42:11.489987Z",
+  "probes": [
+    {
+      "url": "https://gateway.quantforg.com/health",
+      "http_status": 502,
+      "ok": false,
+      "body": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.\",\"instance\":\"a23cae7e0993dcdd\",\"error_code\":502,\"error_name\":\"origin_bad_gateway\",\"error_category\":\"origin\",\"ray_id\":\"a23cae7e0993dcdd\",\"timestamp\":\"2026-07-31T12:42:12Z\",\"zone\"",
+      "error": "HTTPError"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "server": "railway-hikari",
+      "cf_ray": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/rc1-production-validation",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"error\":{\"code\":\"http_error\",\"message\":\"Not Found\",\"details\":{}},\"request_id\":\"req_064fbb63cc3d40ed8c38851060e53fd4\"}",
+      "error": "HTTPError"
+    },
+    {
+      "url": "https://quantforg-staging.up.railway.app/health",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"status\":\"error\",\"code\":404,\"message\":\"Application not found\",\"request_id\":\"hW2esWoeSBWhV5Z16WHkDg\"}",
+      "error": "HTTPError"
+    }
+  ],
+  "gateway_http_200": false
+}
