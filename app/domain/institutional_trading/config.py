@@ -17,7 +17,7 @@ class ITEConfig:
     """Versioned, deterministic engine configuration."""
 
     symbol: str = GOLD_SYMBOL
-    config_version: str = "ite-v2.1.0"
+    config_version: str = "ite-v2.2.0"
 
     # Trading mode: swing (H4 stack) | scalping (H1→M1, no H4 required)
     trading_mode: str = "swing"

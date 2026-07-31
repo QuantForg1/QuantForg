@@ -189,4 +189,4 @@ def test_thresholds_unchanged_v21() -> None:
     cfg = ITEConfig()
     assert cfg.min_confluence_score == 80
     assert cfg.min_trade_quality_score == 80
-    assert cfg.config_version == "ite-v2.1.0"
+    assert cfg.config_version == "ite-v2.2.0"

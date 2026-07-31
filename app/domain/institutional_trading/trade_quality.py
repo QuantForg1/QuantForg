@@ -1,12 +1,20 @@
-"""Trade Quality Score (0-100) — reject below configured threshold."""
+"""Trade Quality Score (0-100) — reject below configured threshold.
+
+Score Pipeline Integration (ite-v2.2.0):
+  - Liquidity factor uses Liquidity v2 (validated OB/FVG/sweeps/pools/EQH/EQL)
+  - Legacy sweep-only liquidity path removed
+  - Weights unchanged; thresholds unchanged (min_trade_quality_score)
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.domain.fair_value_gap.models import FairValueGapSnapshot
 from app.domain.institutional_trading.config import ITEConfig
+from app.domain.institutional_trading.liquidity_v2 import evaluate_liquidity_v2
 from app.domain.institutional_trading.models import (
     SessionFilterResult,
     TradeQualityFactor,
@@ -19,7 +27,7 @@ from app.domain.market_structure.models import StructureSnapshot
 from app.domain.order_block.enums import OrderBlockState
 from app.domain.order_block.models import OrderBlockSnapshot
 
-# Equal weights sum to 100
+# Equal weights sum to 100 — preserved (no inflation)
 _WEIGHTS = {
     "trend": 20,
     "liquidity": 15,
@@ -58,7 +66,11 @@ class TradeQualityEvaluator:
     ) -> TradeQualityScore:
         factors = (
             self._trend(trend),
-            self._liquidity(liquidity),
+            self._liquidity_v2(
+                liquidity=liquidity,
+                order_blocks=order_blocks,
+                fvgs=fvgs,
+            ),
             self._order_blocks(order_blocks),
             self._fvgs(fvgs),
             self._structure(structure),
@@ -90,34 +102,39 @@ class TradeQualityEvaluator:
         if trend.aligned:
             score = max(score, 75)
         detail = trend.why
+        sem = getattr(trend, "m15_semantics", None) or {}
+        if sem:
+            detail = (
+                f"{detail} | quality.trend uses MTF once "
+                f"(M15={sem.get('new_classification', 'n/a')})"
+            )
         return TradeQualityFactor(
             code="trend", weight=_WEIGHTS["trend"], score=score, detail=detail
         )
 
-    def _liquidity(self, snap: LiquiditySnapshot | None) -> TradeQualityFactor:
-        if snap is None:
-            return TradeQualityFactor(
-                code="liquidity",
-                weight=_WEIGHTS["liquidity"],
-                score=0,
-                detail="No liquidity snapshot",
-            )
-        sweeps = len(getattr(snap, "sweeps", ()) or ())
-        pools = len(getattr(snap, "pools", ()) or ())
-        eqh = len(getattr(snap, "equal_highs", ()) or ())
-        eql = len(getattr(snap, "equal_lows", ()) or ())
-        score = 40
-        if sweeps:
-            score += 30
-        if pools or eqh or eql:
-            score += 20
-        if sweeps and (pools or eqh or eql):
-            score = min(100, score + 10)
+    def _liquidity_v2(
+        self,
+        *,
+        liquidity: LiquiditySnapshot | None,
+        order_blocks: OrderBlockSnapshot | None,
+        fvgs: FairValueGapSnapshot | None,
+    ) -> TradeQualityFactor:
+        """Liquidity v2 — replaces legacy sweep-only scoring."""
+        snap = SimpleNamespace(
+            liquidity=liquidity,
+            order_blocks=order_blocks,
+            fair_value_gaps=fvgs,
+        )
+        assessment = evaluate_liquidity_v2(snap)
+        sources = ",".join(assessment.sources) if assessment.sources else "none"
         return TradeQualityFactor(
             code="liquidity",
             weight=_WEIGHTS["liquidity"],
-            score=min(100, score),
-            detail=f"sweeps={sweeps} pools={pools} eqh={eqh} eql={eql}",
+            score=int(assessment.score),
+            detail=(
+                f"Liquidity v2 score={assessment.score} "
+                f"sources={sources} rejected={assessment.rejected}"
+            ),
         )
 
     def _order_blocks(self, snap: OrderBlockSnapshot | None) -> TradeQualityFactor:
