@@ -1,6 +1,10 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+/** Official RC4 mark — web-optimized for chrome; full-res for large watermarks. */
+const MARK_SRC = "/brand/quantforg-mark-256.png";
+const MARK_HIRES = "/brand/quantforg-mark.png";
+
 type BrandLogoProps = {
   className?: string;
   /** Mark size in px (square). */
@@ -26,7 +30,7 @@ export function BrandLogo({
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <Image
-        src="/brand/quantforg-mark.png"
+        src={MARK_SRC}
         alt="QuantForg"
         width={size}
         height={size}
@@ -53,14 +57,17 @@ export function BrandMark({
   className,
   size = 32,
   priority = false,
+  hiRes = false,
 }: {
   className?: string;
   size?: number;
   priority?: boolean;
+  /** Use full-resolution mark for large decorative watermarks. */
+  hiRes?: boolean;
 }) {
   return (
     <Image
-      src="/brand/quantforg-mark.png"
+      src={hiRes || size > 128 ? MARK_HIRES : MARK_SRC}
       alt="QuantForg"
       width={size}
       height={size}
