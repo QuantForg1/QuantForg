@@ -461,6 +461,164 @@ body {
   filter: brightness(1.06);
 }
 
+/* Pricing — lifetime license badge (subtle pulse, RC4 cyan) */
+.qf-lifetime-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-soft);
+  padding: 0.4rem 0.95rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.qf-lifetime-badge__glow {
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    circle at 30% 50%,
+    color-mix(in srgb, var(--accent) 35%, transparent),
+    transparent 55%
+  );
+  animation: qf-lifetime-glow 2.8s var(--ease-os) infinite;
+  pointer-events: none;
+}
+
+@keyframes qf-lifetime-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateX(-12%) scale(0.95);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translateX(12%) scale(1.05);
+  }
+}
+
+/* Pricing conversion — glass cards & micro-motion */
+.qf-glass-card {
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition:
+    border-color var(--duration-os) var(--ease-os),
+    box-shadow var(--duration-os) var(--ease-os),
+    transform var(--duration-os) var(--ease-os),
+    background-color var(--duration-os) var(--ease-os);
+}
+
+.qf-glass-card--hero {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  box-shadow: var(--shadow-elevated);
+}
+
+.qf-glass-card--hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+}
+
+.qf-btn-elevate {
+  transition:
+    filter var(--duration-fast) var(--ease-os),
+    transform var(--duration-fast) var(--ease-os),
+    box-shadow var(--duration-fast) var(--ease-os);
+}
+
+.qf-btn-elevate:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 10px 28px rgba(0, 212, 224, 0.18);
+}
+
+.qf-btn-elevate:active {
+  transform: translateY(0);
+}
+
+.qf-roi-slider {
+  appearance: none;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 55%, transparent),
+    var(--border-strong)
+  );
+  outline: none;
+}
+
+.qf-roi-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: var(--accent-gradient);
+  border: 2px solid var(--bg-elevated);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+  cursor: pointer;
+}
+
+.qf-roi-slider::-moz-range-thumb {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--bg-elevated);
+  cursor: pointer;
+}
+
+.qf-sticky-purchase {
+  /* reserved for sticky CTA shell */
+}
+
+.qf-success-ring {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 32px rgba(0, 212, 224, 0.2);
+  animation: qf-fade-in var(--duration-slow) var(--ease-os-out) both;
+}
+
+.qf-success-pulse {
+  animation:
+    qf-fade-in var(--duration-slow) var(--ease-os-out) both,
+    qf-success-glow 2.4s var(--ease-os) 0.4s infinite;
+}
+
+@keyframes qf-success-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+      0 0 24px rgba(0, 212, 224, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent),
+      0 0 40px rgba(0, 212, 224, 0.32);
+  }
+}
+
+.qf-pricing-hero {
+  /* cinematic ambient reserved — radial handled inline */
+}
+
+.qf-browser-chrome {
+  /* product preview chrome */
+}
+
 .qf-contain {
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
@@ -476,8 +634,16 @@ body {
   .qf-shimmer,
   .qf-pulse-once,
   .qf-exec-flash,
-  .qf-kpi-flash {
+  .qf-kpi-flash,
+  .qf-lifetime-badge__glow,
+  .qf-success-ring,
+  .qf-success-pulse {
     animation: none !important;
+  }
+
+  .qf-glass-card--hover:hover,
+  .qf-btn-elevate:hover {
+    transform: none;
   }
 
   *,

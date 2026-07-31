@@ -109,9 +109,9 @@ export default function LoginPage() {
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-[var(--fg-muted)]">
-        No account?{" "}
-        <Link href="/register" className="text-[var(--accent)]">
-          Create one
+        Need access?{" "}
+        <Link href="/pricing" className="text-[var(--accent)]">
+          Purchase Institutional License
         </Link>
       </p>
     </AuthShell>

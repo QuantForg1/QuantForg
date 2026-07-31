@@ -59,15 +59,16 @@ export default function LandingPage() {
           <a href="#platform" className="hover:text-[var(--fg)]">
             Platform
           </a>
-          <span className="text-[var(--fg-subtle)]">Pricing</span>
-          <span className="text-[var(--fg-subtle)]">Resources</span>
+          <Link href="/pricing" className="hover:text-[var(--fg)]">
+            Pricing
+          </Link>
         </nav>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2" aria-label="Primary">
           <Link href="/login" className={`${btnGhost} max-sm:px-3`}>
             Sign in
           </Link>
-          <Link href="/register" className={`${btnOutline} max-sm:px-3`}>
-            Open terminal
+          <Link href="/pricing" className={`${btnOutline} max-sm:px-3`}>
+            Get Lifetime Access
           </Link>
         </div>
       </header>
@@ -87,8 +88,8 @@ export default function LandingPage() {
               designed like a product, measured like a desk.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/register" className={btnPrimary}>
-                Start free
+              <Link href="/pricing" className={btnPrimary}>
+                Get Lifetime Access
               </Link>
               <Link href="/login" className={btnSecondary}>
                 Sign in to workspace
@@ -197,8 +198,8 @@ export default function LandingPage() {
                   </a>
                 </li>
                 <li>
-                  <Link href="/register" className="hover:text-[var(--fg)]">
-                    Open terminal
+                  <Link href="/pricing" className="hover:text-[var(--fg)]">
+                    Pricing
                   </Link>
                 </li>
               </ul>

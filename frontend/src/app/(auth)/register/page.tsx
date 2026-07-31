@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,6 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/providers/auth-provider";
 import { ApiError } from "@/lib/api/client";
+import {
+  hasLifetimePurchaseEntitlement,
+  markLifetimePurchaseComplete,
+} from "@/lib/licensing/purchase-gate";
 
 const schema = z.object({
   display_name: z.string().min(1).max(120),
@@ -21,16 +26,54 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function RegisterPage() {
+function RegisterForm() {
   const { register: registerUser } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const fromSuccess = searchParams.get("licensed") === "1";
+    if (fromSuccess) {
+      markLifetimePurchaseComplete();
+      setAllowed(true);
+      return;
+    }
+    setAllowed(hasLifetimePurchaseEntitlement());
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (allowed === false) {
+      router.replace("/pricing");
+    }
+  }, [allowed, router]);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { display_name: "", email: "", password: "" },
   });
 
+  if (allowed !== true) {
+    return (
+      <AuthShell title="Purchase required" subtitle="Redirecting to pricing…">
+        <p className="text-center text-sm text-[var(--fg-muted)]">
+          Create account is available only after a successful license purchase.
+        </p>
+        <Link
+          href="/pricing"
+          className="mt-4 inline-flex w-full items-center justify-center rounded-[var(--radius-sm)] qf-btn-primary h-11 text-sm font-medium"
+        >
+          View pricing
+        </Link>
+      </AuthShell>
+    );
+  }
+
   return (
-    <AuthShell title="Create workspace" subtitle="Register with email to access the terminal.">
+    <AuthShell
+      title="Create workspace"
+      subtitle="License confirmed. Register with email to access the terminal."
+    >
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
@@ -85,5 +128,19 @@ export default function RegisterPage() {
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell title="Create workspace" subtitle="Loading…">
+          <div className="h-40 animate-pulse rounded-lg bg-[var(--surface-2)]" />
+        </AuthShell>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }
