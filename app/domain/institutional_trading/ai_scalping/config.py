@@ -257,9 +257,7 @@ class AiScalpingConfig:
             else "STANDARD"
         )
         object.__setattr__(self, "risk_profile_id", pid)
-        ceiling = (
-            Decimal("8.00") if pid == "ULTRA_AGGRESSIVE" else Decimal("0.75")
-        )
+        ceiling = Decimal("8.00") if pid == "ULTRA_AGGRESSIVE" else Decimal("0.75")
         if self.risk_per_trade_pct > ceiling:
             object.__setattr__(self, "risk_per_trade_pct", ceiling)
         # Never loosen hold beyond absolute max

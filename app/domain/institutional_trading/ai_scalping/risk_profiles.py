@@ -111,9 +111,7 @@ def get_active_ai_scalping_config() -> AiScalpingConfig:
         plane = get_control_plane()
         pid = getattr(plane, "risk_profile_id", "STANDARD")
         compounding = bool(getattr(plane, "compounding_enabled", False))
-        cfg = ai_scalping_config_for_profile(
-            pid, compounding_enabled=compounding
-        )
+        cfg = ai_scalping_config_for_profile(pid, compounding_enabled=compounding)
     except Exception:
         cfg = DEFAULT_AI_SCALPING_CONFIG
     with _LOCK:

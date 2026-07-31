@@ -495,9 +495,9 @@ def calculate_dynamic_lots_v2(
         if news_mult < 1:
             reduction_reasons.append(f"news_risk_mult={news_mult}")
 
-    base_risk = (
-        configured_max * q_scale * soft_scale * news_mult
-    ).quantize(Decimal("0.0001"))
+    base_risk = (configured_max * q_scale * soft_scale * news_mult).quantize(
+        Decimal("0.0001")
+    )
 
     # Daily / portfolio exposure remaining — reduce only
     max_daily = cfg.max_daily_exposure_pct
@@ -509,15 +509,13 @@ def calculate_dynamic_lots_v2(
         )
     remaining = max_daily - daily_exposure_used_pct
     if remaining < base_risk:
-        reduction_reasons.append(
-            f"portfolio_remaining={remaining}<{base_risk}"
-        )
+        reduction_reasons.append(f"portfolio_remaining={remaining}<{base_risk}")
         base_risk = max(Decimal("0"), remaining)
 
     if portfolio_exposure_pct is not None and portfolio_exposure_pct >= max_daily:
         return _reject(
             "portfolio_exposure_cap",
-            (f"Portfolio exposure {portfolio_exposure_pct}% " f"at max {max_daily}%"),
+            (f"Portfolio exposure {portfolio_exposure_pct}% at max {max_daily}%"),
             risk=base_risk,
         )
 
@@ -529,15 +527,13 @@ def calculate_dynamic_lots_v2(
     if symbol_open_risk_pct is not None and symbol_open_risk_pct >= sym_cap > 0:
         return _reject(
             "symbol_exposure_cap",
-            (f"Symbol exposure {symbol_open_risk_pct}% " f"at max {sym_cap}%"),
+            (f"Symbol exposure {symbol_open_risk_pct}% at max {sym_cap}%"),
             risk=base_risk,
         )
     if symbol_open_risk_pct is not None and sym_cap > 0:
         sym_remaining = sym_cap - symbol_open_risk_pct
         if sym_remaining < base_risk:
-            reduction_reasons.append(
-                f"symbol_remaining={sym_remaining}<{base_risk}"
-            )
+            reduction_reasons.append(f"symbol_remaining={sym_remaining}<{base_risk}")
             base_risk = max(Decimal("0"), sym_remaining)
 
     vol_scale = Decimal("1")
