@@ -813,6 +813,35 @@ def _system_metrics(*, ops_metrics: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _production_acceptance_widget() -> dict[str, Any]:
+    """Production Acceptance — VERIFIED only after real certificate-eligible trade."""
+    try:
+        from app.application.services.execution_evidence import (
+            build_execution_evidence_status,
+        )
+
+        status = build_execution_evidence_status()
+        return status if isinstance(status, dict) else {
+            "status": "NOT VERIFIED",
+            "verified": False,
+            "message": "Waiting for first eligible production execution.",
+            "observe_only": True,
+        }
+    except Exception:
+        logger.exception("noc_production_acceptance_failed")
+        return {
+            "status": "NOT VERIFIED",
+            "verified": False,
+            "message": "Waiting for first eligible production execution.",
+            "latest_broker_ticket": None,
+            "latest_execution": None,
+            "latest_latency_ms": None,
+            "latest_certificate": None,
+            "observe_only": True,
+            "never_fabricated": True,
+        }
+
+
 def build_noc_command_center() -> dict[str, Any]:
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.production_validation_mode import (
@@ -1007,6 +1036,7 @@ def build_noc_command_center() -> dict[str, Any]:
         "execution_state": getattr(auto, "execution_state", {}) or {},
         "primary_blocker": getattr(auto, "primary_blocker", None)
         or pvm.get("current_blocker"),
+        "production_acceptance": _production_acceptance_widget(),
         "flags": {
             "observe_only": True,
             "never_modifies_trading": True,

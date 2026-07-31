@@ -1,0 +1,8 @@
+{
+  "status": "NOT_VERIFIED",
+  "message": "Waiting for first eligible production execution.",
+  "latest": null,
+  "observe_only": true,
+  "never_fabricated": true,
+  "as_of": "2026-07-31T00:03:31.537861Z"
+}

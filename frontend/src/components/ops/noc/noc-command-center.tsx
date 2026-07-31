@@ -21,6 +21,7 @@ import {
   NocRow,
   pipelineTone,
 } from "@/components/ops/noc/noc-primitives";
+import { ProductionAcceptancePanel } from "@/components/ops/noc/production-acceptance-panel";
 
 function filterValidationHistory(history: unknown[], filter: string): unknown[] {
   const q = filter.trim().toLowerCase();
@@ -185,6 +186,7 @@ export function NocCommandCenter() {
   const alerts = asList(data.alerts);
   const history = asList(data.validation_history);
   const metrics = asRecord(data.system_metrics);
+  const productionAcceptance = asRecord(data.production_acceptance);
 
   const filteredHistory = filterValidationHistory(history, filter);
 
@@ -236,6 +238,8 @@ export function NocCommandCenter() {
             })}
           </div>
         </NocPanel>
+
+        <ProductionAcceptancePanel data={productionAcceptance} />
 
         <NocPanel
           title="Live Execution Pipeline"

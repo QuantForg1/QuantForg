@@ -6,8 +6,9 @@ Every public function swallows exceptions — never affects trading path.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
 
 from app.domain.institutional_trading.production_validation_mode.export import (
     export_validation_report,
@@ -158,11 +159,9 @@ def record_decision_reasons(
                 # confluence reasons are informational; include when NO_TRADE
                 if action_s in {"NO_TRADE", "WATCH"}:
                     reasons.append(str(r))
-        if action_s in {"NO_TRADE", "WATCH"}:
-            get_production_validation_recorder().record_no_trade_reasons(
-                reasons, validation_id=validation_id
-            )
-        elif reasons and not getattr(elig, "eligible", True):
+        if action_s in {"NO_TRADE", "WATCH"} or (
+            reasons and not getattr(elig, "eligible", True)
+        ):
             get_production_validation_recorder().record_no_trade_reasons(
                 reasons, validation_id=validation_id
             )
@@ -250,6 +249,17 @@ def finalize(
             return None
         if export:
             export_validation_report(attempt, recorder=recorder)
+            # Observe-only: record real BUY/SELL → broker evidence.
+            try:
+                from app.domain.institutional_trading.execution_evidence import (
+                    collector as evidence_collector,
+                )
+
+                evidence_collector.collect_after_finalize(attempt)
+            except Exception:
+                logger.exception(
+                    "execution_evidence_collect_after_finalize_failed"
+                )
         return recorder.report_summary(attempt)
     except Exception:
         logger.exception("pvm_finalize_failed")
