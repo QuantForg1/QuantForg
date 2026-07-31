@@ -83,7 +83,7 @@ def test_mtf_v2_ranging_h4_not_veto_when_lower_tfs_lock() -> None:
 
 
 @pytest.mark.unit
-def test_mtf_v2_ranging_still_requires_m15_m5_agreement() -> None:
+def test_mtf_v2_ranging_still_requires_m15_agreement() -> None:
     v2 = evaluate_mtf_v2(
         h4=TrendDirection.RANGE,
         h1=TrendDirection.UP,
@@ -92,6 +92,19 @@ def test_mtf_v2_ranging_still_requires_m15_m5_agreement() -> None:
         scalping=True,
     )
     assert v2.aligned is False
+
+
+@pytest.mark.unit
+def test_mtf_v2_ranging_h1_m15_lock_does_not_require_m5() -> None:
+    v2 = evaluate_mtf_v2(
+        h4=TrendDirection.RANGE,
+        h1=TrendDirection.UP,
+        m15=TrendDirection.UP,
+        m5=TrendDirection.DOWN,
+        scalping=True,
+    )
+    assert v2.aligned is True
+    assert v2.policy == "v2_ranging_h1_m15"
 
 
 @pytest.mark.unit
@@ -168,7 +181,7 @@ def test_confluence_v2_clears_mtf_and_liquidity_false_negatives() -> None:
         market_regime="ranging",
         mtf_policy="v2_ranging",
         trade_bias=TrendDirection.UP,
-        mtf_contributions={"h4": 0, "h1": 40, "m15": 35, "m5": 25},
+        mtf_contributions={"h4": 0, "h1": 50, "m15": 50, "m5_timing_bonus": 0},
         h4_is_context=True,
         why="test",
     )
@@ -206,4 +219,4 @@ def test_thresholds_unchanged() -> None:
     cfg = ITEConfig()
     assert cfg.min_confluence_score == 80
     assert cfg.min_trade_quality_score == 80
-    assert cfg.config_version == "ite-v2.0.0"
+    assert cfg.config_version == "ite-v2.1.0"

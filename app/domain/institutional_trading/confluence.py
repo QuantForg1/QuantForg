@@ -61,7 +61,8 @@ class ConfluenceEngine:
         structure = snapshot.primary_structure
 
         # --- Direction from MTF v2 (regime-aware) ---
-        # Trending: H4+H1+M15 lock. Ranging: H4 context; H1+M15+M5 lock.
+        # Trending: H4+H1+M15 lock. Ranging: H4 context; H1+M15 lock.
+        # M5 is execution timing only — never redefines H1 direction.
         # Never use raw H4 RANGE as a permanent veto when lower TFs lock.
         direction = TradeDirection.NONE
         bias = trend.effective_bias
@@ -105,14 +106,37 @@ class ConfluenceEngine:
             factors["m15"] = 100
             reasons.append(f"{cfg.entry_confirmation_tf.value} confirms bearish")
         elif direction is not TradeDirection.NONE:
-            # In ranging v2, M15 agreement is already required for aligned=True.
-            # Soft penalty only when direction came from soft path.
+            # In ranging v2, M15 agreement is already required for aligned=True
+            # (after M15 semantics). Soft penalty only on soft-bias path.
             factors[entry_key] = 40
             factors["m15"] = 40
             rejected.append("entry_tf_not_confirming")
         else:
             factors[entry_key] = 0
             factors["m15"] = 0
+
+        # Execution TF — timing soft score only; never a directional veto.
+        # Skip when entry_confirmation_tf already owns this key (scalping remap).
+        exec_key = cfg.execution_management_tf.value.lower()
+        if exec_key != entry_key:
+            if direction is not TradeDirection.NONE and trend.execution == bias:
+                factors[exec_key] = 100
+                if exec_key == "m5" or "m5" not in factors:
+                    factors["m5"] = 100
+                reasons.append(
+                    f"{cfg.execution_management_tf.value} timing confirms "
+                    f"{bias.value} (execution only)"
+                )
+            elif direction is not TradeDirection.NONE:
+                factors[exec_key] = 50
+                if exec_key == "m5" or "m5" not in factors:
+                    factors["m5"] = 50
+                reasons.append(
+                    f"{cfg.execution_management_tf.value} timing soft — "
+                    "does not redefine H1+M15 lock"
+                )
+            else:
+                factors.setdefault(exec_key, 0)
 
         # Structure events on primary structure TF
         bos = len(structure.breaks_of_structure) if structure else 0
@@ -138,9 +162,7 @@ class ConfluenceEngine:
         if liq_v2.rejected:
             rejected.append("no_liquidity_context")
         elif liq_v2.sources:
-            reasons.append(
-                "Liquidity v2 sources=" + ",".join(liq_v2.sources)
-            )
+            reasons.append("Liquidity v2 sources=" + ",".join(liq_v2.sources))
 
         # Order blocks
         ob = snapshot.order_blocks
