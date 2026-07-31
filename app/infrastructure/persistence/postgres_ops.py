@@ -70,8 +70,7 @@ class PostgresSystemAlertRepository:
     async def add(self, alert: SystemAlert) -> SystemAlert:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO system_alerts (
                     id, code, name, severity, status, component, message, details,
                     triggered_at, resolved_at, created_at, updated_at
@@ -91,8 +90,7 @@ class PostgresSystemAlertRepository:
                     triggered_at = EXCLUDED.triggered_at,
                     resolved_at = EXCLUDED.resolved_at,
                     updated_at = EXCLUDED.updated_at
-                """
-            ),
+                """),
             {
                 "id": str(alert.id),
                 "code": alert.code,
@@ -124,14 +122,12 @@ class PostgresSystemAlertRepository:
     async def list_open(self, *, limit: int = 100) -> list[SystemAlert]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM system_alerts
                 WHERE status IN ('open', 'acknowledged')
                 ORDER BY triggered_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [_alert_from_row(r) for r in result.mappings().all()]
@@ -139,13 +135,11 @@ class PostgresSystemAlertRepository:
     async def list_recent(self, *, limit: int = 100) -> list[SystemAlert]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM system_alerts
                 ORDER BY triggered_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [_alert_from_row(r) for r in result.mappings().all()]
@@ -157,14 +151,12 @@ class PostgresSystemAlertRepository:
         key = code.strip().lower()
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM system_alerts
                 WHERE code = :code AND status IN ('open', 'acknowledged')
                 ORDER BY triggered_at DESC
                 LIMIT 1
-                """
-            ),
+                """),
             {"code": key},
         )
         row = result.mappings().first()
@@ -178,8 +170,7 @@ class PostgresSystemMetricRepository:
     async def add(self, record: SystemMetricRecord) -> SystemMetricRecord:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO system_metrics (
                     id, payload, recorded_at, created_at, updated_at
                 )
@@ -190,8 +181,7 @@ class PostgresSystemMetricRepository:
                     payload = EXCLUDED.payload,
                     recorded_at = EXCLUDED.recorded_at,
                     updated_at = EXCLUDED.updated_at
-                """
-            ),
+                """),
             {
                 "id": str(record.id),
                 "payload": as_json(record.payload),
@@ -205,13 +195,11 @@ class PostgresSystemMetricRepository:
     async def list_recent(self, *, limit: int = 100) -> list[SystemMetricRecord]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM system_metrics
                 ORDER BY recorded_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [_metric_from_row(r) for r in result.mappings().all()]
@@ -224,8 +212,7 @@ class PostgresHealthHistoryRepository:
     async def add(self, entry: HealthHistoryEntry) -> HealthHistoryEntry:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO health_history (
                     id, overall, payload, recorded_at, created_at, updated_at
                 ) VALUES (
@@ -237,8 +224,7 @@ class PostgresHealthHistoryRepository:
                     payload = EXCLUDED.payload,
                     recorded_at = EXCLUDED.recorded_at,
                     updated_at = EXCLUDED.updated_at
-                """
-            ),
+                """),
             {
                 "id": str(entry.id),
                 "overall": entry.overall.value,
@@ -253,13 +239,11 @@ class PostgresHealthHistoryRepository:
     async def list_recent(self, *, limit: int = 100) -> list[HealthHistoryEntry]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM health_history
                 ORDER BY recorded_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"limit": limit},
         )
         return [_health_from_row(r) for r in result.mappings().all()]

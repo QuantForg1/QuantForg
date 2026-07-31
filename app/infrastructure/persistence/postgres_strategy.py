@@ -76,8 +76,7 @@ class PostgresStrategyEvaluationRepository:
     async def add(self, evaluation: StrategyEvaluation) -> StrategyEvaluation:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO strategy_evaluations (
                     id, user_id, request_id, symbol, timeframe, decision, reasons,
                     preconditions, market_state, signal_id, risk_decision,
@@ -101,8 +100,7 @@ class PostgresStrategyEvaluationRepository:
                     risk_decision = EXCLUDED.risk_decision,
                     risk_score = EXCLUDED.risk_score,
                     evaluated_at = EXCLUDED.evaluated_at
-                """
-            ),
+                """),
             {
                 "id": str(evaluation.id),
                 "user_id": str(evaluation.user_id),
@@ -129,14 +127,12 @@ class PostgresStrategyEvaluationRepository:
     ) -> StrategyEvaluation | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM strategy_evaluations
                 WHERE user_id = :user_id AND request_id = :request_id
                 ORDER BY evaluated_at DESC
                 LIMIT 1
-                """
-            ),
+                """),
             {"user_id": str(user_id), "request_id": request_id.strip()},
         )
         row = result.mappings().first()
@@ -147,14 +143,12 @@ class PostgresStrategyEvaluationRepository:
     ) -> list[StrategyEvaluation]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM strategy_evaluations
                 WHERE user_id = :user_id
                 ORDER BY evaluated_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_evaluation_from_row(r) for r in result.mappings().all()]
@@ -167,8 +161,7 @@ class PostgresStrategySignalRepository:
     async def add(self, signal: StrategySignal) -> StrategySignal:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO strategy_signals (
                     id, user_id, evaluation_id, symbol, timeframe, direction,
                     confidence, reasons, rejected, rejection_reasons,
@@ -189,8 +182,7 @@ class PostgresStrategySignalRepository:
                     rejected = EXCLUDED.rejected,
                     rejection_reasons = EXCLUDED.rejection_reasons,
                     generated_at = EXCLUDED.generated_at
-                """
-            ),
+                """),
             {
                 "id": str(signal.id),
                 "user_id": str(signal.user_id),
@@ -216,26 +208,22 @@ class PostgresStrategySignalRepository:
         session = self._uow._require_session()
         if include_rejected:
             result = await session.execute(
-                text(
-                    """
+                text("""
                     SELECT * FROM strategy_signals
                     WHERE user_id = :user_id
                     ORDER BY generated_at DESC
                     LIMIT :limit
-                    """
-                ),
+                    """),
                 {"user_id": str(user_id), "limit": limit},
             )
         else:
             result = await session.execute(
-                text(
-                    """
+                text("""
                     SELECT * FROM strategy_signals
                     WHERE user_id = :user_id AND rejected = false
                     ORDER BY generated_at DESC
                     LIMIT :limit
-                    """
-                ),
+                    """),
                 {"user_id": str(user_id), "limit": limit},
             )
         return [_signal_from_row(r) for r in result.mappings().all()]
@@ -255,16 +243,14 @@ class PostgresStrategyDecisionHistoryRepository:
     ) -> None:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO strategy_decision_history (
                     id, user_id, evaluation_id, decision, reasons
                 ) VALUES (
                     :id, :user_id, :evaluation_id, :decision,
                     CAST(:reasons AS jsonb)
                 )
-                """
-            ),
+                """),
             {
                 "id": str(uuid4()),
                 "user_id": str(user_id),

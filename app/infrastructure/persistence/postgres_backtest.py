@@ -93,8 +93,7 @@ class PostgresBacktestRunRepository:
     async def add(self, run: BacktestRun) -> BacktestRun:
         session = self._uow._require_session()
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO backtest_runs (
                     id, user_id, request_id, symbol, timeframe, status, replay_mode,
                     initial_balance, assumptions, metrics, equity_curve,
@@ -127,8 +126,7 @@ class PostgresBacktestRunRepository:
                     started_at = EXCLUDED.started_at,
                     finished_at = EXCLUDED.finished_at,
                     updated_at = EXCLUDED.updated_at
-                """
-            ),
+                """),
             {
                 "id": str(run.id),
                 "user_id": str(run.user_id),
@@ -168,12 +166,10 @@ class PostgresBacktestRunRepository:
     ) -> BacktestRun | None:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM backtest_runs
                 WHERE id = :id AND user_id = :user_id
-                """
-            ),
+                """),
             {"id": str(backtest_id), "user_id": str(user_id)},
         )
         row = result.mappings().first()
@@ -184,14 +180,12 @@ class PostgresBacktestRunRepository:
     ) -> list[BacktestRun]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM backtest_runs
                 WHERE user_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"user_id": str(user_id), "limit": limit},
         )
         return [_run_from_row(r) for r in result.mappings().all()]
@@ -213,8 +207,7 @@ class PostgresSimulatedTradeRepository:
             raise RuntimeError(msg)
         user_id = str(owner_row["user_id"])
         await session.execute(
-            text(
-                """
+            text("""
                 INSERT INTO backtest_trades (
                     id, backtest_id, user_id, symbol, side, status, volume,
                     entry_price, exit_price, stop_loss, take_profit, spread,
@@ -246,8 +239,7 @@ class PostgresSimulatedTradeRepository:
                     closed_at = EXCLUDED.closed_at,
                     bar_index_open = EXCLUDED.bar_index_open,
                     bar_index_close = EXCLUDED.bar_index_close
-                """
-            ),
+                """),
             {
                 "id": str(trade.id),
                 "backtest_id": str(trade.backtest_id),
@@ -285,14 +277,12 @@ class PostgresSimulatedTradeRepository:
     ) -> list[SimulatedTrade]:
         session = self._uow._require_session()
         result = await session.execute(
-            text(
-                """
+            text("""
                 SELECT * FROM backtest_trades
                 WHERE backtest_id = :backtest_id
                 ORDER BY opened_at ASC
                 LIMIT :limit
-                """
-            ),
+                """),
             {"backtest_id": str(backtest_id), "limit": limit},
         )
         return [_trade_from_row(r) for r in result.mappings().all()]
