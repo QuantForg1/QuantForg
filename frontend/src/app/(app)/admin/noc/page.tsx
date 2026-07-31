@@ -10,8 +10,8 @@ export default function AdminNocPage() {
   return (
     <div>
       <PageHeader
-        title="NOC Command Center"
-        description="Institutional production operations desk — real telemetry only. Observe-only: never mutates trading, risk, OMS, gateway, or MT5."
+        title="Trading Command Center"
+        description="QuantForg institutional NOC — Bloomberg-style live telemetry. RC4 charcoal · observe-only · never mutates trading, AI, risk, OMS, gateway, or MT5."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">

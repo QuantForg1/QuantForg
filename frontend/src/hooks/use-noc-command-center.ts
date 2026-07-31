@@ -4,8 +4,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { iteOpsApi, platformApi } from "@/lib/api/endpoints";
 import { env } from "@/lib/env";
 
-/** Efficient poll cadence for NOC — complements existing realtime fallback. */
-const NOC_REFETCH_MS = 8_000;
+/** Institutional NOC poll cadence — observe-only, no full page reload. */
+const NOC_REFETCH_MS = 2_000;
 
 export function useNocCommandCenter(enabled = true) {
   const noc = useQuery({
@@ -14,7 +14,7 @@ export function useNocCommandCenter(enabled = true) {
     enabled,
     retry: false,
     refetchInterval: enabled ? NOC_REFETCH_MS : false,
-    staleTime: 4_000,
+    staleTime: 1_000,
   });
 
   const version = useQuery({
