@@ -222,14 +222,14 @@ class InstitutionalDecisionPipeline:
             apply_thresholds_to_ite,
             resolve_adaptive_thresholds,
         )
-        from app.domain.institutional_trading.ai_scalping.config import (
-            DEFAULT_AI_SCALPING_CONFIG,
+        from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+            get_active_ai_scalping_config,
         )
 
         resolved = resolve_adaptive_thresholds(
             account.atr,
             account.mid_price,
-            config=DEFAULT_AI_SCALPING_CONFIG,
+            config=get_active_ai_scalping_config(),
         )
         return apply_thresholds_to_ite(cfg, resolved)
 
@@ -252,24 +252,25 @@ class InstitutionalDecisionPipeline:
         ai_score = None
         if cfg.is_scalping():
             try:
-                from app.domain.institutional_trading.ai_scalping.config import (
-                    DEFAULT_AI_SCALPING_CONFIG,
-                )
                 from app.domain.institutional_trading.ai_scalping.diagnostics import (
                     get_scalping_diagnostics_store,
                 )
                 from app.domain.institutional_trading.ai_scalping.learning import (
                     get_scalping_learning_store,
                 )
+                from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+                    get_active_ai_scalping_config,
+                )
                 from app.domain.institutional_trading.ai_scalping.scoring import (
                     score_scalping_setup,
                 )
 
+                active_scalp = get_active_ai_scalping_config()
                 session_name = str(
                     getattr(snapshot.session.session, "value", snapshot.session.session)
                 )
                 hist = None
-                if DEFAULT_AI_SCALPING_CONFIG.learning_enabled:
+                if active_scalp.learning_enabled:
                     hist = get_scalping_learning_store().historical_similarity_bonus(
                         session=session_name,
                         confidence=70,
@@ -281,7 +282,7 @@ class InstitutionalDecisionPipeline:
                     atr=account.atr,
                     mid=account.mid_price,
                     historical_similarity=hist,
-                    config=DEFAULT_AI_SCALPING_CONFIG,
+                    config=active_scalp,
                     enforce_adaptive_cooldown=True,
                     symbol=str(getattr(snapshot, "symbol", "") or ""),
                     opens=tuple(getattr(snapshot, "entry_opens", ()) or ()),
@@ -456,15 +457,16 @@ class InstitutionalDecisionPipeline:
         if cfg.is_scalping() and risk_allowed:
             from dataclasses import replace as dc_replace
 
-            from app.domain.institutional_trading.ai_scalping.config import (
-                DEFAULT_AI_SCALPING_CONFIG,
-            )
             from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
                 may_add_scalping_trade,
             )
             from app.domain.institutional_trading.ai_scalping.dynamic_sizing_v2 import (
                 calculate_dynamic_lots_v2,
                 check_portfolio_sizing_limits,
+            )
+            from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+                get_active_ai_scalping_config,
+                news_risk_multiplier_for_snapshot,
             )
             from app.domain.institutional_trading.ai_scalping.session_intelligence import (  # noqa: E501
                 assess_session,
@@ -474,10 +476,18 @@ class InstitutionalDecisionPipeline:
             )
 
             scalp_cfg = dc_replace(
-                DEFAULT_AI_SCALPING_CONFIG,
+                get_active_ai_scalping_config(),
                 broker_min_lot=live_min,
                 broker_lot_step=live_step,
             )
+            mtf_score = int(getattr(snapshot.trend, "alignment_score", 0) or 0)
+            news_risk_mult = news_risk_multiplier_for_snapshot(
+                news_blocked=bool(getattr(snapshot.news, "blocked", False)),
+                news_reason=str(getattr(snapshot.news, "reason", "") or ""),
+                config=scalp_cfg,
+            )
+            # Active risk profile is the sizing authority (STANDARD 0.75 / ULTRA 8.00).
+            sizing_risk_pct = scalp_cfg.risk_per_trade_pct
             session_assess = assess_session(
                 str(
                     getattr(
@@ -551,7 +561,7 @@ class InstitutionalDecisionPipeline:
                         atr=account.atr,
                         mid_price=account.mid_price,
                         leverage=account.leverage,
-                        risk_pct=cfg.risk_per_trade_pct,
+                        risk_pct=sizing_risk_pct,
                         session_risk_multiplier=sess_risk,
                         quality_score=(
                             int(ai_score.trade_quality)
@@ -570,6 +580,8 @@ class InstitutionalDecisionPipeline:
                         trend_confidence=(
                             int(ai_score.confidence) if ai_score is not None else None
                         ),
+                        mtf_score=mtf_score,
+                        news_risk_multiplier=news_risk_mult,
                         quality_reject=(
                             bool(ai_score.reject) if ai_score is not None else False
                         ),
@@ -726,7 +738,7 @@ class InstitutionalDecisionPipeline:
                         stop_distance=stop_distance,
                         atr=account.atr,
                         mid_price=account.mid_price,
-                        risk_pct=cfg.risk_per_trade_pct,
+                        risk_pct=sizing_risk_pct,
                         contract_size=live_cs,
                         min_lot=live_min,
                         lot_step=live_step,
@@ -751,6 +763,8 @@ class InstitutionalDecisionPipeline:
                         trend_confidence=(
                             int(ai_score.confidence) if ai_score is not None else None
                         ),
+                        mtf_score=mtf_score,
+                        news_risk_multiplier=news_risk_mult,
                         quality_reject=(
                             bool(ai_score.reject) if ai_score is not None else False
                         ),
@@ -767,7 +781,7 @@ class InstitutionalDecisionPipeline:
                         equity=account.equity,
                         stop_distance=stop_distance,
                         atr=account.atr,
-                        risk_pct=cfg.risk_per_trade_pct,
+                        risk_pct=sizing_risk_pct,
                         peak_equity=account.peak_equity,
                         compounding_enabled=scalp_cfg.compounding_enabled,
                         contract_size=live_cs,
@@ -838,7 +852,7 @@ class InstitutionalDecisionPipeline:
                     risk_reasons.append(add.reason)
                     approved_lots = Decimal("0")
 
-                if DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled:
+                if scalp_cfg.multi_asset_scan_enabled:
                     try:
                         from app.domain.institutional_trading.ai_scalping.portfolio_risk import (  # noqa: E501
                             aggregate_portfolio_risk,
@@ -849,7 +863,7 @@ class InstitutionalDecisionPipeline:
 
                         risk_snap = aggregate_portfolio_risk(
                             account,
-                            config=DEFAULT_AI_SCALPING_CONFIG,
+                            config=scalp_cfg,
                             ite_config=cfg,
                         )
                         blocked, block_why = check_portfolio_limits(

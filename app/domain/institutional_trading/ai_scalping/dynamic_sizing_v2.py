@@ -55,6 +55,14 @@ _QUALITY_RISK_SCALE: dict[QualityBand, Decimal] = {
     "exceptional": Decimal("1.00"),  # max configured only — never above ceiling
 }
 
+# ULTRA_AGGRESSIVE: full configured max only for exceptional; others reduce
+_ULTRA_QUALITY_RISK_SCALE: dict[QualityBand, Decimal] = {
+    "weak": Decimal("0"),
+    "average": Decimal("0.35"),
+    "high": Decimal("0.65"),
+    "exceptional": Decimal("1.00"),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class EquityTierPreference:
@@ -106,6 +114,9 @@ class DynamicSizingDecision:
     spread_score: int | None = None
     trend_confidence: int | None = None
     rejection_reason: str | None = None
+    risk_reduction_reason: str | None = None
+    target_lot: Decimal | None = None
+    risk_profile_id: str | None = None
     extras: dict[str, object] = field(default_factory=dict)
 
     def to_lot_result(self) -> LotSizingResult:
@@ -143,7 +154,11 @@ class DynamicSizingDecision:
             "stop_loss_distance": str(self.stop_loss_distance),
             "risk_pct": str(self.risk_pct),
             "risk_percentage": str(self.risk_pct),
+            "effective_risk_pct": str(self.risk_pct),
             "configured_max_risk_pct": str(self.configured_max_risk_pct),
+            "risk_reduction_reason": self.risk_reduction_reason,
+            "target_lot": str(self.target_lot) if self.target_lot is not None else None,
+            "risk_profile_id": self.risk_profile_id,
             "quality_score": self.quality_score,
             "quality_band": self.quality_band,
             "quality_risk_scale": str(self.quality_risk_scale),
@@ -293,6 +308,8 @@ def calculate_dynamic_lots_v2(
     liquidity_score: int | None = None,
     spread_score: int | None = None,
     trend_confidence: int | None = None,
+    mtf_score: int | None = None,
+    news_risk_multiplier: Decimal | None = None,
     quality_reject: bool = False,
     previous_final_lot: Decimal | None = None,
     max_margin_usage_pct: Decimal = Decimal("30"),
@@ -302,13 +319,19 @@ def calculate_dynamic_lots_v2(
     log: bool = True,
 ) -> DynamicSizingDecision:
     """Institutional dynamic lot sizing — quality-weighted, equity-tier aware."""
+    from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+        max_risk_ceiling_for_profile,
+        normalize_risk_profile_id,
+    )
+
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    profile_id = normalize_risk_profile_id(getattr(cfg, "risk_profile_id", "STANDARD"))
     bal = balance if balance is not None and balance > 0 else equity
     configured_max = (
         risk_pct if risk_pct is not None and risk_pct > 0 else cfg.risk_per_trade_pct
     )
-    # Never exceed configured ceiling (also respect config hard lock 0.75)
-    hard_ceiling = min(configured_max, Decimal("0.75"))
+    # Profile-aware ceiling — never exceed profile absolute max
+    hard_ceiling = min(configured_max, max_risk_ceiling_for_profile(profile_id))
     if configured_max > hard_ceiling:
         configured_max = hard_ceiling
 
@@ -327,6 +350,7 @@ def calculate_dynamic_lots_v2(
         else CONTRACT_SIZE
     )
     tier = interpolate_equity_tier(equity)
+    target_lot = (tier.preferred_lot_lo + tier.preferred_lot_hi) / Decimal("2")
 
     try:
         min_q = int(cfg.normal_vol.quality)
@@ -341,7 +365,13 @@ def calculate_dynamic_lots_v2(
         min_quality=min_q,
         min_confidence=min_c,
     )
-    q_scale = _QUALITY_RISK_SCALE[band]
+    scale_table = (
+        _ULTRA_QUALITY_RISK_SCALE
+        if profile_id == "ULTRA_AGGRESSIVE"
+        else _QUALITY_RISK_SCALE
+    )
+    q_scale = scale_table[band]
+    reduction_reasons: list[str] = []
 
     def _reject(
         method: str,
@@ -380,6 +410,11 @@ def calculate_dynamic_lots_v2(
             spread_score=spread_score,
             trend_confidence=trend_confidence or confidence,
             rejection_reason=reason,
+            risk_reduction_reason=(
+                "; ".join(reduction_reasons) if reduction_reasons else None
+            ),
+            target_lot=target_lot,
+            risk_profile_id=profile_id,
         )
         if log:
             logger.warning(
@@ -405,27 +440,64 @@ def calculate_dynamic_lots_v2(
             risk=Decimal("0"),
         )
 
+    if band != "exceptional":
+        reduction_reasons.append(f"quality_band={band}")
+
     # Soft quality scales on liquidity / spread / trend (reduce only)
     soft_scale = Decimal("1")
-    if liquidity_score is not None:
-        if liquidity_score < 50:
-            soft_scale *= Decimal("0.70")
-        elif liquidity_score < 70:
-            soft_scale *= Decimal("0.85")
-    if spread_score is not None:
-        if spread_score < 40:
-            soft_scale *= Decimal("0.65")
-        elif spread_score < 70:
-            soft_scale *= Decimal("0.85")
+    if liquidity_score is None:
+        soft_scale *= Decimal("0.90")
+        reduction_reasons.append("liquidity_unknown")
+    elif liquidity_score < 50:
+        soft_scale *= Decimal("0.70")
+        reduction_reasons.append(f"liquidity_weak={liquidity_score}")
+    elif liquidity_score < 70:
+        soft_scale *= Decimal("0.85")
+        reduction_reasons.append(f"liquidity_soft={liquidity_score}")
+    if spread_score is None:
+        soft_scale *= Decimal("0.90")
+        reduction_reasons.append("spread_unknown")
+    elif spread_score < 40:
+        soft_scale *= Decimal("0.65")
+        reduction_reasons.append(f"spread_weak={spread_score}")
+    elif spread_score < 70:
+        soft_scale *= Decimal("0.85")
+        reduction_reasons.append(f"spread_soft={spread_score}")
     trend_c = trend_confidence if trend_confidence is not None else confidence
     if trend_c is not None:
         if trend_c < 55:
             soft_scale *= Decimal("0.75")
+            reduction_reasons.append(f"trend_weak={trend_c}")
         elif trend_c < 70:
             soft_scale *= Decimal("0.90")
+            reduction_reasons.append(f"trend_soft={trend_c}")
     soft_scale = _clamp01(soft_scale)
 
-    base_risk = (configured_max * q_scale * soft_scale).quantize(Decimal("0.0001"))
+    # MTF alignment — full configured max requires complete alignment
+    if mtf_score is None:
+        soft_scale *= Decimal("0.85")
+        reduction_reasons.append("mtf_unknown")
+        soft_scale = _clamp01(soft_scale)
+    elif mtf_score < 70:
+        soft_scale *= Decimal("0.70")
+        reduction_reasons.append(f"mtf_incomplete={mtf_score}")
+        soft_scale = _clamp01(soft_scale)
+    elif profile_id == "ULTRA_AGGRESSIVE" and mtf_score < 85:
+        # Strong but incomplete for full ULTRA allocation
+        soft_scale *= Decimal("0.90")
+        reduction_reasons.append(f"mtf_partial={mtf_score}")
+        soft_scale = _clamp01(soft_scale)
+
+    # News — medium-risk multiplier reduces; never increases
+    news_mult = Decimal("1")
+    if news_risk_multiplier is not None:
+        news_mult = min(Decimal("1"), max(Decimal("0"), news_risk_multiplier))
+        if news_mult < 1:
+            reduction_reasons.append(f"news_risk_mult={news_mult}")
+
+    base_risk = (configured_max * q_scale * soft_scale * news_mult).quantize(
+        Decimal("0.0001")
+    )
 
     # Daily / portfolio exposure remaining — reduce only
     max_daily = cfg.max_daily_exposure_pct
@@ -437,29 +509,35 @@ def calculate_dynamic_lots_v2(
         )
     remaining = max_daily - daily_exposure_used_pct
     if remaining < base_risk:
+        reduction_reasons.append(f"portfolio_remaining={remaining}<{base_risk}")
         base_risk = max(Decimal("0"), remaining)
 
     if portfolio_exposure_pct is not None and portfolio_exposure_pct >= max_daily:
         return _reject(
             "portfolio_exposure_cap",
-            (f"Portfolio exposure {portfolio_exposure_pct}% " f"at max {max_daily}%"),
+            (f"Portfolio exposure {portfolio_exposure_pct}% at max {max_daily}%"),
             risk=base_risk,
         )
 
     sym_cap = (
         max_symbol_exposure_pct
         if max_symbol_exposure_pct is not None
-        else configured_max * Decimal("2")
+        else getattr(cfg, "max_symbol_exposure_pct", configured_max * Decimal("2"))
     )
     if symbol_open_risk_pct is not None and symbol_open_risk_pct >= sym_cap > 0:
         return _reject(
             "symbol_exposure_cap",
-            (f"Symbol exposure {symbol_open_risk_pct}% " f"at max {sym_cap}%"),
+            (f"Symbol exposure {symbol_open_risk_pct}% at max {sym_cap}%"),
             risk=base_risk,
         )
+    if symbol_open_risk_pct is not None and sym_cap > 0:
+        sym_remaining = sym_cap - symbol_open_risk_pct
+        if sym_remaining < base_risk:
+            reduction_reasons.append(f"symbol_remaining={sym_remaining}<{base_risk}")
+            base_risk = max(Decimal("0"), sym_remaining)
 
     vol_scale = Decimal("1")
-    method_suffix = "+v2"
+    method_suffix = f"+v2+{profile_id.lower()}"
     dist = stop_distance
     if dist is None or dist <= 0:
         if atr is not None and atr > 0:
@@ -475,6 +553,7 @@ def calculate_dynamic_lots_v2(
         if atr >= dist * Decimal("1.5"):
             vol_scale = min(Decimal("1"), cfg.high_vol_risk_scale)
             method_suffix += "+high_vol_scale"
+            reduction_reasons.append(f"high_vol_scale={vol_scale}")
         elif atr <= dist * Decimal("0.5"):
             vol_scale = min(Decimal("1"), cfg.low_vol_risk_scale)
             method_suffix += "+low_vol_scale"
@@ -485,10 +564,22 @@ def calculate_dynamic_lots_v2(
         if sess < 1:
             base_risk = (base_risk * sess).quantize(Decimal("0.0001"))
             method_suffix += "+session_risk_scale"
+            reduction_reasons.append(f"session_risk_mult={sess}")
 
     # Absolute ceiling — never exceed configured max
     if base_risk > configured_max:
         base_risk = configured_max
+
+    # Full configured max only when exceptional + no reductions
+    if (
+        profile_id == "ULTRA_AGGRESSIVE"
+        and band == "exceptional"
+        and base_risk >= configured_max
+        and not reduction_reasons
+    ):
+        method_suffix += "+full_max_risk"
+    elif base_risk < configured_max and band == "exceptional":
+        method_suffix += "+reduced_from_max"
 
     if equity <= 0 or base_risk <= 0 or cs <= 0:
         return _reject(
@@ -649,12 +740,30 @@ def calculate_dynamic_lots_v2(
         spread_score=spread_score,
         trend_confidence=trend_confidence or confidence,
         rejection_reason=None,
+        risk_reduction_reason=(
+            "; ".join(reduction_reasons) if reduction_reasons else None
+        ),
+        target_lot=target_lot,
+        risk_profile_id=profile_id,
         extras={
             "soft_scale": str(soft_scale),
             "preferred_lot_lo": str(tier.preferred_lot_lo),
             "preferred_lot_hi": str(tier.preferred_lot_hi),
             "volume_min_default": str(VOLUME_MIN),
             "volume_step_default": str(VOLUME_STEP),
+            "configured_max_risk_pct": str(configured_max),
+            "effective_risk_pct": str(base_risk),
+            "risk_reduction_reason": (
+                "; ".join(reduction_reasons) if reduction_reasons else None
+            ),
+            "target_lot": str(target_lot),
+            "calculated_lot": str(raw),
+            "final_lot": str(final),
+            "ai_score": confidence if confidence is not None else trend_confidence,
+            "mtf_score": mtf_score,
+            "news_risk_multiplier": (
+                str(news_mult) if news_risk_multiplier is not None else None
+            ),
         },
     )
     if log:

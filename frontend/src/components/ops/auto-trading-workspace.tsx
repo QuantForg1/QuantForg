@@ -198,6 +198,8 @@ export function AutoTradingWorkspace() {
   const maxOpen = num(policy.max_open_positions, 1);
   const tradingMode = str(policy.trading_mode, "swing").toLowerCase();
   const compoundingEnabled = Boolean(policy.compounding_enabled);
+  const riskProfileId = str(policy.risk_profile_id, "STANDARD").toUpperCase();
+  const ultraAggressive = riskProfileId === "ULTRA_AGGRESSIVE";
   const aiScalping = asRecord(asRecord(autoQ.data).ai_scalping);
   const aiScore = asRecord(aiScalping.ai_score);
   const gateStatus = str(asRecord(autoQ.data).status, "—");
@@ -381,6 +383,7 @@ export function AutoTradingWorkspace() {
         news_filter_enabled: Boolean(policy.news_filter_enabled),
         trading_mode: tradingMode,
         compounding_enabled: compoundingEnabled,
+        risk_profile_id: riskProfileId,
       }),
     onSuccess: () => {
       toast.success("Auto Trading state updated");
@@ -413,6 +416,7 @@ export function AutoTradingWorkspace() {
           : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
         news_filter_enabled: Boolean(policy.news_filter_enabled),
         compounding_enabled: compoundingEnabled,
+        risk_profile_id: riskProfileId,
         run_state: runState === "off" ? undefined : runState,
         enabled: runState === "running" || runState === "paused" ? true : undefined,
       }),
@@ -446,6 +450,7 @@ export function AutoTradingWorkspace() {
           ? asList(policy.allowed_sessions).map(String)
           : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
         news_filter_enabled: Boolean(policy.news_filter_enabled),
+        risk_profile_id: riskProfileId,
       }),
     onSuccess: (_d, on) => {
       toast.success(on ? "Compounding Mode on" : "Compounding Mode off");
@@ -453,6 +458,38 @@ export function AutoTradingWorkspace() {
     },
     onError: (e) =>
       toast.error(e instanceof ApiError ? e.message : "Failed to update compounding"),
+  });
+
+  const setRiskProfileMut = useMutation({
+    mutationFn: (profile: "STANDARD" | "ULTRA_AGGRESSIVE") =>
+      iteOpsApi.updateAutoTrading({
+        reason: `operator set risk_profile_id=${profile}`,
+        confirmed: true,
+        risk_profile_id: profile,
+        trading_mode: tradingMode === "swing" ? "scalping" : tradingMode,
+        compounding_enabled: compoundingEnabled,
+        max_daily_loss_pct: String(maxDailyLossPct || 3),
+        max_spread: str(policy.max_spread, "2.00"),
+        allowed_symbols: asList(policy.allowed_symbols).map(String).length
+          ? asList(policy.allowed_symbols).map(String)
+          : ["XAUUSD"],
+        allowed_sessions: asList(policy.allowed_sessions).map(String).length
+          ? asList(policy.allowed_sessions).map(String)
+          : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
+        news_filter_enabled: Boolean(policy.news_filter_enabled),
+        run_state: runState === "off" ? undefined : runState,
+        enabled: runState === "running" || runState === "paused" ? true : undefined,
+      }),
+    onSuccess: (_d, profile) => {
+      toast.success(
+        profile === "ULTRA_AGGRESSIVE"
+          ? "ULTRA_AGGRESSIVE risk profile active (8% max / quality-gated)"
+          : "STANDARD risk profile active",
+      );
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof ApiError ? e.message : "Failed to set risk profile"),
   });
   const emergencyMut = useMutation({
     mutationFn: () =>
@@ -1123,8 +1160,20 @@ export function AutoTradingWorkspace() {
           >
             Compounding {compoundingEnabled ? "ON" : "OFF"}
           </Button>
+          <Button
+            size="sm"
+            variant={ultraAggressive ? "default" : "outline"}
+            disabled={setRiskProfileMut.isPending}
+            onClick={() =>
+              setRiskProfileMut.mutate(
+                ultraAggressive ? "STANDARD" : "ULTRA_AGGRESSIVE",
+              )
+            }
+          >
+            ULTRA {ultraAggressive ? "ON" : "OFF"}
+          </Button>
           <span className="font-mono text-[10px] text-[var(--fg-muted)]">
-            Max open {maxOpen} · Risk {riskPerTradePct}%
+            {riskProfileId} · Max open {maxOpen} · Risk {riskPerTradePct}%
             {tradingMode === "alpha"
               ? " · Multi-symbol Alpha"
               : tradingMode === "scalping"

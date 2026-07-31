@@ -78,6 +78,7 @@ class OperationsControlPlane:
     trading_mode: str = "swing"
     compounding_enabled: bool = False
     alpha_engine_enabled: bool = False
+    risk_profile_id: str = "STANDARD"
 
     _lock: RLock = field(default_factory=RLock, repr=False)
     _initialized: bool = field(default=False, repr=False)
@@ -375,6 +376,7 @@ class OperationsControlPlane:
                 trading_mode=self.trading_mode,
                 compounding_enabled=self.compounding_enabled,
                 alpha_engine_enabled=self.alpha_engine_enabled,
+                risk_profile_id=self.risk_profile_id,
             )
 
     def update_auto_trade_controls(
@@ -393,6 +395,7 @@ class OperationsControlPlane:
         trading_mode: str | None = None,
         compounding_enabled: bool | None = None,
         alpha_engine_enabled: bool | None = None,
+        risk_profile_id: str | None = None,
         reason: str,
         now: datetime | None = None,
     ) -> AutoTradePolicy:
@@ -407,13 +410,36 @@ class OperationsControlPlane:
             elif enabled is not None:
                 self.auto_trading_enabled = enabled
                 self.auto_trading_run_state = "running" if enabled else "off"
-            if max_open_positions is not None:
+            profile_changed = False
+            if risk_profile_id is not None:
+                from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+                    ai_scalping_config_for_profile,
+                    normalize_risk_profile_id,
+                )
+
+                pid = normalize_risk_profile_id(risk_profile_id)
+                profile_changed = pid != normalize_risk_profile_id(self.risk_profile_id)
+                self.risk_profile_id = pid
+                if profile_changed:
+                    # Profile switch is authoritative for institutional ceilings.
+                    profile_cfg = ai_scalping_config_for_profile(pid)
+                    self.max_open_trades = int(profile_cfg.max_open_trades)
+                    self.risk_per_trade_pct = profile_cfg.risk_per_trade_pct
+            if max_open_positions is not None and not profile_changed:
                 if max_open_positions < 1:
                     raise ValueError("max_open_positions must be >= 1")
                 self.max_open_trades = max_open_positions
-            if risk_per_trade_pct is not None:
-                if risk_per_trade_pct <= 0 or risk_per_trade_pct > Decimal("5"):
-                    raise ValueError("risk_per_trade_pct must be in (0, 5]")
+            if risk_per_trade_pct is not None and not profile_changed:
+                from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+                    max_risk_ceiling_for_profile,
+                )
+
+                ceiling = max_risk_ceiling_for_profile(self.risk_profile_id)
+                if risk_per_trade_pct <= 0 or risk_per_trade_pct > ceiling:
+                    raise ValueError(
+                        f"risk_per_trade_pct must be in (0, {ceiling}] "
+                        f"for profile {self.risk_profile_id}"
+                    )
                 self.risk_per_trade_pct = risk_per_trade_pct
             if max_daily_loss_pct is not None:
                 if max_daily_loss_pct <= 0 or max_daily_loss_pct > Decimal("20"):
@@ -507,6 +533,7 @@ class OperationsControlPlane:
                 trading_mode=self.trading_mode,
                 compounding_enabled=self.compounding_enabled,
                 alpha_engine_enabled=self.alpha_engine_enabled,
+                risk_profile_id=self.risk_profile_id,
             )
         self.audit.record(
             operator=operator,
@@ -527,6 +554,8 @@ class OperationsControlPlane:
                     "max_open_positions": self.max_open_trades,
                     "alpha_engine_enabled": self.alpha_engine_enabled,
                     "compounding_enabled": self.compounding_enabled,
+                    "risk_profile_id": self.risk_profile_id,
+                    "risk_per_trade_pct": str(self.risk_per_trade_pct),
                 }
             )
         except Exception as exc:
@@ -558,6 +587,7 @@ class OperationsControlPlane:
                 trading_mode=self.trading_mode,
                 compounding_enabled=self.compounding_enabled,
                 alpha_engine_enabled=self.alpha_engine_enabled,
+                risk_profile_id=self.risk_profile_id,
             )
             merged = AutoTradeLiveFacts(
                 gateway_connected=facts.gateway_connected,
@@ -787,6 +817,7 @@ class OperationsControlPlane:
                         "allowed_symbols": list(self.allowed_symbols),
                         "max_spread": str(self.max_spread),
                         "news_filter_enabled": self.news_filter_enabled,
+                        "risk_profile_id": self.risk_profile_id,
                     },
                 },
                 "risk": {
@@ -908,6 +939,59 @@ def get_control_plane() -> OperationsControlPlane:
                 plane.alpha_engine_enabled = bool(state.get("alpha_engine_enabled"))
             if "compounding_enabled" in state:
                 plane.compounding_enabled = bool(state.get("compounding_enabled"))
+            if "risk_profile_id" in state:
+                from app.domain.institutional_trading.ai_scalping.risk_profiles import (
+                    apply_risk_profile,
+                    normalize_risk_profile_id,
+                )
+
+                plane.risk_profile_id = normalize_risk_profile_id(
+                    str(state.get("risk_profile_id") or "STANDARD")
+                )
+                scalp = apply_risk_profile(
+                    plane.risk_profile_id,
+                    compounding_enabled=plane.compounding_enabled,
+                )
+                # Best-effort: keep ITE/RiskEngine ceilings aligned after restart.
+                try:
+                    from app.application.services.ai_scalping_mode import (
+                        apply_trading_mode_to_runtime,
+                    )
+                    from app.application.services.institutional_ite_runtime import (
+                        get_ite_runtime,
+                    )
+
+                    mode = plane.trading_mode
+                    if plane.alpha_engine_enabled:
+                        mode = "alpha"
+                    if mode in {"scalping", "alpha"}:
+                        apply_trading_mode_to_runtime(
+                            get_ite_runtime(), mode=mode, scalp=scalp
+                        )
+                except Exception as profile_exc:
+                    from core.logging import get_logger as _get_logger
+
+                    _get_logger(__name__).warning(
+                        "risk_profile_runtime_hydrate_failed",
+                        error=str(profile_exc),
+                    )
+            if "risk_per_trade_pct" in state:
+                try:
+                    from app.domain.institutional_trading.ai_scalping import (
+                        risk_profiles as _rp,
+                    )
+
+                    rp = Decimal(str(state.get("risk_per_trade_pct")))
+                    ceiling = _rp.max_risk_ceiling_for_profile(plane.risk_profile_id)
+                    if Decimal("0") < rp <= ceiling:
+                        plane.risk_per_trade_pct = rp
+                except Exception as rp_exc:
+                    from core.logging import get_logger as _get_logger
+
+                    _get_logger(__name__).warning(
+                        "risk_per_trade_hydrate_failed",
+                        error=str(rp_exc),
+                    )
             # Railway restart continuity: never strand the desk in PAUSED when
             # launch locks already pass — auto-promote to RUNNING.
             try:
