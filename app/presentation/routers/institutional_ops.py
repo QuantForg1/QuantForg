@@ -826,6 +826,49 @@ def get_production_validation_mode(_user: OperatorUser) -> dict[str, Any]:
     return build_production_validation_dashboard()
 
 
+@router.get("/rc1-production-validation")
+def get_rc1_production_validation(_user: OperatorUser) -> dict[str, Any]:
+    """RC1 Production Validation Live Pilot Dashboard (observe-only).
+
+    Feature flags: PRODUCTION_VALIDATION_MODE, VALIDATION_EXECUTION_MODE.
+    Never modifies strategy, Quality/Confidence floors, weights, or risk.
+    """
+    from app.application.services.rc1_production_validation import (
+        get_rc1_validation_dashboard,
+        get_rc1_validation_status,
+    )
+
+    status = get_rc1_validation_status()
+    dash = get_rc1_validation_dashboard()
+    return {"status": status, "dashboard": dash}
+
+
+@router.get("/rc1-production-validation/trades")
+def list_rc1_production_validation_trades(
+    _user: OperatorUser,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """RC1 trade journal (eligible + rejected)."""
+    from app.application.services.rc1_production_validation import (
+        list_rc1_validation_trades,
+    )
+
+    return list_rc1_validation_trades(limit=max(1, min(int(limit or 50), 500)))
+
+
+@router.post("/rc1-production-validation/run")
+def run_rc1_production_validation(_user: OperatorUser) -> dict[str, Any]:
+    """Run offline RC1 validation pipeline (replay + paper/shadow + report).
+
+    Does not place live broker orders. Does not change strategy or floors.
+    """
+    from app.application.services.rc1_production_validation import run_rc1_validation
+
+    result = run_rc1_validation(write_report=True)
+    # Omit huge markdown from API body; path is enough
+    return {k: v for k, v in result.items() if k != "report_markdown"}
+
+
 @router.get("/noc-command-center")
 def get_noc_command_center(_user: OperatorUser) -> dict[str, Any]:
     """Institutional NOC Command Center — observe-only production telemetry.
