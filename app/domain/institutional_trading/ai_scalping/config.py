@@ -59,7 +59,7 @@ class AiScalpingConfig:
     remain locked to the v6.3 institutional baseline.
     """
 
-    version: str = "ai-scalping-v7.1.0"
+    version: str = "ai-scalping-v7.2.0"
     # Quality-engine baseline identity (unchanged floors from v6.3)
     quality_baseline: str = "ai-scalping-v6.3.0"
     portfolio_version: str = "ai-scalping-v7.1.0"
@@ -89,6 +89,26 @@ class AiScalpingConfig:
     )
     atr_high_pct: Decimal = Decimal("1.50")
     atr_low_pct: Decimal = Decimal("0.40")
+
+    # Volatility Gate v2 — adaptive floors (calibration evidence; never below 0.15)
+    # Standard = legacy atr_low_pct/2; exceptional only when all pillars strong.
+    atr_compression_floor_pct: Decimal = Decimal("0.20")
+    atr_exceptional_floor_pct: Decimal = Decimal("0.15")
+    atr_hard_min_pct: Decimal = Decimal("0.15")
+    vol_exceptional_min_quality: int = 88
+    vol_exceptional_min_confidence: int = 88
+    vol_exceptional_min_structure: int = 80
+    vol_exceptional_min_liquidity: int = 70
+    vol_exceptional_min_momentum: int = 70
+    vol_exceptional_min_mtf: int = 80
+    vol_exceptional_min_session_stars: int = 4
+    vol_exceptional_min_spread_score: int = 75
+    vol_exceptional_regimes: tuple[str, ...] = (
+        "strong_trend",
+        "weak_trend",
+        "breakout",
+        "expansion",
+    )
 
     # Quality gates (all required for a take)
     require_strong_structure: bool = True
@@ -262,6 +282,20 @@ class AiScalpingConfig:
                 "max_hold_minutes_if_confident",
                 self.absolute_max_hold_minutes,
             )
+        # Volatility Gate v2 — never allow floors to invert or go below hard min
+        hard = self.atr_hard_min_pct
+        exc = self.atr_exceptional_floor_pct
+        std = self.atr_compression_floor_pct
+        if exc < hard:
+            object.__setattr__(self, "atr_exceptional_floor_pct", hard)
+            exc = hard
+        if std < exc:
+            object.__setattr__(self, "atr_compression_floor_pct", exc)
+        # Exceptional path never below institutional 80 floors
+        if self.vol_exceptional_min_quality < 80:
+            object.__setattr__(self, "vol_exceptional_min_quality", 80)
+        if self.vol_exceptional_min_confidence < 80:
+            object.__setattr__(self, "vol_exceptional_min_confidence", 80)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -296,6 +330,20 @@ class AiScalpingConfig:
                 },
                 "atr_high_pct": str(self.atr_high_pct),
                 "atr_low_pct": str(self.atr_low_pct),
+            },
+            "volatility_gate_v2": {
+                "atr_compression_floor_pct": str(self.atr_compression_floor_pct),
+                "atr_exceptional_floor_pct": str(self.atr_exceptional_floor_pct),
+                "atr_hard_min_pct": str(self.atr_hard_min_pct),
+                "exceptional_min_quality": self.vol_exceptional_min_quality,
+                "exceptional_min_confidence": self.vol_exceptional_min_confidence,
+                "exceptional_min_structure": self.vol_exceptional_min_structure,
+                "exceptional_min_liquidity": self.vol_exceptional_min_liquidity,
+                "exceptional_min_momentum": self.vol_exceptional_min_momentum,
+                "exceptional_min_mtf": self.vol_exceptional_min_mtf,
+                "exceptional_min_session_stars": self.vol_exceptional_min_session_stars,
+                "exceptional_min_spread_score": self.vol_exceptional_min_spread_score,
+                "exceptional_regimes": list(self.vol_exceptional_regimes),
             },
             "quality_gates": {
                 "require_strong_structure": self.require_strong_structure,

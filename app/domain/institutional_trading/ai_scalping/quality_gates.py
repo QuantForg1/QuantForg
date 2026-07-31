@@ -12,6 +12,7 @@ from app.domain.institutional_trading.ai_scalping.adaptive_thresholds import (
 from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
     AiScalpingConfig,
+    MarketRegimeLabel,
 )
 from app.domain.institutional_trading.ai_scalping.direction import DirectionDecision
 from app.domain.institutional_trading.ai_scalping.pa_confluence import (
@@ -23,6 +24,10 @@ from app.domain.institutional_trading.ai_scalping.session_intelligence import (
 from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     SpreadAssessment,
 )
+from app.domain.institutional_trading.ai_scalping.volatility_gate_v2 import (
+    VolatilityDecision,
+    evaluate_volatility_gate_v2,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,12 +35,14 @@ class QualityGateResult:
     passed: bool
     rejects: tuple[str, ...]
     checks: dict[str, bool]
+    volatility_decision: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "passed": self.passed,
             "rejects": list(self.rejects),
             "checks": dict(self.checks),
+            "volatility_decision": dict(self.volatility_decision or {}),
         }
 
 
@@ -55,6 +62,8 @@ def evaluate_quality_gates(
     config: AiScalpingConfig | None = None,
     pa_confluence: PaConfluenceResult | None = None,
     min_expected_rr_override: Decimal | None = None,
+    mtf_alignment: int = 0,
+    market_regime: MarketRegimeLabel | str | None = None,
 ) -> QualityGateResult:
     """Trade only when structure, liquidity, momentum, spread, vol, session align."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -87,29 +96,38 @@ def evaluate_quality_gates(
     if cfg.require_tight_spread and not spread_ok:
         rejects.append(spread.reason or "Spread reject")
 
-    # Valid volatility — reject dead / extreme without expansion context
-    vol_ok = True
-    if atr_pct is not None:
-        if atr_pct <= 0:
-            vol_ok = False
-            rejects.append("Invalid volatility (ATR% ≤ 0)")
-        elif thresholds.band == "low" and atr_pct < cfg.atr_low_pct / Decimal("2"):
-            vol_ok = False
-            rejects.append(f"Volatility too compressed ATR%={atr_pct}")
+    direction_clear = direction.direction.value in {"BUY", "SELL"}
+    pa_passed = True
+    if pa_confluence is not None:
+        pa_passed = pa_confluence.passed
+
+    vol_decision: VolatilityDecision = evaluate_volatility_gate_v2(
+        atr_pct=atr_pct,
+        thresholds=thresholds,
+        trade_quality=trade_quality,
+        confidence=confidence,
+        structure_score=structure_score,
+        liquidity=liquidity,
+        momentum=momentum,
+        mtf_alignment=mtf_alignment,
+        session=session,
+        spread=spread,
+        market_regime=market_regime,
+        config=cfg,
+        pa_passed=pa_passed,
+        direction_clear=direction_clear,
+    )
+    vol_ok = vol_decision.passed
     checks["valid_volatility"] = vol_ok
-    if (
-        cfg.require_valid_volatility
-        and not vol_ok
-        and "Invalid" not in " ".join(rejects)
-    ):
-        pass  # already appended
+    if cfg.require_valid_volatility and not vol_ok:
+        rejects.append(vol_decision.reason)
 
     session_ok = session.stars >= cfg.min_session_stars
     checks["session_quality"] = session_ok
     if cfg.require_session_quality and not session_ok:
         rejects.append(f"Session quality {session.stars}★ < {cfg.min_session_stars}★")
 
-    checks["clear_direction"] = direction.direction.value in {"BUY", "SELL"}
+    checks["clear_direction"] = direction_clear
     if not checks["clear_direction"]:
         rejects.append("No clear BUY/SELL edge (balanced scores → reject)")
 
@@ -153,4 +171,5 @@ def evaluate_quality_gates(
         passed=len(rejects) == 0,
         rejects=tuple(rejects),
         checks=checks,
+        volatility_decision=vol_decision.to_dict(),
     )

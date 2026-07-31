@@ -84,6 +84,7 @@ class AiScalpingScore:
     setup_family: str | None = None
     setup_scan: dict[str, object] | None = None
     adaptive_cooldown: dict[str, object] | None = None
+    volatility_decision: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -119,6 +120,7 @@ class AiScalpingScore:
             "setup_family": self.setup_family,
             "setup_scan": dict(self.setup_scan or {}),
             "adaptive_cooldown": dict(self.adaptive_cooldown or {}),
+            "volatility_decision": dict(self.volatility_decision or {}),
             "never_prefer_buy_only": True,
         }
 
@@ -413,7 +415,13 @@ def score_scalping_setup(
         config=cfg,
         pa_confluence=pa,
         min_expected_rr_override=effective_min_rr,
+        mtf_alignment=int(trend.alignment_score),
+        market_regime=regime.regime,
     )
+    if gates.volatility_decision:
+        vol_reason = str(gates.volatility_decision.get("reason") or "").strip()
+        if vol_reason:
+            reasons.append(vol_reason)
 
     reject_list: list[str] = list(gates.rejects)
     # Setup scan ranks opportunities — absence does not poison global quality gates.
@@ -493,4 +501,5 @@ def score_scalping_setup(
         setup_family=setup_family,
         setup_scan=setup_scan.to_dict() if setup_scan else None,
         adaptive_cooldown=cooldown_eval.to_dict(),
+        volatility_decision=gates.volatility_decision,
     )

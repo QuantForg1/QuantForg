@@ -137,6 +137,11 @@ from app.domain.institutional_trading.ai_scalping.sizing import (
     LotSizingResult,
     calculate_scalping_lots,
 )
+from app.domain.institutional_trading.ai_scalping.volatility_gate_v2 import (
+    VolatilityDecision,
+    evaluate_volatility_gate_v1_compat,
+    evaluate_volatility_gate_v2,
+)
 from app.domain.institutional_trading.ai_scalping.slippage_protection import (
     SlippageAssessment,
     measure_slippage,
@@ -203,6 +208,7 @@ __all__ = [
     "StructureTargets",
     "SymbolExecutionState",
     "SymbolStateBook",
+    "VolatilityDecision",
     "aggregate_portfolio_risk",
     "apply_thresholds_to_ite",
     "assess_session",
@@ -226,6 +232,8 @@ __all__ = [
     "evaluate_pa_confluence",
     "evaluate_portfolio_allocation",
     "evaluate_quality_gates",
+    "evaluate_volatility_gate_v1_compat",
+    "evaluate_volatility_gate_v2",
     "get_adaptive_cooldown_gate",
     "get_broker_profile_store",
     "get_continuous_operation_controller",
