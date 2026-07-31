@@ -1,0 +1,34 @@
+{
+  "collected_at": "2026-07-31T12:40:46.681369Z",
+  "environment_list": {
+    "cmd": "railway environment list --json",
+    "rc": 0,
+    "stdout": "{\n  \"environments\": [\n    {\n      \"id\": \"cb96aa83-7ace-470a-9e98-d52a1634a446\",\n      \"name\": \"production\",\n      \"isEphemeral\": false,\n      \"isLinked\": true,\n      \"restricted\": false,\n      \"createdAt\": \"2026-07-12T20:14:21.366+00:00\",\n      \"updatedAt\": \"2026-07-12T20:14:28.308+00:00\"\n    }\n  ]\n}\n",
+    "stderr": ""
+  },
+  "create_staging_attempt": {
+    "cmd": "printf 'staging\\n' | railway environment create staging 2>&1 || true",
+    "rc": 0,
+    "stdout": "> Environment name staging\nAn environment with that name already exists\n",
+    "stderr": ""
+  },
+  "status": {
+    "cmd": "railway status",
+    "rc": 0,
+    "stdout": "\nWorkspace:       Quant Forg\n\nProject:         QuantForg\nProject ID:      76f9026d-362f-4e16-961d-44e7a090459a\n\nEnvironment:     production\nEnvironment ID:  cb96aa83-7ace-470a-9e98-d52a1634a446\n\nLinked service\n\n    Service:         None\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nAll resources\n\n    Services\n      - QuantForg: \u25cf Online \u00b7 https://quantforg-production.up.railway.app\n\n",
+    "stderr": ""
+  },
+  "staging_url_probe": {
+    "cmd": "curl -sS -o /tmp/stg2.txt -w '%{http_code}' --max-time 10 https://quantforg-staging.up.railway.app/health; echo; cat /tmp/stg2.txt",
+    "rc": 0,
+    "stdout": "404\n{\"status\":\"error\",\"code\":404,\"message\":\"Application not found\",\"request_id\":\"LLqv9rQfRF6-zQkZLPU1MQ\"}",
+    "stderr": ""
+  },
+  "notes": [
+    "CLI reports 'An environment with that name already exists' for staging",
+    "environment list --json only returns production",
+    "staging URL returns Application not found",
+    "GraphQL project query Not Authorized with current RAILWAY_TOKEN",
+    "No production deploy performed"
+  ]
+}
