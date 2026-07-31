@@ -29,10 +29,10 @@ EXPECTED_UNIVERSE = {
     "EURUSD",
     "GBPUSD",
     "USDJPY",
+    "AUDUSD",
     "NAS100",
     "US30",
     "BTCUSD",
-    "ETHUSD",
 }
 
 
@@ -106,7 +106,7 @@ def test_rank_all_symbols_execute_best_only() -> None:
             _opp("XAUUSD", confidence=85, quality=86),
             _opp("NAS100", confidence=93, quality=94, direction="SELL"),
             _opp("BTCUSD", confidence=88, quality=89),
-            _opp("ETHUSD", confidence=70, quality=72),
+            _opp("AUDUSD", confidence=70, quality=72),
         ],
         state_book=SymbolStateBook(),
     )
@@ -186,9 +186,9 @@ def test_run_multi_asset_scan_facade() -> None:
     payload = run_multi_asset_scan(
         [
             _opp("XAUUSD", reject=True),
-            _opp("ETHUSD", confidence=92, quality=93, direction="BUY"),
+            _opp("AUDUSD", confidence=92, quality=93, direction="BUY"),
         ]
     )
-    assert payload["best"]["symbol"] == "ETHUSD"
+    assert payload["best"]["symbol"] == "AUDUSD"
     assert payload["scheduler"]["mode"] == "simultaneous"
-    assert "ETHUSD" in payload["symbol_state"]["symbols"]
+    assert "AUDUSD" in payload["symbol_state"]["symbols"]

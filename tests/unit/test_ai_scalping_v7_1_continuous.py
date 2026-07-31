@@ -31,7 +31,8 @@ SECRET = "x" * 32 + "quantforg-test-secret-key!!"
 @pytest.mark.unit
 def test_v71_config_preserves_quality_risk() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.version.startswith("ai-scalping-v7.1")
+    assert cfg.version.startswith("ai-scalping-v7")
+    assert cfg.continuous_version.startswith("ai-scalping-v7.1")
     assert cfg.quality_baseline == "ai-scalping-v6.3.0"
     assert cfg.normal_vol.confidence == 82
     assert cfg.normal_vol.quality == 82

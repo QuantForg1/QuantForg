@@ -1,0 +1,352 @@
+"""Institutional Multi-Asset Scanner — full AI score per symbol, best-only handoff.
+
+Fetches market data and runs the existing AI scalping score independently for
+each watchlist symbol. Ranks via the existing portfolio scanner. Only the best
+eligible opportunity is returned for the existing Risk → PRE → OMS → MT5 path.
+
+Does not lower quality/confidence floors. Does not force BUY/SELL.
+Does not bypass AI, Risk, PRE, OMS, or MT5.
+"""
+
+from __future__ import annotations
+
+import threading
+from datetime import UTC, datetime
+from typing import Any
+
+from app.application.services.ai_scalping_portfolio import run_multi_asset_scan
+from app.application.services.ite_cycle_market_context import (
+    build_ite_cycle_market_context,
+)
+from app.domain.institutional_trading.ai_scalping.config import (
+    DEFAULT_AI_SCALPING_CONFIG,
+    DEFAULT_SCALPING_UNIVERSE,
+    AiScalpingConfig,
+)
+from app.domain.institutional_trading.ai_scalping.scoring import score_scalping_setup
+from app.domain.institutional_trading.decision_models import AccountRiskState
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
+_LOCK = threading.RLock()
+_LAST_SCAN: dict[str, Any] | None = None
+
+
+def get_last_multi_asset_scan() -> dict[str, Any] | None:
+    """Observe-only snapshot of the most recent institutional multi-asset scan."""
+    with _LOCK:
+        return dict(_LAST_SCAN) if isinstance(_LAST_SCAN, dict) else None
+
+
+def _store_last_scan(payload: dict[str, Any]) -> None:
+    global _LAST_SCAN
+    with _LOCK:
+        _LAST_SCAN = dict(payload)
+
+
+def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a score dict into NOC multi-asset table columns."""
+    factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
+    vol_dec = (
+        score.get("volatility_decision")
+        if isinstance(score.get("volatility_decision"), dict)
+        else {}
+    )
+    quality = int(score.get("trade_quality") or score.get("quality") or 0)
+    confidence = int(score.get("ai_confidence") or score.get("confidence") or 0)
+    reject = bool(score.get("reject"))
+    direction = str(score.get("direction") or "NONE").upper()
+    decision = "NO_TRADE" if reject or direction in {"", "NONE"} else direction
+    mtf = score.get("mtf_alignment")
+    if mtf is None:
+        mtf = factors.get("mtf") or factors.get("h1_bias")
+    liquidity = score.get("liquidity")
+    if liquidity is None:
+        liquidity = factors.get("liquidity_sweep") or factors.get("liquidity")
+    volatility = None
+    if vol_dec:
+        volatility = vol_dec.get("band") or vol_dec.get("reason") or vol_dec.get("passed")
+    if volatility is None:
+        volatility = score.get("market_regime") or factors.get("volatility")
+    blocker = None
+    if reject:
+        blocker = score.get("reject_reason") or score.get("blocking_gate")
+        reasons = score.get("reject_reasons") or score.get("failed_gates")
+        if not blocker and isinstance(reasons, list) and reasons:
+            blocker = str(reasons[0])
+    return {
+        "symbol": str(score.get("symbol") or "").upper(),
+        "quality": quality,
+        "confidence": confidence,
+        "mtf": mtf,
+        "liquidity": liquidity,
+        "volatility": volatility,
+        "decision": decision,
+        "direction": direction,
+        "blocking_gate": blocker,
+        "reject": reject,
+        "eligible": (not reject) and direction in {"BUY", "SELL"},
+        "expected_rr": score.get("expected_rr"),
+        "setup_family": score.get("setup_family"),
+        "market_regime": score.get("market_regime") or score.get("regime"),
+        "atr_pct": score.get("atr_pct"),
+        "spread_score": score.get("spread_score"),
+    }
+
+
+def resolve_scan_universe(
+    config: AiScalpingConfig | None = None,
+    *,
+    plane: Any | None = None,
+) -> tuple[str, ...]:
+    """Configurable watchlist — AiScalping universe, optionally intersected by plane."""
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    base = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
+    if plane is None:
+        return base
+    allowed = tuple(
+        str(s).strip().upper()
+        for s in (getattr(plane, "allowed_symbols", ()) or ())
+        if str(s).strip()
+    )
+    if not allowed:
+        return base
+    allowed_set = set(allowed)
+    filtered = tuple(s for s in base if s in allowed_set)
+    return filtered or base
+
+
+async def score_symbol_for_scan(
+    mt5_adapter: Any,
+    symbol: str,
+    *,
+    position_engine: Any | None = None,
+    config: AiScalpingConfig | None = None,
+) -> dict[str, Any]:
+    """Fetch market data + run existing AI score for one symbol (no Risk/OMS)."""
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    code = (symbol or "").strip().upper()
+    if not code:
+        return {
+            "symbol": "",
+            "reject": True,
+            "reject_reason": "empty_symbol",
+            "direction": "NONE",
+            "ai_confidence": 0,
+            "trade_quality": 0,
+        }
+    try:
+        ctx = await build_ite_cycle_market_context(
+            mt5_adapter,
+            symbol=code,
+            position_engine=position_engine,
+        )
+    except Exception as exc:
+        logger.exception("multi_asset_market_context_failed", symbol=code)
+        return {
+            "symbol": code,
+            "reject": True,
+            "reject_reason": f"market_context_error:{type(exc).__name__}",
+            "direction": "NONE",
+            "ai_confidence": 0,
+            "trade_quality": 0,
+        }
+    if not ctx.ok or ctx.snapshot is None or ctx.account is None:
+        return {
+            "symbol": code,
+            "reject": True,
+            "reject_reason": ctx.reason or "market_context_unavailable",
+            "direction": "NONE",
+            "ai_confidence": 0,
+            "trade_quality": 0,
+            "market_context_reason": ctx.reason,
+        }
+    snapshot = ctx.snapshot
+    account: AccountRiskState = ctx.account
+    try:
+        score = score_scalping_setup(
+            snapshot,
+            atr=account.atr,
+            mid=account.mid_price,
+            config=cfg,
+            enforce_adaptive_cooldown=True,
+            symbol=code,
+            opens=tuple(getattr(snapshot, "entry_opens", ()) or ()),
+            highs=tuple(getattr(snapshot, "entry_highs", ()) or ()),
+            lows=tuple(getattr(snapshot, "entry_lows", ()) or ()),
+            closes=tuple(getattr(snapshot, "entry_closes", ()) or ()),
+        )
+        payload = score.to_dict()
+        payload["symbol"] = code
+        payload["mtf_alignment"] = int(
+            getattr(getattr(snapshot, "trend", None), "alignment_score", 0) or 0
+        )
+        return payload
+    except Exception as exc:
+        logger.exception("multi_asset_score_failed", symbol=code)
+        return {
+            "symbol": code,
+            "reject": True,
+            "reject_reason": f"ai_score_error:{type(exc).__name__}",
+            "direction": "NONE",
+            "ai_confidence": 0,
+            "trade_quality": 0,
+        }
+
+
+async def run_institutional_multi_asset_scan(
+    mt5_adapter: Any,
+    *,
+    position_engine: Any | None = None,
+    account: AccountRiskState | None = None,
+    open_positions: int | None = None,
+    config: AiScalpingConfig | None = None,
+    plane: Any | None = None,
+    ite_config: Any | None = None,
+) -> dict[str, Any]:
+    """Scan the full watchlist with the institutional AI engine; rank; pick best.
+
+    Downstream Risk / Dynamic Sizing / PRE / OMS / MT5 are intentionally not
+    invoked here — only the winning symbol is handed to the existing cycle.
+    """
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    universe = resolve_scan_universe(cfg, plane=plane)
+    as_of = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+    if not bool(getattr(cfg, "multi_asset_scan_enabled", True)):
+        payload = {
+            "as_of": as_of,
+            "enabled": False,
+            "universe": list(universe),
+            "rows": [],
+            "noc_rows": [],
+            "ranked": [],
+            "best": None,
+            "best_symbol": None,
+            "eligible_count": 0,
+            "note": "multi_asset_scan_disabled",
+            "version": cfg.version,
+            "forced_trades": False,
+            "governed_by_existing_ai_and_risk": True,
+        }
+        _store_last_scan(payload)
+        return payload
+
+    if mt5_adapter is None:
+        payload = {
+            "as_of": as_of,
+            "enabled": True,
+            "universe": list(universe),
+            "rows": [],
+            "noc_rows": [],
+            "ranked": [],
+            "best": None,
+            "best_symbol": None,
+            "eligible_count": 0,
+            "note": "mt5_adapter_unavailable",
+            "version": cfg.version,
+            "governed_by_existing_ai_and_risk": True,
+        }
+        _store_last_scan(payload)
+        return payload
+
+    scored: list[dict[str, Any]] = []
+    for symbol in universe:
+        row = await score_symbol_for_scan(
+            mt5_adapter,
+            symbol,
+            position_engine=position_engine,
+            config=cfg,
+        )
+        scored.append(row)
+        logger.warning(
+            "multi_asset_symbol_scored",
+            symbol=row.get("symbol"),
+            reject=row.get("reject"),
+            quality=row.get("trade_quality") or row.get("quality"),
+            confidence=row.get("ai_confidence") or row.get("confidence"),
+            direction=row.get("direction"),
+            reason=row.get("reject_reason"),
+        )
+
+    open_n = open_positions
+    if open_n is None and position_engine is not None:
+        try:
+            open_n = len(getattr(position_engine, "_positions", {}) or {})
+        except Exception:
+            open_n = None
+
+    scan = run_multi_asset_scan(
+        scored,
+        account=account,
+        open_positions=open_n,
+        ite_config=ite_config,
+        config=cfg,
+    )
+    best = scan.get("best") if isinstance(scan.get("best"), dict) else None
+    best_symbol = (
+        str(best.get("symbol") or "").upper()
+        if best and not bool(scan.get("blocked_by_portfolio"))
+        else None
+    )
+    if best and bool(scan.get("blocked_by_portfolio")):
+        best_symbol = None
+
+    noc_rows = [_noc_row_from_score(r) for r in scored]
+    # Prefer ranked portfolio rows for richer reject/cooldown annotations
+    ranked = scan.get("ranked") if isinstance(scan.get("ranked"), list) else []
+    by_sym = {
+        str(r.get("symbol") or "").upper(): r
+        for r in (scan.get("rows") or [])
+        if isinstance(r, dict)
+    }
+    enriched_noc: list[dict[str, Any]] = []
+    for base in noc_rows:
+        sym = base["symbol"]
+        port = by_sym.get(sym) or {}
+        enriched = dict(base)
+        if port.get("reject_reason"):
+            enriched["blocking_gate"] = port.get("reject_reason") or enriched.get(
+                "blocking_gate"
+            )
+        if port.get("reject"):
+            enriched["reject"] = True
+            enriched["eligible"] = False
+            enriched["decision"] = "NO_TRADE"
+        enriched_noc.append(enriched)
+
+    payload: dict[str, Any] = {
+        "as_of": as_of,
+        "enabled": True,
+        "universe": list(universe),
+        "scored_count": len(scored),
+        "rows": list(scan.get("rows") or []),
+        "noc_rows": enriched_noc,
+        "ranked": ranked,
+        "best": best,
+        "best_symbol": best_symbol,
+        "eligible_count": len(ranked),
+        "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),
+        "portfolio_block_reason": scan.get("portfolio_block_reason"),
+        "portfolio_risk": scan.get("portfolio_risk"),
+        "scheduler": scan.get("scheduler"),
+        "symbol_state": scan.get("symbol_state"),
+        "note": scan.get("note")
+        or "institutional_multi_asset_scan — best-only handoff to existing cycle",
+        "version": cfg.version,
+        "quality_floor": 80,
+        "confidence_floor": 80,
+        "execute_only_best": True,
+        "forced_trades": False,
+        "governed_by_existing_ai_and_risk": True,
+    }
+    _store_last_scan(payload)
+    logger.warning(
+        "multi_asset_scan_complete",
+        universe=list(universe),
+        best_symbol=best_symbol,
+        eligible_count=payload["eligible_count"],
+        blocked_by_portfolio=payload["blocked_by_portfolio"],
+    )
+    return payload

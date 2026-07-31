@@ -655,10 +655,27 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "reload", False)
             if self.debug:
                 object.__setattr__(self, "debug", False)
-            # Multi-symbol / Alpha explicitly lifts the XAUUSD-only mandate.
-            # Do not overwrite MULTI_SYMBOL_ENABLED=true from the environment.
-            multi = bool(getattr(self, "multi_symbol_enabled", False)) or bool(
-                getattr(self, "institutional_alpha_enabled", False)
+            # Multi-symbol / Alpha / institutional multi-asset scanner lifts
+            # the XAUUSD-only mandate. Do not overwrite MULTI_SYMBOL_ENABLED=true.
+            multi_asset_scan = False
+            try:
+                from app.domain.institutional_trading.ai_scalping.config import (
+                    DEFAULT_AI_SCALPING_CONFIG,
+                )
+
+                multi_asset_scan = bool(
+                    getattr(
+                        DEFAULT_AI_SCALPING_CONFIG,
+                        "multi_asset_scan_enabled",
+                        False,
+                    )
+                )
+            except Exception:
+                multi_asset_scan = False
+            multi = (
+                bool(getattr(self, "multi_symbol_enabled", False))
+                or bool(getattr(self, "institutional_alpha_enabled", False))
+                or multi_asset_scan
             )
             if multi:
                 object.__setattr__(self, "multi_symbol_enabled", True)

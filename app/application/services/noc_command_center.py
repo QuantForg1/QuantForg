@@ -847,6 +847,66 @@ def _production_acceptance_widget() -> dict[str, Any]:
         }
 
 
+def _symbol_scan(*, runtime_scan: dict[str, Any] | None) -> dict[str, Any]:
+    """Per-symbol multi-asset scanner rows for NOC (observe-only)."""
+    scan = runtime_scan if isinstance(runtime_scan, dict) else None
+    if scan is None:
+        try:
+            from app.application.services.institutional_multi_asset_scanner import (
+                get_last_multi_asset_scan,
+            )
+
+            scan = get_last_multi_asset_scan()
+        except Exception:
+            scan = None
+    if not isinstance(scan, dict):
+        try:
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_SCALPING_UNIVERSE,
+            )
+
+            return {
+                "enabled": True,
+                "universe": list(DEFAULT_SCALPING_UNIVERSE),
+                "rows": [],
+                "best_symbol": None,
+                "eligible_count": 0,
+                "as_of": None,
+                "note": "awaiting_first_scan",
+                "governed_by_existing_ai_and_risk": True,
+            }
+        except Exception:
+            return {
+                "enabled": True,
+                "universe": [],
+                "rows": [],
+                "best_symbol": None,
+                "eligible_count": 0,
+                "as_of": None,
+                "note": "scanner_unavailable",
+                "governed_by_existing_ai_and_risk": True,
+            }
+    rows = scan.get("noc_rows")
+    if not isinstance(rows, list):
+        rows = []
+    return {
+        "enabled": bool(scan.get("enabled", True)),
+        "universe": list(scan.get("universe") or []),
+        "rows": rows,
+        "best_symbol": scan.get("best_symbol"),
+        "eligible_count": int(scan.get("eligible_count") or 0),
+        "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),
+        "portfolio_block_reason": scan.get("portfolio_block_reason"),
+        "as_of": scan.get("as_of"),
+        "version": scan.get("version"),
+        "note": scan.get("note"),
+        "quality_floor": scan.get("quality_floor", 80),
+        "confidence_floor": scan.get("confidence_floor", 80),
+        "forced_trades": False,
+        "governed_by_existing_ai_and_risk": True,
+    }
+
+
 def build_noc_command_center() -> dict[str, Any]:
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.production_validation_mode import (
@@ -1017,6 +1077,15 @@ def build_noc_command_center() -> dict[str, Any]:
         )
 
     live_for_broker: dict[str, Any] = live_map if isinstance(live_map, dict) else {}
+    runtime_scan: dict[str, Any] | None = None
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        rt = get_ite_runtime()
+        if rt is not None and hasattr(rt, "last_multi_asset_scan"):
+            runtime_scan = rt.last_multi_asset_scan()
+    except Exception:
+        runtime_scan = None
     payload: dict[str, Any] = {
         "header": header,
         "global_health": _health_cards(
@@ -1029,6 +1098,7 @@ def build_noc_command_center() -> dict[str, Any]:
         "pipeline": pipeline,
         "ai_engine": _ai_engine(diagnostics=diagnostics, pvm=pvm),
         "market_context": _market_context(diagnostics=diagnostics, pvm=pvm, auto=auto),
+        "symbol_scan": _symbol_scan(runtime_scan=runtime_scan),
         "open_positions": _positions_read_only(),
         "closed_trades": _closed_trades_read_only(limit=25),
         "oms": oms,

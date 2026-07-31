@@ -36,10 +36,10 @@ DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
     "EURUSD",
     "GBPUSD",
     "USDJPY",
+    "AUDUSD",
     "NAS100",
     "US30",
     "BTCUSD",
-    "ETHUSD",
 )
 
 
@@ -59,10 +59,10 @@ class AiScalpingConfig:
     remain locked to the v6.3 institutional baseline.
     """
 
-    version: str = "ai-scalping-v7.2.0"
+    version: str = "ai-scalping-v7.3.0"
     # Quality-engine baseline identity (unchanged floors from v6.3)
     quality_baseline: str = "ai-scalping-v6.3.0"
-    portfolio_version: str = "ai-scalping-v7.1.0"
+    portfolio_version: str = "ai-scalping-v7.3.0"
     continuous_version: str = "ai-scalping-v7.1.0"
     symbol: str = GOLD_SYMBOL
     trading_mode: TradingMode = "scalping"

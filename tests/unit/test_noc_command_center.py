@@ -41,6 +41,10 @@ def test_noc_dashboard_shape_and_flags() -> None:
     assert any(n.get("status") == "FAIL" for n in nodes)
     assert any("AI" in str(n.get("stage")) for n in nodes)
     assert "ai_engine" in payload
+    assert "symbol_scan" in payload
+    assert isinstance(payload["symbol_scan"], dict)
+    assert "universe" in payload["symbol_scan"]
+    assert payload["symbol_scan"]["governed_by_existing_ai_and_risk"] is True
     assert "validation_history" in payload
     assert isinstance(payload["alerts"], list)
     assert isinstance(payload["system_metrics"], dict)

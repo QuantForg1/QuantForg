@@ -6,7 +6,7 @@ GOLD_SYMBOL = "XAUUSD"
 
 
 def gold_only_enabled() -> bool:
-    """True unless multi-symbol / Institutional Alpha is explicitly enabled."""
+    """True unless multi-symbol / Alpha / multi-asset scanner is enabled."""
     try:
         from core.config.settings import get_settings
 
@@ -15,6 +15,17 @@ def gold_only_enabled() -> bool:
             return False
         if bool(getattr(settings, "multi_symbol_enabled", False)):
             return False
+        try:
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_AI_SCALPING_CONFIG,
+            )
+
+            if bool(
+                getattr(DEFAULT_AI_SCALPING_CONFIG, "multi_asset_scan_enabled", False)
+            ):
+                return False
+        except Exception:
+            pass
         return bool(getattr(settings, "gold_only_mode", True))
     except Exception:
         return True

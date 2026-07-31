@@ -11,6 +11,7 @@ DEFAULT_ALPHA_UNIVERSE: tuple[str, ...] = (
     "EURUSD",
     "GBPUSD",
     "USDJPY",
+    "AUDUSD",
     "NAS100",
     "US30",
     "BTCUSD",

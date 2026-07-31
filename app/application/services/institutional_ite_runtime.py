@@ -168,6 +168,7 @@ class InstitutionalIteRuntime:
     _last_cycle: ShadowCycleResult | None = field(default=None, repr=False)
     _last_decision: Any | None = field(default=None, repr=False)
     _last_bridge_result: Any | None = field(default=None, repr=False)
+    _last_multi_asset_scan: dict[str, Any] | None = field(default=None, repr=False)
     _manual_execution: bool = field(default=False, repr=False)
     _cycles: int = 0
     user_id: UUID = field(default_factory=uuid4)
@@ -2694,14 +2695,137 @@ class InstitutionalIteRuntime:
             logger.exception("alpha_ranking_rows_failed")
             return []
 
+    async def _multi_asset_preferred_symbol(self) -> str | None:
+        """Institutional Multi-Asset Scanner — full AI score per symbol, best only.
+
+        Does not invoke Risk / PRE / OMS / MT5. Winner is handed to the existing
+        single-symbol cycle which still runs the full institutional pipeline.
+        """
+        try:
+            from app.application.services.institutional_multi_asset_scanner import (
+                run_institutional_multi_asset_scan,
+            )
+            from app.domain.institutional_trading.ai_scalping.config import (
+                DEFAULT_AI_SCALPING_CONFIG,
+            )
+
+            if not bool(
+                getattr(DEFAULT_AI_SCALPING_CONFIG, "multi_asset_scan_enabled", True)
+            ):
+                return None
+            open_n = 0
+            try:
+                open_n = len(
+                    getattr(self.position_management.engine, "_positions", {}) or {}
+                )
+            except Exception:
+                open_n = 0
+            scan = await run_institutional_multi_asset_scan(
+                self.mt5_adapter,
+                position_engine=getattr(self.position_management, "engine", None),
+                open_positions=open_n,
+                plane=self.plane,
+                config=DEFAULT_AI_SCALPING_CONFIG,
+            )
+            with self._lock:
+                self._last_multi_asset_scan = dict(scan) if isinstance(scan, dict) else None
+            best = str(scan.get("best_symbol") or "").upper() or None
+            if best:
+                logger.warning(
+                    "multi_asset_opportunity_selected",
+                    symbol=best,
+                    eligible_count=scan.get("eligible_count"),
+                    blocked_by_portfolio=scan.get("blocked_by_portfolio"),
+                )
+                return best
+            logger.warning(
+                "multi_asset_scan_no_executable_opportunity",
+                eligible_count=scan.get("eligible_count"),
+                blocked_by_portfolio=scan.get("blocked_by_portfolio"),
+                reason=scan.get("portfolio_block_reason") or scan.get("note"),
+            )
+            return None
+        except Exception:
+            logger.exception("multi_asset_preferred_symbol_failed")
+            return None
+
+    def last_multi_asset_scan(self) -> dict[str, Any] | None:
+        with self._lock:
+            return (
+                dict(self._last_multi_asset_scan)
+                if isinstance(self._last_multi_asset_scan, dict)
+                else None
+            )
+
+    async def _pick_executable_symbol_async(self) -> str | None:
+        """Highest-ranked full-mode symbol after institutional multi-asset scan."""
+        from app.application.services.closeonly_symbol_router import (
+            resolve_executable_symbol,
+        )
+        from app.domain.trading.gold_only import GOLD_SYMBOL
+
+        preferred = await self._multi_asset_preferred_symbol()
+        with self._lock:
+            last = (
+                dict(self._last_multi_asset_scan)
+                if isinstance(self._last_multi_asset_scan, dict)
+                else None
+            )
+        scan_complete = bool(
+            last
+            and last.get("enabled")
+            and last.get("as_of")
+            and last.get("note") != "multi_asset_scan_disabled"
+        )
+        if not preferred:
+            if scan_complete:
+                # Full AI universe scanned — do not invent a single-market fallback.
+                logger.warning(
+                    "multi_asset_scan_exhausted_no_fallback",
+                    eligible_count=last.get("eligible_count") if last else 0,
+                    blocked_by_portfolio=(
+                        last.get("blocked_by_portfolio") if last else None
+                    ),
+                )
+                return None
+            preferred = self._alpha_preferred_symbol() or GOLD_SYMBOL
+        symbol, skipped = resolve_executable_symbol(
+            self.mt5_adapter,
+            preferred=preferred,
+            plane=self.plane,
+            alpha_ranking=self._alpha_ranking_rows(),
+        )
+        if skipped:
+            logger.warning(
+                "closeonly_symbols_removed_from_scanner",
+                skipped=skipped,
+                next_opportunity=symbol,
+            )
+        if symbol is None:
+            logger.warning(
+                "no_full_mode_symbol_available",
+                preferred=preferred,
+                skipped=skipped,
+            )
+        else:
+            logger.warning("Submitting Order...", symbol=symbol)
+        return symbol
+
     def _pick_executable_symbol(self) -> str | None:
-        """Highest-ranked symbol with trade_mode=full (skip close-only)."""
+        """Sync fallback — prefer Alpha / gold when async scan is not awaited."""
         from app.application.services.closeonly_symbol_router import (
             resolve_executable_symbol,
         )
         from app.domain.trading.gold_only import GOLD_SYMBOL
 
         preferred = self._alpha_preferred_symbol() or GOLD_SYMBOL
+        # Prefer last multi-asset winner when a scan already completed this cycle.
+        with self._lock:
+            last = self._last_multi_asset_scan
+        if isinstance(last, dict):
+            best = str(last.get("best_symbol") or "").upper()
+            if best:
+                preferred = best
         symbol, skipped = resolve_executable_symbol(
             self.mt5_adapter,
             preferred=preferred,
@@ -2765,7 +2889,7 @@ class InstitutionalIteRuntime:
 
             logger.warning("Force Sync Positions")
             enrich = _enrich_from_adapter(self.probes)
-            symbol = self._pick_executable_symbol()
+            symbol = await self._pick_executable_symbol_async()
             if not symbol:
                 logger.warning(
                     "no_full_mode_symbol_available — manage-only execute-now"
@@ -3075,7 +3199,7 @@ class InstitutionalIteRuntime:
                 except Exception:
                     logger.exception("pvm_scheduler_stage_failed")
 
-                symbol = self._pick_executable_symbol()
+                symbol = await self._pick_executable_symbol_async()
                 manage_only = False
                 if not symbol:
                     # Never force a close-only / market-closed symbol into OMS.

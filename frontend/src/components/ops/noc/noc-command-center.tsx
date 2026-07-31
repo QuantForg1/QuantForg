@@ -214,6 +214,11 @@ export function NocCommandCenter() {
   const nodes = asList(pipeline.nodes);
   const ai = asRecord(data.ai_engine);
   const market = asRecord(data.market_context);
+  const symbolScan = asRecord(data.symbol_scan);
+  const scanRows = Array.isArray(symbolScan.rows) ? symbolScan.rows : [];
+  const scanUniverse = Array.isArray(symbolScan.universe)
+    ? symbolScan.universe.map((s) => String(s))
+    : [];
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -549,6 +554,76 @@ export function NocCommandCenter() {
             )}
           </NocPanel>
         </div>
+
+        {/* §4b Multi-Asset Scanner */}
+        <NocPanel
+          id="noc-symbol-scan"
+          title="4b · Multi-Asset Scanner"
+          action={
+            <Badge tone="neutral">
+              {fmt(symbolScan.best_symbol, "no best")} ·{" "}
+              {fmt(symbolScan.eligible_count, "0")} eligible
+            </Badge>
+          }
+        >
+          <NocRow
+            label="Universe"
+            value={
+              scanUniverse.length > 0 ? scanUniverse.join(" · ") : "—"
+            }
+          />
+          <NocRow
+            label="As of"
+            value={fmt(symbolScan.as_of)}
+          />
+          <NocRow
+            label="Portfolio block"
+            value={
+              symbolScan.blocked_by_portfolio
+                ? fmt(symbolScan.portfolio_block_reason, "blocked")
+                : "none"
+            }
+            tone={symbolScan.blocked_by_portfolio ? "warn" : "ok"}
+          />
+          <NocRow
+            label="Governance"
+            value="Existing AI + Risk / PRE / OMS / MT5 only"
+            tone="ok"
+          />
+          {scanRows.length === 0 ? (
+            <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
+              {fmt(symbolScan.note, "Awaiting first institutional multi-asset scan.")}
+            </p>
+          ) : (
+            <div className="mt-2">
+              <DeskTable
+                columns={[
+                  "Symbol",
+                  "Quality",
+                  "Confidence",
+                  "MTF",
+                  "Liquidity",
+                  "Volatility",
+                  "Decision",
+                  "Blocking Gate",
+                ]}
+                rows={scanRows.map((row) => {
+                  const r = asRecord(row);
+                  return [
+                    fmt(r.symbol),
+                    fmt(r.quality),
+                    fmt(r.confidence),
+                    fmt(r.mtf),
+                    fmt(r.liquidity),
+                    fmt(r.volatility),
+                    fmt(r.decision),
+                    fmt(r.blocking_gate, "—"),
+                  ];
+                })}
+              />
+            </div>
+          )}
+        </NocPanel>
 
         {/* §5 Pipeline */}
         <NocPanel

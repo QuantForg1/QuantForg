@@ -62,12 +62,18 @@ class ExecutionPolicy:
             resolved = cleaned & SYMBOL_WHITELIST if cleaned else SYMBOL_WHITELIST
         else:
             try:
+                from app.domain.institutional_trading.ai_scalping.config import (
+                    DEFAULT_SCALPING_UNIVERSE,
+                )
                 from app.domain.institutional_trading.alpha_engine.config import (
                     DEFAULT_ALPHA_UNIVERSE,
                 )
 
                 universe = (
                     frozenset(
+                        str(s).strip().upper() for s in DEFAULT_SCALPING_UNIVERSE if s
+                    )
+                    | frozenset(
                         str(s).strip().upper() for s in DEFAULT_ALPHA_UNIVERSE if s
                     )
                     | SYMBOL_WHITELIST
@@ -79,6 +85,9 @@ class ExecutionPolicy:
                         "GBPUSD",
                         "USDJPY",
                         "AUDUSD",
+                        "NAS100",
+                        "US30",
+                        "BTCUSD",
                         "USDCAD",
                         "USDCHF",
                         "NZDUSD",
