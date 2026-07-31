@@ -1,18 +1,21 @@
 ---
-description: Design Freeze — RC3 locked Design System (v1.0 baseline)
+description: Design Freeze — RC4 brand baseline (product-owner override of RC3)
 alwaysApply: true
 ---
 
-# QuantForg Design Freeze (post-RC3)
+# QuantForg Design Freeze (post-RC4)
 
-The QuantForg Design System is **LOCKED**. RC3 is the permanent visual baseline.
+The QuantForg Design System is **LOCKED** on the **RC4 brand identity**.
+
+**Product-owner override:** RC3 Design Freeze was explicitly superseded by an authorized RC4 visual rebrand. RC4 (logo-derived charcoal + cyan) is the permanent visual baseline.
 
 ## Forbidden
 
-- Redesign or restyle existing UI
-- New visual patterns, tokens, or component chrome
+- Redesign or restyle existing UI beyond verified RC4 inheritance
+- New visual patterns, tokens, or component chrome unrelated to RC4
 - New navigation models or interaction models
 - Subjective polish / “make it nicer” changes
+- Pure black (`#000`) product backgrounds; neon / hacker / gaming / crypto aesthetics
 
 ## Allowed only
 
@@ -21,11 +24,20 @@ The QuantForg Design System is **LOCKED**. RC3 is the permanent visual baseline.
 - Responsive issues
 - Performance regressions
 - Proven usability issues discovered during testing
+- Inheritance of RC4 tokens / brand mark / charcoal–cyan surfaces on new UI
+
+## Brand baseline (RC4)
+
+- Official mark: `frontend/public/brand/quantforg-mark.png` (+ SVG)
+- Primary: turquoise / cyan (`--accent` ≈ `#00D4E0`)
+- Secondary: white / silver text
+- Neutrals: premium charcoal (`#111827`, `#151B23`, `#1A2330`, `#202938`)
+- Ambient: subtle radial gradients — no noisy grids
 
 ## Inheritance
 
-Every future UI must inherit from the existing Design Bible + RC3 shell language (`docs/design/`, ADR-0022, shared desk chrome, steel tokens, IBM Plex).
+Every future UI must inherit from the Design Bible + **RC4** shell language (`docs/design/`, ADR-0022, shared desk chrome, IBM Plex, RC4 tokens).
 
-Do not modify `components/terminal|book|research|counsel/` unless fixing a verified bug/a11y/responsive/perf issue above.
+Do not modify `components/terminal|book|research|counsel/` unless fixing a verified bug/a11y/responsive/perf issue above (or applying shared RC4 token inheritance only).
 
-Tag target for the frozen frontend baseline: `v1.0.0-frontend`.
+Tag target for the frozen frontend baseline: `v1.0.0-frontend` (visual layer: RC4).

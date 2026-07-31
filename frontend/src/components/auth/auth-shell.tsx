@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export function AuthShell({
   title,
@@ -12,27 +13,23 @@ export function AuthShell({
   return (
     <main
       id="main-content"
-      className="flex min-h-screen items-center justify-center px-4 py-10"
+      className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12"
       tabIndex={-1}
     >
-      <div className="w-full max-w-md">
-        <Link href="/" className="mb-8 flex items-center gap-2">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-os)] bg-[var(--accent)] font-bold text-[var(--accent-fg)]"
-            aria-hidden
-          >
-            Q
-          </div>
-          <span className="text-lg font-semibold tracking-tight text-[var(--fg)]">
-            QuantForg
-          </span>
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_85%_40%,rgba(0,212,224,0.12),transparent_58%)]"
+        aria-hidden
+      />
+      <div className="relative w-full max-w-[420px]">
+        <Link href="/" className="mb-8 flex justify-center">
+          <BrandLogo size={40} priority />
         </Link>
-        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-[var(--space-5)] shadow-[var(--shadow-elevated)]">
-          <h1 className="text-[var(--text-title)] font-semibold leading-[var(--leading-title)] tracking-tight text-[var(--fg)]">
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 p-7 shadow-[var(--shadow-elevated)] backdrop-blur-sm">
+          <h1 className="text-center font-[family-name:var(--font-display)] text-[1.65rem] font-semibold leading-tight tracking-tight text-[var(--fg)]">
             {title}
           </h1>
-          <p className="mt-1 text-sm text-[var(--fg-muted)]">{subtitle}</p>
-          <div className="mt-6">{children}</div>
+          <p className="mt-2 text-center text-sm text-[var(--fg-muted)]">{subtitle}</p>
+          <div className="mt-7">{children}</div>
         </div>
       </div>
     </main>

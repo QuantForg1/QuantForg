@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-/** Root layout replacement for catastrophic render failures. */
+/** Root layout replacement for catastrophic render failures. Self-contained RC4 palette. */
 export default function GlobalError({
   error,
   reset,
@@ -12,7 +12,6 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     try {
-      // Keep global-error self-contained; avoid importing app chrome that may also be broken.
       const payload = {
         kind: "route",
         message: error.message,
@@ -41,8 +40,8 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0b1016",
-          color: "#e8eef7",
+          background: "#111827",
+          color: "#f4f7fb",
           fontFamily: "system-ui, sans-serif",
           padding: 24,
         }}
@@ -51,25 +50,35 @@ export default function GlobalError({
           style={{
             width: "100%",
             maxWidth: 440,
-            border: "1px solid #2a3a4f",
-            borderRadius: 12,
-            background: "#141c27",
+            border: "1px solid #2f3b4d",
+            borderRadius: 10,
+            background: "#1a2330",
             padding: 24,
           }}
         >
-          <h1 style={{ margin: "0 0 8px", fontSize: 18 }}>Something went wrong</h1>
-          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#9aabc2" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/quantforg-mark-256.png"
+            width={40}
+            height={40}
+            alt="QuantForg"
+            style={{ display: "block", marginBottom: 16 }}
+          />
+          <h1 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600 }}>
+            Something went wrong
+          </h1>
+          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#9aa8bc" }}>
             An unexpected error occurred. You can retry or return to the dashboard.
           </p>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={reset}
               style={{
                 border: 0,
                 borderRadius: 8,
-                background: "#2dd4bf",
-                color: "#042f2e",
+                background: "linear-gradient(135deg, #5ef6ff 0%, #00d4e0 48%, #0891a8 100%)",
+                color: "#0b1219",
                 padding: "8px 14px",
                 fontWeight: 600,
                 cursor: "pointer",
@@ -83,10 +92,10 @@ export default function GlobalError({
                 window.location.href = "/terminal";
               }}
               style={{
-                border: "1px solid #2a3a4f",
+                border: "1px solid #2f3b4d",
                 borderRadius: 8,
-                background: "#1a2433",
-                color: "#e8eef7",
+                background: "#202938",
+                color: "#f4f7fb",
                 padding: "8px 14px",
                 cursor: "pointer",
               }}

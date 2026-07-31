@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { BrandMark } from "@/components/brand/brand-logo";
 import { Button } from "@/components/ui/button";
 import { captureError } from "@/lib/observability/error-monitor";
 
@@ -17,7 +18,8 @@ export default function RootError({
 
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-start justify-center gap-4 p-6">
-      <h1 className="text-xl font-semibold text-[var(--fg)]">Something went wrong</h1>
+      <BrandMark size={40} />
+      <h1 className="text-xl font-semibold tracking-tight text-[var(--fg)]">Something went wrong</h1>
       <p className="text-sm text-[var(--fg-muted)]">
         An unexpected error interrupted this view. Retry to continue.
       </p>

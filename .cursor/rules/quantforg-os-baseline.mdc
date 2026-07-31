@@ -16,7 +16,7 @@ P0 is the baseline. `tsc --noEmit` must stay clean.
 5. Remove mock/demo UI (real data or empty states)
 6. Collapse duplicate workflows
 7. Eight primary surfaces only (Terminal, Book, Research, Counsel, Journal, Broker, Inbox, Settings)
-8. Institutional design system (IBM Plex Sans/Mono, steel tokens; no neon/atmosphere gradients)
+8. Institutional design system (IBM Plex Sans/Mono, RC4 charcoal + cyan tokens; no neon/hacker/crypto chrome)
 9. Terminal is flagship
 10. Continuously releasable repository
 
@@ -39,7 +39,7 @@ Every redesign phase must finish production-ready before the next begins.
 
 P1–P4 flagship desks: Terminal, Book, Research, Counsel.
 P4.5 Design Bible is binding (`docs/design/`, ADR-0022).
-**Design Freeze (post-RC3):** no redesign/restyle/new visual patterns — only verified bugs, a11y, responsive, performance, and proven usability fixes. See `quantforg-design-freeze.mdc`.
+**Design Freeze (post-RC4):** product-owner override superseded RC3. Visual baseline is RC4 brand (logo, charcoal, cyan). No further redesign/restyle/new visual patterns — only verified bugs, a11y, responsive, performance, and proven usability fixes. See `quantforg-design-freeze.mdc`.
 Do not modify `components/terminal/`, `book/`, `research/`, or `counsel/` unless explicitly asked (or fixing a freeze-allowed issue).
 Future features must pass Design Bible + acceptance checklists and inherit the frozen Design System.
 

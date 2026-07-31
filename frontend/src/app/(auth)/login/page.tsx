@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { Lock, Mail } from "lucide-react";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +59,20 @@ export default function LoginPage() {
       >
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" autoComplete="email" {...form.register("email")} />
+          <div className="relative">
+            <Mail
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--fg-subtle)]"
+              aria-hidden
+            />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@firm.com"
+              className="pl-9"
+              {...form.register("email")}
+            />
+          </div>
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -67,12 +81,20 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            {...form.register("password")}
-          />
+          <div className="relative">
+            <Lock
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--fg-subtle)]"
+              aria-hidden
+            />
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              className="pl-9"
+              {...form.register("password")}
+            />
+          </div>
         </div>
         <label className="flex items-center gap-2 text-sm text-[var(--fg-muted)]">
           <input

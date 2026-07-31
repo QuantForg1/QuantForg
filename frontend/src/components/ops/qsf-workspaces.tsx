@@ -152,7 +152,7 @@ export function QsfPipelineWorkspace() {
             return (
               <div
                 key={stage}
-                className="min-w-[160px] flex-shrink-0 border border-[var(--border)] bg-[var(--surface-1)]"
+                className="min-w-[160px] flex-shrink-0 border border-[var(--border)] bg-[var(--surface)]"
               >
                 <div className="border-b border-[var(--border)] px-2 py-1.5 text-[10px] uppercase tracking-[0.08em] text-[var(--fg-muted)]">
                   {stage} · {cards.length}
@@ -212,7 +212,7 @@ export function QsfWorkspacePanel() {
           {items.map((w) => (
             <div
               key={str(w.work_item_id)}
-              className="border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2"
+              className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
             >
               <div className="text-[13px] text-[var(--fg)]">{str(w.title)}</div>
               <div className="mt-1 text-[11px] text-[var(--fg-muted)]">
@@ -335,7 +335,7 @@ export function QsfApprovalsWorkspace() {
             queue.map((item) => (
               <div
                 key={str(item.queue_id)}
-                className="border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2"
+                className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
               >
                 <div className="text-[13px] text-[var(--fg)]">
                   {str(item.title)}

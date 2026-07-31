@@ -127,13 +127,13 @@ export function QemExplorerWorkspace() {
       <OpsPanel title="Search">
         <div className="flex flex-wrap gap-2">
           <input
-            className="min-w-[180px] flex-1 border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
+            className="min-w-[180px] flex-1 border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
             placeholder="Strategy · release · correlation · type"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
           <input
-            className="w-[140px] border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
+            className="w-[140px] border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-[12px] text-[var(--fg)]"
             placeholder="Category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -150,7 +150,7 @@ export function QemExplorerWorkspace() {
             events.map((ev) => (
               <div
                 key={str(ev.id)}
-                className="border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2"
+                className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-[12px] text-[var(--fg)]">
@@ -320,7 +320,7 @@ export function QemCorrelationWorkspace() {
       <OpsPanel title="Correlation Viewer">
         <div className="mb-3 flex flex-wrap gap-2">
           <input
-            className="min-w-[220px] flex-1 border border-[var(--border)] bg-[var(--surface-1)] px-2 py-1.5 font-mono text-[12px] text-[var(--fg)]"
+            className="min-w-[220px] flex-1 border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 font-mono text-[12px] text-[var(--fg)]"
             placeholder="Correlation ID"
             value={correlationId}
             onChange={(e) => setCorrelationId(e.target.value)}
@@ -344,7 +344,7 @@ export function QemCorrelationWorkspace() {
             <button
               key={str(g.correlation_id)}
               type="button"
-              className="block w-full border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-left hover:border-[var(--border-strong)]"
+              className="block w-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-left hover:border-[var(--border-strong)]"
               onClick={() => setCorrelationId(str(g.correlation_id))}
             >
               <div className="font-mono text-[12px] text-[var(--fg)]">

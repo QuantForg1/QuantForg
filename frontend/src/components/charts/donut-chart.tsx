@@ -4,7 +4,8 @@ import { memo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { cn } from "@/lib/utils";
 
-const COLORS = ["#2dd4bf", "#38bdf8", "#a78bfa", "#fbbf24", "#34d399", "#f87171", "#94a3b8"];
+/* RC4 palette: accent → status → muted (no RC3 teal). */
+const COLORS = ["#00d4e0", "#2f9e7a", "#d4a017", "#e05d5d", "#0891a8", "#9aa8bc", "#6b7a8f"];
 
 export const DonutChart = memo(function DonutChart({
   data,

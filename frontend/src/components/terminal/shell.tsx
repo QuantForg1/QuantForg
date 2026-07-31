@@ -531,7 +531,7 @@ export function TerminalShell() {
           {layout.mobileTicketOpen ? (
             <button
               type="button"
-              className="absolute inset-0 z-[25] bg-black/40"
+              className="absolute inset-0 z-[25] bg-[color-mix(in_srgb,var(--bg)_50%,#000)]"
               aria-label="Dismiss order ticket"
               onClick={() => patchLayout({ mobileTicketOpen: false })}
             />

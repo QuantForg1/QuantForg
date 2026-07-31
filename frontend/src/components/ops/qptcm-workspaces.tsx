@@ -143,7 +143,7 @@ export function QptcmExplorerWorkspace() {
           {campaigns.map((c) => (
             <div
               key={str(c.campaign_id)}
-              className="border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2"
+              className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="neutral">{str(c.lifecycle)}</Badge>
@@ -338,7 +338,7 @@ export function QptcmGraduationWorkspace() {
           {queue.map((item) => (
             <div
               key={str(item.campaign_id)}
-              className="border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2"
+              className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
             >
               <div className="text-[12px] text-[var(--fg)]">
                 {str(item.strategy_name)} · {str(item.from_state)} →{" "}

@@ -72,7 +72,7 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-[12vh] qf-motion-overlay"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-[color-mix(in_srgb,var(--bg)_50%,#000)] p-4 pt-[12vh] qf-motion-overlay"
       role="presentation"
     >
       <button
