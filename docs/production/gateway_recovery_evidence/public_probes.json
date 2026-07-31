@@ -1,0 +1,88 @@
+{
+  "collected_at": "2026-07-31T12:49:40.166599Z",
+  "mission": "P0_GATEWAY_RECOVERY",
+  "probes": [
+    {
+      "url": "https://gateway.quantforg.com/health",
+      "http_status": 502,
+      "ok": false,
+      "body": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.\",\"instance\":\"a23cb9724fa6a096\",\"error_code\":502,\"error_name\":\"origin_bad_gate",
+      "error": "HTTPError"
+    },
+    {
+      "url": "https://gateway.quantforg.com/account",
+      "http_status": 502,
+      "ok": false,
+      "body": "{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502/\",\"title\":\"Error 502: Bad gateway\",\"status\":502,\"detail\":\"The origin web server returned an invalid or incomplete response to Cloudflare. This typically indicates the origin is overloaded or misconfigured.\",\"instance\":\"a23cb9795e55ca84\",\"error_code\":502,\"error_name\":\"origin_bad_gate",
+      "error": "HTTPError"
+    },
+    {
+      "url": "https://gateway.quantforg.com/cdn-cgi/trace",
+      "http_status": 200,
+      "ok": true,
+      "body": "fl=988f82\nh=gateway.quantforg.com\nip=52.43.50.137\nts=1785502182.000\nvisit_scheme=https\nuag=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36\ncolo=PDX\nsliver=none\nhttp=http/1.1\nloc=US\ntls=TLSv1.3\nsni=plaintext\nwarp=off\ngateway=off\nrbi=off\nkex=X25519\n",
+      "server": "cloudflare",
+      "cf_ray": "a23cb9800f879314-PDX"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/health",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "ok"
+      },
+      "server": "railway-hikari",
+      "cf_ray": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/health/status",
+      "http_status": 200,
+      "ok": true,
+      "body": {
+        "status": "healthy",
+        "version": "1.0.0",
+        "environment": "production",
+        "dependencies": [
+          {
+            "name": "postgres",
+            "status": "healthy",
+            "latency_ms": 184.82
+          },
+          {
+            "name": "redis",
+            "status": "disabled",
+            "latency_ms": 0.03
+          }
+        ]
+      },
+      "server": "railway-hikari",
+      "cf_ray": null
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/rc1-production-validation",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"error\":{\"code\":\"http_error\",\"message\":\"Not Found\",\"details\":{}},\"request_id\":\"req_810f33832b5c4f7bb888011a78e3691d\"}",
+      "error": "HTTPError"
+    },
+    {
+      "url": "https://quantforg-production.up.railway.app/api/v1/ite/ops/services-health",
+      "http_status": 401,
+      "ok": false,
+      "body": "{\"error\":{\"code\":\"missing_token\",\"message\":\"Missing bearer access token\",\"details\":{}},\"request_id\":\"req_23aabb9a23cb43058ee97f41af455695\"}",
+      "error": "HTTPError"
+    },
+    {
+      "url": "https://quantforg-staging.up.railway.app/health",
+      "http_status": 404,
+      "ok": false,
+      "body": "{\"status\":\"error\",\"code\":404,\"message\":\"Application not found\",\"request_id\":\"7ioUBYh2SHK-84xA2h0iww\"}",
+      "error": "HTTPError"
+    }
+  ],
+  "acceptance": {
+    "gateway_health_http_200": false,
+    "cloudflare_edge_reachable": true,
+    "origin_via_tunnel": false
+  }
+}

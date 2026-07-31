@@ -47,9 +47,11 @@ def main() -> int:
         )
 
     app.dependency_overrides[get_current_user] = _operator
-    client = TestClient(app)
+    # TrustedHostMiddleware rejects default TestClient host "testserver"
+    # when Railway ALLOWED_HOSTS are injected into the process env.
+    client = TestClient(app, base_url="http://localhost")
     path = "/api/v1/ite/ops/rc1-production-validation"
-    resp = client.get(path)
+    resp = client.get(path, headers={"Host": "localhost"})
     body: object
     try:
         body = resp.json()
@@ -63,6 +65,11 @@ def main() -> int:
         "ok": resp.status_code == 200,
         "body_keys": (
             sorted(body.keys()) if isinstance(body, dict) else None
+        ),
+        "body_error_snippet": (
+            None
+            if resp.status_code == 200
+            else (body if isinstance(body, str) else str(body)[:300])
         ),
         "note": (
             "Proves route is wired and returns 200 for OperatorUser. "
@@ -78,6 +85,17 @@ def main() -> int:
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+    # Also mirror into gateway recovery evidence when present
+    gw_out = (
+        root
+        / "docs"
+        / "production"
+        / "gateway_recovery_evidence"
+        / "rc1_endpoint_local_200.json"
+    )
+    if gw_out.parent.is_dir() or True:
+        gw_out.parent.mkdir(parents=True, exist_ok=True)
+        gw_out.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
     print(json.dumps(evidence, indent=2))
     return 0 if evidence["ok"] else 2
 

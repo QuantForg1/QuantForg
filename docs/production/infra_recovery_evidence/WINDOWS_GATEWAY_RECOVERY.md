@@ -19,6 +19,9 @@ git pull origin main
 
 # Single listener on 8765 + restart + session attach + verify:
 .\deploy\mt5_gateway\deploy_main_gateway.ps1
+
+# Preferred P0 wrapper (deploy + tunnel service hints + public /health gate):
+.\deploy\mt5_gateway\p0_gateway_recovery.ps1
 ```
 
 If Cloudflare still 502 after local `/health` is 200:
