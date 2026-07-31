@@ -438,7 +438,7 @@ class MT5Adapter:
             leverage=info.leverage,
             name=info.name,
             server=info.server,
-            environment=info.trade_mode or "demo",
+            environment=info.trade_mode or "unknown",
             raw={"company": info.company},
         )
 

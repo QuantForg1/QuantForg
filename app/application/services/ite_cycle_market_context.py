@@ -342,16 +342,36 @@ async def build_ite_cycle_market_context(
         free_raw = getattr(info, "free_margin", None)
         if free_raw is not None:
             free_margin = Decimal(str(free_raw))
-        trade_mode = str(getattr(info, "trade_mode", "") or "").strip().lower()
-        account_trading_enabled = trade_mode not in {"", "disabled", "0"}
-        # Equity fallback only when trade_mode is unknown/empty — never when the
-        # broker reports trading explicitly disabled.
-        if not account_trading_enabled and equity > 0 and trade_mode in {"", "unknown"}:
-            account_trading_enabled = True
-            diag["account_trading_source"] = "equity_fallback_unknown_mode"
+        # Account environment (demo|contest|real|unknown) ≠ symbol trade mode.
+        account_mode = str(getattr(info, "trade_mode", "") or "").strip().lower()
+        if account_mode not in {"demo", "contest", "real", "unknown"}:
+            account_mode = account_mode or "unknown"
+        trade_allowed = getattr(info, "trade_allowed", None)
+        if trade_allowed is not None:
+            account_trading_enabled = bool(trade_allowed)
+            diag["account_trading_source"] = f"trade_allowed:{account_trading_enabled}"
         else:
-            diag["account_trading_source"] = f"trade_mode:{trade_mode or 'empty'}"
-            diag["account_trading_enabled"] = account_trading_enabled
+            # Unknown trade_allowed: enable when account mode is a known tradable
+            # environment (demo/contest/real) or equity proves a live book.
+            account_trading_enabled = account_mode in {"demo", "contest", "real"}
+            if (
+                not account_trading_enabled
+                and equity > 0
+                and account_mode
+                in {
+                    "",
+                    "unknown",
+                }
+            ):
+                account_trading_enabled = True
+                diag["account_trading_source"] = "equity_fallback_unknown_mode"
+            else:
+                diag["account_trading_source"] = (
+                    f"account_mode:{account_mode or 'empty'}"
+                )
+        diag["account_trading_enabled"] = account_trading_enabled
+        diag["account_mode"] = account_mode
+        diag["account_trade_allowed"] = trade_allowed
         diag["account"] = "OK"
         diag["terminal"] = str(getattr(info, "server", "") or "")
         diag["balance"] = str(balance)
@@ -573,22 +593,52 @@ async def build_ite_cycle_market_context(
         open_entries=tuple(open_entries),
     )
 
-    # Sizing diagnostics (observational) — same formulas as decision → risk path.
+    # Sizing diagnostics (observational) — live broker volume_min/step when available.
     from decimal import ROUND_DOWN
 
     from app.domain.institutional_trading.atr import stop_distance_from_atr
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+    from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
 
     stop_dist = stop_distance_from_atr(atr_dec)
     risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct
     risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.01"))
-    contract_size = Decimal("100")
-    lot_step = Decimal("0.01")
+    contract_size = CONTRACT_SIZE
+    lot_step = VOLUME_STEP
+    min_lot = VOLUME_MIN
+    specs_source = "xauusd_specs_fallback"
+    try:
+        client = getattr(mt5_adapter, "client", None) or getattr(
+            mt5_adapter, "_client", None
+        )
+        if client is not None and hasattr(client, "symbol_info"):
+            spec = client.symbol_info(symbol)
+            if spec is not None:
+                vmin = Decimal(str(getattr(spec, "volume_min", None) or VOLUME_MIN))
+                vstep = Decimal(str(getattr(spec, "volume_step", None) or VOLUME_STEP))
+                cs = Decimal(str(getattr(spec, "contract_size", None) or CONTRACT_SIZE))
+                if vmin > 0:
+                    min_lot = vmin
+                if vstep > 0:
+                    lot_step = vstep
+                if cs > 0:
+                    contract_size = cs
+                specs_source = "live_broker"
+    except Exception as exc:
+        logger.debug("ite_cycle_live_lot_specs_failed", error=str(exc))
+
     raw_lots: Decimal | None = None
     calc_lots: Decimal | None = None
-    if stop_dist is not None and stop_dist > 0:
+    sizing_status = "unavailable"
+    if stop_dist is not None and stop_dist > 0 and contract_size > 0:
         raw_lots = risk_budget / (stop_dist * contract_size)
-        calc_lots = raw_lots.quantize(lot_step, rounding=ROUND_DOWN)
+        quantized = raw_lots.quantize(lot_step, rounding=ROUND_DOWN)
+        if quantized < min_lot:
+            calc_lots = Decimal("0")
+            sizing_status = "below_min_lot"
+        else:
+            calc_lots = quantized
+            sizing_status = "tradable"
 
     diag["atr"] = str(atr_dec) if atr_dec is not None else None
     diag["stop_distance"] = str(stop_dist) if stop_dist is not None else None
@@ -596,6 +646,11 @@ async def build_ite_cycle_market_context(
     diag["risk_pct"] = str(risk_pct)
     diag["raw_lots"] = str(raw_lots) if raw_lots is not None else None
     diag["calculated_lots"] = str(calc_lots) if calc_lots is not None else None
+    diag["broker_min_lot"] = str(min_lot)
+    diag["broker_lot_step"] = str(lot_step)
+    diag["contract_size"] = str(contract_size)
+    diag["lot_specs_source"] = specs_source
+    diag["sizing_status"] = sizing_status
 
     diag["reason"] = "market context ready"
     diag["snapshot"] = "OK"

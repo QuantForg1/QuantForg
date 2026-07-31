@@ -68,12 +68,26 @@ class TradeQualityScore:
     band: str  # reject | tradable | high_confidence
     factors: tuple[TradeQualityFactor, ...] = ()
 
+    @property
+    def components(self) -> dict[str, int]:
+        """Factor code → score for scalping overlays (momentum/volume aliases)."""
+        from app.domain.institutional_trading.quality_components import (
+            quality_components,
+        )
+
+        return quality_components(self)
+
     def to_dict(self) -> dict[str, Any]:
+        from app.domain.institutional_trading.quality_components import (
+            quality_components,
+        )
+
         return {
             "total": self.total,
             "passed": self.passed,
             "band": self.band,
             "factors": [f.to_dict() for f in self.factors],
+            "components": quality_components(self),
         }
 
 
@@ -126,6 +140,11 @@ class MarketAnalysisSnapshot:
     trade_quality: TradeQualityScore
     spread: Decimal | None = None
     atr: Decimal | None = None
+    # Entry-TF OHLC for EMA/RSI/candle PA — empty when unavailable (never invent).
+    entry_opens: tuple[float, ...] = ()
+    entry_highs: tuple[float, ...] = ()
+    entry_lows: tuple[float, ...] = ()
+    entry_closes: tuple[float, ...] = ()
     id: UUID = field(default_factory=uuid4)
     schema_version: str = "1.0.0"
 

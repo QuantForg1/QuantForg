@@ -165,10 +165,17 @@ def decide_scalping_direction(
             reasons.append("Bearish FVG")
     factors["fvg"] = min(18, len(gaps) * 6)
 
-    # Momentum / volume from quality components
-    q_components = getattr(snapshot.trade_quality, "components", None) or {}
+    # Momentum / volume from quality components (real factors, not missing attr)
+    from app.domain.institutional_trading.quality_components import (
+        quality_components,
+    )
+
+    q_components = quality_components(snapshot.trade_quality)
     mom = int(
-        q_components.get("momentum", q_components.get("trend_strength", 50)) or 50
+        q_components.get("momentum")
+        or q_components.get("trend_strength")
+        or getattr(snapshot.trend, "alignment_score", 0)
+        or 0
     )
     if mom >= 65:
         if buy > sell:

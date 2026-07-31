@@ -191,6 +191,12 @@ def classify_gateway_failure(
     if "connection refused" in err or "connecterror" in et:
         return "Gateway refused connection"
     if (
+        "errno 11" in err
+        or "resource temporarily unavailable" in err
+        or "eagain" in err
+    ):
+        return "Gateway transient socket pressure"
+    if (
         "getaddrinfo" in err
         or "name or service not known" in err
         or "nodename" in err
@@ -326,10 +332,17 @@ class GatewayMT5Client:
 
     def _build_http_client(self) -> httpx.Client:
         """Prefer HTTP/2; fall back to 1.1 if the runtime lacks ``h2``."""
+        # Bound pool size so concurrent ITE candle GETs cannot exhaust FDs.
+        limits = httpx.Limits(
+            max_connections=20,
+            max_keepalive_connections=10,
+            keepalive_expiry=30.0,
+        )
         common: dict[str, Any] = {
             "timeout": self._timeout(),
             "follow_redirects": True,
             "trust_env": True,
+            "limits": limits,
         }
         try:
             return httpx.Client(http2=True, **common)
@@ -340,6 +353,31 @@ class GatewayMT5Client:
                 error_type=type(exc).__name__,
             )
             return httpx.Client(http2=False, **common)
+
+    @staticmethod
+    def _is_transient_transport_error(exc: BaseException) -> bool:
+        """Safe-to-retry transport failures for idempotent GET market data."""
+        if isinstance(
+            exc,
+            (
+                httpx.ConnectError,
+                httpx.ConnectTimeout,
+                httpx.ReadTimeout,
+                httpx.WriteTimeout,
+                httpx.PoolTimeout,
+                httpx.ReadError,
+                httpx.WriteError,
+                httpx.RemoteProtocolError,
+            ),
+        ):
+            return True
+        text = f"{type(exc).__name__} {exc}".lower()
+        return (
+            "errno 11" in text
+            or "resource temporarily unavailable" in text
+            or "eagain" in text
+            or "temporarily unavailable" in text
+        )
 
     def _request(
         self,
@@ -400,9 +438,9 @@ class GatewayMT5Client:
 
         try:
             client = self._http_client()
-            # Safe retries: GET + connect failures only. Never retry order_send
+            # Safe retries: GET + transient transport only. Never retry order_send
             # after the request may have reached the broker (duplicate risk).
-            attempts = 2 if method.upper() == "GET" else 1
+            attempts = 4 if method.upper() == "GET" else 1
             last_exc: Exception | None = None
             response = None
             for attempt_i in range(attempts):
@@ -416,8 +454,12 @@ class GatewayMT5Client:
                     )
                     last_exc = None
                     break
-                except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-                    last_exc = exc
+                except Exception as exc:
+                    if not self._is_transient_transport_error(exc):
+                        raise
+                    last_exc = (
+                        exc if isinstance(exc, Exception) else RuntimeError(str(exc))
+                    )
                     # No silent reconnect — log every transport retry.
                     try:
                         from app.domain.institutional_trading.reliability.platform import (  # noqa: E501
@@ -427,16 +469,19 @@ class GatewayMT5Client:
                         get_reliability_platform().network.log_reconnect_attempt(
                             component="gateway",
                             attempt=attempt_i + 1,
-                            detail=(
-                                f"{type(exc).__name__}: {exc} " f"({method} {path})"
-                            ),
+                            detail=(f"{type(exc).__name__}: {exc} ({method} {path})"),
                             success=False,
                         )
                     except Exception:  # noqa: S110  # best-effort optional path
                         pass
                     if attempt_i + 1 >= attempts:
                         raise
-                    time.sleep(0.15 * (attempt_i + 1))
+                    # Rebuild client after socket pressure so keepalive sockets
+                    # that returned EAGAIN are not reused indefinitely.
+                    if "errno 11" in str(exc).lower() or "eagain" in str(exc).lower():
+                        self.close()
+                        client = self._http_client()
+                    time.sleep(0.2 * (2**attempt_i))
             if response is None and last_exc is not None:
                 raise last_exc
             assert response is not None
@@ -913,6 +958,18 @@ class GatewayMT5Client:
             return self._account_cache
         gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/account")
+        # Prefer gateway-mapped account_mode (demo|contest|real). Never invent
+        # "demo" when the broker omits the field — that caused Weltrade-Real
+        # accounts to be mislabeled.
+        account_mode = (
+            str(data.get("account_mode") or data.get("trade_mode") or "")
+            .strip()
+            .lower()
+        )
+        if account_mode not in {"demo", "contest", "real"}:
+            account_mode = "unknown"
+        trade_allowed_raw = data.get("trade_allowed")
+        trade_allowed = None if trade_allowed_raw is None else bool(trade_allowed_raw)
         info = MT5AccountInfo(
             login=int(data.get("login") or self._login),
             name=str(data.get("name") or f"Account {data.get('login', '')}"),
@@ -925,18 +982,25 @@ class GatewayMT5Client:
             free_margin=_dec(data.get("free_margin")),
             margin_level=_dec(data.get("margin_level")),
             profit=_dec(data.get("profit")),
-            company="Weltrade",
-            trade_mode="demo",
+            company=str(data.get("company") or "Weltrade"),
+            trade_mode=account_mode,
+            trade_allowed=trade_allowed,
         )
         self._account_cache = info
         self._account_cache_at = now
         return info
 
     def server_info(self) -> MT5Server:
+        mode = "unknown"
+        try:
+            info = self.account_info()
+            mode = str(info.trade_mode or "unknown")
+        except Exception:
+            mode = "unknown"
         return MT5Server(
             name=self._server or "Weltrade",
             company="Weltrade",
-            trade_mode="demo",
+            trade_mode=mode if mode in {"demo", "contest", "real"} else "unknown",
         )
 
     def symbols(self) -> list[BrokerSymbolInfo]:

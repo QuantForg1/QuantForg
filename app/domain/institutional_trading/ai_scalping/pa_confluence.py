@@ -258,12 +258,15 @@ def evaluate_pa_confluence(
         indicators.update(rsi_ind)
     else:
         # Soft proxies when OHLC not wired — never invent bars
+        from app.domain.institutional_trading.quality_components import (
+            quality_components,
+        )
+
         ema_score = max(40, min(85, int(snapshot.trend.alignment_score)))
         rsi_score = int(
-            (getattr(snapshot.trade_quality, "components", {}) or {}).get(
-                "momentum", 55
-            )
-            or 55
+            quality_components(snapshot.trade_quality).get("momentum")
+            or snapshot.trend.alignment_score
+            or 0
         )
         reasons.append("EMA/RSI soft proxy (no entry OHLC series)")
         indicators["ema_ready"] = False

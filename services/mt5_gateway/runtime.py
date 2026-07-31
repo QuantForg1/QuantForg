@@ -50,7 +50,7 @@ def call_mt5_bounded(
     def _target() -> None:
         try:
             box.append(fn())
-        except BaseException as exc:  # noqa: BLE001 — boundary to caller thread
+        except BaseException as exc:
             err.append(exc)
 
     worker = threading.Thread(target=_target, name=f"mt5-bounded-{label}", daemon=True)
@@ -1022,6 +1022,19 @@ class MT5GatewayRuntime:
 
     def account(self) -> dict[str, Any]:
         info = self._require_account()
+        # MetaTrader5 ACCOUNT_TRADE_MODE: 0=demo, 1=contest, 2=real
+        trade_mode_raw = getattr(info, "trade_mode", None)
+        try:
+            trade_mode_int = int(trade_mode_raw) if trade_mode_raw is not None else -1
+        except (TypeError, ValueError):
+            trade_mode_int = -1
+        account_mode = {0: "demo", 1: "contest", 2: "real"}.get(
+            trade_mode_int, "unknown"
+        )
+        trade_allowed_raw = getattr(info, "trade_allowed", None)
+        trade_allowed = (
+            bool(trade_allowed_raw) if trade_allowed_raw is not None else None
+        )
         return {
             "login": _safe_int(info.login),
             "balance": str(info.balance),
@@ -1034,7 +1047,12 @@ class MT5GatewayRuntime:
             "currency": str(getattr(info, "currency", "")),
             "server": str(getattr(info, "server", "")),
             "name": str(getattr(info, "name", "")),
+            "company": str(getattr(info, "company", "")),
             "session_mode": self.diagnostics.session_mode,
+            "account_mode": account_mode,
+            "trade_mode": account_mode,
+            "trade_mode_raw": trade_mode_int if trade_mode_int >= 0 else None,
+            "trade_allowed": trade_allowed,
         }
 
     def symbols(self) -> dict[str, Any]:
