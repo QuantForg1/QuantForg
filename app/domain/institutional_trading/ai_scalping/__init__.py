@@ -33,6 +33,14 @@ from app.domain.institutional_trading.ai_scalping.continuous_operation import (
     NewEntryPauseDecision,
     get_continuous_operation_controller,
 )
+from app.domain.institutional_trading.ai_scalping.correlation_book import (
+    PORTFOLIO_CORRELATION_GROUPS,
+    correlation_group_members,
+    correlation_group_name,
+    currency_for,
+    normalize_book_symbol,
+    sector_for,
+)
 from app.domain.institutional_trading.ai_scalping.diagnostics import (
     get_scalping_diagnostics_store,
 )
@@ -77,6 +85,13 @@ from app.domain.institutional_trading.ai_scalping.portfolio_risk import (
     aggregate_portfolio_risk,
     portfolio_daily_loss_pct,
     portfolio_exposure_pct,
+)
+from app.domain.institutional_trading.ai_scalping.portfolio_risk_engine_v2 import (
+    BrokerComplianceSpec,
+    PortfolioAllocationDecision,
+    PortfolioBookSnapshot,
+    build_portfolio_book,
+    evaluate_portfolio_allocation,
 )
 from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
     PortfolioScanResult,
@@ -146,12 +161,14 @@ from app.domain.institutional_trading.ai_scalping.validation import (
 __all__ = [
     "DEFAULT_AI_SCALPING_CONFIG",
     "DEFAULT_SCALPING_UNIVERSE",
+    "PORTFOLIO_CORRELATION_GROUPS",
     "AdaptiveCooldownDecision",
     "AdaptiveCooldownGate",
     "AdaptiveThresholdBand",
     "AddTradeDecision",
     "AiScalpingConfig",
     "AiScalpingScore",
+    "BrokerComplianceSpec",
     "BrokerProfileStore",
     "BrokerRuntimeProfile",
     "ContinuousOpSnapshot",
@@ -166,6 +183,8 @@ __all__ = [
     "MultiAssetScanScheduler",
     "NewEntryPauseDecision",
     "PaConfluenceResult",
+    "PortfolioAllocationDecision",
+    "PortfolioBookSnapshot",
     "PortfolioRiskSnapshot",
     "PortfolioScanResult",
     "PostTradeAnalytics",
@@ -188,6 +207,7 @@ __all__ = [
     "apply_thresholds_to_ite",
     "assess_session",
     "assess_spread",
+    "build_portfolio_book",
     "build_regime_execution_profile",
     "calculate_dynamic_lots_v2",
     "calculate_scalping_lots",
@@ -199,8 +219,12 @@ __all__ = [
     "compare_backtest_vs_live",
     "compute_post_trade_analytics",
     "compute_structure_targets",
+    "correlation_group_members",
+    "correlation_group_name",
+    "currency_for",
     "decide_scalping_direction",
     "evaluate_pa_confluence",
+    "evaluate_portfolio_allocation",
     "evaluate_quality_gates",
     "get_adaptive_cooldown_gate",
     "get_broker_profile_store",
@@ -215,6 +239,7 @@ __all__ = [
     "interpolate_equity_tier",
     "may_add_scalping_trade",
     "measure_slippage",
+    "normalize_book_symbol",
     "portfolio_daily_loss_pct",
     "portfolio_exposure_pct",
     "rank_scalping_opportunities",
@@ -224,4 +249,5 @@ __all__ = [
     "scan_multi_asset_portfolio",
     "scan_setup_families",
     "score_scalping_setup",
+    "sector_for",
 ]

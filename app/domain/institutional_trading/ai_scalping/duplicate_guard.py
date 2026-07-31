@@ -28,8 +28,16 @@ def may_add_scalping_trade(
     min_entry_distance: Decimal | None = None,
     require_improvement: bool = True,
     min_confidence_delta: int = 3,
+    open_profits: tuple[Decimal, ...] = (),
+    require_unrealized_profit: bool = False,
+    same_direction_profits: tuple[Decimal, ...] = (),
 ) -> AddTradeDecision:
-    """Allow another trade only within caps and when probability improves."""
+    """Allow another trade only within caps and when probability improves.
+
+    When ``require_unrealized_profit`` is True (PRE v2 pyramiding), add-ons
+    require net unrealized profit on same-symbol / same-direction legs —
+    never average into losing trades.
+    """
     if open_positions >= max_open:
         return AddTradeDecision(
             False,
@@ -37,6 +45,25 @@ def may_add_scalping_trade(
         )
     if open_positions <= 0:
         return AddTradeDecision(True, "No open positions — entry allowed")
+
+    # Never average into losers / only pyramid into winners
+    if require_unrealized_profit:
+        legs = same_direction_profits or open_profits
+        if legs:
+            net = sum(legs, Decimal("0"))
+            if net <= 0:
+                return AddTradeDecision(
+                    False,
+                    (
+                        f"Pyramiding blocked — unrealized P/L {net} ≤ 0 "
+                        "(never average into losers)"
+                    ),
+                )
+            if any(p <= 0 for p in legs):
+                return AddTradeDecision(
+                    False,
+                    "Pyramiding blocked — losing leg present (scale winners only)",
+                )
 
     # Never duplicate identical direction + near-identical entry
     dir_u = (new_direction or "").upper()

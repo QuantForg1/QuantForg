@@ -342,6 +342,7 @@ async def build_ite_cycle_market_context(
         free_raw = getattr(info, "free_margin", None)
         if free_raw is not None:
             free_margin = Decimal(str(free_raw))
+        floating_pnl = Decimal(str(getattr(info, "profit", 0) or 0))
         # Account environment (demo|contest|real|unknown) ≠ symbol trade mode.
         account_mode = str(getattr(info, "trade_mode", "") or "").strip().lower()
         if account_mode not in {"demo", "contest", "real", "unknown"}:
@@ -378,6 +379,7 @@ async def build_ite_cycle_market_context(
         diag["equity"] = str(equity)
         diag["margin"] = str(margin)
         diag["free_margin"] = str(free_margin) if free_margin is not None else None
+        diag["floating_pnl"] = str(floating_pnl)
         diag["leverage"] = leverage
         diag["login"] = int(getattr(info, "login", 0) or 0)
     except Exception as exc:
@@ -591,6 +593,14 @@ async def build_ite_cycle_market_context(
         free_margin=free_margin,
         open_directions=tuple(open_directions),
         open_entries=tuple(open_entries),
+        balance=Decimal(str(diag.get("balance") or equity or 0)),
+        used_margin=Decimal(str(diag.get("margin") or 0)),
+        floating_pnl=Decimal(str(diag.get("floating_pnl") or 0)),
+        leverage=(
+            Decimal(str(diag.get("leverage")))
+            if diag.get("leverage") not in (None, 0, "0")
+            else None
+        ),
     )
 
     # Sizing diagnostics (observational) — live broker volume_min/step when available.

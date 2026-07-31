@@ -432,83 +432,57 @@ class InstitutionalDecisionPipeline:
             if sess_risk is None or sess_risk <= 0:
                 sess_risk = session_assess.risk_multiplier
 
-            # Portfolio exposure used for daily / symbol / correlation caps
-            portfolio_exp = Decimal("0")
-            symbol_exp = Decimal("0")
-            correlated_exp = Decimal("0")
-            try:
-                from app.domain.institutional_trading.ai_scalping.portfolio_risk import (  # noqa: E501
-                    aggregate_portfolio_risk,
-                    portfolio_exposure_pct,
+            min_entry_distance: Decimal | None = None
+            if account.atr is not None and account.atr > 0:
+                min_entry_distance = (account.atr * Decimal("0.15")).quantize(
+                    Decimal("0.00001")
+                )
+            elif stop_distance is not None and stop_distance > 0:
+                min_entry_distance = stop_distance
+
+            # Incomplete open-book facts must never allow add-ons (fail closed).
+            if (
+                account.open_positions > 0
+                and not account.open_directions
+                and not account.open_entries
+            ):
+                risk_allowed = False
+                risk_reasons.append("open_book_facts_incomplete — blocking add-on")
+                approved_lots = Decimal("0")
+
+            # Institutional quality gates — never bypass risk; block weak setups
+            if ai_score is not None and ai_score.reject:
+                risk_allowed = False
+                risk_reasons.append(
+                    f"ai_scalping_quality_reject:{ai_score.reject_reason or 'gates'}"
+                )
+                approved_lots = Decimal("0")
+
+            if risk_allowed and scalp_cfg.portfolio_risk_engine_v2_enabled:
+                from app.domain.institutional_trading.ai_scalping.portfolio_risk_engine_v2 import (  # noqa: E501
+                    BrokerComplianceSpec,
+                    evaluate_portfolio_allocation,
                 )
 
-                risk_snap_pre = aggregate_portfolio_risk(
-                    account,
-                    config=scalp_cfg,
-                    ite_config=cfg,
-                )
-                portfolio_exp = risk_snap_pre.exposure_pct
-                sym = str(getattr(snapshot, "symbol", "") or "")
-                same_sym = sum(
-                    1
-                    for p in (positions or [])
-                    if str(getattr(p, "symbol", "") or "").upper() == sym.upper()
-                )
-                symbol_exp = portfolio_exposure_pct(
-                    open_positions=same_sym,
-                    risk_per_trade_pct=scalp_cfg.risk_per_trade_pct,
-                )
-                try:
-                    from app.domain.institutional_trading.alpha_engine.correlation import (  # noqa: E501
-                        correlation_group_for,
-                    )
-
-                    group = correlation_group_for(sym, config=None)
-                    if group:
-                        group_u = {g.upper() for g in group}
-                        corr_n = sum(
-                            1
-                            for p in (positions or [])
-                            if str(getattr(p, "symbol", "") or "").upper() in group_u
-                        )
-                        correlated_exp = portfolio_exposure_pct(
-                            open_positions=corr_n,
-                            risk_per_trade_pct=scalp_cfg.risk_per_trade_pct,
-                        )
-                except Exception:
-                    correlated_exp = Decimal("0")
-            except Exception:
-                logger.exception("dynamic_sizing_v2_exposure_precheck_failed")
-
-            previous_lot: Decimal | None = None
-            real_positions = list(positions or [])
-            if real_positions:
-                vols = [
-                    Decimal(str(getattr(p, "volume", 0) or 0))
-                    for p in real_positions
-                    if str(getattr(p, "symbol", "") or "").upper()
-                    == str(getattr(snapshot, "symbol", "") or "").upper()
-                ]
-                vols = [v for v in vols if v > 0]
-                if vols:
-                    previous_lot = max(vols)
-
-            if scalp_cfg.dynamic_sizing_v2_enabled:
-                sized_v2 = calculate_dynamic_lots_v2(
-                    equity=account.equity,
-                    balance=account.equity,
-                    free_margin=account.free_margin,
-                    stop_distance=stop_distance,
-                    atr=account.atr,
-                    mid_price=account.mid_price,
-                    risk_pct=cfg.risk_per_trade_pct,
-                    contract_size=live_cs,
+                broker_spec = BrokerComplianceSpec(
                     min_lot=live_min,
                     lot_step=live_step,
+                    max_lot=scalp_cfg.broker_max_lot,
+                    contract_size=live_cs,
+                )
+                alloc = evaluate_portfolio_allocation(
+                    account=account,
+                    symbol=str(getattr(snapshot, "symbol", "") or ""),
+                    stop_distance=stop_distance,
+                    positions=list(positions or []),
+                    new_direction=confluence.direction.value,
+                    new_confidence=confluence.confidence,
+                    entry=entry,
+                    atr=account.atr,
+                    mid_price=account.mid_price,
+                    leverage=account.leverage,
+                    risk_pct=cfg.risk_per_trade_pct,
                     session_risk_multiplier=sess_risk,
-                    daily_exposure_used_pct=portfolio_exp,
-                    portfolio_exposure_pct=portfolio_exp,
-                    symbol_open_risk_pct=symbol_exp,
                     quality_score=(
                         int(ai_score.trade_quality) if ai_score is not None else None
                     ),
@@ -527,167 +501,317 @@ class InstitutionalDecisionPipeline:
                     quality_reject=(
                         bool(ai_score.reject) if ai_score is not None else False
                     ),
-                    previous_final_lot=previous_lot,
-                    max_margin_usage_pct=scalp_cfg.max_margin_usage_pct,
-                    max_symbol_exposure_pct=scalp_cfg.max_symbol_exposure_pct,
-                    lot_growth_max_step_pct=scalp_cfg.lot_growth_max_step_pct,
+                    broker=broker_spec,
+                    balance=account.balance,
+                    used_margin=account.used_margin,
+                    floating_pnl=account.floating_pnl,
+                    best_open_confidence=account.best_open_confidence,
+                    open_directions=account.open_directions,
+                    open_entries=account.open_entries,
+                    min_entry_distance=min_entry_distance,
+                    require_probability_improvement=(
+                        scalp_cfg.require_probability_improvement
+                        and account.open_positions > 0
+                    ),
                     config=scalp_cfg,
+                    ite_config=cfg,
                 )
-                sized = sized_v2.to_lot_result()
-                sizing_audit = sized_v2.to_dict()
-            else:
-                sized = calculate_scalping_lots(
-                    equity=account.equity,
-                    stop_distance=stop_distance,
-                    atr=account.atr,
-                    risk_pct=cfg.risk_per_trade_pct,
-                    peak_equity=account.peak_equity,
-                    compounding_enabled=scalp_cfg.compounding_enabled,
-                    contract_size=live_cs,
-                    session_risk_multiplier=sess_risk,
-                    daily_exposure_used_pct=portfolio_exp,
-                    config=scalp_cfg,
-                )
-                sizing_audit = sized.to_dict()
-
-            if sized.valid:
-                approved_lots = sized.lots
-            else:
-                risk_allowed = False
-                risk_reasons.append(sized.reason)
-                if sized.method == "below_min_lot" or "below_min_lot" in sized.method:
+                self._last_ai_score = self._last_ai_score or {}
+                if isinstance(self._last_ai_score, dict):
+                    self._last_ai_score["portfolio_risk_v2"] = alloc.to_dict()
+                if alloc.allow:
+                    approved_lots = alloc.approved_lots
+                else:
+                    risk_allowed = False
                     risk_reasons.append(
-                        "below_min_lot:"
-                        f"calculated_lot={sized.calculated_lot},"
-                        f"broker_minimum={sized.broker_min_lot},"
-                        f"account_balance={sized.account_balance},"
-                        f"risk_percentage={sized.risk_percentage}"
+                        alloc.rejection_reason or "portfolio_risk_engine_v2_reject"
                     )
-                    try:
-                        from app.application.services.cycle_evidence import (
-                            log_trade_rejection,
+                    approved_lots = Decimal("0")
+                    method = (
+                        alloc.sizing.method
+                        if alloc.sizing is not None
+                        else "portfolio_reject"
+                    )
+                    if "below_min_lot" in method or (
+                        alloc.rejection_reason
+                        and "below_min_lot" in alloc.rejection_reason
+                    ):
+                        sized = (
+                            alloc.sizing.to_lot_result()
+                            if alloc.sizing is not None
+                            else None
                         )
+                        if sized is not None:
+                            risk_reasons.append(
+                                "below_min_lot:"
+                                f"calculated_lot={sized.calculated_lot},"
+                                f"broker_minimum={sized.broker_min_lot},"
+                                f"account_balance={sized.account_balance},"
+                                f"risk_percentage={sized.risk_percentage}"
+                            )
+                        try:
+                            from app.application.services.cycle_evidence import (
+                                log_trade_rejection,
+                            )
 
-                        log_trade_rejection(
-                            reasons=(sized.reason,),
-                            stage="lot_sizing",
-                            code="below_min_lot",
-                            symbol=str(getattr(snapshot, "symbol", "") or ""),
-                            session=str(
-                                getattr(
-                                    snapshot.session.session,
-                                    "value",
-                                    snapshot.session.session,
-                                )
-                            ),
-                            sizing=sizing_audit,
-                        )
-                    except Exception:
-                        logger.exception("below_min_lot_reject_log_failed")
-                approved_lots = Decimal("0")
-
-            min_entry_distance: Decimal | None = None
-            if account.atr is not None and account.atr > 0:
-                min_entry_distance = (account.atr * Decimal("0.15")).quantize(
-                    Decimal("0.00001")
-                )
-            elif stop_distance is not None and stop_distance > 0:
-                min_entry_distance = stop_distance
-            # Incomplete open-book facts must never allow add-ons (fail closed).
-            if (
-                account.open_positions > 0
-                and not account.open_directions
-                and not account.open_entries
-            ):
-                risk_allowed = False
-                risk_reasons.append("open_book_facts_incomplete — blocking add-on")
-                approved_lots = Decimal("0")
-
-            add = may_add_scalping_trade(
-                open_positions=account.open_positions,
-                max_open=cfg.max_open_trades,
-                new_confidence=confluence.confidence,
-                best_open_confidence=account.best_open_confidence,
-                new_direction=confluence.direction.value,
-                open_directions=account.open_directions,
-                entry=entry,
-                open_entries=account.open_entries,
-                min_entry_distance=min_entry_distance,
-                require_improvement=DEFAULT_AI_SCALPING_CONFIG.require_probability_improvement
-                and account.open_positions > 0,
-                min_confidence_delta=DEFAULT_AI_SCALPING_CONFIG.min_confidence_delta_for_add,
-            )
-            if not add.allow:
-                risk_allowed = False
-                risk_reasons.append(add.reason)
-                approved_lots = Decimal("0")
-
-            # Institutional quality gates — never bypass risk; block weak setups
-            if ai_score is not None and ai_score.reject:
-                risk_allowed = False
-                risk_reasons.append(
-                    f"ai_scalping_quality_reject:{ai_score.reject_reason or 'gates'}"
-                )
-                approved_lots = Decimal("0")
-
-            # Portfolio-wide exposure + daily loss (all symbols combined)
-            if DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled:
+                            log_trade_rejection(
+                                reasons=(alloc.rejection_reason or method,),
+                                stage="lot_sizing",
+                                code="below_min_lot",
+                                symbol=str(getattr(snapshot, "symbol", "") or ""),
+                                session=str(
+                                    getattr(
+                                        snapshot.session.session,
+                                        "value",
+                                        snapshot.session.session,
+                                    )
+                                ),
+                                sizing=alloc.to_dict(),
+                            )
+                        except Exception:
+                            logger.exception("below_min_lot_reject_log_failed")
+            elif risk_allowed:
+                # Legacy / sizing-v2-only path (PRE v2 disabled)
+                portfolio_exp = Decimal("0")
+                symbol_exp = Decimal("0")
+                correlated_exp = Decimal("0")
                 try:
                     from app.domain.institutional_trading.ai_scalping.portfolio_risk import (  # noqa: E501
                         aggregate_portfolio_risk,
-                    )
-                    from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (  # noqa: E501
-                        check_portfolio_limits,
+                        portfolio_exposure_pct,
                     )
 
-                    risk_snap = aggregate_portfolio_risk(
+                    risk_snap_pre = aggregate_portfolio_risk(
                         account,
-                        config=DEFAULT_AI_SCALPING_CONFIG,
+                        config=scalp_cfg,
                         ite_config=cfg,
                     )
-                    blocked, block_why = check_portfolio_limits(
-                        open_positions=risk_snap.open_positions,
-                        max_open_positions=risk_snap.max_open_positions,
-                        daily_loss_pct=risk_snap.daily_loss_pct,
-                        max_daily_loss_pct=risk_snap.max_daily_loss_pct,
-                        exposure_pct=risk_snap.exposure_pct,
-                        max_exposure_pct=risk_snap.max_exposure_pct,
+                    portfolio_exp = risk_snap_pre.exposure_pct
+                    sym = str(getattr(snapshot, "symbol", "") or "")
+                    same_sym = sum(
+                        1
+                        for p in (positions or [])
+                        if str(getattr(p, "symbol", "") or "").upper() == sym.upper()
                     )
-                    if blocked:
-                        risk_allowed = False
-                        risk_reasons.append(
-                            f"portfolio_risk_block:{block_why or 'limits'}"
+                    symbol_exp = portfolio_exposure_pct(
+                        open_positions=same_sym,
+                        risk_per_trade_pct=scalp_cfg.risk_per_trade_pct,
+                    )
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.correlation_book import (  # noqa: E501
+                            correlation_group_members,
+                            normalize_book_symbol,
                         )
-                        approved_lots = Decimal("0")
 
-                    # v2: margin / symbol / correlation caps (reduce-only)
-                    blocked_v2, why_v2 = check_portfolio_sizing_limits(
-                        open_positions=risk_snap.open_positions,
-                        max_open_positions=risk_snap.max_open_positions,
-                        daily_loss_pct=risk_snap.daily_loss_pct,
-                        max_daily_loss_pct=risk_snap.max_daily_loss_pct,
-                        exposure_pct=risk_snap.exposure_pct,
-                        max_exposure_pct=risk_snap.max_exposure_pct,
-                        margin_usage_pct=None,
-                        max_margin_usage_pct=scalp_cfg.max_margin_usage_pct,
-                        symbol_exposure_pct=symbol_exp,
-                        max_symbol_exposure_pct=scalp_cfg.max_symbol_exposure_pct,
-                        correlated_exposure_pct=correlated_exp,
-                        max_correlated_exposure_pct=(
-                            scalp_cfg.max_correlated_exposure_pct
-                        ),
-                    )
-                    if blocked_v2:
-                        risk_allowed = False
-                        risk_reasons.append(
-                            f"portfolio_sizing_v2_block:{why_v2 or 'limits'}"
-                        )
-                        approved_lots = Decimal("0")
+                        members = correlation_group_members(sym)
+                        if members:
+                            group_u = {normalize_book_symbol(g) for g in members}
+                            corr_n = sum(
+                                1
+                                for p in (positions or [])
+                                if normalize_book_symbol(
+                                    str(getattr(p, "symbol", "") or "")
+                                )
+                                in group_u
+                            )
+                            correlated_exp = portfolio_exposure_pct(
+                                open_positions=corr_n,
+                                risk_per_trade_pct=scalp_cfg.risk_per_trade_pct,
+                            )
+                    except Exception:
+                        correlated_exp = Decimal("0")
                 except Exception:
-                    logger.exception("portfolio_risk_check_failed")
+                    logger.exception("dynamic_sizing_v2_exposure_precheck_failed")
+
+                previous_lot: Decimal | None = None
+                real_positions = list(positions or [])
+                if real_positions:
+                    vols = [
+                        Decimal(str(getattr(p, "volume", 0) or 0))
+                        for p in real_positions
+                        if str(getattr(p, "symbol", "") or "").upper()
+                        == str(getattr(snapshot, "symbol", "") or "").upper()
+                    ]
+                    vols = [v for v in vols if v > 0]
+                    if vols:
+                        previous_lot = max(vols)
+
+                if scalp_cfg.dynamic_sizing_v2_enabled:
+                    sized_v2 = calculate_dynamic_lots_v2(
+                        equity=account.equity,
+                        balance=account.balance or account.equity,
+                        free_margin=account.free_margin,
+                        stop_distance=stop_distance,
+                        atr=account.atr,
+                        mid_price=account.mid_price,
+                        risk_pct=cfg.risk_per_trade_pct,
+                        contract_size=live_cs,
+                        min_lot=live_min,
+                        lot_step=live_step,
+                        session_risk_multiplier=sess_risk,
+                        daily_exposure_used_pct=portfolio_exp,
+                        portfolio_exposure_pct=portfolio_exp,
+                        symbol_open_risk_pct=symbol_exp,
+                        quality_score=(
+                            int(ai_score.trade_quality)
+                            if ai_score is not None
+                            else None
+                        ),
+                        confidence=(
+                            int(ai_score.confidence) if ai_score is not None else None
+                        ),
+                        liquidity_score=(
+                            int(ai_score.liquidity) if ai_score is not None else None
+                        ),
+                        spread_score=(
+                            int(ai_score.spread_score) if ai_score is not None else None
+                        ),
+                        trend_confidence=(
+                            int(ai_score.confidence) if ai_score is not None else None
+                        ),
+                        quality_reject=(
+                            bool(ai_score.reject) if ai_score is not None else False
+                        ),
+                        previous_final_lot=previous_lot,
+                        max_margin_usage_pct=scalp_cfg.max_margin_usage_pct,
+                        max_symbol_exposure_pct=scalp_cfg.max_symbol_exposure_pct,
+                        lot_growth_max_step_pct=scalp_cfg.lot_growth_max_step_pct,
+                        config=scalp_cfg,
+                    )
+                    sized = sized_v2.to_lot_result()
+                    sizing_audit = sized_v2.to_dict()
+                else:
+                    sized = calculate_scalping_lots(
+                        equity=account.equity,
+                        stop_distance=stop_distance,
+                        atr=account.atr,
+                        risk_pct=cfg.risk_per_trade_pct,
+                        peak_equity=account.peak_equity,
+                        compounding_enabled=scalp_cfg.compounding_enabled,
+                        contract_size=live_cs,
+                        session_risk_multiplier=sess_risk,
+                        daily_exposure_used_pct=portfolio_exp,
+                        config=scalp_cfg,
+                    )
+                    sizing_audit = sized.to_dict()
+
+                if sized.valid:
+                    approved_lots = sized.lots
+                else:
                     risk_allowed = False
-                    risk_reasons.append("portfolio_risk_check_failed")
+                    risk_reasons.append(sized.reason)
+                    if (
+                        sized.method == "below_min_lot"
+                        or "below_min_lot" in sized.method
+                    ):
+                        risk_reasons.append(
+                            "below_min_lot:"
+                            f"calculated_lot={sized.calculated_lot},"
+                            f"broker_minimum={sized.broker_min_lot},"
+                            f"account_balance={sized.account_balance},"
+                            f"risk_percentage={sized.risk_percentage}"
+                        )
+                        try:
+                            from app.application.services.cycle_evidence import (
+                                log_trade_rejection,
+                            )
+
+                            log_trade_rejection(
+                                reasons=(sized.reason,),
+                                stage="lot_sizing",
+                                code="below_min_lot",
+                                symbol=str(getattr(snapshot, "symbol", "") or ""),
+                                session=str(
+                                    getattr(
+                                        snapshot.session.session,
+                                        "value",
+                                        snapshot.session.session,
+                                    )
+                                ),
+                                sizing=sizing_audit,
+                            )
+                        except Exception:
+                            logger.exception("below_min_lot_reject_log_failed")
                     approved_lots = Decimal("0")
+
+                add = may_add_scalping_trade(
+                    open_positions=account.open_positions,
+                    max_open=cfg.max_open_trades,
+                    new_confidence=confluence.confidence,
+                    best_open_confidence=account.best_open_confidence,
+                    new_direction=confluence.direction.value,
+                    open_directions=account.open_directions,
+                    entry=entry,
+                    open_entries=account.open_entries,
+                    min_entry_distance=min_entry_distance,
+                    require_improvement=(
+                        scalp_cfg.require_probability_improvement
+                        and account.open_positions > 0
+                    ),
+                    min_confidence_delta=scalp_cfg.min_confidence_delta_for_add,
+                    require_unrealized_profit=False,
+                )
+                if not add.allow:
+                    risk_allowed = False
+                    risk_reasons.append(add.reason)
+                    approved_lots = Decimal("0")
+
+                if DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled:
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.portfolio_risk import (  # noqa: E501
+                            aggregate_portfolio_risk,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (  # noqa: E501
+                            check_portfolio_limits,
+                        )
+
+                        risk_snap = aggregate_portfolio_risk(
+                            account,
+                            config=DEFAULT_AI_SCALPING_CONFIG,
+                            ite_config=cfg,
+                        )
+                        blocked, block_why = check_portfolio_limits(
+                            open_positions=risk_snap.open_positions,
+                            max_open_positions=risk_snap.max_open_positions,
+                            daily_loss_pct=risk_snap.daily_loss_pct,
+                            max_daily_loss_pct=risk_snap.max_daily_loss_pct,
+                            exposure_pct=risk_snap.exposure_pct,
+                            max_exposure_pct=risk_snap.max_exposure_pct,
+                        )
+                        if blocked:
+                            risk_allowed = False
+                            risk_reasons.append(
+                                f"portfolio_risk_block:{block_why or 'limits'}"
+                            )
+                            approved_lots = Decimal("0")
+
+                        blocked_v2, why_v2 = check_portfolio_sizing_limits(
+                            open_positions=risk_snap.open_positions,
+                            max_open_positions=risk_snap.max_open_positions,
+                            daily_loss_pct=risk_snap.daily_loss_pct,
+                            max_daily_loss_pct=risk_snap.max_daily_loss_pct,
+                            exposure_pct=risk_snap.exposure_pct,
+                            max_exposure_pct=risk_snap.max_exposure_pct,
+                            margin_usage_pct=None,
+                            max_margin_usage_pct=scalp_cfg.max_margin_usage_pct,
+                            symbol_exposure_pct=symbol_exp,
+                            max_symbol_exposure_pct=scalp_cfg.max_symbol_exposure_pct,
+                            correlated_exposure_pct=correlated_exp,
+                            max_correlated_exposure_pct=(
+                                scalp_cfg.max_correlated_exposure_pct
+                            ),
+                        )
+                        if blocked_v2:
+                            risk_allowed = False
+                            risk_reasons.append(
+                                f"portfolio_sizing_v2_block:{why_v2 or 'limits'}"
+                            )
+                            approved_lots = Decimal("0")
+                    except Exception:
+                        logger.exception("portfolio_risk_check_failed")
+                        risk_allowed = False
+                        risk_reasons.append("portfolio_risk_check_failed")
+                        approved_lots = Decimal("0")
 
         eligibility = PositionEligibilityEngine(config=cfg).evaluate(
             snapshot=snapshot,
