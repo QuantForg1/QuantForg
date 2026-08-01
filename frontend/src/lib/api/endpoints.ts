@@ -456,6 +456,48 @@ export const customerOpsApi = {
 };
 
 /** QuantForg Enterprise Platform — OWNER/ADMIN additive SaaS controls. */
+export const productionReliabilityApi = {
+  program: () =>
+    apiFetch<Record<string, unknown>>("/production-reliability/program"),
+  observability: () =>
+    apiFetch<Record<string, unknown>>("/production-reliability/observability"),
+  reliability: () =>
+    apiFetch<Record<string, unknown>>("/production-reliability/reliability"),
+  health: () =>
+    apiFetch<Record<string, unknown>>("/production-reliability/health"),
+  incidents: (status?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/production-reliability/incidents${
+        status ? `?status=${encodeURIComponent(status)}` : ""
+      }`,
+    ),
+  openIncident: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/production-reliability/incidents", {
+      method: "POST",
+      body,
+    }),
+  setIncidentStatus: (id: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      `/production-reliability/incidents/${encodeURIComponent(id)}/status`,
+      { method: "POST", body },
+    ),
+  backupRecovery: () =>
+    apiFetch<Record<string, unknown>>(
+      "/production-reliability/backup-recovery",
+    ),
+  recordEvidence: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      "/production-reliability/backup-recovery/evidence",
+      { method: "POST", body },
+    ),
+  securityOps: () =>
+    apiFetch<Record<string, unknown>>("/production-reliability/security-ops"),
+  performance: () =>
+    apiFetch<Record<string, unknown>>("/production-reliability/performance"),
+  nocPanels: () =>
+    apiFetch<Record<string, unknown>>("/production-reliability/noc-panels"),
+};
+
 export const enterpriseApi = {
   platform: (organizationId?: string) =>
     apiFetch<Record<string, unknown>>(

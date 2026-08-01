@@ -1055,6 +1055,42 @@ def _build_enterprise_noc_panels_sync() -> dict[str, Any]:
         }
 
 
+def _build_reliability_noc_panels_sync() -> dict[str, Any]:
+    """Sync wrapper for Production Reliability NOC panels — observe-only."""
+    import asyncio
+    import concurrent.futures
+
+    async def _run() -> dict[str, Any]:
+        from app.application.services.production_reliability_program import (
+            build_reliability_noc_panels,
+        )
+
+        return await build_reliability_noc_panels()
+
+    try:
+        try:
+            asyncio.get_running_loop()
+            running = True
+        except RuntimeError:
+            running = False
+        if running:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(lambda: asyncio.run(_run())).result(timeout=15)
+        return asyncio.run(_run())
+    except Exception:
+        logger.exception("reliability_noc_panels_sync_failed")
+        return {
+            "fabricated": False,
+            "observe_only": True,
+            "error": "reliability_panels_unavailable",
+            "flags": {
+                "never_modifies_trading": True,
+                "destructive_ops_forbidden": True,
+                "program_version": "v1.0.0",
+            },
+        }
+
+
 def build_noc_command_center() -> dict[str, Any]:
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.production_validation_mode import (
@@ -1270,6 +1306,12 @@ def build_noc_command_center() -> dict[str, Any]:
         "enterprise_platform": _safe_call(
             "enterprise_platform",
             _build_enterprise_noc_panels_sync,
+            {},
+        )
+        or {},
+        "production_reliability": _safe_call(
+            "production_reliability",
+            _build_reliability_noc_panels_sync,
             {},
         )
         or {},

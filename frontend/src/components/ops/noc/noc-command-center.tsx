@@ -291,6 +291,14 @@ export function NocCommandCenter() {
   const entDash = asRecord(enterprisePlat.enterprise_dashboard);
   const entMetrics = asRecord(entDash.metrics);
   const entOrgs = asRecord(enterprisePlat.organizations);
+  const prodRel = asRecord(data.production_reliability);
+  const relDash = asRecord(prodRel.reliability);
+  const relIncidents = asRecord(prodRel.incidents);
+  const relInfra = asRecord(prodRel.infrastructure);
+  const relOps = asRecord(prodRel.operations);
+  const relPerf = asRecord(prodRel.performance);
+  const relSecOps = asRecord(prodRel.security_operations);
+  const relLatencies = asRecord(prodRel.latencies_ms);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -1619,6 +1627,86 @@ export function NocCommandCenter() {
             label="Trading untouched"
             value={fmt(
               asRecord(enterprisePlat.flags).never_modifies_trading,
+              "true",
+            )}
+            tone="ok"
+          />
+        </NocPanel>
+
+        <NocPanel
+          id="noc-prod-reliability"
+          title="4ab · Reliability"
+          action={<Badge tone="accent">Ops</Badge>}
+        >
+          <NocRow
+            label="Availability %"
+            value={fmt(relDash.availability_percent)}
+          />
+          <NocRow label="SLA met" value={fmt(relDash.sla_met)} />
+          <NocRow label="SLO met" value={fmt(relDash.slo_met)} />
+          <NocRow
+            label="Error budget %"
+            value={fmt(relDash.error_budget_remaining_percent)}
+          />
+          <NocRow label="Open incidents" value={fmt(relDash.open_incidents, "0")} />
+        </NocPanel>
+
+        <NocPanel id="noc-prod-incidents" title="4ac · Incidents">
+          <NocRow label="Total" value={fmt(relIncidents.count, "0")} />
+          <NocRow
+            label="By status"
+            value={fmt(
+              JSON.stringify(asRecord(relIncidents.by_status)),
+              "{}",
+            )}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-prod-infra" title="4ad · Infrastructure">
+          <NocRow label="Overall" value={fmt(relInfra.overall)} />
+          <NocRow
+            label="Components OK"
+            value={`${fmt(relInfra.ok_count)} / ${fmt(relInfra.target_count)}`}
+          />
+          <NocRow label="API latency" value={fmt(relLatencies.api)} />
+          <NocRow label="Gateway latency" value={fmt(relLatencies.gateway)} />
+          <NocRow label="OMS latency" value={fmt(relLatencies.oms)} />
+          <NocRow label="MT5 latency" value={fmt(relLatencies.mt5)} />
+        </NocPanel>
+
+        <NocPanel id="noc-prod-operations" title="4ae · Operations">
+          <NocRow label="Success rate" value={fmt(relOps.success_rate)} />
+          <NocRow label="Error rate" value={fmt(relOps.error_rate)} />
+          <NocRow
+            label="Backup artifacts"
+            value={fmt(relOps.backup_artifacts, "0")}
+          />
+          <NocRow label="DR passed" value={fmt(relOps.dr_passed, "0")} />
+        </NocPanel>
+
+        <NocPanel id="noc-prod-performance" title="4af · Performance">
+          <NocRow label="CPU %" value={fmt(relPerf.cpu_percent)} />
+          <NocRow label="Memory %" value={fmt(relPerf.memory_percent)} />
+          <NocRow
+            label="Slow endpoints"
+            value={fmt(relPerf.slow_endpoints, "0")}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-prod-secops" title="4ag · Security Operations">
+          <NocRow label="Alerts" value={fmt(relSecOps.alert_count, "0")} />
+          <NocRow
+            label="Failed auth"
+            value={fmt(relSecOps.failed_auth_count, "0")}
+          />
+          <NocRow
+            label="Expired keys"
+            value={fmt(relSecOps.expired_api_key_count, "0")}
+          />
+          <NocRow
+            label="Trading untouched"
+            value={fmt(
+              asRecord(prodRel.flags).never_modifies_trading,
               "true",
             )}
             tone="ok"

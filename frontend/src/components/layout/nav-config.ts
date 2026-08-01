@@ -565,6 +565,12 @@ export const appNav: NavGroup[] = [
         hint: "Orgs · RBAC · API keys · compliance · OWNER/ADMIN",
       },
       {
+        href: "/admin/reliability",
+        label: "Production Reliability",
+        icon: Activity,
+        hint: "SLA · incidents · health · security ops · OWNER/ADMIN",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,
