@@ -1127,6 +1127,42 @@ def _build_ci_noc_panels_sync() -> dict[str, Any]:
         }
 
 
+def _build_lte_noc_panels_sync() -> dict[str, Any]:
+    """Sync wrapper for Live Trading Evidence NOC panels — observe-only."""
+    import asyncio
+    import concurrent.futures
+
+    async def _run() -> dict[str, Any]:
+        from app.application.services.live_trading_evidence_program import (
+            build_live_trading_evidence_noc_panels,
+        )
+
+        return await build_live_trading_evidence_noc_panels()
+
+    try:
+        try:
+            asyncio.get_running_loop()
+            running = True
+        except RuntimeError:
+            running = False
+        if running:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(lambda: asyncio.run(_run())).result(timeout=15)
+        return asyncio.run(_run())
+    except Exception:
+        logger.exception("lte_noc_panels_sync_failed")
+        return {
+            "fabricated": False,
+            "observe_only": True,
+            "error": "lte_panels_unavailable",
+            "flags": {
+                "never_modifies_trading": True,
+                "fabricates_evidence": False,
+                "program_version": "v1.0.0",
+            },
+        }
+
+
 def build_noc_command_center() -> dict[str, Any]:
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.production_validation_mode import (
@@ -1354,6 +1390,12 @@ def build_noc_command_center() -> dict[str, Any]:
         "continuous_improvement": _safe_call(
             "continuous_improvement",
             _build_ci_noc_panels_sync,
+            {},
+        )
+        or {},
+        "live_trading_evidence": _safe_call(
+            "live_trading_evidence",
+            _build_lte_noc_panels_sync,
             {},
         )
         or {},

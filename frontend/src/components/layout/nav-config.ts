@@ -577,6 +577,12 @@ export const appNav: NavGroup[] = [
         hint: "Validation · effectiveness · scorecard · OWNER/ADMIN",
       },
       {
+        href: "/admin/live-trading-evidence",
+        label: "Live Trading Evidence",
+        icon: Activity,
+        hint: "Trade archive · rejections · readiness · OWNER/ADMIN",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,

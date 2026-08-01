@@ -306,6 +306,12 @@ export function NocCommandCenter() {
   const ciScore = asRecord(contImp.operational_scorecard);
   const ciTrends = asRecord(contImp.historical_trends);
   const ciTrendMap = asRecord(ciTrends.validation_trends);
+  const liveEvid = asRecord(data.live_trading_evidence);
+  const lteTrades = asRecord(liveEvid.live_trade_evidence);
+  const lteRejects = asRecord(liveEvid.rejected_opportunities);
+  const lteArchive = asRecord(liveEvid.execution_archive);
+  const lteReady = asRecord(liveEvid.production_readiness);
+  const lteDash = asRecord(liveEvid.dashboard_snapshot);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -1800,6 +1806,59 @@ export function NocCommandCenter() {
             label="Trading untouched"
             value={fmt(
               asRecord(contImp.flags).never_modifies_trading,
+              "true",
+            )}
+            tone="ok"
+          />
+        </NocPanel>
+
+        <NocPanel
+          id="noc-lte-trades"
+          title="4am · Live Trade Evidence"
+          action={<Badge tone="accent">Evidence</Badge>}
+        >
+          <NocRow label="Archived trades" value={fmt(lteTrades.count, "0")} />
+          <NocRow
+            label="Archive count"
+            value={fmt(lteTrades.archive_count, "0")}
+          />
+          <NocRow
+            label="Executed (dash)"
+            value={fmt(lteDash.executed_trades, "0")}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-lte-rejects" title="4an · Rejected Opportunities">
+          <NocRow label="Count" value={fmt(lteRejects.count, "0")} />
+          <NocRow
+            label="Rejected (dash)"
+            value={fmt(lteDash.rejected_trades, "0")}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-lte-archive" title="4ao · Execution Archive">
+          <NocRow label="Packages" value={fmt(lteArchive.count, "0")} />
+          <NocRow
+            label="Avg latency"
+            value={fmt(lteDash.average_latency)}
+          />
+          <NocRow
+            label="Avg slippage"
+            value={fmt(lteDash.average_slippage)}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-lte-readiness" title="4ap · Production Readiness">
+          <NocRow label="Score" value={fmt(lteReady.score)} />
+          <NocRow label="Status" value={fmt(lteReady.status)} />
+          <NocRow
+            label="Measured components"
+            value={fmt(lteReady.measured_components, "0")}
+          />
+          <NocRow
+            label="Trading untouched"
+            value={fmt(
+              asRecord(liveEvid.flags).never_modifies_trading,
               "true",
             )}
             tone="ok"

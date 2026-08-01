@@ -456,6 +456,37 @@ export const customerOpsApi = {
 };
 
 /** QuantForg Enterprise Platform — OWNER/ADMIN additive SaaS controls. */
+export const liveTradingEvidenceApi = {
+  program: () =>
+    apiFetch<Record<string, unknown>>("/live-trading-evidence/program"),
+  trades: (limit?: number) =>
+    apiFetch<Record<string, unknown>>(
+      `/live-trading-evidence/trades${
+        limit ? `?limit=${encodeURIComponent(String(limit))}` : ""
+      }`,
+    ),
+  trade: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/live-trading-evidence/trades/${encodeURIComponent(id)}`,
+    ),
+  investigate: (id: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/live-trading-evidence/investigate/${encodeURIComponent(id)}`,
+    ),
+  rejections: (limit?: number) =>
+    apiFetch<Record<string, unknown>>(
+      `/live-trading-evidence/rejections${
+        limit ? `?limit=${encodeURIComponent(String(limit))}` : ""
+      }`,
+    ),
+  dashboard: () =>
+    apiFetch<Record<string, unknown>>("/live-trading-evidence/dashboard"),
+  readiness: () =>
+    apiFetch<Record<string, unknown>>("/live-trading-evidence/readiness"),
+  nocPanels: () =>
+    apiFetch<Record<string, unknown>>("/live-trading-evidence/noc-panels"),
+};
+
 export const continuousImprovementApi = {
   program: () =>
     apiFetch<Record<string, unknown>>("/continuous-improvement/program"),
