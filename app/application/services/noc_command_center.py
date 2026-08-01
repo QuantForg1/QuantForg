@@ -1021,6 +1021,40 @@ def _build_cop_noc_panels_sync() -> dict[str, Any]:
         }
 
 
+def _build_enterprise_noc_panels_sync() -> dict[str, Any]:
+    """Sync wrapper for Enterprise NOC panels — observe-only."""
+    import asyncio
+    import concurrent.futures
+
+    async def _run() -> dict[str, Any]:
+        from app.application.services.enterprise_platform import (
+            build_enterprise_noc_panels,
+        )
+
+        return await build_enterprise_noc_panels()
+
+    try:
+        try:
+            asyncio.get_running_loop()
+            running = True
+        except RuntimeError:
+            running = False
+        if running:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(lambda: asyncio.run(_run())).result(timeout=12)
+        return asyncio.run(_run())
+    except Exception:
+        logger.exception("enterprise_noc_panels_sync_failed")
+        return {
+            "fabricated": False,
+            "observe_only": True,
+            "flags": {
+                "never_modifies_trading": True,
+                "enterprise_version": "v1.0.0",
+            },
+        }
+
+
 def build_noc_command_center() -> dict[str, Any]:
     from app.application.services.auto_trading_status import build_auto_trading_status
     from app.application.services.production_validation_mode import (
@@ -1230,6 +1264,12 @@ def build_noc_command_center() -> dict[str, Any]:
         "customer_operations": _safe_call(
             "customer_operations",
             _build_cop_noc_panels_sync,
+            {},
+        )
+        or {},
+        "enterprise_platform": _safe_call(
+            "enterprise_platform",
+            _build_enterprise_noc_panels_sync,
             {},
         )
         or {},

@@ -455,6 +455,76 @@ export const customerOpsApi = {
     apiFetch<Record<string, unknown>>(`/customer-ops/audit?limit=${limit}`),
 };
 
+/** QuantForg Enterprise Platform — OWNER/ADMIN additive SaaS controls. */
+export const enterpriseApi = {
+  platform: (organizationId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/enterprise/platform${
+        organizationId
+          ? `?organization_id=${encodeURIComponent(organizationId)}`
+          : ""
+      }`,
+    ),
+  dashboard: () => apiFetch<Record<string, unknown>>("/enterprise/dashboard"),
+  organizations: () =>
+    apiFetch<Record<string, unknown>>("/enterprise/organizations"),
+  rbac: () => apiFetch<Record<string, unknown>>("/enterprise/rbac"),
+  apiKeys: (organizationId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/enterprise/api-keys${
+        organizationId
+          ? `?organization_id=${encodeURIComponent(organizationId)}`
+          : ""
+      }`,
+    ),
+  createApiKey: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/enterprise/api-keys", {
+      method: "POST",
+      body,
+    }),
+  rotateApiKey: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/enterprise/api-keys/${id}/rotate`, {
+      method: "POST",
+      body: {},
+    }),
+  disableApiKey: (id: string) =>
+    apiFetch<Record<string, unknown>>(`/enterprise/api-keys/${id}/disable`, {
+      method: "POST",
+      body: {},
+    }),
+  audit: (params?: { organization_id?: string; q?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.organization_id) {
+      sp.set("organization_id", params.organization_id);
+    }
+    if (params?.q) sp.set("q", params.q);
+    if (params?.limit) sp.set("limit", String(params.limit));
+    const qs = sp.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/enterprise/audit${qs ? `?${qs}` : ""}`,
+    );
+  },
+  security: () => apiFetch<Record<string, unknown>>("/enterprise/security"),
+  reports: (organizationId?: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/enterprise/reports${
+        organizationId
+          ? `?organization_id=${encodeURIComponent(organizationId)}`
+          : ""
+      }`,
+    ),
+  compliance: () =>
+    apiFetch<Record<string, unknown>>("/enterprise/compliance"),
+  gdprExport: (userId: string) =>
+    apiFetch<Record<string, unknown>>("/enterprise/compliance/gdpr-export", {
+      method: "POST",
+      body: { user_id: userId },
+    }),
+  admin: () => apiFetch<Record<string, unknown>>("/enterprise/admin"),
+  nocPanels: () =>
+    apiFetch<Record<string, unknown>>("/enterprise/noc-panels"),
+};
+
 export const institutionalDataWarehouseApi = {
   dashboard: () =>
     apiFetch<Record<string, unknown>>("/institutional-data-warehouse/dashboard"),

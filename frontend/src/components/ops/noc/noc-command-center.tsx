@@ -287,6 +287,10 @@ export function NocCommandCenter() {
     : [];
   const copSupport = asRecord(customerOps.support);
   const copAnalytics = asRecord(customerOps.enterprise_analytics);
+  const enterprisePlat = asRecord(data.enterprise_platform);
+  const entDash = asRecord(enterprisePlat.enterprise_dashboard);
+  const entMetrics = asRecord(entDash.metrics);
+  const entOrgs = asRecord(enterprisePlat.organizations);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -1584,6 +1588,37 @@ export function NocCommandCenter() {
             label="Trading untouched"
             value={fmt(
               asRecord(customerOps.flags).never_modifies_trading,
+              "true",
+            )}
+            tone="ok"
+          />
+        </NocPanel>
+
+        <NocPanel
+          id="noc-enterprise-platform"
+          title="4aa · Enterprise Platform"
+          action={<Badge tone="accent">SaaS</Badge>}
+        >
+          <NocRow
+            label="Organizations"
+            value={fmt(entOrgs.count ?? entMetrics.organizations, "0")}
+          />
+          <NocRow
+            label="Active users"
+            value={fmt(entMetrics.active_users, "0")}
+          />
+          <NocRow
+            label="Active sessions"
+            value={fmt(entMetrics.active_sessions, "0")}
+          />
+          <NocRow
+            label="API keys"
+            value={fmt(entMetrics.active_api_keys, "0")}
+          />
+          <NocRow
+            label="Trading untouched"
+            value={fmt(
+              asRecord(enterprisePlat.flags).never_modifies_trading,
               "true",
             )}
             tone="ok"

@@ -559,6 +559,12 @@ export const appNav: NavGroup[] = [
         hint: "Fleet · licenses · brokers · support · OWNER/ADMIN",
       },
       {
+        href: "/admin/enterprise",
+        label: "Enterprise Platform",
+        icon: Building2,
+        hint: "Orgs · RBAC · API keys · compliance · OWNER/ADMIN",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,
