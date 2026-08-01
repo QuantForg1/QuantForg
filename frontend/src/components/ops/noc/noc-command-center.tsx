@@ -299,6 +299,13 @@ export function NocCommandCenter() {
   const relPerf = asRecord(prodRel.performance);
   const relSecOps = asRecord(prodRel.security_operations);
   const relLatencies = asRecord(prodRel.latencies_ms);
+  const contImp = asRecord(data.continuous_improvement);
+  const ciVal = asRecord(contImp.production_validation);
+  const ciTrade = asRecord(contImp.trading_effectiveness);
+  const ciLearn = asRecord(contImp.learning_review);
+  const ciScore = asRecord(contImp.operational_scorecard);
+  const ciTrends = asRecord(contImp.historical_trends);
+  const ciTrendMap = asRecord(ciTrends.validation_trends);
   const positions = asList(data.open_positions);
   const closed = asList(data.closed_trades);
   const oms = asRecord(data.oms);
@@ -1707,6 +1714,92 @@ export function NocCommandCenter() {
             label="Trading untouched"
             value={fmt(
               asRecord(prodRel.flags).never_modifies_trading,
+              "true",
+            )}
+            tone="ok"
+          />
+        </NocPanel>
+
+        <NocPanel
+          id="noc-ci-validation"
+          title="4ah · Production Validation"
+          action={<Badge tone="accent">CI</Badge>}
+        >
+          <NocRow label="Overall" value={fmt(ciVal.overall)} />
+          <NocRow
+            label="Components OK"
+            value={`${fmt(ciVal.ok_count)} / ${fmt(ciVal.target_count)}`}
+          />
+          <NocRow
+            label="History samples"
+            value={fmt(ciVal.history_count, "0")}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-ci-trading" title="4ai · Trading Effectiveness">
+          <NocRow
+            label="Signals generated"
+            value={fmt(ciTrade.signals_generated)}
+          />
+          <NocRow
+            label="Signals rejected"
+            value={fmt(ciTrade.signals_rejected)}
+          />
+          <NocRow label="Win rate" value={fmt(ciTrade.win_rate)} />
+          <NocRow label="Profit factor" value={fmt(ciTrade.profit_factor)} />
+          <NocRow label="Expectancy" value={fmt(ciTrade.expectancy)} />
+          <NocRow
+            label="Measured fields"
+            value={fmt(ciTrade.measured_count, "0")}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-ci-learning" title="4aj · Learning Review">
+          <NocRow
+            label="Success patterns"
+            value={fmt(ciLearn.success_patterns, "0")}
+          />
+          <NocRow
+            label="Failure patterns"
+            value={fmt(ciLearn.failure_patterns, "0")}
+          />
+          <NocRow
+            label="Blocking gates"
+            value={fmt(ciLearn.blocking_gates, "0")}
+          />
+          <NocRow
+            label="Recommendations"
+            value={fmt(ciLearn.recommendations, "0")}
+          />
+          <NocRow label="Operator review only" value="true" tone="ok" />
+        </NocPanel>
+
+        <NocPanel id="noc-ci-scorecard" title="4ak · Operational Scorecard">
+          <NocRow
+            label="Overall score"
+            value={fmt(ciScore.overall_score)}
+          />
+          <NocRow
+            label="Categories"
+            value={fmt(
+              JSON.stringify(asRecord(ciScore.categories)),
+              "{}",
+            )}
+          />
+        </NocPanel>
+
+        <NocPanel id="noc-ci-trends" title="4al · Historical Trends">
+          {(["24h", "7d", "30d", "90d", "1y"] as const).map((w) => (
+            <NocRow
+              key={w}
+              label={`${w} avg OK %`}
+              value={fmt(asRecord(ciTrendMap[w]).avg_ok_ratio_percent)}
+            />
+          ))}
+          <NocRow
+            label="Trading untouched"
+            value={fmt(
+              asRecord(contImp.flags).never_modifies_trading,
               "true",
             )}
             tone="ok"

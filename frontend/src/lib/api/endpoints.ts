@@ -456,6 +456,33 @@ export const customerOpsApi = {
 };
 
 /** QuantForg Enterprise Platform — OWNER/ADMIN additive SaaS controls. */
+export const continuousImprovementApi = {
+  program: () =>
+    apiFetch<Record<string, unknown>>("/continuous-improvement/program"),
+  validation: () =>
+    apiFetch<Record<string, unknown>>("/continuous-improvement/validation"),
+  tradingEffectiveness: () =>
+    apiFetch<Record<string, unknown>>(
+      "/continuous-improvement/trading-effectiveness",
+    ),
+  learningReview: () =>
+    apiFetch<Record<string, unknown>>(
+      "/continuous-improvement/learning-review",
+    ),
+  releaseConfidence: () =>
+    apiFetch<Record<string, unknown>>(
+      "/continuous-improvement/release-confidence",
+    ),
+  scorecard: () =>
+    apiFetch<Record<string, unknown>>("/continuous-improvement/scorecard"),
+  trends: () =>
+    apiFetch<Record<string, unknown>>("/continuous-improvement/trends"),
+  reports: () =>
+    apiFetch<Record<string, unknown>>("/continuous-improvement/reports"),
+  nocPanels: () =>
+    apiFetch<Record<string, unknown>>("/continuous-improvement/noc-panels"),
+};
+
 export const productionReliabilityApi = {
   program: () =>
     apiFetch<Record<string, unknown>>("/production-reliability/program"),

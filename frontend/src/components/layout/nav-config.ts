@@ -571,6 +571,12 @@ export const appNav: NavGroup[] = [
         hint: "SLA · incidents · health · security ops · OWNER/ADMIN",
       },
       {
+        href: "/admin/continuous-improvement",
+        label: "Continuous Improvement",
+        icon: Activity,
+        hint: "Validation · effectiveness · scorecard · OWNER/ADMIN",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,
