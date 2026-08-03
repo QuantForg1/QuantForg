@@ -244,28 +244,59 @@ async def build_ite_cycle_market_context(
     if session_err:
         return _fail(session_err)
 
+    # Multi-symbol: broker terminal may use USTEC/DJ30/DE40 instead of
+    # NAS100/US30/GER40 — try candidates before failing the scan.
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        broker_symbol_candidates,
+    )
+
+    symbol_candidates = broker_symbol_candidates(symbol) or (symbol,)
+    resolved_symbol = symbol
     bars_by_tf: dict[Timeframe, list[Candle]] = {}
     bars_loaded: dict[str, int] = {}
-    try:
-        for tf, count in _TF_COUNTS:
-            rates = mt5_adapter.copy_rates_from_pos(symbol, tf, 0, count)
-            candles = [_rate_to_candle(r) for r in (rates or [])]
-            bars_by_tf[tf] = candles
-            bars_loaded[tf.value] = len(candles)
-            diag["bars"][tf.value] = {
-                "requested": count,
-                "loaded": len(candles),
-                "ok": len(candles) >= 50,
-            }
-            if len(candles) < 50:
-                return _fail(
-                    f"Insufficient {tf.value} bars for analysis "
-                    f"(got {len(candles)}, need ≥50)",
-                    bars=diag["bars"],
-                )
-    except Exception as exc:
-        logger.warning("ite_cycle_bars_load_failed", error=str(exc))
-        return _fail(f"Market data load failed: {exc}", bars=bars_loaded)
+    last_bar_exc: Exception | None = None
+    for candidate in symbol_candidates:
+        bars_by_tf = {}
+        bars_loaded = {}
+        try:
+            for tf, count in _TF_COUNTS:
+                rates = mt5_adapter.copy_rates_from_pos(candidate, tf, 0, count)
+                candles = [_rate_to_candle(r) for r in (rates or [])]
+                bars_by_tf[tf] = candles
+                bars_loaded[tf.value] = len(candles)
+                diag["bars"][tf.value] = {
+                    "requested": count,
+                    "loaded": len(candles),
+                    "ok": len(candles) >= 50,
+                }
+                if len(candles) < 50:
+                    raise RuntimeError(
+                        f"Insufficient {tf.value} bars for analysis "
+                        f"(got {len(candles)}, need ≥50)"
+                    )
+            resolved_symbol = candidate
+            last_bar_exc = None
+            break
+        except Exception as exc:
+            last_bar_exc = exc
+            continue
+    if last_bar_exc is not None or not bars_by_tf:
+        logger.warning(
+            "ite_cycle_bars_load_failed",
+            error=str(last_bar_exc),
+            symbol=symbol,
+            tried=list(symbol_candidates),
+        )
+        return _fail(
+            f"Market data load failed: {last_bar_exc}",
+            bars=bars_loaded,
+            broker_symbol_tried=list(symbol_candidates),
+        )
+    if resolved_symbol != symbol:
+        diag["broker_symbol_resolved"] = resolved_symbol
+        diag["requested_symbol"] = symbol
+        symbol = resolved_symbol
+        diag["symbol"] = symbol
 
     diag["bars"] = {
         k: v if isinstance(v, dict) else {"loaded": v, "ok": int(v) >= 50}

@@ -92,16 +92,20 @@ def resolve_atr_floors_for_symbol(
     hard = Decimal(str(cfg.atr_hard_min_pct))
     exc = Decimal(str(cfg.atr_exceptional_floor_pct))
     std = Decimal(str(cfg.atr_compression_floor_pct))
-    code = (symbol or "").strip().upper()
-    if not code or "XAU" in code or code in {"GOLD", "XAUUSDM"}:
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        asset_class_for_symbol,
+    )
+
+    cls = asset_class_for_symbol(symbol)
+    if cls in {"gold", "other"}:
         return hard, exc, std
-    if code in {"BTCUSD", "ETHUSD"} or code.startswith(("BTC", "ETH")):
+    if cls == "crypto":
         return (
             max(hard, Decimal("0.15")),
             max(exc, Decimal("0.20")),
             max(std, Decimal("0.30")),
         )
-    if code in {"NAS100", "US30", "GER40", "US500", "UK100", "SPX500"}:
+    if cls == "index":
         return Decimal("0.06"), Decimal("0.08"), Decimal("0.12")
     # FX majors / crosses
     return Decimal("0.03"), Decimal("0.04"), Decimal("0.06")

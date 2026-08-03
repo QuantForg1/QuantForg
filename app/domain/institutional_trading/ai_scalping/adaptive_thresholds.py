@@ -35,14 +35,24 @@ def classify_volatility_band(
     mid: Decimal | None,
     *,
     config: AiScalpingConfig | None = None,
+    symbol: str | None = None,
 ) -> tuple[VolatilityBand, Decimal | None]:
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     if atr is None or mid is None or atr <= 0 or mid <= 0:
         return "normal", None
     atr_pct = (atr / mid) * Decimal("100")
-    if atr_pct >= cfg.atr_high_pct:
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        classify_atr_band_thresholds,
+    )
+
+    low, high = classify_atr_band_thresholds(
+        symbol,
+        gold_low=cfg.atr_low_pct,
+        gold_high=cfg.atr_high_pct,
+    )
+    if atr_pct >= high:
         return "high", atr_pct
-    if atr_pct <= cfg.atr_low_pct:
+    if atr_pct <= low:
         return "low", atr_pct
     return "normal", atr_pct
 
@@ -52,10 +62,11 @@ def resolve_adaptive_thresholds(
     mid: Decimal | None,
     *,
     config: AiScalpingConfig | None = None,
+    symbol: str | None = None,
 ) -> ResolvedThresholds:
     """Resolve live Quality / Confidence floors — never hardcoded at call sites."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
-    band, atr_pct = classify_volatility_band(atr, mid, config=cfg)
+    band, atr_pct = classify_volatility_band(atr, mid, config=cfg, symbol=symbol)
     profile: AdaptiveThresholdBand
     if band == "high":
         profile = cfg.high_vol

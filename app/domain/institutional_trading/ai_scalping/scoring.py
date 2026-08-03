@@ -211,7 +211,9 @@ def score_scalping_setup(
     open_fvg = len(getattr(fvg, "active_gaps", ()) or ()) if fvg else 0
     factors["fvg"] = 80 if open_fvg else 25
 
-    resolved: ResolvedThresholds = resolve_adaptive_thresholds(atr, mid, config=cfg)
+    resolved: ResolvedThresholds = resolve_adaptive_thresholds(
+        atr, mid, config=cfg, symbol=str(symbol or getattr(snapshot, "symbol", "") or "")
+    )
     factors["atr_expansion"] = (
         85 if resolved.band == "high" else (70 if resolved.band == "normal" else 50)
     )

@@ -74,6 +74,16 @@ def assess_spread(
             reject=False,
             reason="Spread unavailable - neutral",
         )
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        resolve_spread_limits,
+    )
+
+    max_reject, max_full, atr_pct_limit, atr_cap_floor = resolve_spread_limits(
+        symbol,
+        max_spread_reject=cfg.max_spread_reject,
+        max_spread_for_full_score=cfg.max_spread_for_full_score,
+        max_spread_atr_pct=cfg.max_spread_atr_pct,
+    )
     hist = _record_spread(symbol, spread)
     med = _median(hist)
     med_s = str(med) if med is not None else None
@@ -83,28 +93,30 @@ def assess_spread(
         if spread > med * Decimal("2.5"):
             abnormal = True
 
-    if spread > cfg.max_spread_reject:
+    if spread > max_reject:
         return SpreadAssessment(
             score=0,
             confidence_penalty=cfg.spread_soft_penalty_max,
             reject=True,
             reason=(
-                f"Spread {spread} exceeds configured reject {cfg.max_spread_reject}"
+                f"Spread {spread} exceeds configured reject {max_reject}"
             ),
             historical_median=med_s,
             abnormal_vs_history=abnormal,
         )
-    if atr is not None and atr > 0 and cfg.max_spread_atr_pct > 0:
-        atr_cap = (atr * cfg.max_spread_atr_pct / Decimal("100")).quantize(
+    if atr is not None and atr > 0 and atr_pct_limit > 0:
+        atr_cap = (atr * atr_pct_limit / Decimal("100")).quantize(
             Decimal("0.0001")
         )
+        if atr_cap_floor > 0 and atr_cap < atr_cap_floor:
+            atr_cap = atr_cap_floor
         if spread > atr_cap:
             return SpreadAssessment(
                 score=0,
                 confidence_penalty=cfg.spread_soft_penalty_max,
                 reject=True,
                 reason=(
-                    f"Spread {spread} exceeds {cfg.max_spread_atr_pct}% of ATR "
+                    f"Spread {spread} exceeds {atr_pct_limit}% of ATR "
                     f"({atr_cap})"
                 ),
                 historical_median=med_s,
@@ -122,7 +134,7 @@ def assess_spread(
             historical_median=med_s,
             abnormal_vs_history=True,
         )
-    if spread <= cfg.max_spread_for_full_score:
+    if spread <= max_full:
         return SpreadAssessment(
             score=100,
             confidence_penalty=0,
@@ -131,11 +143,11 @@ def assess_spread(
             historical_median=med_s,
             abnormal_vs_history=False,
         )
-    span = cfg.max_spread_reject - cfg.max_spread_for_full_score
+    span = max_reject - max_full
     if span <= 0:
         ratio = Decimal("1")
     else:
-        ratio = (spread - cfg.max_spread_for_full_score) / span
+        ratio = (spread - max_full) / span
     ratio = max(Decimal("0"), min(Decimal("1"), ratio))
     score = int(max(0, float(100 * (1 - ratio))))
     penalty = round(float(ratio) * cfg.spread_soft_penalty_max)
