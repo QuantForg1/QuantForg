@@ -58,6 +58,24 @@ def test_resolve_scan_universe_respects_plane_allowlist() -> None:
 
 
 @pytest.mark.unit
+def test_resolve_scan_universe_ignores_stale_gold_only_plane(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
+    plane = MagicMock()
+    plane.allowed_symbols = ("XAUUSD",)
+    universe = resolve_scan_universe(plane=plane)
+    assert "EURUSD" in universe
+    assert "GBPUSD" in universe
+    assert "BTCUSD" in universe
+    assert "NAS100" in universe
+    assert len(universe) == len(DEFAULT_SCALPING_UNIVERSE)
+
+
+@pytest.mark.unit
 def test_noc_row_maps_blocking_gate() -> None:
     row = _noc_row_from_score(
         {

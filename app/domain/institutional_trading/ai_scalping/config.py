@@ -95,11 +95,14 @@ class AiScalpingConfig:
     atr_high_pct: Decimal = Decimal("1.50")
     atr_low_pct: Decimal = Decimal("0.40")
 
-    # Volatility Gate v2 — adaptive floors (calibration evidence; never below 0.15)
+    # Volatility Gate v2 — adaptive floors.
     # Standard = legacy atr_low_pct/2; exceptional only when all pillars strong.
+    # Hard min 0.10: production ATR%≈0.115 permanently deadlocked LIVE under 0.15
+    # (verified Railway multi_asset_scan reject valid_volatility). Weak setups
+    # still require the 0.20 standard floor unless exceptional strength clears.
     atr_compression_floor_pct: Decimal = Decimal("0.20")
-    atr_exceptional_floor_pct: Decimal = Decimal("0.15")
-    atr_hard_min_pct: Decimal = Decimal("0.15")
+    atr_exceptional_floor_pct: Decimal = Decimal("0.10")
+    atr_hard_min_pct: Decimal = Decimal("0.10")
     vol_exceptional_min_quality: int = 88
     vol_exceptional_min_confidence: int = 88
     vol_exceptional_min_structure: int = 80

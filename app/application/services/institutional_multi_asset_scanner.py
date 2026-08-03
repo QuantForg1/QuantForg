@@ -112,6 +112,16 @@ def resolve_scan_universe(
     )
     if not allowed:
         return base
+    # Defense: never let a stale gold-only plane collapse MULTI_SYMBOL scan.
+    try:
+        from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+
+        if not gold_only_enabled() and (
+            len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}
+        ):
+            return base
+    except Exception:
+        pass
     allowed_set = set(allowed)
     filtered = tuple(s for s in base if s in allowed_set)
     return filtered or base

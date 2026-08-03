@@ -4,11 +4,11 @@ Replaces the single fixed compression floor (atr_low_pct/2 = 0.20%) with an
 adaptive model:
 
 * Standard setups → keep 0.20% floor (never looser than v1 for weak tape).
-* Exceptional institutional strength → floor may ease to 0.15% (calibration
-  evidence: profitable fills clustered 0.15–0.20; median ATR% ≈ 0.178).
-* Absolute hard minimum → 0.15% (never trade dead tape below evidence band).
-
-Does not touch Quality/Confidence baselines (80), Risk Engine, PRE, or sizing.
+* Exceptional institutional strength → floor may ease to hard_min (0.10%).
+* Absolute hard minimum → 0.10% for XAUUSD (production ATR≈0.115 deadlocked
+  LIVE under the prior 0.15 floor; weak setups still require 0.20 standard).
+* Multi-symbol: FX / index ATR% is not comparable to gold — use asset-class
+  floors so MULTI_SYMBOL_ENABLED is not silently gold-calibrated.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
 
 # Evidence floors from docs/trading/VOLATILITY_GATE_CALIBRATION_REPORT.md
 V1_FIXED_FLOOR_PCT = Decimal("0.20")
-EVIDENCE_EXCEPTIONAL_FLOOR_PCT = Decimal("0.15")
+EVIDENCE_EXCEPTIONAL_FLOOR_PCT = Decimal("0.10")
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +77,34 @@ class VolatilityDecision:
 
 def _legacy_floor(cfg: AiScalpingConfig) -> Decimal:
     return (cfg.atr_low_pct / Decimal("2")).quantize(Decimal("0.0001"))
+
+
+def resolve_atr_floors_for_symbol(
+    symbol: str | None,
+    config: AiScalpingConfig | None = None,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Return (hard_min, exceptional, standard) for the symbol's asset class.
+
+    Gold ATR% floors must not be applied verbatim to FX majors — that is a
+    multi-symbol correctness bug (FX ATR% of mid is typically far smaller).
+    """
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    hard = Decimal(str(cfg.atr_hard_min_pct))
+    exc = Decimal(str(cfg.atr_exceptional_floor_pct))
+    std = Decimal(str(cfg.atr_compression_floor_pct))
+    code = (symbol or "").strip().upper()
+    if not code or "XAU" in code or code in {"GOLD", "XAUUSDM"}:
+        return hard, exc, std
+    if code in {"BTCUSD", "ETHUSD"} or code.startswith(("BTC", "ETH")):
+        return (
+            max(hard, Decimal("0.15")),
+            max(exc, Decimal("0.20")),
+            max(std, Decimal("0.30")),
+        )
+    if code in {"NAS100", "US30", "GER40", "US500", "UK100", "SPX500"}:
+        return Decimal("0.06"), Decimal("0.08"), Decimal("0.12")
+    # FX majors / crosses
+    return Decimal("0.03"), Decimal("0.04"), Decimal("0.06")
 
 
 def assess_exceptional_strength(
@@ -138,12 +166,11 @@ def evaluate_volatility_gate_v2(
     config: AiScalpingConfig | None = None,
     pa_passed: bool = True,
     direction_clear: bool = True,
+    symbol: str | None = None,
 ) -> VolatilityDecision:
     """Resolve adaptive ATR floor and PASS/FAIL with full evidence."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
-    standard = Decimal(str(cfg.atr_compression_floor_pct))
-    exceptional = Decimal(str(cfg.atr_exceptional_floor_pct))
-    hard_min = Decimal(str(cfg.atr_hard_min_pct))
+    hard_min, exceptional, standard = resolve_atr_floors_for_symbol(symbol, cfg)
     # Safety: exceptional never below hard min; standard never below exceptional.
     if exceptional < hard_min:
         exceptional = hard_min

@@ -64,6 +64,7 @@ def evaluate_quality_gates(
     min_expected_rr_override: Decimal | None = None,
     mtf_alignment: int = 0,
     market_regime: MarketRegimeLabel | str | None = None,
+    symbol: str | None = None,
 ) -> QualityGateResult:
     """Trade only when structure, liquidity, momentum, spread, vol, session align."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -116,6 +117,7 @@ def evaluate_quality_gates(
         config=cfg,
         pa_passed=pa_passed,
         direction_clear=direction_clear,
+        symbol=symbol,
     )
     vol_ok = vol_decision.passed
     checks["valid_volatility"] = vol_ok

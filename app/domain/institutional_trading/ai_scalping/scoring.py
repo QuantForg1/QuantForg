@@ -431,6 +431,7 @@ def score_scalping_setup(
         min_expected_rr_override=effective_min_rr,
         mtf_alignment=int(trend.alignment_score),
         market_regime=regime.regime,
+        symbol=sym_key or None,
     )
     if gates.volatility_decision:
         vol_reason = str(gates.volatility_decision.get("reason") or "").strip()

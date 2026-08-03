@@ -39,6 +39,35 @@ from app.domain.institutional_trading.operations.runbooks import RunbookCatalog
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
 
+def _default_allowed_symbols(
+    *,
+    trading_mode: str = "scalping",
+    alpha_engine_enabled: bool = False,
+) -> tuple[str, ...]:
+    """Resolve operator allowlist from gold-only vs multi-symbol policy.
+
+    Production bug: bootstrap previously hard-forced ``(XAUUSD,)`` even when
+    ``MULTI_SYMBOL_ENABLED`` / Alpha / multi-asset scan were on, collapsing the
+    LIVE scanner to gold-only forever.
+    """
+    from app.domain.trading.gold_only import gold_only_enabled
+
+    if gold_only_enabled():
+        return (GOLD_SYMBOL,)
+    mode = (trading_mode or "").strip().lower()
+    if alpha_engine_enabled or mode == "alpha":
+        from app.domain.institutional_trading.alpha_engine.config import (
+            DEFAULT_ALPHA_UNIVERSE,
+        )
+
+        return DEFAULT_ALPHA_UNIVERSE
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_SCALPING_UNIVERSE,
+    )
+
+    return DEFAULT_SCALPING_UNIVERSE
+
+
 class PermissionDenied(PermissionError):
     pass
 
@@ -86,7 +115,12 @@ class OperationsControlPlane:
         from app.domain.trading.xauusd_specs import coerce_max_spread
 
         self.max_spread = coerce_max_spread(self.max_spread)
-        self.allowed_symbols = (GOLD_SYMBOL,)
+        # Never hard-force gold-only when MULTI_SYMBOL / Alpha / multi-asset
+        # scan is enabled — that silently collapses the LIVE scanner universe.
+        self.allowed_symbols = _default_allowed_symbols(
+            trading_mode=self.trading_mode,
+            alpha_engine_enabled=self.alpha_engine_enabled,
+        )
         if not self._initialized:
             self.git_commit = self.git_commit or _detect_git_commit()
             # Seed initial config version (append-only baseline)
@@ -474,13 +508,19 @@ class OperationsControlPlane:
                 if mode == "scalping" and max_open_positions is None:  # noqa: SIM102
                     if self.max_open_trades < 3:
                         self.max_open_trades = 3
+                if mode == "scalping":
+                    # Multi-symbol scalping must not inherit a stale XAUUSD-only
+                    # allowlist from bootstrap / prior gold-only deploys.
+                    self.allowed_symbols = _default_allowed_symbols(
+                        trading_mode="scalping",
+                        alpha_engine_enabled=self.alpha_engine_enabled,
+                    )
                 if mode == "alpha":
                     self.alpha_engine_enabled = True
-                    from app.domain.institutional_trading.alpha_engine.config import (
-                        DEFAULT_ALPHA_UNIVERSE,
+                    self.allowed_symbols = _default_allowed_symbols(
+                        trading_mode="alpha",
+                        alpha_engine_enabled=True,
                     )
-
-                    self.allowed_symbols = DEFAULT_ALPHA_UNIVERSE
                     if max_open_positions is None and self.max_open_trades < 3:
                         self.max_open_trades = 3
             if compounding_enabled is not None:
@@ -489,6 +529,11 @@ class OperationsControlPlane:
                 self.alpha_engine_enabled = bool(alpha_engine_enabled)
                 if self.alpha_engine_enabled and self.trading_mode == "swing":
                     self.trading_mode = "alpha"
+                if self.alpha_engine_enabled:
+                    self.allowed_symbols = _default_allowed_symbols(
+                        trading_mode=self.trading_mode,
+                        alpha_engine_enabled=True,
+                    )
             state = normalize_run_state(
                 self.auto_trading_run_state,
                 enabled=self.auto_trading_enabled,
@@ -527,6 +572,7 @@ class OperationsControlPlane:
                     "max_open_positions": self.max_open_trades,
                     "alpha_engine_enabled": self.alpha_engine_enabled,
                     "compounding_enabled": self.compounding_enabled,
+                    "allowed_symbols": list(self.allowed_symbols),
                 }
             )
         except Exception as exc:
@@ -837,6 +883,35 @@ def _detect_git_commit() -> str | None:
 _GLOBAL_PLANE: OperationsControlPlane | None = None
 
 
+def _ensure_multi_symbol_allowlist(plane: OperationsControlPlane) -> None:
+    """Expand a stale gold-only allowlist when multi-symbol policy is active."""
+    from app.domain.trading.gold_only import gold_only_enabled
+
+    if gold_only_enabled():
+        plane.allowed_symbols = (GOLD_SYMBOL,)
+        return
+    try:
+        from core.config.settings import get_settings
+
+        settings = get_settings()
+        if bool(getattr(settings, "institutional_alpha_enabled", False)):
+            plane.alpha_engine_enabled = True
+            if str(plane.trading_mode or "").strip().lower() == "swing":
+                plane.trading_mode = "alpha"
+    except Exception:
+        pass
+    current = tuple(
+        str(s).strip().upper()
+        for s in (plane.allowed_symbols or ())
+        if str(s).strip()
+    )
+    if len(current) <= 1:
+        plane.allowed_symbols = _default_allowed_symbols(
+            trading_mode=plane.trading_mode,
+            alpha_engine_enabled=plane.alpha_engine_enabled,
+        )
+
+
 def get_control_plane() -> OperationsControlPlane:
     global _GLOBAL_PLANE
     if _GLOBAL_PLANE is None:
@@ -908,6 +983,21 @@ def get_control_plane() -> OperationsControlPlane:
                 plane.alpha_engine_enabled = bool(state.get("alpha_engine_enabled"))
             if "compounding_enabled" in state:
                 plane.compounding_enabled = bool(state.get("compounding_enabled"))
+            raw_syms = state.get("allowed_symbols")
+            if isinstance(raw_syms, (list, tuple)) and raw_syms:
+                cleaned = tuple(
+                    str(s).strip().upper() for s in raw_syms if str(s).strip()
+                )
+                if cleaned:
+                    plane.allowed_symbols = cleaned
+            # MULTI_SYMBOL / Alpha must not remain stuck on XAUUSD after restart.
+            _ensure_multi_symbol_allowlist(plane)
+            try:
+                from app.application.services.ops_state_persistence import save_ops_state
+
+                save_ops_state({"allowed_symbols": list(plane.allowed_symbols)})
+            except Exception:
+                pass
             # Railway restart continuity: never strand the desk in PAUSED when
             # launch locks already pass — auto-promote to RUNNING.
             try:
@@ -937,6 +1027,8 @@ def get_control_plane() -> OperationsControlPlane:
                 auto_trading_run_state=plane.auto_trading_run_state,
                 trading_mode=plane.trading_mode,
                 max_open_positions=plane.max_open_trades,
+                allowed_symbols=list(plane.allowed_symbols),
+                alpha_engine_enabled=plane.alpha_engine_enabled,
                 hydrate_source=diag.get("hydrate_source"),
                 durable=diag.get("durable"),
                 postgres_has_state=diag.get("postgres_has_state"),
@@ -948,6 +1040,7 @@ def get_control_plane() -> OperationsControlPlane:
                 "ops_state_hydrate_failed",
                 error=str(exc),
             )
+            _ensure_multi_symbol_allowlist(plane)
         _GLOBAL_PLANE = plane
     return _GLOBAL_PLANE
 
@@ -955,4 +1048,5 @@ def get_control_plane() -> OperationsControlPlane:
 def reset_control_plane_for_tests() -> OperationsControlPlane:
     global _GLOBAL_PLANE
     _GLOBAL_PLANE = OperationsControlPlane()
+    _ensure_multi_symbol_allowlist(_GLOBAL_PLANE)
     return _GLOBAL_PLANE
