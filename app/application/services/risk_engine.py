@@ -1143,12 +1143,22 @@ class RiskEngine:
                 self.config.lot_step, rounding=ROUND_DOWN
             )
             if reduced < self.config.min_lot:
-                # Never promote undersized risk to min_lot.
-                decision = RiskDecision.REJECT
-                approved = Decimal("0")
-                reasons.append(
-                    "reduced size below min_lot — reject (no upsize to min_lot)"
-                )
+                # Already at (or would fall below) broker min — keep min_lot
+                # when the pre-reduce size was executable. Halving 0.01→0 was
+                # a LIVE deadlock on micro equity after AI already approved SELL.
+                if approved >= self.config.min_lot:
+                    decision = RiskDecision.ALLOW
+                    approved = self.config.min_lot
+                    reasons.append(
+                        "risk reduce requested but already at broker min_lot — "
+                        "keeping min_lot"
+                    )
+                else:
+                    decision = RiskDecision.REJECT
+                    approved = Decimal("0")
+                    reasons.append(
+                        "reduced size below min_lot — reject (no upsize to min_lot)"
+                    )
             else:
                 approved = reduced
                 if size.requested_lots > approved:

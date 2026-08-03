@@ -211,6 +211,41 @@ def calculate_scalping_lots(
         max_lot=cfg.broker_max_lot,
     )
     if lots <= 0:
+        # Micro CONDITIONAL: when institutional % risk cannot reach broker
+        # min_lot, approve min_lot only if dollar risk fits hard_max (never
+        # invent lots; never exceed micro hard ceiling). Live blocker: $181
+        # XAUUSD desk with ATR stops needed ~4% (<5% hard_max) but 0.5–1%
+        # risk produced raw_lots≈0.0025 → permanent NO_TRADE after AI SELL.
+        try:
+            from app.domain.institutional_trading.micro_account_mode import (
+                MicroAccountProfile,
+            )
+
+            profile = MicroAccountProfile()
+            min_loss = (broker_min * cs * dist).quantize(Decimal("0.01"))
+            if equity > 0 and min_loss > 0 and equity <= Decimal("500"):
+                needed_pct = (min_loss / equity * Decimal("100")).quantize(
+                    Decimal("0.01")
+                )
+                if needed_pct <= profile.hard_max_risk_pct:
+                    return LotSizingResult(
+                        lots=broker_min,
+                        risk_amount=min_loss,
+                        stop_distance=dist,
+                        method="micro_conditional_min_lot",
+                        reason=(
+                            f"micro hard_max: min_lot risk {needed_pct}% "
+                            f"<= {profile.hard_max_risk_pct}% "
+                            f"(institutional raw={raw})"
+                        ),
+                        valid=True,
+                        calculated_lot=raw,
+                        broker_min_lot=broker_min,
+                        account_balance=equity,
+                        risk_percentage=needed_pct,
+                    )
+        except Exception:
+            pass
         detail = (
             f"below_min_lot calculated_lot={raw} broker_minimum={broker_min} "
             f"account_balance={equity} risk_percentage={base_risk}"
