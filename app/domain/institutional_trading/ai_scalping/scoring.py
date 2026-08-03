@@ -343,8 +343,10 @@ def score_scalping_setup(
     weighted = sum(factors.get(k, 0) * w for k, w in weights.items())
     total_w = sum(weights.values())
     confidence = round(weighted / total_w) if total_w else 0
-    confidence -= session.confidence_penalty
-    confidence -= spread_a.confidence_penalty
+    # Session / spread already enter the weighted composite via factors.
+    # Subtracting confidence_penalty again double-counts soft weights and
+    # permanently suppressed LIVE adaptive confidence floors (verified:
+    # quality≈84–89 with confidence stuck ≈54 after -10 session penalty).
     if (
         setup_scan
         and setup_scan.best
