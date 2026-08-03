@@ -214,7 +214,12 @@ class InstitutionalDecisionPipeline:
     def last_ai_score(self) -> dict[str, Any] | None:
         return dict(self._last_ai_score) if self._last_ai_score else None
 
-    def _prepare_config(self, account: AccountRiskState) -> ITEConfig:
+    def _prepare_config(
+        self,
+        account: AccountRiskState,
+        *,
+        symbol: str | None = None,
+    ) -> ITEConfig:
         cfg = self.config
         if not cfg.is_scalping():
             return cfg
@@ -230,6 +235,7 @@ class InstitutionalDecisionPipeline:
             account.atr,
             account.mid_price,
             config=DEFAULT_AI_SCALPING_CONFIG,
+            symbol=symbol,
         )
         return apply_thresholds_to_ite(cfg, resolved)
 
@@ -241,7 +247,8 @@ class InstitutionalDecisionPipeline:
         positions: list[MT5Position] | None = None,
         request_id: str | None = None,
     ) -> TradeDecision:
-        cfg = self._prepare_config(account)
+        sym = str(getattr(snapshot, "symbol", "") or "")
+        cfg = self._prepare_config(account, symbol=sym or None)
         rid = (request_id or f"ite_{snapshot.input_hash[:12]}").strip()
 
         daily_dd = Decimal("0")
