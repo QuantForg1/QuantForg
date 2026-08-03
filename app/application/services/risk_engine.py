@@ -149,6 +149,34 @@ class RiskEngine:
                 lots = min(lots, requested_lots)
 
         if lots < cfg.min_lot:
+            # Micro CONDITIONAL — mirror AI scalping sizing: approve broker
+            # min_lot when dollar risk fits hard_max on sub-$500 equity.
+            try:
+                from app.domain.institutional_trading.micro_account_mode import (
+                    MicroAccountProfile,
+                )
+
+                profile = MicroAccountProfile()
+                if equity > 0 and stop > 0 and equity <= Decimal("500"):
+                    min_loss = (cfg.min_lot * cs * stop).quantize(Decimal("0.01"))
+                    needed_pct = (min_loss / equity * Decimal("100")).quantize(
+                        Decimal("0.01")
+                    )
+                    if needed_pct <= profile.hard_max_risk_pct:
+                        return PositionSizeResult(
+                            method=method,
+                            requested_lots=(
+                                requested_lots
+                                if requested_lots is not None
+                                else cfg.min_lot
+                            ),
+                            approved_lots=cfg.min_lot,
+                            capped=True,
+                            dollar_risk=min_loss,
+                            stop_distance=stop,
+                        )
+            except Exception:
+                pass
             # Never promote undersized risk to min_lot — reject via 0 lots.
             return PositionSizeResult(
                 method=method,
