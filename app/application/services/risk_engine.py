@@ -171,7 +171,7 @@ class RiskEngine:
                                 else cfg.min_lot
                             ),
                             approved_lots=cfg.min_lot,
-                            capped=True,
+                            capped=False,
                             dollar_risk=min_loss,
                             stop_distance=stop,
                         )
