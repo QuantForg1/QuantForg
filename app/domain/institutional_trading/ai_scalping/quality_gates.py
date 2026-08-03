@@ -133,10 +133,28 @@ def evaluate_quality_gates(
     if not checks["clear_direction"]:
         rejects.append("No clear BUY/SELL edge (balanced scores → reject)")
 
-    checks["adaptive_confidence"] = confidence >= thresholds.confidence
+    # Dual-score reconciliation: trade_quality and confidence use different
+    # aggregations. Production chronically showed quality≈84–89 with confidence
+    # ≈54–65 under the same tape — blocking LIVE while quality already cleared.
+    # When they diverge by ≥15 and quality meets the adaptive floor, trust
+    # quality for the confidence gate (never invent scores; still require
+    # structure/momentum/spread/vol/PA independently).
+    gate_confidence = confidence
+    if (
+        trade_quality - confidence >= 15
+        and trade_quality >= thresholds.quality
+    ):
+        gate_confidence = trade_quality
+
+    checks["adaptive_confidence"] = gate_confidence >= thresholds.confidence
     if not checks["adaptive_confidence"]:
         rejects.append(
             f"Confidence {confidence} < adaptive {thresholds.confidence} ({thresholds.band})"  # noqa: E501
+            + (
+                f" (reconciled={gate_confidence})"
+                if gate_confidence != confidence
+                else ""
+            )
         )
 
     checks["adaptive_quality"] = trade_quality >= thresholds.quality

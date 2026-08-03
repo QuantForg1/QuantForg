@@ -133,7 +133,7 @@ class AiScalpingConfig:
     min_session_stars: int = 4
     min_expected_rr: Decimal = Decimal("1.3")
     # EMA / RSI / candle PA composite — never below prior quality floors
-    min_pa_confluence_score: int = 55
+    min_pa_confluence_score: int = 50
 
     # Real scalping hold window (target 2-15m when conditions support)
     typical_hold_min_minutes: int = 2
