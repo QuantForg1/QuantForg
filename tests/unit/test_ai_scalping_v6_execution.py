@@ -250,6 +250,58 @@ def test_fixed_tp_r_preference() -> None:
 
 
 @pytest.mark.unit
+def test_structure_sl_uses_nearest_swing_not_farthest() -> None:
+    """Farthest swing-high SL deadlocked LIVE micro desks (stop≫ATR → hard_max)."""
+    from types import SimpleNamespace
+
+    snap = _snap()
+    # Far high + near high above entry — must pick nearest (1912), not 1980.
+    snap.primary_structure = SimpleNamespace(
+        last_swing_low=Decimal("1850"),
+        last_swing_high=Decimal("1980"),
+        swings=(
+            SimpleNamespace(price=Decimal("1980"), kind="HIGH"),
+            SimpleNamespace(price=Decimal("1912"), kind="HIGH"),
+            SimpleNamespace(price=Decimal("1900"), kind="LOW"),
+        ),
+    )
+    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.5"), stop_atr_mult=Decimal("1.10"))
+    targets = compute_structure_targets(
+        snap,
+        direction=TradeDirection.SELL,
+        entry=Decimal("1910"),
+        atr=Decimal("5"),
+        config=cfg,
+    )
+    assert targets.stop_distance is not None
+    # Nearest high 1912 + 0.15*ATR ≈ 2.75; must not be ~70+ from farthest 1980.
+    assert targets.stop_distance < Decimal("20")
+    assert "nearest" in targets.reason.lower()
+
+
+@pytest.mark.unit
+def test_structure_sl_caps_wide_stop_to_atr() -> None:
+    from types import SimpleNamespace
+
+    snap = _snap()
+    snap.primary_structure = SimpleNamespace(
+        last_swing_low=None,
+        last_swing_high=Decimal("2000"),  # 90 pts above 1910
+        swings=(),
+    )
+    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.5"), stop_atr_mult=Decimal("1.10"))
+    targets = compute_structure_targets(
+        snap,
+        direction=TradeDirection.SELL,
+        entry=Decimal("1910"),
+        atr=Decimal("5"),
+        config=cfg,
+    )
+    assert targets.stop_distance == Decimal("5") * Decimal("1.10")
+    assert "capped" in targets.reason.lower()
+
+
+@pytest.mark.unit
 def test_news_fail_closed_optional(tmp_path: Path) -> None:
     cfg = DEFAULT_ITE_CONFIG
     open_prot = NewsProtection(config=cfg, fail_closed_without_feed=False)

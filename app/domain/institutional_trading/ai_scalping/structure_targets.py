@@ -73,28 +73,42 @@ def compute_structure_targets(
 
     atr_d = atr if atr and atr > 0 else None
     fallback_dist = (atr_d * cfg.stop_atr_mult) if atr_d else None
+    # Structure SL must stay scalp-scale. Farthest-swing SL (e.g. 40–100 pts on
+    # XAUUSD) blows micro hard_max (~5%) on $180 desks and deadlocks LIVE
+    # order_send even when ATR stop (~1.1×ATR) would be tradable.
+    max_structure_stop = (atr_d * Decimal("2.5")) if atr_d else None
 
     structure = snapshot.primary_structure
-    swing_low = None
-    swing_high = None
+    candidate_lows: list[Decimal] = []
+    candidate_highs: list[Decimal] = []
     if structure:
-        swing_low = _dec(getattr(structure, "last_swing_low", None)) or _dec(
+        seed_low = _dec(getattr(structure, "last_swing_low", None)) or _dec(
             getattr(structure, "swing_low", None)
         )
-        swing_high = _dec(getattr(structure, "last_swing_high", None)) or _dec(
+        seed_high = _dec(getattr(structure, "last_swing_high", None)) or _dec(
             getattr(structure, "swing_high", None)
         )
-        # Try nested swings list
+        if seed_low is not None:
+            candidate_lows.append(seed_low)
+        if seed_high is not None:
+            candidate_highs.append(seed_high)
+        # Collect swings — pick NEAREST protective level later (not min/max of all).
         swings = list(getattr(structure, "swings", ()) or ())
-        for s in swings[-8:]:
+        for s in swings[-12:]:
             price = _dec(getattr(s, "price", None))
             kind = str(getattr(getattr(s, "kind", None), "value", s.kind) or "").upper()
             if price is None:
                 continue
             if "LOW" in kind:
-                swing_low = price if swing_low is None else min(swing_low, price)
+                candidate_lows.append(price)
             if "HIGH" in kind:
-                swing_high = price if swing_high is None else max(swing_high, price)
+                candidate_highs.append(price)
+
+    # Nearest swing low below entry / nearest swing high above entry.
+    below_entry_lows = [p for p in candidate_lows if p < entry]
+    above_entry_highs = [p for p in candidate_highs if p > entry]
+    swing_low = max(below_entry_lows) if below_entry_lows else None
+    swing_high = min(above_entry_highs) if above_entry_highs else None
 
     liq = snapshot.liquidity
     liq_high = None
@@ -115,12 +129,12 @@ def compute_structure_targets(
 
     reason_parts: list[str] = []
     if direction is TradeDirection.BUY:
-        # SL behind structure low
+        # SL behind nearest structure low (not the farthest historical low).
         if swing_low is not None and swing_low < entry:
             sl = swing_low - (
                 atr_d * Decimal("0.15") if atr_d else entry * Decimal("0.0001")
             )
-            reason_parts.append("SL behind swing low")
+            reason_parts.append("SL behind nearest swing low")
         elif fallback_dist:
             sl = entry - fallback_dist
             reason_parts.append("SL ATR fallback (no swing low)")
@@ -134,6 +148,17 @@ def compute_structure_targets(
                 "Cannot place BUY SL without structure/ATR",
             )
         stop_distance = entry - sl
+        if (
+            max_structure_stop is not None
+            and fallback_dist is not None
+            and stop_distance > max_structure_stop
+        ):
+            sl = entry - fallback_dist
+            stop_distance = fallback_dist
+            reason_parts.append(
+                f"SL capped to ATR×{cfg.stop_atr_mult} "
+                f"(structure stop > {max_structure_stop})"
+            )
         # TP priority: fixed-R (optional) → liquidity → swing → ATR expansion
         fixed_r = cfg.fixed_tp_r
         if fixed_r is not None and fixed_r > 0:
@@ -156,7 +181,7 @@ def compute_structure_targets(
             sl = swing_high + (
                 atr_d * Decimal("0.15") if atr_d else entry * Decimal("0.0001")
             )
-            reason_parts.append("SL behind swing high")
+            reason_parts.append("SL behind nearest swing high")
         elif fallback_dist:
             sl = entry + fallback_dist
             reason_parts.append("SL ATR fallback (no swing high)")
@@ -170,6 +195,17 @@ def compute_structure_targets(
                 "Cannot place SELL SL without structure/ATR",
             )
         stop_distance = sl - entry
+        if (
+            max_structure_stop is not None
+            and fallback_dist is not None
+            and stop_distance > max_structure_stop
+        ):
+            sl = entry + fallback_dist
+            stop_distance = fallback_dist
+            reason_parts.append(
+                f"SL capped to ATR×{cfg.stop_atr_mult} "
+                f"(structure stop > {max_structure_stop})"
+            )
         fixed_r = cfg.fixed_tp_r
         if fixed_r is not None and fixed_r > 0:
             tp = entry - stop_distance * fixed_r

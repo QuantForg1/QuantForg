@@ -151,6 +151,9 @@ class RiskEngine:
         if lots < cfg.min_lot:
             # Micro CONDITIONAL — mirror AI scalping sizing: approve broker
             # min_lot when dollar risk fits hard_max on sub-$500 equity.
+            from core.logging import get_logger
+
+            _log = get_logger(__name__)
             try:
                 from app.domain.institutional_trading.micro_account_mode import (
                     MicroAccountProfile,
@@ -163,6 +166,16 @@ class RiskEngine:
                         Decimal("0.01")
                     )
                     if needed_pct <= profile.hard_max_risk_pct:
+                        _log.info(
+                            "risk_engine_micro_min_lot_approved",
+                            equity=str(equity),
+                            stop=str(stop),
+                            contract_size=str(cs),
+                            min_lot=str(cfg.min_lot),
+                            min_loss=str(min_loss),
+                            needed_pct=str(needed_pct),
+                            hard_max_pct=str(profile.hard_max_risk_pct),
+                        )
                         return PositionSizeResult(
                             method=method,
                             requested_lots=(
@@ -175,8 +188,27 @@ class RiskEngine:
                             dollar_risk=min_loss,
                             stop_distance=stop,
                         )
+                    _log.warning(
+                        "risk_engine_micro_min_lot_rejected",
+                        condition="needed_pct > hard_max_risk_pct",
+                        equity=str(equity),
+                        stop=str(stop),
+                        contract_size=str(cs),
+                        min_lot=str(cfg.min_lot),
+                        min_loss=str(min_loss),
+                        needed_pct=str(needed_pct),
+                        hard_max_pct=str(profile.hard_max_risk_pct),
+                        raw_lots=str(lots),
+                    )
+                else:
+                    _log.warning(
+                        "risk_engine_micro_min_lot_skipped",
+                        equity=str(equity),
+                        stop=str(stop),
+                        equity_cap="500",
+                    )
             except Exception:
-                pass
+                _log.exception("risk_engine_micro_min_lot_path_failed")
             # Never promote undersized risk to min_lot — reject via 0 lots.
             return PositionSizeResult(
                 method=method,

@@ -354,8 +354,12 @@ class InstitutionalDecisionPipeline:
             side = "none"
 
         stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")
-        stop_distance = account.atr * stop_mult if account.atr else None
-        # Structure-based stop distance when AI computed one
+        atr_stop = account.atr * stop_mult if account.atr else None
+        stop_distance = atr_stop
+        # Structure-based stop distance when AI computed one — but never let a
+        # farthest-swing SL (tens of points) replace ATR stop on micro equity:
+        # that path made RiskEngine reject min_lot via hard_max while diagnostics
+        # still showed the ATR stop (~7–8 pts). Cap at 2.5×ATR for sizing.
         if ai_score is not None and self._last_ai_score:
             raw_sd = self._last_ai_score.get("stop_loss")
             entry_s = self._last_ai_score.get("entry")
@@ -364,10 +368,38 @@ class InstitutionalDecisionPipeline:
                     from decimal import Decimal as _D
 
                     sd = abs(_D(str(entry_s)) - _D(str(raw_sd)))
-                    if sd > 0:
+                    max_sd = (
+                        (account.atr * Decimal("2.5"))
+                        if account.atr and account.atr > 0
+                        else None
+                    )
+                    if sd > 0 and (max_sd is None or sd <= max_sd):
                         stop_distance = sd
+                    elif sd > 0 and max_sd is not None and atr_stop is not None:
+                        logger.warning(
+                            "ai_structure_stop_capped_to_atr",
+                            file=(
+                                "app/application/services/"
+                                "institutional_decision_pipeline.py"
+                            ),
+                            function="InstitutionalDecisionPipeline.decide",
+                            symbol=str(snapshot.symbol),
+                            ai_stop_distance=str(sd),
+                            atr_stop=str(atr_stop),
+                            max_structure_stop=str(max_sd),
+                            condition="ai_stop_distance > atr * 2.5",
+                        )
+                        stop_distance = atr_stop
             except Exception:  # noqa: S110  # best-effort optional path
                 pass
+        logger.info(
+            "risk_sizing_stop_distance",
+            symbol=str(snapshot.symbol),
+            side=side,
+            stop_distance=str(stop_distance) if stop_distance is not None else None,
+            atr=str(account.atr) if account.atr is not None else None,
+            atr_stop=str(atr_stop) if atr_stop is not None else None,
+        )
         entry = account.mid_price
         if entry is None or entry <= 0:
             # Prefer No Trade — never invent an entry price for risk sizing.
