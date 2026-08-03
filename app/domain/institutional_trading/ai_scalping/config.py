@@ -97,12 +97,12 @@ class AiScalpingConfig:
 
     # Volatility Gate v2 — adaptive floors.
     # Standard = legacy atr_low_pct/2; exceptional only when all pillars strong.
-    # Hard min 0.10: production ATR%≈0.115 permanently deadlocked LIVE under 0.15
-    # (verified Railway multi_asset_scan reject valid_volatility). Weak setups
-    # still require the 0.20 standard floor unless exceptional strength clears.
+    # Hard min 0.08: LIVE Sydney/Tokyo gold ATR%≈0.082–0.115 repeatedly
+    # deadlocked under 0.10/0.15 (Railway multi_asset_scan valid_volatility).
+    # Weak setups still require the 0.20 standard floor unless exceptional.
     atr_compression_floor_pct: Decimal = Decimal("0.20")
-    atr_exceptional_floor_pct: Decimal = Decimal("0.10")
-    atr_hard_min_pct: Decimal = Decimal("0.10")
+    atr_exceptional_floor_pct: Decimal = Decimal("0.08")
+    atr_hard_min_pct: Decimal = Decimal("0.08")
     vol_exceptional_min_quality: int = 88
     vol_exceptional_min_confidence: int = 88
     vol_exceptional_min_structure: int = 80

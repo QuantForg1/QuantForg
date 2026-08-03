@@ -125,8 +125,8 @@ def test_config_preserves_quality_confidence_floors() -> None:
     assert cfg.low_vol.quality >= 80
     assert cfg.low_vol.confidence >= 80
     assert cfg.atr_compression_floor_pct == Decimal("0.20")
-    assert cfg.atr_exceptional_floor_pct == Decimal("0.10")
-    assert cfg.atr_hard_min_pct == Decimal("0.10")
+    assert cfg.atr_exceptional_floor_pct == Decimal("0.08")
+    assert cfg.atr_hard_min_pct == Decimal("0.08")
     assert cfg.atr_exceptional_floor_pct >= cfg.atr_hard_min_pct
     assert cfg.atr_compression_floor_pct >= cfg.atr_exceptional_floor_pct
 
@@ -160,27 +160,27 @@ def test_exceptional_setup_allows_evidence_band() -> None:
     assert d.passed is True
     assert d.exceptional_eligible is True
     assert d.exceptional_used is True
-    assert d.applied_floor_pct == Decimal("0.10")
+    assert d.applied_floor_pct == Decimal("0.08")
     assert d.legacy_would_pass is False  # v1 would still block
 
 
 @pytest.mark.unit
 def test_production_atr_exceptional_clears_prior_hard_deadlock() -> None:
-    # Live ATR% ≈ 0.115 previously failed hard_min 0.15 forever.
-    d = evaluate_volatility_gate_v2(atr_pct=Decimal("0.115"), **_strong_kwargs())
+    # Live ATR% ≈ 0.082–0.115 previously failed hard_min 0.10/0.15 forever.
+    d = evaluate_volatility_gate_v2(atr_pct=Decimal("0.082"), **_strong_kwargs())
     assert d.passed is True
     assert d.exceptional_eligible is True
-    assert d.applied_floor_pct == Decimal("0.10")
+    assert d.applied_floor_pct == Decimal("0.08")
 
 
 @pytest.mark.unit
 def test_hard_min_blocks_even_exceptional() -> None:
     # Dead tape below absolute hard minimum still fails.
-    d = evaluate_volatility_gate_v2(atr_pct=Decimal("0.08"), **_strong_kwargs())
+    d = evaluate_volatility_gate_v2(atr_pct=Decimal("0.07"), **_strong_kwargs())
     assert d.passed is False
-    assert d.applied_floor_pct == Decimal("0.10")
+    assert d.applied_floor_pct == Decimal("0.08")
     assert "hard minimum" in d.reason.lower() or "hard min" in d.reason.lower() or (
-        "0.10" in d.reason
+        "0.08" in d.reason
     )
 
 
@@ -283,8 +283,10 @@ def test_before_after_replay_no_false_positive_increase() -> None:
             assert weak is False
 
     assert weak_new_accepts == 0
-    # Exceptional recovers 0.10–0.20 (0.125 + 0.175 buckets); weak never does
-    assert strong_new_accepts == pytest.approx(0.2718 + 0.3465, abs=0.001)
+    # Exceptional recovers 0.08–0.20 (0.08 + 0.125 + 0.175 buckets); weak never
+    assert strong_new_accepts == pytest.approx(
+        0.0257 + 0.2718 + 0.3465, abs=0.001
+    )
     assert both_accept == pytest.approx(0.2906 + 0.0653, abs=0.001)
 
 

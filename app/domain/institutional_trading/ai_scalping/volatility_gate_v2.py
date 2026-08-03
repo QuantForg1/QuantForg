@@ -4,9 +4,9 @@ Replaces the single fixed compression floor (atr_low_pct/2 = 0.20%) with an
 adaptive model:
 
 * Standard setups → keep 0.20% floor (never looser than v1 for weak tape).
-* Exceptional institutional strength → floor may ease to hard_min (0.10%).
-* Absolute hard minimum → 0.10% for XAUUSD (production ATR≈0.115 deadlocked
-  LIVE under the prior 0.15 floor; weak setups still require 0.20 standard).
+* Exceptional institutional strength → floor may ease to hard_min (0.08%).
+* Absolute hard minimum → 0.08% for XAUUSD (production ATR%≈0.082–0.115
+  deadlocked under 0.10/0.15; weak setups still require 0.20 standard).
 * Multi-symbol: FX / index ATR% is not comparable to gold — use asset-class
   floors so MULTI_SYMBOL_ENABLED is not silently gold-calibrated.
 """
@@ -34,7 +34,7 @@ from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
 
 # Evidence floors from docs/trading/VOLATILITY_GATE_CALIBRATION_REPORT.md
 V1_FIXED_FLOOR_PCT = Decimal("0.20")
-EVIDENCE_EXCEPTIONAL_FLOOR_PCT = Decimal("0.10")
+EVIDENCE_EXCEPTIONAL_FLOOR_PCT = Decimal("0.08")
 
 
 @dataclass(frozen=True, slots=True)

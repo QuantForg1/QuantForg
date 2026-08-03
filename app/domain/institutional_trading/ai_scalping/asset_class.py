@@ -59,9 +59,10 @@ def classify_atr_band_thresholds(
     """Return (atr_low_pct, atr_high_pct) for band classification."""
     cls = asset_class_for_symbol(symbol)
     if cls == "gold":
-        # Gold M15 ATR% typically clusters 0.10–0.30 — prior low=0.40
-        # forced nearly all live tape into the raised 88/88 low-vol band.
-        return Decimal("0.10"), Decimal("0.35")
+        # Gold M15 ATR% typically clusters 0.08–0.30 on thin sessions.
+        # Prior low=0.10 forced ATR%≈0.082 into the raised 88/88 low-vol band
+        # (quality 84 tradable setups rejected before RiskEngine / order_send).
+        return Decimal("0.08"), Decimal("0.35")
     if cls == "fx":
         return Decimal("0.04"), Decimal("0.12")
     if cls == "index":
