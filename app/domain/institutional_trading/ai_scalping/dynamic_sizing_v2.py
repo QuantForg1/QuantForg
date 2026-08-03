@@ -334,10 +334,23 @@ def calculate_dynamic_lots_v2(
     except Exception:
         min_q, min_c = 80, 80
 
+    gate_c = confidence if confidence is not None else trend_confidence
+    gate_q = quality_score
+    # Same dual-score reconciliation as quality_gates: production chronically
+    # clears quality≈84 while confidence composite lags ≈65, which wrongly
+    # marked sizing as quality_weak after the scanner already accepted SELL.
+    if (
+        gate_q is not None
+        and gate_c is not None
+        and int(gate_q) - int(gate_c) >= 15
+        and int(gate_q) >= min_q
+    ):
+        gate_c = int(gate_q)
+
     band = classify_quality_band(
         reject=bool(quality_reject),
-        quality_score=quality_score,
-        confidence=confidence if confidence is not None else trend_confidence,
+        quality_score=gate_q,
+        confidence=gate_c,
         min_quality=min_q,
         min_confidence=min_c,
     )
