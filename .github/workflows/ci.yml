@@ -119,10 +119,39 @@ jobs:
           files: coverage.xml
           fail_ci_if_error: false
 
+  trading-core-regression:
+    name: Trading Core Regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            poetry.lock
+            pyproject.toml
+
+      - name: Install Poetry
+        run: pip install poetry==${{ env.POETRY_VERSION }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Trading core regression (freeze gate)
+        run: poetry run pytest -m trading_core -o addopts= -q --tb=short
+
+      - name: Verify trading-core freeze docs exist
+        run: |
+          test -f docs/production/TRADING_CORE_LOCKDOWN.md
+          test -f .cursor/rules/quantforg-trading-core-freeze.mdc
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
+    needs: [lint, typecheck, test, trading-core-regression]
     services:
       postgres:
         image: postgres:16-alpine

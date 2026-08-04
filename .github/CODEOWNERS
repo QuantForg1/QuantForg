@@ -1,0 +1,15 @@
+# Trading-core freeze — paths below are production-critical.
+# Enable required reviews in GitHub Settings → Branches / Rulesets.
+# Optionally map these paths to a GitHub team when available.
+
+/app/application/services/institutional_ite_runtime.py
+/app/application/services/risk_engine.py
+/app/application/services/institutional_position_management.py
+/app/application/services/mt5_position_truth.py
+/app/domain/institutional_trading/execution/
+/app/domain/institutional_trading/management/
+/app/domain/institutional_trading/ai_scalping/
+/app/domain/institutional_trading/production_hardening/
+/app/infrastructure/brokers/mt5/
+/tests/unit/test_trading_core_regression.py
+/docs/production/TRADING_CORE_LOCKDOWN.md

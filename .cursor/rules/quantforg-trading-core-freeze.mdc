@@ -1,0 +1,43 @@
+---
+description: QuantForg Trading Core is FROZEN — no accidental execution/risk/OMS/PME/gateway/AI changes
+alwaysApply: true
+---
+
+# QuantForg Trading Core Freeze (Production Lockdown)
+
+The LIVE trading engine is **COMPLETE and LOCKED**.
+
+## Frozen modules (production-critical)
+
+Do **not** modify without **explicit product-owner approval** naming the module and reason:
+
+- Scheduler / ITE runtime (`institutional_ite_runtime.py`)
+- AI Decision / confluence / pipeline
+- AI Scalping
+- Institutional Alpha
+- Portfolio Engine
+- Risk Engine
+- OMS / execution bridge
+- MT5 Gateway / adapter / `gateway_client`
+- Position Management Engine (PME)
+- Position Recovery / MT5 position truth
+- Multi-symbol scanner
+- Runtime state / control plane execution gates
+
+## Forbidden without explicit approval
+
+- New trading features, strategies, or thresholds “improvements”
+- Redesign / refactor of frozen modules
+- Temporary bypasses (`FORCE_FIRST_TRADE`, `ALLOW_RISK_LOCK_OVERRIDE`, validation-mode shortcuts)
+- Weakening risk, margin, invalid stop/volume, market-closed, or emergency-stop guards
+- Changing order_send / PME lifecycle / recovery semantics
+
+## Allowed without freeze override
+
+- Verified production bugs that block LIVE continuity (with regression test)
+- Docs / CI / regression suite only
+- Non-trading surfaces (marketing UI under Design Freeze rules)
+
+## Gate
+
+Before any PR touching frozen paths: regression suite `pytest -m trading_core` must pass; cite approval in the PR description.

@@ -185,6 +185,7 @@ markers = [
     "unit: Fast isolated unit tests",
     "integration: Tests requiring external services",
     "slow: Long-running tests",
+    "trading_core: Production trading-core regression (must pass before merge)",
 ]
 filterwarnings = [
     "error",
