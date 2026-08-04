@@ -565,6 +565,12 @@ export const appNav: NavGroup[] = [
         hint: "LIVE AI signals · quality · confidence · detail",
       },
       {
+        href: "/signal-intelligence",
+        label: "Signal Intelligence",
+        icon: BarChart3,
+        hint: "History · outcomes · heat map · analytics · LIVE",
+      },
+      {
         href: "/admin/customer-ops",
         label: "Customer Operations",
         icon: Building2,

@@ -145,6 +145,7 @@ export function labelForHref(href: string, fallback?: string): string {
     "/ai-signals": "Counsel",
     "/counsel": "Counsel",
     "/signals": "Signal Center",
+    "/signal-intelligence": "Signal Intelligence",
     "/symbol-management": "Symbol Management",
     "/settings": "Settings",
     "/notifications": "Inbox",

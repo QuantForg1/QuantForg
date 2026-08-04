@@ -214,6 +214,45 @@ export const signalCenterApi = {
     ),
 };
 
+/** Signal Intelligence v2 — LIVE history, outcomes, heat map, analytics. */
+export const signalIntelligenceApi = {
+  overview: (days = 30) =>
+    apiFetch<Record<string, unknown>>(
+      `/signals/intelligence/overview?days=${days}`,
+    ),
+  history: (params?: { symbol?: string; direction?: string; limit?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.symbol) search.set("symbol", params.symbol);
+    if (params?.direction) search.set("direction", params.direction);
+    if (params?.limit) search.set("limit", String(params.limit));
+    const qs = search.toString();
+    return apiFetch<Record<string, unknown>>(
+      `/signals/intelligence/history${qs ? `?${qs}` : ""}`,
+    );
+  },
+  outcomes: (days = 14, limit = 100) =>
+    apiFetch<Record<string, unknown>>(
+      `/signals/intelligence/outcomes?days=${days}&limit=${limit}`,
+    ),
+  probability: () =>
+    apiFetch<Record<string, unknown>>("/signals/intelligence/probability"),
+  heatmap: () =>
+    apiFetch<Record<string, unknown>>("/signals/intelligence/heatmap"),
+  analytics: (days = 30) =>
+    apiFetch<Record<string, unknown>>(
+      `/signals/intelligence/analytics?days=${days}`,
+    ),
+  chartMarkers: (symbol: string, limit = 50) =>
+    apiFetch<Record<string, unknown>>(
+      `/signals/intelligence/chart-markers/${encodeURIComponent(symbol)}?limit=${limit}`,
+    ),
+  observe: () =>
+    apiFetch<Record<string, unknown>>("/signals/intelligence/observe", {
+      method: "POST",
+      body: {},
+    }),
+};
+
 export const brokersApi = {
   list: () => apiFetch<unknown[]>("/brokers"),
   health: (id: string) => apiFetch<Record<string, unknown>>(`/brokers/${id}/health`),

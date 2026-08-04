@@ -192,9 +192,101 @@ async def get_signals(
     )
 
 
+# --- Signal Intelligence v2 (read-only LIVE analytics) ---
+# Registered before /signals/{symbol} so "intelligence" is not captured as a symbol.
+
+
+@router.get("/signals/intelligence/overview")
+async def si_overview(
+    user: CurrentUser,
+    days: int = Query(default=30, ge=1, le=365),
+) -> dict[str, Any]:
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.build_overview(days=days)
+
+
+@router.get("/signals/intelligence/history")
+async def si_history(
+    user: CurrentUser,
+    symbol: str | None = Query(default=None),
+    direction: str | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> dict[str, Any]:
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.list_signal_history(
+        symbol=symbol, direction=direction, limit=limit, observe=True
+    )
+
+
+@router.get("/signals/intelligence/outcomes")
+async def si_outcomes(
+    user: CurrentUser,
+    days: int = Query(default=14, ge=1, le=90),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.build_outcomes(days=days, limit=limit)
+
+
+@router.get("/signals/intelligence/probability")
+async def si_probability(user: CurrentUser) -> dict[str, Any]:
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.build_probabilities()
+
+
+@router.get("/signals/intelligence/heatmap")
+async def si_heatmap(user: CurrentUser) -> dict[str, Any]:
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.build_heatmap()
+
+
+@router.get("/signals/intelligence/analytics")
+async def si_analytics(
+    user: CurrentUser,
+    days: int = Query(default=30, ge=1, le=365),
+) -> dict[str, Any]:
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.build_symbol_analytics(days=days)
+
+
+@router.get("/signals/intelligence/chart-markers/{symbol}")
+async def si_chart_markers(
+    symbol: str,
+    user: CurrentUser,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.chart_markers(symbol, limit=limit)
+
+
+@router.post("/signals/intelligence/observe")
+async def si_observe(user: OperatorUser) -> dict[str, Any]:
+    """Owner/Admin — snapshot current LIVE scan into signal_history."""
+    _ = user
+    from app.application.services import signal_intelligence_service as si
+
+    return si.observe_live_scan()
+
+
 @router.get("/signals/{symbol}")
 async def get_signal_detail(symbol: str, user: CurrentUser) -> dict[str, Any]:
     _ = user
+    if symbol.strip().lower() == "intelligence":
+        raise HTTPException(status_code=404, detail="Use /signals/intelligence/*")
     item = signal_center_service.get_signal(symbol)
     if item is None:
         raise HTTPException(status_code=404, detail="Signal not found")
