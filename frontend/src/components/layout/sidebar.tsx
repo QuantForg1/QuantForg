@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, Fragment } from "react";
+import { useCallback, useEffect, useId, useRef, useState, Fragment, Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronsLeft, ChevronsRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -37,7 +37,8 @@ function PrimaryLink({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const active = isPrimaryActive(pathname, item);
+  const searchParams = useSearchParams();
+  const active = isPrimaryActive(pathname, item, searchParams.toString());
   const Icon = item.icon;
   const title = item.hint
     ? `${item.label} — ${item.hint}${item.shortcut ? ` (⌘${item.shortcut})` : ""}`
@@ -98,31 +99,28 @@ function NavBody({
 }) {
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
-      {!collapsed ? (
-        <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          Workspaces
-        </p>
-      ) : null}
-
       <ul className="space-y-0.5">
         {primaryRail.map((item, index) => {
           const prev = index > 0 ? primaryRail[index - 1] : undefined;
-          const showSeparator =
-            Boolean(prev?.group) &&
-            Boolean(item.group) &&
-            prev!.group !== item.group;
+          const sectionChanged = item.section !== prev?.section;
+          const showSection = !collapsed && Boolean(item.section) && sectionChanged;
           return (
-            <Fragment key={item.href}>
-              {showSeparator ? (
+            <Fragment key={`${item.href}:${item.label}`}>
+              {showSection ? (
+                <li className="list-none">
+                  <p
+                    className={cn(
+                      "mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]",
+                      index > 0 && "mt-3",
+                    )}
+                  >
+                    {item.section}
+                  </p>
+                </li>
+              ) : null}
+              {collapsed && sectionChanged && index > 0 ? (
                 <li aria-hidden className="list-none">
-                  <div
-                    className={
-                      collapsed
-                        ? "my-1.5"
-                        : "my-2 border-t border-[var(--border)]"
-                    }
-                    role="separator"
-                  />
+                  <div className="my-1.5" role="separator" />
                 </li>
               ) : null}
               <PrimaryLink
@@ -215,7 +213,9 @@ export function Sidebar() {
       aria-label="Workspace rail"
     >
       <Brand collapsed={chrome.collapsed} />
-      <NavBody collapsed={chrome.collapsed} />
+      <Suspense fallback={<div className="flex-1" aria-hidden />}>
+        <NavBody collapsed={chrome.collapsed} />
+      </Suspense>
       <div className="flex shrink-0 items-center justify-end border-t border-[var(--border)] p-1.5">
         <Button
           type="button"
@@ -329,7 +329,9 @@ export function MobileNav() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <NavBody onNavigate={() => setOpen(false)} />
+            <Suspense fallback={<div className="flex-1" aria-hidden />}>
+              <NavBody onNavigate={() => setOpen(false)} />
+            </Suspense>
           </aside>
         </div>
       ) : null}

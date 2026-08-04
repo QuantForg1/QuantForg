@@ -1,15 +1,17 @@
 /**
- * XAUUSD-only trading mode.
+ * Trading symbol policy for the QuantForg frontend.
  *
- * QuantForg is a single-instrument gold desk. Multi-asset mode is removed.
+ * Production supports multi-asset (LIVE MT5 universe). Default focus remains XAUUSD.
+ * Order routing still goes through existing backend Risk/OMS gates — this file only
+ * controls client display / API path encoding.
  */
 
 export const GOLD_SYMBOL = "XAUUSD";
 
-/** Always false — platform mandate. */
-export const MULTI_SYMBOL_ENABLED = false;
+/** Multi-asset Terminal watchlist, charts, and tickets are enabled. */
+export const MULTI_SYMBOL_ENABLED = true;
 
-/** Active default / forced trading symbol. */
+/** Default desk focus when no symbol is selected. */
 export const TRADING_SYMBOL = GOLD_SYMBOL;
 
 const GOLD_ALIASES = new Set(["XAUUSD", "GOLD", "XAUUSDM", "XAUUSD.", "XAUUSD.a"]);
@@ -26,22 +28,30 @@ export function isGoldSymbol(code: string): boolean {
 }
 
 export function isAllowedTradingSymbol(code: string): boolean {
-  return isGoldSymbol(code);
+  const u = normalizeSymbolCode(code);
+  if (!u) return false;
+  if (MULTI_SYMBOL_ENABLED) return true;
+  return isGoldSymbol(u);
 }
 
-/** Resolve any input to XAUUSD. */
-/** Resolve any input to XAUUSD. */
+/** Resolve a user/URL symbol for API paths and Terminal state. */
 export function resolveTradingSymbol(code?: string | null): string {
-  void code;
-  return GOLD_SYMBOL;
+  const n = normalizeSymbolCode(code || "");
+  if (!n) return GOLD_SYMBOL;
+  if (!MULTI_SYMBOL_ENABLED) return GOLD_SYMBOL;
+  return n;
 }
 
 /**
  * Map a user search string to an MT5 `q` param.
- * Non-gold queries return null → callers should show an empty result set.
+ * Multi-asset: empty string lists the broker catalogue.
+ * Gold-only: non-gold queries return null → empty result set.
  */
 export function goldOnlySearchQuery(q?: string): string | null {
   const raw = (q || "").trim().toUpperCase();
+  if (MULTI_SYMBOL_ENABLED) {
+    return raw;
+  }
   if (!raw) return GOLD_SYMBOL;
   if (
     GOLD_SYMBOL.includes(raw) ||
@@ -57,6 +67,7 @@ export function goldOnlySearchQuery(q?: string): string | null {
 export function filterTradingSymbolRecords<T extends Record<string, unknown>>(
   items: T[],
 ): T[] {
+  if (MULTI_SYMBOL_ENABLED) return items;
   return items.filter((item) =>
     isGoldSymbol(String(item.code ?? item.symbol ?? "")),
   );

@@ -32,13 +32,13 @@ const ALL_CATS = [
   "all",
   "favorites",
   "forex",
-  "indices",
-  "crypto",
   "gold",
+  "crypto",
+  "indices",
+  "commodities",
   "silver",
   "oil",
   "stocks",
-  "commodities",
 ] as const;
 
 type MarketCategory = (typeof ALL_CATS)[number];

@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Keyboard,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   X,
@@ -12,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { WorkspaceChart } from "@/components/workspace/chart-panel";
+import { WorkspaceLeftRail } from "@/components/workspace/left-rail";
 import { SplitHandle, useResizeSplit } from "@/components/workspace/splitters";
 import { TerminalSessionBar } from "@/components/terminal/session-bar";
 import { TerminalCounselStrip } from "@/components/terminal/counsel-strip";
@@ -107,14 +110,15 @@ export function TerminalShell() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(TERMINAL_SYMBOL_KEY, TRADING_SYMBOL);
+      localStorage.setItem(TERMINAL_SYMBOL_KEY, symbol);
     } catch {
       /* ignore */
     }
-    if (symbol !== TRADING_SYMBOL) {
-      setSymbol(TRADING_SYMBOL);
-    }
   }, [symbol, hydrated]);
+
+  const onSymbolSelect = useCallback((code: string) => {
+    setSymbol(resolveTradingSymbol(code));
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023px)");
@@ -123,6 +127,7 @@ export function TerminalShell() {
       if (mq.matches) {
         setLayout((prev) => ({
           ...prev,
+          leftCollapsed: true,
           rightCollapsed: true,
         }));
       }
@@ -169,6 +174,12 @@ export function TerminalShell() {
     setLayout((prev) => ({ ...prev, ...partial }));
   }, []);
 
+  const onLeftDelta = useCallback((d: number) => {
+    setLayout((prev) => ({
+      ...prev,
+      leftWidth: Math.min(360, Math.max(200, prev.leftWidth + d)),
+    }));
+  }, []);
   const onRightDelta = useCallback((d: number) => {
     setLayout((prev) => ({
       ...prev,
@@ -182,6 +193,7 @@ export function TerminalShell() {
     }));
   }, []);
 
+  const leftSplit = useResizeSplit(onLeftDelta);
   const rightSplit = useResizeSplit(onRightDelta);
   const bottomSplit = useResizeSplit(onBottomDelta);
 
@@ -283,6 +295,8 @@ export function TerminalShell() {
     return () => window.removeEventListener("keydown", onKey);
   }, [patchLayout, setBlotterTab, isMobile, cyclePreset]);
 
+  const showLeft =
+    !isMobile && !layout.leftCollapsed && !layout.chartFullscreen;
   const showRight =
     !isMobile && !layout.rightCollapsed && !layout.chartFullscreen;
   const showBottom = !layout.bottomCollapsed && !layout.chartFullscreen;
@@ -331,6 +345,25 @@ export function TerminalShell() {
                   </Button>
                 ))}
               </div>
+            ) : null}
+            {!isMobile ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 px-0"
+                aria-label={
+                  layout.leftCollapsed ? "Expand watchlist" : "Collapse watchlist"
+                }
+                onClick={() =>
+                  patchLayout({ leftCollapsed: !layout.leftCollapsed })
+                }
+              >
+                {layout.leftCollapsed ? (
+                  <PanelLeftOpen className="h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4" />
+                )}
+              </Button>
             ) : null}
             {!isMobile ? (
               <Button
@@ -392,6 +425,31 @@ export function TerminalShell() {
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
+        {showLeft ? (
+          <>
+            <div
+              style={{ width: layout.leftWidth }}
+              className="min-h-0 shrink-0 overflow-hidden border-r border-[var(--border)]"
+            >
+              <WorkspaceLeftRail
+                connected={connected}
+                selected={symbol}
+                onSelect={onSymbolSelect}
+                preset={layout.preset}
+                onPresetChange={applyPreset}
+                latencyMs={session.latencyMs}
+                hideStatusChrome
+              />
+            </div>
+            <SplitHandle
+              orientation="vertical"
+              label="Resize watchlist"
+              onStartDrag={leftSplit.start("x")}
+              onStep={onLeftDelta}
+            />
+          </>
+        ) : null}
+
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="min-h-0 flex-1 overflow-hidden">
             <WorkspaceChart
@@ -446,7 +504,7 @@ export function TerminalShell() {
             >
               <TerminalRightRail
                 symbol={symbol}
-                onSymbolChange={setSymbol}
+                onSymbolChange={onSymbolSelect}
                 connected={connected}
                 bid={bidOk}
                 ask={askOk}

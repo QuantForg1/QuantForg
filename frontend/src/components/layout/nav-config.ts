@@ -72,69 +72,96 @@ export type PrimaryNavItem = NavItem & {
   /** ⌘N desk jump hint shown in rail tooltip */
   shortcut?: string;
   /**
-   * Visual group for rail separators only (no collapsible sections).
-   * Separators render when the group changes between adjacent items.
+   * Bloomberg-style section title. Rendered when it changes from the
+   * previous item (expanded rail only).
    */
-  group?: "desks" | "ops" | "system";
+  section?:
+    | "Trading"
+    | "Execution"
+    | "Signals"
+    | "Portfolio"
+    | "Market"
+    | "Research"
+    | "Administration";
 };
 
 /**
- * Trader rail workspaces. ⌘1–8 remain on the eight primary desks
- * (Terminal…Broker + Inbox + Settings). Operator workspaces in between
- * are rail-visible without desk shortcuts; everything else is ⌘K / deep link.
+ * Production workspace rail — grouped navigation to existing surfaces.
+ * ⌘1–8 remain on the eight primary desks.
  */
 export const primaryRail: PrimaryNavItem[] = [
   {
     href: "/terminal",
     label: "Terminal",
     icon: LayoutTemplate,
-    hint: "Trade — chart · ticket · blotter",
+    hint: "Trade — chart · watchlist · ticket",
     match: ["/terminal", "/workspace", "/execution"],
     shortcut: "1",
-    group: "desks",
+    section: "Trading",
   },
   {
-    href: "/portfolio",
-    label: "Book",
-    icon: Briefcase,
-    hint: "Understand portfolio · risk · exposure",
-    match: [
-      "/portfolio",
-      "/book",
-      "/performance",
-      "/exposure",
-      "/allocation",
-      "/risk-center",
-    ],
-    shortcut: "2",
-    group: "desks",
+    href: "/auto-trading",
+    label: "Auto Trading",
+    icon: Bot,
+    hint: "Autonomous command center",
+    match: ["/auto-trading"],
+    section: "Trading",
   },
   {
-    href: "/research",
-    label: "Research",
-    icon: FlaskConical,
-    hint: "Idea → promote pipeline",
-    match: ["/research", "/screeners"],
-    shortcut: "3",
-    group: "desks",
+    href: "/ai-scalping",
+    label: "Scalping AI",
+    icon: Crosshair,
+    hint: "H1/M15/M5/M1 · quality gates",
+    match: ["/ai-scalping", "/scalping-ai-v2"],
+    section: "Trading",
   },
   {
-    href: "/ai-signals",
-    label: "Counsel",
-    icon: Scale,
-    hint: "Decide — advisory only, never executes",
-    match: ["/ai-signals", "/counsel"],
-    shortcut: "4",
-    group: "desks",
+    href: "/institutional-alpha",
+    label: "Multi Asset",
+    icon: Layers3,
+    hint: "Multi-symbol ranking and handoff",
+    match: ["/institutional-alpha", "/multi-asset"],
+    section: "Trading",
   },
   {
-    href: "/journal",
-    label: "Journal",
-    icon: NotebookPen,
-    hint: "Session memory and trade notes",
-    match: ["/journal", "/trade-replay"],
-    shortcut: "5",
-    group: "desks",
+    href: "/trading-kernel",
+    label: "Trading Engine",
+    icon: Gauge,
+    hint: "Kernel · cycle · live gates",
+    match: ["/trading-kernel", "/trading-engine"],
+    section: "Trading",
+  },
+  {
+    href: "/orders",
+    label: "Orders",
+    icon: ListOrdered,
+    hint: "Working and pending orders",
+    match: ["/orders"],
+    section: "Execution",
+  },
+  {
+    href: "/positions",
+    label: "Positions",
+    icon: Layers3,
+    hint: "Open exposure blotter",
+    match: ["/positions"],
+    section: "Execution",
+  },
+  {
+    href: "/executions",
+    label: "Executions",
+    icon: History,
+    hint: "Fills and deal tape",
+    match: ["/executions"],
+    section: "Execution",
+  },
+  {
+    href: "/oms",
+    label: "OMS",
+    icon: Workflow,
+    hint: "Order management · execution tape",
+    match: ["/oms"],
+    section: "Execution",
   },
   {
     href: "/broker",
@@ -143,48 +170,153 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Attach session · connectivity",
     match: ["/broker", "/gateway"],
     shortcut: "6",
-    group: "ops",
+    section: "Execution",
   },
   {
-    href: "/auto-trading",
-    label: "Auto-trading",
-    icon: Bot,
-    hint: "Autonomous command center",
-    match: ["/auto-trading"],
-    group: "ops",
+    href: "/signals",
+    label: "Signal Center",
+    icon: Radar,
+    hint: "LIVE signal board",
+    match: ["/signals"],
+    section: "Signals",
   },
   {
-    href: "/ai-scalping",
-    label: "Scalping AI",
-    icon: Crosshair,
-    hint: "H1/M15/M5/M1 · BUY/SELL quality gates",
-    match: ["/ai-scalping", "/scalping-ai-v2"],
-    group: "ops",
+    href: "/signal-intelligence",
+    label: "Signal Intelligence",
+    icon: Brain,
+    hint: "History · outcomes · analytics",
+    match: ["/signal-intelligence"],
+    section: "Signals",
+  },
+  {
+    href: "/signal-intelligence?tab=history",
+    label: "Signal History",
+    icon: History,
+    hint: "Per-symbol signal timeline",
+    match: ["/signal-intelligence"],
+    section: "Signals",
+  },
+  {
+    href: "/signal-intelligence?tab=analytics",
+    label: "Signal Analytics",
+    icon: BarChart3,
+    hint: "Aggregate quality and outcomes",
+    match: ["/signal-intelligence"],
+    section: "Signals",
+  },
+  {
+    href: "/signal-intelligence?tab=heatmap",
+    label: "Heat Map",
+    icon: Flame,
+    hint: "Session × symbol heat map",
+    match: ["/signal-intelligence"],
+    section: "Signals",
+  },
+  {
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: Briefcase,
+    hint: "Equity · health · book OS",
+    match: ["/portfolio", "/book"],
+    shortcut: "2",
+    section: "Portfolio",
+  },
+  {
+    href: "/exposure",
+    label: "Exposure",
+    icon: Target,
+    hint: "Symbol and side exposure",
+    match: ["/exposure"],
+    section: "Portfolio",
+  },
+  {
+    href: "/performance",
+    label: "Performance",
+    icon: LineChart,
+    hint: "Equity path and returns",
+    match: ["/performance"],
+    section: "Portfolio",
+  },
+  {
+    href: "/risk-center",
+    label: "Risk",
+    icon: Shield,
+    hint: "Pre-trade and session risk",
+    match: ["/risk-center", "/risk"],
+    section: "Portfolio",
+  },
+  {
+    href: "/allocation",
+    label: "Allocation",
+    icon: PieChart,
+    hint: "Capital allocation map",
+    match: ["/allocation"],
+    section: "Portfolio",
+  },
+  {
+    href: "/symbol-management",
+    label: "Symbol Management",
+    icon: Library,
+    hint: "Universe · enable · favorites · sync",
+    match: ["/symbol-management"],
+    section: "Market",
+  },
+  {
+    href: "/watchlist",
+    label: "Watchlist",
+    icon: CandlestickChart,
+    hint: "Terminal market watch",
+    match: ["/watchlist"],
+    section: "Market",
+  },
+  {
+    href: "/favorites",
+    label: "Favorites",
+    icon: Sparkles,
+    hint: "Favorite symbols",
+    match: ["/favorites"],
+    section: "Market",
+  },
+  {
+    href: "/market-scanner",
+    label: "Market Scanner",
+    icon: ScanSearch,
+    hint: "Scan liquid markets",
+    match: ["/market-scanner", "/screeners"],
+    section: "Market",
+  },
+  {
+    href: "/research",
+    label: "Research",
+    icon: FlaskConical,
+    hint: "Idea → promote pipeline",
+    match: ["/research", "/screeners"],
+    shortcut: "3",
+    section: "Research",
   },
   {
     href: "/strategy-diagnostics",
     label: "Strategy Diagnostics",
     icon: ScanSearch,
-    hint: "Why NO_TRADE · quality · confluence · MTF",
+    hint: "Why NO_TRADE · confluence · MTF",
     match: ["/strategy-diagnostics"],
-    group: "ops",
+    section: "Research",
   },
   {
     href: "/continuous-validation",
     label: "Continuous Validation",
     icon: ClipboardCheck,
-    hint: "CVF · drift · replay vs live · evidence",
+    hint: "CVF · drift · replay vs live",
     match: ["/continuous-validation"],
-    group: "ops",
+    section: "Research",
   },
   {
-    href: "/notifications",
-    label: "Inbox",
-    icon: Bell,
-    hint: "Alerts and notifications",
-    match: ["/notifications", "/alerts"],
-    shortcut: "7",
-    group: "system",
+    href: "/live-learning-program",
+    label: "AI Learning",
+    icon: GraduationCap,
+    hint: "Live learning program",
+    match: ["/live-learning-program", "/ai-learning"],
+    section: "Research",
   },
   {
     href: "/settings",
@@ -193,15 +325,102 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Profile, org, preferences",
     match: ["/settings", "/integrations", "/shortcuts"],
     shortcut: "8",
-    group: "system",
+    section: "Administration",
+  },
+  {
+    href: "/admin/customer-ops",
+    label: "Users",
+    icon: Building2,
+    hint: "Customer and user ops",
+    match: ["/admin/customer-ops", "/users", "/organizations"],
+    section: "Administration",
+  },
+  {
+    href: "/logs",
+    label: "Logs",
+    icon: FileText,
+    hint: "Operational logs",
+    match: ["/logs"],
+    section: "Administration",
+  },
+  {
+    href: "/monitoring",
+    label: "System Health",
+    icon: HeartPulse,
+    hint: "Health · latency · uptime",
+    match: ["/monitoring", "/institutional-observability", "/system-health"],
+    section: "Administration",
+  },
+  {
+    href: "/ai-signals",
+    label: "Counsel",
+    icon: Scale,
+    hint: "Decide — advisory only",
+    match: ["/ai-signals", "/counsel"],
+    shortcut: "4",
+    section: "Administration",
+  },
+  {
+    href: "/journal",
+    label: "Journal",
+    icon: NotebookPen,
+    hint: "Session memory and trade notes",
+    match: ["/journal", "/trade-replay"],
+    shortcut: "5",
+    section: "Administration",
+  },
+  {
+    href: "/notifications",
+    label: "Inbox",
+    icon: Bell,
+    hint: "Alerts and notifications",
+    match: ["/notifications", "/alerts"],
+    shortcut: "7",
+    section: "Administration",
   },
 ];
 
-export function isPrimaryActive(pathname: string, item: PrimaryNavItem): boolean {
-  const prefixes = item.match ?? [item.href];
-  return prefixes.some(
+export function isPrimaryActive(
+  pathname: string,
+  item: PrimaryNavItem,
+  search = "",
+): boolean {
+  const hrefPath = item.href.split("?")[0] || item.href;
+  const prefixes = item.match ?? [hrefPath];
+  const pathOk = prefixes.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
+  if (!pathOk) return false;
+
+  const wantTab = (() => {
+    const q = item.href.includes("?") ? item.href.slice(item.href.indexOf("?") + 1) : "";
+    return new URLSearchParams(q).get("tab");
+  })();
+  const params = new URLSearchParams(
+    search.startsWith("?") ? search.slice(1) : search,
+  );
+  const haveTab = params.get("tab");
+
+  if (wantTab) {
+    return haveTab === wantTab;
+  }
+
+  // Bare Signal Intelligence entry: active only on overview (no / default tab).
+  if (hrefPath === "/signal-intelligence" && item.label === "Signal Intelligence") {
+    return !haveTab || haveTab === "overview";
+  }
+
+  // Avoid highlighting every SI deep-link alias when on a tabbed SI page.
+  if (
+    hrefPath === "/signal-intelligence" &&
+    haveTab &&
+    haveTab !== "overview" &&
+    item.label !== "Signal Intelligence"
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 /**

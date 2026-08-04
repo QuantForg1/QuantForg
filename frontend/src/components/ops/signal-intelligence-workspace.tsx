@@ -39,8 +39,16 @@ function heatTone(heat: number): string {
   return "bg-[var(--surface-2)]";
 }
 
-export function SignalIntelligenceWorkspace() {
-  const [tab, setTab] = useState<Tab>("overview");
+export function SignalIntelligenceWorkspace({
+  initialTab = "overview",
+}: {
+  initialTab?: Tab;
+}) {
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
   const [symbol, setSymbol] = useState("XAUUSD");
   const [days, setDays] = useState(30);
 

@@ -6,8 +6,10 @@ export type TerminalBlotterTab = "positions" | "orders" | "executions";
 
 export type TerminalLayoutState = {
   preset: TerminalPresetId;
+  leftWidth: number;
   rightWidth: number;
   bottomHeight: number;
+  leftCollapsed: boolean;
   rightCollapsed: boolean;
   bottomCollapsed: boolean;
   chartFullscreen: boolean;
@@ -20,13 +22,15 @@ export type TerminalLayoutState = {
   mobileTicketOpen: boolean;
 };
 
-export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v5";
+export const TERMINAL_LAYOUT_KEY = "qf.terminal.layout.v6";
 export const TERMINAL_SYMBOL_KEY = "qf.workspace.symbol";
 
 export const DEFAULT_TERMINAL_LAYOUT: TerminalLayoutState = {
   preset: "default",
+  leftWidth: 260,
   rightWidth: 320,
   bottomHeight: 148,
+  leftCollapsed: false,
   rightCollapsed: false,
   bottomCollapsed: false,
   chartFullscreen: false,
@@ -46,8 +50,10 @@ export const PRESET_TERMINAL: Record<
 > = {
   default: {
     preset: "default",
+    leftWidth: 260,
     rightWidth: 320,
     bottomHeight: 148,
+    leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
     chartFullscreen: false,
@@ -55,6 +61,7 @@ export const PRESET_TERMINAL: Record<
   },
   "chart-focus": {
     preset: "chart-focus",
+    leftCollapsed: true,
     rightCollapsed: true,
     bottomCollapsed: true,
     counselCollapsed: true,
@@ -62,8 +69,10 @@ export const PRESET_TERMINAL: Record<
   },
   "tape-focus": {
     preset: "tape-focus",
+    leftWidth: 220,
     rightWidth: 300,
     bottomHeight: 220,
+    leftCollapsed: false,
     rightCollapsed: false,
     bottomCollapsed: false,
     counselCollapsed: true,
@@ -93,6 +102,11 @@ export function loadTerminalLayout(): TerminalLayoutState {
         parsed.counselCollapsed === undefined
           ? true
           : Boolean(parsed.counselCollapsed),
+      leftCollapsed: Boolean(parsed.leftCollapsed),
+      leftWidth: Math.min(
+        360,
+        Math.max(200, Number(parsed.leftWidth) || DEFAULT_TERMINAL_LAYOUT.leftWidth),
+      ),
       rightWidth: Math.min(
         380,
         Math.max(280, Number(parsed.rightWidth) || DEFAULT_TERMINAL_LAYOUT.rightWidth),

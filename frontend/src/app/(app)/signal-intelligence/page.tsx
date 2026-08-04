@@ -1,11 +1,38 @@
 "use client";
 
+import { Suspense } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { SignalIntelligenceWorkspace } from "@/components/ops/signal-intelligence-workspace";
 import { Button } from "@/components/ui/button";
+import { DeskSkeleton } from "@/components/desk/primitives";
 
-export default function SignalIntelligencePage() {
+const TABS = [
+  "overview",
+  "history",
+  "outcomes",
+  "probability",
+  "heatmap",
+  "analytics",
+  "overlay",
+] as const;
+
+type Tab = (typeof TABS)[number];
+
+function resolveTab(raw: string | null): Tab {
+  if (raw && (TABS as readonly string[]).includes(raw)) return raw as Tab;
+  return "overview";
+}
+
+function SignalIntelligenceBody() {
+  const searchParams = useSearchParams();
+  const initialTab = useMemo(
+    () => resolveTab(searchParams.get("tab")),
+    [searchParams],
+  );
+
   return (
     <div>
       <PageHeader
@@ -25,7 +52,15 @@ export default function SignalIntelligencePage() {
           </div>
         }
       />
-      <SignalIntelligenceWorkspace />
+      <SignalIntelligenceWorkspace initialTab={initialTab} />
     </div>
+  );
+}
+
+export default function SignalIntelligencePage() {
+  return (
+    <Suspense fallback={<DeskSkeleton rows={6} />}>
+      <SignalIntelligenceBody />
+    </Suspense>
   );
 }

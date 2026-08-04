@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 
@@ -16,9 +18,12 @@ export type DeskQueryEmpty = {
 
 type SkeletonVariant = "list" | "kpis" | "chart" | "page";
 
+const LOADING_TIMEOUT_MS = 20_000;
+
 /**
  * Single reusable async boundary for desk pages:
  * loading → error → optional empty → content.
+ * Hard-timeout prevents infinite skeletons when the API hangs.
  */
 export function DeskQueryState({
   isLoading,
@@ -42,11 +47,31 @@ export function DeskQueryState({
   empty?: DeskQueryEmpty;
   children: ReactNode;
 }) {
-  if (isLoading) {
+  const [timedOut, setTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setTimedOut(true), LOADING_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [isLoading]);
+
+  if (isLoading && !timedOut) {
     return (
       <DeskSkeleton
         variant={skeleton}
         rows={skeletonRows ?? (skeleton === "page" ? 4 : 3)}
+      />
+    );
+  }
+
+  if (timedOut && isLoading) {
+    return (
+      <DeskError
+        message="Loading timed out. Retry when the API responds."
+        onRetry={onRetry}
       />
     );
   }

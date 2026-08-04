@@ -88,6 +88,18 @@ const nextConfig: NextConfig = {
       { source: "/cloud-ops", destination: "/gateway", permanent: false },
       { source: "/profile", destination: "/settings", permanent: false },
       { source: "/organizations", destination: "/settings", permanent: false },
+
+      // Production workspace aliases (nav deep links)
+      { source: "/oms", destination: "/executions", permanent: false },
+      { source: "/multi-asset", destination: "/institutional-alpha", permanent: false },
+      { source: "/trading-engine", destination: "/trading-kernel", permanent: false },
+      { source: "/watchlist", destination: "/terminal", permanent: false },
+      { source: "/favorites", destination: "/symbol-management", permanent: false },
+      { source: "/users", destination: "/admin/customer-ops", permanent: false },
+      { source: "/system-health", destination: "/monitoring", permanent: false },
+      { source: "/ai-learning", destination: "/live-learning-program", permanent: false },
+      { source: "/signal-history", destination: "/signal-intelligence?tab=history", permanent: false },
+      { source: "/heat-map", destination: "/signal-intelligence?tab=heatmap", permanent: false },
     ];
   },
   async headers() {

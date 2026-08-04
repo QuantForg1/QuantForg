@@ -8,8 +8,8 @@ export type ShellChromeState = {
 };
 
 export const SHELL_SIDEBAR_MIN = 200;
-export const SHELL_SIDEBAR_MAX = 280;
-export const SHELL_SIDEBAR_DEFAULT = 220;
+export const SHELL_SIDEBAR_MAX = 300;
+export const SHELL_SIDEBAR_DEFAULT = 240;
 export const SHELL_SIDEBAR_COLLAPSED = 56;
 
 const DEFAULT: ShellChromeState = {
