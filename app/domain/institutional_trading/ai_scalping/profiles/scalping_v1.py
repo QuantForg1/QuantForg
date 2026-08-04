@@ -19,7 +19,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 
 PROFILE_ID = "SCALPING_V1"
-PROFILE_VERSION = "ai-scalping-v8.1.1+SCALPING_V1"
+PROFILE_VERSION = "ai-scalping-v8.1.2+SCALPING_V1"
 
 # Professional scalping RR target — min gate MUST match (never demand more).
 _SCALP_RR = Decimal("1.20")
@@ -82,6 +82,11 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         post_close_rescan_delay_seconds=0.0,
         continuous_operation_enabled=True,
         multi_asset_scan_enabled=True,
+        # Dynamic liquid universe from LIVE broker catalogue (gates unchanged)
+        dynamic_universe_enabled=True,
+        max_universe_symbols=36,
+        session_symbol_priority_enabled=True,
+        live_symbol_learning_enabled=True,
         # PME — earlier BE / partial / trail (do not increase losses)
         break_even_at_r=Decimal("0.35"),
         partial_at_r=Decimal("0.70"),

@@ -102,34 +102,90 @@ def resolve_scan_universe(
     config: AiScalpingConfig | None = None,
     *,
     plane: Any | None = None,
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+    session: str | None = None,
 ) -> tuple[str, ...]:
-    """Configurable watchlist — AiScalping universe, optionally intersected by plane."""
-    cfg = config or DEFAULT_AI_SCALPING_CONFIG
-    base = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
-    # Never spend cycle time on broker-dead index aliases.
-    base = tuple(s for s in base if s not in BROKER_UNAVAILABLE_SCALP_SYMBOLS)
-    if plane is None:
-        return base
-    allowed = tuple(
-        str(s).strip().upper()
-        for s in (getattr(plane, "allowed_symbols", ()) or ())
-        if str(s).strip()
-    )
-    if not allowed:
-        return base
-    # Defense: never let a stale gold-only plane collapse MULTI_SYMBOL scan.
-    try:
-        from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+    """Watchlist: seed ∪ liquid broker discoveries, session/learning prioritized.
 
-        if not gold_only_enabled() and (
-            len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}
-        ):
-            return base
-    except Exception:
-        pass
-    allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
-    filtered = tuple(s for s in base if s in allowed_set)
-    return filtered or base
+    Quality / structure / momentum / RR gates are unchanged — this only decides
+    *which* symbols are scored each cycle.
+    """
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    seed = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
+    seed = tuple(s for s in seed if s not in BROKER_UNAVAILABLE_SCALP_SYMBOLS)
+
+    demoted: set[str] = set()
+    boost: dict[str, float] = {}
+    if getattr(cfg, "live_symbol_learning_enabled", True):
+        try:
+            from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
+                get_symbol_stats_book,
+            )
+
+            book = get_symbol_stats_book()
+            demoted = set(book.demoted_symbols())
+            boost = book.performance_boost()
+        except Exception:
+            logger.exception("symbol_stats_priority_unavailable")
+
+    base = seed
+    if getattr(cfg, "dynamic_universe_enabled", False) and broker_symbol_rows:
+        try:
+            from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+                build_dynamic_scalping_universe,
+                discover_from_broker_rows,
+            )
+
+            discovered = discover_from_broker_rows(list(broker_symbol_rows))
+            base = build_dynamic_scalping_universe(
+                discovered,
+                seed=seed,
+                max_symbols=int(getattr(cfg, "max_universe_symbols", 28) or 28),
+                demoted=demoted,
+            )
+        except Exception:
+            logger.exception("dynamic_universe_build_failed")
+            base = seed
+    else:
+        base = tuple(s for s in base if s not in demoted)
+
+    if plane is not None:
+        allowed = tuple(
+            str(s).strip().upper()
+            for s in (getattr(plane, "allowed_symbols", ()) or ())
+            if str(s).strip()
+        )
+        if allowed:
+            # Defense: never let a stale gold-only plane collapse MULTI_SYMBOL scan.
+            try:
+                from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+
+                if not gold_only_enabled() and (
+                    len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}
+                ):
+                    pass  # keep base
+                else:
+                    allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
+                    filtered = tuple(s for s in base if s in allowed_set)
+                    base = filtered or base
+            except Exception:
+                allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
+                filtered = tuple(s for s in base if s in allowed_set)
+                base = filtered or base
+
+    if getattr(cfg, "session_symbol_priority_enabled", True):
+        try:
+            from app.domain.institutional_trading.ai_scalping.session_symbol_priority import (
+                prioritize_universe_for_session,
+            )
+
+            base = prioritize_universe_for_session(
+                base, session, performance_boost=boost
+            )
+        except Exception:
+            logger.exception("session_symbol_priority_failed")
+
+    return base
 
 
 async def score_symbol_for_scan(
@@ -227,8 +283,49 @@ async def run_institutional_multi_asset_scan(
     (up to max_entries_per_cycle) with unchanged institutional gates.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
-    universe = resolve_scan_universe(cfg, plane=plane)
+    # LIVE broker catalogue → dynamic liquid universe (quality gates unchanged).
+    broker_rows: tuple[dict[str, Any], ...] = ()
+    session_name: str | None = None
+    try:
+        from datetime import UTC as _UTC
+
+        from app.domain.institutional_trading.session_filter import classify_session_utc
+
+        session_name = classify_session_utc(datetime.now(_UTC)).value
+    except Exception:
+        session_name = None
+    if mt5_adapter is not None and getattr(cfg, "dynamic_universe_enabled", False):
+        try:
+            from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+                fetch_broker_symbol_rows,
+            )
+
+            broker_rows = fetch_broker_symbol_rows(mt5_adapter)
+        except Exception:
+            logger.exception("broker_universe_fetch_failed")
+    universe = resolve_scan_universe(
+        cfg,
+        plane=plane,
+        broker_symbol_rows=broker_rows or None,
+        session=session_name,
+    )
     as_of = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    if broker_rows:
+        try:
+            from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+                classify_catalogue_summary,
+                discover_from_broker_rows,
+            )
+
+            logger.warning(
+                "scalping_dynamic_universe_resolved",
+                session=session_name,
+                universe_size=len(universe),
+                universe=list(universe),
+                catalogue=classify_catalogue_summary(discover_from_broker_rows(broker_rows)),
+            )
+        except Exception:
+            logger.exception("dynamic_universe_log_failed")
 
     if not bool(getattr(cfg, "multi_asset_scan_enabled", True)):
         payload = {
@@ -304,6 +401,41 @@ async def run_institutional_multi_asset_scan(
             direction=row.get("direction"),
             reason=row.get("reject_reason"),
         )
+        # Live learning: production scan stats (priority only — not gate weakening).
+        if getattr(cfg, "live_symbol_learning_enabled", True):
+            try:
+                from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
+                    get_symbol_stats_book,
+                )
+
+                reason = str(row.get("reject_reason") or "")
+                hard = any(
+                    k in reason.lower()
+                    for k in (
+                        "market_context",
+                        "symbol_select",
+                        "unavailable",
+                        "503",
+                        "not found",
+                    )
+                )
+                direction = str(row.get("direction") or "NONE").upper()
+                eligible = (not bool(row.get("reject"))) and direction in {
+                    "BUY",
+                    "SELL",
+                }
+                atr_raw = row.get("atr_pct")
+                spread_raw = row.get("spread") or row.get("spread_score")
+                get_symbol_stats_book().record_scan(
+                    str(row.get("symbol") or ""),
+                    eligible=eligible,
+                    reject_reason=reason or None,
+                    spread=float(spread_raw) if spread_raw is not None else None,
+                    atr_pct=float(atr_raw) if atr_raw is not None else None,
+                    broker_hard_fail=hard,
+                )
+            except Exception:
+                logger.exception("symbol_scan_stats_record_failed")
 
     # Opportunity Ranking + Execution Probability + Trade Queue
     try:

@@ -1029,7 +1029,15 @@ class GatewayMT5Client:
                 code=str(row.get("code") or ""),
                 description=str(row.get("description") or ""),
                 digits=int(row.get("digits") or 0),
-                contract_size=Decimal("100000"),
+                contract_size=Decimal(str(row.get("contract_size") or "100000")),
+                raw={
+                    "trade_mode": str(row.get("trade_mode") if row.get("trade_mode") is not None else ""),
+                    "volume_min": str(row.get("volume_min") or ""),
+                    "volume_max": str(row.get("volume_max") or ""),
+                    "volume_step": str(row.get("volume_step") or ""),
+                    "filling_mode": str(row.get("filling_mode") or ""),
+                    "point": str(row.get("point") or ""),
+                },
             )
             for row in items
             if row.get("code")

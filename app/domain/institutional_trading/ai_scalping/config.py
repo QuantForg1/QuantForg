@@ -80,6 +80,11 @@ class AiScalpingConfig:
     multi_asset_scan_enabled: bool = True
     continuous_operation_enabled: bool = True
     post_close_rescan_enabled: bool = True
+    # Dynamic broker-driven universe (discovery + priority). Quality floors unchanged.
+    dynamic_universe_enabled: bool = True
+    max_universe_symbols: int = 36
+    session_symbol_priority_enabled: bool = True
+    live_symbol_learning_enabled: bool = True
     # Continuous scalping cadence — parallel score + multi-symbol handoff.
     # Quality / confluence / structure / momentum floors unchanged.
     parallel_scan_enabled: bool = True
@@ -347,6 +352,10 @@ class AiScalpingConfig:
             "multi_asset_scan_enabled": self.multi_asset_scan_enabled,
             "continuous_operation_enabled": self.continuous_operation_enabled,
             "post_close_rescan_enabled": self.post_close_rescan_enabled,
+            "dynamic_universe_enabled": self.dynamic_universe_enabled,
+            "max_universe_symbols": self.max_universe_symbols,
+            "session_symbol_priority_enabled": self.session_symbol_priority_enabled,
+            "live_symbol_learning_enabled": self.live_symbol_learning_enabled,
             "timeframes": {
                 "direction": self.direction_tf.value,
                 "structure": self.structure_tf.value,
