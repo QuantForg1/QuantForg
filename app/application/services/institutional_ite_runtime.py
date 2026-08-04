@@ -1072,18 +1072,41 @@ class InstitutionalIteRuntime:
                     getattr(result, "action", None),
                 )
                 if action_v and str(action_v).lower() not in {"skip", "none", ""}:
+                    plan_reason = str(
+                        getattr(getattr(result, "record", None), "reason", "")
+                        or getattr(result, "reason", "")
+                        or ""
+                    )
                     logger.warning(
                         "Position Managed",
                         ticket=ticket,
                         action=str(action_v),
                         reason=reason,
                         mid=str(current_px),
-                        plan_reason=str(
-                            getattr(getattr(result, "record", None), "reason", "")
-                            or getattr(result, "reason", "")
-                            or ""
-                        ),
+                        plan_reason=plan_reason,
                     )
+                    act = str(action_v).lower()
+                    if act in {"break_even", "break-even"}:
+                        logger.warning(
+                            "BREAK_EVEN",
+                            ticket=ticket,
+                            mid=str(current_px),
+                            plan_reason=plan_reason,
+                        )
+                    elif act in {"partial_close", "partial"}:
+                        logger.warning(
+                            "PARTIAL_TP",
+                            ticket=ticket,
+                            mid=str(current_px),
+                            plan_reason=plan_reason,
+                        )
+                    elif act in {"trail", "trailing"}:
+                        logger.warning(
+                            "TRAILING",
+                            ticket=ticket,
+                            mid=str(current_px),
+                            plan_reason=plan_reason,
+                        )
                 to_state = getattr(getattr(result, "record", None), "to_state", None)
                 to_v = getattr(to_state, "value", to_state)
                 pos_state = getattr(getattr(result, "position", None), "state", None)

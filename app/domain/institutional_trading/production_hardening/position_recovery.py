@@ -295,6 +295,16 @@ def recover_positions_from_mt5(
                 be_already_on_broker=be_already,
                 state=state.value,
             )
+            if be_already:
+                logger.warning(
+                    "BREAK_EVEN",
+                    ticket=ticket,
+                    symbol=managed.symbol,
+                    detail="broker SL already on profit side — PME BE_MOVED",
+                    broker_sl=str(broker_sl),
+                    entry=str(entry),
+                    risk_distance=str(risk),
+                )
         except Exception:
             logger.exception("pme_recovery_register_failed", ticket=ticket)
 
