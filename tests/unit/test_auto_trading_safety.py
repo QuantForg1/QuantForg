@@ -118,6 +118,35 @@ class TestAutoTradeSafetyGate:
         assert result.allowed is False
         assert any("Spread" in r for r in result.failed_reasons)
 
+    def test_scalping_allows_dynamic_universe_symbol_not_on_plane_list(self) -> None:
+        """LIVE bug: AUDJPY eligible + handed off, then safety_blocked on allowlist."""
+        policy = AutoTradePolicy(
+            enabled=True,
+            run_state="running",
+            trading_mode="scalping",
+            allowed_symbols=("XAUUSD", "EURUSD", "GBPUSD"),
+        )
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="AUDJPY", symbol_tradable=True),
+        )
+        assert result.allowed is True
+        assert not any("not in allowed list" in r for r in result.failed_reasons)
+
+    def test_swing_still_enforces_allowed_symbols(self) -> None:
+        policy = AutoTradePolicy(
+            enabled=True,
+            run_state="running",
+            trading_mode="swing",
+            allowed_symbols=("XAUUSD", "EURUSD"),
+        )
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="AUDJPY", symbol_tradable=True),
+        )
+        assert result.allowed is False
+        assert any("not in allowed list" in r for r in result.failed_reasons)
+
 
 @pytest.mark.unit
 class TestAutoTradeOpsControls:

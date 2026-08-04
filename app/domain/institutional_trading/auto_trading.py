@@ -324,7 +324,20 @@ def evaluate_auto_trade_safety(
     )
     symbol_u = (facts.symbol or "").strip().upper()
     allowed_syms = {s.strip().upper() for s in policy.allowed_symbols if s.strip()}
-    symbol_allowed = symbol_u in allowed_syms if allowed_syms else False
+    mode = (policy.trading_mode or "swing").strip().lower()
+    # Scalping/alpha multi-asset: dynamic scan universe owns membership.
+    # Stale ops plane allowed_symbols must not reject post-strategy handoff
+    # (same class of bug as portfolio_scanner universe gate). Broker
+    # tradable check below remains mandatory. Gold-only still enforced.
+    if mode in {"scalping", "alpha"}:
+        from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+
+        if gold_only_enabled() and mode != "alpha":
+            symbol_allowed = symbol_u == GOLD_SYMBOL
+        else:
+            symbol_allowed = bool(symbol_u)
+    else:
+        symbol_allowed = symbol_u in allowed_syms if allowed_syms else False
     add(
         "symbol_allowed",
         "Symbol allowed",
