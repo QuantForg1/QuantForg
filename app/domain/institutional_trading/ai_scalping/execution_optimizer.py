@@ -18,7 +18,9 @@ _LAST_OPTIMIZER: dict[str, Any] | None = None
 MAX_DEFERS_PER_DECISION = 3
 MAX_DEFER_WINDOW_SECONDS = 45
 MIN_QUALITY_TO_PROCEED = 45
-DEFER_BELOW_QUALITY = 55
+# Was 55: LIVE XAUUSD scored 54 after gold ATR% <0.15 compression penalty and
+# never reached OMS (new input_hash each cycle reset defer_count to 1).
+DEFER_BELOW_QUALITY = 50
 
 
 def _now() -> datetime:
@@ -89,8 +91,13 @@ def _micro_volatility(snapshot: Any, account: Any) -> dict[str, Any]:
     if atr <= 0 or mid <= 0:
         return {"atr_pct": None, "band": "unknown", "score": 50}
     atr_pct = (atr / mid) * 100.0
-    if atr_pct < 0.15:
+    # Gold scalp ATR% routinely 0.08–0.35 on Sydney/Tokyo. Treating <0.15 as
+    # "compression" scored 35 and held LIVE submits at quality 54 (DEFER forever
+    # because each cycle uses a new decision hash). Align with vol hard_min 0.08.
+    if atr_pct < 0.08:
         return {"atr_pct": round(atr_pct, 6), "band": "compression", "score": 35}
+    if atr_pct < 0.12:
+        return {"atr_pct": round(atr_pct, 6), "band": "thin", "score": 60}
     if atr_pct > 2.5:
         return {"atr_pct": round(atr_pct, 6), "band": "expansion", "score": 40}
     return {"atr_pct": round(atr_pct, 6), "band": "normal", "score": 75}
@@ -205,7 +212,18 @@ def evaluate_execution_moment(
     Never alters AI direction. Never forces a trade.
     """
     sym = str(symbol or getattr(decision, "symbol", "") or "").upper()
-    key = decision_key or str(getattr(decision, "input_hash", None) or sym or "na")
+    action = str(
+        getattr(getattr(decision, "action", None), "value", None)
+        or getattr(decision, "action", None)
+        or ""
+    ).upper()
+    # Stable key so soft defers accumulate within the window across cycles.
+    # Unique input_hash/tid per cycle permanently reset defer_count → forever DEFER.
+    key = (
+        decision_key
+        or f"{sym}:{action}"
+        or str(getattr(decision, "input_hash", None) or sym or "na")
+    )
     spread = _spread_trend(sym)
     mom = _tick_momentum(snapshot)
     vol = _micro_volatility(snapshot, account)
@@ -235,8 +253,7 @@ def evaluate_execution_moment(
         round(sum(components[k] * weights[k] for k in weights) / total_w)
     )
     defer = _defer_state(key)
-    action = str(getattr(getattr(decision, "action", None), "value", None) or "")
-    if action.upper() not in {"BUY", "SELL"}:
+    if action not in {"BUY", "SELL"}:
         recommendation = "SKIP"
         reason = "no_buy_sell_action"
     elif quality >= DEFER_BELOW_QUALITY:

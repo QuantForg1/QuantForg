@@ -1835,7 +1835,10 @@ class InstitutionalIteRuntime:
                     decision=decision,
                     snapshot=snapshot,
                     account=account,
-                    decision_key=str(getattr(decision, "input_hash", None) or tid),
+                    decision_key=(
+                        f"{str(getattr(decision, 'symbol', '') or '').upper()}"
+                        f":{action_for_exec}"
+                    ),
                 )
                 sor_payload = estimate_smart_routing(
                     symbol=str(getattr(decision, "symbol", "") or ""),
@@ -1861,7 +1864,8 @@ class InstitutionalIteRuntime:
                         )
                 elif rec in {"PROCEED", "PROCEED_DEGRADED"}:
                     clear_optimizer_defers(
-                        str(getattr(decision, "input_hash", None) or tid)
+                        f"{str(getattr(decision, 'symbol', '') or '').upper()}"
+                        f":{action_for_exec}"
                     )
             if isinstance(market_context_diagnostics, dict):
                 if optimizer_payload:
