@@ -528,12 +528,19 @@ async def run_institutional_multi_asset_scan(
             if open_n is None:
                 open_n = None
 
+    # CRITICAL: portfolio ranking must use the SAME resolved scan universe.
+    # Scoring uses `universe` (dynamic, up to 36). Leaving cfg.universe at the
+    # static DEFAULT_SCALPING_UNIVERSE drops AUDNZD/AUDJPY/… from ranked →
+    # portfolio_eligible → strategy winners with Q91/C84 get eligible_count=0.
+    from dataclasses import replace as dc_replace
+
+    cfg_for_rank = dc_replace(cfg, universe=tuple(universe))
     scan = run_multi_asset_scan(
         scored,
         account=account,
         open_positions=open_n,
         ite_config=ite_config,
-        config=cfg,
+        config=cfg_for_rank,
     )
     ranked = scan.get("ranked") if isinstance(scan.get("ranked"), list) else []
     best = scan.get("best") if isinstance(scan.get("best"), dict) else None
@@ -619,7 +626,9 @@ async def run_institutional_multi_asset_scan(
             nxt = peek_next_eligible(exclude_symbols=excluded)
             while nxt is not None:
                 cand_sym = str(nxt.get("symbol") or "").upper()
-                if portfolio_eligible and cand_sym not in portfolio_eligible:
+                # Empty portfolio_eligible must still block — never promote a
+                # symbol the portfolio ranker dropped (universe/cooldown/reject).
+                if cand_sym not in portfolio_eligible:
                     excluded.add(cand_sym)
                     nxt = peek_next_eligible(exclude_symbols=excluded)
                     continue
@@ -670,6 +679,33 @@ async def run_institutional_multi_asset_scan(
             ]
         else:
             eligible_symbols.insert(0, best_symbol)
+    elif strategy_global_best is not None:
+        logger.warning(
+            "multi_strategy_winner_blocked_final_gate",
+            strategy_id=strategy_global_best.strategy_id,
+            symbol=strategy_global_best.symbol,
+            quality=strategy_global_best.quality,
+            confidence=strategy_global_best.confidence,
+            direction=strategy_global_best.direction,
+            blocked_by_portfolio=bool(scan.get("blocked_by_portfolio")),
+            in_portfolio_eligible=strategy_global_best.symbol in portfolio_eligible,
+            already_open=strategy_global_best.symbol in open_syms,
+            portfolio_eligible_count=len(portfolio_eligible),
+            scan_universe_size=len(universe),
+            cfg_universe_size=len(cfg_for_rank.universe),
+            boolean=(
+                "strategy_global_best is not None "
+                "and not blocked_by_portfolio "
+                "and symbol in portfolio_eligible "
+                "and symbol not in open_syms"
+            ),
+            runtime_values={
+                "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),
+                "in_portfolio_eligible": strategy_global_best.symbol
+                in portfolio_eligible,
+                "in_open_syms": strategy_global_best.symbol in open_syms,
+            },
+        )
 
     noc_rows = [_noc_row_from_score(r) for r in scored]
     # Prefer ranked portfolio rows for richer reject/cooldown annotations

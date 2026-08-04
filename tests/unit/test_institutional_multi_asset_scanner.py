@@ -204,10 +204,139 @@ async def test_scan_ranks_best_eligible_only(
 
 
 @pytest.mark.unit
+def test_portfolio_rank_must_include_dynamic_universe_symbols() -> None:
+    """Regression: dynamic AUDNZD must not be dropped by stale DEFAULT universe.
+
+    Exact gate that caused strategy Q91/C84 → eligible_count=0:
+      portfolio_scanner.scan_multi_asset_portfolio
+      if universe and sym and sym not in universe: continue
+      universe = cfg.universe  # was DEFAULT without AUDNZD
+    """
+    from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
+        scan_multi_asset_portfolio,
+    )
+    from app.domain.institutional_trading.ai_scalping.symbol_state import SymbolStateBook
+
+    audnzd = {
+        "symbol": "AUDNZD",
+        "reject": False,
+        "direction": "SELL",
+        "ai_confidence": 84,
+        "trade_quality": 91,
+        "liquidity": 80,
+        "expected_rr": "1.20",
+        "spread_score": 85,
+        "market_regime": "strong_trend",
+        "setup_family": "pullback_continuation",
+        "execution_health_ok": True,
+        "atr_pct": "0.12",
+        "momentum": 70,
+        "structure_score": 65,
+    }
+    # Stale default universe — reproduces the LIVE bug
+    stale = replace(
+        DEFAULT_AI_SCALPING_CONFIG,
+        universe=DEFAULT_SCALPING_UNIVERSE,
+        adaptive_cooldown_enabled=False,
+    )
+    dropped = scan_multi_asset_portfolio(
+        [audnzd],
+        open_positions=0,
+        config=stale,
+        state_book=SymbolStateBook(),
+    )
+    assert dropped.best is None or str(dropped.best.get("symbol") or "") != "AUDNZD"
+    assert all(str(r.get("symbol") or "").upper() != "AUDNZD" for r in dropped.ranked)
+
+    # Fixed path — rank with the resolved scan universe
+    fixed = replace(
+        DEFAULT_AI_SCALPING_CONFIG,
+        universe=("AUDNZD", "XAUUSD", "EURUSD"),
+        adaptive_cooldown_enabled=False,
+    )
+    kept = scan_multi_asset_portfolio(
+        [audnzd],
+        open_positions=0,
+        config=fixed,
+        state_book=SymbolStateBook(),
+    )
+    assert kept.best is not None
+    assert str(kept.best.get("symbol") or "").upper() == "AUDNZD"
+    assert any(str(r.get("symbol") or "").upper() == "AUDNZD" for r in kept.ranked)
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
-async def test_score_symbol_fail_closed_on_bad_context(
+async def test_dynamic_symbol_reaches_eligible_after_universe_align(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Full scan: AUDNZD strategy-quality setup must land in eligible_symbols."""
+
+    async def _fake_score(mt5: Any, symbol: str, **_k: Any) -> dict[str, Any]:
+        if symbol == "AUDNZD":
+            return {
+                "symbol": "AUDNZD",
+                "reject": False,
+                "direction": "SELL",
+                "ai_confidence": 84,
+                "trade_quality": 91,
+                "liquidity": 80,
+                "expected_rr": "1.20",
+                "spread_score": 85,
+                "market_regime": "strong_trend",
+                "setup_family": "pullback_continuation",
+                "execution_health_ok": True,
+                "atr_pct": "0.12",
+                "momentum": 72,
+                "structure_score": 68,
+                "factors": {
+                    "momentum": 72,
+                    "trend_strength": 70,
+                    "mtf": 80,
+                    "volume": 70,
+                    "bos": 60,
+                    "choch": 55,
+                },
+            }
+        return {
+            "symbol": symbol,
+            "reject": True,
+            "reject_reason": "below floors",
+            "direction": "NONE",
+            "ai_confidence": 40,
+            "trade_quality": 40,
+            "liquidity": 40,
+            "spread_score": 70,
+            "execution_health_ok": True,
+            "atr_pct": "0.10",
+        }
+
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.score_symbol_for_scan",
+        _fake_score,
+    )
+    # cfg.universe stays DEFAULT (no AUDNZD); resolve_scan_universe returns AUDNZD.
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.resolve_scan_universe",
+        lambda *_a, **_k: ("AUDNZD", "XAUUSD"),
+    )
+    cfg = replace(
+        DEFAULT_AI_SCALPING_CONFIG,
+        universe=DEFAULT_SCALPING_UNIVERSE,
+        adaptive_cooldown_enabled=False,
+        multi_strategy_enabled=True,
+        dynamic_universe_enabled=True,
+        parallel_scan_enabled=False,
+    )
+    out = await run_institutional_multi_asset_scan(
+        mt5_adapter=object(),
+        config=cfg,
+        open_positions=0,
+    )
+    assert "AUDNZD" in (out.get("eligible_symbols") or [])
+    assert int(out.get("eligible_count") or 0) >= 1
+    assert out.get("best_symbol") == "AUDNZD"
+
     async def _bad_ctx(*_a: Any, **_k: Any) -> Any:
         return MagicMock(ok=False, snapshot=None, account=None, reason="no bars")
 
