@@ -30,7 +30,10 @@ SetupFamily = Literal[
     "breakout_continuation",
 ]
 
-# Institutional multi-asset universe — trade only the best opportunity.
+# Institutional multi-asset universe — LIVE-tradable symbols only.
+# NAS100/US30/GER40 removed: production gateway repeatedly 503 / symbol_select
+# failed (broker-side). They burned ~30% of scan rejects without ever reaching
+# ORDER ACCEPTED. Quality floors unchanged.
 DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
     "XAUUSD",
     "EURUSD",
@@ -42,9 +45,11 @@ DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
     "NZDUSD",
     "BTCUSD",
     "ETHUSD",
-    "NAS100",
-    "US30",
-    "GER40",
+)
+
+# Broker-dead index aliases — never score even if ops plane still lists them.
+BROKER_UNAVAILABLE_SCALP_SYMBOLS: frozenset[str] = frozenset(
+    {"NAS100", "US30", "GER40", "NDX100", "WALLSTREET30", "DEU40", "USTEC", "DJ30", "DE40"}
 )
 
 
@@ -75,6 +80,14 @@ class AiScalpingConfig:
     multi_asset_scan_enabled: bool = True
     continuous_operation_enabled: bool = True
     post_close_rescan_enabled: bool = True
+    # Continuous scalping cadence — parallel score + multi-symbol handoff.
+    # Quality / confluence / structure / momentum floors unchanged.
+    parallel_scan_enabled: bool = True
+    parallel_scan_concurrency: int = 4
+    # Independent eligible symbols may enter in one outer cycle (exposure caps apply).
+    max_entries_per_cycle: int = 3
+    # After PME close — skip idle sleep and rescan immediately.
+    post_close_rescan_delay_seconds: float = 0.0
 
     # MTF stack - H1 direction · M15 structure · M5 entry · M1 precision
     direction_tf: Timeframe = Timeframe.H1
@@ -162,7 +175,12 @@ class AiScalpingConfig:
     # Dynamic sizing - DO NOT increase risk vs prior default without evidence
     risk_per_trade_pct: Decimal = Decimal("0.50")
     compounding_enabled: bool = False
-    max_daily_exposure_pct: Decimal = Decimal("2.00")
+    # Micro desk (~$180): broker min_lot on gold is ~2.3–2.9% equity risk.
+    # Prior 2.00 daily / 1.00 symbol caps were BELOW one min-lot fill, so after
+    # the first ORDER ACCEPTED the portfolio gate blocked all further entries
+    # until flat — swing cadence, not continuous scalping. Align with
+    # MicroAccountProfile.hard_max_risk_pct (5%). Quality floors unchanged.
+    max_daily_exposure_pct: Decimal = Decimal("5.00")
     broker_min_lot: Decimal = Decimal("0.01")
     broker_lot_step: Decimal = Decimal("0.01")
     broker_max_lot: Decimal = Decimal("50.00")
@@ -229,16 +247,18 @@ class AiScalpingConfig:
     # Dynamic Position Sizing Engine v2 — equity-tier + quality-weighted lots
     dynamic_sizing_v2_enabled: bool = True
     max_margin_usage_pct: Decimal = Decimal("30")
-    # Soft caps for multi-order / portfolio (reduce-only; never raise risk %)
-    max_symbol_exposure_pct: Decimal = Decimal("1.00")
-    max_correlated_exposure_pct: Decimal = Decimal("1.50")
+    # Soft caps for multi-order / portfolio (reduce-only; never raise risk %).
+    # Must be >= micro min-lot open risk (~2.5% on ~$180 gold) or the first
+    # fill permanently saturates the symbol/portfolio gate.
+    max_symbol_exposure_pct: Decimal = Decimal("5.00")
+    max_correlated_exposure_pct: Decimal = Decimal("5.00")
     lot_growth_max_step_pct: Decimal = Decimal("0.35")
 
     # Portfolio Risk Engine v2 — portfolio-aware allocation
     portfolio_risk_engine_v2_enabled: bool = True
     max_positions_per_symbol: int = 2
-    max_sector_exposure_pct: Decimal = Decimal("1.50")
-    max_currency_exposure_pct: Decimal = Decimal("2.00")
+    max_sector_exposure_pct: Decimal = Decimal("5.00")
+    max_currency_exposure_pct: Decimal = Decimal("5.00")
     pyramid_winners_only: bool = True
 
     # Self-protection (pause NEW entries only)

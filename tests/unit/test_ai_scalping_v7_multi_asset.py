@@ -35,9 +35,6 @@ EXPECTED_UNIVERSE = {
     "NZDUSD",
     "BTCUSD",
     "ETHUSD",
-    "NAS100",
-    "US30",
-    "GER40",
 }
 
 
@@ -109,23 +106,15 @@ def test_rank_all_symbols_execute_best_only() -> None:
     result = scan_multi_asset_portfolio(
         [
             _opp("XAUUSD", confidence=85, quality=86),
-            _opp("NAS100", confidence=93, quality=94, direction="SELL"),
+            _opp("ETHUSD", confidence=93, quality=94, direction="SELL"),
             _opp("BTCUSD", confidence=88, quality=89),
             _opp("AUDUSD", confidence=70, quality=72),
         ],
         state_book=SymbolStateBook(),
     )
     assert result.best is not None
-    assert result.best["symbol"] == "NAS100"
+    assert result.best["symbol"] == "ETHUSD"
     assert len(result.ranked) >= 3
-    assert (
-        all(
-            r["symbol"] != result.best["symbol"] or i == 0
-            for i, r in enumerate(result.ranked)
-            if False
-        )
-        or True
-    )
 
 
 @pytest.mark.unit
@@ -178,7 +167,7 @@ def test_scheduler_simultaneous_universe() -> None:
     cycle = sched.begin_cycle()
     assert set(cycle["symbols"]) == EXPECTED_UNIVERSE
     assert cycle["mode"] == "simultaneous"
-    assert len(sched.symbols_for_cycle()) == 13
+    assert len(sched.symbols_for_cycle()) == len(DEFAULT_SCALPING_UNIVERSE)
     done = sched.complete_cycle(best_symbol="EURUSD", eligible_count=3)
     assert done["last_best_symbol"] == "EURUSD"
     assert done["last_eligible_count"] == 3

@@ -169,6 +169,9 @@ class InstitutionalIteRuntime:
     _last_decision: Any | None = field(default=None, repr=False)
     _last_bridge_result: Any | None = field(default=None, repr=False)
     _last_multi_asset_scan: dict[str, Any] | None = field(default=None, repr=False)
+    _eligible_handoff_queue: list[str] = field(default_factory=list, repr=False)
+    _eligible_consumed: set[str] = field(default_factory=set, repr=False)
+    _entries_this_scan: int = field(default=0, repr=False)
     _manual_execution: bool = field(default=False, repr=False)
     _cycles: int = 0
     user_id: UUID = field(default_factory=uuid4)
@@ -1312,6 +1315,36 @@ class InstitutionalIteRuntime:
                             get_continuous_operation_controller(
                                 DEFAULT_AI_SCALPING_CONFIG
                             ).request_rescan_after_close()
+                            try:
+                                from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (  # noqa: E501
+                                    get_adaptive_cooldown_gate,
+                                )
+                                from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
+                                    get_symbol_state_book,
+                                )
+
+                                get_adaptive_cooldown_gate().clear_for_post_close_rescan()
+                                closed_sym = str(
+                                    getattr(pos, "symbol", "")
+                                    or getattr(snapshot, "symbol", "")
+                                    or ""
+                                ).upper()
+                                if closed_sym:
+                                    get_symbol_state_book().reset(closed_sym)
+                                # Invalidate handoff queue — force full parallel rescan
+                                with self._lock:
+                                    self._eligible_handoff_queue = []
+                                    self._eligible_consumed = set()
+                                    self._entries_this_scan = 0
+                                logger.warning(
+                                    "Immediate Rescan armed after Position Closed",
+                                    symbol=closed_sym,
+                                    ticket=ticket,
+                                )
+                            except Exception:
+                                logger.exception(
+                                    "post_close_cooldown_symbol_clear_failed"
+                                )
                     except Exception:
                         logger.exception("post_close_rescan_flag_failed")
             except Exception:
@@ -3337,10 +3370,10 @@ class InstitutionalIteRuntime:
             return []
 
     async def _multi_asset_preferred_symbol(self) -> str | None:
-        """Institutional Multi-Asset Scanner — full AI score per symbol, best only.
+        """Institutional Multi-Asset Scanner — parallel score, multi-symbol handoff.
 
-        Does not invoke Risk / PRE / OMS / MT5. Winner is handed to the existing
-        single-symbol cycle which still runs the full institutional pipeline.
+        Does not invoke Risk / PRE / OMS / MT5. Eligible winners are queued for
+        the existing single-symbol cycle (up to max_entries_per_cycle).
         """
         try:
             from app.application.services.institutional_multi_asset_scanner import (
@@ -3368,17 +3401,35 @@ class InstitutionalIteRuntime:
                 plane=self.plane,
                 config=DEFAULT_AI_SCALPING_CONFIG,
             )
-            with self._lock:
-                self._last_multi_asset_scan = dict(scan) if isinstance(scan, dict) else None
+            eligible = [
+                str(s).upper()
+                for s in (scan.get("eligible_symbols") or [])
+                if str(s).strip()
+            ]
             best = str(scan.get("best_symbol") or "").upper() or None
-            if best:
+            if best and best not in eligible:
+                eligible = [best, *[s for s in eligible if s != best]]
+            with self._lock:
+                self._last_multi_asset_scan = (
+                    dict(scan) if isinstance(scan, dict) else None
+                )
+                self._eligible_handoff_queue = list(eligible)
+                self._eligible_consumed = set()
+                self._entries_this_scan = 0
+            if eligible:
+                first = eligible[0]
+                with self._lock:
+                    self._eligible_consumed.add(first)
+                    self._entries_this_scan = 1
                 logger.warning(
                     "multi_asset_opportunity_selected",
-                    symbol=best,
-                    eligible_count=scan.get("eligible_count"),
+                    symbol=first,
+                    eligible_count=len(eligible),
+                    eligible_symbols=eligible[:8],
                     blocked_by_portfolio=scan.get("blocked_by_portfolio"),
+                    handoff="multi_symbol",
                 )
-                return best
+                return first
             logger.warning(
                 "multi_asset_scan_no_executable_opportunity",
                 eligible_count=scan.get("eligible_count"),
@@ -3390,6 +3441,38 @@ class InstitutionalIteRuntime:
             logger.exception("multi_asset_preferred_symbol_failed")
             return None
 
+    def _take_next_handoff_symbol(self) -> str | None:
+        """Next eligible symbol from last parallel scan (no rescan)."""
+        from app.domain.institutional_trading.ai_scalping.config import (
+            DEFAULT_AI_SCALPING_CONFIG,
+        )
+
+        max_e = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 3) or 3))
+        max_open = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 5) or 5))
+        try:
+            open_n = len(
+                getattr(self.position_management.engine, "_positions", {}) or {}
+            )
+        except Exception:
+            open_n = 0
+        if open_n >= max_open:
+            return None
+        with self._lock:
+            if self._entries_this_scan >= max_e:
+                return None
+            for sym in self._eligible_handoff_queue:
+                if sym and sym not in self._eligible_consumed:
+                    self._eligible_consumed.add(sym)
+                    self._entries_this_scan += 1
+                    logger.warning(
+                        "multi_asset_handoff_next",
+                        symbol=sym,
+                        entries_this_scan=self._entries_this_scan,
+                        max_entries_per_cycle=max_e,
+                    )
+                    return sym
+        return None
+
     def last_multi_asset_scan(self) -> dict[str, Any] | None:
         with self._lock:
             return (
@@ -3399,13 +3482,19 @@ class InstitutionalIteRuntime:
             )
 
     async def _pick_executable_symbol_async(self) -> str | None:
-        """Highest-ranked full-mode symbol after institutional multi-asset scan."""
+        """Highest-ranked full-mode symbol after institutional multi-asset scan.
+
+        Reuses the last parallel scan's eligible queue when max_entries_per_cycle
+        still has capacity — continuous multi-symbol handoff without re-scoring.
+        """
         from app.application.services.closeonly_symbol_router import (
             resolve_executable_symbol,
         )
         from app.domain.trading.gold_only import GOLD_SYMBOL
 
-        preferred = await self._multi_asset_preferred_symbol()
+        preferred = self._take_next_handoff_symbol()
+        if not preferred:
+            preferred = await self._multi_asset_preferred_symbol()
         with self._lock:
             last = (
                 dict(self._last_multi_asset_scan)
@@ -4194,7 +4283,50 @@ class InstitutionalIteRuntime:
                 interval_seconds=self.interval_seconds,
                 cycle_ms=round((time.perf_counter() - cycle_t0) * 1000.0, 1),
             )
-            for _ in range(int(max(1, self.interval_seconds))):
+            # Continuous scalping cadence:
+            # 1) More eligible symbols from last parallel scan → no idle sleep
+            # 2) PME just closed → immediate rescan (post_close_rescan)
+            sleep_s = float(self.interval_seconds)
+            try:
+                from app.domain.institutional_trading.ai_scalping.config import (
+                    DEFAULT_AI_SCALPING_CONFIG as _sc,
+                )
+                from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+                    get_continuous_operation_controller,
+                )
+
+                nxt = None
+                with self._lock:
+                    for sym in self._eligible_handoff_queue:
+                        if sym and sym not in self._eligible_consumed:
+                            nxt = sym
+                            break
+                    entries = int(self._entries_this_scan)
+                max_e = max(1, int(getattr(_sc, "max_entries_per_cycle", 3) or 3))
+                if nxt and entries < max_e:
+                    sleep_s = 0.0
+                    logger.warning(
+                        "multi_symbol_continue_no_idle",
+                        next_symbol=nxt,
+                        entries_this_scan=entries,
+                        max_entries_per_cycle=max_e,
+                    )
+                elif bool(getattr(_sc, "post_close_rescan_enabled", True)):
+                    ctrl = get_continuous_operation_controller(_sc)
+                    if bool(getattr(ctrl, "pending_rescan", False)):
+                        sleep_s = float(
+                            getattr(_sc, "post_close_rescan_delay_seconds", 0.0) or 0.0
+                        )
+                        logger.warning(
+                            "post_close_immediate_rescan",
+                            delay_seconds=sleep_s,
+                        )
+            except Exception:
+                logger.exception("continuous_scalp_cadence_failed")
+            if sleep_s <= 0:
+                await asyncio.sleep(0)
+                continue
+            for _ in range(int(max(1, sleep_s))):
                 if self._stop.is_set():
                     break
                 await asyncio.sleep(1)

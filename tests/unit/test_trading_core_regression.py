@@ -380,6 +380,17 @@ def test_multi_asset_scan_config_present() -> None:
     assert hasattr(cfg, "multi_asset_scan_enabled")
     assert cfg.break_even_at_r == Decimal("0.5")
     assert cfg.partial_at_r == Decimal("1.0")
+    assert cfg.parallel_scan_enabled is True
+    assert cfg.max_entries_per_cycle >= 2
+    assert cfg.post_close_rescan_enabled is True
+    assert "NAS100" not in cfg.universe
+    assert "EURUSD" in cfg.universe
+    assert "BTCUSD" in cfg.universe
+    assert cfg.max_daily_exposure_pct == Decimal("5.00")
+    assert cfg.max_symbol_exposure_pct == Decimal("5.00")
+    # Quality floors locked — never weakened for fill rate
+    assert cfg.normal_vol.quality == 82
+    assert cfg.normal_vol.confidence == 82
 
 
 def test_frozen_module_imports() -> None:

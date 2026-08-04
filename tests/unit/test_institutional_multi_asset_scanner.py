@@ -32,9 +32,6 @@ EXPECTED_UNIVERSE = {
     "NZDUSD",
     "BTCUSD",
     "ETHUSD",
-    "NAS100",
-    "US30",
-    "GER40",
 }
 
 
@@ -43,8 +40,11 @@ def test_institutional_watchlist_matches_approved_universe() -> None:
     assert set(DEFAULT_SCALPING_UNIVERSE) == EXPECTED_UNIVERSE
     assert set(DEFAULT_AI_SCALPING_CONFIG.universe) == EXPECTED_UNIVERSE
     assert "ETHUSD" in DEFAULT_SCALPING_UNIVERSE
-    assert "GER40" in DEFAULT_SCALPING_UNIVERSE
+    assert "NAS100" not in DEFAULT_SCALPING_UNIVERSE
+    assert "GER40" not in DEFAULT_SCALPING_UNIVERSE
     assert DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled is True
+    assert DEFAULT_AI_SCALPING_CONFIG.parallel_scan_enabled is True
+    assert DEFAULT_AI_SCALPING_CONFIG.max_entries_per_cycle >= 2
     # Floors locked
     assert DEFAULT_AI_SCALPING_CONFIG.normal_vol.quality == 82
     assert DEFAULT_AI_SCALPING_CONFIG.normal_vol.confidence == 82
@@ -71,8 +71,20 @@ def test_resolve_scan_universe_ignores_stale_gold_only_plane(
     assert "EURUSD" in universe
     assert "GBPUSD" in universe
     assert "BTCUSD" in universe
-    assert "NAS100" in universe
+    assert "NAS100" not in universe
     assert len(universe) == len(DEFAULT_SCALPING_UNIVERSE)
+
+
+@pytest.mark.unit
+def test_resolve_scan_universe_strips_broker_dead_indexes() -> None:
+    plane = MagicMock()
+    plane.allowed_symbols = ("XAUUSD", "EURUSD", "NAS100", "US30", "GER40")
+    universe = resolve_scan_universe(plane=plane)
+    assert "XAUUSD" in universe
+    assert "EURUSD" in universe
+    assert "NAS100" not in universe
+    assert "US30" not in universe
+    assert "GER40" not in universe
 
 
 @pytest.mark.unit

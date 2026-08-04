@@ -1,8 +1,9 @@
-"""Institutional Multi-Asset Scanner — full AI score per symbol, best-only handoff.
+"""Institutional Multi-Asset Scanner — parallel AI score per symbol.
 
 Fetches market data and runs the existing AI scalping score independently for
-each watchlist symbol. Ranks via the existing portfolio scanner. Only the best
-eligible opportunity is returned for the existing Risk → PRE → OMS → MT5 path.
+each watchlist symbol (bounded parallel). Ranks via the existing portfolio
+scanner. Returns the full eligible ranked list for multi-symbol handoff while
+preserving Risk → PRE → OMS → MT5 per entry.
 
 Does not lower quality/confidence floors. Does not force BUY/SELL.
 Does not bypass AI, Risk, PRE, OMS, or MT5.
@@ -10,6 +11,7 @@ Does not bypass AI, Risk, PRE, OMS, or MT5.
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from datetime import UTC, datetime
 from typing import Any
@@ -19,6 +21,7 @@ from app.application.services.ite_cycle_market_context import (
     build_ite_cycle_market_context,
 )
 from app.domain.institutional_trading.ai_scalping.config import (
+    BROKER_UNAVAILABLE_SCALP_SYMBOLS,
     DEFAULT_AI_SCALPING_CONFIG,
     DEFAULT_SCALPING_UNIVERSE,
     AiScalpingConfig,
@@ -103,6 +106,8 @@ def resolve_scan_universe(
     """Configurable watchlist — AiScalping universe, optionally intersected by plane."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     base = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
+    # Never spend cycle time on broker-dead index aliases.
+    base = tuple(s for s in base if s not in BROKER_UNAVAILABLE_SCALP_SYMBOLS)
     if plane is None:
         return base
     allowed = tuple(
@@ -122,7 +127,7 @@ def resolve_scan_universe(
             return base
     except Exception:
         pass
-    allowed_set = set(allowed)
+    allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
     filtered = tuple(s for s in base if s in allowed_set)
     return filtered or base
 
@@ -215,10 +220,11 @@ async def run_institutional_multi_asset_scan(
     plane: Any | None = None,
     ite_config: Any | None = None,
 ) -> dict[str, Any]:
-    """Scan the full watchlist with the institutional AI engine; rank; pick best.
+    """Scan the full watchlist in parallel; rank; return eligible handoff list.
 
     Downstream Risk / Dynamic Sizing / PRE / OMS / MT5 are intentionally not
-    invoked here — only the winning symbol is handed to the existing cycle.
+    invoked here — eligible symbols are handed to the existing cycle one-by-one
+    (up to max_entries_per_cycle) with unchanged institutional gates.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     universe = resolve_scan_universe(cfg, plane=plane)
@@ -235,6 +241,7 @@ async def run_institutional_multi_asset_scan(
             "best": None,
             "best_symbol": None,
             "eligible_count": 0,
+            "eligible_symbols": [],
             "note": "multi_asset_scan_disabled",
             "version": cfg.version,
             "forced_trades": False,
@@ -254,6 +261,7 @@ async def run_institutional_multi_asset_scan(
             "best": None,
             "best_symbol": None,
             "eligible_count": 0,
+            "eligible_symbols": [],
             "note": "mt5_adapter_unavailable",
             "version": cfg.version,
             "governed_by_existing_ai_and_risk": True,
@@ -262,14 +270,31 @@ async def run_institutional_multi_asset_scan(
         return payload
 
     scored: list[dict[str, Any]] = []
-    for symbol in universe:
-        row = await score_symbol_for_scan(
-            mt5_adapter,
-            symbol,
-            position_engine=position_engine,
-            config=cfg,
-        )
-        scored.append(row)
+    if bool(getattr(cfg, "parallel_scan_enabled", True)) and len(universe) > 1:
+        conc = max(1, int(getattr(cfg, "parallel_scan_concurrency", 4) or 4))
+        sem = asyncio.Semaphore(conc)
+
+        async def _score_one(sym: str) -> dict[str, Any]:
+            async with sem:
+                return await score_symbol_for_scan(
+                    mt5_adapter,
+                    sym,
+                    position_engine=position_engine,
+                    config=cfg,
+                )
+
+        scored = list(await asyncio.gather(*[_score_one(s) for s in universe]))
+    else:
+        for symbol in universe:
+            row = await score_symbol_for_scan(
+                mt5_adapter,
+                symbol,
+                position_engine=position_engine,
+                config=cfg,
+            )
+            scored.append(row)
+
+    for row in scored:
         logger.warning(
             "multi_asset_symbol_scored",
             symbol=row.get("symbol"),
@@ -346,6 +371,39 @@ async def run_institutional_multi_asset_scan(
     )
     if best and bool(scan.get("blocked_by_portfolio")):
         best_symbol = None
+
+    # Ranked eligible handoff list — independent symbols may enter sequentially
+    # in one outer cycle (max_entries_per_cycle) without lowering quality.
+    eligible_symbols: list[str] = []
+    if not bool(scan.get("blocked_by_portfolio")):
+        seen_elig: set[str] = set()
+        for row in opportunity_ranked:
+            if not isinstance(row, dict):
+                continue
+            sym = str(row.get("symbol") or "").upper()
+            if (
+                sym
+                and sym in portfolio_eligible
+                and row.get("opportunity_eligible")
+                and not row.get("reject")
+                and sym not in seen_elig
+            ):
+                eligible_symbols.append(sym)
+                seen_elig.add(sym)
+        if not eligible_symbols:
+            for r in ranked:
+                if not isinstance(r, dict) or r.get("reject"):
+                    continue
+                sym = str(r.get("symbol") or "").upper()
+                if sym and sym not in seen_elig:
+                    eligible_symbols.append(sym)
+                    seen_elig.add(sym)
+        if best_symbol and best_symbol not in seen_elig:
+            eligible_symbols.insert(0, best_symbol)
+        elif best_symbol and eligible_symbols and eligible_symbols[0] != best_symbol:
+            eligible_symbols = [best_symbol] + [
+                s for s in eligible_symbols if s != best_symbol
+            ]
 
     # If current best disappears, evaluate next ranked eligible from queue
     if best_symbol is None and not bool(scan.get("blocked_by_portfolio")):
@@ -429,18 +487,23 @@ async def run_institutional_multi_asset_scan(
         "trade_queue": queue_snap,
         "best": best,
         "best_symbol": best_symbol,
-        "eligible_count": len(ranked),
+        "eligible_count": len(ranked) if not eligible_symbols else len(eligible_symbols),
+        "eligible_symbols": list(eligible_symbols),
         "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),
         "portfolio_block_reason": scan.get("portfolio_block_reason"),
         "portfolio_risk": scan.get("portfolio_risk"),
         "scheduler": scan.get("scheduler"),
         "symbol_state": scan.get("symbol_state"),
         "note": scan.get("note")
-        or "institutional_multi_asset_scan — best-only handoff to existing cycle",
+        or "institutional_multi_asset_scan — parallel score + multi-symbol handoff",
         "version": cfg.version,
         "quality_floor": 80,
         "confidence_floor": 80,
-        "execute_only_best": True,
+        "execute_only_best": False,
+        "max_entries_per_cycle": int(
+            getattr(cfg, "max_entries_per_cycle", 3) or 3
+        ),
+        "parallel_scan": bool(getattr(cfg, "parallel_scan_enabled", True)),
         "forced_trades": False,
         "governed_by_existing_ai_and_risk": True,
     }
@@ -450,6 +513,8 @@ async def run_institutional_multi_asset_scan(
         universe=list(universe),
         best_symbol=best_symbol,
         eligible_count=payload["eligible_count"],
+        eligible_symbols=list(eligible_symbols)[:8],
         blocked_by_portfolio=payload["blocked_by_portfolio"],
+        parallel_scan=payload["parallel_scan"],
     )
     return payload

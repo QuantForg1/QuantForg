@@ -96,7 +96,31 @@ class TestQualityBands:
 @pytest.mark.unit
 class TestDynamicSizingSafety:
     def test_never_force_broker_min_lot(self) -> None:
-        """~$181 equity / wide stop → below_min_lot, lots=0 (no upsize)."""
+        """Wide stop where min_lot risk exceeds hard_max → reject (no upsize)."""
+        # min_loss = 0.01 * 100 * 12 = 12 → ~6.6% of $181.53 > hard_max 5%
+        d = calculate_dynamic_lots_v2(
+            equity=Decimal("181.53"),
+            balance=Decimal("181.53"),
+            free_margin=Decimal("181.53"),
+            stop_distance=Decimal("12.00"),
+            risk_pct=Decimal("0.50"),
+            contract_size=Decimal("100"),
+            min_lot=Decimal("0.01"),
+            lot_step=Decimal("0.01"),
+            quality_score=88,
+            confidence=88,
+            quality_reject=False,
+            log=False,
+        )
+        assert d.valid is False
+        assert d.final_lot == Decimal("0")
+        assert d.method == "below_min_lot"
+        assert "below_min_lot" in (d.rejection_reason or "")
+        assert d.calculated_lot < d.broker_min_lot
+
+    def test_micro_conditional_approves_when_min_lot_within_hard_max(self) -> None:
+        """~$181 equity / moderate stop → micro_conditional keeps broker min_lot."""
+        # min_loss = 0.01 * 100 * 7.26 = 7.26 → ~4.0% <= hard_max 5%
         d = calculate_dynamic_lots_v2(
             equity=Decimal("181.53"),
             balance=Decimal("181.53"),
@@ -111,10 +135,9 @@ class TestDynamicSizingSafety:
             quality_reject=False,
             log=False,
         )
-        assert d.valid is False
-        assert d.final_lot == Decimal("0")
-        assert d.method == "below_min_lot"
-        assert "below_min_lot" in (d.rejection_reason or "")
+        assert d.valid is True
+        assert d.final_lot == Decimal("0.01")
+        assert "micro_conditional" in d.method
         assert d.calculated_lot < d.broker_min_lot
 
     def test_weak_setup_rejects(self) -> None:
