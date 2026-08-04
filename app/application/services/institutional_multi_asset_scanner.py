@@ -288,8 +288,10 @@ async def run_institutional_multi_asset_scan(
     """Scan the full watchlist in parallel; rank; return eligible handoff list.
 
     Downstream Risk / Dynamic Sizing / PRE / OMS / MT5 are intentionally not
-    invoked here — eligible symbols are handed to the existing cycle one-by-one
-    (up to max_entries_per_cycle) with unchanged institutional gates.
+    invoked here — every independent eligible is handed to the existing cycle
+    (up to max_entries_per_cycle / max_open_trades) with unchanged gates.
+    Already-open symbols are excluded from new-entry handoff (no same-symbol
+    duplicate unless pyramid rules allow via PRE on a deliberate re-entry).
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     # LIVE broker catalogue → dynamic liquid universe (quality gates unchanged).
@@ -513,11 +515,18 @@ async def run_institutional_multi_asset_scan(
         queue_snap = {"candidates": [], "size": 0}
 
     open_n = open_positions
-    if open_n is None and position_engine is not None:
+    open_syms: set[str] = set()
+    if position_engine is not None:
         try:
-            open_n = len(getattr(position_engine, "_positions", {}) or {})
+            for p in (getattr(position_engine, "_positions", {}) or {}).values():
+                s = str(getattr(p, "symbol", "") or "").upper()
+                if s:
+                    open_syms.add(s)
+            if open_n is None:
+                open_n = len(open_syms)
         except Exception:
-            open_n = None
+            if open_n is None:
+                open_n = None
 
     scan = run_multi_asset_scan(
         scored,
@@ -540,6 +549,7 @@ async def run_institutional_multi_asset_scan(
             sym = str(row.get("symbol") or "").upper()
             if (
                 sym in portfolio_eligible
+                and sym not in open_syms
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
             ):
@@ -552,11 +562,15 @@ async def run_institutional_multi_asset_scan(
         if best and not bool(scan.get("blocked_by_portfolio"))
         else None
     )
+    if best_symbol and best_symbol in open_syms:
+        best_symbol = None
+        best = None
     if best and bool(scan.get("blocked_by_portfolio")):
         best_symbol = None
 
-    # Ranked eligible handoff list — independent symbols may enter sequentially
-    # in one outer cycle (max_entries_per_cycle) without lowering quality.
+    # Ranked eligible handoff list — independent symbols may all enter
+    # (max_entries_per_cycle / max_open) without lowering quality.
+    # Skip symbols already open — never duplicate same-symbol via handoff.
     eligible_symbols: list[str] = []
     if not bool(scan.get("blocked_by_portfolio")):
         seen_elig: set[str] = set()
@@ -567,6 +581,7 @@ async def run_institutional_multi_asset_scan(
             if (
                 sym
                 and sym in portfolio_eligible
+                and sym not in open_syms
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
                 and sym not in seen_elig
@@ -578,11 +593,15 @@ async def run_institutional_multi_asset_scan(
                 if not isinstance(r, dict) or r.get("reject"):
                     continue
                 sym = str(r.get("symbol") or "").upper()
-                if sym and sym not in seen_elig:
+                if sym and sym not in seen_elig and sym not in open_syms:
                     eligible_symbols.append(sym)
                     seen_elig.add(sym)
+        if best_symbol and best_symbol in open_syms:
+            best_symbol = eligible_symbols[0] if eligible_symbols else None
+            best = None
         if best_symbol and best_symbol not in seen_elig:
             eligible_symbols.insert(0, best_symbol)
+            seen_elig.add(best_symbol)
         elif best_symbol and eligible_symbols and eligible_symbols[0] != best_symbol:
             eligible_symbols = [best_symbol] + [
                 s for s in eligible_symbols if s != best_symbol
@@ -596,11 +615,15 @@ async def run_institutional_multi_asset_scan(
                 select_for_risk,
             )
 
-            excluded: set[str] = set()
+            excluded: set[str] = set(open_syms)
             nxt = peek_next_eligible(exclude_symbols=excluded)
             while nxt is not None:
                 cand_sym = str(nxt.get("symbol") or "").upper()
                 if portfolio_eligible and cand_sym not in portfolio_eligible:
+                    excluded.add(cand_sym)
+                    nxt = peek_next_eligible(exclude_symbols=excluded)
+                    continue
+                if cand_sym in open_syms:
                     excluded.add(cand_sym)
                     nxt = peek_next_eligible(exclude_symbols=excluded)
                     continue
@@ -611,21 +634,24 @@ async def run_institutional_multi_asset_scan(
                 break
         except Exception:
             logger.exception("trade_queue_next_eligible_failed")
-    elif best_symbol:
+    # Mark every independent eligible for Risk visibility (multi-asset concurrent).
+    if eligible_symbols and not bool(scan.get("blocked_by_portfolio")):
         try:
             from app.domain.institutional_trading.ai_scalping.institutional_trade_queue import (
                 select_for_risk,
             )
 
-            select_for_risk(best_symbol)
+            for sym in eligible_symbols:
+                select_for_risk(sym)
         except Exception:
-            logger.exception("trade_queue_select_failed")
+            logger.exception("trade_queue_multi_select_failed")
 
     # Prefer multi-strategy global winner when portfolio-eligible (one strategy/symbol).
     if (
         strategy_global_best is not None
         and not bool(scan.get("blocked_by_portfolio"))
         and strategy_global_best.symbol in portfolio_eligible
+        and strategy_global_best.symbol not in open_syms
     ):
         best_symbol = strategy_global_best.symbol
         best = {
@@ -710,9 +736,12 @@ async def run_institutional_multi_asset_scan(
         "quality_floor": int(cfg.normal_vol.quality),
         "confidence_floor": int(cfg.normal_vol.confidence),
         "execute_only_best": False,
+        "independent_multi_asset": True,
+        "open_symbols_excluded": sorted(open_syms),
         "max_entries_per_cycle": int(
             getattr(cfg, "max_entries_per_cycle", 3) or 3
         ),
+        "max_open_trades": int(getattr(cfg, "max_open_trades", 5) or 5),
         "parallel_scan": bool(getattr(cfg, "parallel_scan_enabled", True)),
         "profile": str(getattr(cfg, "quality_baseline", "") or cfg.version),
         "multi_strategy_enabled": bool(getattr(cfg, "multi_strategy_enabled", True)),

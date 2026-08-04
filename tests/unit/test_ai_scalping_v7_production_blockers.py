@@ -94,12 +94,15 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
         account=AccountRiskState(
             equity=Decimal("10000"), daily_pnl=Decimal("0"), open_positions=1
         ),
-        position_risk_pcts=(Decimal("0.80"), Decimal("0.80"), Decimal("0.80")),
+        position_risk_pcts=(Decimal("2.00"), Decimal("2.00"), Decimal("2.00")),
+        max_exposure_pct=Decimal("5.00"),
         state_book=SymbolStateBook(),
+        config=DEFAULT_AI_SCALPING_CONFIG,
     )
     assert blocked.blocked_by_portfolio is True
     assert blocked.best is None
     assert "exposure" in (blocked.portfolio_block_reason or "").lower()
+    assert blocked.to_dict().get("execute_only_best") is False
 
 
 @pytest.mark.unit

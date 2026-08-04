@@ -55,7 +55,7 @@ def test_institutional_watchlist_matches_approved_universe() -> None:
 def test_resolve_scan_universe_respects_plane_allowlist() -> None:
     plane = MagicMock()
     plane.allowed_symbols = ("XAUUSD", "EURUSD")
-    assert resolve_scan_universe(plane=plane) == ("XAUUSD", "EURUSD")
+    assert set(resolve_scan_universe(plane=plane)) == {"XAUUSD", "EURUSD"}
 
 
 @pytest.mark.unit

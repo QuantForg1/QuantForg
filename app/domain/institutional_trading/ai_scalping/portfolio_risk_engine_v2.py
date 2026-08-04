@@ -647,9 +647,13 @@ def _evaluate_portfolio_allocation_unlocked(
     if projected_cur >= max_currency > 0:
         return _reject(f"Currency exposure {projected_cur}% at max {max_currency}%")
 
-    # Winner-only pyramiding / never average into losers
+    # Winner-only pyramiding / never average into losers — SAME SYMBOL only.
+    # Independent symbols must not be blocked by another symbol's direction/entry
+    # (false "duplicate" across XAUUSD vs EURUSD etc.).
     same_sym_profits: list[Decimal] = []
     same_dir_profits: list[Decimal] = []
+    same_sym_dirs: list[str] = []
+    same_sym_entries: list[Decimal] = []
     dir_u = (new_direction or "").upper()
     for p in pos_list:
         psym = normalize_book_symbol(str(getattr(p, "symbol", "") or ""))
@@ -657,25 +661,47 @@ def _evaluate_portfolio_allocation_unlocked(
         upnl = _position_unrealized(p)
         if psym == canon:
             same_sym_profits.append(upnl)
+            if pside:
+                same_sym_dirs.append(pside)
+            try:
+                pe = _d(getattr(p, "open_price", None) or getattr(p, "price_open", None))
+                if pe > 0:
+                    same_sym_entries.append(pe)
+            except Exception:
+                pass
             if dir_u and pside == dir_u:
                 same_dir_profits.append(upnl)
+
+    # Cross-symbol add: only portfolio/max-open gates — not pyramid/duplicate.
+    if sym_count <= 0:
+        pyramid_dirs: tuple[str, ...] = ()
+        pyramid_entries: tuple[Decimal, ...] = ()
+        pyramid_require_improve = False
+        pyramid_require_profit = False
+    else:
+        pyramid_dirs = open_directions or tuple(same_sym_dirs)
+        pyramid_entries = open_entries or tuple(same_sym_entries)
+        pyramid_require_improve = (
+            require_probability_improvement and book.open_positions > 0
+        )
+        pyramid_require_profit = bool(
+            getattr(cfg, "pyramid_winners_only", True)
+        ) and book.open_positions > 0
 
     pyramid = may_add_scalping_trade(
         open_positions=book.open_positions,
         max_open=int(cfg.max_open_trades),
         new_confidence=new_confidence or (confidence or 0),
-        best_open_confidence=best_open_confidence,
+        best_open_confidence=best_open_confidence if sym_count > 0 else None,
         new_direction=new_direction,
-        open_directions=open_directions or tuple(account.open_directions),
+        open_directions=pyramid_dirs,
         entry=entry,
-        open_entries=open_entries or tuple(account.open_entries),
-        min_entry_distance=min_entry_distance,
-        require_improvement=require_probability_improvement and book.open_positions > 0,
+        open_entries=pyramid_entries,
+        min_entry_distance=min_entry_distance if sym_count > 0 else None,
+        require_improvement=pyramid_require_improve,
         min_confidence_delta=int(cfg.min_confidence_delta_for_add),
         open_profits=tuple(same_sym_profits),
-        require_unrealized_profit=bool(getattr(cfg, "pyramid_winners_only", True))
-        and book.open_positions > 0
-        and sym_count > 0,
+        require_unrealized_profit=pyramid_require_profit,
         same_direction_profits=tuple(same_dir_profits),
     )
     if not pyramid.allow:

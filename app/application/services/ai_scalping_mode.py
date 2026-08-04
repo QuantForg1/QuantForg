@@ -118,12 +118,16 @@ def apply_trading_mode_to_runtime(
         plane = getattr(runtime, "plane", None)
         if plane is not None and hasattr(plane, "max_open_trades"):
             try:
-                plane.max_open_trades = max(
-                    int(getattr(ite, "max_open_trades", 1) or 1),
-                    int(getattr(plane, "max_open_trades", 1) or 1),
-                )
-                if mode_l in {"scalping", "alpha"} and plane.max_open_trades < 2:
-                    plane.max_open_trades = max(2, int(ite.max_open_trades or 2))
+                # Scalping/alpha: plane must not serialize to one-trade — sync to ITE.
+                if mode_l in {"scalping", "alpha"}:
+                    plane.max_open_trades = max(
+                        2, int(getattr(ite, "max_open_trades", 5) or 5)
+                    )
+                else:
+                    plane.max_open_trades = max(
+                        int(getattr(ite, "max_open_trades", 1) or 1),
+                        int(getattr(plane, "max_open_trades", 1) or 1),
+                    )
                 plane.trading_mode = mode_l
             except Exception:
                 logger.exception("trading_mode_plane_sync_failed")

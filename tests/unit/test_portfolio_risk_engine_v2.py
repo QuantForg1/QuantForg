@@ -137,10 +137,12 @@ class TestPortfolioBookAndAllocation:
         assert book.margin_usage_pct is not None
 
     def test_never_force_min_lot(self) -> None:
+        # Equity > $500 → micro_conditional_min_lot path does not apply;
+        # institutional below_min_lot must still reject (never invent lots).
         account = AccountRiskState(
-            equity=Decimal("181.53"),
-            balance=Decimal("181.53"),
-            free_margin=Decimal("181.53"),
+            equity=Decimal("1000"),
+            balance=Decimal("1000"),
+            free_margin=Decimal("1000"),
             open_positions=0,
         )
         broker = BrokerComplianceSpec(
@@ -152,8 +154,8 @@ class TestPortfolioBookAndAllocation:
         alloc = evaluate_portfolio_allocation(
             account=account,
             symbol="XAUUSD",
-            stop_distance=Decimal("7.26"),
-            risk_pct=Decimal("0.50"),
+            stop_distance=Decimal("50.00"),
+            risk_pct=Decimal("0.10"),
             quality_score=90,
             confidence=88,
             quality_reject=False,
@@ -300,6 +302,78 @@ class TestPortfolioBookAndAllocation:
             or "unrealized" in alloc.rejection_reason.lower()
             or "pyramid" in alloc.rejection_reason.lower()
         )
+
+    def test_independent_symbol_not_blocked_by_other_open(self) -> None:
+        """XAUUSD open must not false-block EURUSD via cross-symbol duplicate."""
+        account = AccountRiskState(
+            equity=Decimal("5000"),
+            balance=Decimal("5000"),
+            free_margin=Decimal("4800"),
+            used_margin=Decimal("50"),
+            floating_pnl=Decimal("5"),
+            open_positions=1,
+            open_directions=("BUY",),
+            open_entries=(Decimal("2400"),),
+            best_open_confidence=80,
+        )
+        positions = [
+            _pos(
+                ticket=1,
+                symbol="XAUUSD",
+                side="buy",
+                volume=Decimal("0.01"),
+                open_price=Decimal("2400"),
+                current_price=Decimal("2401"),
+                profit=Decimal("5"),
+            )
+        ]
+        alloc = evaluate_portfolio_allocation(
+            account=account,
+            symbol="EURUSD",
+            stop_distance=Decimal("0.0012"),
+            positions=positions,
+            new_direction="BUY",
+            new_confidence=85,
+            entry=Decimal("1.0850"),
+            mid_price=Decimal("1.0850"),
+            atr=Decimal("0.0008"),
+            risk_pct=Decimal("0.50"),
+            quality_score=85,
+            confidence=85,
+            best_open_confidence=80,
+            # Account-wide directions/entries would previously false-block.
+            open_directions=("BUY",),
+            open_entries=(Decimal("2400"),),
+            min_entry_distance=Decimal("0.50"),
+            require_probability_improvement=False,
+            broker=BrokerComplianceSpec(
+                min_lot=Decimal("0.01"),
+                lot_step=Decimal("0.01"),
+                max_lot=Decimal("50"),
+                contract_size=Decimal("100000"),
+            ),
+            config=AiScalpingConfig(
+                max_open_trades=5,
+                max_symbol_exposure_pct=Decimal("5.00"),
+                max_correlated_exposure_pct=Decimal("5.00"),
+                max_daily_exposure_pct=Decimal("5.00"),
+                max_sector_exposure_pct=Decimal("5.00"),
+                max_currency_exposure_pct=Decimal("5.00"),
+                pyramid_winners_only=True,
+                require_probability_improvement=False,
+                risk_per_trade_pct=Decimal("0.50"),
+            ),
+            log=False,
+        )
+        # May still reject on sizing/margin — must NOT be pyramid/duplicate.
+        if not alloc.allow:
+            reason = (alloc.rejection_reason or "").lower()
+            assert "duplicate" not in reason
+            assert "pyramid" not in reason
+            assert "unrealized" not in reason
+            assert "confidence" not in reason or "improve" not in reason
+        else:
+            assert alloc.approved_lots > 0
 
     def test_broker_closeonly_blocks(self) -> None:
         account = AccountRiskState(

@@ -1,4 +1,8 @@
-"""Multi-symbol opportunity ranking — trade only the highest quality setup."""
+"""Multi-symbol opportunity ranking — keep all independent valid setups.
+
+Ranks BUY/SELL opportunities across the universe. Downstream handoff may
+submit every independent eligible within portfolio caps — never grid/martingale.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ def rank_scalping_opportunities(
     *,
     config: AiScalpingConfig | None = None,
 ) -> dict[str, Any]:
-    """Pick best non-rejected BUY/SELL opportunity across the universe."""
+    """Rank non-rejected BUY/SELL opportunities across the universe."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     universe = set(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
     eligible: list[dict[str, Any]] = []
@@ -53,7 +57,8 @@ def rank_scalping_opportunities(
         "ranked": eligible[:10],
         "rejected_sample": rejected[:20],
         "note": (
-            "Trade only the highest quality opportunity — never grid/martingale. "
+            "Independent eligible symbols may all trade within portfolio caps — "
+            "never grid/martingale/same-symbol duplicate. "
             "Ties break by symbol ascending for deterministic ordering."
         ),
     }

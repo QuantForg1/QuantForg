@@ -127,7 +127,7 @@ def test_execution_probability_from_ai_only() -> None:
 
 
 @pytest.mark.unit
-def test_trade_queue_one_to_risk_and_next_eligible() -> None:
+def test_trade_queue_independent_symbols_multi_select() -> None:
     clear_selection()
     rebuild_trade_queue(
         [
@@ -138,14 +138,18 @@ def test_trade_queue_one_to_risk_and_next_eligible() -> None:
     )
     snap = snapshot_trade_queue()
     assert snap["eligible_count"] >= 2
-    assert snap["one_to_risk_only"] is True
+    assert snap["one_to_risk_only"] is False
+    assert snap["independent_symbols_allowed"] is True
     assert snap["forced_trades"] is False
     first = select_for_risk("XAUUSD")
     assert first is not None
     assert first["symbol"] == "XAUUSD"
-    # Duplicate select for different symbol blocked
+    # Independent symbol may also reach Risk (multi-asset concurrent)
     second = select_for_risk("EURUSD")
-    assert second is None
+    assert second is not None
+    assert second["symbol"] == "EURUSD"
+    # Same symbol cannot be selected twice in one scan window
+    assert select_for_risk("XAUUSD") is None
     clear_selection()
     nxt = peek_next_eligible(exclude_symbols={"XAUUSD"})
     assert nxt is not None

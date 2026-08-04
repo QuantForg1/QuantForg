@@ -1,6 +1,7 @@
 """Institutional Trade Queue — durable ranked candidates from live scans.
 
-Only one eligible opportunity may reach Risk. No duplicate execution.
+Independent symbols may all reach Risk when they pass portfolio gates.
+Same-symbol re-selection is blocked (no duplicate handoff). Never forces trades.
 If the best disappears, peek_next_eligible() returns the next ranked candidate.
 """
 
@@ -21,7 +22,7 @@ from app.domain.institutional_trading.ai_scalping.opportunity_ranking import (
 _LOCK = threading.RLock()
 _QUEUE: list[dict[str, Any]] = []
 _AS_OF: str | None = None
-_SELECTED: str | None = None
+_SELECTED: set[str] = set()
 _TTL_SECONDS = 180
 
 
@@ -78,7 +79,7 @@ def rebuild_trade_queue(
     with _LOCK:
         _QUEUE = rows
         _AS_OF = _iso()
-        _SELECTED = None
+        _SELECTED = set()
     return snapshot_trade_queue()
 
 
@@ -87,11 +88,14 @@ def snapshot_trade_queue() -> dict[str, Any]:
         return {
             "as_of": _AS_OF,
             "size": len(_QUEUE),
-            "selected_symbol": _SELECTED,
+            "selected_symbol": next(iter(_SELECTED), None),
+            "selected_symbols": sorted(_SELECTED),
             "candidates": [dict(r) for r in _QUEUE],
             "eligible_count": sum(1 for r in _QUEUE if r.get("eligible")),
             "observe_only": False,
-            "one_to_risk_only": True,
+            # Independent symbols may all hand off to Risk (not one-best only).
+            "one_to_risk_only": False,
+            "independent_symbols_allowed": True,
             "forced_trades": False,
         }
 
@@ -104,6 +108,7 @@ def peek_next_eligible(
     exclude = {s.upper() for s in (exclude_symbols or set())}
     cutoff = _now() - timedelta(seconds=_TTL_SECONDS)
     with _LOCK:
+        exclude |= set(_SELECTED)
         for row in _QUEUE:
             if not row.get("eligible"):
                 continue
@@ -122,27 +127,35 @@ def peek_next_eligible(
 
 
 def select_for_risk(symbol: str | None = None) -> dict[str, Any] | None:
-    """Mark one eligible symbol as selected for the Risk handoff (single-flight)."""
+    """Mark an eligible symbol for Risk handoff (independent multi-symbol OK).
+
+    Same symbol cannot be selected twice in one scan window (no duplicate
+    handoff). Different symbols may all be selected concurrently.
+    """
     global _SELECTED
     with _LOCK:
-        if _SELECTED and symbol and symbol.upper() != _SELECTED:
-            # Another symbol already selected this scan window
-            return None
         cand = None
         if symbol:
             want = symbol.upper()
+            if want in _SELECTED:
+                return None
             for row in _QUEUE:
                 if row.get("eligible") and str(row.get("symbol") or "").upper() == want:
                     cand = dict(row)
                     break
         else:
             for row in _QUEUE:
-                if row.get("eligible"):
-                    cand = dict(row)
-                    break
+                if not row.get("eligible"):
+                    continue
+                sym = str(row.get("symbol") or "").upper()
+                if sym in _SELECTED:
+                    continue
+                cand = dict(row)
+                break
         if cand is None:
             return None
-        _SELECTED = str(cand["symbol"]).upper()
+        sym = str(cand["symbol"]).upper()
+        _SELECTED.add(sym)
         cand["selected"] = True
         return cand
 
@@ -150,4 +163,4 @@ def select_for_risk(symbol: str | None = None) -> dict[str, Any] | None:
 def clear_selection() -> None:
     global _SELECTED
     with _LOCK:
-        _SELECTED = None
+        _SELECTED = set()

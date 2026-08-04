@@ -3427,7 +3427,15 @@ class InstitutionalIteRuntime:
                     eligible_count=len(eligible),
                     eligible_symbols=eligible[:8],
                     blocked_by_portfolio=scan.get("blocked_by_portfolio"),
-                    handoff="multi_symbol",
+                    handoff="multi_symbol_independent",
+                    max_entries_per_cycle=int(
+                        getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 5)
+                        or 5
+                    ),
+                    max_open_trades=int(
+                        getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 5) or 5
+                    ),
+                    open_positions=open_n,
                 )
                 return first
             logger.warning(
@@ -3442,35 +3450,63 @@ class InstitutionalIteRuntime:
             return None
 
     def _take_next_handoff_symbol(self) -> str | None:
-        """Next eligible symbol from last parallel scan (no rescan)."""
+        """Next eligible independent symbol from last parallel scan (no rescan)."""
         from app.domain.institutional_trading.ai_scalping.config import (
             DEFAULT_AI_SCALPING_CONFIG,
         )
 
         max_e = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 3) or 3))
         max_open = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 5) or 5))
+        open_syms: set[str] = set()
         try:
-            open_n = len(
-                getattr(self.position_management.engine, "_positions", {}) or {}
-            )
+            positions = getattr(self.position_management.engine, "_positions", {}) or {}
+            open_n = len(positions)
+            for p in positions.values():
+                s = str(getattr(p, "symbol", "") or "").upper()
+                if s:
+                    open_syms.add(s)
         except Exception:
             open_n = 0
         if open_n >= max_open:
+            logger.warning(
+                "multi_asset_handoff_blocked_max_open",
+                open_positions=open_n,
+                max_open_trades=max_open,
+            )
             return None
         with self._lock:
             if self._entries_this_scan >= max_e:
                 return None
             for sym in self._eligible_handoff_queue:
-                if sym and sym not in self._eligible_consumed:
+                if not sym or sym in self._eligible_consumed:
+                    continue
+                # Never duplicate same-symbol via handoff (pyramid only via PRE).
+                if sym in open_syms:
                     self._eligible_consumed.add(sym)
-                    self._entries_this_scan += 1
                     logger.warning(
-                        "multi_asset_handoff_next",
+                        "multi_asset_handoff_skip_already_open",
                         symbol=sym,
-                        entries_this_scan=self._entries_this_scan,
-                        max_entries_per_cycle=max_e,
+                        reason="same_symbol_already_open",
                     )
-                    return sym
+                    continue
+                self._eligible_consumed.add(sym)
+                self._entries_this_scan += 1
+                logger.warning(
+                    "multi_asset_handoff_next",
+                    symbol=sym,
+                    entries_this_scan=self._entries_this_scan,
+                    max_entries_per_cycle=max_e,
+                    open_positions=open_n,
+                    max_open_trades=max_open,
+                    remaining_independent=[
+                        s
+                        for s in self._eligible_handoff_queue
+                        if s
+                        and s not in self._eligible_consumed
+                        and s not in open_syms
+                    ][:8],
+                )
+                return sym
         return None
 
     def last_multi_asset_scan(self) -> dict[str, Any] | None:
@@ -4297,8 +4333,23 @@ class InstitutionalIteRuntime:
 
                 nxt = None
                 with self._lock:
+                    open_now: set[str] = set()
+                    try:
+                        for p in (
+                            getattr(self.position_management.engine, "_positions", {})
+                            or {}
+                        ).values():
+                            s = str(getattr(p, "symbol", "") or "").upper()
+                            if s:
+                                open_now.add(s)
+                    except Exception:
+                        open_now = set()
                     for sym in self._eligible_handoff_queue:
-                        if sym and sym not in self._eligible_consumed:
+                        if (
+                            sym
+                            and sym not in self._eligible_consumed
+                            and sym not in open_now
+                        ):
                             nxt = sym
                             break
                     entries = int(self._entries_this_scan)

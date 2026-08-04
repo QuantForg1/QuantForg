@@ -1,7 +1,8 @@
-"""Multi-asset portfolio scanner — rank all symbols, execute best only (v7).
+"""Multi-asset portfolio scanner — rank all symbols; keep independent eligibles.
 
-Preserves v6.3 quality gates and risk limits. Never forces trades.
-If XAUUSD has no edge but EURUSD does, EURUSD wins.
+Preserves quality gates and risk limits. Never forces trades.
+Independent symbols with valid setups may all remain eligible (up to
+max_open / exposure / correlation). Same-symbol duplicates stay blocked.
 """
 
 from __future__ import annotations
@@ -122,7 +123,7 @@ class PortfolioScanResult:
             "exposure_pct": str(self.exposure_pct),
             "version": self.version,
             "note": self.note,
-            "execute_only_best": True,
+            "execute_only_best": False,
         }
 
 
@@ -263,10 +264,11 @@ def scan_multi_asset_portfolio(
     config: AiScalpingConfig | None = None,
     state_book: SymbolStateBook | None = None,
 ) -> PortfolioScanResult:
-    """Scan all symbols independently; rank; select only the best opportunity.
+    """Scan all symbols independently; rank; keep all portfolio-eligible.
 
     Portfolio exposure and daily loss are aggregated across ALL symbols
     (via account or explicit portfolio totals) — never per-symbol silos.
+    Downstream handoff may submit every independent eligible within caps.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     book = state_book or get_symbol_state_book()
@@ -358,10 +360,11 @@ def scan_multi_asset_portfolio(
         best = None
 
     note = (
-        "Execute ONLY the highest-quality symbol opportunity. "
+        "Keep ALL independent eligible symbol opportunities (not one-best only). "
         "Per-symbol quality/cooldown/spread/regime/health are independent. "
-        "Exposure and daily loss are portfolio-wide across all symbols. "
-        "v6.3 quality and risk floors unchanged."
+        "Exposure, correlation, margin and daily loss are portfolio-wide. "
+        "Same-symbol duplicates remain blocked unless pyramid rules allow. "
+        "Quality and risk floors unchanged — never force trades."
     )
     if blocked and block_reason:
         note = f"{note} Portfolio block: {block_reason}"

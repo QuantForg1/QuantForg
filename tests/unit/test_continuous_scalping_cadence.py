@@ -59,3 +59,34 @@ def test_handoff_queue_drains_without_rescan() -> None:
     assert rt._take_next_handoff_symbol() == "EURUSD"
     assert rt._take_next_handoff_symbol() == "GBPUSD"
     assert rt._take_next_handoff_symbol() is None
+
+
+@pytest.mark.unit
+def test_handoff_skips_already_open_symbol() -> None:
+    open_pos = {
+        "1": SimpleNamespace(symbol="XAUUSD", side="sell", volume=0.01),
+    }
+    rt = InstitutionalIteRuntime(
+        plane=MagicMock(),
+        reliability=MagicMock(),
+        probes=MagicMock(),
+        guarded_submit=MagicMock(),
+        guarded_manage=MagicMock(),
+        execution=MagicMock(),
+        position_management=SimpleNamespace(engine=SimpleNamespace(_positions=open_pos)),
+    )
+    rt._eligible_handoff_queue = ["XAUUSD", "EURUSD", "BTCUSD"]
+    rt._eligible_consumed = set()
+    rt._entries_this_scan = 0
+    assert rt._take_next_handoff_symbol() == "EURUSD"
+    assert rt._take_next_handoff_symbol() == "BTCUSD"
+    assert "XAUUSD" in rt._eligible_consumed
+
+
+@pytest.mark.unit
+def test_scalping_v1_multi_asset_concurrent_caps() -> None:
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    assert cfg.max_open_trades >= 5
+    assert cfg.max_entries_per_cycle >= 5
+    assert cfg.require_probability_improvement is False
+    assert "MULTI_ASSET_CONCURRENT" in cfg.version or "SCALPING_V1" in cfg.version
