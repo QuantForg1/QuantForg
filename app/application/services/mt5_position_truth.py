@@ -148,10 +148,22 @@ def _repair_internal_engine(
             for ticket in stale:
                 if positions.pop(ticket, None) is not None:
                     removed += 1
+                    logger.warning(
+                        "Position Closed",
+                        ticket=ticket,
+                        reason="missing_from_mt5_book",
+                        symbol=target or "",
+                    )
     else:
         for ticket in stale:
             if positions.pop(ticket, None) is not None:
                 removed += 1
+                logger.warning(
+                    "Position Closed",
+                    ticket=ticket,
+                    reason="missing_from_mt5_book",
+                    symbol=target or "",
+                )
     return removed
 
 

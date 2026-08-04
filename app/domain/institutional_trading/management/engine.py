@@ -104,6 +104,17 @@ class PositionManagementEngine:
             for ticket in stale:
                 if self._positions.pop(ticket, None) is not None:
                     removed += 1
+                    try:
+                        from core.logging import get_logger
+
+                        get_logger(__name__).warning(
+                            "Position Closed",
+                            ticket=ticket,
+                            reason="missing_from_mt5_book",
+                            symbol=target or "",
+                        )
+                    except Exception:
+                        pass
         return removed
 
     def evaluate(
