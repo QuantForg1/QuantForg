@@ -446,6 +446,48 @@ async def run_institutional_multi_asset_scan(
             except Exception:
                 logger.exception("symbol_scan_stats_record_failed")
 
+    # Multi-strategy pack — evaluate ALL strategies per symbol; one winner each.
+    strategy_global_best = None
+    strategy_winners: list[Any] = []
+    if getattr(cfg, "multi_strategy_enabled", True):
+        try:
+            from app.domain.institutional_trading.ai_scalping.strategies import (
+                attach_strategies_to_scores,
+                evaluate_all_strategies,
+                get_strategy_stats_book,
+            )
+
+            book = get_strategy_stats_book()
+            boosts = book.live_rank_boosts()
+            by_sym: dict[str, Any] = {}
+            for row in scored:
+                sym = str(row.get("symbol") or "").upper()
+                evals = evaluate_all_strategies(row, config=cfg, live_boosts=boosts)
+                by_sym[sym] = evals
+                for ev in evals:
+                    book.record_evaluation(ev.strategy_id, passed=ev.passed)
+            scored, strategy_global_best, strategy_winners = attach_strategies_to_scores(
+                scored, evaluations_by_symbol=by_sym
+            )
+            if strategy_global_best is not None:
+                logger.warning(
+                    "multi_strategy_best_opportunity",
+                    strategy_id=strategy_global_best.strategy_id,
+                    symbol=strategy_global_best.symbol,
+                    quality=strategy_global_best.quality,
+                    confidence=strategy_global_best.confidence,
+                    direction=strategy_global_best.direction,
+                )
+            else:
+                logger.warning(
+                    "multi_strategy_no_passer",
+                    strategies_evaluated=5,
+                    symbols=len(scored),
+                    note="SCALPING_V1 floors unchanged — no forced trades",
+                )
+        except Exception:
+            logger.exception("multi_strategy_evaluation_failed")
+
     # Opportunity Ranking + Execution Probability + Trade Queue
     try:
         from app.domain.institutional_trading.ai_scalping.execution_probability import (
@@ -579,6 +621,30 @@ async def run_institutional_multi_asset_scan(
         except Exception:
             logger.exception("trade_queue_select_failed")
 
+    # Prefer multi-strategy global winner when portfolio-eligible (one strategy/symbol).
+    if (
+        strategy_global_best is not None
+        and not bool(scan.get("blocked_by_portfolio"))
+        and strategy_global_best.symbol in portfolio_eligible
+    ):
+        best_symbol = strategy_global_best.symbol
+        best = {
+            **(best or {}),
+            "symbol": best_symbol,
+            "strategy_id": strategy_global_best.strategy_id,
+            "strategy_name": strategy_global_best.name,
+            "strategy_quality": strategy_global_best.quality,
+            "strategy_confidence": strategy_global_best.confidence,
+            "strategy_explanation": strategy_global_best.explanation,
+            "direction": strategy_global_best.direction,
+        }
+        if best_symbol in eligible_symbols:
+            eligible_symbols = [best_symbol] + [
+                s for s in eligible_symbols if s != best_symbol
+            ]
+        else:
+            eligible_symbols.insert(0, best_symbol)
+
     noc_rows = [_noc_row_from_score(r) for r in scored]
     # Prefer ranked portfolio rows for richer reject/cooldown annotations
     by_sym = {
@@ -594,6 +660,9 @@ async def run_institutional_multi_asset_scan(
         raw = next((r for r in scored if str(r.get("symbol") or "").upper() == sym), {})
         enriched["opportunity_score"] = raw.get("opportunity_score")
         enriched["estimated_probability"] = raw.get("estimated_probability")
+        enriched["strategy_id"] = raw.get("strategy_id")
+        enriched["strategy_quality"] = raw.get("strategy_quality")
+        enriched["strategy_confidence"] = raw.get("strategy_confidence")
         if port.get("reject_reason"):
             enriched["blocking_gate"] = port.get("reject_reason") or enriched.get(
                 "blocking_gate"
@@ -646,9 +715,23 @@ async def run_institutional_multi_asset_scan(
         ),
         "parallel_scan": bool(getattr(cfg, "parallel_scan_enabled", True)),
         "profile": str(getattr(cfg, "quality_baseline", "") or cfg.version),
+        "multi_strategy_enabled": bool(getattr(cfg, "multi_strategy_enabled", True)),
+        "strategy_best": (
+            strategy_global_best.to_dict() if strategy_global_best is not None else None
+        ),
+        "strategy_winners": [w.to_dict() for w in strategy_winners],
+        "strategy_stats": None,
         "forced_trades": False,
         "governed_by_existing_ai_and_risk": True,
     }
+    try:
+        from app.domain.institutional_trading.ai_scalping.strategies import (
+            get_strategy_stats_book,
+        )
+
+        payload["strategy_stats"] = get_strategy_stats_book().snapshot()
+    except Exception:
+        pass
     _store_last_scan(payload)
     logger.warning(
         "multi_asset_scan_complete",

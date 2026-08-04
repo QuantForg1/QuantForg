@@ -85,6 +85,9 @@ class AiScalpingConfig:
     max_universe_symbols: int = 36
     session_symbol_priority_enabled: bool = True
     live_symbol_learning_enabled: bool = True
+    # Multi-strategy pack — evaluate all strategies; pick highest quality only.
+    # Never lowers SCALPING_V1 structure/momentum/quality/safety floors.
+    multi_strategy_enabled: bool = True
     # Continuous scalping cadence — parallel score + multi-symbol handoff.
     # Quality / confluence / structure / momentum floors unchanged.
     parallel_scan_enabled: bool = True
@@ -356,6 +359,7 @@ class AiScalpingConfig:
             "max_universe_symbols": self.max_universe_symbols,
             "session_symbol_priority_enabled": self.session_symbol_priority_enabled,
             "live_symbol_learning_enabled": self.live_symbol_learning_enabled,
+            "multi_strategy_enabled": self.multi_strategy_enabled,
             "timeframes": {
                 "direction": self.direction_tf.value,
                 "structure": self.structure_tf.value,
