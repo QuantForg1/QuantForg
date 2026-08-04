@@ -24,15 +24,9 @@ _DAILY_LOSS_MARKERS = (
 
 
 def risk_lock_override_enabled(settings: Any | None = None) -> bool:
-    """True only when ALLOW_RISK_LOCK_OVERRIDE is explicitly enabled."""
-    try:
-        if settings is None:
-            from core.config.settings import get_settings
-
-            settings = get_settings()
-        return bool(getattr(settings, "allow_risk_lock_override", False))
-    except Exception:
-        return False
+    """Permanently disabled — production finalization (daily-loss lock always ON)."""
+    _ = settings
+    return False
 
 
 def is_daily_loss_lock_reason(reason: str) -> bool:
@@ -132,12 +126,21 @@ def risk_lock_override_status(settings: Any | None = None) -> dict[str, Any]:
 
 def log_risk_lock_override_startup(settings: Any | None = None) -> None:
     """Startup banner when ALLOW_RISK_LOCK_OVERRIDE is loaded."""
-    enabled = risk_lock_override_enabled(settings)
+    enabled_env = False
+    try:
+        if settings is None:
+            from core.config.settings import get_settings
+
+            settings = get_settings()
+        enabled_env = bool(getattr(settings, "allow_risk_lock_override", False))
+    except Exception:
+        enabled_env = False
+    # Effective gate is always off after production finalization.
     logger.warning(
-        "ALLOW_RISK_LOCK_OVERRIDE = %s",
-        "TRUE" if enabled else "FALSE",
+        "ALLOW_RISK_LOCK_OVERRIDE = %s (effective=FALSE)",
+        "TRUE" if enabled_env else "FALSE",
     )
-    if enabled:
+    if enabled_env:
         logger.warning(
-            "TEST MODE — Daily loss lock overridden (capital protection otherwise intact)"  # noqa: E501
+            "ALLOW_RISK_LOCK_OVERRIDE ignored — permanently disabled for production"
         )

@@ -1,4 +1,4 @@
-"""Force First Trade — isolated temporary test override."""
+"""Force First Trade — permanently disabled for production finalization."""
 
 from __future__ import annotations
 
@@ -18,10 +18,9 @@ from app.domain.institutional_trading.decision_models import (
 )
 from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
 from app.domain.institutional_trading.force_first_trade import (
-    FORCED_REASON,
     ForceFirstTradeConfig,
     force_first_trade_status,
-    is_forced_test_decision,
+    is_force_first_trade_armed,
     maybe_override_decision,
     record_forced_trade_success,
     reset_force_first_trade_state_for_tests,
@@ -233,7 +232,7 @@ def test_waive_signal_gates_keeps_margin_and_session() -> None:
 
 
 @pytest.mark.unit
-def test_maybe_override_builds_forced_buy() -> None:
+def test_maybe_override_permanently_disabled() -> None:
     snap = _snapshot()
     account = _account()
     decision = _weak_decision(snap, account)
@@ -248,14 +247,9 @@ def test_maybe_override_builds_forced_buy() -> None:
         broker_connected=True,
         force_shadow=False,
     )
-    assert ok is True
-    assert forced.action is DecisionAction.BUY
-    assert forced.approved_lots == Decimal("0.01")
-    assert is_forced_test_decision(forced)
-    assert FORCED_REASON in forced.reasons
-    assert forced.entry_zone is not None
-    assert forced.stop_zone is not None
-    assert forced.target_zone is not None
+    assert ok is False
+    assert forced is decision
+    assert is_force_first_trade_armed(_settings()) is False
 
 
 @pytest.mark.unit
@@ -279,12 +273,18 @@ def test_force_skips_when_open_position() -> None:
 
 @pytest.mark.unit
 def test_record_success_disarms_and_blocks_second() -> None:
+    """Record path still disarms state; override itself is permanently off."""
+    settings = _settings()
+    record_forced_trade_success(
+        direction="BUY",
+        lot=Decimal("0.01"),
+        ticket=12345,
+        price=Decimal("2300"),
+    )
     snap = _snapshot()
     account = _account()
     decision = _weak_decision(snap, account)
-    settings = _settings()
-
-    forced, ok = maybe_override_decision(
+    _, ok = maybe_override_decision(
         decision,
         snapshot=snap,
         account=account,
@@ -295,12 +295,8 @@ def test_record_success_disarms_and_blocks_second() -> None:
         broker_connected=True,
         force_shadow=False,
     )
-    assert ok is True
-    record_forced_trade_success(
-        direction=forced.direction.value,
-        lot=forced.approved_lots or Decimal("0.01"),
-        ticket=99901,
-    )
+    assert ok is False
+    assert is_force_first_trade_armed(settings) is False
     status = force_first_trade_status(
         settings,
         gateway_connected=True,
@@ -309,25 +305,12 @@ def test_record_success_disarms_and_blocks_second() -> None:
     )
     assert status["banner"] is False
     assert status["armed"] is False
+    assert status["enabled"] is False
     assert status["executed_count"] == 1
-
-    _, ok2 = maybe_override_decision(
-        decision,
-        snapshot=snap,
-        account=account,
-        ite_config=ITEConfig(),
-        settings=settings,
-        execution_enabled=True,
-        gateway_connected=True,
-        broker_connected=True,
-        force_shadow=False,
-    )
-    assert ok2 is False
 
 
 @pytest.mark.unit
-def test_eurusd_sell_keeps_positive_take_profit() -> None:
-    """Gold-style stop floor=1.0 made FX SELL TP negative — must stay valid."""
+def test_override_disabled_for_fx_as_well() -> None:
     snap = _snapshot()
     object.__setattr__(snap, "symbol", "EURUSD")
     account = _account(atr=None, mid_price=Decimal("1.13700"))
@@ -343,17 +326,12 @@ def test_eurusd_sell_keeps_positive_take_profit() -> None:
         broker_connected=True,
         force_shadow=False,
     )
-    assert ok is True
-    assert forced.action is DecisionAction.SELL
-    assert forced.stop_zone is not None
-    assert forced.target_zone is not None
-    assert forced.stop_zone.mid > 0
-    assert forced.target_zone.mid > 0
-    assert forced.target_zone.mid < account.mid_price
+    assert ok is False
+    assert forced is decision
 
 
 @pytest.mark.unit
-def test_banner_when_enabled() -> None:
+def test_banner_never_armed_after_finalization() -> None:
     cfg = ForceFirstTradeConfig.from_settings(_settings(force_first_trade=True))
     assert cfg.enabled is True
     status = force_first_trade_status(
@@ -362,5 +340,7 @@ def test_banner_when_enabled() -> None:
         broker_connected=True,
         execution_enabled=True,
     )
-    assert status["banner"] is True
-    assert "TEST MODE" in status["message"]
+    assert status["banner"] is False
+    assert status["armed"] is False
+    assert status["enabled"] is False
+    assert is_force_first_trade_armed(_settings()) is False

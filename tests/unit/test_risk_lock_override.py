@@ -164,12 +164,9 @@ def test_auto_trade_gate_passes_daily_loss_in_test_mode(
 @pytest.mark.unit
 def test_status_banner_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = SimpleNamespace(allow_risk_lock_override=True)
-    monkeypatch.setattr(
-        "app.domain.institutional_trading.risk_lock_override.risk_lock_override_enabled",
-        lambda s=None: bool(getattr(s or settings, "allow_risk_lock_override", False)),
-    )
+    # Even if env says true, production gate stays off.
+    assert risk_lock_override_enabled(settings) is False
     status = risk_lock_override_status(settings)
-    assert status["enabled"] is True
-    assert status["banner"] is True
-    assert status["message"] == "Daily loss lock overridden."
-    assert risk_lock_override_enabled(settings) is True
+    assert status["enabled"] is False
+    assert status["banner"] is False
+    assert "inactive" in status["message"].lower() or status["enabled"] is False

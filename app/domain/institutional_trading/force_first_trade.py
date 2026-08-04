@@ -170,12 +170,9 @@ def get_force_first_trade_state() -> ForceFirstTradeState:
 
 
 def is_force_first_trade_armed(settings: Any) -> bool:
-    """True when env enables force mode and local disarm counter still allows it."""
-    cfg = ForceFirstTradeConfig.from_settings(settings)
-    if not cfg.enabled:
-        return False
-    state = get_force_first_trade_state()
-    return bool(state.armed and state.executed_count < cfg.max_trades)
+    """Permanently disabled — production finalization (no test-trade bypass)."""
+    _ = settings
+    return False
 
 
 def log_force_first_trade_startup(settings: Any) -> None:
@@ -183,22 +180,11 @@ def log_force_first_trade_startup(settings: Any) -> None:
     cfg = ForceFirstTradeConfig.from_settings(settings)
     enabled = bool(cfg.enabled)
     logger.warning("FORCE_FIRST_TRADE = %s", "TRUE" if enabled else "FALSE")
-    if enabled and is_force_first_trade_armed(settings):
-        logger.warning("FORCE_FIRST_TRADE armed")
+    if enabled:
         logger.warning(
-            "force_first_trade_startup_config",
-            max=cfg.max_trades,
-            lot=str(cfg.lot),
-            direction=cfg.direction,
+            "FORCE_FIRST_TRADE ignored — permanently disabled for production"
         )
-    elif enabled:
-        state = get_force_first_trade_state()
-        logger.warning(
-            "FORCE_FIRST_TRADE enabled but DISARMED",
-            executed_count=state.executed_count,
-            max=cfg.max_trades,
-            armed=state.armed,
-        )
+    _ = is_force_first_trade_armed(settings)
 
 
 def is_forced_test_decision(decision: TradeDecision) -> bool:
@@ -237,10 +223,11 @@ def force_first_trade_status(
     cfg = ForceFirstTradeConfig.from_settings(settings)
     state = get_force_first_trade_state()
     remaining = max(0, cfg.max_trades - state.executed_count)
-    armed = cfg.enabled and state.armed and remaining > 0 and bool(execution_enabled)
-    banner = bool(cfg.enabled and state.armed and remaining > 0)
+    # Production finalization: never advertise test-mode banner as armed.
+    armed = False
+    banner = False
     return {
-        "enabled": cfg.enabled,
+        "enabled": False,
         "armed": armed,
         "banner": banner,
         "executed_count": state.executed_count,
@@ -274,197 +261,22 @@ def maybe_override_decision(
     broker_connected: bool,
     force_shadow: bool,
 ) -> tuple[TradeDecision, bool]:
-    """If armed, replace NO_TRADE/WATCH with one forced BUY/SELL decision."""
-    if force_shadow:
-        return decision, False
-    if decision.action in {DecisionAction.BUY, DecisionAction.SELL}:
-        return decision, False
+    """If armed, replace NO_TRADE/WATCH with one forced BUY/SELL decision.
 
-    cfg = ForceFirstTradeConfig.from_settings(settings)
-    with _STATE_LOCK:
-        state = _load_state()
-        if not cfg.enabled or not state.armed:
-            return decision, False
-        if state.executed_count >= cfg.max_trades:
-            return decision, False
-        if not execution_enabled:
-            return decision, False
-        if not gateway_connected or not broker_connected:
-            return decision, False
-        if account.open_positions > 0 or account.already_in_trade:
-            logger.error(
-                "FORCE_FIRST_TRADE REJECTED before OMS: open position already exists "
-                "(open_positions=%s already_in_trade=%s)",
-                account.open_positions,
-                account.already_in_trade,
-            )
-            return decision, False
+    Production finalization: permanently disabled (no quality/confluence bypass).
+    """
+    _ = (
+        snapshot,
+        account,
+        ite_config,
+        settings,
+        execution_enabled,
+        gateway_connected,
+        broker_connected,
+        force_shadow,
+    )
+    return decision, False
 
-        direction = resolve_force_direction(
-            configured=cfg.direction,
-            snapshot=snapshot,
-            confluence=decision.confluence,
-        )
-        if direction is None:
-            logger.warning(
-                "force_first_trade_no_validated_direction",
-                configured=cfg.direction,
-            )
-            return decision, False
-
-        # Force First Trade continues past signal/risk soft blocks to OMS.
-        # Margin / market-open / spread remain enforced in eligibility below.
-        logger.warning("Force First Trade detected")
-        logger.warning("Bypassing:\n- Quality\n- Confluence\n- MTF")
-
-        forced_confluence = ConfluenceResult(
-            confidence=decision.confluence.confidence,
-            direction=direction,
-            reasons=tuple(
-                dict.fromkeys(
-                    (
-                        *decision.confluence.reasons,
-                        FORCED_REASON,
-                        "Manual Test — signal gates waived",
-                    )
-                )
-            ),
-            rejected_rules=decision.confluence.rejected_rules,
-            input_hash=decision.confluence.input_hash,
-            band="forced_test",
-            passed=True,
-            factors=dict(decision.confluence.factors),
-        )
-
-        eligibility = PositionEligibilityEngine(config=ite_config).evaluate(
-            snapshot=snapshot,
-            confluence=forced_confluence,
-            account=account,
-            risk_allowed=True,
-            risk_reasons=decision.risk_reasons,
-            waive_signal_gates=True,
-            force_test_mode=True,
-        )
-        if not eligibility.eligible:
-            exact = "; ".join(eligibility.rejection_reasons) or "eligibility_failed"
-            logger.error(
-                "FORCE_FIRST_TRADE REJECTED before OMS: %s",
-                exact,
-            )
-            return decision, False
-
-        mid = account.mid_price
-        if mid is None or mid <= 0:
-            logger.error(
-                "FORCE_FIRST_TRADE REJECTED before OMS: no mid price for market SL/TP"
-            )
-            return decision, False
-        atr = account.atr if account.atr is not None and account.atr > 0 else None
-        # FX mids (~1.1) must not use gold-style 0.01 quantize / floor=1.0 —
-        # that made SELL TP negative (TakeProfit must be non-negative).
-        if mid >= Decimal("50"):
-            quant = Decimal("0.01")
-            floor = Decimal("0.50")
-        else:
-            quant = Decimal("0.00001")
-            floor = (mid * Decimal("0.0005")).quantize(quant)
-            if floor <= 0:
-                floor = Decimal("0.00010")
-        if atr is not None:
-            stop_dist = (atr * Decimal("1.5")).quantize(quant)
-        else:
-            stop_dist = (mid * Decimal("0.001")).quantize(quant)
-        if stop_dist <= 0:
-            stop_dist = floor
-        # Cap so SELL TP (mid - 2R) and BUY SL stay strictly positive.
-        max_stop = (mid / Decimal("4")).quantize(quant)
-        if max_stop > 0 and stop_dist > max_stop:
-            stop_dist = max_stop
-        if stop_dist <= 0:
-            stop_dist = floor
-        # Market-order geometry must be valid vs live mid (not stale OB/FVG zones).
-        from app.domain.institutional_trading.decision_models import PriceZone
-
-        entry_zone = PriceZone(low=mid, high=mid, mid=mid)
-        if direction is TradeDirection.BUY:
-            sl = mid - stop_dist
-            tp = mid + (stop_dist * Decimal("2"))
-            stop_zone = PriceZone(low=sl, high=sl, mid=sl)
-            target_zone = PriceZone(low=tp, high=tp, mid=tp)
-            invalidations = ("Forced BUY: close below stop",)
-        else:
-            sl = mid + stop_dist
-            tp = mid - (stop_dist * Decimal("2"))
-            stop_zone = PriceZone(low=sl, high=sl, mid=sl)
-            target_zone = PriceZone(low=tp, high=tp, mid=tp)
-            invalidations = ("Forced SELL: close above stop",)
-        if sl <= 0 or tp <= 0:
-            logger.error(
-                "FORCE_FIRST_TRADE REJECTED before OMS: invalid SL/TP geometry "
-                "(mid=%s stop_dist=%s sl=%s tp=%s)",
-                mid,
-                stop_dist,
-                sl,
-                tp,
-            )
-            return decision, False
-        rr = Decimal("2.00")
-
-        action = (
-            DecisionAction.BUY
-            if direction is TradeDirection.BUY
-            else DecisionAction.SELL
-        )
-        digest = sha256(
-            (
-                f"force1|{snapshot.input_hash}|{direction.value}|"
-                f"{cfg.lot}|{state.executed_count}"
-            ).encode()
-        ).hexdigest()[:32]
-
-        forced = TradeDecision(
-            action=action,
-            direction=direction,
-            confidence=decision.confidence,
-            quality=decision.quality,
-            risk_score=decision.risk_score,
-            reasons=(
-                FORCED_REASON,
-                "Reason: Manual Test",
-                f"Direction: {direction.value}",
-                f"Lot: {cfg.lot}",
-                "Signal gates waived (quality/confluence/MTF)",
-                *tuple(
-                    r
-                    for r in decision.reasons
-                    if r not in {FORCED_REASON, "Reason: Manual Test"}
-                ),
-            ),
-            invalidations=tuple(invalidations),
-            entry_zone=entry_zone,
-            stop_zone=stop_zone,
-            target_zone=target_zone,
-            estimated_rr=rr,
-            expected_duration="forced_test",
-            confluence=forced_confluence,
-            eligibility=eligibility,
-            input_hash=digest,
-            config_version=ite_config.config_version,
-            symbol=snapshot.symbol,
-            as_of=decision.as_of,
-            approved_lots=cfg.lot,
-            risk_reasons=decision.risk_reasons,
-        )
-        logger.warning("Submitting order...")
-        logger.warning(
-            "force_first_trade_submitting",
-            direction=direction.value,
-            lot=str(cfg.lot),
-            quality=decision.quality,
-            confluence=decision.confidence,
-            mid=str(account.mid_price) if account.mid_price is not None else None,
-        )
-        return forced, True
 
 
 def record_forced_trade_success(

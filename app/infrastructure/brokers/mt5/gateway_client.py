@@ -416,7 +416,14 @@ class GatewayMT5Client:
                 "x-quantforg-gateway-token",
             }
         )
-        logger.info(
+        # High-volume candle/quote traffic stays at debug; trade paths keep info.
+        _trade_path = path.startswith("/trade/") or path in {
+            "/positions",
+            "/account",
+            "/orders",
+        }
+        _http_log = logger.info if _trade_path else logger.debug
+        _http_log(
             "gateway_http_request",
             method=method,
             gateway_url=self.base_url,
@@ -630,7 +637,8 @@ class GatewayMT5Client:
         }
         self._record_upstream(upstream)
 
-        logger.info(
+        _resp_log = logger.info if _trade_path else logger.debug
+        _resp_log(
             "gateway_http_response",
             method=method,
             gateway_url=self.base_url,

@@ -655,6 +655,13 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "reload", False)
             if self.debug:
                 object.__setattr__(self, "debug", False)
+            # Production finalization — never allow temporary test overrides.
+            if self.force_first_trade:
+                object.__setattr__(self, "force_first_trade", False)
+            if self.allow_risk_lock_override:
+                object.__setattr__(self, "allow_risk_lock_override", False)
+            if self.production_validation_mode:
+                object.__setattr__(self, "production_validation_mode", False)
             # Multi-symbol / Alpha / institutional multi-asset scanner lifts
             # the XAUUSD-only mandate. Do not overwrite MULTI_SYMBOL_ENABLED=true.
             multi_asset_scan = False

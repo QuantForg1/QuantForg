@@ -368,8 +368,22 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         )
 
         log_risk_lock_override_startup(settings)
+        logger.warning(
+            "production_finalization",
+            force_first_trade=False,
+            allow_risk_lock_override=False,
+            production_validation_mode=bool(
+                getattr(settings, "production_validation_mode", False)
+            ),
+            daily_loss_protection=True,
+            weekly_loss_protection=True,
+            monthly_loss_protection=True,
+            emergency_stop_available=True,
+            margin_protection=True,
+            message="Temporary test overrides permanently disabled",
+        )
     except Exception:
-        logger.exception("risk_lock_override_startup_log_failed")
+        logger.exception("production_finalization_log_failed")
 
     database = DatabaseManager(settings)
     container = Container(settings=settings, database=database)
