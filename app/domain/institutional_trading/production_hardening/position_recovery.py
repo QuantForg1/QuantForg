@@ -177,7 +177,7 @@ def recover_positions_from_mt5(
                         logger.exception("pme_flag_restore_failed", ticket=ticket)
             continue
 
-            snap = snapshot_by_ticket.get(ticket, {})
+        snap = snapshot_by_ticket.get(ticket, {})
         try:
             side = str(getattr(row, "side", "buy") or "buy").lower()
             entry = Decimal(str(getattr(row, "open_price", 0) or 0))
@@ -187,13 +187,42 @@ def recover_positions_from_mt5(
             snap_sl = Decimal(
                 str(snap.get("current_stop") or snap.get("initial_stop") or 0)
             )
-            # Broker SL defines 1R. Snapshot stops may already be BE/trail and
-            # must not shrink risk_distance (that inflates R and skips real BE).
-            if broker_sl > 0:
-                initial_sl = broker_sl
-                risk = abs(entry - broker_sl) or Decimal("1")
+            snap_risk = Decimal(str(snap.get("risk_distance") or 0))
+            snap_initial = Decimal(str(snap.get("initial_stop") or 0))
+            be_offset = Decimal("0.2")
+            be_already = False
+            # Broker SL on the profit side of entry ⇒ BE (or better) already applied.
+            if broker_sl > 0 and entry > 0:
+                if side == "sell" and broker_sl < entry:
+                    be_already = True
+                elif side == "buy" and broker_sl > entry:
+                    be_already = True
+
+            if be_already and broker_sl > 0:
+                # Reconstruct original 1R from BE geometry: BE ≈ entry ± 0.2R
+                reconstructed = (abs(entry - broker_sl) / be_offset).quantize(
+                    Decimal("0.0001")
+                )
+                if snap_risk > reconstructed:
+                    risk = snap_risk
+                else:
+                    risk = reconstructed or Decimal("1")
+                if snap_initial > 0:
+                    initial_sl = snap_initial
+                elif side == "sell":
+                    initial_sl = entry + risk
+                else:
+                    initial_sl = entry - risk
+                current_sl = broker_sl
+            elif broker_sl > 0:
+                # Protective stop still on risk side — broker defines 1R.
+                initial_sl = (
+                    snap_initial
+                    if snap_initial > 0 and abs(entry - snap_initial) >= abs(entry - broker_sl)
+                    else broker_sl
+                )
+                risk = abs(entry - initial_sl) or Decimal("1")
                 if side == "sell":
-                    # Tighter protective stop = lower price
                     current_sl = (
                         min(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
                     )
@@ -202,11 +231,10 @@ def recover_positions_from_mt5(
                         max(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
                     )
             elif snap_sl > 0:
-                initial_sl = snap_sl
+                initial_sl = snap_initial if snap_initial > 0 else snap_sl
                 current_sl = snap_sl
-                risk = abs(entry - snap_sl) or Decimal("1")
+                risk = snap_risk if snap_risk > 0 else (abs(entry - initial_sl) or Decimal("1"))
             else:
-                # Last resort only — prefer broker SL; never invent when SL exists
                 initial_sl = (
                     entry * Decimal("0.99")
                     if side == "buy"
@@ -214,6 +242,7 @@ def recover_positions_from_mt5(
                 )
                 current_sl = initial_sl
                 risk = abs(entry - initial_sl) or Decimal("1")
+
             tp = Decimal(str(snap.get("current_tp") or 0))
             if tp <= 0 and broker_tp > 0:
                 tp = broker_tp
@@ -227,6 +256,9 @@ def recover_positions_from_mt5(
             state_raw = str(snap.get("state") or "")
             if state_raw in {s.value for s in PositionLifecycleState}:
                 state = PositionLifecycleState(state_raw)
+            be_moved = bool(snap.get("be_moved", False)) or be_already
+            if be_moved and state is PositionLifecycleState.OPEN:
+                state = PositionLifecycleState.BE_MOVED
             managed = ManagedPosition(
                 ticket=ticket,
                 symbol=str(getattr(row, "symbol", sym) or sym),
@@ -240,7 +272,7 @@ def recover_positions_from_mt5(
                 state=state,
                 current_stop=current_sl,
                 current_tp=tp,
-                be_moved=bool(snap.get("be_moved", False)),
+                be_moved=be_moved,
                 partial_done=bool(snap.get("partial_done", False)),
                 trailing_active=bool(snap.get("trailing_active", False)),
                 max_favorable_r=Decimal(str(snap.get("max_favorable_r") or 0)),
@@ -253,6 +285,16 @@ def recover_positions_from_mt5(
                 engine._positions[ticket] = managed
             registered += 1
             restored += 1
+            logger.warning(
+                "PME recovered position",
+                ticket=ticket,
+                symbol=managed.symbol,
+                side=side,
+                risk_distance=str(risk),
+                be_moved=be_moved,
+                be_already_on_broker=be_already,
+                state=state.value,
+            )
         except Exception:
             logger.exception("pme_recovery_register_failed", ticket=ticket)
 

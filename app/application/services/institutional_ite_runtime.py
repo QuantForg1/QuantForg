@@ -907,6 +907,7 @@ class InstitutionalIteRuntime:
                 except Exception:
                     live_px = None
                 # Repair understated 1R from bad PME snapshot (inflates R / skips BE).
+                # Never treat a profit-side (already-BE) broker SL as the original 1R.
                 try:
                     broker_sl = Decimal(
                         str(
@@ -916,19 +917,41 @@ class InstitutionalIteRuntime:
                         )
                     )
                     entry_px = Decimal(str(getattr(pos, "entry_price", 0) or 0))
+                    side_l = str(getattr(pos, "side", "") or "").lower()
                     if broker_sl > 0 and entry_px > 0:
-                        broker_risk = abs(entry_px - broker_sl)
-                        cur_risk = Decimal(str(getattr(pos, "risk_distance", 0) or 0))
-                        if broker_risk > cur_risk * Decimal("1.2"):
-                            logger.warning(
-                                "pme_risk_distance_repaired",
-                                ticket=ticket,
-                                old_risk=str(cur_risk),
-                                new_risk=str(broker_risk),
-                                broker_sl=str(broker_sl),
+                        be_on_broker = (side_l == "sell" and broker_sl < entry_px) or (
+                            side_l == "buy" and broker_sl > entry_px
+                        )
+                        if be_on_broker:
+                            if not bool(getattr(pos, "be_moved", False)):
+                                pos.be_moved = True
+                                from app.domain.institutional_trading.management.models import (
+                                    PositionLifecycleState,
+                                )
+
+                                if getattr(pos, "state", None) is PositionLifecycleState.OPEN:
+                                    pos.state = PositionLifecycleState.BE_MOVED
+                                logger.warning(
+                                    "pme_be_detected_on_broker",
+                                    ticket=ticket,
+                                    broker_sl=str(broker_sl),
+                                    entry=str(entry_px),
+                                )
+                        else:
+                            broker_risk = abs(entry_px - broker_sl)
+                            cur_risk = Decimal(
+                                str(getattr(pos, "risk_distance", 0) or 0)
                             )
-                            pos.risk_distance = broker_risk
-                            pos.initial_stop = broker_sl
+                            if broker_risk > cur_risk * Decimal("1.2"):
+                                logger.warning(
+                                    "pme_risk_distance_repaired",
+                                    ticket=ticket,
+                                    old_risk=str(cur_risk),
+                                    new_risk=str(broker_risk),
+                                    broker_sl=str(broker_sl),
+                                )
+                                pos.risk_distance = broker_risk
+                                pos.initial_stop = broker_sl
                 except Exception:
                     logger.exception("pme_risk_distance_repair_failed", ticket=ticket)
             fallback_mid = account.mid_price or Decimal("0")
