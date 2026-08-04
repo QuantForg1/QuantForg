@@ -47,7 +47,8 @@ def test_v63_version_preserves_quality_and_risk() -> None:
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
-    assert cfg.min_expected_rr >= Decimal("1.3")
+    assert cfg.min_expected_rr >= Decimal("1.20")
+    assert cfg.min_expected_rr == cfg.fixed_tp_r
     assert cfg.typical_hold_min_minutes == 2
     assert cfg.typical_hold_max_minutes == 10
     assert cfg.absolute_max_hold_minutes == 12

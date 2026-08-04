@@ -131,7 +131,10 @@ class AiScalpingConfig:
         "expansion",
     )
 
-    # Quality gates (all required for a take)
+    # Quality gates (all required for a take).
+    # Class defaults = institutional research baseline. Production LIVE uses
+    # SCALPING_V1 (profiles/scalping_v1.py) which owns scalping-calibrated
+    # floors — do not assume these class defaults are the live profile.
     require_strong_structure: bool = True
     require_liquidity_event: bool = True
     require_momentum_confirm: bool = True
@@ -147,6 +150,8 @@ class AiScalpingConfig:
     min_expected_rr: Decimal = Decimal("1.3")
     # EMA / RSI / candle PA composite — never below prior quality floors
     min_pa_confluence_score: int = 50
+    # BUY vs SELL edge margin (profile-aware; was hardcoded 5 in direction.py)
+    direction_edge_margin: int = 5
 
     # Real scalping hold window (target 2-15m when conditions support)
     typical_hold_min_minutes: int = 2
@@ -297,6 +302,11 @@ class AiScalpingConfig:
         # Cap risk - quality upgrade must not silently raise risk
         if self.risk_per_trade_pct > Decimal("0.75"):
             object.__setattr__(self, "risk_per_trade_pct", Decimal("0.75"))
+        # Internal consistency: never demand RR above the profile TP target.
+        # (SCALPING_V1 bug: fixed_tp_r=1.20 with institutional min_rr=1.3/1.4.)
+        if self.fixed_tp_r is not None and self.fixed_tp_r > 0:
+            if self.min_expected_rr > self.fixed_tp_r:
+                object.__setattr__(self, "min_expected_rr", self.fixed_tp_r)
         # Never loosen hold beyond absolute max
         if self.absolute_max_hold_minutes < self.typical_hold_max_minutes:
             object.__setattr__(

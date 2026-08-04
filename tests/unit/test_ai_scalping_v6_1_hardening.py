@@ -40,7 +40,8 @@ def test_v61_version_preserves_v6_safety() -> None:
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
-    assert cfg.min_expected_rr >= Decimal("1.3")
+    assert cfg.min_expected_rr >= Decimal("1.20")
+    assert cfg.min_expected_rr == cfg.fixed_tp_r
     assert cfg.self_protection_enabled is True
     assert cfg.slippage_protection_enabled is True
     assert cfg.normal_vol.confidence == 71

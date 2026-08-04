@@ -171,6 +171,9 @@ def evaluate_quality_gates(
     # Never allow override below configured floor
     if min_rr < cfg.min_expected_rr:
         min_rr = cfg.min_expected_rr
+    # Never demand more RR than the profile's fixed TP can deliver
+    if cfg.fixed_tp_r is not None and cfg.fixed_tp_r > 0 and min_rr > cfg.fixed_tp_r:
+        min_rr = cfg.fixed_tp_r
     rr_ok = expected_rr is not None and expected_rr >= min_rr
     checks["min_rr"] = bool(rr_ok)
     if not rr_ok:

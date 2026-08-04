@@ -177,7 +177,8 @@ def decide_scalping_direction(
         or getattr(snapshot.trend, "alignment_score", 0)
         or 0
     )
-    if mom >= 65:
+    mom_floor = int(cfg.min_momentum_score)
+    if mom >= mom_floor:
         if buy > sell:
             buy += 8
             reasons.append("Momentum confirms BUY side")
@@ -201,10 +202,11 @@ def decide_scalping_direction(
     )
     structure_score = max(0, min(100, structure_score))
 
-    if buy > sell + 5:
+    edge = max(1, int(getattr(cfg, "direction_edge_margin", 5) or 5))
+    if buy > sell + edge:
         direction = TradeDirection.BUY
         reasons.append(f"Highest probability BUY ({buy} vs SELL {sell})")
-    elif sell > buy + 5:
+    elif sell > buy + edge:
         direction = TradeDirection.SELL
         reasons.append(f"Highest probability SELL ({sell} vs BUY {buy})")
     else:

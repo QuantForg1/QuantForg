@@ -412,11 +412,16 @@ def score_scalping_setup(
         atr=atr,
         config=cfg,
     )
-    expected_rr = targets.expected_rr or Decimal("1.4")
+    # Profile-aware RR fallback — never hardcode institutional 1.4.
+    _rr_fallback = cfg.fixed_tp_r if cfg.fixed_tp_r is not None else cfg.min_expected_rr
+    expected_rr = targets.expected_rr if targets.expected_rr is not None else _rr_fallback
     if targets.reason:
         reasons.append(targets.reason)
 
     effective_min_rr = max(cfg.min_expected_rr, exec_profile.min_expected_rr)
+    # Consistency: regime bumps must not exceed fixed TP target.
+    if cfg.fixed_tp_r is not None and cfg.fixed_tp_r > 0:
+        effective_min_rr = min(effective_min_rr, cfg.fixed_tp_r)
 
     gates = evaluate_quality_gates(
         direction=direction_dec,

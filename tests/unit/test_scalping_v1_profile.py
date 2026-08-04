@@ -9,12 +9,17 @@ import pytest
 from app.application.services.ai_scalping_mode import pme_config_for_scalping
 from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
+    AiScalpingConfig,
     scalping_ite_config,
 )
 from app.domain.institutional_trading.ai_scalping.profiles import (
     ACTIVE_PRODUCTION_PROFILE,
     SCALPING_V1,
     SCALPING_V1_ID,
+)
+from app.domain.institutional_trading.ai_scalping.regime import RegimeAssessment
+from app.domain.institutional_trading.ai_scalping.regime_execution import (
+    build_regime_execution_profile,
 )
 from app.domain.institutional_trading.management.config import DEFAULT_PME_CONFIG
 
@@ -35,7 +40,6 @@ def test_scalping_v1_adaptive_quality_confluence_bands() -> None:
     assert cfg.normal_vol.confidence == 71
     assert cfg.low_vol.quality == 75
     assert cfg.low_vol.confidence == 72
-    # Bands stay within professional scalping envelope
     assert 72 <= cfg.high_vol.quality <= 75
     assert 70 <= cfg.high_vol.confidence <= 72
 
@@ -47,6 +51,55 @@ def test_scalping_v1_hold_window() -> None:
     assert cfg.typical_hold_max_minutes == 10
     assert cfg.absolute_max_hold_minutes == 12
     assert cfg.time_stop_minutes == 8
+
+
+@pytest.mark.unit
+def test_scalping_v1_gates_are_profile_owned_not_institutional() -> None:
+    """Structure/momentum/RR/PA must not silently inherit institutional leftovers."""
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    institutional = AiScalpingConfig()  # bare class = research institutional
+    assert cfg.min_structure_score == 60
+    assert cfg.min_momentum_score == 55
+    assert cfg.min_liquidity_score == 55
+    assert cfg.min_pa_confluence_score == 45
+    assert cfg.min_structure_score < institutional.min_structure_score
+    assert cfg.min_momentum_score < institutional.min_momentum_score
+    # Still hard gates — not disabled
+    assert cfg.require_strong_structure is True
+    assert cfg.require_momentum_confirm is True
+    assert cfg.require_liquidity_event is True
+    assert cfg.require_pa_confluence is True
+
+
+@pytest.mark.unit
+def test_scalping_v1_rr_internally_consistent() -> None:
+    """fixed_tp_r and min_expected_rr must never contradict."""
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    assert cfg.fixed_tp_r == Decimal("1.20")
+    assert cfg.min_expected_rr == Decimal("1.20")
+    assert cfg.min_expected_rr <= cfg.fixed_tp_r
+    # Regime bumps must not push RR above fixed TP
+    for regime in ("range", "compression", "expansion", "strong_trend"):
+        assessment = RegimeAssessment(
+            regime=regime,  # type: ignore[arg-type]
+            confidence=70,
+            reasons=(f"test-{regime}",),
+        )
+        profile = build_regime_execution_profile(
+            assessment, atr_pct=Decimal("0.50"), config=cfg
+        )
+        assert profile.min_expected_rr <= cfg.fixed_tp_r
+        assert profile.min_expected_rr >= cfg.min_expected_rr
+
+
+@pytest.mark.unit
+def test_config_post_init_clamps_rr_to_fixed_tp() -> None:
+    """Even a misconfigured profile cannot demand RR above fixed TP."""
+    broken = AiScalpingConfig(
+        fixed_tp_r=Decimal("1.20"),
+        min_expected_rr=Decimal("1.40"),
+    )
+    assert broken.min_expected_rr == Decimal("1.20")
 
 
 @pytest.mark.unit
@@ -69,7 +122,6 @@ def test_scalping_v1_pme_earlier_management() -> None:
     assert pme.absolute_max_hold_minutes == 12
     assert pme.time_stop_minutes == 8
     assert pme.momentum_fade_exit is True
-    # Still earlier than institutional swing PME
     assert pme.break_even_at_r < DEFAULT_PME_CONFIG.break_even_at_r
     assert pme.partial_at_r < DEFAULT_PME_CONFIG.partial_at_r
 

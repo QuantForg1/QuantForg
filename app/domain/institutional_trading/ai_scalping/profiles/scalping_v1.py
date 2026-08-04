@@ -3,6 +3,9 @@
 Intentional product change: QuantForg production default is professional
 scalping (not institutional swing gates). Reuses AiScalpingConfig + PME
 mapping — does not rewrite OMS / Risk / Gateway / MT5 / database.
+
+All quality gates that previously fell through to institutional class
+defaults are owned here so the profile is internally consistent.
 """
 
 from __future__ import annotations
@@ -16,11 +19,14 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 
 PROFILE_ID = "SCALPING_V1"
-PROFILE_VERSION = "ai-scalping-v8.1.0+SCALPING_V1"
+PROFILE_VERSION = "ai-scalping-v8.1.1+SCALPING_V1"
+
+# Professional scalping RR target — min gate MUST match (never demand more).
+_SCALP_RR = Decimal("1.20")
 
 
 def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalpingConfig:
-    """Professional LIVE scalping knobs — adaptive Q 72–75 / C 70–72."""
+    """Professional LIVE scalping knobs — fully profile-owned gates."""
     src = base or AiScalpingConfig()
     return replace(
         src,
@@ -32,6 +38,27 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         high_vol=AdaptiveThresholdBand(quality=72, confidence=70),
         normal_vol=AdaptiveThresholdBand(quality=74, confidence=71),
         low_vol=AdaptiveThresholdBand(quality=75, confidence=72),
+        # --- Profile-owned gates (were institutional class leftovers) ---
+        # Structure / momentum / liquidity / PA: scalping-calibrated floors.
+        # Still hard gates (not disabled). Not institutional swing 70/65/60/50.
+        # Require real structure & confirmation — reject noise / dead tape.
+        min_structure_score=60,
+        min_momentum_score=55,
+        min_liquidity_score=55,
+        min_pa_confluence_score=45,
+        setup_min_local_score=55,
+        direction_edge_margin=5,
+        require_strong_structure=True,
+        require_momentum_confirm=True,
+        require_liquidity_event=True,
+        require_pa_confluence=True,
+        require_tight_spread=True,
+        require_valid_volatility=True,
+        # RR MUST equal fixed TP — institutional min 1.3 + regime bumps → 1.4
+        # contradicted fixed_tp_r=1.20 (LIVE: Expected RR 1.20 below minimum 1.4).
+        min_expected_rr=_SCALP_RR,
+        fixed_tp_r=_SCALP_RR,
+        atr_tp_mult=Decimal("1.40"),
         # Hold window: target 2–10m, absolute 12m
         typical_hold_min_minutes=2,
         typical_hold_max_minutes=10,
@@ -60,8 +87,6 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         partial_at_r=Decimal("0.70"),
         partial_close_pct=Decimal("50"),
         trail_after_r=Decimal("0.70"),
-        fixed_tp_r=Decimal("1.20"),
-        atr_tp_mult=Decimal("1.40"),
         momentum_fade_exit=True,
         momentum_fade_threshold=45,
         volatility_collapse_exit=True,
