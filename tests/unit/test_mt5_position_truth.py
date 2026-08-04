@@ -106,6 +106,20 @@ def test_force_sync_keeps_live_mt5_positions() -> None:
 
 
 @pytest.mark.unit
+def test_force_sync_account_count_includes_other_symbols() -> None:
+    """Multi-symbol desk: EURUSD sync must not report MT5=0 while gold is open."""
+    adapter = _FakeAdapter([_pos(533737978, "XAUUSD"), _pos(1, "EURUSD")])
+    sync = force_sync_positions(
+        adapter,
+        symbol="EURUSD",
+        internal_positions=0,
+        position_engine=None,
+    )
+    assert sync.mt5_positions == 2
+    assert set(sync.tickets) == {533737978, 1}
+
+
+@pytest.mark.unit
 def test_apply_mt5_truth_rewrites_account() -> None:
     account = AccountRiskState(
         equity=Decimal("1000"),

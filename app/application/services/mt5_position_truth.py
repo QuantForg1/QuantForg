@@ -56,6 +56,20 @@ def _invalidate_adapter_position_cache(mt5_adapter: Any) -> None:
         client._positions_cache_at = 0.0
 
 
+def _ticket_of(row: Any) -> int:
+    try:
+        return int(getattr(row, "ticket", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _count_all_positions(rows: list[Any] | None) -> tuple[int, tuple[int, ...]]:
+    """Account-level open count — every live MT5 ticket (multi-symbol desk)."""
+    tickets = [_ticket_of(p) for p in rows or []]
+    tickets = [t for t in tickets if t > 0]
+    return len(tickets), tuple(tickets)
+
+
 def _count_symbol_positions(
     rows: list[Any] | None, *, symbol: str
 ) -> tuple[int, tuple[int, ...]]:
@@ -68,11 +82,9 @@ def _count_symbol_positions(
                 continue
         elif sym != target:
             continue
-        try:
-            tickets.append(int(getattr(p, "ticket", 0) or 0))
-        except (TypeError, ValueError):
-            tickets.append(0)
-    tickets = [t for t in tickets if t > 0]
+        t = _ticket_of(p)
+        if t > 0:
+            tickets.append(t)
     return len(tickets), tuple(tickets)
 
 
@@ -162,29 +174,42 @@ def force_sync_positions(
     )
 
     _invalidate_adapter_position_cache(mt5_adapter)
-    rows = mt5_adapter.list_positions()
-    mt5_count, tickets = _count_symbol_positions(rows, symbol=sym)
+    rows = list(mt5_adapter.list_positions() or [])
+    # Account gate uses ALL open tickets. Symbol filter is only for PME repair
+    # scope — never report "MT5 positions: 0" while another symbol is live.
+    mt5_count, tickets = _count_all_positions(rows)
+    sym_count, sym_tickets = _count_symbol_positions(rows, symbol=sym)
 
     logger.warning("MT5 positions: %s", mt5_count)
     logger.warning("Internal positions: %s", prior_internal)
+    if sym_count != mt5_count:
+        logger.warning(
+            "MT5 positions symbol_scope",
+            symbol=sym,
+            count=sym_count,
+            tickets=list(sym_tickets),
+            account_count=mt5_count,
+        )
 
     repaired = False
     if mt5_count != prior_internal or (
-        position_engine is not None and engine_count != mt5_count
+        position_engine is not None and engine_count != sym_count
     ):
         removed = _repair_internal_engine(
             position_engine,
-            live_tickets=set(tickets),
+            live_tickets=set(sym_tickets),
             symbol=sym,
         )
         repaired = True
         logger.warning(
             "position_truth_repaired",
             mt5_positions=mt5_count,
+            symbol_positions=sym_count,
             internal_positions=prior_internal,
             engine_positions_before=engine_count,
             removed_stale=removed,
             tickets=list(tickets),
+            symbol_tickets=list(sym_tickets),
             symbol=sym,
         )
 

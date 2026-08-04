@@ -878,18 +878,74 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("pme_recover_before_manage_failed", reason=reason)
 
+        # Per-ticket live mid from MT5 — never manage gold with EURUSD mid.
+        live_by_ticket: dict[int, Any] = {}
+        try:
+            if self.mt5_adapter is not None and hasattr(
+                self.mt5_adapter, "list_positions"
+            ):
+                for row in list(self.mt5_adapter.list_positions() or []):
+                    try:
+                        t = int(getattr(row, "ticket", 0) or 0)
+                    except (TypeError, ValueError):
+                        t = 0
+                    if t > 0:
+                        live_by_ticket[t] = row
+        except Exception:
+            logger.exception("pme_live_positions_for_manage_failed")
+
         managed = 0
         for ticket in list(getattr(engine, "_positions", {}).keys()):
             pos = engine.get(ticket)
             if pos is None:
                 continue
+            live = live_by_ticket.get(int(ticket))
+            live_px = None
+            if live is not None:
+                try:
+                    live_px = Decimal(str(getattr(live, "current_price", 0) or 0))
+                except Exception:
+                    live_px = None
+            fallback_mid = account.mid_price or Decimal("0")
+            # Prefer broker mark for THIS ticket; only fall back to account mid
+            # when it is same-symbol scale (avoid 1.15 mid on a 4060 gold book).
+            current_px = live_px if live_px and live_px > 0 else fallback_mid
+            if current_px <= 0:
+                current_px = Decimal(str(getattr(pos, "entry_price", 0) or 0)) or Decimal(
+                    "1"
+                )
+            # Empty book ⇒ ambiguous (gateway blip); never force local EXIT.
+            # Non-empty book without this ticket ⇒ truly closed on MT5.
+            pos_still_open = True if not live_by_ticket else (live is not None)
+            book_vol = None
+            book_sl = None
+            if live is not None:
+                try:
+                    book_vol = Decimal(str(getattr(live, "volume", 0) or 0))
+                except Exception:
+                    book_vol = None
+                try:
+                    book_sl = Decimal(
+                        str(
+                            getattr(live, "stop_loss", 0)
+                            or getattr(live, "sl", 0)
+                            or 0
+                        )
+                    )
+                    if book_sl <= 0:
+                        book_sl = None
+                except Exception:
+                    book_sl = None
             pctx = PositionManageContext(
                 now=datetime.now(UTC),
-                current_price=account.mid_price or Decimal("2300"),
+                current_price=current_px,
                 atr=account.atr or Decimal("1"),
+                mid_price=current_px,
                 spread=getattr(snapshot, "spread", None),
                 market_open=True,
-                position_still_open=True,
+                position_still_open=pos_still_open,
+                book_volume=book_vol,
+                book_stop=book_sl,
                 kill_switch_armed=self.plane.kill_switch_armed,
                 daily_loss_exceeded=self.plane.daily_loss_exceeded,
                 user_id=self.user_id,
@@ -913,12 +969,11 @@ class InstitutionalIteRuntime:
                 from app.domain.institutional_trading.ai_scalping.trade_lifecycle_timeline import (  # noqa: E501
                     get_trade_lifecycle_store,
                 )
+                from app.domain.institutional_trading.management.r_math import signed_r
 
                 build_position_monitor(
                     getattr(engine, "_positions", {}),
-                    mid_price=float(account.mid_price)
-                    if getattr(account, "mid_price", None) is not None
-                    else None,
+                    mid_price=float(current_px),
                     atr=float(account.atr)
                     if getattr(account, "atr", None) is not None
                     else None,
@@ -938,6 +993,28 @@ class InstitutionalIteRuntime:
                         or "manage"
                     ),
                 )
+                r_now = signed_r(pos, current_px)
+                be_at = getattr(
+                    getattr(self.position_management.engine, "config", None),
+                    "break_even_at_r",
+                    None,
+                )
+                logger.warning(
+                    "PME Active",
+                    ticket=ticket,
+                    symbol=getattr(pos, "symbol", ""),
+                    side=getattr(pos, "side", ""),
+                    mid=str(current_px),
+                    entry=str(getattr(pos, "entry_price", "")),
+                    risk_distance=str(getattr(pos, "risk_distance", "")),
+                    r=str(r_now),
+                    break_even_at_r=str(be_at),
+                    be_moved=bool(getattr(pos, "be_moved", False)),
+                    state=str(
+                        getattr(getattr(pos, "state", None), "value", getattr(pos, "state", ""))
+                    ),
+                    still_open=pos_still_open,
+                )
             except Exception:
                 logger.exception("position_monitor_update_failed")
             try:
@@ -952,6 +1029,7 @@ class InstitutionalIteRuntime:
                         ticket=ticket,
                         action=str(action_v),
                         reason=reason,
+                        mid=str(current_px),
                     )
                 to_state = getattr(getattr(result, "record", None), "to_state", None)
                 to_v = getattr(to_state, "value", to_state)
@@ -4117,7 +4195,7 @@ def build_ite_runtime(
     probes = LiveProbeCollector(
         settings=settings, mt5_adapter=mt5_adapter, supabase=supabase
     )
-    return InstitutionalIteRuntime(
+    runtime = InstitutionalIteRuntime(
         plane=plane,
         reliability=reliability,
         probes=probes,
@@ -4128,6 +4206,18 @@ def build_ite_runtime(
         interval_seconds=interval_seconds,
         mt5_adapter=mt5_adapter,
     )
+    # Plane defaults to scalping — PME must inherit BE@0.5R / partial / trail knobs
+    # at bootstrap (ops apply_trading_mode is not required for LIVE loop).
+    try:
+        from app.application.services.ai_scalping_mode import (
+            apply_trading_mode_to_runtime,
+        )
+
+        mode = str(getattr(plane, "trading_mode", "scalping") or "scalping")
+        apply_trading_mode_to_runtime(runtime, mode=mode)
+    except Exception:
+        logger.exception("ite_runtime_bootstrap_trading_mode_failed")
+    return runtime
 
 
 _RUNTIME: InstitutionalIteRuntime | None = None
