@@ -290,7 +290,14 @@ class ExecutionBridge:
             atr = getattr(context.snapshot, "atr", None) or getattr(
                 context.account, "atr", None
             )
-            atr_spread = assess_spread(spread, atr=atr, config=scalp_cfg)
+            sym = str(
+                getattr(decision, "symbol", None)
+                or getattr(context.snapshot, "symbol", None)
+                or ""
+            )
+            atr_spread = assess_spread(
+                spread, atr=atr, config=scalp_cfg, symbol=sym or None
+            )
             if atr_spread.reject:
                 return self._abort(
                     decision=decision,

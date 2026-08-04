@@ -41,7 +41,11 @@ class SpreadAssessment:
 
 
 def _record_spread(symbol: str | None, spread: Decimal) -> deque[Decimal]:
-    key = (symbol or "GLOBAL").strip().upper() or "GLOBAL"
+    # Per-symbol only — never GLOBAL. Mixing FX (~0.0004) into gold history made
+    # LIVE XAUUSD spread 0.474 look "abnormal >2.5× median" and aborted OMS.
+    key = (symbol or "").strip().upper()
+    if not key:
+        return deque(maxlen=64)
     with _LOCK:
         hist = _HISTORY[key]
         hist.append(spread)
@@ -85,10 +89,11 @@ def assess_spread(
         max_spread_atr_pct=cfg.max_spread_atr_pct,
     )
     hist = _record_spread(symbol, spread)
-    med = _median(hist)
+    med = _median(hist) if symbol else None
     med_s = str(med) if med is not None else None
     abnormal = False
-    if med is not None and len(hist) >= 8 and med > 0:
+    # Abnormality is symbol-local only (never cross-asset GLOBAL medians).
+    if symbol and med is not None and len(hist) >= 8 and med > 0:
         # Abnormal: > 2.5× recent median (flash / liquidity vacuum)
         if spread > med * Decimal("2.5"):
             abnormal = True
