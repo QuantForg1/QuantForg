@@ -238,6 +238,34 @@ class PositionManagementEngine:
                 skipped=False,
             )
 
+        # BE already locked on broker/book — advance lifecycle without OMS modify.
+        if plan.kind is ManageActionKind.BREAK_EVEN and plan.new_sl is None:
+            position.be_moved = True
+            if plan.target_state is not None:
+                PositionStateMachine.assert_transition(
+                    position.state, plan.target_state
+                )
+                position.state = plan.target_state
+            latency = (time.perf_counter() - t0) * 1000.0
+            self.metrics.record_be(success=True)
+            rec = self._record(
+                position=position,
+                context=context,
+                plan=plan,
+                outcome=ManageOutcome.SUCCESS,
+                latency_ms=latency,
+                fingerprint=fp,
+                to_state=position.state,
+                comment=plan.reason,
+            )
+            position.last_manage_fingerprint = fp
+            return PositionManageResult(
+                position=position,
+                action=plan.kind,
+                record=rec,
+                skipped=False,
+            )
+
         oms_result = self._dispatch(position, context, plan)
         latency = (time.perf_counter() - t0) * 1000.0
 

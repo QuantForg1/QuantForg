@@ -906,6 +906,31 @@ class InstitutionalIteRuntime:
                     live_px = Decimal(str(getattr(live, "current_price", 0) or 0))
                 except Exception:
                     live_px = None
+                # Repair understated 1R from bad PME snapshot (inflates R / skips BE).
+                try:
+                    broker_sl = Decimal(
+                        str(
+                            getattr(live, "stop_loss", 0)
+                            or getattr(live, "sl", 0)
+                            or 0
+                        )
+                    )
+                    entry_px = Decimal(str(getattr(pos, "entry_price", 0) or 0))
+                    if broker_sl > 0 and entry_px > 0:
+                        broker_risk = abs(entry_px - broker_sl)
+                        cur_risk = Decimal(str(getattr(pos, "risk_distance", 0) or 0))
+                        if broker_risk > cur_risk * Decimal("1.2"):
+                            logger.warning(
+                                "pme_risk_distance_repaired",
+                                ticket=ticket,
+                                old_risk=str(cur_risk),
+                                new_risk=str(broker_risk),
+                                broker_sl=str(broker_sl),
+                            )
+                            pos.risk_distance = broker_risk
+                            pos.initial_stop = broker_sl
+                except Exception:
+                    logger.exception("pme_risk_distance_repair_failed", ticket=ticket)
             fallback_mid = account.mid_price or Decimal("0")
             # Prefer broker mark for THIS ticket; only fall back to account mid
             # when it is same-symbol scale (avoid 1.15 mid on a 4060 gold book).
@@ -1030,6 +1055,11 @@ class InstitutionalIteRuntime:
                         action=str(action_v),
                         reason=reason,
                         mid=str(current_px),
+                        plan_reason=str(
+                            getattr(getattr(result, "record", None), "reason", "")
+                            or getattr(result, "reason", "")
+                            or ""
+                        ),
                     )
                 to_state = getattr(getattr(result, "record", None), "to_state", None)
                 to_v = getattr(to_state, "value", to_state)

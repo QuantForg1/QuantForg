@@ -177,27 +177,46 @@ def recover_positions_from_mt5(
                         logger.exception("pme_flag_restore_failed", ticket=ticket)
             continue
 
-        snap = snapshot_by_ticket.get(ticket, {})
+            snap = snapshot_by_ticket.get(ticket, {})
         try:
             side = str(getattr(row, "side", "buy") or "buy").lower()
             entry = Decimal(str(getattr(row, "open_price", 0) or 0))
             volume = Decimal(str(getattr(row, "volume", 0) or 0))
             broker_sl = Decimal(str(getattr(row, "stop_loss", 0) or 0))
             broker_tp = Decimal(str(getattr(row, "take_profit", 0) or 0))
-            sl = Decimal(str(snap.get("current_stop") or snap.get("initial_stop") or 0))
-            if sl <= 0 and broker_sl > 0:
-                sl = broker_sl
-            if sl <= 0:
+            snap_sl = Decimal(
+                str(snap.get("current_stop") or snap.get("initial_stop") or 0)
+            )
+            # Broker SL defines 1R. Snapshot stops may already be BE/trail and
+            # must not shrink risk_distance (that inflates R and skips real BE).
+            if broker_sl > 0:
+                initial_sl = broker_sl
+                risk = abs(entry - broker_sl) or Decimal("1")
+                if side == "sell":
+                    # Tighter protective stop = lower price
+                    current_sl = (
+                        min(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
+                    )
+                else:
+                    current_sl = (
+                        max(snap_sl, broker_sl) if snap_sl > 0 else broker_sl
+                    )
+            elif snap_sl > 0:
+                initial_sl = snap_sl
+                current_sl = snap_sl
+                risk = abs(entry - snap_sl) or Decimal("1")
+            else:
                 # Last resort only — prefer broker SL; never invent when SL exists
-                sl = (
+                initial_sl = (
                     entry * Decimal("0.99")
                     if side == "buy"
                     else entry * Decimal("1.01")
                 )
+                current_sl = initial_sl
+                risk = abs(entry - initial_sl) or Decimal("1")
             tp = Decimal(str(snap.get("current_tp") or 0))
             if tp <= 0 and broker_tp > 0:
                 tp = broker_tp
-            risk = abs(entry - sl) or Decimal("1")
             opened = datetime.now(UTC)
             opened_raw = getattr(row, "opened_at", None)
             if isinstance(opened_raw, datetime):
@@ -215,11 +234,11 @@ def recover_positions_from_mt5(
                 entry_price=entry,
                 initial_volume=volume,
                 remaining_volume=volume,
-                initial_stop=sl,
+                initial_stop=initial_sl,
                 risk_distance=risk,
                 opened_at=opened,
                 state=state,
-                current_stop=Decimal(str(snap.get("current_stop") or sl)),
+                current_stop=current_sl,
                 current_tp=tp,
                 be_moved=bool(snap.get("be_moved", False)),
                 partial_done=bool(snap.get("partial_done", False)),

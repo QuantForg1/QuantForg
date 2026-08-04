@@ -299,9 +299,17 @@ def plan_action(
     ):
         new_sl = break_even_stop(position, config)
         if not is_stop_improvement(position, new_sl):
+            # Stop already at/better than BE — still advance so partial/trail run.
             return PlannedAction(
-                ManageActionKind.NOOP,
-                "BE candidate does not improve stop",
+                ManageActionKind.BREAK_EVEN,
+                (
+                    f"Break-even already protected at {r}R "
+                    f"(candidate {new_sl} does not improve "
+                    f"{position.current_stop}) — advance BE_MOVED"
+                ),
+                new_sl=None,
+                new_tp=position.current_tp if position.current_tp > 0 else None,
+                target_state=PositionLifecycleState.BE_MOVED,
             )
         return PlannedAction(
             ManageActionKind.BREAK_EVEN,
