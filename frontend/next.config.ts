@@ -101,6 +101,10 @@ const nextConfig: NextConfig = {
       { source: "/ai-learning", destination: "/live-learning-program", permanent: false },
       { source: "/signal-history", destination: "/signal-intelligence?tab=history", permanent: false },
       { source: "/heat-map", destination: "/signal-intelligence?tab=heatmap", permanent: false },
+      { source: "/System/API%20Inspector", destination: "/api-inspector", permanent: false },
+      { source: "/System/API Inspector", destination: "/api-inspector", permanent: false },
+      { source: "/system/api-inspector", destination: "/api-inspector", permanent: false },
+      { source: "/api-logs", destination: "/api-inspector", permanent: false },
     ];
   },
   async headers() {

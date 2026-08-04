@@ -6,6 +6,8 @@ import { PageMotion } from "@/components/desk/motion";
 import { Button } from "@/components/ui/button";
 import { MissionControlWorkspace } from "@/components/ops/mission-control-workspace";
 import { PlatformStatusBoard } from "@/components/ops/platform-status-board";
+import { EventTimelinePanel } from "@/components/ops/event-timeline-panel";
+import { AutoRecoveryPanel } from "@/components/ops/auto-recovery-panel";
 
 export default function MissionControlPage() {
   return (
@@ -19,13 +21,13 @@ export default function MissionControlPage() {
               <Link href="/ops">Ops control</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/monitoring">Monitoring</Link>
+              <Link href="/api-inspector">API Inspector</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/order-monitor">Order Monitor</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
               <Link href="/terminal">Terminal</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/broker">Broker</Link>
             </Button>
           </div>
         }
@@ -33,6 +35,13 @@ export default function MissionControlPage() {
       <PageMotion>
         <div className="space-y-6">
           <PlatformStatusBoard />
+          <AutoRecoveryPanel />
+          <section className="space-y-3">
+            <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+              Event timeline
+            </h2>
+            <EventTimelinePanel />
+          </section>
           <MissionControlWorkspace />
         </div>
       </PageMotion>

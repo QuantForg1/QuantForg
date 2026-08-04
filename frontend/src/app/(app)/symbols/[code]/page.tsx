@@ -1,33 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { use } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageMotion } from "@/components/desk/motion";
 import { Button } from "@/components/ui/button";
-import { LogViewerWorkspace } from "@/components/ops/log-viewer-workspace";
+import { SymbolExperienceWorkspace } from "@/components/ops/symbol-experience-workspace";
 
-export default function LogsPage() {
+export default function SymbolPage({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}) {
+  const { code } = use(params);
   return (
     <div>
       <PageHeader
-        title="Logs"
-        description="LIVE operational log stream — execution journal, ITE audit, ops audit, and client error buffer."
+        title="Symbol"
+        description="LIVE chart, spread, signal quality, positions, and history — never fabricated."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
-              <Link href="/api-inspector">API Inspector</Link>
+              <Link href="/symbol-management">Symbol Management</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/monitoring">Monitoring</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/mission-control">Mission Control</Link>
+              <Link href="/terminal">Terminal</Link>
             </Button>
           </div>
         }
       />
       <PageMotion>
-        <LogViewerWorkspace />
+        <SymbolExperienceWorkspace code={code} />
       </PageMotion>
     </div>
   );

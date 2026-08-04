@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Cable, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TerminalSymbolSwitcher } from "@/components/terminal/symbol-switcher";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { num, str } from "@/lib/desk";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -16,12 +17,14 @@ import type { RealtimeStatus } from "@/lib/realtime/types";
  */
 export const TerminalSessionBar = memo(function TerminalSessionBar({
   symbol,
+  onSymbolChange,
   bid,
   ask,
   realtime,
   className,
 }: {
   symbol: string;
+  onSymbolChange?: (code: string) => void;
   bid?: number;
   ask?: number;
   realtime?: RealtimeStatus;
@@ -69,9 +72,13 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
           <span className="text-[var(--fg-subtle)]"> · </span>
           {str(session.login, "—")}
         </span>
-        <span className="hidden truncate font-mono text-[11px] font-medium text-[var(--fg)] sm:inline">
-          {symbol}
-        </span>
+        {onSymbolChange ? (
+          <TerminalSymbolSwitcher symbol={symbol} onSelect={onSymbolChange} />
+        ) : (
+          <span className="hidden truncate font-mono text-[11px] font-medium text-[var(--fg)] sm:inline">
+            {symbol}
+          </span>
+        )}
         {spread != null ? (
           <span className="hidden tabular text-[10px] text-[var(--fg-subtle)] md:inline">
             spr {spread.toFixed(5)}

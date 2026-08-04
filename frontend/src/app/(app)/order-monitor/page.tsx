@@ -4,30 +4,30 @@ import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageMotion } from "@/components/desk/motion";
 import { Button } from "@/components/ui/button";
-import { LogViewerWorkspace } from "@/components/ops/log-viewer-workspace";
+import { OrderMonitorWorkspace } from "@/components/ops/order-monitor-workspace";
 
-export default function LogsPage() {
+export default function OrderMonitorPage() {
   return (
     <div>
       <PageHeader
-        title="Logs"
-        description="LIVE operational log stream — execution journal, ITE audit, ops audit, and client error buffer."
+        title="Order Monitor"
+        description="LIVE order lifecycle — Pending → Risk → OMS → Gateway → Broker → Accepted/Rejected → PME → Closed."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
-              <Link href="/api-inspector">API Inspector</Link>
+              <Link href="/orders">Orders</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/monitoring">Monitoring</Link>
+              <Link href="/executions">Executions</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/mission-control">Mission Control</Link>
+              <Link href="/execution/diagnostics">Diagnostics</Link>
             </Button>
           </div>
         }
       />
       <PageMotion>
-        <LogViewerWorkspace />
+        <OrderMonitorWorkspace />
       </PageMotion>
     </div>
   );

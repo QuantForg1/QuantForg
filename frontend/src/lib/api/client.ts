@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/connectivity";
 import { newRequestId } from "@/lib/observability/context";
 import { captureError } from "@/lib/observability/error-monitor";
+import { recordApiRequestSample } from "@/lib/api/request-log";
 
 export class ApiError extends Error {
   status: number;
@@ -234,6 +235,28 @@ export async function apiFetch<T>(
   const timeoutMs =
     options.timeoutMs !== undefined ? options.timeoutMs : defaultTimeoutForPath(safePath);
   const { signal: effectiveSignal, cleanup } = mergeAbortSignals(signal, timeoutMs);
+  const started = performance.now();
+  let retries = 0;
+
+  const record = (partial: {
+    status: number;
+    sizeBytes?: number | null;
+    timedOut?: boolean;
+    error?: string;
+  }) => {
+    if (silent && partial.status >= 200 && partial.status < 400) return;
+    recordApiRequestSample({
+      method,
+      path: safePath,
+      status: partial.status,
+      latencyMs: Math.round(performance.now() - started),
+      sizeBytes: partial.sizeBytes ?? null,
+      retries,
+      timedOut: Boolean(partial.timedOut),
+      error: partial.error,
+      requestId,
+    });
+  };
 
   let res: Response;
   try {
@@ -248,6 +271,11 @@ export async function apiFetch<T>(
     const networkErr = toNetworkApiError(err, requestId);
     if (networkErr.code === "timeout") noteApiTimeout();
     else noteApiNetworkFailure();
+    record({
+      status: networkErr.status,
+      timedOut: networkErr.code === "timeout",
+      error: networkErr.message,
+    });
     if (!silent) {
       captureError(kind, networkErr, {
         request_id: requestId,
@@ -269,6 +297,7 @@ export async function apiFetch<T>(
     }
     const next = await refreshPromise;
     if (next) {
+      retries += 1;
       headers.Authorization = `Bearer ${next}`;
       try {
         res = await fetch(url, {
@@ -283,6 +312,11 @@ export async function apiFetch<T>(
         const networkErr = toNetworkApiError(err, requestId);
         if (networkErr.code === "timeout") noteApiTimeout();
         else noteApiNetworkFailure();
+        record({
+          status: networkErr.status,
+          timedOut: networkErr.code === "timeout",
+          error: networkErr.message,
+        });
         if (!silent) {
           captureError(kind, networkErr, {
             request_id: requestId,
@@ -298,11 +332,19 @@ export async function apiFetch<T>(
 
   cleanup();
 
+  const sizeHeader = res.headers.get("content-length");
+  const sizeBytes = sizeHeader ? Number(sizeHeader) : null;
+
   if (!res.ok) {
     try {
       await parseError(res, requestId);
     } catch (e) {
       const apiErr = e instanceof ApiError ? e : null;
+      record({
+        status: res.status,
+        sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null,
+        error: apiErr?.message || (e instanceof Error ? e.message : "Request failed"),
+      });
       if (!silent) {
         captureError(kind, e, {
           request_id: apiErr?.requestId || requestId,
@@ -314,8 +356,18 @@ export async function apiFetch<T>(
       throw e;
     }
   }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+
+  if (res.status === 204) {
+    record({ status: 204, sizeBytes: 0 });
+    return undefined as T;
+  }
+  const text = await res.text();
+  record({
+    status: res.status,
+    sizeBytes: text.length || (Number.isFinite(sizeBytes) ? sizeBytes : null),
+  });
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export { isNetworkFailure };

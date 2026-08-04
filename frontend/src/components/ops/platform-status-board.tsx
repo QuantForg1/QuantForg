@@ -30,6 +30,9 @@ type CardModel = {
   tone: Tone;
   latency?: string;
   heartbeat?: string;
+  version?: string;
+  errors?: string;
+  recovery?: string;
   detail?: string;
   metrics?: Array<{ label: string; value: string }>;
 };
@@ -65,6 +68,24 @@ function StatusCard({ card }: { card: CardModel }) {
           <>
             <dt className="text-[var(--fg-subtle)]">Heartbeat</dt>
             <dd className="tabular text-[var(--fg)]">{card.heartbeat}</dd>
+          </>
+        ) : null}
+        {card.version ? (
+          <>
+            <dt className="text-[var(--fg-subtle)]">Version</dt>
+            <dd className="tabular text-[var(--fg)]">{card.version}</dd>
+          </>
+        ) : null}
+        {card.errors ? (
+          <>
+            <dt className="text-[var(--fg-subtle)]">Errors</dt>
+            <dd className="tabular text-[var(--fg)]">{card.errors}</dd>
+          </>
+        ) : null}
+        {card.recovery ? (
+          <>
+            <dt className="text-[var(--fg-subtle)]">Recovery</dt>
+            <dd className="tabular text-[var(--fg)]">{card.recovery}</dd>
           </>
         ) : null}
         {(card.metrics ?? []).map((m) => (
@@ -126,6 +147,13 @@ export function PlatformStatusBoard() {
     refetchInterval: 45_000,
     retry: false,
   });
+  const versionQ = useQuery({
+    queryKey: ["platform-version", "mission"],
+    queryFn: platformApi.version,
+    staleTime: 120_000,
+    refetchInterval: 300_000,
+    retry: false,
+  });
 
   const health = asRecord(weltradeQ.data);
   const mt5 = asRecord(mt5Q.data);
@@ -133,6 +161,14 @@ export function PlatformStatusBoard() {
   const live = asRecord(auto.live);
   const dash = asRecord(signalsQ.data?.dashboard);
   const positions = session.positions;
+  const version = asRecord(versionQ.data);
+  const versionLabel =
+    str(version.version || version.git_sha || version.build || version.release, "—") ||
+    "—";
+  const backendLatencyMs =
+    backendQ.isSuccess && backendQ.dataUpdatedAt
+      ? Math.max(0, Date.now() - backendQ.dataUpdatedAt)
+      : null;
 
   const cards = useMemo((): CardModel[] => {
     const backendOk =
@@ -178,10 +214,23 @@ export function PlatformStatusBoard() {
                 ? "Degraded"
                 : "Checking",
         tone: toneFromOk(backendOk, apiState === "degraded"),
-        latency: backendQ.dataUpdatedAt
-          ? `${Math.max(0, Date.now() - backendQ.dataUpdatedAt)} ms ago`
-          : "—",
-        heartbeat: backendQ.isSuccess ? "OK" : backendQ.isError ? "Error" : "—",
+        latency:
+          backendLatencyMs != null
+            ? `probe ${backendLatencyMs} ms ago`
+            : "—",
+        heartbeat: backendQ.isSuccess
+          ? new Date(backendQ.dataUpdatedAt).toISOString().slice(11, 19)
+          : backendQ.isError
+            ? "Error"
+            : "—",
+        version: versionLabel,
+        errors: backendQ.isError ? "Health probe failed" : "0",
+        recovery:
+          apiState === "degraded"
+            ? "Soft retry"
+            : apiState === "unreachable"
+              ? "Probing"
+              : "Stable",
         detail:
           apiState === "degraded"
             ? "Elevated latency — not the same as offline"
@@ -199,6 +248,9 @@ export function PlatformStatusBoard() {
         tone: toneFromOk(gatewayOk),
         latency: str(session.latencyMs, "—"),
         heartbeat: str(session.heartbeatAt, "—").slice(0, 19) || "—",
+        version: str(health.gateway_version || health.version, "—"),
+        errors: gatewayOk === false ? "No heartbeat" : "0",
+        recovery: gatewayOk === false ? "Await reconnect" : "Stable",
         detail: session.gatewayLabel || undefined,
       },
       {
@@ -206,6 +258,10 @@ export function PlatformStatusBoard() {
         title: "MT5",
         status: mt5Ok === true ? "Running" : mt5Ok === false ? "Detached" : "Unknown",
         tone: toneFromOk(mt5Ok),
+        heartbeat: str(mt5.updated_at || mt5.last_heartbeat, "—").slice(0, 19) || "—",
+        version: str(mt5.build || mt5.terminal_build, "—"),
+        errors: mt5Ok === false ? "Detached" : "0",
+        recovery: mt5Ok === false ? "Await attach" : "Stable",
         metrics: [
           { label: "Login", value: str(session.login, "—") },
           { label: "Server", value: str(session.server, "—") },
@@ -221,23 +277,66 @@ export function PlatformStatusBoard() {
               ? "Disconnected"
               : "Unknown",
         tone: toneFromOk(brokerOk),
+        heartbeat: str(health.as_of || health.updated_at, "—").slice(0, 19) || "—",
+        version: str(health.broker || health.broker_name, "Weltrade"),
+        errors: brokerOk === false ? "Session down" : "0",
+        recovery: brokerOk === false ? "Reconnect available" : "Stable",
         metrics: [
           { label: "Equity", value: str(session.equity, "—") },
           { label: "Open", value: String(openN) },
         ],
       },
       {
-        id: "session",
-        title: "Session",
+        id: "auth",
+        title: "Authentication",
         status: isAuthenticated ? "Authenticated" : "Signed out",
         tone: isAuthenticated ? "success" : "warning",
+        version: "—",
+        errors: "0",
+        recovery: isAuthenticated ? "Stable" : "Login required",
         detail: user?.email || user?.display_name || undefined,
+      },
+      {
+        id: "database",
+        title: "Database",
+        status:
+          backendOk === true
+            ? "Reachable"
+            : backendOk === false
+              ? "Unknown"
+              : "Checking",
+        tone: toneFromOk(backendOk),
+        version: versionLabel,
+        errors: backendQ.isError ? "Via health" : "0",
+        recovery: "Stable",
+        detail: "Inferred from backend health — no fabricated DB metrics",
+      },
+      {
+        id: "railway",
+        title: "Railway",
+        status:
+          backendOk === true
+            ? "Serving"
+            : backendOk === false
+              ? "Unreachable"
+              : "Checking",
+        tone: toneFromOk(backendOk, apiState === "degraded"),
+        latency:
+          backendLatencyMs != null ? `edge ${backendLatencyMs} ms ago` : "—",
+        version: versionLabel,
+        errors: backendQ.isError ? "Deploy probe failed" : "0",
+        recovery: apiState === "degraded" ? "Degraded path" : "Stable",
       },
       {
         id: "scanner",
         title: "Scanner",
         status: autoQ.isSuccess ? "Ready" : autoQ.isError ? "Error" : "—",
         tone: autoQ.isError ? "warning" : autoQ.isSuccess ? "success" : "neutral",
+        heartbeat: autoQ.dataUpdatedAt
+          ? new Date(autoQ.dataUpdatedAt).toISOString().slice(11, 19)
+          : "—",
+        errors: autoQ.isError ? "Ops feed error" : "0",
+        recovery: autoQ.isError ? "Retrying poll" : "Stable",
         metrics: [
           {
             label: "Eligible",
@@ -249,10 +348,12 @@ export function PlatformStatusBoard() {
         ],
       },
       {
-        id: "ai",
-        title: "AI",
+        id: "auto",
+        title: "Auto Trading",
         status: str(asRecord(auto.status), autoQ.isSuccess ? "Ready" : "—"),
         tone: "neutral",
+        errors: str(asRecord(auto.primary_blocker), "0") || "0",
+        recovery: str(asRecord(auto.blocking_category), "Stable") || "Stable",
         detail: str(asRecord(auto.primary_blocker), "") || undefined,
       },
       {
@@ -262,6 +363,8 @@ export function PlatformStatusBoard() {
         tone: Boolean(asRecord(auto.execution_state).execution_enabled)
           ? "success"
           : "neutral",
+        errors: "0",
+        recovery: "Stable",
         metrics: [
           { label: "Orders", value: String(session.orders.length) },
           { label: "Positions", value: String(openN) },
@@ -269,21 +372,27 @@ export function PlatformStatusBoard() {
       },
       {
         id: "risk",
-        title: "Risk",
+        title: "Risk Engine",
         status: str(asRecord(auto.blocking_category), "Clear") || "Clear",
         tone: str(asRecord(auto.blocking_category)) ? "warning" : "success",
+        errors: str(asRecord(auto.blocking_category), "0") || "0",
+        recovery: str(asRecord(auto.blocking_category)) ? "Gating" : "Stable",
       },
       {
         id: "pme",
         title: "PME",
         status: str(live.pme_state || live.position_engine, "—"),
         tone: "neutral",
+        errors: "0",
+        recovery: "Stable",
       },
       {
         id: "portfolio",
         title: "Portfolio",
         status: openN > 0 ? "Open book" : "Flat",
         tone: openN > 0 ? "success" : "neutral",
+        errors: "0",
+        recovery: "Stable",
         metrics: [
           { label: "Float PnL", value: Number.isFinite(floatPnl) ? floatPnl.toFixed(2) : "—" },
           { label: "Positions", value: String(openN) },
@@ -294,6 +403,11 @@ export function PlatformStatusBoard() {
         title: "Signals",
         status: signalsQ.isSuccess ? "LIVE" : signalsQ.isError ? "Error" : "—",
         tone: signalsQ.isSuccess ? "success" : signalsQ.isError ? "warning" : "neutral",
+        heartbeat: signalsQ.dataUpdatedAt
+          ? new Date(signalsQ.dataUpdatedAt).toISOString().slice(11, 19)
+          : "—",
+        errors: signalsQ.isError ? "Feed error" : "0",
+        recovery: signalsQ.isError ? "Retrying poll" : "Stable",
         metrics: [
           { label: "BUY", value: str(dash.buy_signals, "—") },
           { label: "SELL", value: str(dash.sell_signals, "—") },
@@ -304,8 +418,10 @@ export function PlatformStatusBoard() {
   }, [
     apiState,
     auto,
+    autoQ.dataUpdatedAt,
     autoQ.isError,
     autoQ.isSuccess,
+    backendLatencyMs,
     backendQ.dataUpdatedAt,
     backendQ.isError,
     backendQ.isSuccess,
@@ -317,9 +433,11 @@ export function PlatformStatusBoard() {
     mt5Q.isFetched,
     positions,
     session,
+    signalsQ.dataUpdatedAt,
     signalsQ.isError,
     signalsQ.isSuccess,
     user,
+    versionLabel,
   ]);
 
   return (

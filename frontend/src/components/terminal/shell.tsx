@@ -407,6 +407,7 @@ export function TerminalShell() {
         </div>
         <TerminalSessionBar
           symbol={symbol}
+          onSymbolChange={onSymbolSelect}
           bid={bidOk}
           ask={askOk}
           realtime={realtime}

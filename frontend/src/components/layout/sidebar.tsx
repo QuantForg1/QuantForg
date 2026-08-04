@@ -97,25 +97,59 @@ function NavBody({
   collapsed?: boolean;
   onNavigate?: () => void;
 }) {
+  const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("qf.nav.sections.v1");
+      if (raw) setSectionOpen(JSON.parse(raw) as Record<string, boolean>);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleSection = useCallback((title: string) => {
+    setSectionOpen((prev) => {
+      const next = { ...prev, [title]: !(prev[title] ?? true) };
+      try {
+        localStorage.setItem("qf.nav.sections.v1", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
       <ul className="space-y-0.5">
         {primaryRail.map((item, index) => {
           const prev = index > 0 ? primaryRail[index - 1] : undefined;
           const sectionChanged = item.section !== prev?.section;
+          const sectionTitle = item.section || "";
+          const open = !sectionTitle || (sectionOpen[sectionTitle] ?? true);
           const showSection = !collapsed && Boolean(item.section) && sectionChanged;
+
+          if (!collapsed && !open && !sectionChanged) {
+            return null;
+          }
+
           return (
             <Fragment key={`${item.href}:${item.label}`}>
               {showSection ? (
                 <li className="list-none">
-                  <p
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(sectionTitle)}
                     className={cn(
-                      "mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]",
+                      "mb-1 flex w-full items-center justify-between px-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)] hover:text-[var(--fg-muted)]",
                       index > 0 && "mt-3",
                     )}
+                    aria-expanded={open}
                   >
-                    {item.section}
-                  </p>
+                    <span>{item.section}</span>
+                    <span className="tabular text-[9px]">{open ? "−" : "+"}</span>
+                  </button>
                 </li>
               ) : null}
               {collapsed && sectionChanged && index > 0 ? (
@@ -123,11 +157,13 @@ function NavBody({
                   <div className="my-1.5" role="separator" />
                 </li>
               ) : null}
-              <PrimaryLink
-                item={item}
-                collapsed={collapsed}
-                onNavigate={onNavigate}
-              />
+              {collapsed || open ? (
+                <PrimaryLink
+                  item={item}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              ) : null}
             </Fragment>
           );
         })}
