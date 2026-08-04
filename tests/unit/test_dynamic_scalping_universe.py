@@ -118,7 +118,28 @@ def test_symbol_stats_demote_after_hard_fails(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_quality_floors_unchanged_by_dynamic_universe() -> None:
+def test_dynamic_universe_not_shrunk_by_static_plane_allowlist() -> None:
+    """Ops plane seed of 10 must not erase broker-discovered liquid symbols."""
+    from unittest.mock import MagicMock
+
+    rows = [
+        {"code": "EURUSD", "trade_mode": 4},
+        {"code": "EURJPY", "trade_mode": 4},
+        {"code": "XAGUSD", "trade_mode": 4},
+        {"code": "GBPJPY", "trade_mode": 4},
+    ]
+    plane = MagicMock()
+    plane.allowed_symbols = tuple(DEFAULT_SCALPING_UNIVERSE)
+    uni = resolve_scan_universe(
+        DEFAULT_AI_SCALPING_CONFIG,
+        plane=plane,
+        broker_symbol_rows=rows,
+        session="london",
+    )
+    assert "EURJPY" in uni
+    assert "XAGUSD" in uni
+    assert "GBPJPY" in uni
+    assert len(uni) > len(DEFAULT_SCALPING_UNIVERSE)
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.normal_vol.quality == 74
     assert cfg.normal_vol.confidence == 71

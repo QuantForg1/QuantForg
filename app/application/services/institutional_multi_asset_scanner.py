@@ -156,22 +156,31 @@ def resolve_scan_universe(
             if str(s).strip()
         )
         if allowed:
-            # Defense: never let a stale gold-only plane collapse MULTI_SYMBOL scan.
             try:
                 from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
 
-                if not gold_only_enabled() and (
-                    len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}
-                ):
-                    pass  # keep base
+                if gold_only_enabled():
+                    gold_only = tuple(s for s in base if s == GOLD_SYMBOL)
+                    base = gold_only or (GOLD_SYMBOL,)
+                elif len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}:
+                    # Stale gold-only plane — keep dynamic / seed base
+                    pass
+                elif getattr(cfg, "dynamic_universe_enabled", False) and broker_symbol_rows:
+                    # LIVE broker discovery owns membership; plane must not
+                    # shrink the liquid scalping universe back to a static seed.
+                    pass
                 else:
                     allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
                     filtered = tuple(s for s in base if s in allowed_set)
                     base = filtered or base
             except Exception:
-                allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
-                filtered = tuple(s for s in base if s in allowed_set)
-                base = filtered or base
+                if not (
+                    getattr(cfg, "dynamic_universe_enabled", False)
+                    and broker_symbol_rows
+                ):
+                    allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
+                    filtered = tuple(s for s in base if s in allowed_set)
+                    base = filtered or base
 
     if getattr(cfg, "session_symbol_priority_enabled", True):
         try:
