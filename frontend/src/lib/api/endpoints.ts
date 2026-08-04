@@ -2999,11 +2999,11 @@ export const platformApi = {
   health: () =>
     apiFetch<Record<string, unknown>>(
       `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/health`,
-      { auth: false },
+      { auth: false, silent: true, timeoutMs: 8_000 },
     ),
   healthLive: () =>
     apiFetch<Record<string, unknown>>(
       `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/health/live`,
-      { auth: false },
+      { auth: false, silent: true, timeoutMs: 8_000 },
     ),
 };

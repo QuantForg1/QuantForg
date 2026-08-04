@@ -56,9 +56,13 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
       aria-label="Session"
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <Badge tone={session.connected ? "success" : "warning"} className="shrink-0 h-5 px-1.5 text-[10px]">
+        <Badge tone={session.connected ? "success" : session.gatewayOnline ? "warning" : "neutral"} className="shrink-0 h-5 px-1.5 text-[10px]">
           <span className="qf-status-dot mr-1 h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
-          {session.connected ? "Live" : "Offline"}
+          {session.connected
+            ? "Broker live"
+            : session.gatewayOnline
+              ? "Gateway only"
+              : "Broker off"}
         </Badge>
         <span className="truncate qf-caption tabular text-[var(--fg-muted)]">
           {str(session.server, "—")}

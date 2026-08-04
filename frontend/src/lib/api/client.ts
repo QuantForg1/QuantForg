@@ -10,7 +10,8 @@ import {
 import {
   isNetworkFailure,
   markApiReachable,
-  markApiUnreachable,
+  noteApiNetworkFailure,
+  noteApiTimeout,
 } from "@/lib/api/connectivity";
 import { newRequestId } from "@/lib/observability/context";
 import { captureError } from "@/lib/observability/error-monitor";
@@ -38,8 +39,10 @@ export class ApiError extends Error {
 }
 
 /** Default hard timeout so UI never spins forever on a hung API. */
-export const API_DEFAULT_TIMEOUT_MS = 20_000;
+export const API_DEFAULT_TIMEOUT_MS = 25_000;
 export const API_AUTH_TIMEOUT_MS = 15_000;
+export const API_HEALTH_TIMEOUT_MS = 8_000;
+export const API_HEAVY_TIMEOUT_MS = 45_000;
 
 type RequestOptions = {
   method?: string;
@@ -149,8 +152,9 @@ async function refreshAccessToken(): Promise<string | null> {
     saveSession(session, { remember: isRememberMeEnabled() });
     markApiReachable();
     return session.access_token;
-  } catch {
-    markApiUnreachable();
+  } catch (err) {
+    if (isAbortError(err)) noteApiTimeout();
+    else noteApiNetworkFailure();
     return null;
   } finally {
     cleanup();
@@ -185,8 +189,25 @@ function toNetworkApiError(err: unknown, requestId: string): ApiError {
 
 function defaultTimeoutForPath(path: string): number {
   const p = path.startsWith("http") ? new URL(path).pathname : path;
-  if (p.includes("/auth/login") || p.includes("/auth/refresh") || p.includes("/auth/me")) {
+  if (
+    p.includes("/auth/login") ||
+    p.includes("/auth/refresh") ||
+    p.includes("/auth/me")
+  ) {
     return API_AUTH_TIMEOUT_MS;
+  }
+  if (p.endsWith("/health") || p.includes("/health/") || p.endsWith("/health/live")) {
+    return API_HEALTH_TIMEOUT_MS;
+  }
+  if (
+    p.includes("/mt5") ||
+    p.includes("/weltrade") ||
+    p.includes("/signals") ||
+    p.includes("/symbol") ||
+    p.includes("/auto-trading") ||
+    p.includes("/ite")
+  ) {
+    return API_HEAVY_TIMEOUT_MS;
   }
   return API_DEFAULT_TIMEOUT_MS;
 }
@@ -224,8 +245,9 @@ export async function apiFetch<T>(
     });
   } catch (err) {
     cleanup();
-    markApiUnreachable();
     const networkErr = toNetworkApiError(err, requestId);
+    if (networkErr.code === "timeout") noteApiTimeout();
+    else noteApiNetworkFailure();
     if (!silent) {
       captureError(kind, networkErr, {
         request_id: requestId,
@@ -258,8 +280,9 @@ export async function apiFetch<T>(
         markApiReachable();
       } catch (err) {
         cleanup();
-        markApiUnreachable();
         const networkErr = toNetworkApiError(err, requestId);
+        if (networkErr.code === "timeout") noteApiTimeout();
+        else noteApiNetworkFailure();
         if (!silent) {
           captureError(kind, networkErr, {
             request_id: requestId,

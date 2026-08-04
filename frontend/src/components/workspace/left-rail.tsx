@@ -32,12 +32,11 @@ const ALL_CATS = [
   "all",
   "favorites",
   "forex",
-  "gold",
+  "metals",
   "crypto",
   "indices",
+  "energy",
   "commodities",
-  "silver",
-  "oil",
   "stocks",
 ] as const;
 
@@ -50,9 +49,9 @@ const VISIBLE_CATS = MULTI_SYMBOL_ENABLED ? ALL_CATS : GOLD_ONLY_CATS;
 function matchesCategory(code: string, cat: MarketCategory): boolean {
   const u = code.toUpperCase();
   if (cat === "all" || cat === "favorites") return true;
-  if (cat === "gold") return u.includes("XAU") || u.includes("GOLD");
-  if (cat === "silver") return u.includes("XAG") || u.includes("SILVER");
-  if (cat === "oil") return /XTI|XBR|OIL|BRENT|WTI|NATGAS/.test(u);
+  if (cat === "metals") return /XAU|XAG|GOLD|SILVER/.test(u);
+  if (cat === "energy") return /XTI|XBR|OIL|BRENT|WTI|NATGAS|XNG/.test(u);
+  if (cat === "commodities") return /XTI|XBR|OIL|COPPER|WHEAT|CORN/.test(u);
   return classifySymbol(code) === cat;
 }
 
@@ -189,7 +188,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
                 <span className="text-[10px] tabular text-[var(--fg-subtle)]">{latencyMs} ms</span>
               ) : null}
               <Badge tone={connected ? "success" : "warning"} className="text-[10px]">
-                {connected ? "Live" : "Offline"}
+                {connected ? "Live" : "Broker off"}
               </Badge>
             </div>
           ) : null}
