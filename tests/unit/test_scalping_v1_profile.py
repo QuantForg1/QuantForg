@@ -1,0 +1,92 @@
+"""SCALPING_V1 — Professional AI Scalping Engine production profile tests."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+
+from app.application.services.ai_scalping_mode import pme_config_for_scalping
+from app.domain.institutional_trading.ai_scalping.config import (
+    DEFAULT_AI_SCALPING_CONFIG,
+    scalping_ite_config,
+)
+from app.domain.institutional_trading.ai_scalping.profiles import (
+    ACTIVE_PRODUCTION_PROFILE,
+    SCALPING_V1,
+    SCALPING_V1_ID,
+)
+from app.domain.institutional_trading.management.config import DEFAULT_PME_CONFIG
+
+
+@pytest.mark.unit
+def test_scalping_v1_is_production_default() -> None:
+    assert ACTIVE_PRODUCTION_PROFILE == SCALPING_V1_ID
+    assert DEFAULT_AI_SCALPING_CONFIG.quality_baseline == SCALPING_V1_ID
+    assert DEFAULT_AI_SCALPING_CONFIG.version == SCALPING_V1.version
+
+
+@pytest.mark.unit
+def test_scalping_v1_adaptive_quality_confluence_bands() -> None:
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    assert cfg.high_vol.quality == 72
+    assert cfg.high_vol.confidence == 70
+    assert cfg.normal_vol.quality == 74
+    assert cfg.normal_vol.confidence == 71
+    assert cfg.low_vol.quality == 75
+    assert cfg.low_vol.confidence == 72
+    # Bands stay within professional scalping envelope
+    assert 72 <= cfg.high_vol.quality <= 75
+    assert 70 <= cfg.high_vol.confidence <= 72
+
+
+@pytest.mark.unit
+def test_scalping_v1_hold_window() -> None:
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    assert cfg.typical_hold_min_minutes == 2
+    assert cfg.typical_hold_max_minutes == 10
+    assert cfg.absolute_max_hold_minutes == 12
+    assert cfg.time_stop_minutes == 8
+
+
+@pytest.mark.unit
+def test_scalping_v1_multi_opportunity_not_one_best_only() -> None:
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    assert cfg.max_entries_per_cycle >= 3
+    assert cfg.max_open_trades >= 3
+    assert cfg.require_probability_improvement is False
+    assert cfg.parallel_scan_enabled is True
+    assert cfg.multi_asset_scan_enabled is True
+
+
+@pytest.mark.unit
+def test_scalping_v1_pme_earlier_management() -> None:
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    pme = pme_config_for_scalping(cfg)
+    assert pme.break_even_at_r == Decimal("0.35")
+    assert pme.partial_at_r == Decimal("0.70")
+    assert pme.trail_after_r == Decimal("0.70")
+    assert pme.absolute_max_hold_minutes == 12
+    assert pme.time_stop_minutes == 8
+    assert pme.momentum_fade_exit is True
+    # Still earlier than institutional swing PME
+    assert pme.break_even_at_r < DEFAULT_PME_CONFIG.break_even_at_r
+    assert pme.partial_at_r < DEFAULT_PME_CONFIG.partial_at_r
+
+
+@pytest.mark.unit
+def test_scalping_v1_safety_locked() -> None:
+    cfg = DEFAULT_AI_SCALPING_CONFIG
+    assert cfg.allow_martingale is False
+    assert cfg.allow_grid is False
+    assert cfg.never_prefer_buy_only is True
+    assert cfg.self_protection_enabled is True
+
+
+@pytest.mark.unit
+def test_scalping_ite_maps_v1_floors() -> None:
+    ite = scalping_ite_config()
+    assert ite.trading_mode == "scalping"
+    assert ite.min_trade_quality_score == 74
+    assert ite.min_confluence_score == 71
+    assert ite.max_open_trades >= 3

@@ -118,12 +118,12 @@ def _weak_kwargs() -> dict:
 @pytest.mark.unit
 def test_config_preserves_quality_confidence_floors() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.version == "ai-scalping-v8.0.0"
-    assert cfg.quality_baseline == "ai-scalping-v6.3.0"
-    assert cfg.normal_vol.quality >= 80
-    assert cfg.normal_vol.confidence >= 80
-    assert cfg.low_vol.quality >= 80
-    assert cfg.low_vol.confidence >= 80
+    assert cfg.version.startswith("ai-scalping-v8")
+    assert cfg.quality_baseline == "SCALPING_V1"
+    assert 72 <= cfg.normal_vol.quality <= 75
+    assert 70 <= cfg.normal_vol.confidence <= 72
+    assert 72 <= cfg.low_vol.quality <= 75
+    assert 70 <= cfg.low_vol.confidence <= 72
     assert cfg.atr_compression_floor_pct == Decimal("0.20")
     assert cfg.atr_exceptional_floor_pct == Decimal("0.08")
     assert cfg.atr_hard_min_pct == Decimal("0.08")

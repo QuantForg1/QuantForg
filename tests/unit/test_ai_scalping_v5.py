@@ -85,7 +85,8 @@ def test_v5_mtf_and_risk_locked() -> None:
     assert cfg.typical_hold_max_minutes >= 10
     assert cfg.typical_hold_max_minutes <= 15
     assert cfg.typical_hold_min_minutes >= 1
-    assert cfg.normal_vol.confidence == 82
+    assert cfg.normal_vol.confidence == 71
+    assert cfg.quality_baseline == "SCALPING_V1"
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     ite = scalping_ite_config()
     assert ite.risk_per_trade_pct == cfg.risk_per_trade_pct

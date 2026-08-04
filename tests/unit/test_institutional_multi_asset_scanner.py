@@ -45,9 +45,10 @@ def test_institutional_watchlist_matches_approved_universe() -> None:
     assert DEFAULT_AI_SCALPING_CONFIG.multi_asset_scan_enabled is True
     assert DEFAULT_AI_SCALPING_CONFIG.parallel_scan_enabled is True
     assert DEFAULT_AI_SCALPING_CONFIG.max_entries_per_cycle >= 2
-    # Floors locked
-    assert DEFAULT_AI_SCALPING_CONFIG.normal_vol.quality == 82
-    assert DEFAULT_AI_SCALPING_CONFIG.normal_vol.confidence == 82
+    # SCALPING_V1 floors
+    assert DEFAULT_AI_SCALPING_CONFIG.normal_vol.quality == 74
+    assert DEFAULT_AI_SCALPING_CONFIG.normal_vol.confidence == 71
+    assert DEFAULT_AI_SCALPING_CONFIG.quality_baseline == "SCALPING_V1"
 
 
 @pytest.mark.unit

@@ -71,17 +71,18 @@ def _opp(
 def test_v7_universe_and_quality_risk_locked() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.version.startswith("ai-scalping-v8")
-    assert cfg.quality_baseline == "ai-scalping-v6.3.0"
+    assert cfg.quality_baseline == "SCALPING_V1"
     assert set(DEFAULT_SCALPING_UNIVERSE) == EXPECTED_UNIVERSE
     assert set(cfg.universe) == EXPECTED_UNIVERSE
-    # v6.3 quality / risk unchanged
-    assert cfg.normal_vol.confidence == 82
-    assert cfg.normal_vol.quality == 82
+    # SCALPING_V1 professional floors
+    assert cfg.normal_vol.confidence == 71
+    assert cfg.normal_vol.quality == 74
     assert cfg.min_expected_rr == Decimal("1.3")
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     assert cfg.max_open_trades == 5
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
+    assert cfg.absolute_max_hold_minutes == 12
 
 
 @pytest.mark.unit

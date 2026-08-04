@@ -44,7 +44,7 @@ def pme_config_for_scalping(
             abs_hold = cfg.absolute_max_hold_minutes
     return replace(
         DEFAULT_PME_CONFIG,
-        config_version=f"{DEFAULT_PME_CONFIG.config_version}+scalping-v6.3",
+        config_version=f"{DEFAULT_PME_CONFIG.config_version}+{cfg.version}",
         break_even_at_r=cfg.break_even_at_r,
         partial_at_r=partial_at,
         partial_close_pct=partial_pct,
@@ -130,10 +130,15 @@ def apply_trading_mode_to_runtime(
         logger.warning(
             "trading_mode_applied",
             mode=mode_l,
+            profile=getattr(scalp or DEFAULT_AI_SCALPING_CONFIG, "quality_baseline", None),
             ite_version=ite.config_version,
             max_open=ite.max_open_trades,
             plane_max_open=getattr(plane, "max_open_trades", None),
             tfs=[t.value for t in ite.analysis_timeframes()],
+            quality=int(getattr(scalp or DEFAULT_AI_SCALPING_CONFIG, "normal_vol").quality),
+            confluence=int(
+                getattr(scalp or DEFAULT_AI_SCALPING_CONFIG, "normal_vol").confidence
+            ),
         )
 
     return {

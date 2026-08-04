@@ -445,7 +445,17 @@ class AiScalpingConfig:
         }
 
 
-DEFAULT_AI_SCALPING_CONFIG = AiScalpingConfig()
+def _load_production_scalping_default() -> AiScalpingConfig:
+    """Production default = SCALPING_V1 Professional AI Scalping Engine."""
+    from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+        SCALPING_V1,
+    )
+
+    return SCALPING_V1
+
+
+# Intentional product change: professional scalping is the LIVE default.
+DEFAULT_AI_SCALPING_CONFIG = _load_production_scalping_default()
 
 
 def scalping_ite_config(

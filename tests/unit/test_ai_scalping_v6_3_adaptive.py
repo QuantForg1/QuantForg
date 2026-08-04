@@ -34,18 +34,25 @@ from app.domain.institutional_trading.management.policies import plan_action
 
 @pytest.mark.unit
 def test_v63_version_preserves_quality_and_risk() -> None:
+    # Class-field institutional baseline (historical) remains on AiScalpingConfig()
+    from app.domain.institutional_trading.ai_scalping.config import AiScalpingConfig
+
+    bare = AiScalpingConfig()
+    assert bare.normal_vol.confidence == 82
+    assert bare.normal_vol.quality == 82
+    # Production default is SCALPING_V1
     cfg = DEFAULT_AI_SCALPING_CONFIG
-    assert cfg.quality_baseline == "ai-scalping-v6.3.0"
+    assert cfg.quality_baseline == "SCALPING_V1"
     assert cfg.version.startswith("ai-scalping-v8")
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
     assert cfg.min_expected_rr >= Decimal("1.3")
     assert cfg.typical_hold_min_minutes == 2
-    assert cfg.typical_hold_max_minutes == 15
-    assert cfg.absolute_max_hold_minutes >= cfg.typical_hold_max_minutes
-    assert cfg.normal_vol.confidence == 82
-    assert cfg.normal_vol.quality == 82
+    assert cfg.typical_hold_max_minutes == 10
+    assert cfg.absolute_max_hold_minutes == 12
+    assert cfg.normal_vol.confidence == 71
+    assert cfg.normal_vol.quality == 74
 
 
 @pytest.mark.unit

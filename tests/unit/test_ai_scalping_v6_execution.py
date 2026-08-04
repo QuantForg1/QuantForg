@@ -83,9 +83,9 @@ def _snap(*, alignment: int = 70) -> MagicMock:
 def test_v6_version_and_risk_locks() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.version.startswith("ai-scalping-v")
-    assert cfg.quality_baseline == "ai-scalping-v6.3.0"
+    assert cfg.quality_baseline == "SCALPING_V1"
     assert cfg.risk_per_trade_pct == Decimal("0.50")
-    assert cfg.normal_vol.confidence == 82
+    assert cfg.normal_vol.confidence == 71
     assert cfg.risk_per_trade_pct <= Decimal("0.75")
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
@@ -98,7 +98,7 @@ def test_v6_version_and_risk_locks() -> None:
 @pytest.mark.unit
 def test_pme_maps_v6_execution_knobs() -> None:
     pme = pme_config_for_scalping()
-    assert "scalping-v6" in pme.config_version
+    assert "SCALPING_V1" in pme.config_version
     assert (
         pme.absolute_max_hold_minutes
         == DEFAULT_AI_SCALPING_CONFIG.absolute_max_hold_minutes
@@ -106,8 +106,9 @@ def test_pme_maps_v6_execution_knobs() -> None:
     assert pme.structure_trail_enabled is True
     assert pme.liquidity_trail_enabled is True
     assert pme.atr_trail_enabled is True
-    assert pme.momentum_fade_threshold == 40
+    assert pme.momentum_fade_threshold == DEFAULT_AI_SCALPING_CONFIG.momentum_fade_threshold
     assert pme.partial_tp_enabled is True
+    assert pme.break_even_at_r == Decimal("0.35")
 
 
 @pytest.mark.unit

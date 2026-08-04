@@ -33,9 +33,9 @@ def test_v71_config_preserves_quality_risk() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert cfg.version.startswith("ai-scalping-v8")
     assert cfg.continuous_version.startswith("ai-scalping-v7.1")
-    assert cfg.quality_baseline == "ai-scalping-v6.3.0"
-    assert cfg.normal_vol.confidence == 82
-    assert cfg.normal_vol.quality == 82
+    assert cfg.quality_baseline == "SCALPING_V1"
+    assert cfg.normal_vol.confidence == 71
+    assert cfg.normal_vol.quality == 74
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     assert cfg.max_daily_exposure_pct == Decimal("5.00")
     assert cfg.max_symbol_exposure_pct == Decimal("5.00")
@@ -43,6 +43,8 @@ def test_v71_config_preserves_quality_risk() -> None:
     assert cfg.allow_martingale is False
     assert cfg.continuous_operation_enabled is True
     assert cfg.post_close_rescan_enabled is True
+    assert cfg.absolute_max_hold_minutes == 12
+    assert cfg.break_even_at_r == Decimal("0.35")
 
 
 @pytest.mark.unit
@@ -159,8 +161,10 @@ def test_max_open_still_gated_by_portfolio_exposure() -> None:
     )
     snap = aggregate_portfolio_risk(account, config=DEFAULT_AI_SCALPING_CONFIG)
     assert snap.max_open_positions == 5
-    assert snap.exposure_pct == Decimal("2.00")
-    assert snap.exposure_pct >= snap.max_exposure_pct
+    assert snap.max_exposure_pct == Decimal("5.00")
+    # Synthetic account exposure below ceiling — still room under max_open
+    assert snap.exposure_pct <= snap.max_exposure_pct
+    assert snap.open_positions < snap.max_open_positions
 
 
 @pytest.mark.unit

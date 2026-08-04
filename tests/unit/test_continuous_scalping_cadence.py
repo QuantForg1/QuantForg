@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -24,10 +25,12 @@ def test_continuous_scalp_flow_knobs_locked() -> None:
     assert cfg.post_close_rescan_enabled is True
     assert cfg.post_close_rescan_delay_seconds == 0.0
     assert cfg.max_open_trades >= 2
-    # Strategy floors unchanged
-    assert cfg.normal_vol.quality == 82
+    # Strategy floors = SCALPING_V1
+    assert cfg.normal_vol.quality == 74
     assert cfg.min_structure_score == 70
     assert cfg.min_momentum_score == 65
+    assert cfg.absolute_max_hold_minutes == 12
+    assert cfg.break_even_at_r == Decimal("0.35")
 
 
 @pytest.mark.unit

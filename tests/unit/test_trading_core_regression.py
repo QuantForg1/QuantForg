@@ -277,7 +277,10 @@ def test_scalping_pme_knobs_locked() -> None:
     assert pme.partial_at_r == DEFAULT_AI_SCALPING_CONFIG.partial_at_r
     assert pme.trail_after_r == DEFAULT_AI_SCALPING_CONFIG.trail_after_r
     assert DEFAULT_PME_CONFIG.break_even_at_r == Decimal("1.0")
-    assert pme.break_even_at_r == Decimal("0.5")
+    assert pme.break_even_at_r == Decimal("0.35")
+    assert pme.partial_at_r == Decimal("0.70")
+    assert pme.trail_after_r == Decimal("0.70")
+    assert pme.absolute_max_hold_minutes == 12
 
 
 def test_pme_break_even_partial_trail_close_loop() -> None:
@@ -378,8 +381,8 @@ def test_position_recovery_broker_be_reconstruct() -> None:
 def test_multi_asset_scan_config_present() -> None:
     cfg = DEFAULT_AI_SCALPING_CONFIG
     assert hasattr(cfg, "multi_asset_scan_enabled")
-    assert cfg.break_even_at_r == Decimal("0.5")
-    assert cfg.partial_at_r == Decimal("1.0")
+    assert cfg.break_even_at_r == Decimal("0.35")
+    assert cfg.partial_at_r == Decimal("0.70")
     assert cfg.parallel_scan_enabled is True
     assert cfg.max_entries_per_cycle >= 2
     assert cfg.post_close_rescan_enabled is True
@@ -388,9 +391,11 @@ def test_multi_asset_scan_config_present() -> None:
     assert "BTCUSD" in cfg.universe
     assert cfg.max_daily_exposure_pct == Decimal("5.00")
     assert cfg.max_symbol_exposure_pct == Decimal("5.00")
-    # Quality floors locked — never weakened for fill rate
-    assert cfg.normal_vol.quality == 82
-    assert cfg.normal_vol.confidence == 82
+    # SCALPING_V1 professional floors
+    assert cfg.quality_baseline == "SCALPING_V1"
+    assert cfg.normal_vol.quality == 74
+    assert cfg.normal_vol.confidence == 71
+    assert cfg.absolute_max_hold_minutes == 12
 
 
 def test_frozen_module_imports() -> None:

@@ -497,13 +497,14 @@ async def run_institutional_multi_asset_scan(
         "note": scan.get("note")
         or "institutional_multi_asset_scan — parallel score + multi-symbol handoff",
         "version": cfg.version,
-        "quality_floor": 80,
-        "confidence_floor": 80,
+        "quality_floor": int(cfg.normal_vol.quality),
+        "confidence_floor": int(cfg.normal_vol.confidence),
         "execute_only_best": False,
         "max_entries_per_cycle": int(
             getattr(cfg, "max_entries_per_cycle", 3) or 3
         ),
         "parallel_scan": bool(getattr(cfg, "parallel_scan_enabled", True)),
+        "profile": str(getattr(cfg, "quality_baseline", "") or cfg.version),
         "forced_trades": False,
         "governed_by_existing_ai_and_risk": True,
     }
