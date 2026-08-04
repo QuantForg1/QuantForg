@@ -334,7 +334,11 @@ def evaluate_auto_trade_safety(
 
         if gold_only_enabled() and mode != "alpha":
             symbol_allowed = symbol_u == GOLD_SYMBOL
+        elif allowed_syms and len(allowed_syms) >= 2:
+            # Operator Symbol Management / multi-symbol allowlist owns membership.
+            symbol_allowed = symbol_u in allowed_syms
         else:
+            # Dynamic discovery path when no operator-managed multi-symbol list.
             symbol_allowed = bool(symbol_u)
     else:
         symbol_allowed = symbol_u in allowed_syms if allowed_syms else False

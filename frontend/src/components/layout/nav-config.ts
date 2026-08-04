@@ -553,6 +553,18 @@ export const appNav: NavGroup[] = [
         hint: "Production ops · real telemetry · OWNER/ADMIN",
       },
       {
+        href: "/symbol-management",
+        label: "Symbol Management",
+        icon: ListOrdered,
+        hint: "Enable · disable · priority · trading universe",
+      },
+      {
+        href: "/signals",
+        label: "Signal Center",
+        icon: Radar,
+        hint: "LIVE AI signals · quality · confidence · detail",
+      },
+      {
         href: "/admin/customer-ops",
         label: "Customer Operations",
         icon: Building2,

@@ -118,13 +118,13 @@ class TestAutoTradeSafetyGate:
         assert result.allowed is False
         assert any("Spread" in r for r in result.failed_reasons)
 
-    def test_scalping_allows_dynamic_universe_symbol_not_on_plane_list(self) -> None:
-        """LIVE bug: AUDJPY eligible + handed off, then safety_blocked on allowlist."""
+    def test_scalping_allows_dynamic_universe_when_no_multi_symbol_list(self) -> None:
+        """Dynamic path: single/default allowlist does not block discovered symbols."""
         policy = AutoTradePolicy(
             enabled=True,
             run_state="running",
             trading_mode="scalping",
-            allowed_symbols=("XAUUSD", "EURUSD", "GBPUSD"),
+            allowed_symbols=("XAUUSD",),
         )
         result = evaluate_auto_trade_safety(
             policy,
@@ -132,6 +132,26 @@ class TestAutoTradeSafetyGate:
         )
         assert result.allowed is True
         assert not any("not in allowed list" in r for r in result.failed_reasons)
+
+    def test_scalping_enforces_operator_managed_multi_symbol_list(self) -> None:
+        """Symbol Management multi-symbol allowlist gates post-strategy handoff."""
+        policy = AutoTradePolicy(
+            enabled=True,
+            run_state="running",
+            trading_mode="scalping",
+            allowed_symbols=("XAUUSD", "EURUSD", "GBPUSD"),
+        )
+        blocked = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="AUDJPY", symbol_tradable=True),
+        )
+        assert blocked.allowed is False
+        assert any("not in allowed list" in r for r in blocked.failed_reasons)
+        ok = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="EURUSD", symbol_tradable=True),
+        )
+        assert ok.allowed is True
 
     def test_swing_still_enforces_allowed_symbols(self) -> None:
         policy = AutoTradePolicy(

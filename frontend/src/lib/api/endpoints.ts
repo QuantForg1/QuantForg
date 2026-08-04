@@ -151,6 +151,69 @@ export const mt5Api = {
     }),
 };
 
+/** Operator Symbol Management — enable/disable/priority for trading universe. */
+export const symbolManagementApi = {
+  list: (params?: {
+    q?: string;
+    asset_class?: string;
+    enabled?: boolean;
+    favorites?: boolean;
+  }) => {
+    const search = new URLSearchParams();
+    if (params?.q) search.set("q", params.q);
+    if (params?.asset_class) search.set("asset_class", params.asset_class);
+    if (params?.enabled != null) search.set("enabled", String(params.enabled));
+    if (params?.favorites) search.set("favorites", "true");
+    const qs = search.toString();
+    return apiFetch<Record<string, unknown>>(`/symbols${qs ? `?${qs}` : ""}`);
+  },
+  get: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/symbols/${encodeURIComponent(symbol)}`,
+    ),
+  update: (symbol: string, body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>(
+      `/symbols/${encodeURIComponent(symbol)}`,
+      { method: "PUT", body: { confirmed: true, ...body } },
+    ),
+  bulk: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/symbols/bulk", {
+      method: "POST",
+      body: { confirmed: true, ...body },
+    }),
+  reorder: (ordered_symbols: string[], reason = "symbol_management_reorder") =>
+    apiFetch<Record<string, unknown>>("/symbols/reorder", {
+      method: "POST",
+      body: { confirmed: true, ordered_symbols, reason },
+    }),
+};
+
+/** LIVE Signal Center — read-only projection of AI multi-asset scan. */
+export const signalCenterApi = {
+  list: (params?: {
+    q?: string;
+    direction?: string;
+    asset_class?: string;
+    strong_only?: boolean;
+    high_confidence?: boolean;
+    enabled_only?: boolean;
+  }) => {
+    const search = new URLSearchParams();
+    if (params?.q) search.set("q", params.q);
+    if (params?.direction) search.set("direction", params.direction);
+    if (params?.asset_class) search.set("asset_class", params.asset_class);
+    if (params?.strong_only) search.set("strong_only", "true");
+    if (params?.high_confidence) search.set("high_confidence", "true");
+    if (params?.enabled_only === false) search.set("enabled_only", "false");
+    const qs = search.toString();
+    return apiFetch<Record<string, unknown>>(`/signals${qs ? `?${qs}` : ""}`);
+  },
+  get: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/signals/${encodeURIComponent(symbol)}`,
+    ),
+};
+
 export const brokersApi = {
   list: () => apiFetch<unknown[]>("/brokers"),
   health: (id: string) => apiFetch<Record<string, unknown>>(`/brokers/${id}/health`),
