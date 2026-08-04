@@ -311,7 +311,10 @@ async def run_institutional_multi_asset_scan(
                 fetch_broker_symbol_rows,
             )
 
-            broker_rows = fetch_broker_symbol_rows(mt5_adapter)
+            # Offload sync catalogue I/O so login/health stay responsive.
+            broker_rows = await asyncio.to_thread(
+                fetch_broker_symbol_rows, mt5_adapter
+            )
         except Exception:
             logger.exception("broker_universe_fetch_failed")
     universe = resolve_scan_universe(

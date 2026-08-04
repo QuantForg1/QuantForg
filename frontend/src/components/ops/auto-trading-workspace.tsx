@@ -90,99 +90,99 @@ export function AutoTradingWorkspace() {
     queryKey: ["ite-ops-auto-trading"],
     queryFn: iteOpsApi.autoTrading,
     retry: false,
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   });
   const centerQ = useQuery({
     queryKey: ["ite-ops-center"],
     queryFn: iteOpsApi.controlCenter,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: 20_000,
   });
   const signalsQ = useQuery({
     queryKey: ["strategy-signals", "auto-ws"],
     queryFn: strategyApi.signals,
     retry: false,
-    refetchInterval: 12_000,
+    refetchInterval: 20_000,
   });
   const journalQ = useQuery({
     queryKey: ["execution-journal", "auto-ws"],
     queryFn: () => executionApi.journal(60),
     retry: false,
-    refetchInterval: 8_000,
+    refetchInterval: 15_000,
   });
   const auditsQ = useQuery({
     queryKey: ["execution-audits", "auto-ws"],
     queryFn: () => executionApi.audits(80),
     retry: false,
-    refetchInterval: 8_000,
+    refetchInterval: 15_000,
   });
   const analyticsQ = useQuery({
     queryKey: ["execution-analytics", "auto-ws"],
     queryFn: () => executionApi.analytics(100),
     retry: false,
-    refetchInterval: 20_000,
+    refetchInterval: 30_000,
   });
   const positionsQ = useQuery({
     queryKey: ["portfolio-positions", "auto-ws"],
     queryFn: () => portfolioApi.positions(),
     retry: false,
-    refetchInterval: 5_000,
+    refetchInterval: 12_000,
   });
   const ordersQ = useQuery({
     queryKey: ["portfolio-orders", "auto-ws"],
     queryFn: () => portfolioApi.orders(),
     retry: false,
-    refetchInterval: 8_000,
+    refetchInterval: 15_000,
   });
   const mt5Q = useQuery({
     queryKey: ["mt5-status"],
     queryFn: () => mt5Api.status(),
     retry: false,
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   });
   const healthQ = useQuery({
     queryKey: ["weltrade-health"],
     queryFn: () => weltradeApi.health(),
     retry: false,
-    refetchInterval: 10_000,
+    refetchInterval: 20_000,
   });
   const tickQ = useQuery({
     queryKey: ["mt5-tick", TRADING_SYMBOL],
     queryFn: () => mt5Api.tick(TRADING_SYMBOL),
     enabled: session.connected,
-    staleTime: 2_000,
-    refetchInterval: session.connected ? 3_000 : false,
+    staleTime: 4_000,
+    refetchInterval: session.connected ? 5_000 : false,
     retry: false,
   });
   const auditLogQ = useQuery({
     queryKey: ["ite-ops-audit", "auto-ws"],
     queryFn: () => iteOpsApi.audit(40),
     retry: false,
-    refetchInterval: 20_000,
+    refetchInterval: 30_000,
   });
   const servicesHealthQ = useQuery({
     queryKey: ["ite-ops-services-health", "auto-ws"],
     queryFn: iteOpsApi.servicesHealth,
     retry: false,
-    refetchInterval: 20_000,
+    refetchInterval: 30_000,
   });
   const obsHealthQ = useQuery({
     queryKey: ["institutional-observability", "auto-ws"],
     queryFn: institutionalObservabilityApi.health,
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: 45_000,
   });
   const obsResourcesQ = useQuery({
     queryKey: ["institutional-observability-resources", "auto-ws"],
     queryFn: institutionalObservabilityApi.resources,
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: 45_000,
   });
   const apiHealthQ = useQuery({
     queryKey: ["system-health", "auto-ws"],
     queryFn: platformApi.health,
     retry: false,
-    refetchInterval: 20_000,
+    refetchInterval: 30_000,
   });
 
   const policy = asRecord(asRecord(autoQ.data).policy);

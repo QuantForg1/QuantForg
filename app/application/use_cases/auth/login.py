@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from app.application.dto.audit import RecordAuditEventCommand
@@ -17,6 +18,8 @@ from app.domain.exceptions.auth import AuthenticationError
 from app.domain.interfaces.auth import AuthProviderPort
 from app.domain.interfaces.unit_of_work import UnitOfWorkFactory
 
+_LOGIN_SIGN_IN_TIMEOUT_S = 15.0
+
 
 @dataclass(frozen=True, slots=True)
 class LoginUseCase:
@@ -26,9 +29,18 @@ class LoginUseCase:
 
     async def execute(self, command: LoginCommand) -> AuthSessionDTO:
         try:
-            session = await self.auth.sign_in(
-                email=command.email, password=command.password
-            )
+            try:
+                session = await asyncio.wait_for(
+                    self.auth.sign_in(
+                        email=command.email, password=command.password
+                    ),
+                    timeout=_LOGIN_SIGN_IN_TIMEOUT_S,
+                )
+            except TimeoutError as exc:
+                raise AuthenticationError(
+                    "Sign-in timed out. Please retry.",
+                    code="login_timeout",
+                ) from exc
         except AuthenticationError:
             await self.audit.execute(
                 RecordAuditEventCommand(

@@ -118,7 +118,7 @@ export function SignalCenterWorkspace() {
         strong_only: strongOnly,
         high_confidence: highConf,
       }),
-    refetchInterval: 4_000,
+    refetchInterval: 15_000,
   });
 
   const signals = useMemo(() => asSignals(query.data), [query.data]);
@@ -205,7 +205,7 @@ export function SignalCenterWorkspace() {
 
         <p className="text-[11px] text-[var(--fg-subtle)]">
           LIVE scan · fabricated={String(query.data?.fabricated ?? false)} ·
-          auto-refresh 4s · as_of {String(query.data?.as_of ?? "—")}
+          auto-refresh 15s · as_of {String(query.data?.as_of ?? "—")}
         </p>
 
         {query.isLoading ? (

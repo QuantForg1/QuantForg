@@ -76,10 +76,11 @@ const DESK_SHORTCUTS: string[] = (() => {
 })();
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated, bootError, refreshMe } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const isFullBleed = OS_FULLBLEED_PATHS.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
@@ -125,10 +126,58 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    if (bootError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-4">
+          <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
+            <BrandMark size={48} className="opacity-90" />
+            <p className="text-sm text-[var(--fg-muted)]">{bootError}</p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--bg)] disabled:opacity-60"
+                disabled={retrying}
+                onClick={() => {
+                  setRetrying(true);
+                  void refreshMe().finally(() => setRetrying(false));
+                }}
+              >
+                {retrying ? "Retrying…" : "Retry"}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--fg)]"
+                onClick={() => router.replace("/login")}
+              >
+                Sign in
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg)] text-[var(--fg)]">
+      {bootError ? (
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm text-[var(--fg-muted)]">
+          <span>{bootError}</span>
+          <button
+            type="button"
+            className="shrink-0 text-[var(--accent)] disabled:opacity-60"
+            disabled={retrying}
+            onClick={() => {
+              setRetrying(true);
+              void refreshMe().finally(() => setRetrying(false));
+            }}
+          >
+            {retrying ? "Retrying…" : "Retry"}
+          </button>
+        </div>
+      ) : null}
       <OfflineBanner />
       <div className="flex min-h-0 flex-1">
         <Sidebar />

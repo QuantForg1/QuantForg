@@ -47,38 +47,38 @@ export function SignalIntelligenceWorkspace() {
   const overview = useQuery({
     queryKey: ["si-v2-overview", days],
     queryFn: () => signalIntelligenceApi.overview(days),
-    refetchInterval: 8_000,
+    refetchInterval: 30_000,
     enabled: tab === "overview",
   });
   const history = useQuery({
     queryKey: ["si-v2-history", symbol],
     queryFn: () =>
       signalIntelligenceApi.history({ symbol: symbol || undefined, limit: 200 }),
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
     enabled: tab === "history" || tab === "overlay",
   });
   const outcomes = useQuery({
     queryKey: ["si-v2-outcomes", days],
     queryFn: () => signalIntelligenceApi.outcomes(Math.min(days, 14), 100),
-    refetchInterval: 12_000,
+    refetchInterval: 30_000,
     enabled: tab === "outcomes",
   });
   const probability = useQuery({
     queryKey: ["si-v2-probability"],
     queryFn: () => signalIntelligenceApi.probability(),
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     enabled: tab === "probability",
   });
   const heatmap = useQuery({
     queryKey: ["si-v2-heatmap"],
     queryFn: () => signalIntelligenceApi.heatmap(),
-    refetchInterval: 5_000,
+    refetchInterval: 20_000,
     enabled: tab === "heatmap",
   });
   const analytics = useQuery({
     queryKey: ["si-v2-analytics", days],
     queryFn: () => signalIntelligenceApi.analytics(days),
-    refetchInterval: 15_000,
+    refetchInterval: 45_000,
     enabled: tab === "analytics" || tab === "overview",
   });
 
@@ -482,7 +482,7 @@ function ChartOverlayPanel({ symbol }: { symbol: string }) {
   const markers = useQuery({
     queryKey: ["si-v2-markers", symbol],
     queryFn: () => signalIntelligenceApi.chartMarkers(symbol, 50),
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 
   const points = useMemo(() => {

@@ -37,17 +37,74 @@ export class ApiError extends Error {
   }
 }
 
+/** Default hard timeout so UI never spins forever on a hung API. */
+export const API_DEFAULT_TIMEOUT_MS = 20_000;
+export const API_AUTH_TIMEOUT_MS = 15_000;
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
   token?: string | null;
   auth?: boolean;
   signal?: AbortSignal;
+  /** Override default request timeout (ms). 0 disables. */
+  timeoutMs?: number;
   /** Observability classification for failed calls */
   errorKind?: "api" | "execution" | "mt5";
   /** Skip error-monitor logging (still throws). */
   silent?: boolean;
 };
+
+function mergeAbortSignals(
+  external: AbortSignal | undefined,
+  timeoutMs: number,
+): { signal: AbortSignal | undefined; cleanup: () => void } {
+  if (timeoutMs <= 0 && !external) {
+    return { signal: undefined, cleanup: () => undefined };
+  }
+  if (timeoutMs <= 0) {
+    return { signal: external, cleanup: () => undefined };
+  }
+  const timeoutSignal =
+    typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function"
+      ? AbortSignal.timeout(timeoutMs)
+      : undefined;
+  if (!timeoutSignal && !external) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    return {
+      signal: controller.signal,
+      cleanup: () => clearTimeout(timer),
+    };
+  }
+  if (!external) {
+    return { signal: timeoutSignal, cleanup: () => undefined };
+  }
+  if (!timeoutSignal) {
+    return { signal: external, cleanup: () => undefined };
+  }
+  if (typeof AbortSignal.any === "function") {
+    return { signal: AbortSignal.any([external, timeoutSignal]), cleanup: () => undefined };
+  }
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  external.addEventListener("abort", onAbort);
+  timeoutSignal.addEventListener("abort", onAbort);
+  if (external.aborted || timeoutSignal.aborted) controller.abort();
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      external.removeEventListener("abort", onAbort);
+      timeoutSignal.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
+function isAbortError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = "name" in err ? String((err as { name?: unknown }).name) : "";
+  return name === "AbortError" || name === "TimeoutError";
+}
 
 async function parseError(res: Response, requestId: string) {
   let payload: Record<string, unknown> = {};
@@ -75,11 +132,13 @@ let refreshPromise: Promise<string | null> | null = null;
 async function refreshAccessToken(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
+  const { signal, cleanup } = mergeAbortSignals(undefined, API_AUTH_TIMEOUT_MS);
   try {
     const res = await fetch(`${env.apiBaseUrl}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ refresh_token: refresh }),
+      signal,
     });
     if (!res.ok) {
       clearSession();
@@ -93,6 +152,8 @@ async function refreshAccessToken(): Promise<string | null> {
   } catch {
     markApiUnreachable();
     return null;
+  } finally {
+    cleanup();
   }
 }
 
@@ -104,6 +165,15 @@ function classifyPath(path: string): "api" | "execution" | "mt5" {
 
 function toNetworkApiError(err: unknown, requestId: string): ApiError {
   if (err instanceof ApiError && err.code === "network_error") return err;
+  if (isAbortError(err)) {
+    return new ApiError(
+      "Request timed out. The API did not respond in time — retry shortly.",
+      408,
+      "timeout",
+      { cause: err instanceof Error ? err.message : String(err) },
+      requestId,
+    );
+  }
   return new ApiError(
     "Unable to reach the QuantForg API. Check connection and API base URL.",
     0,
@@ -111,6 +181,14 @@ function toNetworkApiError(err: unknown, requestId: string): ApiError {
     { cause: err instanceof Error ? err.message : String(err) },
     requestId,
   );
+}
+
+function defaultTimeoutForPath(path: string): number {
+  const p = path.startsWith("http") ? new URL(path).pathname : path;
+  if (p.includes("/auth/login") || p.includes("/auth/refresh") || p.includes("/auth/me")) {
+    return API_AUTH_TIMEOUT_MS;
+  }
+  return API_DEFAULT_TIMEOUT_MS;
 }
 
 export async function apiFetch<T>(
@@ -132,6 +210,9 @@ export async function apiFetch<T>(
   const url = path.startsWith("http") ? path : `${env.apiBaseUrl}${path}`;
   const safePath = path.startsWith("http") ? new URL(path).pathname : path;
   const kind = options.errorKind || classifyPath(safePath);
+  const timeoutMs =
+    options.timeoutMs !== undefined ? options.timeoutMs : defaultTimeoutForPath(safePath);
+  const { signal: effectiveSignal, cleanup } = mergeAbortSignals(signal, timeoutMs);
 
   let res: Response;
   try {
@@ -139,17 +220,18 @@ export async function apiFetch<T>(
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal,
+      signal: effectiveSignal,
     });
   } catch (err) {
+    cleanup();
     markApiUnreachable();
     const networkErr = toNetworkApiError(err, requestId);
     if (!silent) {
       captureError(kind, networkErr, {
         request_id: requestId,
         path: safePath,
-        status: 0,
-        details: { network: true },
+        status: networkErr.status,
+        details: { network: true, timeout: networkErr.code === "timeout" },
       });
     }
     throw networkErr;
@@ -171,17 +253,18 @@ export async function apiFetch<T>(
           method,
           headers,
           body: body === undefined ? undefined : JSON.stringify(body),
-          signal,
+          signal: effectiveSignal,
         });
         markApiReachable();
       } catch (err) {
+        cleanup();
         markApiUnreachable();
         const networkErr = toNetworkApiError(err, requestId);
         if (!silent) {
           captureError(kind, networkErr, {
             request_id: requestId,
             path: safePath,
-            status: 0,
+            status: networkErr.status,
             details: { network: true, phase: "retry_after_refresh" },
           });
         }
@@ -189,6 +272,8 @@ export async function apiFetch<T>(
       }
     }
   }
+
+  cleanup();
 
   if (!res.ok) {
     try {

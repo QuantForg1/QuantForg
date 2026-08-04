@@ -6,6 +6,7 @@ If market data cannot be loaded, returns an explicit failure reason.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -22,6 +23,18 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+async def _offload_sync(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+    """Run blocking MT5/gateway I/O off the asyncio event loop.
+
+    Production bug: sync httpx gateway calls inside ``async`` market context
+    starved login/health. Trading decisions are unchanged — only the thread
+    that performs I/O moves.
+    """
+    if kwargs:
+        return await asyncio.to_thread(lambda: fn(*args, **kwargs))
+    return await asyncio.to_thread(fn, *args)
 
 _TF_COUNTS: tuple[tuple[Timeframe, int], ...] = (
     (Timeframe.H4, 180),
@@ -260,7 +273,9 @@ async def build_ite_cycle_market_context(
         bars_loaded = {}
         try:
             for tf, count in _TF_COUNTS:
-                rates = mt5_adapter.copy_rates_from_pos(candidate, tf, 0, count)
+                rates = await _offload_sync(
+                    mt5_adapter.copy_rates_from_pos, candidate, tf, 0, count
+                )
                 candles = [_rate_to_candle(r) for r in (rates or [])]
                 bars_by_tf[tf] = candles
                 bars_loaded[tf.value] = len(candles)
@@ -306,7 +321,7 @@ async def build_ite_cycle_market_context(
     spread: Decimal | None = None
     market_data_live = False
     try:
-        tick = mt5_adapter.latest_tick(symbol)
+        tick = await _offload_sync(mt5_adapter.latest_tick, symbol)
         if tick is not None:
             bid = Decimal(str(getattr(tick, "bid", 0) or 0))
             ask = Decimal(str(getattr(tick, "ask", 0) or 0))
@@ -365,7 +380,7 @@ async def build_ite_cycle_market_context(
     open_positions = 0
     account_trading_enabled = False
     try:
-        info = mt5_adapter.account_info()
+        info = await _offload_sync(mt5_adapter.account_info)
         equity = Decimal(str(getattr(info, "equity", 0) or 0))
         balance = Decimal(str(getattr(info, "balance", 0) or 0))
         margin = Decimal(str(getattr(info, "margin", 0) or 0))
@@ -436,7 +451,8 @@ async def build_ite_cycle_market_context(
         from app.application.services.mt5_position_truth import force_sync_positions
 
         # Force Sync Positions — never trust a cached open count alone.
-        sync = force_sync_positions(
+        sync = await _offload_sync(
+            force_sync_positions,
             mt5_adapter,
             symbol=symbol,
             position_engine=position_engine,
@@ -466,7 +482,7 @@ async def build_ite_cycle_market_context(
     open_entries: list[Decimal] = []
     book_facts_ok = False
     try:
-        rows = mt5_adapter.list_positions()
+        rows = await _offload_sync(mt5_adapter.list_positions)
         for p in rows or []:
             side = str(getattr(p, "side", "") or "").strip().upper()
             if side in {"BUY", "SELL"}:
@@ -578,7 +594,7 @@ async def build_ite_cycle_market_context(
             mt5_adapter, "list_orders", None
         )
         if callable(orders_fn):
-            orders = orders_fn()
+            orders = await _offload_sync(orders_fn)
             diag["orders"] = len(orders or [])
         else:
             diag["orders"] = "N/A"
@@ -587,7 +603,7 @@ async def build_ite_cycle_market_context(
 
     mid = None
     try:
-        tick = mt5_adapter.latest_tick(symbol)
+        tick = await _offload_sync(mt5_adapter.latest_tick, symbol)
         mid = Decimal(str(getattr(tick, "mid", 0) or getattr(tick, "bid", 0) or 0))
         if mid <= 0:
             mid = None
