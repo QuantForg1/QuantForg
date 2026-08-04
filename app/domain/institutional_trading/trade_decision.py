@@ -190,28 +190,34 @@ class TradeDecisionEngine:
         if entry is None:
             return None, None, None, None, ["Insufficient data for entry geometry"]
 
+        # Always anchor SL/TP to live mid — never to a stale OB/FVG zone far from
+        # the fill. Production SELL used stop_zone.high from an old OB (~4016)
+        # while bid≈4060 → MT5 retcode 10016 "Sell stop loss must be above entry".
+        anchor = mid if mid is not None and mid > 0 else (entry.mid or entry.low)
+        if anchor is None or anchor <= 0:
+            return entry, None, None, None, ["No live mid for stop geometry"]
+
         # Stop beyond structure swing / ATR
         stop_dist = atr * Decimal("1.5") if atr > 0 else (entry.high - entry.low)
         if stop_dist <= 0:
-            stop_dist = entry.mid or entry.low
-            stop_dist = stop_dist * Decimal("0.001") if stop_dist else Decimal("1")
+            stop_dist = anchor * Decimal("0.001")
 
         if direction is TradeDirection.BUY:
-            stop = _zone(entry.low - stop_dist, entry.low - stop_dist * Decimal("0.5"))
+            stop = _zone(anchor - stop_dist, anchor - stop_dist * Decimal("0.5"))
             target = _zone(
-                entry.high + stop_dist * Decimal("2"),
-                entry.high + stop_dist * Decimal("2.5"),
+                anchor + stop_dist * Decimal("2"),
+                anchor + stop_dist * Decimal("2.5"),
             )
             invalidations.append("Close below bullish invalidation / stop zone")
             if snapshot.trend.macro_bias is TrendDirection.DOWN:
                 invalidations.append("H4 flips bearish")
         elif direction is TradeDirection.SELL:
             stop = _zone(
-                entry.high + stop_dist * Decimal("0.5"), entry.high + stop_dist
+                anchor + stop_dist * Decimal("0.5"), anchor + stop_dist
             )
             target = _zone(
-                entry.low - stop_dist * Decimal("2.5"),
-                entry.low - stop_dist * Decimal("2"),
+                anchor - stop_dist * Decimal("2.5"),
+                anchor - stop_dist * Decimal("2"),
             )
             invalidations.append("Close above bearish invalidation / stop zone")
             if snapshot.trend.macro_bias is TrendDirection.UP:
@@ -219,8 +225,8 @@ class TradeDecisionEngine:
         else:
             return entry, None, None, None, invalidations
 
-        risk = abs((entry.mid or entry.low) - (stop.mid or stop.low))
-        reward = abs((target.mid or target.high) - (entry.mid or entry.high))
+        risk = abs(anchor - (stop.mid or stop.low))
+        reward = abs((target.mid or target.high) - anchor)
         rr = (reward / risk).quantize(Decimal("0.01")) if risk > 0 else None
         return entry, stop, target, rr, invalidations
 

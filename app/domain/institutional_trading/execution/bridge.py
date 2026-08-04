@@ -943,18 +943,77 @@ class ExecutionBridge:
         )
 
     def _build_intent(
-        self, decision: TradeDecision, _context: ExecutionBridgeContext
+        self, decision: TradeDecision, context: ExecutionBridgeContext
     ) -> OrderIntent:
         assert decision.stop_zone is not None
         assert decision.target_zone is not None
+        mid = getattr(context.account, "mid_price", None)
+        atr = getattr(context.account, "atr", None)
+        try:
+            mid_d = Decimal(str(mid)) if mid is not None else None
+        except Exception:
+            mid_d = None
+        try:
+            atr_d = Decimal(str(atr)) if atr is not None else None
+        except Exception:
+            atr_d = None
+        # Prefer AI structure SL/TP when correctly sided vs live mid.
+        ai = getattr(decision, "ai_score", None) or {}
+        if not isinstance(ai, dict):
+            ai = {}
+        ai_sl = ai.get("stop_loss")
+        ai_tp = ai.get("take_profit")
+        fallback_dist = (
+            (atr_d * Decimal("1.10"))
+            if atr_d is not None and atr_d > 0
+            else (mid_d * Decimal("0.001") if mid_d else Decimal("1"))
+        )
         if decision.action is DecisionAction.BUY:
             side = "buy"
-            sl = str(decision.stop_zone.low)
-            tp = str(decision.target_zone.high)
+            sl = Decimal(str(decision.stop_zone.low))
+            tp = Decimal(str(decision.target_zone.high))
+            if mid_d is not None and mid_d > 0:
+                if ai_sl:
+                    try:
+                        cand = Decimal(str(ai_sl))
+                        if cand < mid_d:
+                            sl = cand
+                    except Exception:
+                        pass
+                if sl >= mid_d:
+                    sl = mid_d - fallback_dist
+                if ai_tp:
+                    try:
+                        cand = Decimal(str(ai_tp))
+                        if cand > mid_d:
+                            tp = cand
+                    except Exception:
+                        pass
+                if tp <= mid_d:
+                    tp = mid_d + fallback_dist * Decimal("1.5")
         elif decision.action is DecisionAction.SELL:
             side = "sell"
-            sl = str(decision.stop_zone.high)
-            tp = str(decision.target_zone.low)
+            sl = Decimal(str(decision.stop_zone.high))
+            tp = Decimal(str(decision.target_zone.low))
+            if mid_d is not None and mid_d > 0:
+                if ai_sl:
+                    try:
+                        cand = Decimal(str(ai_sl))
+                        if cand > mid_d:
+                            sl = cand
+                    except Exception:
+                        pass
+                if sl <= mid_d:
+                    sl = mid_d + fallback_dist
+                if ai_tp:
+                    try:
+                        cand = Decimal(str(ai_tp))
+                        if cand < mid_d:
+                            tp = cand
+                    except Exception:
+                        pass
+                if tp >= mid_d:
+                    tp = mid_d - fallback_dist * Decimal("1.5")
         else:
             raise ValueError(
                 f"OMS intent requires BUY or SELL, got {decision.action.value}"
@@ -971,8 +1030,8 @@ class ExecutionBridge:
             side=side,
             order_type="market",
             volume=str(decision.approved_lots),
-            stop_loss=sl,
-            take_profit=tp,
+            stop_loss=str(sl),
+            take_profit=str(tp),
             slippage=self.config.slippage,
             magic=self.config.magic,
             comment=comment,
