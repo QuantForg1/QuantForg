@@ -8,6 +8,7 @@ import { DeskSkeleton } from "@/components/desk/primitives";
 import { Button } from "@/components/ui/button";
 import { PlatformStatusBoard } from "@/components/ops/platform-status-board";
 import { Rc2BurnInPanel } from "@/components/operator/rc2-burnin-panel";
+import { MissionControlLatencyPlane } from "@/components/operator/mission-control-latency-plane";
 
 const AutoRecoveryPanel = dynamic(
   () =>
@@ -57,6 +58,7 @@ export default function MissionControlPage() {
       <PageMotion>
         <div className="space-y-5">
           <PlatformStatusBoard />
+          <MissionControlLatencyPlane />
           <Rc2BurnInPanel />
           <AutoRecoveryPanel />
           <section className="space-y-3">

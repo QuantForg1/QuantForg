@@ -13,6 +13,7 @@ const FAMILIES = [
   "Trend",
   "Momentum",
   "Breakout",
+  "Range",
   "Mean Reversion",
 ] as const;
 
@@ -22,6 +23,7 @@ function familyOf(strategy: string, comment: string): (typeof FAMILIES)[number] 
   if (/trend|ema|ma.?cross|structure/.test(blob)) return "Trend";
   if (/momentum|rsi|macd|impulse/.test(blob)) return "Momentum";
   if (/breakout|range.?break|donchian/.test(blob)) return "Breakout";
+  if (/\brange\b|mean.?range|consolidation/.test(blob)) return "Range";
   if (/mean.?rev|reversion|fade|vwap/.test(blob)) return "Mean Reversion";
   return "Other";
 }
@@ -116,7 +118,7 @@ export function StrategyLeaderboardWorkspace() {
       <DeskEmpty
         icon={Trophy}
         title="No LIVE strategy sample"
-        description="Leaderboard ranks SMC / Trend / Momentum / Breakout / Mean Reversion from closed LIVE trades."
+        description="Leaderboard ranks SMC / Trend / Momentum / Breakout / Range / Mean Reversion from closed LIVE trades."
       />
     );
   }
