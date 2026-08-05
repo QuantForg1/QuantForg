@@ -18,7 +18,20 @@ import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
 import { formatRelativeTime } from "@/lib/utils";
 
-const SECTIONS = ["all", "trading", "risk", "system", "execution"] as const;
+const SECTIONS = [
+  "all",
+  "signals",
+  "orders",
+  "risk",
+  "gateway",
+  "broker",
+  "portfolio",
+  "reports",
+  "errors",
+  "trading",
+  "system",
+  "execution",
+] as const;
 
 export default function NotificationsPage() {
   const qc = useQueryClient();
@@ -47,10 +60,9 @@ export default function NotificationsPage() {
   const items = useMemo(() => {
     return allItems.filter((n) => {
       if (unreadOnly && n.is_read) return false;
-      const cat = str(n.category, "").toLowerCase();
-      if (section !== "all" && !cat.includes(section)) return false;
+      const hay = `${str(n.category)} ${str(n.title)} ${str(n.body)}`.toLowerCase();
+      if (section !== "all" && !hay.includes(section)) return false;
       if (!q.trim()) return true;
-      const hay = `${str(n.title)} ${str(n.body)}`.toLowerCase();
       return hay.includes(q.trim().toLowerCase());
     });
   }, [allItems, section, q, unreadOnly]);

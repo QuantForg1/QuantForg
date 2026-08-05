@@ -105,6 +105,12 @@ const nextConfig: NextConfig = {
       { source: "/System/API Inspector", destination: "/api-inspector", permanent: false },
       { source: "/system/api-inspector", destination: "/api-inspector", permanent: false },
       { source: "/api-logs", destination: "/api-inspector", permanent: false },
+
+      // Operator OS
+      { source: "/trading-journal/replay", destination: "/ai-trade-replay", permanent: false },
+      { source: "/ceo", destination: "/executive-dashboard", permanent: false },
+      { source: "/operator", destination: "/operator-home", permanent: false },
+      { source: "/coach", destination: "/ai-coach", permanent: false },
     ];
   },
   async headers() {

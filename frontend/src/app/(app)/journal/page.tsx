@@ -16,6 +16,14 @@ import { cn } from "@/lib/utils";
 export default function JournalPage() {
   const tiles = [
     {
+      href: "/trading-journal",
+      icon: BookOpen,
+      title: "Trading Journal",
+      description:
+        "Every LIVE closed trade as a journal entry — notes, tags, CSV/PDF, AI replay.",
+      cta: "Open journal",
+    },
+    {
       href: "/journal/orders",
       icon: History,
       title: "Orders History",

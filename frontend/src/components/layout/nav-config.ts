@@ -50,6 +50,7 @@ import {
   Store,
   Target,
   Timer,
+  Trophy,
   Workflow,
 } from "lucide-react";
 
@@ -80,6 +81,7 @@ export type PrimaryNavItem = NavItem & {
     | "Signals"
     | "Market"
     | "Portfolio"
+    | "Operator"
     | "Research"
     | "System";
 };
@@ -90,11 +92,11 @@ export type PrimaryNavItem = NavItem & {
  */
 export const primaryRail: PrimaryNavItem[] = [
   {
-    href: "/portfolio",
-    label: "Dashboard",
+    href: "/operator-home",
+    label: "Operator Home",
     icon: Briefcase,
-    hint: "Equity · health · book OS",
-    match: ["/portfolio", "/book", "/dashboard"],
+    hint: "Morning brief · today desks",
+    match: ["/operator-home"],
     shortcut: "2",
     section: "Trading",
   },
@@ -104,6 +106,14 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Radar,
     hint: "Production status board",
     match: ["/mission-control"],
+    section: "Trading",
+  },
+  {
+    href: "/executive-dashboard",
+    label: "Executive",
+    icon: Gauge,
+    hint: "CEO capital & status",
+    match: ["/executive-dashboard"],
     section: "Trading",
   },
   {
@@ -276,6 +286,79 @@ export const primaryRail: PrimaryNavItem[] = [
     section: "Portfolio",
   },
   {
+    href: "/trading-journal",
+    label: "Trading Journal",
+    icon: NotebookPen,
+    hint: "Closed trades · notes · export",
+    match: ["/trading-journal", "/journal"],
+    shortcut: "5",
+    section: "Operator",
+  },
+  {
+    href: "/ai-trade-replay",
+    label: "AI Replay",
+    icon: History,
+    hint: "Animated execution replay",
+    match: ["/ai-trade-replay", "/trade-replay"],
+    section: "Operator",
+  },
+  {
+    href: "/daily-reports",
+    label: "Daily Reports",
+    icon: FileText,
+    hint: "Daily · weekly · monthly",
+    match: ["/daily-reports", "/reports"],
+    section: "Operator",
+  },
+  {
+    href: "/ai-coach",
+    label: "AI Coach",
+    icon: GraduationCap,
+    hint: "Recommendations only",
+    match: ["/ai-coach"],
+    section: "Operator",
+  },
+  {
+    href: "/portfolio-heatmap",
+    label: "Heatmap",
+    icon: Flame,
+    hint: "Asset-class exposure map",
+    match: ["/portfolio-heatmap"],
+    section: "Operator",
+  },
+  {
+    href: "/strategy-leaderboard",
+    label: "Leaderboard",
+    icon: Trophy,
+    hint: "Strategy ranking LIVE",
+    match: ["/strategy-leaderboard"],
+    section: "Operator",
+  },
+  {
+    href: "/performance-analytics",
+    label: "Perf Analytics",
+    icon: BarChart3,
+    hint: "Symbol · session · strategy",
+    match: ["/performance-analytics", "/analytics"],
+    section: "Operator",
+  },
+  {
+    href: "/notifications",
+    label: "Notifications",
+    icon: Bell,
+    hint: "Realtime operator inbox",
+    match: ["/notifications", "/inbox"],
+    section: "Operator",
+  },
+  {
+    href: "/live-alerts",
+    label: "Live Alerts",
+    icon: AlertTriangle,
+    hint: "Desktop · email · Telegram-ready",
+    match: ["/live-alerts", "/alerts"],
+    section: "Operator",
+  },
+  {
     href: "/research",
     label: "Research",
     icon: FlaskConical,
@@ -285,20 +368,11 @@ export const primaryRail: PrimaryNavItem[] = [
     section: "Research",
   },
   {
-    href: "/journal",
-    label: "Journal",
-    icon: NotebookPen,
-    hint: "Session memory and trade notes",
-    match: ["/journal", "/trade-replay"],
-    shortcut: "5",
-    section: "Research",
-  },
-  {
-    href: "/signal-intelligence?tab=analytics",
-    label: "Analytics",
+    href: "/portfolio",
+    label: "Portfolio",
     icon: PieChart,
-    hint: "Signal and outcome analytics",
-    match: ["/signal-intelligence"],
+    hint: "Equity · health · book OS",
+    match: ["/portfolio", "/book"],
     section: "Research",
   },
   {
