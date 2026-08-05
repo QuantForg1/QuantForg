@@ -78,15 +78,15 @@ export function EventTimelinePanel() {
   const journalQ = useQuery({
     queryKey: ["execution-journal", "mission-timeline"],
     queryFn: () => executionApi.journal(80),
-    staleTime: 12_000,
-    refetchInterval: 20_000,
+    staleTime: 25_000,
+    refetchInterval: 45_000,
     retry: false,
   });
   const auditQ = useQuery({
     queryKey: ["ite-ops-audit", "mission-timeline"],
     queryFn: () => iteOpsApi.audit(60),
-    staleTime: 12_000,
-    refetchInterval: 20_000,
+    staleTime: 25_000,
+    refetchInterval: 45_000,
     retry: false,
   });
 

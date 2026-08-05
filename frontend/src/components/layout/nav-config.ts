@@ -92,20 +92,20 @@ export type PrimaryNavItem = NavItem & {
  */
 export const primaryRail: PrimaryNavItem[] = [
   {
+    href: "/mission-control",
+    label: "Mission Control",
+    icon: Radar,
+    hint: "Production homepage · status · burn-in",
+    match: ["/mission-control"],
+    shortcut: "2",
+    section: "Trading",
+  },
+  {
     href: "/operator-home",
     label: "Operator Home",
     icon: Briefcase,
     hint: "Morning brief · today desks",
     match: ["/operator-home"],
-    shortcut: "2",
-    section: "Trading",
-  },
-  {
-    href: "/mission-control",
-    label: "Mission Control",
-    icon: Radar,
-    hint: "Production status board",
-    match: ["/mission-control"],
     section: "Trading",
   },
   {

@@ -65,37 +65,43 @@ export function ProductionBurnInWorkspace() {
     queryKey: ["ite-ops-auto-trading", "burnin"],
     queryFn: iteOpsApi.autoTrading,
     retry: false,
-    refetchInterval: 8_000,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
   const mt5Q = useQuery({
     queryKey: ["mt5-status", "burnin"],
     queryFn: mt5Api.status,
     retry: false,
-    refetchInterval: 12_000,
+    staleTime: 20_000,
+    refetchInterval: 45_000,
   });
   const relQ = useQuery({
     queryKey: ["ite-rel-dash", "burnin"],
     queryFn: iteReliabilityApi.dashboard,
     retry: false,
-    refetchInterval: 20_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
   const witnessQ = useQuery({
     queryKey: ["ite-ops-witness-health", "burnin"],
     queryFn: iteOpsApi.witnessHealth,
     retry: false,
-    refetchInterval: 15_000,
+    staleTime: 30_000,
+    refetchInterval: 45_000,
   });
   const journalQ = useQuery({
     queryKey: ["execution-journal", "burnin"],
     queryFn: () => executionApi.journal(100),
     retry: false,
-    refetchInterval: 12_000,
+    staleTime: 20_000,
+    refetchInterval: 40_000,
   });
   const auditsQ = useQuery({
     queryKey: ["execution-audits", "burnin"],
     queryFn: () => executionApi.audits(100),
     retry: false,
-    refetchInterval: 20_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
   const model = useMemo(

@@ -40,7 +40,7 @@ export default function LoginPage() {
               remember: values.remember !== false,
             });
             toast.success("Signed in");
-            router.replace("/terminal");
+            router.replace("/mission-control");
           } catch (e) {
             if (e instanceof ApiError && e.code === "email_not_verified") {
               toast.error("Verify your email before signing in.");

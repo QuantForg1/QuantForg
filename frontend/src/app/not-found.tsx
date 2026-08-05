@@ -10,7 +10,7 @@ export default function NotFound() {
         The route you requested does not exist in QuantForg.
       </p>
       <Link
-        href="/terminal"
+        href="/mission-control"
         className="qf-btn-primary inline-flex h-10 items-center justify-center rounded-[var(--radius-sm)] px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
       >
         Back to dashboard

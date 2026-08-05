@@ -115,43 +115,43 @@ export function PlatformStatusBoard() {
   const backendQ = useQuery({
     queryKey: ["platform-health", "mission"],
     queryFn: platformApi.health,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: 1,
   });
   const weltradeQ = useQuery({
     queryKey: ["weltrade-health", "mission"],
     queryFn: weltradeApi.health,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: 1,
   });
   const mt5Q = useQuery({
     queryKey: ["mt5-status", "mission"],
     queryFn: mt5Api.status,
-    staleTime: 10_000,
-    refetchInterval: 20_000,
+    staleTime: 20_000,
+    refetchInterval: 45_000,
     retry: 1,
   });
   const autoQ = useQuery({
     queryKey: ["ite-ops-auto-trading", "mission"],
     queryFn: iteOpsApi.autoTrading,
-    staleTime: 20_000,
-    refetchInterval: 30_000,
+    staleTime: 45_000,
+    refetchInterval: 60_000,
     retry: false,
   });
   const signalsQ = useQuery({
     queryKey: ["signals-center", "mission"],
     queryFn: () => signalCenterApi.list({}),
-    staleTime: 20_000,
-    refetchInterval: 45_000,
+    staleTime: 45_000,
+    refetchInterval: 90_000,
     retry: false,
   });
   const versionQ = useQuery({
     queryKey: ["platform-version", "mission"],
     queryFn: platformApi.version,
-    staleTime: 120_000,
-    refetchInterval: 300_000,
+    staleTime: 300_000,
+    refetchInterval: 600_000,
     retry: false,
   });
 

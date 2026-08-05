@@ -111,6 +111,8 @@ const nextConfig: NextConfig = {
       { source: "/ceo", destination: "/executive-dashboard", permanent: false },
       { source: "/operator", destination: "/operator-home", permanent: false },
       { source: "/coach", destination: "/ai-coach", permanent: false },
+      { source: "/home", destination: "/mission-control", permanent: false },
+      { source: "/production-home", destination: "/mission-control", permanent: false },
     ];
   },
   async headers() {

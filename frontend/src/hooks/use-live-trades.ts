@@ -24,8 +24,8 @@ export function useLiveTrades(range: HistoryRange = "month") {
   const historyQ = useQuery({
     queryKey: ["portfolio-history", "operator", range, iso.date_from, iso.date_to],
     queryFn: () => portfolioApi.historyRange(iso),
-    staleTime: 20_000,
-    refetchInterval: 45_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: false,
     enabled: session.connected || session.gatewayOnline,
   });
