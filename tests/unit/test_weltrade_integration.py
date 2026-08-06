@@ -152,7 +152,7 @@ class TestGatewayMT5Client:
     def test_attach_adopts_existing_connected_session_without_relogin(self) -> None:
         client = _StubGateway()
         client._connected = True
-        client._login = 12260878
+        client._login = 16785006
         client._server = "Weltrade-Real"
         client._session_mode = "attached"
         client._fail_attach = True  # POST /session/attach would fail
@@ -162,7 +162,7 @@ class TestGatewayMT5Client:
         assert ("POST", "/session/attach") not in client.calls
         assert ("POST", "/session/connect") not in client.calls
         assert client.is_connected is True
-        assert client._login == 12260878
+        assert client._login == 16785006
 
     def test_login_skips_connect_when_session_already_attached(self) -> None:
         client = _StubGateway()
@@ -203,7 +203,7 @@ class TestWeltradeIntegration:
         """Attached session → success without POST /session/connect."""
         client = _StubGateway()
         client._connected = True
-        client._login = 12260878
+        client._login = 16785006
         client._server = "Weltrade-Real"
         client._session_mode = "attached"
         client._fail_attach = True  # POST attach must not be required
@@ -213,7 +213,7 @@ class TestWeltradeIntegration:
         user_id = uuid4()
         result = await svc.connect(
             user_id=user_id,
-            login=12260878,
+            login=16785006,
             password="should-not-be-used",
             server="Weltrade-Real",
             account_type="live",
@@ -373,10 +373,10 @@ class TestWeltradeIntegration:
     async def test_ensure_binds_when_gateway_live_without_session_ref(self) -> None:
         """After process restart: gateway connected, no local session_ref yet."""
         client = _StubGateway()
-        client._account_login = 12260878
+        client._account_login = 16785006
         # Simulate gateway-live state without an adapter session handle.
         client._connected = True
-        client._login = 12260878
+        client._login = 16785006
         client._server = "Weltrade-Real"
         client._session_token = ""
         adapter = MT5Adapter(client=client)
@@ -389,7 +389,7 @@ class TestWeltradeIntegration:
             conn = await uow.connections.get_active_for_user(user_id)
         assert conn is not None
         assert conn.connected is True
-        assert conn.login == 12260878
+        assert conn.login == 16785006
         assert adapter.is_live_session(conn.session_ref)
         assert ("GET", "/session/status") in client.calls
         # Connected gateway is adopted via status; POST attach is not required.
@@ -440,7 +440,7 @@ class TestWeltradeConnectHTTP:
     def test_http_attached_session_returns_200_without_login(self) -> None:
         client = _StubGateway()
         client._connected = True
-        client._login = 12260878
+        client._login = 16785006
         client._server = "Weltrade-Real"
         client._session_mode = "attached"
         client._fail_attach = True
@@ -452,7 +452,7 @@ class TestWeltradeConnectHTTP:
         response = http.post(
             "/api/v1/weltrade/connect",
             json={
-                "login": 12260878,
+                "login": 16785006,
                 "password": "unused",
                 "server": "Weltrade-Real",
                 "account_type": "live",
