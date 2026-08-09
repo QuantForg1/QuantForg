@@ -459,7 +459,16 @@ export function PositionManager({ connected }: { connected: boolean }) {
         ) : positionsQ.isLoading ? (
           <DeskSkeleton rows={4} />
         ) : positionsQ.isError ? (
-          <DeskError message="Unable to load positions." onRetry={() => positionsQ.refetch()} />
+          <DeskError
+            message={
+              positionsQ.error instanceof ApiError && positionsQ.error.status === 401
+                ? "Session expired. Please sign in again."
+                : positionsQ.error instanceof ApiError && positionsQ.error.code === "timeout"
+                  ? "Backend response delayed while loading positions. Retrying…"
+                  : "Unable to load positions."
+            }
+            onRetry={() => positionsQ.refetch()}
+          />
         ) : (
           <>
             {confirm?.title.includes("SL/TP") ? (

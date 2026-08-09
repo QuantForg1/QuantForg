@@ -26,7 +26,25 @@ export function num(value: unknown, fallback = NaN): number {
 
 export function str(value: unknown, fallback = "—"): string {
   if (value == null || value === "") return fallback;
+  // Never render "[object Object]" in UI — objects need explicit field mapping.
+  if (typeof value === "object") return fallback;
   return String(value);
+}
+
+/** Human-readable label for scalar or short object status payloads. */
+export function statusLabel(value: unknown, fallback = "—"): string {
+  if (value == null || value === "") return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const rec = value as Record<string, unknown>;
+    for (const key of ["label", "status", "state", "name", "code", "message", "detail"]) {
+      const v = rec[key];
+      if (typeof v === "string" && v.trim()) return v;
+    }
+  }
+  return fallback;
 }
 
 export function bool(value: unknown): boolean {

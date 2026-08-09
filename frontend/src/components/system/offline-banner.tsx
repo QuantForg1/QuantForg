@@ -7,7 +7,6 @@ import {
   markApiReachable,
   noteApiNetworkFailure,
   noteApiSlow,
-  noteApiTimeout,
   subscribeApiConnection,
   type ApiConnectionState,
 } from "@/lib/api/connectivity";
@@ -38,18 +37,21 @@ export function OfflineBanner() {
 
   useEffect(() => subscribeApiConnection(setApiState), []);
 
-  // Independent lightweight health probe — clears false offline when backend recovers.
+  // Independent lightweight liveness probe — never uses heavy MT5/weltrade routes.
   useEffect(() => {
     let cancelled = false;
     const probe = async () => {
       if (cancelled || !navigator.onLine) return;
       try {
-        await platformApi.health();
+        await platformApi.healthLive();
         if (!cancelled) markApiReachable();
       } catch (e) {
         if (cancelled) return;
         if (e instanceof ApiError && e.code === "timeout") noteApiSlow();
-        else noteApiNetworkFailure();
+        else if (e instanceof ApiError && e.status > 0) {
+          // HTTP error from a live process — API is reachable.
+          markApiReachable();
+        } else noteApiNetworkFailure();
       }
     };
     void probe();

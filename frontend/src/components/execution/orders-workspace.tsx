@@ -281,7 +281,16 @@ export function OrdersWorkspace({ connected }: { connected: boolean }) {
         ) : ordersQ.isLoading ? (
           <DeskSkeleton rows={4} />
         ) : ordersQ.isError ? (
-          <DeskError message="Unable to load orders." onRetry={() => ordersQ.refetch()} />
+          <DeskError
+            message={
+              ordersQ.error instanceof Error && /401|unauthor/i.test(ordersQ.error.message)
+                ? "Session expired. Please sign in again."
+                : ordersQ.error instanceof Error && /timeout|timed out/i.test(ordersQ.error.message)
+                  ? "Backend response delayed while loading orders. Retrying…"
+                  : "Unable to load orders."
+            }
+            onRetry={() => ordersQ.refetch()}
+          />
         ) : (
           <>
             <p className="mb-3 text-xs text-[var(--fg-muted)]">

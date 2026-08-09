@@ -28,8 +28,8 @@ function Cell({ label, value }: { label: string; value: string }) {
 export function MissionControlLatencyPlane() {
   const session = useTradingSession();
   const healthQ = useQuery({
-    queryKey: ["platform-health", "mc-v2"],
-    queryFn: platformApi.health,
+    queryKey: ["platform-health-live"],
+    queryFn: platformApi.healthLive,
     staleTime: 45_000,
     refetchInterval: 60_000,
     retry: 1,
@@ -114,7 +114,7 @@ export function MissionControlLatencyPlane() {
           label="Health Probe Age"
           value={
             healthQ.dataUpdatedAt
-              ? `${Math.max(0, Date.now() - healthQ.dataUpdatedAt)} ms`
+              ? `${Math.max(0, Math.round((Date.now() - healthQ.dataUpdatedAt) / 1000))} s ago`
               : "—"
           }
         />

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
+import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { classifySymbol } from "@/lib/dashboard/derive";
 import { formatNumber } from "@/lib/utils";
@@ -317,7 +318,19 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
           </div>
         ) : symbolsQ.isError ? (
           <div className="p-3">
-            <DeskError message="Symbols unavailable." onRetry={() => symbolsQ.refetch()} />
+            <DeskError
+              message={
+                symbolsQ.error instanceof ApiError && symbolsQ.error.status === 401
+                  ? "Session expired. Please sign in again."
+                  : symbolsQ.error instanceof ApiError && symbolsQ.error.code === "timeout"
+                    ? "Backend response delayed while loading symbols. Retrying…"
+                    : symbolsQ.error instanceof ApiError &&
+                        symbolsQ.error.code === "network_error"
+                      ? "Gateway unavailable. Symbol catalogue temporarily unavailable."
+                      : "Symbol catalogue unavailable from the broker feed."
+              }
+              onRetry={() => symbolsQ.refetch()}
+            />
           </div>
         ) : (
           <ul className="divide-y divide-[var(--border)]" aria-label="Watchlist symbols">

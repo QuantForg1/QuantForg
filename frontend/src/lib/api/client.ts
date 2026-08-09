@@ -11,6 +11,7 @@ import {
   isNetworkFailure,
   markApiReachable,
   noteApiNetworkFailure,
+  noteApiSlow,
   noteApiTimeout,
 } from "@/lib/api/connectivity";
 import { newRequestId } from "@/lib/observability/context";
@@ -269,8 +270,15 @@ export async function apiFetch<T>(
   } catch (err) {
     cleanup();
     const networkErr = toNetworkApiError(err, requestId);
-    if (networkErr.code === "timeout") noteApiTimeout();
-    else noteApiNetworkFailure();
+    if (networkErr.code === "timeout") {
+      // Heavy MT5/Weltrade/ITE routes under load must not escalate the whole
+      // platform to "API unreachable" — cap at degraded (noteApiSlow).
+      if (timeoutMs >= API_HEAVY_TIMEOUT_MS || kind === "mt5" || kind === "execution") {
+        noteApiSlow();
+      } else {
+        noteApiTimeout();
+      }
+    } else noteApiNetworkFailure();
     record({
       status: networkErr.status,
       timedOut: networkErr.code === "timeout",

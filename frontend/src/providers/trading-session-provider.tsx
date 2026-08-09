@@ -111,22 +111,38 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const health = asRecord(healthQ.data);
 
   const connected = Boolean(status.connected);
-  const healthKnown = healthQ.isFetched && !healthQ.isLoading;
-  const gatewayOnline = Boolean(
-    health.gateway_online || health.gateway_reachable || connected,
-  );
-  const brokerConnected = Boolean(
-    health.weltrade_connected || health.mt5_connected || connected,
-  );
-  const executionEnabled =
-    !healthKnown || !("execution_enabled" in health)
+  // Health feed may 500 under DB pressure — do not treat that as broker down
+  // when MT5 status already proves an attached session.
+  const healthKnown =
+    (healthQ.isFetched && !healthQ.isLoading) ||
+    (statusQ.isFetched && !statusQ.isLoading);
+  const healthUsable = healthQ.isSuccess && Object.keys(health).length > 0;
+  const gatewayOnline = healthUsable
+    ? Boolean(health.gateway_online || health.gateway_reachable || connected)
+    : connected;
+  const brokerConnected = healthUsable
+    ? Boolean(health.weltrade_connected || health.mt5_connected || connected)
+    : connected;
+  const executionEnabled = !healthUsable
+    ? null
+    : !("execution_enabled" in health)
       ? null
       : Boolean(health.execution_enabled);
 
-  const gatewayDetail = gatewayDiagnosticDetail(health);
+  const gatewayDetail = healthUsable
+    ? gatewayDiagnosticDetail(health)
+    : healthQ.isError
+      ? "Broker health feed unavailable — using MT5 status"
+      : "";
   const gatewayLabel = gatewayOnline
     ? "Gateway Online"
-    : gatewayStatusLabel(health);
+    : healthUsable
+      ? gatewayStatusLabel(health)
+      : connected
+        ? "Gateway Online"
+        : healthQ.isError
+          ? "Gateway status unknown"
+          : "Gateway unreachable";
 
   const invalidateAll = useCallback(async () => {
     // Drop all broker/gateway caches so reconnect never serves stale status.
