@@ -64,17 +64,28 @@ Broker passwords are **not** written to disk by the gateway and are **never** re
 
 ## Run (Windows)
 
+QuantForg requires **Python 3.13** via the Poetry project venv (`.venv`).  
+Do **not** use bare `py -m` / global Python 3.14 — that environment does not include project dependencies (`uvicorn`, etc.).
+
 ```powershell
-# 1. Install MetaTrader 5 terminal + MetaTrader5 Python package
-pip install MetaTrader5
+# From repo root
+py -3.13 --version
+py -3.13 -m poetry --version
+py -3.13 -m poetry install
 
-# 2. Copy deploy/mt5_gateway/gateway.env.example → set MT5_GATEWAY_TOKEN
-#    Prefer MT5_GATEWAY_AUTO_ATTACH=true when the XM terminal stays logged in
+# Preferred start (skips if :8765 already healthy)
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\start_gateway.ps1
 
-# 3. Start gateway (from repo root so .env is found)
-quantforg-mt5-gateway
-# or: python -m services.mt5_gateway.main
+# Or start directly with the project interpreter:
+py -3.13 -m poetry run python -m services.mt5_gateway.main
+# equivalent:
+.\.venv\Scripts\python.exe -m services.mt5_gateway.main
+# or Poetry script:
+py -3.13 -m poetry run quantforg-mt5-gateway
 ```
+
+Ensure `MT5_GATEWAY_TOKEN` is set in the Windows host `.env` (see `deploy/mt5_gateway/gateway.env.example`).  
+Prefer `MT5_GATEWAY_AUTO_ATTACH=true` when the terminal stays logged in.
 
 ### Prefer attach when already logged into XM
 

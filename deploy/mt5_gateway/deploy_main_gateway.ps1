@@ -10,7 +10,11 @@
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = "C:\Users\P7 PROVIDER\QuantForg"
-$Python = "C:\Python314\python.exe"
+# QuantForg requires Python 3.13 + Poetry project venv (.venv). Never use global Python 3.14.
+$Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $Python)) {
+  throw "Missing project venv at $Python. Run from repo root: py -3.13 -m poetry install"
+}
 $ReportDir = Join-Path $RepoRoot "docs\production\reports\oat_v71"
 $Log = Join-Path $ReportDir "deploy_main_gateway.log"
 $VerifyJson = Join-Path $ReportDir "deploy_main_gateway_verify.json"
@@ -42,7 +46,7 @@ Write-Log ("package_version={0}" -f $Version)
 
 & $Python -c "import MetaTrader5 as m; print('MetaTrader5OK', getattr(m, '__file__', m))"
 if ($LASTEXITCODE -ne 0) {
-  $hint = "MetaTrader5 missing in {0} - install with: {0} -m pip install MetaTrader5" -f $Python
+  $hint = "MetaTrader5 missing in project venv ({0}). Install into Poetry env only: py -3.13 -m poetry run pip install MetaTrader5" -f $Python
   throw $hint
 }
 
