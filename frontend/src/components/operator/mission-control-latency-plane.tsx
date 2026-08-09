@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -61,13 +60,16 @@ export function MissionControlLatencyPlane() {
   const rel = asRecord(relQ.data);
   const merged = { ...asRecord(rel.resources), ...resources, ...lat };
 
-  const apiAvg = useMemo(() => {
+  const apiAvg = (() => {
+    // Refresh when health/latency query timestamps change.
+    void healthQ.dataUpdatedAt;
+    void latQ.dataUpdatedAt;
     const samples = listApiRequestSamples().slice(0, 25);
     if (!samples.length) return null;
     return Math.round(
       samples.reduce((s, r) => s + r.latencyMs, 0) / samples.length,
     );
-  }, [healthQ.dataUpdatedAt, latQ.dataUpdatedAt]);
+  })();
 
   const ms = (v: unknown) => {
     const n = num(v, NaN);
