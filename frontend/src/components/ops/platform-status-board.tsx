@@ -8,6 +8,7 @@ import {
   subscribeApiConnection,
   type ApiConnectionState,
 } from "@/lib/api/connectivity";
+import { ApiError } from "@/lib/api/client";
 import {
   iteOpsApi,
   mt5Api,
@@ -15,7 +16,7 @@ import {
   signalCenterApi,
   weltradeApi,
 } from "@/lib/api/endpoints";
-import { asRecord, num, statusLabel, str } from "@/lib/desk";
+import { asList, asRecord, num, statusLabel, str } from "@/lib/desk";
 import { useAuth } from "@/providers/auth-provider";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,16 @@ function componentStatus(
   key: string,
 ): string {
   return str(statuses[key], "").toUpperCase();
+}
+
+function feedErrorKind(error: unknown): "unauthorized" | "timeout" | "server" | "network" | "other" {
+  if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return "unauthorized";
+    if (error.code === "timeout") return "timeout";
+    if (error.code === "network_error") return "network";
+    if (error.status >= 500) return "server";
+  }
+  return "other";
 }
 
 async function timedHealthLive(): Promise<{
@@ -136,48 +147,55 @@ export function PlatformStatusBoard() {
 
   useEffect(() => subscribeApiConnection(setApiState), []);
 
-  // Shared query keys with TradingSessionProvider — React Query dedupes polls.
+  // Distinct key from plain healthLive consumers (offline banner / latency plane).
   const backendQ = useQuery({
-    queryKey: ["platform-health-live"],
+    queryKey: ["platform-health-live", "timed"],
     queryFn: timedHealthLive,
     staleTime: 30_000,
     refetchInterval: 60_000,
     retry: 1,
+    refetchIntervalInBackground: false,
   });
   const componentsQ = useQuery({
-    queryKey: ["trading-components-health"],
+    queryKey: ["trading-components-health", "timed"],
     queryFn: timedTradingComponents,
-    staleTime: 20_000,
-    refetchInterval: 45_000,
-    retry: 1,
-  });
-  const weltradeQ = useQuery({
-    queryKey: ["weltrade-health"],
-    queryFn: weltradeApi.health,
     staleTime: 30_000,
     refetchInterval: 60_000,
     retry: 1,
+    refetchIntervalInBackground: false,
+  });
+  // Optional broker detail — do not hammer; trading-components is authoritative for MT5/gateway.
+  const weltradeQ = useQuery({
+    queryKey: ["weltrade-health"],
+    queryFn: weltradeApi.health,
+    staleTime: 90_000,
+    refetchInterval: 180_000,
+    retry: false,
+    refetchIntervalInBackground: false,
   });
   const mt5Q = useQuery({
     queryKey: ["mt5-status"],
     queryFn: mt5Api.status,
-    staleTime: 20_000,
-    refetchInterval: 45_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: 1,
+    refetchIntervalInBackground: false,
   });
   const autoQ = useQuery({
     queryKey: ["ite-ops-auto-trading"],
     queryFn: iteOpsApi.autoTrading,
-    staleTime: 45_000,
-    refetchInterval: 60_000,
-    retry: false,
+    staleTime: 60_000,
+    refetchInterval: 90_000,
+    retry: 1,
+    refetchIntervalInBackground: false,
   });
   const signalsQ = useQuery({
     queryKey: ["signals-center", "mission"],
     queryFn: () => signalCenterApi.list({}),
-    staleTime: 45_000,
-    refetchInterval: 90_000,
-    retry: false,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    retry: 1,
+    refetchIntervalInBackground: false,
   });
   const versionQ = useQuery({
     queryKey: ["platform-version"],
@@ -195,14 +213,20 @@ export function PlatformStatusBoard() {
   const execState = asRecord(auto.execution_state);
   const components = asRecord(componentsQ.data?.payload ?? componentsQ.data);
   const statuses = asRecord(components.statuses);
+  const gatewayComponent = asRecord(components.gateway);
+  const gatewayEvidence = asRecord(gatewayComponent.evidence);
+  const omsComponent = asRecord(components.oms);
+  const omsEvidence = asRecord(omsComponent.evidence);
   const dash = asRecord(signalsQ.data?.dashboard);
+  const signalRows = asList(signalsQ.data?.items ?? signalsQ.data?.signals ?? signalsQ.data);
   const positions = session.positions;
   const version = asRecord(versionQ.data);
   const versionLabel =
     str(version.version || version.git_sha || version.build || version.release, "—") ||
     "—";
   const backendLatencyMs = backendQ.data?.latencyMs ?? null;
-  const componentsLatencyMs = componentsQ.data?.latencyMs ?? null;
+  const componentsAggregateRttMs = componentsQ.data?.latencyMs ?? null;
+  const gatewayProbeMs = num(gatewayEvidence.latency_ms, NaN);
 
   const cards = useMemo((): CardModel[] => {
     const backendOk =
@@ -245,7 +269,6 @@ export function PlatformStatusBoard() {
                 ? false
                 : null;
 
-    // Broker transport vs market session — do not conflate.
     const mt5Confirmed = mt5Ok === true;
     const brokerTransportOk = Boolean(
       mt5Confirmed ||
@@ -264,20 +287,149 @@ export function PlatformStatusBoard() {
     const openN = positions.length;
     const floatPnl = positions.reduce((s, p) => s + num(p.profit, 0), 0);
 
-    const autoStatus = statusLabel(
-      auto.status,
-      autoQ.isSuccess ? "Ready" : autoQ.isError ? "Unavailable" : "—",
+    const executionEnabled = Boolean(
+      execState.execution_enabled ??
+        omsEvidence.execution_enabled ??
+        facts.execution_enabled,
     );
-    const blocker = statusLabel(auto.primary_blocker, "");
-    const blockCat = statusLabel(auto.blocking_category, "");
-    const riskClear = !blockCat || blockCat === "—" || blockCat.toLowerCase() === "none";
+    const runState = statusLabel(
+      execState.auto_trading_run_state || auto.run_state,
+      "",
+    );
+    const gateStatus = statusLabel(auto.status || execState.gate_status, "");
+    const opsMode = statusLabel(auto.ops_mode || execState.ops_mode, "");
+    const blocker = statusLabel(auto.primary_blocker || execState.primary_blocker, "");
+    const blockCat = statusLabel(
+      auto.blocking_category || execState.blocking_category,
+      "",
+    );
+    const riskClear =
+      !blockCat || blockCat === "—" || blockCat.toLowerCase() === "none";
+
+    // Auto Trading: never invent LIVE/UNAVAILABLE from missing feed defaults.
+    let autoCardStatus = "—";
+    let autoTone: Tone = "neutral";
+    let autoDetail: string | undefined;
+    if (autoQ.isSuccess) {
+      const raw = (gateStatus || runState || "READY").toUpperCase();
+      if (executionEnabled && (raw.includes("ALLOW") || raw === "OK" || raw === "READY" || runState.toUpperCase() === "RUNNING")) {
+        autoCardStatus = "ENABLED";
+        autoTone = "success";
+      } else if (raw.includes("BLOCK") || raw.includes("DENY") || raw.includes("STOP")) {
+        autoCardStatus = raw;
+        autoTone = "warning";
+      } else {
+        autoCardStatus = raw;
+        autoTone = executionEnabled ? "success" : "warning";
+      }
+      autoDetail = [
+        opsMode ? `Mode: ${opsMode}` : null,
+        executionEnabled ? "Mock: OFF" : null,
+        runState ? `Run: ${runState}` : null,
+        blocker ? `Blocker: ${blocker}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    } else if (autoQ.isError) {
+      const kind = feedErrorKind(autoQ.error);
+      if (omsStatus === "HEALTHY" && mt5Confirmed && executionEnabled) {
+        autoCardStatus = "ENABLED";
+        autoTone = "success";
+        autoDetail =
+          "Mode: LIVE · Status feed delayed — OMS/MT5 confirm execution path ready";
+      } else if (omsStatus === "HEALTHY" && mt5Confirmed) {
+        autoCardStatus = "LIVE PATH READY";
+        autoTone = "success";
+        autoDetail =
+          kind === "timeout"
+            ? "Auto-trading detail feed delayed — using trading-components"
+            : "Auto-trading detail feed unavailable — OMS/MT5 healthy";
+      } else {
+        autoCardStatus =
+          kind === "unauthorized"
+            ? "AUTH REQUIRED"
+            : kind === "timeout"
+              ? "FEED DELAYED"
+              : "STATUS FEED UNAVAILABLE";
+        autoTone = "warning";
+        autoDetail = "Waiting for /ite/ops/auto-trading — not the same as MT5 disconnected";
+      }
+    } else if (omsStatus === "HEALTHY" && mt5Confirmed) {
+      autoCardStatus = "CHECKING";
+      autoTone = "neutral";
+    }
+
+    const eligibleFromAuto = str(
+      asRecord(asRecord(auto.ai_scalping).scan).eligible_count,
+      "",
+    );
+    const scannerRunning = aiStatus === "HEALTHY" || autoQ.isSuccess;
+    const scannerFeedKind = autoQ.isError ? feedErrorKind(autoQ.error) : null;
+
+    const buyN = num(dash.buy_signals, NaN);
+    const sellN = num(dash.sell_signals, NaN);
+    const signalCount = signalRows.length;
+    const hasSignalCounts = Number.isFinite(buyN) || Number.isFinite(sellN);
+    const activeSignalTotal =
+      (Number.isFinite(buyN) ? buyN : 0) + (Number.isFinite(sellN) ? sellN : 0);
+
+    let signalsStatus = "—";
+    let signalsTone: Tone = "neutral";
+    let signalsErrors = "0";
+    let signalsRecovery = "Stable";
+    let signalsDetail: string | undefined;
+    if (signalsQ.isSuccess) {
+      if (signalCount === 0 && (!hasSignalCounts || activeSignalTotal === 0)) {
+        signalsStatus = "NO ACTIVE SIGNALS";
+        signalsTone = "neutral";
+        signalsDetail = "No valid setup currently passes the existing safeguards.";
+      } else {
+        signalsStatus = "LIVE";
+        signalsTone = "success";
+      }
+    } else if (signalsQ.isError) {
+      const kind = feedErrorKind(signalsQ.error);
+      if (aiStatus === "HEALTHY" || scannerRunning) {
+        // ITE healthy + empty eligible is the common production case — not a feed outage.
+        signalsStatus = "NO ACTIVE SIGNALS";
+        signalsTone = "neutral";
+        signalsErrors = "0";
+        signalsRecovery = "Stable";
+        signalsDetail =
+          kind === "timeout"
+            ? "Signal list feed delayed — ITE reports no eligible setups"
+            : "Signal list feed unavailable — ITE healthy, no eligible setups assumed";
+      } else if (kind === "unauthorized") {
+        signalsStatus = "AUTH REQUIRED";
+        signalsTone = "warning";
+        signalsErrors = "Unauthorized";
+        signalsRecovery = "Sign in again";
+      } else if (kind === "timeout") {
+        signalsStatus = "FEED DELAYED";
+        signalsTone = "warning";
+        signalsErrors = "Timeout";
+        signalsRecovery = "Retrying poll";
+      } else {
+        signalsStatus = "FEED UNAVAILABLE";
+        signalsTone = "warning";
+        signalsErrors = "Feed error";
+        signalsRecovery = "Retrying poll";
+      }
+    }
+
     const pmeLabel = statusLabel(
       live.pme_state || live.position_engine,
       openN === 0 ? "Synced (flat)" : "—",
     );
     const omsLabel =
       omsStatus ||
-      statusLabel(execState.ops_mode, Boolean(execState.execution_enabled) ? "READY" : "—");
+      statusLabel(execState.ops_mode, executionEnabled ? "READY" : "—");
+
+    const gatewayLatencyLabel = Number.isFinite(gatewayProbeMs)
+      ? `${Math.round(gatewayProbeMs)} ms`
+      : str(session.latencyMs, "—") !== "—"
+        ? `${session.latencyMs} ms`
+        : "—";
 
     return [
       {
@@ -292,8 +444,7 @@ export function PlatformStatusBoard() {
                 ? "Degraded"
                 : "Checking",
         tone: toneFromOk(backendOk, apiState === "degraded"),
-        latency:
-          backendLatencyMs != null ? `${backendLatencyMs} ms` : "—",
+        latency: backendLatencyMs != null ? `${backendLatencyMs} ms` : "—",
         heartbeat: backendQ.isSuccess
           ? new Date(backendQ.dataUpdatedAt).toISOString().slice(11, 19)
           : backendQ.isError
@@ -322,17 +473,24 @@ export function PlatformStatusBoard() {
               ? "UNREACHABLE"
               : "UNKNOWN",
         tone: toneFromOk(gatewayOk),
-        latency:
-          componentsLatencyMs != null
-            ? `${componentsLatencyMs} ms`
-            : str(session.latencyMs, "—") !== "—"
-              ? `${session.latencyMs} ms`
-              : "—",
+        latency: gatewayLatencyLabel,
         heartbeat: str(session.heartbeatAt, "—").slice(0, 19) || "—",
-        version: str(health.gateway_version || health.version, "—"),
+        version: str(
+          health.gateway_version || health.version || mt5.build || mt5.terminal_build,
+          "—",
+        ),
         errors: gatewayOk === false ? statusLabel(health.diagnostic, "No heartbeat") : "0",
         recovery: gatewayOk === false ? "Await reconnect" : "Stable",
-        detail: session.gatewayLabel || str(asRecord(components.gateway).detail, "") || undefined,
+        detail: [
+          session.gatewayLabel || str(gatewayComponent.detail, ""),
+          Number.isFinite(gatewayProbeMs) && componentsAggregateRttMs != null
+            ? `Probe RTT ${Math.round(gatewayProbeMs)} ms · aggregate ${componentsAggregateRttMs} ms`
+            : Number.isFinite(gatewayProbeMs)
+              ? `Railway→gateway probe ${Math.round(gatewayProbeMs)} ms`
+              : undefined,
+        ]
+          .filter(Boolean)
+          .join(" — ") || undefined,
       },
       {
         id: "mt5",
@@ -437,56 +595,60 @@ export function PlatformStatusBoard() {
       {
         id: "scanner",
         title: "Scanner",
-        status:
-          aiStatus === "HEALTHY" || autoQ.isSuccess
-            ? "RUNNING"
-            : autoQ.isError
-              ? "UNKNOWN"
-              : "—",
-        tone:
-          aiStatus === "HEALTHY" || autoQ.isSuccess
-            ? "success"
-            : autoQ.isError
-              ? "warning"
-              : "neutral",
+        status: scannerRunning ? "RUNNING" : autoQ.isError ? "UNKNOWN" : "—",
+        tone: scannerRunning ? "success" : autoQ.isError ? "warning" : "neutral",
         heartbeat: autoQ.dataUpdatedAt
           ? new Date(autoQ.dataUpdatedAt).toISOString().slice(11, 19)
-          : "—",
-        errors: autoQ.isError ? "Ops feed error" : "0",
-        recovery: autoQ.isError ? "Retrying poll" : "Stable",
+          : componentsQ.dataUpdatedAt
+            ? new Date(componentsQ.dataUpdatedAt).toISOString().slice(11, 19)
+            : "—",
+        errors:
+          scannerRunning
+            ? "0"
+            : scannerFeedKind === "timeout"
+              ? "Ops feed timeout"
+              : autoQ.isError
+                ? "Ops feed error"
+                : "0",
+        recovery: scannerRunning
+          ? "Stable"
+          : autoQ.isError
+            ? "Retrying poll"
+            : "Stable",
+        detail: scannerRunning
+          ? autoQ.isError
+            ? "ITE running — optional ops detail feed delayed (not a scanner outage)"
+            : undefined
+          : undefined,
         metrics: [
           {
             label: "Eligible",
-            value: str(
-              asRecord(asRecord(auto.ai_scalping).scan).eligible_count,
-              "—",
-            ),
+            value: eligibleFromAuto || "—",
           },
         ],
       },
       {
         id: "auto",
         title: "Auto Trading",
-        status: autoStatus,
-        tone: autoQ.isSuccess ? "success" : autoQ.isError ? "warning" : "neutral",
+        status: autoCardStatus,
+        tone: autoTone,
         errors: blocker || "0",
-        recovery: blockCat || "Stable",
-        detail: blocker
-          ? `Mode: ${statusLabel(auto.ops_mode || execState.ops_mode, "LIVE")}${blocker ? ` · Blocker: ${blocker}` : ""}`
-          : `Mode: ${statusLabel(auto.ops_mode || execState.ops_mode, "LIVE")}`,
+        recovery: blockCat || (autoQ.isError ? "Using trading-components" : "Stable"),
+        detail: autoDetail,
       },
       {
         id: "oms",
         title: "OMS",
         status: omsLabel || "UNKNOWN",
         tone:
-          omsStatus === "HEALTHY" || Boolean(execState.execution_enabled)
+          omsStatus === "HEALTHY" || executionEnabled
             ? "success"
             : omsStatus === "NOT_READY" || omsStatus === "DISABLED"
               ? "warning"
               : "neutral",
         errors: "0",
         recovery: "Stable",
+        detail: str(omsComponent.detail, "") || undefined,
         metrics: [
           { label: "Orders", value: String(session.orders.length) },
           { label: "Positions", value: String(openN) },
@@ -531,23 +693,33 @@ export function PlatformStatusBoard() {
         errors: "0",
         recovery: "Stable",
         metrics: [
-          { label: "Float PnL", value: Number.isFinite(floatPnl) ? floatPnl.toFixed(2) : "—" },
+          {
+            label: "Float PnL",
+            value: Number.isFinite(floatPnl) ? floatPnl.toFixed(2) : "—",
+          },
           { label: "Positions", value: String(openN) },
         ],
       },
       {
         id: "signals",
         title: "Signals",
-        status: signalsQ.isSuccess ? "LIVE" : signalsQ.isError ? "Error" : "—",
-        tone: signalsQ.isSuccess ? "success" : signalsQ.isError ? "warning" : "neutral",
+        status: signalsStatus,
+        tone: signalsTone,
         heartbeat: signalsQ.dataUpdatedAt
           ? new Date(signalsQ.dataUpdatedAt).toISOString().slice(11, 19)
           : "—",
-        errors: signalsQ.isError ? "Feed error" : "0",
-        recovery: signalsQ.isError ? "Retrying poll" : "Stable",
+        errors: signalsErrors,
+        recovery: signalsRecovery,
+        detail: signalsDetail,
         metrics: [
-          { label: "BUY", value: str(dash.buy_signals, "—") },
-          { label: "SELL", value: str(dash.sell_signals, "—") },
+          {
+            label: "BUY",
+            value: Number.isFinite(buyN) ? String(buyN) : signalsQ.isSuccess ? "0" : "—",
+          },
+          {
+            label: "SELL",
+            value: Number.isFinite(sellN) ? String(sellN) : signalsQ.isSuccess ? "0" : "—",
+          },
           { label: "Enabled", value: str(dash.enabled_symbols, "—") },
         ],
       },
@@ -556,6 +728,7 @@ export function PlatformStatusBoard() {
     apiState,
     auto,
     autoQ.dataUpdatedAt,
+    autoQ.error,
     autoQ.isError,
     autoQ.isSuccess,
     backendLatencyMs,
@@ -563,19 +736,26 @@ export function PlatformStatusBoard() {
     backendQ.isError,
     backendQ.isSuccess,
     components,
-    componentsLatencyMs,
+    componentsAggregateRttMs,
+    componentsQ.dataUpdatedAt,
     dash,
     execState,
     facts,
+    gatewayComponent,
+    gatewayProbeMs,
     health,
     isAuthenticated,
     live,
     mt5,
     mt5Q.isError,
     mt5Q.isFetched,
+    omsComponent,
+    omsEvidence,
     positions,
     session,
+    signalRows.length,
     signalsQ.dataUpdatedAt,
+    signalsQ.error,
     signalsQ.isError,
     signalsQ.isSuccess,
     statuses,
