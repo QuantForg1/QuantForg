@@ -18,21 +18,100 @@ BROKER_SYMBOL_CANDIDATES: dict[str, tuple[str, ...]] = {
     "GER40": ("GER40", "DE40", "GER40.cash", "DAX40", "DEU40"),
     "BTCUSD": ("BTCUSD", "BTCUSDT", "BTCUSD.a"),
     "ETHUSD": ("ETHUSD", "ETHUSDT", "ETHUSD.a"),
+    "LTCUSD": ("LTCUSD", "LTCUSDT", "LTCUSD.a"),
+    "XAUUSD": ("XAUUSD", "XAUUSD_I", "GOLD", "XAUUSDM"),
+    "XAGUSD": ("XAGUSD", "XAGUSD_I", "SILVER"),
 }
+
+# Weltrade and similar CFDs expose index names as NDXUSD/DJIUSD/… not NAS100.
+_INDEX_TOKENS: frozenset[str] = frozenset(
+    {
+        "NAS100",
+        "US30",
+        "GER40",
+        "US500",
+        "UK100",
+        "SPX500",
+        "USTEC",
+        "DJ30",
+        "DE40",
+        "NDXUSD",
+        "DJIUSD",
+        "SPXUSD",
+        "GEREUR",
+        "F40EUR",
+        "STXEUR",
+        "AEXEUR",
+        "FTSGBP",
+        "HSIHKD",
+        "JPXJPY",
+        "AXJAUD",
+        "IBXEUR",
+        "IT4EUR",
+    }
+)
+
+_INDEX_MARKERS: tuple[str, ...] = (
+    "NDX",
+    "DJI",
+    "SPX",
+    "GER",
+    "FTS",
+    "HSI",
+    "JPX",
+    "AXJ",
+    "STX",
+    "AEX",
+    "F40",
+    "IBX",
+    "IT4",
+    "NAS",
+    "US30",
+    "DE40",
+    "USTEC",
+)
+
+
+def desk_symbol_code(symbol: str | None) -> str:
+    """Canonical desk code — strip common broker suffixes (e.g. EURUSD_I → EURUSD)."""
+    code = (symbol or "").strip().upper()
+    if not code:
+        return ""
+    if code.endswith("_I") and len(code) > 3:
+        return code[:-2]
+    if code.endswith((".A", ".RAW", ".PRO")):
+        return code.rsplit(".", 1)[0]
+    return code
 
 
 def asset_class_for_symbol(symbol: str | None) -> AssetClass:
     code = (symbol or "").strip().upper()
     if not code:
         return "other"
-    if "XAU" in code or code in {"GOLD", "XAUUSDM"}:
+    desk = desk_symbol_code(code)
+    if "XAU" in code or desk in {"GOLD", "XAUUSDM", "XAUUSD"}:
         return "gold"
-    if code in {"BTCUSD", "ETHUSD"} or code.startswith(("BTC", "ETH")):
+    if "XAG" in code or desk in {"SILVER", "XAGUSD"}:
+        # Silver uses gold-calibrated absolute spread ceiling via "other"/gold path
+        # only when needed; treat as gold-family for ATR bands (metals).
+        return "gold"
+    if (
+        desk in {"BTCUSD", "ETHUSD", "LTCUSD"}
+        or code.startswith(("BTC", "ETH", "LTC"))
+        or desk.startswith(("BTC", "ETH", "LTC"))
+    ):
         return "crypto"
-    if code in {"NAS100", "US30", "GER40", "US500", "UK100", "SPX500", "USTEC", "DJ30", "DE40"}:
+    if (
+        desk in _INDEX_TOKENS
+        or code in _INDEX_TOKENS
+        or any(m in desk for m in _INDEX_MARKERS)
+        or any(m in code for m in _INDEX_MARKERS)
+    ):
         return "index"
-    # Majors / crosses (letters + optional separators)
-    if len(code) >= 6 and code[:6].isalpha():
+    # Majors / crosses (letters + optional separators / broker suffix)
+    if len(desk) >= 6 and desk[:6].isalpha():
+        return "fx"
+    if desk.endswith("USD") or desk.startswith("USD"):
         return "fx"
     if code.endswith("USD") or code.startswith("USD"):
         return "fx"
@@ -40,14 +119,37 @@ def asset_class_for_symbol(symbol: str | None) -> AssetClass:
 
 
 def broker_symbol_candidates(symbol: str) -> tuple[str, ...]:
-    """Ordered broker names to try for market data / symbol_select."""
+    """Ordered broker names to try for market data / symbol_select.
+
+    Prefers explicit alias tables, then desk code + common broker suffixes
+    (e.g. Weltrade ``_I``). Never invents symbols outside these candidates —
+    MT5/gateway still must accept the name.
+    """
     code = (symbol or "").strip().upper()
     if not code:
         return ()
-    alts = BROKER_SYMBOL_CANDIDATES.get(code)
+    desk = desk_symbol_code(code)
+    alts = BROKER_SYMBOL_CANDIDATES.get(desk) or BROKER_SYMBOL_CANDIDATES.get(code)
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(name: str) -> None:
+        n = (name or "").strip().upper()
+        if not n or n in seen:
+            return
+        seen.add(n)
+        ordered.append(n)
+
     if alts:
-        return alts
-    return (code,)
+        for a in alts:
+            _add(a)
+    _add(code)
+    _add(desk)
+    if desk and not desk.endswith("_I"):
+        _add(f"{desk}_I")
+    if code.endswith("_I"):
+        _add(desk)
+    return tuple(ordered)
 
 
 def classify_atr_band_thresholds(
@@ -96,7 +198,7 @@ def resolve_spread_limits(
     if cls == "index":
         return Decimal("8.0"), Decimal("2.0"), Decimal("25"), Decimal("0.50")
     if cls == "fx":
-        code = (symbol or "").strip().upper()
+        code = desk_symbol_code(symbol)
         if "JPY" in code:
             # JPY quotes: pip ≈ 0.01
             return Decimal("0.350"), Decimal("0.020"), Decimal("100"), Decimal("0.015")

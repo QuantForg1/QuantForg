@@ -65,13 +65,20 @@ _SESSION_WEIGHTS: dict[str, dict[str, int]] = {
 
 def session_priority_score(symbol: str, session: str | None) -> int:
     """0–100 soft priority for scan ordering (does not change eligibility)."""
-    sym = (symbol or "").strip().upper()
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        desk_symbol_code,
+    )
+
+    raw = (symbol or "").strip().upper()
+    sym = desk_symbol_code(raw) or raw
     sess = (session or "").strip().lower()
     if not sym:
         return 0
     table = _SESSION_WEIGHTS.get(sess) or {}
     if sym in table:
         return int(table[sym])
+    if raw in table:
+        return int(table[raw])
     # Class soft defaults
     if sym.startswith(("EUR", "GBP")) and sess in {
         MarketSession.LONDON.value,
@@ -80,7 +87,7 @@ def session_priority_score(symbol: str, session: str | None) -> int:
         return 60
     if "JPY" in sym and sess == MarketSession.TOKYO.value:
         return 55
-    if sym.startswith(("BTC", "ETH")):
+    if sym.startswith(("BTC", "ETH", "LTC")):
         return 40
     if sym.startswith("XAU"):
         return 50

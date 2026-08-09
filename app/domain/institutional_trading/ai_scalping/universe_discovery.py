@@ -150,7 +150,20 @@ def classify_broker_symbol(code: str, description: str = "") -> ScalpAssetClass:
 
 def _is_illiquid(code: str) -> bool:
     c = code.upper()
-    return any(p.search(c) for p in _ILLIQUID_PATTERNS)
+    desk = scalp_desk_code(c)
+    return any(p.search(c) for p in _ILLIQUID_PATTERNS) or any(
+        p.search(desk) for p in _ILLIQUID_PATTERNS
+    )
+
+
+def scalp_desk_code(code: str) -> str:
+    """Strip common broker suffixes so EURUSD_I matches EURUSD liquid sets."""
+    c = (code or "").strip().upper()
+    if c.endswith("_I") and len(c) > 3:
+        return c[:-2]
+    if "." in c:
+        return c.split(".", 1)[0]
+    return c
 
 
 def is_liquid_scalping_candidate(
@@ -161,22 +174,32 @@ def is_liquid_scalping_candidate(
 ) -> bool:
     """Prefer liquid majors/crosses/metals/crypto/indices/commodities."""
     c = (code or "").strip().upper()
-    if not c or c in BROKER_UNAVAILABLE_SCALP_SYMBOLS:
+    desk = scalp_desk_code(c)
+    if not c or c in BROKER_UNAVAILABLE_SCALP_SYMBOLS or desk in BROKER_UNAVAILABLE_SCALP_SYMBOLS:
         return False
     if trade_mode is not None and int(trade_mode) != _TRADE_MODE_FULL:
         return False
     if _is_illiquid(c):
         return False
     cls = asset_class or classify_broker_symbol(c)
-    if c in _MAJOR_FX or c in _CROSS_FX or c in _METALS or c in _CRYPTO:
+    if (
+        desk in _MAJOR_FX
+        or desk in _CROSS_FX
+        or desk in _METALS
+        or desk in _CRYPTO
+        or c in _MAJOR_FX
+        or c in _CROSS_FX
+        or c in _METALS
+        or c in _CRYPTO
+    ):
         return True
-    if c in _INDICES or c in _COMMODITIES:
+    if desk in _INDICES or desk in _COMMODITIES or c in _INDICES or c in _COMMODITIES:
         return True
     # Unknown broker codes: only auto-include major-like FX pairs (6 letters)
-    if cls == "forex" and len(c) == 6 and c.isalpha() and not _is_illiquid(c):
+    if cls == "forex" and len(desk) == 6 and desk.isalpha() and not _is_illiquid(desk):
         # Prefer USD/EUR/GBP/JPY/AUD/NZD/CAD/CHF crosses only
         ccy = {"USD", "EUR", "GBP", "JPY", "AUD", "NZD", "CAD", "CHF"}
-        return c[:3] in ccy and c[3:] in ccy
+        return desk[:3] in ccy and desk[3:] in ccy
     return False
 
 
@@ -231,19 +254,46 @@ def build_dynamic_scalping_universe(
     dem = set(demoted or ()) | set(BROKER_UNAVAILABLE_SCALP_SYMBOLS)
     ordered: list[str] = []
     seen: set[str] = set()
+    seen_desk: set[str] = set()
 
     def _add(code: str) -> bool:
         c = code.strip().upper()
+        desk = scalp_desk_code(c)
+        # Demote exact broker codes only — a failed bare EURUSD must not block
+        # recovery via catalogue form EURUSD_I.
         if not c or c in seen or c in dem:
+            return False
+        # One broker form per desk symbol (prefer first added — seed resolver
+        # already prefers catalogue `_I` when present).
+        if desk in seen_desk:
             return False
         if len(ordered) >= max_symbols:
             return False
         seen.add(c)
+        seen_desk.add(desk)
         ordered.append(c)
         return True
 
+    # Map desk seed → live broker code from catalogue (EURUSD → EURUSD_I).
+    by_desk: dict[str, list[str]] = {}
+    for d in discovered:
+        by_desk.setdefault(scalp_desk_code(d.code), []).append(d.code.upper())
+
+    def _resolve_seed(seed_code: str) -> str:
+        s = seed_code.strip().upper()
+        desk = scalp_desk_code(s)
+        opts = by_desk.get(desk) or []
+        if not opts:
+            return s
+        if desk in opts:
+            return desk
+        for o in opts:
+            if o.endswith("_I"):
+                return o
+        return opts[0]
+
     for s in seed:
-        _add(s)
+        _add(_resolve_seed(s))
 
     buckets: dict[str, list[str]] = {
         "major": [],
@@ -255,13 +305,14 @@ def build_dynamic_scalping_universe(
         "other": [],
     }
     for d in discovered:
+        desk = scalp_desk_code(d.code)
         if not d.liquid_scalp or d.code in dem:
             continue
-        if d.code in _MAJOR_FX:
+        if desk in _MAJOR_FX or d.code in _MAJOR_FX:
             buckets["major"].append(d.code)
-        elif d.code in _METALS:
+        elif desk in _METALS or d.code in _METALS:
             buckets["metal"].append(d.code)
-        elif d.code in _CROSS_FX:
+        elif desk in _CROSS_FX or d.code in _CROSS_FX:
             buckets["cross"].append(d.code)
         elif d.asset_class == "crypto":
             buckets["crypto"].append(d.code)

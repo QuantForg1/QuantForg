@@ -44,10 +44,33 @@ def test_liquid_candidates_exclude_close_only_and_exotics() -> None:
     assert is_liquid_scalping_candidate("EURUSD", trade_mode=4) is True
     assert is_liquid_scalping_candidate("EURJPY", trade_mode=4) is True
     assert is_liquid_scalping_candidate("XAUUSD", trade_mode=4) is True
+    assert is_liquid_scalping_candidate("EURUSD_I", trade_mode=4) is True
+    assert is_liquid_scalping_candidate("XAUUSD_I", trade_mode=4) is True
     assert is_liquid_scalping_candidate("EURRUB", trade_mode=4) is False
     assert is_liquid_scalping_candidate("USDTRY", trade_mode=4) is False
     assert is_liquid_scalping_candidate("EURUSD", trade_mode=3) is False
     assert is_liquid_scalping_candidate("NAS100", trade_mode=4) is False
+
+
+@pytest.mark.unit
+def test_weltrade_i_suffix_seed_maps_to_broker_code() -> None:
+    rows = [
+        {"code": "EURUSD_I", "trade_mode": 4, "digits": 5},
+        {"code": "XAUUSD_I", "trade_mode": 4, "digits": 3},
+        {"code": "GBPUSD_I", "trade_mode": 4, "digits": 5},
+        {"code": "NDXUSD", "trade_mode": 4, "digits": 1},
+        {"code": "BTCUSD", "trade_mode": 4, "digits": 2},
+    ]
+    discovered = discover_from_broker_rows(rows)
+    summary = classify_catalogue_summary(discovered)
+    assert "EURUSD_I" in summary["liquid_candidates"]
+    assert "XAUUSD_I" in summary["liquid_candidates"]
+    universe = build_dynamic_scalping_universe(discovered, max_symbols=36)
+    assert "EURUSD_I" in universe
+    assert "XAUUSD_I" in universe
+    assert "EURUSD" not in universe  # desk seed remapped to broker form
+    assert "NDXUSD" in universe
+    assert "BTCUSD" in universe
 
 
 @pytest.mark.unit
@@ -75,6 +98,8 @@ def test_build_dynamic_universe_from_live_catalogue_fixture() -> None:
 
 @pytest.mark.unit
 def test_resolve_scan_universe_expands_with_broker_rows() -> None:
+    from dataclasses import replace
+
     rows = [
         {"code": "EURUSD", "trade_mode": 4, "digits": 5},
         {"code": "EURJPY", "trade_mode": 4, "digits": 3},
@@ -82,8 +107,9 @@ def test_resolve_scan_universe_expands_with_broker_rows() -> None:
         {"code": "EURRUB", "trade_mode": 3, "digits": 5},
         {"code": "NAS100", "trade_mode": 4, "digits": 1},
     ]
+    cfg = replace(DEFAULT_AI_SCALPING_CONFIG, live_symbol_learning_enabled=False)
     uni = resolve_scan_universe(
-        DEFAULT_AI_SCALPING_CONFIG,
+        cfg,
         broker_symbol_rows=rows,
         session="london",
     )
@@ -120,6 +146,7 @@ def test_symbol_stats_demote_after_hard_fails(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_dynamic_universe_not_shrunk_by_static_plane_allowlist() -> None:
     """Ops plane seed of 10 must not erase broker-discovered liquid symbols."""
+    from dataclasses import replace
     from unittest.mock import MagicMock
 
     rows = [
@@ -130,8 +157,9 @@ def test_dynamic_universe_not_shrunk_by_static_plane_allowlist() -> None:
     ]
     plane = MagicMock()
     plane.allowed_symbols = tuple(DEFAULT_SCALPING_UNIVERSE)
+    cfg = replace(DEFAULT_AI_SCALPING_CONFIG, live_symbol_learning_enabled=False)
     uni = resolve_scan_universe(
-        DEFAULT_AI_SCALPING_CONFIG,
+        cfg,
         plane=plane,
         broker_symbol_rows=rows,
         session="london",
