@@ -282,11 +282,69 @@ async def si_observe(user: OperatorUser) -> dict[str, Any]:
     return si.observe_live_scan()
 
 
+class SyntheticSignalOnceBody(BaseModel):
+    symbol: str = "XAUUSD"
+    side: str = "BUY"
+    confirmed: bool = False
+    restore_previous: bool = True
+
+
+@router.get("/signals/test/synthetic-once/status")
+async def synthetic_signal_once_status(user: OperatorUser) -> dict[str, Any]:
+    """Owner/Admin — one-shot TEST/SYNTHETIC inject status (never executes)."""
+    _ = user
+    from app.application.services import synthetic_signal_once as sso
+
+    return sso.status()
+
+
+@router.post("/signals/test/synthetic-once/arm")
+async def synthetic_signal_once_arm(
+    body: SyntheticSignalOnceBody,
+    user: OperatorUser,
+) -> dict[str, Any]:
+    """Owner/Admin — arm exactly one pending TEST inject (never executes)."""
+    _ = user
+    from app.application.services import synthetic_signal_once as sso
+
+    result = sso.arm_once(confirmed=body.confirmed)
+    if not result.get("ok"):
+        raise HTTPException(status_code=409, detail=result.get("error") or "rejected")
+    return result
+
+
+@router.post("/signals/test/synthetic-once")
+async def synthetic_signal_once_inject(
+    body: SyntheticSignalOnceBody,
+    user: OperatorUser,
+) -> dict[str, Any]:
+    """Owner/Admin — inject exactly one TEST/SYNTHETIC Signal Center row.
+
+    Monitoring projection only. Never OMS. Never MT5 order_send.
+    Auto-disarms after one successful inject.
+    """
+    _ = user
+    from app.application.services import synthetic_signal_once as sso
+
+    side = "SELL" if body.side.strip().upper() == "SELL" else "BUY"
+    result = sso.inject_once(
+        symbol=body.symbol,
+        side=side,  # type: ignore[arg-type]
+        confirmed=body.confirmed,
+        restore_previous=body.restore_previous,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=409, detail=result.get("error") or "rejected")
+    return result
+
+
 @router.get("/signals/{symbol}")
 async def get_signal_detail(symbol: str, user: CurrentUser) -> dict[str, Any]:
     _ = user
     if symbol.strip().lower() == "intelligence":
         raise HTTPException(status_code=404, detail="Use /signals/intelligence/*")
+    if symbol.strip().lower() == "test":
+        raise HTTPException(status_code=404, detail="Use /signals/test/synthetic-once")
     item = signal_center_service.get_signal(symbol)
     if item is None:
         raise HTTPException(status_code=404, detail="Signal not found")

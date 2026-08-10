@@ -142,10 +142,17 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "raw_factors": factors,
     }
     probability = round((quality * 0.55 + confidence * 0.45), 1) if not reject else 0.0
+    test_synthetic = bool(
+        score.get("test_synthetic")
+        or str(score.get("strategy") or "").upper() == "TEST_SYNTHETIC"
+        or str(score.get("strategy_id") or "").upper() == "TEST_SYNTHETIC"
+    )
+    signal_id = score.get("signal_id")
+    out_badge = f"TEST {badge}" if test_synthetic else badge
     return {
         "symbol": str(score.get("symbol") or "").upper(),
         "direction": direction_out,
-        "badge": badge,
+        "badge": out_badge,
         "current_price": price,
         "confidence": confidence,
         "quality": quality,
@@ -168,6 +175,8 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "reasoning": str(reason or explanation or "")[:500] or None,
         "ai_explanation": str(explanation or reason or "")[:2000] or None,
         "reject": reject,
+        "test_synthetic": test_synthetic,
+        "signal_id": signal_id,
         "detail": detail,
         "gauges": {
             "confidence": confidence,
@@ -316,11 +325,16 @@ def list_live_signals(
     confs = [int(s["confidence"]) for s in signals if s.get("confidence") is not None]
     quals = [int(s["quality"]) for s in signals if s.get("quality") is not None]
     all_prefs = load_preferences()
+    test_synthetic = bool(scan.get("test_synthetic")) or str(
+        scan.get("source") or ""
+    ).upper() == "TEST_SYNTHETIC"
     return {
         "as_of": as_of,
         "session": _session(),
-        "source": "live_multi_asset_scan",
-        "fabricated": False,
+        "source": "TEST_SYNTHETIC" if test_synthetic else "live_multi_asset_scan",
+        "fabricated": bool(test_synthetic),
+        "test_synthetic": bool(test_synthetic),
+        "signal_id": scan.get("signal_id"),
         "scan_note": scan.get("note"),
         "universe_size": len(scan.get("universe") or []),
         "dashboard": {
