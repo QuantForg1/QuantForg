@@ -37,19 +37,27 @@ def call_mt5_bounded(
     *,
     timeout_seconds: float,
     label: str = "mt5_call",
+    ops_lock: threading.RLock | None = None,
 ) -> T:
     """Run an MT5 API callable with a hard wall-clock timeout.
 
     MetaTrader5 has no native cancel. We join a daemon worker; if it exceeds
     ``timeout_seconds`` we raise :class:`MT5CallTimeout` and leave the worker
     to finish in the background (preferred over hanging the HTTP server).
+
+    When ``ops_lock`` is provided it is acquired **inside** the worker so a
+    timed-out call still serializes the terminal until the orphaned IPC returns.
     """
     box: list[T] = []
     err: list[BaseException] = []
 
     def _target() -> None:
         try:
-            box.append(fn())
+            if ops_lock is not None:
+                with ops_lock:
+                    box.append(fn())
+            else:
+                box.append(fn())
         except BaseException as exc:
             err.append(exc)
 
@@ -490,6 +498,12 @@ class LiveMT5Bridge:
         )
 
 
+def _is_terminal_call_failed(err: Any) -> bool:
+    """True when MetaTrader5 last_error indicates IPC contention / terminal busy."""
+    text = str(err or "").lower()
+    return "terminal: call failed" in text or "(-1," in text.replace(" ", "")
+
+
 class MT5GatewayRuntime:
     """Owns the live terminal session + heartbeat / auto-reconnect loop."""
 
@@ -502,10 +516,23 @@ class MT5GatewayRuntime:
         self.settings = settings or get_gateway_settings()
         self.bridge = bridge or LiveMT5Bridge()
         self._creds: SessionCredentials | None = None
+        # Session bookkeeping only — never hold across MetaTrader5 IPC.
         self._lock = threading.RLock()
+        # Serialize ALL MetaTrader5 terminal IPC. Concurrent symbol_select /
+        # copy_rates from parallel Railway scans cause (-1, 'Terminal: Call failed').
+        self._mt5_ops_lock = threading.RLock()
+        self._selected_symbols: set[str] = set()
         self.diagnostics = GatewayDiagnostics()
         self._stop = threading.Event()
         self._hb_thread: threading.Thread | None = None
+
+    def _clear_selected_symbols(self) -> None:
+        self._selected_symbols.clear()
+
+    def _run_mt5_op(self, fn: Callable[[], T]) -> T:
+        """Run a MetaTrader5-touching callable under the process-wide ops lock."""
+        with self._mt5_ops_lock:
+            return fn()
 
     def start_background(self) -> None:
         if self._hb_thread and self._hb_thread.is_alive():
@@ -550,6 +577,8 @@ class MT5GatewayRuntime:
         self.diagnostics.login = login
         self.diagnostics.session_mode = mode
         self.diagnostics.reconnect_attempts = 0
+        # Fresh terminal session — prior symbol_select cache is invalid.
+        self._clear_selected_symbols()
 
     def connect(
         self, *, login: int, password: str, server: str, path: str = ""
@@ -647,6 +676,7 @@ class MT5GatewayRuntime:
     def disconnect(self) -> dict[str, Any]:
         with self._lock:
             self._creds = None
+            self._clear_selected_symbols()
             try:
                 self.bridge.shutdown()
             except Exception as exc:
@@ -720,6 +750,7 @@ class MT5GatewayRuntime:
                 self.bridge.account_info,
                 timeout_seconds=timeout,
                 label="health.account_info",
+                ops_lock=self._mt5_ops_lock,
             )
             latency_ms = round((time.perf_counter() - t0) * 1000.0, 3)
             connected = info is not None
@@ -801,6 +832,7 @@ class MT5GatewayRuntime:
                 self.bridge.terminal_info,
                 timeout_seconds=meta_timeout,
                 label="health.terminal_info",
+                ops_lock=self._mt5_ops_lock,
             )
             if term is not None:
                 terminal_build = _safe_int(getattr(term, "build", 0), 0)
@@ -822,6 +854,7 @@ class MT5GatewayRuntime:
                 self.bridge.version,
                 timeout_seconds=meta_timeout,
                 label="health.version",
+                ops_lock=self._mt5_ops_lock,
             )
             build_date = release
             if terminal_build is None or terminal_build == 0:
@@ -879,6 +912,7 @@ class MT5GatewayRuntime:
             self.bridge.account_info,
             timeout_seconds=timeout,
             label="heartbeat.account_info",
+            ops_lock=self._mt5_ops_lock,
         )
         ms = round((time.perf_counter() - t0) * 1000.0, 3)
         if info is None:
@@ -920,6 +954,7 @@ class MT5GatewayRuntime:
                 lambda: self.bridge.initialize(path),
                 timeout_seconds=timeout,
                 label="reconnect.initialize",
+                ops_lock=self._mt5_ops_lock,
             )
             if not initialized:
                 raise RuntimeError(f"initialize failed: {self.bridge.last_error()}")
@@ -930,6 +965,7 @@ class MT5GatewayRuntime:
                     ),
                     timeout_seconds=timeout,
                     label="reconnect.login",
+                    ops_lock=self._mt5_ops_lock,
                 )
                 if not logged_in:
                     raise RuntimeError(f"login failed: {self.bridge.last_error()}")
@@ -938,6 +974,7 @@ class MT5GatewayRuntime:
                     self.bridge.account_info,
                     timeout_seconds=timeout,
                     label="reconnect.account_info",
+                    ops_lock=self._mt5_ops_lock,
                 )
                 if info is None:
                     raise RuntimeError(
@@ -950,6 +987,8 @@ class MT5GatewayRuntime:
                 self.diagnostics.server = creds.server
             self.diagnostics.connected = True
             self.diagnostics.session_mode = creds.mode
+            # Terminal session recovered — drop stale symbol_select cache.
+            self._clear_selected_symbols()
             event["result"] = "ok"
             self.diagnostics.reconnect_events.append(event)
             return True
@@ -1035,161 +1074,225 @@ class MT5GatewayRuntime:
             time.sleep(backoff)
 
     def _ensure_symbol(self, symbol: str) -> None:
-        if not self.bridge.symbol_select(symbol, True):
-            err = self.bridge.last_error()
-            raise RuntimeError(f"symbol_select failed for {symbol}: {err}")
+        """Select symbol in the terminal. Caller must hold ``_mt5_ops_lock``.
+
+        Caches successful selects for the current session and soft-retries once
+        on Terminal: Call failed (IPC contention) without fabricating data.
+        """
+        sym = (symbol or "").strip()
+        if not sym:
+            raise RuntimeError("symbol_select failed: empty symbol")
+        key = sym.upper()
+        if key in self._selected_symbols:
+            return
+        last_err: Any = None
+        for attempt in range(2):
+            ok = bool(self.bridge.symbol_select(sym, True))
+            if ok:
+                self._selected_symbols.add(key)
+                return
+            last_err = self.bridge.last_error()
+            if attempt == 0 and _is_terminal_call_failed(last_err):
+                time.sleep(0.05)
+                continue
+            break
+        raise RuntimeError(f"symbol_select failed for {symbol}: {last_err}")
 
     def account(self) -> dict[str, Any]:
-        info = self._require_account()
-        from services.mt5_gateway.account_mode import map_account_trade_mode
+        self._require_connected()
 
-        # MetaTrader5 ACCOUNT_TRADE_MODE: 0=demo, 1=contest, 2=real
-        account_mode, trade_mode_int = map_account_trade_mode(
-            getattr(info, "trade_mode", None)
-        )
-        trade_allowed_raw = getattr(info, "trade_allowed", None)
-        trade_allowed = (
-            bool(trade_allowed_raw) if trade_allowed_raw is not None else None
-        )
-        return {
-            "login": _safe_int(info.login),
-            "balance": str(info.balance),
-            "equity": str(info.equity),
-            "margin": str(info.margin),
-            "free_margin": str(getattr(info, "margin_free", 0)),
-            "margin_level": str(getattr(info, "margin_level", 0)),
-            "profit": str(info.profit),
-            "leverage": _safe_int(info.leverage, 1),
-            "currency": str(getattr(info, "currency", "")),
-            "server": str(getattr(info, "server", "")),
-            "name": str(getattr(info, "name", "")),
-            "company": str(getattr(info, "company", "")),
-            "session_mode": self.diagnostics.session_mode,
-            "account_mode": account_mode,
-            "trade_mode": account_mode,
-            "trade_mode_raw": trade_mode_int,
-            "trade_allowed": trade_allowed,
-        }
+        def _body() -> dict[str, Any]:
+            info = self.bridge.account_info()
+            if info is None:
+                raise RuntimeError("account_info unavailable")
+            from services.mt5_gateway.account_mode import map_account_trade_mode
+
+            # MetaTrader5 ACCOUNT_TRADE_MODE: 0=demo, 1=contest, 2=real
+            account_mode, trade_mode_int = map_account_trade_mode(
+                getattr(info, "trade_mode", None)
+            )
+            trade_allowed_raw = getattr(info, "trade_allowed", None)
+            trade_allowed = (
+                bool(trade_allowed_raw) if trade_allowed_raw is not None else None
+            )
+            return {
+                "login": _safe_int(info.login),
+                "balance": str(info.balance),
+                "equity": str(info.equity),
+                "margin": str(info.margin),
+                "free_margin": str(getattr(info, "margin_free", 0)),
+                "margin_level": str(getattr(info, "margin_level", 0)),
+                "profit": str(info.profit),
+                "leverage": _safe_int(info.leverage, 1),
+                "currency": str(getattr(info, "currency", "")),
+                "server": str(getattr(info, "server", "")),
+                "name": str(getattr(info, "name", "")),
+                "company": str(getattr(info, "company", "")),
+                "session_mode": self.diagnostics.session_mode,
+                "account_mode": account_mode,
+                "trade_mode": account_mode,
+                "trade_mode_raw": trade_mode_int,
+                "trade_allowed": trade_allowed,
+            }
+
+        return self._run_mt5_op(_body)
 
     def symbols(self) -> dict[str, Any]:
         self._require_connected()
-        rows = self.bridge.symbols_get() or []
-        items = [
-            {
-                "code": str(getattr(s, "name", "")),
-                "description": str(getattr(s, "description", "")),
-                "digits": _safe_int(getattr(s, "digits", 0)),
-                "volume_min": str(getattr(s, "volume_min", 0) or 0),
-                "volume_max": str(getattr(s, "volume_max", 0) or 0),
-                "volume_step": str(getattr(s, "volume_step", 0) or 0),
-                "trade_mode": _safe_int(getattr(s, "trade_mode", 0)),
-                "filling_mode": _safe_int(getattr(s, "filling_mode", 0)),
-                "point": str(getattr(s, "point", 0) or 0),
-                "contract_size": str(getattr(s, "trade_contract_size", 0) or 0),
-            }
-            for s in rows
-        ]
-        return {"items": items, "count": len(items)}
+
+        def _body() -> dict[str, Any]:
+            rows = self.bridge.symbols_get() or []
+            items = [
+                {
+                    "code": str(getattr(s, "name", "")),
+                    "description": str(getattr(s, "description", "")),
+                    "digits": _safe_int(getattr(s, "digits", 0)),
+                    "volume_min": str(getattr(s, "volume_min", 0) or 0),
+                    "volume_max": str(getattr(s, "volume_max", 0) or 0),
+                    "volume_step": str(getattr(s, "volume_step", 0) or 0),
+                    "trade_mode": _safe_int(getattr(s, "trade_mode", 0)),
+                    "filling_mode": _safe_int(getattr(s, "filling_mode", 0)),
+                    "point": str(getattr(s, "point", 0) or 0),
+                    "contract_size": str(getattr(s, "trade_contract_size", 0) or 0),
+                }
+                for s in rows
+            ]
+            return {"items": items, "count": len(items)}
+
+        return self._run_mt5_op(_body)
 
     def symbol_specs(self, symbol: str) -> dict[str, Any]:
         """Live MT5 trading constraints for one symbol — never hardcoded."""
         from services.mt5_gateway.symbol_specs import serialize_symbol_specs
 
         self._require_connected()
-        self._ensure_symbol(symbol)
-        info = self.bridge.symbol_info(symbol)
-        if info is None:
-            err = self.bridge.last_error()
-            raise RuntimeError(f"symbol_info failed for {symbol}: {err}")
-        tick = self.bridge.symbol_info_tick(symbol)
-        return serialize_symbol_specs(info, tick=tick)
+
+        def _body() -> dict[str, Any]:
+            self._ensure_symbol(symbol)
+            info = self.bridge.symbol_info(symbol)
+            if info is None:
+                err = self.bridge.last_error()
+                raise RuntimeError(f"symbol_info failed for {symbol}: {err}")
+            tick = self.bridge.symbol_info_tick(symbol)
+            return serialize_symbol_specs(info, tick=tick)
+
+        return self._run_mt5_op(_body)
 
     def quote(self, symbol: str) -> dict[str, Any]:
         self._require_connected()
-        self._ensure_symbol(symbol)
-        tick = self.bridge.symbol_info_tick(symbol)
-        if tick is None:
-            raise RuntimeError(f"symbol unavailable: {symbol}")
-        specs: dict[str, Any] = {}
-        try:
-            specs = self.symbol_specs(symbol)
-        except RuntimeError:
-            specs = {}
-        return {
-            "symbol": symbol.upper(),
-            "bid": str(tick.bid),
-            "ask": str(tick.ask),
-            "time": _safe_int(getattr(tick, "time", 0)),
-            "specs": specs,
-        }
+
+        def _body() -> dict[str, Any]:
+            self._ensure_symbol(symbol)
+            tick = self.bridge.symbol_info_tick(symbol)
+            if tick is None:
+                raise RuntimeError(f"symbol unavailable: {symbol}")
+            specs: dict[str, Any] = {}
+            try:
+                # Already under _mt5_ops_lock (RLock) — nested ensure is cached.
+                info = self.bridge.symbol_info(symbol)
+                if info is not None:
+                    from services.mt5_gateway.symbol_specs import serialize_symbol_specs
+
+                    specs = serialize_symbol_specs(info, tick=tick)
+            except RuntimeError:
+                specs = {}
+            return {
+                "symbol": symbol.upper(),
+                "bid": str(tick.bid),
+                "ask": str(tick.ask),
+                "time": _safe_int(getattr(tick, "time", 0)),
+                "specs": specs,
+            }
+
+        return self._run_mt5_op(_body)
 
     def candles(
         self, symbol: str, *, timeframe: str = "H1", count: int = 100
     ) -> dict[str, Any]:
         self._require_connected()
-        self._ensure_symbol(symbol)
-        tf = _TIMEFRAME_MAP.get(timeframe.strip().upper())
+        tf_key = timeframe.strip().upper()
+        tf = _TIMEFRAME_MAP.get(tf_key)
         if tf is None:
             raise RuntimeError(f"unsupported timeframe: {timeframe}")
-        rates = self.bridge.copy_rates_from_pos(symbol, tf, 0, count)
-        if rates is None:
-            raise RuntimeError(f"candles unavailable for {symbol}")
-        items = [
-            {
-                "time": _safe_int(r["time"]),
-                "open": str(r["open"]),
-                "high": str(r["high"]),
-                "low": str(r["low"]),
-                "close": str(r["close"]),
+
+        def _body() -> dict[str, Any]:
+            self._ensure_symbol(symbol)
+            rates = self.bridge.copy_rates_from_pos(symbol, tf, 0, count)
+            if rates is None:
+                err = self.bridge.last_error()
+                if _is_terminal_call_failed(err):
+                    time.sleep(0.05)
+                    rates = self.bridge.copy_rates_from_pos(symbol, tf, 0, count)
+                if rates is None:
+                    raise RuntimeError(
+                        f"candles unavailable for {symbol}: {err}"
+                    )
+            items = [
+                {
+                    "time": _safe_int(r["time"]),
+                    "open": str(r["open"]),
+                    "high": str(r["high"]),
+                    "low": str(r["low"]),
+                    "close": str(r["close"]),
+                }
+                for r in rates
+            ]
+            return {
+                "symbol": symbol.upper(),
+                "timeframe": tf_key,
+                "items": items,
             }
-            for r in rates
-        ]
-        return {
-            "symbol": symbol.upper(),
-            "timeframe": timeframe.upper(),
-            "items": items,
-        }
+
+        return self._run_mt5_op(_body)
 
     def positions(self) -> dict[str, Any]:
         self._require_connected()
-        rows = self.bridge.positions_get() or []
-        items = [
-            {
-                "ticket": _safe_int(p.ticket),
-                "symbol": str(p.symbol),
-                "type": _safe_int(p.type),
-                "volume": str(p.volume),
-                "price_open": str(p.price_open),
-                "price_current": str(p.price_current),
-                "sl": str(getattr(p, "sl", 0) or 0),
-                "tp": str(getattr(p, "tp", 0) or 0),
-                "profit": str(p.profit),
-                "swap": str(getattr(p, "swap", 0) or 0),
-                "magic": _safe_int(getattr(p, "magic", 0)),
-                "comment": str(getattr(p, "comment", "") or ""),
-                "time": _safe_int(getattr(p, "time", 0)),
-            }
-            for p in rows
-        ]
-        return {"items": items}
+
+        def _body() -> dict[str, Any]:
+            rows = self.bridge.positions_get() or []
+            items = [
+                {
+                    "ticket": _safe_int(p.ticket),
+                    "symbol": str(p.symbol),
+                    "type": _safe_int(p.type),
+                    "volume": str(p.volume),
+                    "price_open": str(p.price_open),
+                    "price_current": str(p.price_current),
+                    "sl": str(getattr(p, "sl", 0) or 0),
+                    "tp": str(getattr(p, "tp", 0) or 0),
+                    "profit": str(p.profit),
+                    "swap": str(getattr(p, "swap", 0) or 0),
+                    "magic": _safe_int(getattr(p, "magic", 0)),
+                    "comment": str(getattr(p, "comment", "") or ""),
+                    "time": _safe_int(getattr(p, "time", 0)),
+                }
+                for p in rows
+            ]
+            return {"items": items}
+
+        return self._run_mt5_op(_body)
 
     def orders(self) -> dict[str, Any]:
         self._require_connected()
-        rows = self.bridge.orders_get() or []
-        items = [
-            {
-                "ticket": _safe_int(o.ticket),
-                "symbol": str(o.symbol),
-                "type": _safe_int(o.type),
-                "volume_current": str(o.volume_current),
-                "price_open": str(o.price_open),
-                "sl": str(getattr(o, "sl", 0) or 0),
-                "tp": str(getattr(o, "tp", 0) or 0),
-                "time_setup": _safe_int(getattr(o, "time_setup", 0)),
-            }
-            for o in rows
-        ]
-        return {"items": items}
+
+        def _body() -> dict[str, Any]:
+            rows = self.bridge.orders_get() or []
+            items = [
+                {
+                    "ticket": _safe_int(o.ticket),
+                    "symbol": str(o.symbol),
+                    "type": _safe_int(o.type),
+                    "volume_current": str(o.volume_current),
+                    "price_open": str(o.price_open),
+                    "sl": str(getattr(o, "sl", 0) or 0),
+                    "tp": str(getattr(o, "tp", 0) or 0),
+                    "time_setup": _safe_int(getattr(o, "time_setup", 0)),
+                }
+                for o in rows
+            ]
+            return {"items": items}
+
+        return self._run_mt5_op(_body)
 
     def history_orders(self, *, days: int = 30) -> dict[str, Any]:
         self._require_connected()
@@ -1199,46 +1302,55 @@ class MT5GatewayRuntime:
         now = datetime.now(UTC).replace(tzinfo=None)
         date_to = now + timedelta(days=1)
         date_from = now - timedelta(days=days)
-        rows = self.bridge.history_orders_get(date_from, date_to) or []
-        items = [
-            {
-                "ticket": _safe_int(o.ticket),
-                "symbol": str(o.symbol),
-                "state": _safe_int(getattr(o, "state", 0)),
-            }
-            for o in rows
-        ]
-        return {"items": items}
+
+        def _body() -> dict[str, Any]:
+            rows = self.bridge.history_orders_get(date_from, date_to) or []
+            items = [
+                {
+                    "ticket": _safe_int(o.ticket),
+                    "symbol": str(o.symbol),
+                    "state": _safe_int(getattr(o, "state", 0)),
+                }
+                for o in rows
+            ]
+            return {"items": items}
+
+        return self._run_mt5_op(_body)
 
     def history_deals(self, *, days: int = 30) -> dict[str, Any]:
         self._require_connected()
         now = datetime.now(UTC).replace(tzinfo=None)
         date_to = now + timedelta(days=1)
         date_from = now - timedelta(days=days)
-        rows = self.bridge.history_deals_get(date_from, date_to) or []
-        items = [
-            {
-                "ticket": _safe_int(d.ticket),
-                "order": _safe_int(getattr(d, "order", 0)),
-                "symbol": str(d.symbol),
-                "type": _safe_int(getattr(d, "type", 0)),
-                "entry": _safe_int(getattr(d, "entry", 0)),
-                "volume": str(d.volume),
-                "price": str(getattr(d, "price", 0) or 0),
-                "profit": str(d.profit),
-                "swap": str(getattr(d, "swap", 0) or 0),
-                "commission": str(getattr(d, "commission", 0) or 0),
-                "time": _safe_int(getattr(d, "time", 0)),
-                "magic": _safe_int(getattr(d, "magic", 0)),
-                "comment": str(getattr(d, "comment", "") or ""),
-                "position_id": _safe_int(getattr(d, "position_id", 0)),
-            }
-            for d in rows
-        ]
-        return {"items": items}
+
+        def _body() -> dict[str, Any]:
+            rows = self.bridge.history_deals_get(date_from, date_to) or []
+            items = [
+                {
+                    "ticket": _safe_int(d.ticket),
+                    "order": _safe_int(getattr(d, "order", 0)),
+                    "symbol": str(d.symbol),
+                    "type": _safe_int(getattr(d, "type", 0)),
+                    "entry": _safe_int(getattr(d, "entry", 0)),
+                    "volume": str(d.volume),
+                    "price": str(getattr(d, "price", 0) or 0),
+                    "profit": str(d.profit),
+                    "swap": str(getattr(d, "swap", 0) or 0),
+                    "commission": str(getattr(d, "commission", 0) or 0),
+                    "time": _safe_int(getattr(d, "time", 0)),
+                    "magic": _safe_int(getattr(d, "magic", 0)),
+                    "comment": str(getattr(d, "comment", "") or ""),
+                    "position_id": _safe_int(getattr(d, "position_id", 0)),
+                }
+                for d in rows
+            ]
+            return {"items": items}
+
+        return self._run_mt5_op(_body)
 
     def order_check(self, body: dict[str, Any]) -> dict[str, Any]:
         """Validate a trade request via MetaTrader5.order_check (no fill)."""
+        from services.mt5_gateway.symbol_specs import serialize_symbol_specs
         from services.mt5_gateway.trade import (
             build_mt5_trade_request,
             order_check_with_filling_fallback,
@@ -1249,37 +1361,46 @@ class MT5GatewayRuntime:
         symbol = str(body.get("symbol") or "").strip().upper()
         if not symbol:
             raise RuntimeError("symbol is required")
-        self._ensure_symbol(symbol)
-        mt5 = self.bridge.require()
-        request = build_mt5_trade_request(
-            mt5,
-            symbol=symbol,
-            action=str(body.get("action") or "buy"),
-            volume=float(body.get("volume") or 0),
-            price=float(body.get("price") or 0),
-            stop_loss=float(body.get("sl") or body.get("stop_loss") or 0),
-            take_profit=float(body.get("tp") or body.get("take_profit") or 0),
-            deviation=int(body.get("deviation") or body.get("slippage") or 20),
-            magic=int(body.get("magic") or 0),
-            comment=str(body.get("comment") or "quantforg"),
-            position=int(body.get("position") or 0),
-            order_ticket=int(body.get("order_ticket") or body.get("order") or 0),
-            oms_kind=str(body.get("oms_kind") or ""),
-        )
-        info = self.bridge.symbol_info(symbol)
-        result, request = order_check_with_filling_fallback(mt5, request, info=info)
-        filling_attempts = request.pop("_filling_attempts", [])
-        payload = serialize_check_result(result, request)
-        payload["component"] = "mt5_order_check"
-        payload["filling_attempts"] = filling_attempts
-        try:
-            payload["symbol_specs"] = self.symbol_specs(symbol)
-        except RuntimeError:
-            payload["symbol_specs"] = {}
-        if result is None:
-            err = self.bridge.last_error()
-            payload["comment"] = f"order_check failed: {err}"
-        return payload
+
+        def _body() -> dict[str, Any]:
+            self._ensure_symbol(symbol)
+            mt5 = self.bridge.require()
+            request = build_mt5_trade_request(
+                mt5,
+                symbol=symbol,
+                action=str(body.get("action") or "buy"),
+                volume=float(body.get("volume") or 0),
+                price=float(body.get("price") or 0),
+                stop_loss=float(body.get("sl") or body.get("stop_loss") or 0),
+                take_profit=float(body.get("tp") or body.get("take_profit") or 0),
+                deviation=int(body.get("deviation") or body.get("slippage") or 20),
+                magic=int(body.get("magic") or 0),
+                comment=str(body.get("comment") or "quantforg"),
+                position=int(body.get("position") or 0),
+                order_ticket=int(body.get("order_ticket") or body.get("order") or 0),
+                oms_kind=str(body.get("oms_kind") or ""),
+            )
+            info = self.bridge.symbol_info(symbol)
+            result, request = order_check_with_filling_fallback(
+                mt5, request, info=info
+            )
+            filling_attempts = request.pop("_filling_attempts", [])
+            payload = serialize_check_result(result, request)
+            payload["component"] = "mt5_order_check"
+            payload["filling_attempts"] = filling_attempts
+            try:
+                tick = self.bridge.symbol_info_tick(symbol)
+                payload["symbol_specs"] = (
+                    serialize_symbol_specs(info, tick=tick) if info is not None else {}
+                )
+            except RuntimeError:
+                payload["symbol_specs"] = {}
+            if result is None:
+                err = self.bridge.last_error()
+                payload["comment"] = f"order_check failed: {err}"
+            return payload
+
+        return self._run_mt5_op(_body)
 
     def order_calc_margin(self, body: dict[str, Any]) -> dict[str, Any]:
         from services.mt5_gateway.trade import order_type_for_action
@@ -1446,6 +1567,7 @@ class MT5GatewayRuntime:
                 float(self.settings.mt5_api_call_timeout_seconds), 15.0
             ),
             label="order_send",
+            ops_lock=self._mt5_ops_lock,
         )
         payload = serialize_send_result(result, request)
         payload["component"] = "mt5_order_send"
@@ -1510,6 +1632,7 @@ class MT5GatewayRuntime:
                 float(self.settings.mt5_api_call_timeout_seconds), 15.0
             ),
             label="order_cancel",
+            ops_lock=self._mt5_ops_lock,
         )
         payload = serialize_send_result(result, request)
         if result is None:
