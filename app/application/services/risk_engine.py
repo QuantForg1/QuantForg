@@ -192,13 +192,25 @@ class RiskEngine:
                         "risk_engine_micro_min_lot_rejected",
                         condition="needed_pct > hard_max_risk_pct",
                         equity=str(equity),
-                        stop=str(stop),
+                        risk_pct=str(risk_pct),
+                        risk_amount=str(
+                            (equity * risk_pct / Decimal("100")).quantize(
+                                Decimal("0.01")
+                            )
+                        ),
+                        stop_distance=str(stop),
                         contract_size=str(cs),
-                        min_lot=str(cfg.min_lot),
-                        min_loss=str(min_loss),
-                        needed_pct=str(needed_pct),
+                        volume_min=str(cfg.min_lot),
+                        volume_step=str(cfg.lot_step),
+                        raw_volume=str(lots),
+                        normalized_volume=str(lots),
+                        final_volume="0",
+                        min_lot_dollar_risk=str(min_loss),
+                        needed_pct_at_min_lot=str(needed_pct),
                         hard_max_pct=str(profile.hard_max_risk_pct),
-                        raw_lots=str(lots),
+                        rejection_reason="MIN_LOT_CONSTRAINT",
+                        signal_state="VALID_SIGNAL",
+                        execution_state="EXECUTION_BLOCKED",
                     )
                 else:
                     _log.warning(
@@ -1188,7 +1200,21 @@ class RiskEngine:
         approved = size.approved_lots
         decision = RiskDecision.ALLOW
 
-        if (
+        # Below broker min_lot (approved=0) is NOT a "reduce" path — it is an
+        # execution block. Keep the safety reject; label it clearly so Signal
+        # Center does not look like a missing signal.
+        if approved <= 0 and (
+            size.capped or not checks.get("position_sizing", False)
+        ):
+            decision = RiskDecision.REJECT
+            approved = Decimal("0")
+            reasons.append(
+                "MIN_LOT_CONSTRAINT: calculated volume below broker volume_min "
+                "(no upsize to min_lot) "
+                f"requested={size.requested_lots} stop={size.stop_distance} "
+                f"dollar_risk={size.dollar_risk}"
+            )
+        elif (
             band is RiskScoreBand.BLOCKED
             or not dd_ok
             or not checks["open_positions"]
@@ -1210,14 +1236,15 @@ class RiskEngine:
                     decision = RiskDecision.ALLOW
                     approved = self.config.min_lot
                     reasons.append(
-                        "risk reduce requested but already at broker min_lot — "
+                        "risk reduce requested but already at broker min_lot - "
                         "keeping min_lot"
                     )
                 else:
                     decision = RiskDecision.REJECT
                     approved = Decimal("0")
                     reasons.append(
-                        "reduced size below min_lot — reject (no upsize to min_lot)"
+                        "MIN_LOT_CONSTRAINT: reduced size below broker volume_min "
+                        "(no upsize to min_lot)"
                     )
             else:
                 approved = reduced

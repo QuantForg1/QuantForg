@@ -36,6 +36,9 @@ _REASON_LABELS: dict[str, str] = {
     "atr_too_low": "ATR too low",
     "drawdown_elevated": "Drawdown elevated",
     "below_min_lot": "Lot size below broker minimum",
+    "MIN_LOT_CONSTRAINT": (
+        "VALID_SIGNAL blocked: calculated volume below broker volume_min"
+    ),
     "SAFETY_BLOCKED": "Auto-trade safety gate blocked",
     "NO_SNAPSHOT": "No market snapshot",
     "NO_MARKET_CONTEXT": "No market context",
@@ -48,6 +51,7 @@ _REASON_PRIORITY: tuple[str, ...] = (
     "news_blackout",
     "spread_too_wide",
     "below_min_lot",
+    "MIN_LOT_CONSTRAINT",
     "mtf_not_aligned",
     "quality_below_threshold",
     "confidence_below_threshold",
@@ -260,8 +264,16 @@ def extract_cycle_diagnostics(
     for raw in decision_reasons:
         s = str(raw)
         low = s.lower()
-        if "below_min_lot" in low or "below broker min" in low:
-            rejected_codes.append("below_min_lot")
+        if (
+            "min_lot_constraint" in low
+            or "below_min_lot" in low
+            or "below broker min" in low
+            or "below broker volume_min" in low
+        ):
+            if "min_lot_constraint" in low or "volume_min" in low:
+                rejected_codes.append("MIN_LOT_CONSTRAINT")
+            else:
+                rejected_codes.append("below_min_lot")
         for code in _REASON_LABELS:
             if code.replace("_", " ") in low or code in low:
                 rejected_codes.append(code)

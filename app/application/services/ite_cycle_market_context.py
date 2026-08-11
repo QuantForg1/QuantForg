@@ -714,14 +714,30 @@ async def build_ite_cycle_market_context(
     diag["atr"] = str(atr_dec) if atr_dec is not None else None
     diag["stop_distance"] = str(stop_dist) if stop_dist is not None else None
     diag["risk_budget"] = str(risk_budget)
+    diag["risk_amount"] = str(risk_budget)
     diag["risk_pct"] = str(risk_pct)
     diag["raw_lots"] = str(raw_lots) if raw_lots is not None else None
+    diag["raw_volume"] = str(raw_lots) if raw_lots is not None else None
     diag["calculated_lots"] = str(calc_lots) if calc_lots is not None else None
+    diag["normalized_volume"] = (
+        str(raw_lots.quantize(lot_step, rounding=ROUND_DOWN))
+        if raw_lots is not None
+        else None
+    )
+    diag["final_volume"] = str(calc_lots) if calc_lots is not None else None
     diag["broker_min_lot"] = str(min_lot)
+    diag["volume_min"] = str(min_lot)
     diag["broker_lot_step"] = str(lot_step)
+    diag["volume_step"] = str(lot_step)
     diag["contract_size"] = str(contract_size)
     diag["lot_specs_source"] = specs_source
     diag["sizing_status"] = sizing_status
+    if sizing_status == "below_min_lot":
+        diag["rejection_reason"] = "MIN_LOT_CONSTRAINT"
+        diag["signal_state"] = "VALID_SIGNAL"
+        diag["execution_state"] = "EXECUTION_BLOCKED"
+    else:
+        diag["rejection_reason"] = None
 
     diag["reason"] = "market context ready"
     diag["snapshot"] = "OK"

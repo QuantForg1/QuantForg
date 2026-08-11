@@ -71,22 +71,88 @@ def _factors(score: dict[str, Any]) -> dict[str, Any]:
     return f if isinstance(f, dict) else {}
 
 
+def _is_min_lot_constraint(text: str | None) -> bool:
+    low = str(text or "").lower()
+    return any(
+        token in low
+        for token in (
+            "min_lot_constraint",
+            "below_min_lot",
+            "below broker volume_min",
+            "below broker minimum",
+            "reduced size below min_lot",
+            "below broker min",
+        )
+    )
+
+
+def _execution_classification(
+    *,
+    direction: str,
+    reject: bool,
+    reason: str | None,
+    quality: int,
+    confidence: int,
+) -> dict[str, str | None]:
+    """Map sizing blocks to Signal Center lifecycle labels.
+
+    VALID_SIGNAL -> EXECUTION_BLOCKED -> MIN_LOT_CONSTRAINT when a real
+    directional setup exists but broker min volume exceeds safe risk.
+    """
+    min_lot = _is_min_lot_constraint(reason)
+    directional = direction in {"BUY", "SELL"}
+    strong_enough = quality >= 70 and confidence >= 70
+    if min_lot and (directional or strong_enough or reject):
+        return {
+            "signal_state": "VALID_SIGNAL",
+            "execution_state": "EXECUTION_BLOCKED",
+            "block_code": "MIN_LOT_CONSTRAINT",
+            "decision": "EXECUTION_BLOCKED",
+            "status": "MIN_LOT_CONSTRAINT",
+        }
+    if reject or direction in {"", "NONE", "NO_TRADE"}:
+        return {
+            "signal_state": "NO_TRADE",
+            "execution_state": None,
+            "block_code": None,
+            "decision": "NO_TRADE",
+            "status": "NO_TRADE",
+        }
+    return {
+        "signal_state": "VALID_SIGNAL",
+        "execution_state": "ELIGIBLE",
+        "block_code": None,
+        "decision": direction,
+        "status": direction,
+    }
+
+
 def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> dict[str, Any]:
     factors = _factors(score)
     quality = int(score.get("trade_quality") or score.get("quality") or 0)
     confidence = int(score.get("ai_confidence") or score.get("confidence") or 0)
     reject = bool(score.get("reject"))
     direction = str(score.get("direction") or "NONE").upper()
-    if reject:
+    reason_early = (
+        score.get("reject_reason")
+        or score.get("reason")
+        or score.get("summary")
+        or score.get("blocking_gate")
+    )
+    # Min-lot blocks are execution constraints, not "missing signals".
+    min_lot_block = _is_min_lot_constraint(str(reason_early or ""))
+    if reject and not min_lot_block:
         direction_out = "NONE"
     else:
         direction_out = direction if direction in {"BUY", "SELL"} else "NONE"
     badge = _signal_badge(
-        direction=direction_out if not reject else "NONE",
+        direction=direction_out if not (reject and not min_lot_block) else "NONE",
         quality=quality,
         confidence=confidence,
-        reject=reject,
+        reject=reject and not min_lot_block,
     )
+    if min_lot_block and direction_out in {"BUY", "SELL"}:
+        badge = f"{direction_out} BLOCKED"
     momentum = int(
         score.get("momentum")
         or factors.get("momentum")
@@ -124,6 +190,13 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         or score.get("reasoning")
         or reason
     )
+    exec_cls = _execution_classification(
+        direction=direction if direction in {"BUY", "SELL"} else direction_out,
+        reject=reject,
+        reason=str(reason or reason_early or ""),
+        quality=quality,
+        confidence=confidence,
+    )
     detail = {
         "structure": structure,
         "bos": factors.get("bos") or score.get("bos"),
@@ -139,9 +212,16 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "why_buy": score.get("why_buy") or factors.get("why_buy"),
         "why_sell": score.get("why_sell") or factors.get("why_sell"),
         "why_no_trade": reason if reject else score.get("why_no_trade"),
+        "signal_state": exec_cls["signal_state"],
+        "execution_state": exec_cls["execution_state"],
+        "block_code": exec_cls["block_code"],
         "raw_factors": factors,
     }
-    probability = round((quality * 0.55 + confidence * 0.45), 1) if not reject else 0.0
+    probability = (
+        round((quality * 0.55 + confidence * 0.45), 1)
+        if (not reject or min_lot_block)
+        else 0.0
+    )
     test_synthetic = bool(
         score.get("test_synthetic")
         or str(score.get("strategy") or "").upper() == "TEST_SYNTHETIC"
@@ -177,6 +257,11 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "reject": reject,
         "test_synthetic": test_synthetic,
         "signal_id": signal_id,
+        "signal_state": exec_cls["signal_state"],
+        "execution_state": exec_cls["execution_state"],
+        "block_code": exec_cls["block_code"],
+        "decision": exec_cls["decision"],
+        "status": exec_cls["status"],
         "detail": detail,
         "gauges": {
             "confidence": confidence,
@@ -261,8 +346,12 @@ def list_live_signals(
         desk = desk_symbol_code(sym)
         pref = prefs.get(sym) or (prefs.get(desk) if desk else None) or {}
         row["asset_class"] = str(pref.get("asset_class") or "other")
-        # Explicit empty-state for NO_TRADE so UI never looks "broken"
-        if not row.get("direction") or str(row.get("direction")).upper() in {
+        # Explicit empty-state for NO_TRADE so UI never looks "broken".
+        # Preserve MIN_LOT_CONSTRAINT execution blocks (valid signal, blocked).
+        if row.get("block_code") == "MIN_LOT_CONSTRAINT":
+            row.setdefault("decision", "EXECUTION_BLOCKED")
+            row.setdefault("status", "MIN_LOT_CONSTRAINT")
+        elif not row.get("direction") or str(row.get("direction")).upper() in {
             "",
             "NONE",
             "NO_TRADE",
