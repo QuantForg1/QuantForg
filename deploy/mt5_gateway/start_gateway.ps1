@@ -1,10 +1,14 @@
-# QuantForg MT5 Gateway - start via Poetry / Python 3.13 project venv.
+# QuantForg MT5 Gateway - interactive / foreground start via Poetry venv.
 # Do NOT use bare "py -m" or global Python 3.14 (missing project deps / uvicorn).
 #
 # From repo root:
 #   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\start_gateway.ps1
 #
-# If http://127.0.0.1:8765/health is already healthy, this script exits without
+# Production (survives terminal close + auto-restart):
+#   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1 -Once
+#   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\install_gateway_task.ps1
+#
+# If http://127.0.0.1:8765/health/live is already ok, this script exits without
 # starting a second process.
 
 $ErrorActionPreference = "Stop"
@@ -27,32 +31,33 @@ function Get-ProjectPython {
   throw "Project venv not found. Run: py -3.13 -m poetry install"
 }
 
-function Test-LocalGatewayHealthy {
+function Test-LocalGatewayLive {
   try {
-    $h = Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec 8
-    return (
-      $h.status -eq "ok" -and
-      $h.token_configured -eq $true -and
-      $h.bridge_available -eq $true -and
-      $h.mt5.connected -eq $true
-    )
+    $h = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 3
+    return ($h.status -eq "ok" -and $h.service -eq "mt5-gateway")
   } catch {
     return $false
   }
 }
 
 Write-Host "RepoRoot=$RepoRoot"
+Write-Host "TIP: For production use deploy\mt5_gateway\supervise_gateway.ps1 (survives terminal close)."
 
 $listen = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue
 if ($listen) {
-  if (Test-LocalGatewayHealthy) {
-    Write-Host "Gateway already healthy on :8765 - not starting a second process."
-    $h = Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec 8
-    Write-Host ("status={0} mt5.connected={1} trade_allowed={2} autotrading={3}" -f `
-      $h.status, $h.mt5.connected, $h.mt5.trade_allowed, $h.mt5.mt5_autotrading_enabled)
+  if (Test-LocalGatewayLive) {
+    Write-Host "Gateway already live on :8765 - not starting a second process."
+    try {
+      $h = Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec 5
+      Write-Host ("status={0} mt5.connected={1} trade_allowed={2} autotrading={3}" -f `
+        $h.status, $h.mt5.connected, $h.mt5.trade_allowed, $h.mt5.mt5_autotrading_enabled)
+    } catch {
+      Write-Host "Gateway process is live; /health degraded or slow (MT5 busy) --- not restarting."
+    }
     exit 0
   }
-  Write-Host "Port 8765 is occupied but health check failed. Stop the old process before restarting."
+  Write-Host "Port 8765 is occupied but /health/live failed (hung/stale process)."
+  Write-Host "Reclaim with: powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1 -Once"
   $listen | ForEach-Object {
     $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
     Write-Host ("LISTEN pid={0} name={1}" -f $_.OwningProcess, $p.ProcessName)
@@ -69,4 +74,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Starting gateway (foreground). Ctrl+C to stop."
+Write-Host "NOTE: Closing this window stops the gateway. Prefer supervise_gateway.ps1 for production."
 & $Python -m services.mt5_gateway.main
+

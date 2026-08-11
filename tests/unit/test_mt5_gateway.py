@@ -267,7 +267,7 @@ class TestMT5Gateway:
         body = res.json()
         assert body["service"] == "mt5-gateway"
         assert body["token_configured"] is True
-        assert body.get("gateway_version") == "1.1.6"
+        assert body.get("gateway_version") == "1.1.7"
         assert body["auto_attach_enabled"] is False
         mt5 = body.get("mt5") or {}
         # No session yet — capabilities not probed (never invent Enabled).
@@ -666,6 +666,90 @@ class TestFillingModeSelection:
 
         with pytest.raises(MT5CallTimeout):
             call_mt5_bounded(_hang, timeout_seconds=0.1, label="test")
+
+    def test_health_live_never_touches_mt5(self, client: TestClient) -> None:
+        runtime = client.app.state.runtime
+
+        class _BoomBridge(_FakeBridge):
+            def account_info(self) -> Any:
+                raise RuntimeError("health/live must not call MT5")
+
+            def symbol_info_tick(self, symbol: str) -> Any:
+                raise RuntimeError("health/live must not call MT5")
+
+        runtime.bridge = _BoomBridge()
+        res = client.get("/health/live")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["status"] == "ok"
+        assert body["probe"] == "live"
+        assert body["gateway_version"] == "1.1.7"
+        assert "mt5" not in body
+
+    def test_market_data_timeout_returns_503_not_hang(
+        self, client: TestClient
+    ) -> None:
+        import time
+
+        runtime = client.app.state.runtime
+        runtime.settings.mt5_market_data_timeout_seconds = 0.15
+        headers = {"Authorization": "Bearer test-gateway-token"}
+
+        class _SlowQuote(_FakeBridge):
+            def symbol_info_tick(self, symbol: str) -> Any:
+                time.sleep(2.0)
+                return super().symbol_info_tick(symbol)
+
+        runtime.bridge = _SlowQuote(prelogged=True)
+        runtime.diagnostics.connected = True
+        runtime.diagnostics.session_mode = "attached"
+        t0 = time.perf_counter()
+        res = client.get("/quotes/XAUUSD_I", headers=headers)
+        elapsed = time.perf_counter() - t0
+        assert res.status_code == 503
+        assert elapsed < 2.0
+        assert "exceeded" in (res.json().get("detail") or "").lower()
+
+    def test_xauusd_i_quote_and_candles(self, client: TestClient) -> None:
+        runtime = client.app.state.runtime
+        runtime.bridge = _FakeBridge(prelogged=True)
+        runtime.diagnostics.connected = True
+        runtime.diagnostics.session_mode = "attached"
+        headers = {"Authorization": "Bearer test-gateway-token"}
+        q = client.get("/quotes/XAUUSD_I", headers=headers)
+        assert q.status_code == 200
+        assert float(q.json()["bid"]) > 0
+        c = client.get(
+            "/candles/XAUUSD_I",
+            headers=headers,
+            params={"timeframe": "H1", "count": 20},
+        )
+        assert c.status_code == 200
+        assert len(c.json().get("items") or []) >= 1
+
+    def test_try_lock_snapshot_reports_busy(self) -> None:
+        import threading
+
+        from services.mt5_gateway.runtime import MT5GatewayRuntime
+
+        rt = MT5GatewayRuntime(bridge=_FakeBridge(prelogged=True))
+        held = threading.Event()
+        release = threading.Event()
+
+        def _hold() -> None:
+            with rt._mt5_ops_lock:
+                held.set()
+                release.wait(timeout=5.0)
+
+        t = threading.Thread(target=_hold, daemon=True)
+        t.start()
+        assert held.wait(timeout=2.0)
+        try:
+            snap = rt.try_lock_snapshot(wait_seconds=0.0)
+            assert snap["lock"] == "busy"
+        finally:
+            release.set()
+            t.join(timeout=2.0)
 
 
 @pytest.mark.unit

@@ -67,25 +67,52 @@ Broker passwords are **not** written to disk by the gateway and are **never** re
 QuantForg requires **Python 3.13** via the Poetry project venv (`.venv`).  
 Do **not** use bare `py -m` / global Python 3.14 — that environment does not include project dependencies (`uvicorn`, etc.).
 
+### Production (recommended) — survives terminal close
+
+Interactive `start_gateway.ps1` dies when the PowerShell window closes. Production uses a **Hidden** child process + supervisor + optional Task Scheduler:
+
+```powershell
+# One-shot: start Hidden gateway, verify /health/live, exit supervisor
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1 -Once
+
+# Persistent: supervise loop (auto-restart on crash / unresponsive /health/live)
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1
+
+# Register ONLOGON Scheduled Task (run elevated once)
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\install_gateway_task.ps1
+```
+
+Supervisor logs: `docs/production/reports/gateway_supervisor/`.  
+Stop: create `docs/production/reports/gateway_supervisor/STOP`.
+
+Watchdog restarts only when the process dies or `/health/live` fails repeatedly — **not** when a single quote/candle is slow.
+
+### Interactive / debug
+
 ```powershell
 # From repo root
 py -3.13 --version
 py -3.13 -m poetry --version
 py -3.13 -m poetry install
 
-# Preferred start (skips if :8765 already healthy)
+# Foreground (skips if :8765 already live) — dies when the window closes
 powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\start_gateway.ps1
 
 # Or start directly with the project interpreter:
-py -3.13 -m poetry run python -m services.mt5_gateway.main
-# equivalent:
 .\.venv\Scripts\python.exe -m services.mt5_gateway.main
-# or Poetry script:
-py -3.13 -m poetry run quantforg-mt5-gateway
 ```
 
 Ensure `MT5_GATEWAY_TOKEN` is set in the Windows host `.env` (see `deploy/mt5_gateway/gateway.env.example`).  
 Prefer `MT5_GATEWAY_AUTO_ATTACH=true` when the terminal stays logged in.
+
+### Health endpoints
+
+| Path | Behavior |
+|------|----------|
+| `GET /health/live` | Process liveness only — no MetaTrader5, no ops lock |
+| `GET /health` | Fast readiness; MT5 probe bounded (~450ms); degraded MT5 still HTTP 200 |
+
+Market-data handlers use bounded concurrency, in-flight dedupe, and hard MT5 timeouts (`MT5_MARKET_DATA_TIMEOUT_SECONDS`, `MT5_MAX_CONCURRENT_MARKET_REQUESTS`).
 
 ### Prefer attach when already logged into XM
 

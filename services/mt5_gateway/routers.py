@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from services.mt5_gateway.auth import require_gateway_token
-from services.mt5_gateway.runtime import MT5GatewayRuntime
+from services.mt5_gateway.runtime import MT5CallTimeout, MT5GatewayRuntime
 from services.mt5_gateway.schemas import (
     AttachRequest,
     CancelRequest,
@@ -19,6 +20,18 @@ from services.mt5_gateway.schemas import (
 from services.mt5_gateway.settings import get_gateway_settings
 
 router = APIRouter(tags=["mt5-gateway"])
+
+# Dedicated pool so market-data storms cannot starve /health.
+_HEALTH_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gw-health")
+_MD_SEM: asyncio.Semaphore | None = None
+
+
+def _market_sem() -> asyncio.Semaphore:
+    global _MD_SEM
+    if _MD_SEM is None:
+        n = int(get_gateway_settings().mt5_max_concurrent_market_requests or 4)
+        _MD_SEM = asyncio.Semaphore(max(1, n))
+    return _MD_SEM
 
 
 def get_runtime(request: Request) -> MT5GatewayRuntime:
@@ -38,6 +51,10 @@ TokenDep = Annotated[str, Depends(require_gateway_token)]
 def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
         return fn()
+    except MT5CallTimeout as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
@@ -57,18 +74,67 @@ def _call(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
 
 async def _call_async(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     """Run blocking MT5 bridge work off the event loop (candles/ticks/account)."""
+    async with _market_sem():
+        return await asyncio.to_thread(_call, fn)
+
+
+async def _call_trade_async(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    """Trade path: off the event loop, but not queued behind market-data concurrency."""
     return await asyncio.to_thread(_call, fn)
+
+
+# In-flight dedupe for identical market-data GETs (scanner fan-out).
+_INFLIGHT: dict[str, asyncio.Future[dict[str, Any]]] = {}
+
+
+async def _deduped_market(
+    key: str, fn: Callable[[], dict[str, Any]]
+) -> dict[str, Any]:
+    """Share one MT5 call across concurrent identical requests."""
+    existing = _INFLIGHT.get(key)
+    if existing is not None and not existing.done():
+        return await asyncio.shield(existing)
+
+    loop = asyncio.get_running_loop()
+    fut: asyncio.Future[dict[str, Any]] = loop.create_future()
+    _INFLIGHT[key] = fut
+
+    async def _run() -> None:
+        try:
+            result = await _call_async(fn)
+            if not fut.done():
+                fut.set_result(result)
+        except Exception as exc:
+            if not fut.done():
+                fut.set_exception(exc)
+        finally:
+            if _INFLIGHT.get(key) is fut:
+                _INFLIGHT.pop(key, None)
+
+    asyncio.create_task(_run())
+    return await asyncio.shield(fut)
+
+
+@router.get("/health/live")
+async def health_live() -> dict[str, Any]:
+    """Process liveness only — never touches MetaTrader5 or the ops lock."""
+    from services.mt5_gateway import __version__ as gateway_version
+
+    return {
+        "status": "ok",
+        "service": "mt5-gateway",
+        "gateway_version": gateway_version,
+        "probe": "live",
+    }
 
 
 @router.get("/health")
 async def health(request: Request) -> dict[str, Any]:
     """Liveness/readiness — open without token (auth intentionally bypassed).
 
-    Never blocks the event loop on MetaTrader5. MT5 probes run in a worker
-    thread with a hard timeout; degraded MT5 still returns HTTP 200 quickly.
+    Never blocks the event loop on MetaTrader5. MT5 probes run in a dedicated
+    health thread pool with a hard timeout; degraded MT5 still returns HTTP 200.
     """
-    import asyncio
-
     from services.mt5_gateway.settings import token_load_meta
     from services.mt5_gateway.token_util import (
         mask_gateway_token,
@@ -107,36 +173,31 @@ async def health(request: Request) -> dict[str, Any]:
     if runtime is not None:
         # Hard ceiling so /health never exceeds ~500ms even if probe settings drift.
         ceiling = min(0.45, float(settings.mt5_health_probe_timeout_seconds) + 0.1)
+        loop = asyncio.get_running_loop()
         try:
             mt5_payload = await asyncio.wait_for(
-                asyncio.to_thread(runtime.health),
+                loop.run_in_executor(_HEALTH_POOL, runtime.health),
                 timeout=ceiling,
             )
         except TimeoutError:
             from services.mt5_gateway.runtime import _empty_capability_fields
 
+            snap = runtime.try_lock_snapshot(wait_seconds=0.0)
             mt5_payload = {
-                "connected": False,
-                "session_mode": getattr(
-                    getattr(runtime, "diagnostics", None), "session_mode", "none"
-                ),
+                "connected": bool(snap.get("connected")),
+                "session_mode": snap.get("session_mode") or "none",
                 "latency_ms": None,
                 "terminal_build": None,
                 "build_date": None,
                 "server": getattr(getattr(runtime, "diagnostics", None), "server", None)
                 or None,
                 "login_status": "timeout",
-                "last_heartbeat_at": getattr(
-                    getattr(runtime, "diagnostics", None),
-                    "last_heartbeat_at",
-                    None,
-                ),
+                "last_heartbeat_at": snap.get("last_heartbeat_at"),
                 "version": "",
-                "bridge_available": bool(
-                    getattr(getattr(runtime, "bridge", None), "available", False)
-                ),
+                "bridge_available": bool(snap.get("bridge_available")),
                 "degraded": True,
                 "probe": "async_ceiling",
+                "ops_lock": snap.get("lock"),
                 **_empty_capability_fields(
                     reason="health probe timed out — terminal capabilities not read"
                 ),
@@ -220,18 +281,20 @@ async def account(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
 
 @router.get("/symbols")
 async def symbols(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return await _call_async(runtime.symbols)
+    return await _deduped_market("symbols", runtime.symbols)
 
 
 @router.get("/symbols/{symbol}")
 async def symbol_specs(symbol: str, _: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
     """Live MT5 constraints: volume_step, stops_level, filling_mode, trade_mode, …"""
-    return await _call_async(lambda: runtime.symbol_specs(symbol))
+    key = f"symbol_specs:{symbol.strip().upper()}"
+    return await _deduped_market(key, lambda: runtime.symbol_specs(symbol))
 
 
 @router.get("/quotes/{symbol}")
 async def quotes(symbol: str, _: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return await _call_async(lambda: runtime.quote(symbol))
+    key = f"quote:{symbol.strip().upper()}"
+    return await _deduped_market(key, lambda: runtime.quote(symbol))
 
 
 @router.get("/candles/{symbol}")
@@ -242,8 +305,9 @@ async def candles(
     timeframe: str = Query(default="H1"),
     count: int = Query(default=100, ge=1, le=5000),
 ) -> dict[str, Any]:
-    return await _call_async(
-        lambda: runtime.candles(symbol, timeframe=timeframe, count=count)
+    key = f"candles:{symbol.strip().upper()}:{timeframe.strip().upper()}:{count}"
+    return await _deduped_market(
+        key, lambda: runtime.candles(symbol, timeframe=timeframe, count=count)
     )
 
 
@@ -279,21 +343,25 @@ async def history_deals(
 async def trade_order_check(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return await _call_async(lambda: runtime.order_check(body.as_runtime_dict()))
+    return await _call_trade_async(lambda: runtime.order_check(body.as_runtime_dict()))
 
 
 @router.post("/trade/order_calc_margin")
 async def trade_order_calc_margin(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return await _call_async(lambda: runtime.order_calc_margin(body.as_runtime_dict()))
+    return await _call_trade_async(
+        lambda: runtime.order_calc_margin(body.as_runtime_dict())
+    )
 
 
 @router.post("/trade/order_calc_profit")
 async def trade_order_calc_profit(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return await _call_async(lambda: runtime.order_calc_profit(body.as_runtime_dict()))
+    return await _call_trade_async(
+        lambda: runtime.order_calc_profit(body.as_runtime_dict())
+    )
 
 
 @router.post("/trade/order_send")
@@ -301,11 +369,11 @@ async def trade_order_send(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
     """Live MetaTrader5.order_send — never invents tickets."""
-    return await _call_async(lambda: runtime.order_send(body.as_runtime_dict()))
+    return await _call_trade_async(lambda: runtime.order_send(body.as_runtime_dict()))
 
 
 @router.post("/trade/order_cancel")
 async def trade_order_cancel(
     body: CancelRequest, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return await _call_async(lambda: runtime.order_cancel(body.ticket))
+    return await _call_trade_async(lambda: runtime.order_cancel(body.ticket))

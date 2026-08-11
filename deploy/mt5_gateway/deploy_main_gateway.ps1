@@ -62,11 +62,13 @@ Start-Sleep -Seconds 4
 
 $outLog = Join-Path $ReportDir "gateway_main.out.log"
 $errLog = Join-Path $ReportDir "gateway_main.err.log"
-Write-Log "starting gateway"
-Start-Process -FilePath $Python -ArgumentList @("-m", "services.mt5_gateway.main") `
-  -WorkingDirectory $RepoRoot -WindowStyle Hidden `
-  -RedirectStandardOutput $outLog -RedirectStandardError $errLog
-Start-Sleep -Seconds 8
+Write-Log "starting gateway via supervise_gateway.ps1 -Once (Hidden child survives shell close)"
+$supervise = Join-Path $RepoRoot "deploy\mt5_gateway\supervise_gateway.ps1"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $supervise -Once
+if ($LASTEXITCODE -ne 0) {
+  throw "supervise_gateway.ps1 -Once failed"
+}
+Start-Sleep -Seconds 3
 
 # Attach existing terminal session (no password through API)
 $tokenLine = Get-Content -Path ".env" |
@@ -81,9 +83,9 @@ $attachUri = "http://127.0.0.1:8765/session/attach"
 $healthUri = "http://127.0.0.1:8765/health"
 $accountUri = "http://127.0.0.1:8765/account"
 $heartbeatUri = "http://127.0.0.1:8765/heartbeat"
-$quotesUri = "http://127.0.0.1:8765/quotes/XAUUSD"
+$quotesUri = "http://127.0.0.1:8765/quotes/XAUUSD_I"
 # Query string uses single-quoted literal so '&' is never a call operator.
-$candlesUri = 'http://127.0.0.1:8765/candles/XAUUSD?timeframe=M5&count=20'
+$candlesUri = 'http://127.0.0.1:8765/candles/XAUUSD_I?timeframe=H1&count=200'
 
 try {
   $attachHeaders = @{

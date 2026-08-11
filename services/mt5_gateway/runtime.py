@@ -521,18 +521,95 @@ class MT5GatewayRuntime:
         # Serialize ALL MetaTrader5 terminal IPC. Concurrent symbol_select /
         # copy_rates from parallel Railway scans cause (-1, 'Terminal: Call failed').
         self._mt5_ops_lock = threading.RLock()
+        # Exact MetaTrader5 names that have been successfully selected this session.
         self._selected_symbols: set[str] = set()
+        # UPPER → exact catalogue spelling (Weltrade uses ``XAUUSD_i``, not ``XAUUSD_I``).
+        self._symbol_name_by_upper: dict[str, str] = {}
         self.diagnostics = GatewayDiagnostics()
         self._stop = threading.Event()
         self._hb_thread: threading.Thread | None = None
 
     def _clear_selected_symbols(self) -> None:
         self._selected_symbols.clear()
+        self._symbol_name_by_upper.clear()
 
-    def _run_mt5_op(self, fn: Callable[[], T]) -> T:
-        """Run a MetaTrader5-touching callable under the process-wide ops lock."""
-        with self._mt5_ops_lock:
-            return fn()
+    def _run_mt5_op(
+        self,
+        fn: Callable[[], T],
+        *,
+        timeout_seconds: float | None = None,
+        label: str = "mt5_op",
+    ) -> T:
+        """Run MetaTrader5 work under the ops lock with a hard wall-clock bound.
+
+        Unbounded ``with self._mt5_ops_lock`` previously wedged the gateway when
+        MT5 IPC hung: orphaned workers held the lock, queued /health and market
+        data forever, and sockets piled up in CLOSE_WAIT.
+        """
+        timeout = (
+            float(timeout_seconds)
+            if timeout_seconds is not None
+            else float(self.settings.mt5_market_data_timeout_seconds)
+        )
+        return call_mt5_bounded(
+            fn,
+            timeout_seconds=timeout,
+            label=label,
+            ops_lock=self._mt5_ops_lock,
+        )
+
+    def try_lock_snapshot(self, *, wait_seconds: float = 0.05) -> dict[str, Any]:
+        """Non-blocking health helper — never waits on a wedged MT5 lock."""
+        acquired = self._mt5_ops_lock.acquire(timeout=max(0.0, float(wait_seconds)))
+        if not acquired:
+            return {
+                "lock": "busy",
+                "connected": bool(self.diagnostics.connected),
+                "session_mode": self.diagnostics.session_mode,
+                "bridge_available": bool(self.bridge.available),
+                "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
+            }
+        try:
+            return {
+                "lock": "free",
+                "connected": bool(self.diagnostics.connected),
+                "session_mode": self.diagnostics.session_mode,
+                "bridge_available": bool(self.bridge.available),
+                "last_heartbeat_at": self.diagnostics.last_heartbeat_at,
+            }
+        finally:
+            self._mt5_ops_lock.release()
+
+    def _refresh_symbol_name_index_unlocked(self) -> None:
+        """Rebuild UPPER→exact catalogue map. Caller must hold ``_mt5_ops_lock``."""
+        rows = self.bridge.symbols_get() or []
+        idx: dict[str, str] = {}
+        for row in rows:
+            name = str(getattr(row, "name", "") or "").strip()
+            if not name:
+                continue
+            # Preserve the first exact spelling returned by the terminal.
+            idx.setdefault(name.upper(), name)
+        self._symbol_name_by_upper = idx
+
+    def _resolve_broker_symbol(self, symbol: str) -> str:
+        """Map any case variant to the exact MetaTrader5 catalogue name.
+
+        Weltrade (and similar) expose institutional CFDs as ``XAUUSD_i`` /
+        ``EURUSD_i``. Callers often uppercase to ``XAUUSD_I``, which makes
+        ``symbol_select`` / ticks fail with Terminal: Call failed even though
+        the instrument exists. Resolution is catalogue-driven — never invents
+        a name that is not in ``symbols_get``.
+        """
+        sym = (symbol or "").strip()
+        if not sym:
+            return sym
+        key = sym.upper()
+        exact = self._symbol_name_by_upper.get(key)
+        if exact:
+            return exact
+        self._refresh_symbol_name_index_unlocked()
+        return self._symbol_name_by_upper.get(key, sym)
 
     def start_background(self) -> None:
         if self._hb_thread and self._hb_thread.is_alive():
@@ -1073,26 +1150,37 @@ class MT5GatewayRuntime:
                 )
             time.sleep(backoff)
 
-    def _ensure_symbol(self, symbol: str) -> None:
+    def _ensure_symbol(self, symbol: str) -> str:
         """Select symbol in the terminal. Caller must hold ``_mt5_ops_lock``.
 
-        Caches successful selects for the current session and soft-retries once
-        on Terminal: Call failed (IPC contention) without fabricating data.
+        Resolves catalogue-exact spelling, caches successful selects for the
+        current session, and soft-retries once on Terminal: Call failed
+        (IPC contention) without fabricating data.
+
+        Returns the exact broker symbol name used for subsequent MT5 calls.
         """
-        sym = (symbol or "").strip()
-        if not sym:
+        requested = (symbol or "").strip()
+        if not requested:
             raise RuntimeError("symbol_select failed: empty symbol")
-        key = sym.upper()
-        if key in self._selected_symbols:
-            return
+        exact = self._resolve_broker_symbol(requested)
+        if exact in self._selected_symbols:
+            return exact
         last_err: Any = None
         for attempt in range(2):
-            ok = bool(self.bridge.symbol_select(sym, True))
+            ok = bool(self.bridge.symbol_select(exact, True))
             if ok:
-                self._selected_symbols.add(key)
-                return
+                self._selected_symbols.add(exact)
+                # Keep UPPER index aligned even if symbols_get was empty earlier.
+                self._symbol_name_by_upper.setdefault(exact.upper(), exact)
+                return exact
             last_err = self.bridge.last_error()
             if attempt == 0 and _is_terminal_call_failed(last_err):
+                # Case-mismatch can surface as Terminal: Call failed — refresh
+                # catalogue once and retry with the exact spelling if it differs.
+                self._refresh_symbol_name_index_unlocked()
+                refreshed = self._symbol_name_by_upper.get(requested.upper())
+                if refreshed and refreshed != exact:
+                    exact = refreshed
                 time.sleep(0.05)
                 continue
             break
@@ -1168,12 +1256,12 @@ class MT5GatewayRuntime:
         self._require_connected()
 
         def _body() -> dict[str, Any]:
-            self._ensure_symbol(symbol)
-            info = self.bridge.symbol_info(symbol)
+            exact = self._ensure_symbol(symbol)
+            info = self.bridge.symbol_info(exact)
             if info is None:
                 err = self.bridge.last_error()
                 raise RuntimeError(f"symbol_info failed for {symbol}: {err}")
-            tick = self.bridge.symbol_info_tick(symbol)
+            tick = self.bridge.symbol_info_tick(exact)
             return serialize_symbol_specs(info, tick=tick)
 
         return self._run_mt5_op(_body)
@@ -1182,14 +1270,14 @@ class MT5GatewayRuntime:
         self._require_connected()
 
         def _body() -> dict[str, Any]:
-            self._ensure_symbol(symbol)
-            tick = self.bridge.symbol_info_tick(symbol)
+            exact = self._ensure_symbol(symbol)
+            tick = self.bridge.symbol_info_tick(exact)
             if tick is None:
                 raise RuntimeError(f"symbol unavailable: {symbol}")
             specs: dict[str, Any] = {}
             try:
                 # Already under _mt5_ops_lock (RLock) — nested ensure is cached.
-                info = self.bridge.symbol_info(symbol)
+                info = self.bridge.symbol_info(exact)
                 if info is not None:
                     from services.mt5_gateway.symbol_specs import serialize_symbol_specs
 
@@ -1197,7 +1285,7 @@ class MT5GatewayRuntime:
             except RuntimeError:
                 specs = {}
             return {
-                "symbol": symbol.upper(),
+                "symbol": exact.upper(),
                 "bid": str(tick.bid),
                 "ask": str(tick.ask),
                 "time": _safe_int(getattr(tick, "time", 0)),
@@ -1216,13 +1304,13 @@ class MT5GatewayRuntime:
             raise RuntimeError(f"unsupported timeframe: {timeframe}")
 
         def _body() -> dict[str, Any]:
-            self._ensure_symbol(symbol)
-            rates = self.bridge.copy_rates_from_pos(symbol, tf, 0, count)
+            exact = self._ensure_symbol(symbol)
+            rates = self.bridge.copy_rates_from_pos(exact, tf, 0, count)
             if rates is None:
                 err = self.bridge.last_error()
                 if _is_terminal_call_failed(err):
                     time.sleep(0.05)
-                    rates = self.bridge.copy_rates_from_pos(symbol, tf, 0, count)
+                    rates = self.bridge.copy_rates_from_pos(exact, tf, 0, count)
                 if rates is None:
                     raise RuntimeError(
                         f"candles unavailable for {symbol}: {err}"
@@ -1238,7 +1326,7 @@ class MT5GatewayRuntime:
                 for r in rates
             ]
             return {
-                "symbol": symbol.upper(),
+                "symbol": exact.upper(),
                 "timeframe": tf_key,
                 "items": items,
             }
@@ -1358,12 +1446,12 @@ class MT5GatewayRuntime:
         )
 
         self._require_connected()
-        symbol = str(body.get("symbol") or "").strip().upper()
-        if not symbol:
+        symbol_req = str(body.get("symbol") or "").strip()
+        if not symbol_req:
             raise RuntimeError("symbol is required")
 
         def _body() -> dict[str, Any]:
-            self._ensure_symbol(symbol)
+            symbol = self._ensure_symbol(symbol_req)
             mt5 = self.bridge.require()
             request = build_mt5_trade_request(
                 mt5,
@@ -1406,68 +1494,87 @@ class MT5GatewayRuntime:
         from services.mt5_gateway.trade import order_type_for_action
 
         self._require_connected()
-        symbol = str(body.get("symbol") or "").strip().upper()
+        symbol_req = str(body.get("symbol") or "").strip()
         action = str(body.get("action") or "buy")
         volume = float(body.get("volume") or 0)
         price = float(body.get("price") or 0)
-        if not symbol or volume <= 0:
+        if not symbol_req or volume <= 0:
             raise RuntimeError("symbol and positive volume are required")
-        self._ensure_symbol(symbol)
-        if price <= 0:
-            tick = self.bridge.symbol_info_tick(symbol)
-            if tick is None:
-                raise RuntimeError(f"no quote for {symbol}")
-            price = float(tick.ask if "buy" in action.lower() else tick.bid)
-        order_type = order_type_for_action(action)
-        margin = self.bridge.order_calc_margin(order_type, symbol, volume, price)
-        if margin is None:
-            err = self.bridge.last_error()
+
+        def _body() -> dict[str, Any]:
+            symbol = self._ensure_symbol(symbol_req)
+            local_price = price
+            if local_price <= 0:
+                tick = self.bridge.symbol_info_tick(symbol)
+                if tick is None:
+                    raise RuntimeError(f"no quote for {symbol}")
+                local_price = float(
+                    tick.ask if "buy" in action.lower() else tick.bid
+                )
+            order_type = order_type_for_action(action)
+            margin = self.bridge.order_calc_margin(
+                order_type, symbol, volume, local_price
+            )
+            if margin is None:
+                err = self.bridge.last_error()
+                return {
+                    "margin": "0",
+                    "retcode": 10013,
+                    "comment": f"order_calc_margin failed: {err}",
+                }
             return {
-                "margin": "0",
-                "retcode": 10013,
-                "comment": f"order_calc_margin failed: {err}",
+                "margin": str(margin),
+                "retcode": 10009,
+                "comment": "done",
             }
-        return {
-            "margin": str(margin),
-            "retcode": 10009,
-            "comment": "done",
-        }
+
+        return self._run_mt5_op(_body)
 
     def order_calc_profit(self, body: dict[str, Any]) -> dict[str, Any]:
         from services.mt5_gateway.trade import order_type_for_action
 
         self._require_connected()
-        symbol = str(body.get("symbol") or "").strip().upper()
+        symbol_req = str(body.get("symbol") or "").strip()
         action = str(body.get("action") or "buy")
         volume = float(body.get("volume") or 0)
         price_open = float(body.get("price") or body.get("price_open") or 0)
         price_close = float(body.get("close_price") or body.get("price_close") or 0)
-        if not symbol or volume <= 0:
+        if not symbol_req or volume <= 0:
             raise RuntimeError("symbol and positive volume are required")
-        self._ensure_symbol(symbol)
-        tick = self.bridge.symbol_info_tick(symbol)
-        if tick is None:
-            raise RuntimeError(f"no quote for {symbol}")
-        if price_open <= 0:
-            price_open = float(tick.ask if "buy" in action.lower() else tick.bid)
-        if price_close <= 0:
-            price_close = float(tick.bid if "buy" in action.lower() else tick.ask)
-        order_type = order_type_for_action(action)
-        profit = self.bridge.order_calc_profit(
-            order_type, symbol, volume, price_open, price_close
-        )
-        if profit is None:
-            err = self.bridge.last_error()
+
+        def _body() -> dict[str, Any]:
+            symbol = self._ensure_symbol(symbol_req)
+            tick = self.bridge.symbol_info_tick(symbol)
+            if tick is None:
+                raise RuntimeError(f"no quote for {symbol}")
+            local_open = price_open
+            local_close = price_close
+            if local_open <= 0:
+                local_open = float(
+                    tick.ask if "buy" in action.lower() else tick.bid
+                )
+            if local_close <= 0:
+                local_close = float(
+                    tick.bid if "buy" in action.lower() else tick.ask
+                )
+            order_type = order_type_for_action(action)
+            profit = self.bridge.order_calc_profit(
+                order_type, symbol, volume, local_open, local_close
+            )
+            if profit is None:
+                err = self.bridge.last_error()
+                return {
+                    "profit": "0",
+                    "retcode": 10013,
+                    "comment": f"order_calc_profit failed: {err}",
+                }
             return {
-                "profit": "0",
-                "retcode": 10013,
-                "comment": f"order_calc_profit failed: {err}",
+                "profit": str(profit),
+                "retcode": 10009,
+                "comment": "done",
             }
-        return {
-            "profit": str(profit),
-            "retcode": 10009,
-            "comment": "done",
-        }
+
+        return self._run_mt5_op(_body)
 
     def order_send(self, body: dict[str, Any]) -> dict[str, Any]:
         """Live MetaTrader5.order_send — returns real broker retcode / ticket."""
@@ -1482,8 +1589,8 @@ class MT5GatewayRuntime:
         )
 
         self._require_connected()
-        symbol = str(body.get("symbol") or "").strip().upper()
-        if not symbol:
+        symbol_req = str(body.get("symbol") or "").strip()
+        if not symbol_req:
             raise RuntimeError("symbol is required")
         oms_kind = str(body.get("oms_kind") or "").strip().lower()
         action = str(body.get("action") or "buy").strip().lower()
@@ -1494,7 +1601,13 @@ class MT5GatewayRuntime:
         volume = float(body.get("volume") or 0)
         if not is_sltp and volume <= 0:
             raise RuntimeError("volume must be > 0")
-        self._ensure_symbol(symbol)
+        # Catalogue-exact spelling (e.g. XAUUSD_i) — uppercase breaks Weltrade IPC.
+        trade_timeout = float(self.settings.mt5_trade_timeout_seconds)
+        symbol = self._run_mt5_op(
+            lambda: self._ensure_symbol(symbol_req),
+            timeout_seconds=trade_timeout,
+            label="order_send.ensure_symbol",
+        )
         mt5 = self.bridge.require()
         request = build_mt5_trade_request(
             mt5,
@@ -1513,7 +1626,12 @@ class MT5GatewayRuntime:
         )
         # Re-validate with filling fallback so order_send uses a broker-accepted mode.
         if int(request.get("action") or 0) != TRADE_ACTION_SLTP:
-            info = self.bridge.symbol_info(symbol)
+            info = call_mt5_bounded(
+                lambda: self.bridge.symbol_info(symbol),
+                timeout_seconds=trade_timeout,
+                label="order_send.symbol_info",
+                ops_lock=self._mt5_ops_lock,
+            )
             check_result, request = order_check_with_filling_fallback(
                 mt5, request, info=info
             )
@@ -1562,10 +1680,7 @@ class MT5GatewayRuntime:
 
         result = call_mt5_bounded(
             lambda: self.bridge.order_send(request),
-            # Trades need more headroom than heartbeat (default API timeout is 2s).
-            timeout_seconds=max(
-                float(self.settings.mt5_api_call_timeout_seconds), 15.0
-            ),
+            timeout_seconds=trade_timeout,
             label="order_send",
             ops_lock=self._mt5_ops_lock,
         )

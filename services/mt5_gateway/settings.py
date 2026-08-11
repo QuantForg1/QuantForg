@@ -205,6 +205,42 @@ class MT5GatewaySettings(BaseSettings):
             "mt5_api_call_timeout_seconds",
         ),
     )
+    mt5_market_data_timeout_seconds: float = Field(
+        default=8.0,
+        gt=0,
+        le=60.0,
+        description=(
+            "Hard timeout for quotes/candles/symbols/account under the ops lock. "
+            "Prevents a hung MetaTrader5 IPC from wedging the gateway forever."
+        ),
+        validation_alias=AliasChoices(
+            "MT5_MARKET_DATA_TIMEOUT_SECONDS",
+            "mt5_market_data_timeout_seconds",
+        ),
+    )
+    mt5_trade_timeout_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        le=60.0,
+        description="Hard timeout for order_send / order_check (semantics unchanged).",
+        validation_alias=AliasChoices(
+            "MT5_TRADE_TIMEOUT_SECONDS",
+            "mt5_trade_timeout_seconds",
+        ),
+    )
+    mt5_max_concurrent_market_requests: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        description=(
+            "Max concurrent market-data HTTP handlers hitting MT5. "
+            "Extra requests wait; does not disable multi-asset scanning."
+        ),
+        validation_alias=AliasChoices(
+            "MT5_MAX_CONCURRENT_MARKET_REQUESTS",
+            "mt5_max_concurrent_market_requests",
+        ),
+    )
     mt5_reconnect_enabled: bool = Field(default=True)
     mt5_reconnect_max_attempts: int = Field(default=5, ge=0)
     mt5_reconnect_backoff_seconds: float = Field(default=2.0, gt=0)
