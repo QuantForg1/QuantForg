@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from services.mt5_gateway.symbol_specs import normalize_volume, serialize_symbol_specs
@@ -170,13 +171,20 @@ def resolve_deal_price(
     # Even-numbered types are buys (0,2,4…), odd are sells (1,3,5…).
     want_ask = (int(order_type) % 2) == 0
     if force_tick or float(price or 0) <= 0:
-        tick = mt5.symbol_info_tick(symbol)
+        # Brief retry — scanner MD contention can yield a one-shot None tick
+        # even when the symbol is selected and /quotes succeeds moments later.
+        tick = None
+        for attempt in range(3):
+            tick = mt5.symbol_info_tick(symbol)
+            if tick is not None:
+                raw_try = float(tick.ask if want_ask else tick.bid)
+                if raw_try > 0:
+                    return normalize_price(raw_try, digits)
+            if attempt < 2:
+                time.sleep(0.05)
         if tick is None:
             raise RuntimeError(f"no quote for {symbol}")
-        raw = float(tick.ask if want_ask else tick.bid)
-        if raw <= 0:
-            raise RuntimeError(f"invalid tick price for {symbol}")
-        return normalize_price(raw, digits)
+        raise RuntimeError(f"invalid tick price for {symbol}")
     return normalize_price(float(price), digits)
 
 
@@ -309,11 +317,23 @@ def build_mt5_trade_request(
     """Build a live MT5 request with broker-normalized volume, price, and filling.
 
     Every field mirrors MetaTrader5 Python ``MqlTradeRequest`` expectations.
+
+    Symbol spelling must stay catalogue-exact from ``_ensure_symbol`` —
+    forcing ``.upper()`` can break Weltrade IPC (tick/quote → no quote).
     """
-    code = symbol.strip().upper()
+    code = (symbol or "").strip()
+    if not code:
+        raise ValueError("symbol is required")
     act = (action or "").strip().lower()
     kind = (oms_kind or "").strip().lower()
     info = mt5.symbol_info(code)
+    if info is None:
+        # Callers sometimes pass desk-upper codes; try uppercase once only.
+        alt = code.upper()
+        if alt != code:
+            info = mt5.symbol_info(alt)
+            if info is not None:
+                code = alt
     specs = serialize_symbol_specs(info) if info is not None else {}
     digits = int(specs.get("digits") or getattr(info, "digits", 5) or 5)
 

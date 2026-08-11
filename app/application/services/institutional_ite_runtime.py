@@ -707,14 +707,15 @@ class InstitutionalIteRuntime:
                 with self._lock:
                     self._last_cycle = result
                     self._cycles += 1
+                primary = (
+                    safety.failed_reasons[0] if safety.failed_reasons else "SAFETY_BLOCKED"
+                )
                 logger.warning(
                     "execution_path_step",
                     step="Safety",
                     result="FAIL",
                     abort_reason="SAFETY_BLOCKED",
-                    primary_blocker=(
-                        safety.failed_reasons[0] if safety.failed_reasons else None
-                    ),
+                    primary_blocker=primary,
                     reasons=list(result.safety_failed_reasons),
                     gateway=gw,
                     broker=mt5,
@@ -722,6 +723,32 @@ class InstitutionalIteRuntime:
                     mt5_autotrading_enabled=mt5_autotrading_enabled,
                     forwarded_to_oms=False,
                 )
+                logger.warning(
+                    "execution_first_blocking_gate",
+                    gate="SAFETY",
+                    reason=primary,
+                    symbol=getattr(account, "symbol", None)
+                    or getattr(snapshot, "symbol", None),
+                    forwarded_to_oms=False,
+                )
+                try:
+                    from app.domain.institutional_trading.production_hardening.lifecycle import (
+                        get_lifecycle_store,
+                    )
+
+                    get_lifecycle_store().record(
+                        stage="FIRST_BLOCKING_GATE",
+                        status="failed",
+                        detail=f"SAFETY: {primary}",
+                        symbol=str(
+                            getattr(account, "symbol", None)
+                            or getattr(snapshot, "symbol", None)
+                            or ""
+                        )
+                        or None,
+                    )
+                except Exception:
+                    logger.exception("first_blocking_gate_lifecycle_failed")
                 logger.info(
                     "ite_cycle_outcome",
                     outcome=result.cycle_outcome,
@@ -1446,6 +1473,13 @@ class InstitutionalIteRuntime:
                 trace_id=tid,
                 symbol=str(getattr(snapshot, "symbol", "") or ""),
             )
+            record_lifecycle(
+                stage="SIGNAL_CREATED",
+                status="ok",
+                detail=f"symbol={getattr(snapshot, 'symbol', '')}",
+                trace_id=tid,
+                symbol=str(getattr(snapshot, "symbol", "") or ""),
+            )
         except Exception:
             logger.exception("hardening_signal_lifecycle_failed")
 
@@ -1822,6 +1856,43 @@ class InstitutionalIteRuntime:
                 trace_id=tid,
                 symbol=str(getattr(decision, "symbol", "") or ""),
             )
+            if decision.eligibility.eligible:
+                record_lifecycle(
+                    stage="RISK_PASSED",
+                    status="ok",
+                    detail="eligible",
+                    trace_id=tid,
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                )
+                lots_txt = getattr(decision, "approved_lots", None)
+                if lots_txt is None:
+                    lots_txt = getattr(decision, "lots", None)
+                record_lifecycle(
+                    stage="SIZE_APPROVED",
+                    status="ok",
+                    detail=f"lots={lots_txt}",
+                    trace_id=tid,
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                )
+            else:
+                reason = (
+                    ";".join(decision.eligibility.rejection_reasons)
+                    or "risk_ineligible"
+                )
+                record_lifecycle(
+                    stage="FIRST_BLOCKING_GATE",
+                    status="failed",
+                    detail=f"RISK: {reason}",
+                    trace_id=tid,
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                )
+                logger.warning(
+                    "execution_first_blocking_gate",
+                    gate="RISK",
+                    reason=reason,
+                    symbol=str(getattr(decision, "symbol", "") or ""),
+                    forwarded_to_oms=False,
+                )
         except Exception:
             logger.exception("hardening_decision_lifecycle_failed")
 
@@ -3409,6 +3480,28 @@ class InstitutionalIteRuntime:
             best = str(scan.get("best_symbol") or "").upper() or None
             if best and best not in eligible:
                 eligible = [best, *[s for s in eligible if s != best]]
+            # Prefer desk-allowlisted symbols for execution handoff (Safety still
+            # applies). Avoids spending cycles on CADCHF/AEXEUR SAFETY_BLOCKED
+            # before EURUSD_I / other approved desks that can size on micro equity.
+            try:
+                from app.domain.institutional_trading.ai_scalping.config import (
+                    DEFAULT_SCALPING_UNIVERSE,
+                )
+                from app.domain.institutional_trading.auto_trading import (
+                    prefer_allowlisted_handoff,
+                )
+
+                plane_allowed = tuple(
+                    getattr(self.plane, "allowed_symbols", ()) or ()
+                )
+                allow_seed = (
+                    plane_allowed
+                    if plane_allowed and len(plane_allowed) >= 2
+                    else DEFAULT_SCALPING_UNIVERSE
+                )
+                eligible = prefer_allowlisted_handoff(eligible, allow_seed)
+            except Exception:
+                logger.exception("prefer_allowlisted_handoff_failed")
             with self._lock:
                 self._last_multi_asset_scan = (
                     dict(scan) if isinstance(scan, dict) else None

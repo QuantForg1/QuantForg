@@ -63,6 +63,26 @@ def observe_oms_outcome(
         det = get_incident_detector()
         if forwarded:
             mon.record_submit()
+            ticket_s = str(ticket) if ticket is not None else None
+            record_lifecycle(
+                stage="OMS_SUBMIT",
+                status="ok",
+                detail="oms.submit_market invoked",
+                trace_id=trace_id,
+                latency_ms=latency_ms,
+                symbol=symbol,
+                ticket=ticket_s,
+            )
+            record_lifecycle(
+                stage="GATEWAY_ORDER_REQUEST",
+                status="ok" if success else "failed",
+                detail=(message or ("gateway accepted" if success else "gateway failed"))[
+                    :240
+                ],
+                trace_id=trace_id,
+                symbol=symbol,
+                ticket=ticket_s,
+            )
             record_lifecycle(
                 stage="OMS",
                 status="ok" if success else "failed",
@@ -70,7 +90,15 @@ def observe_oms_outcome(
                 trace_id=trace_id,
                 latency_ms=latency_ms,
                 symbol=symbol,
-                ticket=str(ticket) if ticket is not None else None,
+                ticket=ticket_s,
+            )
+            record_lifecycle(
+                stage="MT5_ORDER_SEND",
+                status="ok" if success else "failed",
+                detail=f"retcode={retcode}",
+                trace_id=trace_id,
+                symbol=symbol,
+                ticket=ticket_s,
             )
             record_lifecycle(
                 stage="MT5_GATEWAY",
@@ -78,7 +106,7 @@ def observe_oms_outcome(
                 detail=f"retcode={retcode}",
                 trace_id=trace_id,
                 symbol=symbol,
-                ticket=str(ticket) if ticket is not None else None,
+                ticket=ticket_s,
             )
             record_lifecycle(
                 stage="BROKER",
@@ -86,7 +114,7 @@ def observe_oms_outcome(
                 detail=(message or "")[:240],
                 trace_id=trace_id,
                 symbol=symbol,
-                ticket=str(ticket) if ticket is not None else None,
+                ticket=ticket_s,
             )
             record_lifecycle(
                 stage="CONFIRMATION",
@@ -94,22 +122,57 @@ def observe_oms_outcome(
                 detail="confirmed" if success else "not confirmed",
                 trace_id=trace_id,
                 symbol=symbol,
-                ticket=str(ticket) if ticket is not None else None,
+                ticket=ticket_s,
             )
             if success:
                 mon.record_fill(latency_ms=latency_ms, slippage=slippage)
+                record_lifecycle(
+                    stage="MT5_ACCEPTED",
+                    status="ok",
+                    detail=f"ticket={ticket_s}",
+                    trace_id=trace_id,
+                    symbol=symbol,
+                    ticket=ticket_s,
+                )
                 if ticket is not None:
+                    record_lifecycle(
+                        stage="POSITION_CREATED",
+                        status="ok",
+                        detail="broker ticket present",
+                        trace_id=trace_id,
+                        symbol=symbol,
+                        ticket=ticket_s,
+                    )
                     record_lifecycle(
                         stage="POSITION_MONITOR",
                         status="started",
                         detail="position registered for PME",
                         trace_id=trace_id,
                         symbol=symbol,
-                        ticket=str(ticket),
+                        ticket=ticket_s,
                     )
             else:
                 mon.record_reject(latency_ms=latency_ms)
                 det.on_broker_reject(message=message or "", retcode=retcode)
+                record_lifecycle(
+                    stage="FIRST_BLOCKING_GATE",
+                    status="failed",
+                    detail=(
+                        f"GATEWAY/MT5: retcode={retcode} "
+                        f"{(message or 'rejected')[:200]}"
+                    ),
+                    trace_id=trace_id,
+                    symbol=symbol,
+                    ticket=ticket_s,
+                )
+                logger.warning(
+                    "execution_first_blocking_gate",
+                    gate="GATEWAY_MT5",
+                    reason=message or f"retcode={retcode}",
+                    symbol=symbol,
+                    retcode=retcode,
+                    forwarded_to_oms=True,
+                )
             if retries:
                 mon.record_retry(retries)
             if latency_ms is not None:

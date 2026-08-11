@@ -1488,7 +1488,13 @@ class MT5GatewayRuntime:
                 payload["comment"] = f"order_check failed: {err}"
             return payload
 
-        return self._run_mt5_op(_body)
+        # Trade timeout — never share the shorter market-data bound with
+        # order_check (scanner candle fan-out must not starve pre-trade checks).
+        return self._run_mt5_op(
+            _body,
+            timeout_seconds=float(self.settings.mt5_trade_timeout_seconds),
+            label="order_check",
+        )
 
     def order_calc_margin(self, body: dict[str, Any]) -> dict[str, Any]:
         from services.mt5_gateway.trade import order_type_for_action

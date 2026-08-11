@@ -2,11 +2,67 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Literal
 
 AutoTradeRunState = Literal["off", "running", "paused", "stopped"]
+
+
+def allowlist_matches(symbol: str, allowed: set[str] | frozenset[str]) -> bool:
+    """Desk-code aware: allowlist XAUUSD matches broker XAUUSD_I.
+
+    Safety is unchanged — only identity normalization between desk and catalogue.
+    """
+    symbol_u = (symbol or "").strip().upper()
+    if not symbol_u or not allowed:
+        return False
+    if symbol_u in allowed:
+        return True
+    try:
+        from app.domain.institutional_trading.ai_scalping.asset_class import (
+            desk_symbol_code,
+        )
+
+        desk = desk_symbol_code(symbol_u)
+        if desk and desk in allowed:
+            return True
+        return any(desk_symbol_code(a) == desk for a in allowed if desk)
+    except Exception:
+        return False
+
+
+def prefer_allowlisted_handoff(
+    symbols: Sequence[str] | Iterable[str],
+    allowed: Sequence[str] | set[str] | frozenset[str] | None,
+) -> list[str]:
+    """Stable partition: desk-allowlisted symbols first, others retained after.
+
+    Does not remove non-allowlisted symbols from analysis handoff — Safety still
+    blocks them. Preferring allowlisted desks avoids burning cycles on known
+    SAFETY_BLOCKED crosses before USD majors that can size on micro equity.
+    """
+    ordered = [str(s).strip().upper() for s in symbols if str(s).strip()]
+    if not ordered:
+        return []
+    allowed_set = {
+        str(a).strip().upper() for a in (allowed or ()) if str(a).strip()
+    }
+    if not allowed_set:
+        return ordered
+    primary: list[str] = []
+    secondary: list[str] = []
+    seen: set[str] = set()
+    for sym in ordered:
+        if sym in seen:
+            continue
+        seen.add(sym)
+        if allowlist_matches(sym, allowed_set):
+            primary.append(sym)
+        else:
+            secondary.append(sym)
+    return primary + secondary
 
 _VALID_RUN_STATES: frozenset[str] = frozenset({"off", "running", "paused", "stopped"})
 
@@ -326,24 +382,6 @@ def evaluate_auto_trade_safety(
     allowed_syms = {s.strip().upper() for s in policy.allowed_symbols if s.strip()}
     mode = (policy.trading_mode or "swing").strip().lower()
 
-    def _allowlist_matches(symbol: str, allowed: set[str]) -> bool:
-        """Desk-code aware: allowlist XAUUSD matches broker XAUUSD_I."""
-        if not symbol or not allowed:
-            return False
-        if symbol in allowed:
-            return True
-        try:
-            from app.domain.institutional_trading.ai_scalping.asset_class import (
-                desk_symbol_code,
-            )
-
-            desk = desk_symbol_code(symbol)
-            if desk and desk in allowed:
-                return True
-            return any(desk_symbol_code(a) == desk for a in allowed if desk)
-        except Exception:
-            return False
-
     # Scalping/alpha multi-asset: dynamic scan universe owns membership.
     # Stale ops plane allowed_symbols must not reject post-strategy handoff
     # (same class of bug as portfolio_scanner universe gate). Broker
@@ -360,13 +398,13 @@ def evaluate_auto_trade_safety(
         elif allowed_syms and len(allowed_syms) >= 2:
             # Operator Symbol Management / multi-symbol allowlist owns membership.
             # Desk-aware so configured XAUUSD authorizes catalogue XAUUSD_I.
-            symbol_allowed = _allowlist_matches(symbol_u, allowed_syms)
+            symbol_allowed = allowlist_matches(symbol_u, allowed_syms)
         else:
             # Dynamic discovery path when no operator-managed multi-symbol list.
             symbol_allowed = bool(symbol_u)
     else:
         symbol_allowed = (
-            _allowlist_matches(symbol_u, allowed_syms) if allowed_syms else False
+            allowlist_matches(symbol_u, allowed_syms) if allowed_syms else False
         )
     add(
         "symbol_allowed",

@@ -19,14 +19,24 @@ logger = get_logger(__name__)
 
 LIFECYCLE_STAGES: tuple[str, ...] = (
     "SIGNAL",
+    "SIGNAL_CREATED",
     "AI_DECISION",
+    "SAFETY_PASSED",
     "RISK_VALIDATION",
+    "RISK_PASSED",
+    "SIZE_APPROVED",
     "OMS",
+    "OMS_SUBMIT",
+    "GATEWAY_ORDER_REQUEST",
     "MT5_GATEWAY",
+    "MT5_ORDER_SEND",
+    "MT5_ACCEPTED",
     "BROKER",
     "CONFIRMATION",
+    "POSITION_CREATED",
     "POSITION_MONITOR",
     "EXIT",
+    "FIRST_BLOCKING_GATE",
 )
 
 
