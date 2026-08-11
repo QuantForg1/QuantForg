@@ -2,63 +2,83 @@
 
 from __future__ import annotations
 
+from app.domain.institutional_trading.ai_scalping.config import (
+    MICRO_SAFE_USD_MAJOR_DESKS,
+)
 from app.domain.market_context.enums import MarketSession
 
+# Soft weights for micro-safe USD majors (desk codes). Reorder only — does not
+# change eligibility, risk_pct, hard_max, min-lot, Safety, or OMS.
+_MICRO_SAFE_BASE: dict[str, int] = {
+    "EURUSD": 100,
+    "GBPUSD": 98,
+    "AUDUSD": 96,
+    "NZDUSD": 95,
+    "USDCHF": 94,
+    "USDCAD": 93,
+}
+
 # Higher weight → scanned / preferred earlier within the same quality rank.
+# Gold/JPY remain scannable; soft weights place micro-safe majors ahead of
+# crosses that typically fail Safety allowlist on the operator desk.
 _SESSION_WEIGHTS: dict[str, dict[str, int]] = {
     MarketSession.LONDON.value: {
-        "EURUSD": 100,
-        "GBPUSD": 98,
-        "EURGBP": 92,
-        "EURJPY": 90,
-        "GBPJPY": 88,
-        "XAUUSD": 95,
+        **_MICRO_SAFE_BASE,
+        "EURGBP": 80,
+        "EURJPY": 78,
+        "GBPJPY": 76,
+        "XAUUSD": 85,
         "XAGUSD": 70,
-        "USDCHF": 75,
         "EURCHF": 72,
+        "USDJPY": 74,
     },
     MarketSession.NEW_YORK.value: {
-        "EURUSD": 95,
-        "GBPUSD": 90,
-        "USDJPY": 88,
-        "USDCAD": 86,
-        "XAUUSD": 98,
+        **_MICRO_SAFE_BASE,
+        "EURUSD": 98,
+        "GBPUSD": 94,
+        "USDCAD": 96,
+        "USDCHF": 92,
+        "USDJPY": 80,
+        "XAUUSD": 85,
         "XAGUSD": 75,
-        "BTCUSD": 80,
-        "ETHUSD": 78,
-        "NDXUSD": 85,
-        "DJIUSD": 82,
-        "SPXUSD": 80,
-        "XTIUSD": 70,
+        "BTCUSD": 70,
+        "ETHUSD": 68,
+        "NDXUSD": 72,
+        "DJIUSD": 70,
+        "SPXUSD": 68,
+        "XTIUSD": 60,
     },
     MarketSession.LONDON_NY_OVERLAP.value: {
+        **_MICRO_SAFE_BASE,
         "EURUSD": 100,
         "GBPUSD": 98,
-        "XAUUSD": 100,
-        "USDJPY": 90,
-        "USDCAD": 88,
-        "EURJPY": 86,
-        "GBPJPY": 84,
-        "BTCUSD": 75,
-        "NDXUSD": 80,
+        "USDCAD": 95,
+        "XAUUSD": 86,
+        "USDJPY": 78,
+        "EURJPY": 74,
+        "GBPJPY": 72,
+        "BTCUSD": 65,
+        "NDXUSD": 70,
     },
     MarketSession.TOKYO.value: {
-        "USDJPY": 100,
-        "AUDUSD": 95,
-        "NZDUSD": 90,
-        "AUDJPY": 88,
-        "NZDJPY": 85,
-        "XAUUSD": 80,
-        "BTCUSD": 78,
-        "ETHUSD": 75,
+        **_MICRO_SAFE_BASE,
+        "AUDUSD": 100,
+        "NZDUSD": 98,
+        "USDJPY": 82,
+        "AUDJPY": 70,
+        "NZDJPY": 68,
+        "XAUUSD": 78,
+        "BTCUSD": 66,
+        "ETHUSD": 64,
     },
     MarketSession.SYDNEY.value: {
+        **_MICRO_SAFE_BASE,
         "AUDUSD": 100,
-        "NZDUSD": 95,
-        "AUDNZD": 85,
-        "AUDJPY": 80,
+        "NZDUSD": 98,
+        "AUDNZD": 80,
+        "AUDJPY": 70,
         "XAUUSD": 75,
-        "BTCUSD": 70,
+        "BTCUSD": 62,
     },
 }
 
@@ -79,6 +99,9 @@ def session_priority_score(symbol: str, session: str | None) -> int:
         return int(table[sym])
     if raw in table:
         return int(table[raw])
+    # Micro-safe desks keep elevated floor even if session table omitted them.
+    if sym in MICRO_SAFE_USD_MAJOR_DESKS:
+        return int(_MICRO_SAFE_BASE.get(sym, 90))
     # Class soft defaults
     if sym.startswith(("EUR", "GBP")) and sess in {
         MarketSession.LONDON.value,

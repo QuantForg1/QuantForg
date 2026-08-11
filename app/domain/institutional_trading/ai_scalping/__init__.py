@@ -22,6 +22,7 @@ from app.domain.institutional_trading.ai_scalping.broker_profile_store import (
 from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
     DEFAULT_SCALPING_UNIVERSE,
+    MICRO_SAFE_USD_MAJOR_DESKS,
     AdaptiveThresholdBand,
     AiScalpingConfig,
     SetupFamily,
@@ -166,6 +167,7 @@ from app.domain.institutional_trading.ai_scalping.validation import (
 __all__ = [
     "DEFAULT_AI_SCALPING_CONFIG",
     "DEFAULT_SCALPING_UNIVERSE",
+    "MICRO_SAFE_USD_MAJOR_DESKS",
     "PORTFOLIO_CORRELATION_GROUPS",
     "AdaptiveCooldownDecision",
     "AdaptiveCooldownGate",

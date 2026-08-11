@@ -30,19 +30,28 @@ SetupFamily = Literal[
     "breakout_continuation",
 ]
 
+# Desk codes preferred for micro accounts (~$100) where Weltrade min-lot risk
+# on gold/JPY often exceeds hard_max. Catalogue resolution maps these to
+# broker forms (e.g. EURUSD → EURUSD_I). Soft seed/session priority only —
+# never weakens risk, min-lot, Safety, or quality gates.
+MICRO_SAFE_USD_MAJOR_DESKS: tuple[str, ...] = (
+    "EURUSD",
+    "GBPUSD",
+    "AUDUSD",
+    "NZDUSD",
+    "USDCHF",
+    "USDCAD",
+)
+
 # Institutional multi-asset universe — LIVE-tradable symbols only.
 # NAS100/US30/GER40 removed: production gateway repeatedly 503 / symbol_select
 # failed (broker-side). They burned ~30% of scan rejects without ever reaching
 # ORDER ACCEPTED. Quality floors unchanged.
+# Seed order: micro-safe USD majors first, then gold/JPY/crypto (still scanned).
 DEFAULT_SCALPING_UNIVERSE: tuple[str, ...] = (
+    *MICRO_SAFE_USD_MAJOR_DESKS,
     "XAUUSD",
-    "EURUSD",
-    "GBPUSD",
     "USDJPY",
-    "USDCHF",
-    "USDCAD",
-    "AUDUSD",
-    "NZDUSD",
     "BTCUSD",
     "ETHUSD",
 )
