@@ -232,20 +232,43 @@ def list_live_signals(
     except Exception:
         strategy = None
 
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        desk_symbol_code,
+    )
+
+    def _enabled_match(sym: str) -> bool:
+        """Desk-aware: prefs for XAUUSD also show catalogue XAUUSD_I rows."""
+        if not enabled:
+            return True
+        if sym in enabled:
+            return True
+        desk = desk_symbol_code(sym)
+        if desk and desk in enabled:
+            return True
+        return any(desk_symbol_code(e) == desk for e in enabled if desk)
+
     signals: list[dict[str, Any]] = []
     for score in scores:
         sym = str(score.get("symbol") or "").upper()
         if not sym:
             continue
-        if manage_active and enabled_only and enabled and sym not in enabled:
+        if manage_active and enabled_only and enabled and not _enabled_match(sym):
             continue
         score = dict(score)
         score.setdefault("as_of", as_of)
         score.setdefault("session", scan.get("session") or _session())
         row = _row_from_score(score, strategy=strategy)
-        # asset class from prefs / classifier
-        pref = prefs.get(sym) or {}
+        desk = desk_symbol_code(sym)
+        pref = prefs.get(sym) or (prefs.get(desk) if desk else None) or {}
         row["asset_class"] = str(pref.get("asset_class") or "other")
+        # Explicit empty-state for NO_TRADE so UI never looks "broken"
+        if not row.get("direction") or str(row.get("direction")).upper() in {
+            "",
+            "NONE",
+            "NO_TRADE",
+        }:
+            row.setdefault("decision", "NO_TRADE")
+            row.setdefault("status", "NO_TRADE")
         signals.append(row)
 
     # Enrich with latest strategy diagnostics when scan empty for a symbol.

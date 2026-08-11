@@ -257,13 +257,27 @@ async def build_ite_cycle_market_context(
     if session_err:
         return _fail(session_err)
 
-    # Multi-symbol: broker terminal may use USTEC/DJ30/DE40 instead of
-    # NAS100/US30/GER40 — try candidates before failing the scan.
+    # Catalogue-first resolution: Weltrade exposes XAUUSD_I / EURUSD_I — do not
+    # hammer bare desk codes that are absent from the broker catalogue.
     from app.domain.institutional_trading.ai_scalping.asset_class import (
         broker_symbol_candidates,
     )
+    from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+        catalogue_ordered_candidates,
+        fetch_broker_symbol_rows,
+    )
 
-    symbol_candidates = broker_symbol_candidates(symbol) or (symbol,)
+    broker_rows: tuple[dict[str, Any], ...] = ()
+    try:
+        broker_rows = fetch_broker_symbol_rows(mt5_adapter)
+    except Exception:
+        broker_rows = ()
+    if broker_rows:
+        symbol_candidates = catalogue_ordered_candidates(
+            symbol, broker_symbol_rows=broker_rows
+        )
+    else:
+        symbol_candidates = broker_symbol_candidates(symbol) or (symbol,)
     resolved_symbol = symbol
     bars_by_tf: dict[Timeframe, list[Candle]] = {}
     bars_loaded: dict[str, int] = {}

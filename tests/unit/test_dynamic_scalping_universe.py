@@ -23,10 +23,12 @@ from app.domain.institutional_trading.ai_scalping.symbol_production_stats import
 )
 from app.domain.institutional_trading.ai_scalping.universe_discovery import (
     build_dynamic_scalping_universe,
+    catalogue_ordered_candidates,
     classify_broker_symbol,
     classify_catalogue_summary,
     discover_from_broker_rows,
     is_liquid_scalping_candidate,
+    resolve_seed_to_broker_symbol,
 )
 
 
@@ -141,6 +143,93 @@ def test_symbol_stats_demote_after_hard_fails(tmp_path: Path) -> None:
     assert "NDXUSD" in book.demoted_symbols()
     boost = book.performance_boost()
     assert boost["NDXUSD"] <= -50
+
+
+@pytest.mark.unit
+def test_xauusd_resolves_to_catalogue_xauusd_i() -> None:
+    rows = [
+        {"code": "XAUUSD_I", "trade_mode": 4, "digits": 3},
+        {"code": "EURUSD_I", "trade_mode": 4, "digits": 5},
+    ]
+    discovered = discover_from_broker_rows(rows)
+    assert resolve_seed_to_broker_symbol("XAUUSD", discovered=discovered) == "XAUUSD_I"
+    ordered = catalogue_ordered_candidates("XAUUSD", discovered=discovered)
+    assert ordered[0] == "XAUUSD_I"
+    assert "XAUUSD" in ordered  # bare alias retained after catalogue form
+
+
+@pytest.mark.unit
+def test_healthy_xauusd_i_clears_historical_demotion(tmp_path: Path) -> None:
+    book = SymbolStatsBook(
+        _path=tmp_path / "stats.json",
+        _demote_cooldown_seconds=3600.0,
+    )
+    for _ in range(8):
+        book.record_scan("XAUUSD_I", eligible=False, broker_hard_fail=True)
+    assert "XAUUSD_I" in book.demoted_symbols()
+    # Quality NO_TRADE with healthy MD must recover (not require BUY/SELL).
+    book.record_scan(
+        "XAUUSD_I",
+        eligible=False,
+        broker_hard_fail=False,
+        broker_ok=True,
+        reject_reason="Weak structure score",
+    )
+    assert "XAUUSD_I" not in book.demoted_symbols()
+
+
+@pytest.mark.unit
+def test_unhealthy_symbol_remains_demoted_until_cooldown(tmp_path: Path) -> None:
+    book = SymbolStatsBook(
+        _path=tmp_path / "stats.json",
+        _demote_cooldown_seconds=3600.0,
+    )
+    for _ in range(8):
+        book.record_scan("DEADUSD", eligible=False, broker_hard_fail=True)
+    assert "DEADUSD" in book.demoted_symbols()
+    book.record_scan("DEADUSD", eligible=False, broker_hard_fail=True)
+    assert "DEADUSD" in book.demoted_symbols()
+
+
+@pytest.mark.unit
+def test_demotion_cooldown_expires_for_recovery_probe(tmp_path: Path) -> None:
+    book = SymbolStatsBook(
+        _path=tmp_path / "stats.json",
+        _demote_cooldown_seconds=0.01,
+    )
+    for _ in range(8):
+        book.record_scan("XAUUSD_I", eligible=False, broker_hard_fail=True)
+    assert "XAUUSD_I" in book.demoted_symbols()
+    import time
+
+    time.sleep(0.02)
+    released = book.expire_stale_demotions()
+    assert "XAUUSD_I" in released
+    assert "XAUUSD_I" not in book.demoted_symbols()
+
+
+@pytest.mark.unit
+def test_recovered_seed_reenters_dynamic_universe_despite_demotion() -> None:
+    rows = [
+        {"code": "XAUUSD_I", "trade_mode": 4, "digits": 3},
+        {"code": "EURUSD_I", "trade_mode": 4, "digits": 5},
+        {"code": "BTCUSD", "trade_mode": 4, "digits": 2},
+        {"code": "LTCUSD", "trade_mode": 4, "digits": 2},
+    ]
+    discovered = discover_from_broker_rows(rows)
+    demoted = {"XAUUSD_I", "EURUSD_I"}
+    universe = build_dynamic_scalping_universe(
+        discovered,
+        demoted=demoted,
+        seed_recovery={"XAUUSD_I"},
+        max_symbols=36,
+    )
+    # Catalogue-liquid seed XAUUSD → XAUUSD_I recovers even while demoted.
+    assert "XAUUSD_I" in universe
+    # Non-recovered demoted EURUSD_I stays out of seed slot if demoted…
+    # but seed recovery for EURUSD is also liquid — seed loop adds recovery
+    # for all liquid seeds automatically.
+    assert "EURUSD_I" in universe
 
 
 @pytest.mark.unit

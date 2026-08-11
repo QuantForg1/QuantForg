@@ -2,14 +2,20 @@
 
 File-backed (no DB migration). Does not change quality gates or risk.
 Poor symbols get lower scan priority; strong symbols get higher priority.
+
+Demotion is temporary: after consecutive broker hard-fails a symbol is
+excluded from the dynamic universe, then re-probed after a cooldown.
+Successful catalogue / market-data evidence clears demotion — never
+permanent exclusion after a recovered terminal/session.
 """
 
 from __future__ import annotations
 
 import json
 import threading
+import time
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +24,15 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Consecutive hard broker failures → auto-demote from dynamic universe.
-_PERMANENT_FAIL_THRESHOLD = 8
+# Consecutive hard broker failures → temporary demotion from dynamic universe.
+_DEMOTE_FAIL_THRESHOLD = 8
+# After demotion, wait before allowing the symbol back for a recovery probe.
+_DEMOTE_COOLDOWN_SECONDS = 900.0
+# Successful broker-ok probes required to clear demotion (1 is enough when MD loads).
+_RECOVERY_OK_THRESHOLD = 1
+
+# Backward-compatible alias used by older tests/imports.
+_PERMANENT_FAIL_THRESHOLD = _DEMOTE_FAIL_THRESHOLD
 
 
 @dataclass
@@ -45,11 +58,21 @@ class SymbolProductionStats:
     atr_pct_count: int = 0
     broker_hard_fails: int = 0
     demoted: bool = False
+    demoted_at_mono: float | None = None
+    consecutive_broker_ok: int = 0
     last_reject_reason: str | None = None
     updated_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        # Monotonic clock is process-local — persist wall time only.
+        payload.pop("demoted_at_mono", None)
+        if self.demoted and self.demoted_at_mono is not None:
+            age = max(0.0, time.monotonic() - float(self.demoted_at_mono))
+            payload["demotion_age_seconds"] = round(age, 1)
+            payload["demotion_cooldown_seconds"] = _DEMOTE_COOLDOWN_SECONDS
+            payload["demoted_at"] = (datetime.now(UTC) - timedelta(seconds=age)).isoformat()
+        return payload
 
     @property
     def win_rate(self) -> float | None:
@@ -82,6 +105,7 @@ class SymbolStatsBook:
     _by_symbol: dict[str, SymbolProductionStats] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _path: Path | None = field(default=None, repr=False)
+    _demote_cooldown_seconds: float = _DEMOTE_COOLDOWN_SECONDS
 
     def __post_init__(self) -> None:
         if self._path is None:
@@ -107,6 +131,28 @@ class SymbolStatsBook:
             for sym, row in rows.items():
                 if not isinstance(row, dict):
                     continue
+                demoted = bool(row.get("demoted"))
+                # Legacy sticky demotions (pre-recovery) have no cooldown clock —
+                # clear on load so catalogue-healthy seeds re-enter after deploy.
+                # Fresh demotions persist demoted_at (ISO) and resume cooldown.
+                demoted_at_mono: float | None = None
+                demoted_at_iso = row.get("demoted_at")
+                if demoted and demoted_at_iso:
+                    try:
+                        started = datetime.fromisoformat(str(demoted_at_iso))
+                        if started.tzinfo is None:
+                            started = started.replace(tzinfo=UTC)
+                        age = (datetime.now(UTC) - started).total_seconds()
+                        if age >= _DEMOTE_COOLDOWN_SECONDS:
+                            demoted = False
+                        else:
+                            demoted_at_mono = time.monotonic() - max(0.0, age)
+                    except Exception:
+                        demoted = False
+                        demoted_at_mono = None
+                elif demoted:
+                    demoted = False
+                    demoted_at_mono = None
                 loaded[str(sym).upper()] = SymbolProductionStats(
                     symbol=str(sym).upper(),
                     scans=int(row.get("scans") or 0),
@@ -127,8 +173,12 @@ class SymbolStatsBook:
                     spread_count=int(row.get("spread_count") or 0),
                     atr_pct_sum=float(row.get("atr_pct_sum") or 0),
                     atr_pct_count=int(row.get("atr_pct_count") or 0),
-                    broker_hard_fails=int(row.get("broker_hard_fails") or 0),
-                    demoted=bool(row.get("demoted")),
+                    broker_hard_fails=int(row.get("broker_hard_fails") or 0)
+                    if demoted
+                    else 0,
+                    demoted=demoted,
+                    demoted_at_mono=demoted_at_mono,
+                    consecutive_broker_ok=int(row.get("consecutive_broker_ok") or 0),
                     last_reject_reason=row.get("last_reject_reason"),
                     updated_at=str(row.get("updated_at") or ""),
                 )
@@ -159,6 +209,87 @@ class SymbolStatsBook:
             self._by_symbol[code] = row
         return row
 
+    def _clear_demotion_unlocked(self, row: SymbolProductionStats) -> None:
+        was = row.demoted
+        row.demoted = False
+        row.demoted_at_mono = None
+        row.broker_hard_fails = 0
+        if was:
+            logger.warning(
+                "symbol_demotion_cleared",
+                symbol=row.symbol,
+                reason="broker_health_recovered",
+            )
+
+    def _expire_cooldown_unlocked(self) -> list[str]:
+        """Release demotions whose cooldown elapsed so they can be re-probed."""
+        now = time.monotonic()
+        released: list[str] = []
+        cooldown = float(self._demote_cooldown_seconds)
+        for row in self._by_symbol.values():
+            if not row.demoted:
+                continue
+            started = row.demoted_at_mono
+            if started is None:
+                # Legacy sticky demotion (no timestamp) — allow recovery probe.
+                row.demoted = False
+                row.demoted_at_mono = None
+                row.broker_hard_fails = 0
+                released.append(row.symbol)
+                continue
+            if (now - float(started)) >= cooldown:
+                row.demoted = False
+                row.demoted_at_mono = None
+                # Keep a reduced fail count so a fresh storm can re-demote quickly,
+                # but do not keep the symbol permanently excluded.
+                row.broker_hard_fails = max(0, _DEMOTE_FAIL_THRESHOLD // 2)
+                released.append(row.symbol)
+        if released:
+            logger.warning(
+                "symbol_demotion_cooldown_expired",
+                symbols=released,
+                cooldown_seconds=cooldown,
+            )
+        return released
+
+    def expire_stale_demotions(self) -> list[str]:
+        """Public: clear demotions past cooldown (recovery probe eligibility)."""
+        with self._lock:
+            released = self._expire_cooldown_unlocked()
+        if released:
+            self._persist()
+        return released
+
+    def record_broker_ok(self, symbol: str, *, source: str = "market_data") -> bool:
+        """Catalogue / quote / candle success — clear or reduce demotion.
+
+        Returns True when demotion was cleared.
+        """
+        code = (symbol or "").strip().upper()
+        if not code:
+            return False
+        cleared = False
+        with self._lock:
+            row = self._row(code)
+            row.updated_at = datetime.now(UTC).isoformat()
+            row.consecutive_broker_ok += 1
+            row.broker_hard_fails = 0
+            if row.demoted and row.consecutive_broker_ok >= _RECOVERY_OK_THRESHOLD:
+                self._clear_demotion_unlocked(row)
+                cleared = True
+            elif not row.demoted:
+                row.consecutive_broker_ok = min(
+                    row.consecutive_broker_ok, _RECOVERY_OK_THRESHOLD + 3
+                )
+        self._persist()
+        if cleared:
+            logger.warning(
+                "symbol_broker_ok_recovered",
+                symbol=code,
+                source=source,
+            )
+        return cleared
+
     def record_scan(
         self,
         symbol: str,
@@ -168,8 +299,10 @@ class SymbolStatsBook:
         spread: float | None = None,
         atr_pct: float | None = None,
         broker_hard_fail: bool = False,
+        broker_ok: bool = False,
     ) -> None:
         with self._lock:
+            self._expire_cooldown_unlocked()
             row = self._row(symbol)
             row.scans += 1
             row.updated_at = datetime.now(UTC).isoformat()
@@ -187,10 +320,23 @@ class SymbolStatsBook:
                 row.atr_pct_count += 1
             if broker_hard_fail:
                 row.broker_hard_fails += 1
-                if row.broker_hard_fails >= _PERMANENT_FAIL_THRESHOLD:
+                row.consecutive_broker_ok = 0
+                if row.broker_hard_fails >= _DEMOTE_FAIL_THRESHOLD:
+                    if not row.demoted:
+                        logger.warning(
+                            "symbol_temporarily_demoted",
+                            symbol=row.symbol,
+                            hard_fails=row.broker_hard_fails,
+                            cooldown_seconds=self._demote_cooldown_seconds,
+                        )
                     row.demoted = True
-            elif eligible:
+                    row.demoted_at_mono = time.monotonic()
+            elif broker_ok or eligible:
+                # Healthy MD (even with quality NO_TRADE) recovers the symbol.
                 row.broker_hard_fails = 0
+                row.consecutive_broker_ok += 1
+                if row.demoted and row.consecutive_broker_ok >= _RECOVERY_OK_THRESHOLD:
+                    self._clear_demotion_unlocked(row)
         self._persist()
 
     def record_accepted(self, symbol: str, *, latency_ms: float | None = None) -> None:
@@ -230,12 +376,15 @@ class SymbolStatsBook:
         self._persist()
 
     def demoted_symbols(self) -> frozenset[str]:
+        """Symbols currently excluded from the dynamic universe."""
         with self._lock:
+            self._expire_cooldown_unlocked()
             return frozenset(s for s, r in self._by_symbol.items() if r.demoted)
 
     def performance_boost(self) -> dict[str, float]:
         """Soft boost (−30..+40) for scan ordering from LIVE outcomes."""
         with self._lock:
+            self._expire_cooldown_unlocked()
             rows = list(self._by_symbol.values())
         out: dict[str, float] = {}
         for r in rows:
@@ -310,3 +459,10 @@ def get_symbol_stats_book() -> SymbolStatsBook:
         if _BOOK is None:
             _BOOK = SymbolStatsBook()
         return _BOOK
+
+
+def reset_symbol_stats_book_for_tests() -> None:
+    """Test helper — drop the process singleton."""
+    global _BOOK
+    with _BOOK_LOCK:
+        _BOOK = None

@@ -52,23 +52,41 @@ def test_institutional_watchlist_matches_approved_universe() -> None:
 
 
 @pytest.mark.unit
-def test_resolve_scan_universe_respects_plane_allowlist() -> None:
+def test_resolve_scan_universe_respects_plane_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
+        reset_symbol_stats_book_for_tests,
+    )
+
+    reset_symbol_stats_book_for_tests()
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
     plane = MagicMock()
     plane.allowed_symbols = ("XAUUSD", "EURUSD")
-    assert set(resolve_scan_universe(plane=plane)) == {"XAUUSD", "EURUSD"}
+    cfg = replace(DEFAULT_AI_SCALPING_CONFIG, live_symbol_learning_enabled=False)
+    assert set(resolve_scan_universe(cfg, plane=plane)) == {"XAUUSD", "EURUSD"}
 
 
 @pytest.mark.unit
 def test_resolve_scan_universe_ignores_stale_gold_only_plane(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
+        reset_symbol_stats_book_for_tests,
+    )
+
+    reset_symbol_stats_book_for_tests()
     monkeypatch.setattr(
         "app.domain.trading.gold_only.gold_only_enabled",
         lambda: False,
     )
     plane = MagicMock()
     plane.allowed_symbols = ("XAUUSD",)
-    universe = resolve_scan_universe(plane=plane)
+    cfg = replace(DEFAULT_AI_SCALPING_CONFIG, live_symbol_learning_enabled=False)
+    universe = resolve_scan_universe(cfg, plane=plane)
     assert "EURUSD" in universe
     assert "GBPUSD" in universe
     assert "BTCUSD" in universe
@@ -77,10 +95,22 @@ def test_resolve_scan_universe_ignores_stale_gold_only_plane(
 
 
 @pytest.mark.unit
-def test_resolve_scan_universe_strips_broker_dead_indexes() -> None:
+def test_resolve_scan_universe_strips_broker_dead_indexes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
+        reset_symbol_stats_book_for_tests,
+    )
+
+    reset_symbol_stats_book_for_tests()
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
     plane = MagicMock()
     plane.allowed_symbols = ("XAUUSD", "EURUSD", "NAS100", "US30", "GER40")
-    universe = resolve_scan_universe(plane=plane)
+    cfg = replace(DEFAULT_AI_SCALPING_CONFIG, live_symbol_learning_enabled=False)
+    universe = resolve_scan_universe(cfg, plane=plane)
     assert "XAUUSD" in universe
     assert "EURUSD" in universe
     assert "NAS100" not in universe
@@ -179,13 +209,24 @@ async def test_scan_ranks_best_eligible_only(
             "execution_health_ok": True,
         }
 
+    from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
+        reset_symbol_stats_book_for_tests,
+    )
+
+    reset_symbol_stats_book_for_tests()
     monkeypatch.setattr(
         "app.application.services.institutional_multi_asset_scanner.score_symbol_for_scan",
         _fake_score,
     )
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
     narrow = replace(
         DEFAULT_AI_SCALPING_CONFIG,
         universe=("XAUUSD", "EURUSD", "GBPUSD"),
+        live_symbol_learning_enabled=False,
+        dynamic_universe_enabled=False,
     )
     out = await run_institutional_multi_asset_scan(
         mt5_adapter=object(),

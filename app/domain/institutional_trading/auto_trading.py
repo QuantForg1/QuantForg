@@ -325,23 +325,49 @@ def evaluate_auto_trade_safety(
     symbol_u = (facts.symbol or "").strip().upper()
     allowed_syms = {s.strip().upper() for s in policy.allowed_symbols if s.strip()}
     mode = (policy.trading_mode or "swing").strip().lower()
+
+    def _allowlist_matches(symbol: str, allowed: set[str]) -> bool:
+        """Desk-code aware: allowlist XAUUSD matches broker XAUUSD_I."""
+        if not symbol or not allowed:
+            return False
+        if symbol in allowed:
+            return True
+        try:
+            from app.domain.institutional_trading.ai_scalping.asset_class import (
+                desk_symbol_code,
+            )
+
+            desk = desk_symbol_code(symbol)
+            if desk and desk in allowed:
+                return True
+            return any(desk_symbol_code(a) == desk for a in allowed if desk)
+        except Exception:
+            return False
+
     # Scalping/alpha multi-asset: dynamic scan universe owns membership.
     # Stale ops plane allowed_symbols must not reject post-strategy handoff
     # (same class of bug as portfolio_scanner universe gate). Broker
     # tradable check below remains mandatory. Gold-only still enforced.
     if mode in {"scalping", "alpha"}:
-        from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+        from app.domain.trading.gold_only import (
+            GOLD_SYMBOL,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
 
         if gold_only_enabled() and mode != "alpha":
-            symbol_allowed = symbol_u == GOLD_SYMBOL
+            symbol_allowed = symbol_u == GOLD_SYMBOL or is_gold_symbol(symbol_u)
         elif allowed_syms and len(allowed_syms) >= 2:
             # Operator Symbol Management / multi-symbol allowlist owns membership.
-            symbol_allowed = symbol_u in allowed_syms
+            # Desk-aware so configured XAUUSD authorizes catalogue XAUUSD_I.
+            symbol_allowed = _allowlist_matches(symbol_u, allowed_syms)
         else:
             # Dynamic discovery path when no operator-managed multi-symbol list.
             symbol_allowed = bool(symbol_u)
     else:
-        symbol_allowed = symbol_u in allowed_syms if allowed_syms else False
+        symbol_allowed = (
+            _allowlist_matches(symbol_u, allowed_syms) if allowed_syms else False
+        )
     add(
         "symbol_allowed",
         "Symbol allowed",

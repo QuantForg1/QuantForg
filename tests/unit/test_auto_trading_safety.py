@@ -153,6 +153,26 @@ class TestAutoTradeSafetyGate:
         )
         assert ok.allowed is True
 
+    def test_allowlist_xauusd_recognizes_broker_xauusd_i(self) -> None:
+        """Desk-aware: configured XAUUSD authorizes catalogue XAUUSD_I."""
+        policy = AutoTradePolicy(
+            enabled=True,
+            run_state="running",
+            trading_mode="scalping",
+            allowed_symbols=("XAUUSD", "EURUSD", "GBPUSD"),
+        )
+        ok = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="XAUUSD_I", symbol_tradable=True),
+        )
+        assert ok.allowed is True
+        # LTCUSD still blocked — do not widen allowlist.
+        blocked = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(symbol="LTCUSD", symbol_tradable=True),
+        )
+        assert blocked.allowed is False
+
     def test_swing_still_enforces_allowed_symbols(self) -> None:
         policy = AutoTradePolicy(
             enabled=True,

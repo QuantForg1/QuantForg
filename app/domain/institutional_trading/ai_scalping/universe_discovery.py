@@ -240,28 +240,106 @@ def discover_from_broker_rows(
     return tuple(out)
 
 
+def resolve_seed_to_broker_symbol(
+    seed_code: str,
+    discovered: tuple[DiscoveredSymbol, ...] | list[DiscoveredSymbol] | None = None,
+    *,
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+) -> str:
+    """Map desk seed (XAUUSD) → catalogue broker code (XAUUSD_I).
+
+    Prefers exact desk match, then ``_I`` suffix, then first catalogue form.
+    Never invents symbols absent from the catalogue when rows are provided.
+    """
+    s = (seed_code or "").strip().upper()
+    if not s:
+        return s
+    rows_discovered: tuple[DiscoveredSymbol, ...] | list[DiscoveredSymbol]
+    if discovered is not None:
+        rows_discovered = discovered
+    elif broker_symbol_rows is not None:
+        rows_discovered = discover_from_broker_rows(broker_symbol_rows)
+    else:
+        return s
+    by_desk: dict[str, list[str]] = {}
+    for d in rows_discovered:
+        by_desk.setdefault(scalp_desk_code(d.code), []).append(d.code.upper())
+    desk = scalp_desk_code(s)
+    opts = by_desk.get(desk) or []
+    if not opts:
+        return s
+    if desk in opts:
+        return desk
+    for o in opts:
+        if o.endswith("_I"):
+            return o
+    return opts[0]
+
+
+def catalogue_ordered_candidates(
+    symbol: str,
+    *,
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+    discovered: tuple[DiscoveredSymbol, ...] | list[DiscoveredSymbol] | None = None,
+) -> tuple[str, ...]:
+    """Catalogue-first candidate walk — resolved broker code before bare aliases.
+
+    When the catalogue exposes ``XAUUSD_I``, that form is tried first so bare
+    ``XAUUSD`` (not in Weltrade catalogue) is not hammered every cycle.
+    """
+    from app.domain.institutional_trading.ai_scalping.asset_class import (
+        broker_symbol_candidates,
+    )
+
+    resolved = resolve_seed_to_broker_symbol(
+        symbol, discovered=discovered, broker_symbol_rows=broker_symbol_rows
+    )
+    aliases = broker_symbol_candidates(symbol) or (symbol,)
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(name: str) -> None:
+        n = (name or "").strip().upper()
+        if not n or n in seen:
+            return
+        seen.add(n)
+        ordered.append(n)
+
+    _add(resolved)
+    for a in aliases:
+        _add(a)
+    return tuple(ordered)
+
+
 def build_dynamic_scalping_universe(
     discovered: tuple[DiscoveredSymbol, ...] | list[DiscoveredSymbol],
     *,
     seed: tuple[str, ...] = DEFAULT_SCALPING_UNIVERSE,
     max_symbols: int = 36,
     demoted: frozenset[str] | set[str] | None = None,
+    seed_recovery: frozenset[str] | set[str] | None = None,
 ) -> tuple[str, ...]:
     """Seed + liquid broker discoveries; strip dead/demoted; capped.
 
     Ensures each liquid asset class keeps representation (not FX-only).
+
+    ``seed_recovery``: catalogue-proven healthy broker codes that may re-enter
+    even if still listed as demoted (recovery probe after cooldown / MD OK).
     """
     dem = set(demoted or ()) | set(BROKER_UNAVAILABLE_SCALP_SYMBOLS)
+    recover = {c.strip().upper() for c in (seed_recovery or ()) if c and str(c).strip()}
     ordered: list[str] = []
     seen: set[str] = set()
     seen_desk: set[str] = set()
 
-    def _add(code: str) -> bool:
+    def _add(code: str, *, allow_recovery: bool = False) -> bool:
         c = code.strip().upper()
         desk = scalp_desk_code(c)
         # Demote exact broker codes only — a failed bare EURUSD must not block
         # recovery via catalogue form EURUSD_I.
-        if not c or c in seen or c in dem:
+        if not c or c in seen:
+            return False
+        if c in dem and not (allow_recovery and c in recover):
             return False
         # One broker form per desk symbol (prefer first added — seed resolver
         # already prefers catalogue `_I` when present).
@@ -274,26 +352,19 @@ def build_dynamic_scalping_universe(
         ordered.append(c)
         return True
 
-    # Map desk seed → live broker code from catalogue (EURUSD → EURUSD_I).
-    by_desk: dict[str, list[str]] = {}
-    for d in discovered:
-        by_desk.setdefault(scalp_desk_code(d.code), []).append(d.code.upper())
-
-    def _resolve_seed(seed_code: str) -> str:
-        s = seed_code.strip().upper()
-        desk = scalp_desk_code(s)
-        opts = by_desk.get(desk) or []
-        if not opts:
-            return s
-        if desk in opts:
-            return desk
-        for o in opts:
-            if o.endswith("_I"):
-                return o
-        return opts[0]
-
+    # Catalogue-liquid seeds always receive a recovery probe slot even if a
+    # prior 503 storm demoted the broker code — never permanently exclude a
+    # healthy configured seed solely due to historical hard-fails.
+    liquid_by_code = {
+        d.code.upper(): d
+        for d in discovered
+        if d.liquid_scalp and int(d.trade_mode) == _TRADE_MODE_FULL
+    }
     for s in seed:
-        _add(_resolve_seed(s))
+        resolved = resolve_seed_to_broker_symbol(s, discovered=discovered)
+        if resolved in liquid_by_code:
+            recover.add(resolved)
+        _add(resolved, allow_recovery=True)
 
     buckets: dict[str, list[str]] = {
         "major": [],

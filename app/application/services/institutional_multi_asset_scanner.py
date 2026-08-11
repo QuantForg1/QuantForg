@@ -34,6 +34,7 @@ logger = get_logger(__name__)
 
 _LOCK = threading.RLock()
 _LAST_SCAN: dict[str, Any] | None = None
+_SCAN_GATE = asyncio.Lock()
 
 
 def get_last_multi_asset_scan() -> dict[str, Any] | None:
@@ -116,6 +117,7 @@ def resolve_scan_universe(
 
     demoted: set[str] = set()
     boost: dict[str, float] = {}
+    seed_recovery: set[str] = set()
     if getattr(cfg, "live_symbol_learning_enabled", True):
         try:
             from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
@@ -123,6 +125,8 @@ def resolve_scan_universe(
             )
 
             book = get_symbol_stats_book()
+            # Cooldown expiry + recovery eligibility before universe assembly.
+            book.expire_stale_demotions()
             demoted = set(book.demoted_symbols())
             boost = book.performance_boost()
         except Exception:
@@ -134,20 +138,37 @@ def resolve_scan_universe(
             from app.domain.institutional_trading.ai_scalping.universe_discovery import (
                 build_dynamic_scalping_universe,
                 discover_from_broker_rows,
+                resolve_seed_to_broker_symbol,
             )
 
             discovered = discover_from_broker_rows(list(broker_symbol_rows))
+            # Catalogue-liquid seeds are recovery-eligible even if demoted.
+            for s in seed:
+                resolved = resolve_seed_to_broker_symbol(s, discovered=discovered)
+                for d in discovered:
+                    if (
+                        d.code.upper() == resolved
+                        and d.liquid_scalp
+                        and int(d.trade_mode) == 4
+                    ):
+                        seed_recovery.add(resolved)
+                        break
             base = build_dynamic_scalping_universe(
                 discovered,
                 seed=seed,
                 max_symbols=int(getattr(cfg, "max_universe_symbols", 28) or 28),
                 demoted=demoted,
+                seed_recovery=seed_recovery,
             )
         except Exception:
             logger.exception("dynamic_universe_build_failed")
             base = seed
     else:
-        base = tuple(s for s in base if s not in demoted)
+        # Preserve configured seeds for recovery probes even if demoted.
+        seed_u = {str(s).strip().upper() for s in seed}
+        base = tuple(
+            s for s in base if s not in demoted or str(s).strip().upper() in seed_u
+        )
 
     if plane is not None:
         allowed = tuple(
@@ -160,7 +181,9 @@ def resolve_scan_universe(
                 from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
 
                 if gold_only_enabled():
-                    gold_only = tuple(s for s in base if s == GOLD_SYMBOL)
+                    from app.domain.trading.gold_only import is_gold_symbol
+
+                    gold_only = tuple(s for s in base if is_gold_symbol(s))
                     base = gold_only or (GOLD_SYMBOL,)
                 elif len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}:
                     # Stale gold-only plane — keep dynamic / seed base
@@ -241,9 +264,15 @@ async def score_symbol_for_scan(
             "ai_confidence": 0,
             "trade_quality": 0,
             "market_context_reason": ctx.reason,
+            "broker_ok": False,
         }
     snapshot = ctx.snapshot
     account: AccountRiskState = ctx.account
+    resolved = str(
+        (ctx.diagnostics or {}).get("broker_symbol_resolved")
+        or (ctx.diagnostics or {}).get("symbol")
+        or code
+    ).upper()
     try:
         score = score_scalping_setup(
             snapshot,
@@ -251,14 +280,16 @@ async def score_symbol_for_scan(
             mid=account.mid_price,
             config=cfg,
             enforce_adaptive_cooldown=True,
-            symbol=code,
+            symbol=resolved or code,
             opens=tuple(getattr(snapshot, "entry_opens", ()) or ()),
             highs=tuple(getattr(snapshot, "entry_highs", ()) or ()),
             lows=tuple(getattr(snapshot, "entry_lows", ()) or ()),
             closes=tuple(getattr(snapshot, "entry_closes", ()) or ()),
         )
         payload = score.to_dict()
-        payload["symbol"] = code
+        payload["symbol"] = resolved or code
+        payload["requested_symbol"] = code
+        payload["broker_ok"] = True
         payload["mtf_alignment"] = int(
             getattr(getattr(snapshot, "trend", None), "alignment_score", 0) or 0
         )
@@ -293,6 +324,61 @@ async def run_institutional_multi_asset_scan(
     Already-open symbols are excluded from new-entry handoff (no same-symbol
     duplicate unless pyramid rules allow via PRE on a deliberate re-entry).
     """
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    # Prevent overlapping scanner cycles (shared gateway / MT5 terminal pressure).
+    try:
+        await asyncio.wait_for(_SCAN_GATE.acquire(), timeout=0.01)
+    except TimeoutError:
+        last = get_last_multi_asset_scan() or {}
+        logger.warning(
+            "multi_asset_scan_overlap_skipped",
+            note="previous scan still in flight — reuse last snapshot",
+        )
+        if last:
+            skipped = dict(last)
+            skipped["overlap_skipped"] = True
+            return skipped
+        return {
+            "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "enabled": True,
+            "universe": [],
+            "rows": [],
+            "noc_rows": [],
+            "ranked": [],
+            "best": None,
+            "best_symbol": None,
+            "eligible_count": 0,
+            "eligible_symbols": [],
+            "overlap_skipped": True,
+            "note": "scan_in_flight_no_prior_snapshot",
+            "version": cfg.version,
+            "forced_trades": False,
+            "governed_by_existing_ai_and_risk": True,
+        }
+    try:
+        return await _run_institutional_multi_asset_scan_body(
+            mt5_adapter,
+            position_engine=position_engine,
+            account=account,
+            open_positions=open_positions,
+            config=cfg,
+            plane=plane,
+            ite_config=ite_config,
+        )
+    finally:
+        _SCAN_GATE.release()
+
+
+async def _run_institutional_multi_asset_scan_body(
+    mt5_adapter: Any,
+    *,
+    position_engine: Any | None = None,
+    account: AccountRiskState | None = None,
+    open_positions: int | None = None,
+    config: AiScalpingConfig | None = None,
+    plane: Any | None = None,
+    ite_config: Any | None = None,
+) -> dict[str, Any]:
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     # LIVE broker catalogue → dynamic liquid universe (quality gates unchanged).
     broker_rows: tuple[dict[str, Any], ...] = ()
@@ -423,16 +509,20 @@ async def run_institutional_multi_asset_scan(
                 )
 
                 reason = str(row.get("reject_reason") or "")
+                reason_l = reason.lower()
                 hard = any(
-                    k in reason.lower()
+                    k in reason_l
                     for k in (
                         "market_context",
                         "symbol_select",
                         "unavailable",
                         "503",
                         "not found",
+                        "market data load failed",
+                        "terminal: call failed",
                     )
                 )
+                broker_ok = bool(row.get("broker_ok")) and not hard
                 direction = str(row.get("direction") or "NONE").upper()
                 eligible = (not bool(row.get("reject"))) and direction in {
                     "BUY",
@@ -440,14 +530,20 @@ async def run_institutional_multi_asset_scan(
                 }
                 atr_raw = row.get("atr_pct")
                 spread_raw = row.get("spread") or row.get("spread_score")
+                sym_code = str(row.get("symbol") or "")
                 get_symbol_stats_book().record_scan(
-                    str(row.get("symbol") or ""),
+                    sym_code,
                     eligible=eligible,
                     reject_reason=reason or None,
                     spread=float(spread_raw) if spread_raw is not None else None,
                     atr_pct=float(atr_raw) if atr_raw is not None else None,
                     broker_hard_fail=hard,
+                    broker_ok=broker_ok,
                 )
+                if broker_ok:
+                    get_symbol_stats_book().record_broker_ok(
+                        sym_code, source="multi_asset_scan_md"
+                    )
             except Exception:
                 logger.exception("symbol_scan_stats_record_failed")
 
