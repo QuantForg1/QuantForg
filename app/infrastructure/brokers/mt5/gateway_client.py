@@ -264,6 +264,19 @@ class GatewayMT5Client:
             self._http = client
         return cast("httpx.Client", client)
 
+    def _replace_http_client(self) -> httpx.Client:
+        """Swap in a fresh client without closing the previous mid-flight.
+
+        Parallel multi-asset scans share one ``GatewayMT5Client``. Closing the
+        shared httpx client on EAGAIN races other workers and surfaces
+        ``Cannot send a request, as the client has been closed``, which aborts
+        ITE position/market snapshots. Drop the reference and build a new pool;
+        the orphaned client is finalized by GC after in-flight calls return.
+        """
+        new_client = self._build_http_client()
+        self._http = new_client
+        return new_client
+
     @property
     def session_token(self) -> str:
         return self._session_token
@@ -377,6 +390,7 @@ class GatewayMT5Client:
             or "resource temporarily unavailable" in text
             or "eagain" in text
             or "temporarily unavailable" in text
+            or "client has been closed" in text
         )
 
     def _request(
@@ -483,11 +497,17 @@ class GatewayMT5Client:
                         pass
                     if attempt_i + 1 >= attempts:
                         raise
-                    # Rebuild client after socket pressure so keepalive sockets
-                    # that returned EAGAIN are not reused indefinitely.
-                    if "errno 11" in str(exc).lower() or "eagain" in str(exc).lower():
-                        self.close()
-                        client = self._http_client()
+                    # After socket pressure / closed-client races, swap to a
+                    # fresh pool WITHOUT closing the previous client mid-flight
+                    # (parallel scan workers may still hold it).
+                    exc_text = str(exc).lower()
+                    if (
+                        "errno 11" in exc_text
+                        or "eagain" in exc_text
+                        or "client has been closed" in exc_text
+                        or getattr(client, "is_closed", False)
+                    ):
+                        client = self._replace_http_client()
                     time.sleep(0.2 * (2**attempt_i))
             if response is None and last_exc is not None:
                 raise last_exc

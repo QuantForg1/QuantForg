@@ -243,6 +243,63 @@ class TestGatewayHttpTransport:
         assert "non-JSON" in str(client.last_upstream().get("error", ""))
         assert client.last_upstream().get("body_preview")
 
+    def test_eagain_replaces_client_without_closing_shared_pool(self) -> None:
+        """Parallel scans must not observe 'client has been closed' from EAGAIN."""
+        calls = {"n": 0}
+        closed: list[bool] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise httpx.ReadError(
+                    "[Errno 11] Resource temporarily unavailable",
+                    request=request,
+                )
+            return httpx.Response(
+                200,
+                json={"status": "ok", "bridge_available": True, "token_configured": True},
+            )
+
+        transport = httpx.MockTransport(handler)
+        client = GatewayMT5Client(
+            base_url="https://tunnel.example",
+            token="t",
+            timeout_seconds=5.0,
+        )
+
+        import app.infrastructure.brokers.mt5.gateway_client as mod
+
+        original = mod.httpx.Client
+
+        class PatchedClient(original):  # type: ignore[valid-type,misc]
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                kwargs["transport"] = transport
+                super().__init__(*args, **kwargs)
+
+            def close(self) -> None:  # type: ignore[override]
+                closed.append(True)
+                super().close()
+
+        mod.httpx.Client = PatchedClient  # type: ignore[misc]
+        try:
+            first = client._http_client()
+            data = client.gateway_health()
+            second = client._http_client()
+        finally:
+            mod.httpx.Client = original  # type: ignore[misc]
+
+        assert data["status"] == "ok"
+        assert calls["n"] >= 2
+        # Shared pool was replaced, but the previous client was not closed
+        # mid-flight (orphan finalize only via explicit close / GC).
+        assert first is not second
+        assert closed == []
+
+    def test_closed_client_error_is_transient(self) -> None:
+        assert GatewayMT5Client._is_transient_transport_error(
+            RuntimeError("Cannot send a request, as the client has been closed.")
+        )
+
 
 @pytest.mark.unit
 class TestWeltradeSurfacesUpstreamError:
