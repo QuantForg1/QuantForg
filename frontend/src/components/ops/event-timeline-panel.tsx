@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { executionApi, iteOpsApi } from "@/lib/api/endpoints";
@@ -110,34 +110,81 @@ export function EventTimelinePanel() {
       .slice(0, 80);
   }, [auditQ.data, journalQ.data]);
 
+  const timelineDegraded = journalQ.isError || auditQ.isError;
+  const timelineUnavailable = journalQ.isError && auditQ.isError;
+
   if ((journalQ.isLoading || auditQ.isLoading) && events.length === 0) {
     return <DeskSkeleton rows={6} />;
   }
-  if (journalQ.isError && auditQ.isError) {
+  if (timelineUnavailable && events.length === 0) {
     return (
-      <DeskError
-        message="Unable to load live event timeline."
-        onRetry={() => {
-          void journalQ.refetch();
-          void auditQ.refetch();
-        }}
-      />
+      <div className="space-y-2 border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone="warning" className="h-5 px-1.5 text-[10px]">
+            DEGRADED
+          </Badge>
+          <span className="text-[12px] font-medium text-[var(--fg)]">
+            Event timeline unavailable
+          </span>
+        </div>
+        <p className="text-[12px] text-[var(--fg-muted)]">
+          Journal and ITE audit feeds failed. This does not change Gateway, Broker,
+          or MT5 connectivity — those planes use trading-components health.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            void journalQ.refetch();
+            void auditQ.refetch();
+          }}
+        >
+          Retry timeline
+        </Button>
+      </div>
     );
   }
   if (events.length === 0) {
     return (
-      <DeskEmpty
-        icon={Activity}
-        title="No live events yet"
-        description="Execution journal and ITE audit events appear here as the platform runs."
-      />
+      <div className="space-y-2">
+        {timelineDegraded ? (
+          <div className="flex flex-wrap items-center gap-2 border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+            <Badge tone="warning" className="h-5 px-1.5 text-[10px]">
+              DEGRADED
+            </Badge>
+            <span className="text-[11px] text-[var(--fg-muted)]">
+              Partial timeline feed error — Gateway/Broker/MT5 status is independent
+            </span>
+          </div>
+        ) : null}
+        <DeskEmpty
+          icon={Activity}
+          title="No live events yet"
+          description="Execution journal and ITE audit events appear here as the platform runs."
+        />
+      </div>
     );
   }
 
   const active = events.find((e) => e.id === selected) ?? events[0];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+    <div className="space-y-2">
+      {timelineDegraded ? (
+        <div className="flex flex-wrap items-center gap-2 border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+          <Badge tone="warning" className="h-5 px-1.5 text-[10px]">
+            DEGRADED
+          </Badge>
+          <span className="text-[11px] text-[var(--fg-muted)]">
+            {journalQ.isError && auditQ.isError
+              ? "Timeline feeds delayed — connectivity cards use trading-components"
+              : journalQ.isError
+                ? "Execution journal feed degraded"
+                : "ITE audit feed degraded"}
+          </span>
+        </div>
+      ) : null}
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <ol className="max-h-[28rem] space-y-0 overflow-y-auto border border-[var(--border)] bg-[var(--surface)]">
         {events.map((e) => (
           <li key={e.id}>
@@ -197,6 +244,7 @@ export function EventTimelinePanel() {
           </Button>
         ) : null}
       </aside>
+      </div>
     </div>
   );
 }

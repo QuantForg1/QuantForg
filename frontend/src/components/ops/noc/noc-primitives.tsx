@@ -91,7 +91,9 @@ export function normalizeHealthStatus(
       ? "Disconnected"
       : "Disconnected";
   }
-  if (s === "healthy" || s === "ok" || s === "pass") return "Healthy";
+  if (s === "healthy" || s === "ok" || s === "pass" || s === "connected" || s === "up") {
+    return "Healthy";
+  }
   if (s === "warning" || s === "degraded" || s === "unknown") return "Warning";
   return "Unknown";
 }

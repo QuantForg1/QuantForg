@@ -6,8 +6,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
-import { iteReliabilityApi, weltradeApi } from "@/lib/api/endpoints";
+import { iteReliabilityApi, platformApi, weltradeApi } from "@/lib/api/endpoints";
 import { asRecord } from "@/lib/desk";
+import {
+  mergePlaneOk,
+  planeConnectionLabel,
+  resolveTradingComponentsView,
+} from "@/lib/trading/component-health";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn } from "@/lib/utils";
 
@@ -53,22 +58,76 @@ export function AutoRecoveryPanel() {
     return () => window.clearInterval(id);
   }, []);
 
+  // Authoritative plane — same source as PlatformStatusBoard (no auth).
+  const componentsQ = useQuery({
+    queryKey: ["trading-components-health", "auto-recovery"],
+    queryFn: platformApi.tradingComponents,
+    staleTime: 15_000,
+    refetchInterval: 20_000,
+    retry: 2,
+    refetchIntervalInBackground: false,
+  });
   const healthQ = useQuery({
     queryKey: ["weltrade-health", "auto-recovery"],
     queryFn: weltradeApi.health,
-    staleTime: 10_000,
-    refetchInterval: 15_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: 1,
   });
   const health = asRecord(healthQ.data);
 
-  const gatewayDown = session.healthKnown
-    ? !session.gatewayOnline
-    : health.gateway_online === false;
-  const brokerDown = session.healthKnown
-    ? !session.brokerConnected
-    : health.weltrade_connected === false;
-  const mt5Down = session.healthKnown ? !session.connected : false;
+  const componentsErrorKind =
+    componentsQ.error instanceof ApiError
+      ? componentsQ.error.code === "timeout"
+        ? ("timeout" as const)
+        : componentsQ.error.code === "network_error"
+          ? ("network" as const)
+          : ("other" as const)
+      : componentsQ.isError
+        ? ("other" as const)
+        : null;
+
+  const authHealth = resolveTradingComponentsView({
+    payload: componentsQ.data,
+    isSuccess: componentsQ.isSuccess,
+    isError: componentsQ.isError,
+    errorKind: componentsErrorKind,
+  });
+
+  // Prefer trading-components. Session/weltrade are secondary and must not
+  // flip a confirmed HEALTHY/CONNECTED plane to Disconnected.
+  const gatewayOk = mergePlaneOk(
+    authHealth?.gateway.ok ?? null,
+    session.healthKnown
+      ? session.gatewayOnline
+      : health.gateway_online != null
+        ? Boolean(health.gateway_online || health.gateway_reachable)
+        : null,
+  );
+  const mt5Ok = mergePlaneOk(
+    authHealth?.mt5.ok ?? null,
+    session.healthKnown
+      ? session.connected
+      : health.mt5_connected != null
+        ? Boolean(health.mt5_connected)
+        : null,
+  );
+  const brokerOk = mergePlaneOk(
+    // Broker transport follows MT5 connectivity on LIVE Weltrade.
+    mt5Ok === true ? true : authHealth?.mt5.ok ?? null,
+    session.healthKnown
+      ? session.brokerConnected
+      : health.weltrade_connected != null
+        ? Boolean(health.weltrade_connected)
+        : null,
+  );
+
+  const gatewayDown = gatewayOk === false;
+  const brokerDown = brokerOk === false;
+  const mt5Down = mt5Ok === false;
+  const gatewayStale = Boolean(authHealth?.gateway.stale);
+  const brokerStale = Boolean(authHealth?.mt5.stale);
+  const mt5Stale = Boolean(authHealth?.mt5.stale);
 
   const reconnectMut = useMutation({
     mutationFn: async (plane: Plane) => {
@@ -90,6 +149,7 @@ export function AutoRecoveryPanel() {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["weltrade-health"] }),
         qc.invalidateQueries({ queryKey: ["mt5-status"] }),
+        qc.invalidateQueries({ queryKey: ["trading-components-health"] }),
         session.invalidateAll(),
       ]);
     },
@@ -180,17 +240,31 @@ export function AutoRecoveryPanel() {
     () =>
       (
         [
-          ["gateway", "Gateway", gatewayDown],
-          ["broker", "Broker", brokerDown],
-          ["mt5", "MT5", mt5Down],
+          ["gateway", "Gateway", gatewayDown, gatewayOk, gatewayStale],
+          ["broker", "Broker", brokerDown, brokerOk, brokerStale],
+          ["mt5", "MT5", mt5Down, mt5Ok, mt5Stale],
         ] as const
-      ).map(([id, label, down]) => ({
+      ).map(([id, label, down, ok, stale]) => ({
         id,
         label,
         down,
+        ok,
+        stale,
         state: states[id],
+        connectionLabel: planeConnectionLabel(ok, stale),
       })),
-    [brokerDown, gatewayDown, mt5Down, states],
+    [
+      brokerDown,
+      brokerOk,
+      brokerStale,
+      gatewayDown,
+      gatewayOk,
+      gatewayStale,
+      mt5Down,
+      mt5Ok,
+      mt5Stale,
+      states,
+    ],
   );
 
   return (
@@ -201,7 +275,7 @@ export function AutoRecoveryPanel() {
             Auto recovery
           </h2>
           <p className="text-[11px] text-[var(--fg-subtle)]">
-            Backoff · heartbeat refresh · no page reload
+            Authoritative trading-components · hysteresis · no page reload
           </p>
         </div>
         <Button
@@ -228,21 +302,21 @@ export function AutoRecoveryPanel() {
                   <span className="text-[13px] font-medium text-[var(--fg)]">{row.label}</span>
                   <Badge
                     tone={
-                      !row.down
+                      row.ok === true
                         ? "success"
-                        : row.state.status === "retrying"
-                          ? "warning"
-                          : "danger"
+                        : row.ok == null
+                          ? "neutral"
+                          : row.state.status === "retrying"
+                            ? "warning"
+                            : "danger"
                     }
                     className="h-5 px-1.5 text-[10px]"
                   >
-                    {!row.down
-                      ? "Connected"
-                      : row.state.status === "retrying"
-                        ? row.state.message
-                        : row.state.status === "failed"
-                          ? "Failed"
-                          : "Disconnected"}
+                    {row.ok === false && row.state.status === "retrying"
+                      ? row.state.message
+                      : row.ok === false && row.state.status === "failed"
+                        ? "Failed"
+                        : row.connectionLabel}
                   </Badge>
                 </div>
                 <p className={cn("text-[11px] text-[var(--fg-muted)]")}>

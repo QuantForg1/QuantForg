@@ -17,6 +17,10 @@ import {
   weltradeApi,
 } from "@/lib/api/endpoints";
 import { asList, asRecord, num, statusLabel, str } from "@/lib/desk";
+import {
+  mergePlaneOk,
+  resolveTradingComponentsView,
+} from "@/lib/trading/component-health";
 import { useAuth } from "@/providers/auth-provider";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn } from "@/lib/utils";
@@ -159,9 +163,9 @@ export function PlatformStatusBoard() {
   const componentsQ = useQuery({
     queryKey: ["trading-components-health", "timed"],
     queryFn: timedTradingComponents,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-    retry: 1,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+    retry: 2,
     refetchIntervalInBackground: false,
   });
   // Optional broker detail — do not hammer; trading-components is authoritative for MT5/gateway.
@@ -211,8 +215,34 @@ export function PlatformStatusBoard() {
   const live = asRecord(auto.live);
   const facts = asRecord(auto.facts);
   const execState = asRecord(auto.execution_state);
+
+  const componentsErrorKind =
+    componentsQ.error instanceof ApiError
+      ? componentsQ.error.code === "timeout"
+        ? ("timeout" as const)
+        : componentsQ.error.code === "network_error"
+          ? ("network" as const)
+          : ("other" as const)
+      : componentsQ.isError
+        ? ("other" as const)
+        : null;
+  const authHealth = resolveTradingComponentsView({
+    payload: componentsQ.data?.payload ?? componentsQ.data,
+    isSuccess: componentsQ.isSuccess,
+    isError: componentsQ.isError,
+    errorKind: componentsErrorKind,
+  });
   const components = asRecord(componentsQ.data?.payload ?? componentsQ.data);
-  const statuses = asRecord(components.statuses);
+  const statuses = asRecord(
+    authHealth
+      ? {
+          gateway: authHealth.rawStatuses.gateway,
+          mt5: authHealth.rawStatuses.mt5,
+          oms: authHealth.rawStatuses.oms,
+          ai: authHealth.rawStatuses.ai,
+        }
+      : components.statuses,
+  );
   const gatewayComponent = asRecord(components.gateway);
   const gatewayEvidence = asRecord(gatewayComponent.evidence);
   const omsComponent = asRecord(components.oms);
@@ -243,31 +273,25 @@ export function PlatformStatusBoard() {
     const omsStatus = componentStatus(statuses, "oms");
     const aiStatus = componentStatus(statuses, "ai");
 
-    const gatewayOk =
-      gwStatus === "HEALTHY"
-        ? true
-        : gwStatus === "DOWN" || gwStatus === "UNHEALTHY"
-          ? false
-          : session.healthKnown
-            ? session.gatewayOnline
-            : health.gateway_online != null
-              ? Boolean(health.gateway_online || health.gateway_reachable)
-              : session.connected
-                ? true
-                : null;
+    // Authoritative trading-components (+ hysteresis) first. Session / mt5-status
+    // / weltrade are secondary — a process-local miss must not flip HEALTHY→down.
+    const gatewayOk = mergePlaneOk(
+      authHealth?.gateway.ok ?? null,
+      session.healthKnown
+        ? session.gatewayOnline
+        : health.gateway_online != null
+          ? Boolean(health.gateway_online || health.gateway_reachable)
+          : null,
+    );
 
-    const mt5Ok =
-      mt5Status === "CONNECTED"
-        ? true
-        : mt5Status === "DISCONNECTED" || mt5Status === "DOWN"
-          ? false
-          : mt5.connected != null
-            ? Boolean(mt5.connected)
-            : session.connected
-              ? true
-              : mt5Q.isFetched && !mt5Q.isError
-                ? false
-                : null;
+    const mt5Ok = mergePlaneOk(
+      authHealth?.mt5.ok ?? null,
+      mt5.connected != null
+        ? Boolean(mt5.connected)
+        : session.healthKnown
+          ? session.connected
+          : null,
+    );
 
     const mt5Confirmed = mt5Ok === true;
     const brokerTransportOk = Boolean(
@@ -282,7 +306,10 @@ export function PlatformStatusBoard() {
       (str(health.login_status).toLowerCase().includes("close") ||
         str(session.loginStatus).toLowerCase() === "market_closed" ||
         Boolean(health.session_closed));
-    const brokerHealthUnknown = Boolean(weltradeQ.isError && !mt5Confirmed);
+    // Only UNKNOWN when broker health errored AND we lack authoritative MT5 up.
+    const brokerHealthUnknown = Boolean(
+      weltradeQ.isError && !mt5Confirmed && mt5Ok !== false,
+    );
 
     const openN = positions.length;
     const floatPnl = positions.reduce((s, p) => s + num(p.profit, 0), 0);
@@ -468,10 +495,14 @@ export function PlatformStatusBoard() {
         title: "Gateway",
         status:
           gatewayOk === true
-            ? "HEALTHY"
+            ? authHealth?.gateway.stale
+              ? "HEALTHY (cached)"
+              : "HEALTHY"
             : gatewayOk === false
               ? "UNREACHABLE"
-              : "UNKNOWN",
+              : componentsQ.isFetching
+                ? "CHECKING"
+                : "UNKNOWN",
         tone: toneFromOk(gatewayOk),
         latency: gatewayLatencyLabel,
         heartbeat: str(session.heartbeatAt, "—").slice(0, 19) || "—",
@@ -482,7 +513,11 @@ export function PlatformStatusBoard() {
         errors: gatewayOk === false ? statusLabel(health.diagnostic, "No heartbeat") : "0",
         recovery: gatewayOk === false ? "Await reconnect" : "Stable",
         detail: [
-          session.gatewayLabel || str(gatewayComponent.detail, ""),
+          session.gatewayLabel ||
+            str(authHealth?.gateway.detail || gatewayComponent.detail, ""),
+          authHealth?.gateway.stale
+            ? "Last-known-good — trading-components probe delayed"
+            : undefined,
           Number.isFinite(gatewayProbeMs) && componentsAggregateRttMs != null
             ? `Probe RTT ${Math.round(gatewayProbeMs)} ms · aggregate ${componentsAggregateRttMs} ms`
             : Number.isFinite(gatewayProbeMs)
@@ -497,10 +532,14 @@ export function PlatformStatusBoard() {
         title: "MT5",
         status:
           mt5Ok === true
-            ? "CONNECTED"
+            ? authHealth?.mt5.stale
+              ? "CONNECTED (cached)"
+              : "CONNECTED"
             : mt5Ok === false
               ? "DISCONNECTED"
-              : "UNKNOWN",
+              : componentsQ.isFetching
+                ? "CHECKING"
+                : "UNKNOWN",
         tone: toneFromOk(mt5Ok),
         heartbeat: str(mt5.updated_at || mt5.last_heartbeat, "—").slice(0, 19) || "—",
         version: str(mt5.build || mt5.terminal_build, "—"),
@@ -726,6 +765,7 @@ export function PlatformStatusBoard() {
     ];
   }, [
     apiState,
+    authHealth,
     auto,
     autoQ.dataUpdatedAt,
     autoQ.error,
@@ -738,6 +778,7 @@ export function PlatformStatusBoard() {
     components,
     componentsAggregateRttMs,
     componentsQ.dataUpdatedAt,
+    componentsQ.isFetching,
     dash,
     execState,
     facts,

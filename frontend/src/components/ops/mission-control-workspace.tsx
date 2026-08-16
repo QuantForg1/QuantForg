@@ -17,11 +17,16 @@ import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives
 import {
   missionControlApi,
   mt5Api,
+  platformApi,
   portfolioApi,
 } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import {
+  overlayExecutiveStatus,
+  resolveTradingComponentsView,
+} from "@/lib/trading/component-health";
 import { cn, formatNumber } from "@/lib/utils";
 
 type PanelView = {
@@ -232,6 +237,31 @@ export function MissionControlWorkspace() {
     staleTime: 30_000,
   });
 
+  // Authoritative LIVE planes — overlay stale control-center "disconnected" labels.
+  const componentsQ = useQuery({
+    queryKey: ["trading-components-health", "mission-executive"],
+    queryFn: platformApi.tradingComponents,
+    staleTime: 15_000,
+    refetchInterval: 20_000,
+    retry: 2,
+    refetchIntervalInBackground: false,
+  });
+  const authHealth = resolveTradingComponentsView({
+    payload: componentsQ.data,
+    isSuccess: componentsQ.isSuccess,
+    isError: componentsQ.isError,
+    errorKind:
+      componentsQ.error instanceof ApiError
+        ? componentsQ.error.code === "timeout"
+          ? "timeout"
+          : componentsQ.error.code === "network_error"
+            ? "network"
+            : "other"
+        : componentsQ.isError
+          ? "other"
+          : null,
+  });
+
   const noteM = useMutation({
     mutationFn: () => missionControlApi.addNote({ text: noteText }),
     onSuccess: async () => {
@@ -270,6 +300,15 @@ export function MissionControlWorkspace() {
   const daily = panelOf(dash, "daily_summary");
   const notes = panelOf(dash, "operator_notes");
   const fab = panelOf(dash, "floating_action_bar");
+
+  const gatewayDisplay = overlayExecutiveStatus(
+    executive?.data.gateway_status ?? sysHealth?.data.gateway_status,
+    authHealth?.gateway,
+  );
+  const mt5Display = overlayExecutiveStatus(
+    executive?.data.mt5_status ?? sysHealth?.data.mt5_status,
+    authHealth?.mt5,
+  );
 
   const killArmed = Boolean(asRecord(emergency?.data).kill_switch);
   const caps = asRecord(statusQ.data?.capabilities);
@@ -337,8 +376,8 @@ export function MissionControlWorkspace() {
                 value={executive.data.kill_switch ? "ARMED" : "clear"}
                 tone={executive.data.kill_switch ? "danger" : "ok"}
               />
-              <Stat label="Gateway" value={str(executive.data.gateway_status, "—")} />
-              <Stat label="MT5" value={str(executive.data.mt5_status, "—")} />
+              <Stat label="Gateway" value={gatewayDisplay} />
+              <Stat label="MT5" value={mt5Display} />
               <Stat
                 label="OMS"
                 value={executive.data.oms_orders_allowed ? "allowed" : "blocked"}
@@ -539,8 +578,8 @@ export function MissionControlWorkspace() {
           ) : (
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-3">
-                <Stat label="Gateway" value={str(sysHealth.data.gateway_status, "—")} />
-                <Stat label="MT5" value={str(sysHealth.data.mt5_status, "—")} />
+                <Stat label="Gateway" value={gatewayDisplay} />
+                <Stat label="MT5" value={mt5Display} />
                 <Stat
                   label="Health score"
                   value={str(sysHealth.data.health_score, "—")}
