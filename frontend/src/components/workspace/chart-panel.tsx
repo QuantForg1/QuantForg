@@ -21,35 +21,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import { mt5Api } from "@/lib/api/endpoints";
-import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { cn, formatNumber } from "@/lib/utils";
+import { candleLoadErrorMessage } from "@/lib/trading/market-status";
+import { useTradingSession } from "@/providers/trading-session-provider";
 import { Cable } from "lucide-react";
-
-function candleErrorMessage(error: unknown, symbol: string): string {
-  if (error instanceof ApiError) {
-    const msg = `${error.message} ${JSON.stringify(error.details ?? {})}`.toLowerCase();
-    if (
-      error.status === 503 ||
-      msg.includes("market closed") ||
-      msg.includes("symbol_select") ||
-      msg.includes("trade is disabled") ||
-      msg.includes("session")
-    ) {
-      return `Market closed. Candles unavailable for ${symbol} outside the trading session.`;
-    }
-    if (error.status === 401 || error.code === "unauthorized") {
-      return "Session expired. Please sign in again.";
-    }
-    if (error.code === "timeout") {
-      return "Backend response delayed while loading candles. Retrying…";
-    }
-    if (error.code === "network_error") {
-      return "Gateway unavailable. MT5 candle data temporarily unavailable.";
-    }
-  }
-  return "Unable to load candles from MT5.";
-}
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const;
 
@@ -122,6 +98,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   onFullscreenChange: (v: boolean) => void;
   lastPrice?: number;
 }) {
+  const session = useTradingSession();
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const mainRef = useRef<ISeriesApi<"Candlestick"> | ISeriesApi<"Line"> | ISeriesApi<"Area"> | null>(
@@ -385,7 +362,11 @@ export const WorkspaceChart = memo(function WorkspaceChart({
         ) : candlesQ.isError ? (
           <div className="p-4">
             <DeskError
-              message={candleErrorMessage(candlesQ.error, symbol)}
+              message={candleLoadErrorMessage(
+                candlesQ.error,
+                symbol,
+                session.gatewayOnline,
+              )}
               onRetry={() => candlesQ.refetch()}
             />
           </div>

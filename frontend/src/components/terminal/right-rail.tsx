@@ -15,6 +15,8 @@ export const TerminalRightRail = memo(function TerminalRightRail({
   bid,
   ask,
   tickTimeMs,
+  marketOpen = null,
+  symbolAvailable = null,
   ticketRef,
 }: {
   symbol: string;
@@ -23,6 +25,10 @@ export const TerminalRightRail = memo(function TerminalRightRail({
   bid?: number;
   ask?: number;
   tickTimeMs?: number | null;
+  /** Explicit market session from tick API; null = unknown. */
+  marketOpen?: boolean | null;
+  /** Catalogue/symbol known independently of quotes. */
+  symbolAvailable?: boolean | null;
   ticketRef: RefObject<OrderTicketHandle | null>;
 }) {
   return (
@@ -45,6 +51,8 @@ export const TerminalRightRail = memo(function TerminalRightRail({
           bid={bid}
           ask={ask}
           tickTimeMs={tickTimeMs}
+          marketOpen={marketOpen}
+          symbolAvailable={symbolAvailable}
           dense
         />
       </div>

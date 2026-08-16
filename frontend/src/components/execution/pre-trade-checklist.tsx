@@ -22,6 +22,13 @@ export type PreTradeInputs = {
   riskAssessment?: Record<string, unknown> | null;
   marginRequired?: string | null;
   maxSpread?: number;
+  /**
+   * Explicit market session from tick/candle API.
+   * null = unknown — do not invent Closed from a missing quote alone.
+   */
+  marketOpen?: boolean | null;
+  /** Catalogue / symbol known independently of live quotes. */
+  symbolAvailable?: boolean | null;
 };
 
 /** XAUUSD desk spread ceiling (absolute price units). */
@@ -63,6 +70,7 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
     inputs.ask != null
       ? inputs.ask - inputs.bid
       : NaN;
+  const hasQuote = Number.isFinite(spread) && spread > 0;
   const maxSpread = inputs.maxSpread ?? defaultMaxSpread();
   const vol = num(inputs.volume, 0);
   const free = num(session.freeMargin, NaN);
@@ -79,12 +87,18 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
     return String(inputs.riskDecision);
   }, [inputs.riskDecision, inputs.riskAssessment]);
 
+  const marketOpenExplicit = inputs.marketOpen;
+  const symbolOk =
+    inputs.symbolAvailable != null
+      ? inputs.symbolAvailable
+      : session.connected && Boolean(inputs.symbol.trim());
+
   const checks = useMemo(() => {
     const list = [
       {
         ok: session.gatewayOnline,
         label: "Gateway Connected",
-        detail: session.gatewayLabel,
+        detail: session.gatewayOnline ? "Connected" : session.gatewayLabel || "unavailable",
       },
       {
         ok: session.connected,
@@ -92,21 +106,29 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
         detail: session.connected ? session.server : "offline",
       },
       {
-        ok: session.connected && Boolean(inputs.symbol.trim()),
+        ok: symbolOk,
         label: "Symbol Available",
-        detail: inputs.symbol || "—",
+        detail: symbolOk ? inputs.symbol || "—" : "unavailable",
       },
       {
-        ok: Number.isFinite(spread) && spread > 0,
-        label: "Market Open / Quote",
-        detail: Number.isFinite(spread) ? `spread ${spread.toFixed(5)}` : "no tick",
+        ok: marketOpenExplicit === true || (marketOpenExplicit == null && hasQuote),
+        label: "Market Open",
+        detail:
+          marketOpenExplicit === false
+            ? "Market Closed"
+            : marketOpenExplicit === true || hasQuote
+              ? "Open"
+              : "unknown",
       },
       {
-        ok: Number.isFinite(spread) && spread <= maxSpread,
+        ok: hasQuote,
+        label: "Quote",
+        detail: hasQuote ? `spread ${spread.toFixed(5)}` : "No Tick",
+      },
+      {
+        ok: hasQuote && spread <= maxSpread,
         label: "Spread Acceptable",
-        detail: Number.isFinite(spread)
-          ? `${spread.toFixed(5)} ≤ ${maxSpread}`
-          : "n/a",
+        detail: hasQuote ? `${spread.toFixed(5)} ≤ ${maxSpread}` : "n/a",
       },
       {
         ok: vol > 0,
@@ -150,9 +172,17 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
         detail: inputs.takeProfit || "optional",
       },
       {
-        ok: session.connected,
+        ok:
+          session.connected &&
+          marketOpenExplicit !== false &&
+          hasQuote,
         label: "Trading Enabled",
-        detail: session.connected ? "session live" : "blocked",
+        detail:
+          marketOpenExplicit === false
+            ? "Market Closed"
+            : session.connected && hasQuote
+              ? "session live"
+              : "blocked",
       },
     ];
     return list;
@@ -170,6 +200,9 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
     vol,
     free,
     marginNeeded,
+    hasQuote,
+    marketOpenExplicit,
+    symbolOk,
   ]);
 
   const blocked = checks.some((c) => !c.ok);
@@ -239,6 +272,7 @@ export function preTradeAllowsExecution(inputs: PreTradeInputs, session: {
   const free = num(session.freeMargin, NaN);
   const marginNeeded = num(inputs.marginRequired, NaN);
   if (!session.gatewayOnline || !session.connected) return false;
+  if (inputs.marketOpen === false) return false;
   if (!inputs.symbol.trim() || vol <= 0) return false;
   if (!Number.isFinite(spread) || spread <= 0 || spread > maxSpread) return false;
   if (Number.isFinite(marginNeeded) && Number.isFinite(free) && marginNeeded > free)

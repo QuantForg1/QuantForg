@@ -2,19 +2,40 @@
  * Trading symbol policy for the QuantForg frontend.
  *
  * Production supports multi-asset (LIVE MT5 universe). Default focus remains XAUUSD.
+ * Weltrade live gold CFD is catalogue-spelled ``XAUUSD_i`` (lowercase i).
  * Order routing still goes through existing backend Risk/OMS gates — this file only
  * controls client display / API path encoding.
  */
 
 export const GOLD_SYMBOL = "XAUUSD";
 
+/** Weltrade / institutional gold CFD — exact broker catalogue spelling. */
+export const WELTRADE_XAUUSD = "XAUUSD_i";
+
 /** Multi-asset Terminal watchlist, charts, and tickets are enabled. */
 export const MULTI_SYMBOL_ENABLED = true;
 
 /** Default desk focus when no symbol is selected. */
-export const TRADING_SYMBOL = GOLD_SYMBOL;
+export const TRADING_SYMBOL = MULTI_SYMBOL_ENABLED ? WELTRADE_XAUUSD : GOLD_SYMBOL;
 
-const GOLD_ALIASES = new Set(["XAUUSD", "GOLD", "XAUUSDM", "XAUUSD.", "XAUUSD.a"]);
+const GOLD_ALIASES = new Set([
+  "XAUUSD",
+  "GOLD",
+  "XAUUSDM",
+  "XAUUSD.",
+  "XAUUSD.A",
+  "XAUUSD_I",
+]);
+
+/** Desk aliases → exact Weltrade broker symbols (preserve lowercase ``_i``). */
+const DESK_TO_BROKER: Record<string, string> = {
+  XAUUSD: WELTRADE_XAUUSD,
+  GOLD: WELTRADE_XAUUSD,
+  XAUUSDM: WELTRADE_XAUUSD,
+  "XAUUSD.": WELTRADE_XAUUSD,
+  "XAUUSD.A": WELTRADE_XAUUSD,
+  XAUUSD_I: WELTRADE_XAUUSD,
+};
 
 export function normalizeSymbolCode(code: string): string {
   return code.trim().toUpperCase().replace(/[^A-Z0-9.]/g, "");
@@ -23,7 +44,7 @@ export function normalizeSymbolCode(code: string): string {
 export function isGoldSymbol(code: string): boolean {
   const u = normalizeSymbolCode(code);
   if (!u) return false;
-  if (GOLD_ALIASES.has(u) || u === GOLD_SYMBOL) return true;
+  if (GOLD_ALIASES.has(u) || u === GOLD_SYMBOL || u === "XAUUSD_I") return true;
   return u.includes("XAUUSD") || (u.includes("XAU") && u.includes("USD"));
 }
 
@@ -34,11 +55,28 @@ export function isAllowedTradingSymbol(code: string): boolean {
   return isGoldSymbol(u);
 }
 
-/** Resolve a user/URL symbol for API paths and Terminal state. */
+/**
+ * Resolve a user/URL symbol for API paths and Terminal state.
+ * ``XAUUSD`` → ``XAUUSD_i``; never send uppercase ``XAUUSD_I`` to the gateway.
+ */
 export function resolveTradingSymbol(code?: string | null): string {
-  const n = normalizeSymbolCode(code || "");
-  if (!n) return GOLD_SYMBOL;
+  const raw = (code || "").trim();
+  if (!raw) return TRADING_SYMBOL;
+
+  // Preserve institutional suffix as broker lowercase ``_i``.
+  const inst = raw.match(/^([A-Za-z0-9.]+)[_ ]([iI])$/);
+  if (inst) {
+    const base = inst[1].toUpperCase().replace(/[^A-Z0-9.]/g, "");
+    return `${base}_i`;
+  }
+
+  const n = normalizeSymbolCode(raw);
   if (!MULTI_SYMBOL_ENABLED) return GOLD_SYMBOL;
+  if (DESK_TO_BROKER[n]) return DESK_TO_BROKER[n];
+  // Generic Weltrade institutional uppercase form → catalogue ``_i``.
+  if (n.endsWith("_I") && n.length > 2) {
+    return `${n.slice(0, -2)}_i`;
+  }
   return n;
 }
 
@@ -50,6 +88,16 @@ export function resolveTradingSymbol(code?: string | null): string {
 export function goldOnlySearchQuery(q?: string): string | null {
   const raw = (q || "").trim().toUpperCase();
   if (MULTI_SYMBOL_ENABLED) {
+    if (!raw) return "";
+    // Prefer broker spelling for gold searches so catalogue match succeeds.
+    if (
+      GOLD_SYMBOL.includes(raw) ||
+      raw.includes("XAU") ||
+      raw.includes("GOLD") ||
+      isGoldSymbol(raw)
+    ) {
+      return WELTRADE_XAUUSD;
+    }
     return raw;
   }
   if (!raw) return GOLD_SYMBOL;
@@ -73,11 +121,11 @@ export function filterTradingSymbolRecords<T extends Record<string, unknown>>(
   );
 }
 
-export const DEFAULT_WATCHLIST_SYMBOLS = [GOLD_SYMBOL] as const;
+export const DEFAULT_WATCHLIST_SYMBOLS = [TRADING_SYMBOL] as const;
 
 /** MT5 XAUUSD contract specs used by client-side sizing / display. */
 export const XAUUSD_SPECS = {
-  symbol: GOLD_SYMBOL,
+  symbol: WELTRADE_XAUUSD,
   digits: 2,
   point: 0.01,
   tickSize: 0.01,

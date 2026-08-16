@@ -57,23 +57,25 @@ export const WorkspaceRightRail = memo(function WorkspaceRightRail({
       ? null
       : hasQuote
         ? true
-        : connected
-          ? false
-          : null;
-    const feed = !realtime.online
-      ? ("offline" as const)
-      : realtime.latencyMs != null && realtime.latencyMs >= 200
-        ? ("delayed" as const)
-        : realtime.connected
-          ? ("live" as const)
-          : ("offline" as const);
+        : null;
+    const feed = !hasQuote
+      ? session.healthKnown || realtime.updatedAt != null
+        ? ("offline" as const)
+        : null
+      : !realtime.online
+        ? ("offline" as const)
+        : realtime.latencyMs != null && realtime.latencyMs >= 200
+          ? ("delayed" as const)
+          : realtime.connected
+            ? ("live" as const)
+            : ("offline" as const);
 
     return deriveTradingStatusLines({
       gatewayOnline,
       brokerConnected,
       marketOpen,
       executionEnabled: session.executionEnabled,
-      feed: session.healthKnown || realtime.updatedAt != null ? feed : null,
+      feed,
     });
   }, [
     session.healthKnown,

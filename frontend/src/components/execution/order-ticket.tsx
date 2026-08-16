@@ -71,10 +71,24 @@ export const ExecutionOrderTicket = forwardRef<
     ask?: number;
     /** Epoch ms of last broker tick — reject submit when stale. */
     tickTimeMs?: number | null;
+    /** Explicit market session from tick API; null = unknown. */
+    marketOpen?: boolean | null;
+    /** Catalogue/symbol known independently of quotes. */
+    symbolAvailable?: boolean | null;
     dense?: boolean;
   }
 >(function ExecutionOrderTicket(
-  { symbol, onSymbolChange, connected, bid, ask, tickTimeMs = null, dense = false },
+  {
+    symbol,
+    onSymbolChange,
+    connected,
+    bid,
+    ask,
+    tickTimeMs = null,
+    marketOpen = null,
+    symbolAvailable = null,
+    dense = false,
+  },
   ref,
 ) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -137,7 +151,7 @@ export const ExecutionOrderTicket = forwardRef<
     if (breakEven) parts.push("be:1");
     return {
       request_id: `exec_${crypto.randomUUID()}`,
-      symbol: symbol.trim().toUpperCase(),
+      symbol: resolveTradingSymbol(symbol),
       side,
       order_type: orderType,
       volume,
@@ -405,6 +419,8 @@ export const ExecutionOrderTicket = forwardRef<
           riskDecision,
           riskAssessment: asRecord(risk),
           marginRequired: str(asRecord(calc).expected_margin, ""),
+          marketOpen,
+          symbolAvailable,
         },
         session,
       );
@@ -412,7 +428,9 @@ export const ExecutionOrderTicket = forwardRef<
         const reason =
           !session.gatewayOnline || !session.connected
             ? "Gateway or broker session is offline"
-            : "Pre-trade checklist failed — check spread, margin, and risk";
+            : marketOpen === false
+              ? "Market closed — trading session blocked"
+              : "Pre-trade checklist failed — check spread, margin, and risk";
         setExecStage("rejected");
         setRejectReason(reason);
         toast.error(reason);
@@ -679,8 +697,10 @@ export const ExecutionOrderTicket = forwardRef<
             riskDecision: lastRisk ? str(lastRisk.decision).toUpperCase() : null,
             riskAssessment: lastRisk,
             marginRequired: str(asRecord(calc).expected_margin, ""),
+            marketOpen,
+            symbolAvailable,
           }}
-          compact
+          compact={dense}
         />
 
         <div className="grid gap-2 grid-cols-2">

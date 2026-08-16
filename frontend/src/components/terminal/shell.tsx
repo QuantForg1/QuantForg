@@ -36,6 +36,10 @@ import { useTradingSession } from "@/providers/trading-session-provider";
 import { mt5Api } from "@/lib/api/endpoints";
 import { asRecord, num } from "@/lib/desk";
 import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
+import {
+  isMarketClosedApiError,
+  tickLoadStatus,
+} from "@/lib/trading/market-status";
 import { cn } from "@/lib/utils";
 
 function isTypingTarget(el: EventTarget | null) {
@@ -153,6 +157,20 @@ export function TerminalShell() {
   const tick = asRecord(tickQ.data);
   const bid = num(tick.bid);
   const ask = num(tick.ask);
+  const hasQuote =
+    Number.isFinite(bid) && Number.isFinite(ask) && bid > 0 && ask > 0;
+  const tickStatus = tickLoadStatus(tickQ.isError ? tickQ.error : null);
+  const marketOpen = hasQuote
+    ? true
+    : tickQ.isError
+      ? tickStatus.marketOpen
+      : tickQ.isFetched
+        ? null
+        : null;
+  const symbolAvailable =
+    session.connected && Boolean(symbol.trim())
+      ? !tickQ.isError || isMarketClosedApiError(tickQ.error)
+      : false;
   const tickTimeMs = (() => {
     const raw = tick.timestamp ?? tick.time ?? tick.updated_at;
     if (typeof raw === "number" && Number.isFinite(raw)) {
@@ -510,6 +528,8 @@ export function TerminalShell() {
                 bid={bidOk}
                 ask={askOk}
                 tickTimeMs={tickTimeMs}
+                marketOpen={marketOpen}
+                symbolAvailable={symbolAvailable}
                 ticketRef={ticketRef}
               />
             </div>
@@ -577,11 +597,13 @@ export function TerminalShell() {
               <div className="max-h-[calc(78dvh-2.75rem)] overflow-y-auto">
                 <TerminalRightRail
                   symbol={symbol}
-                  onSymbolChange={setSymbol}
+                  onSymbolChange={onSymbolSelect}
                   connected={connected}
                   bid={bidOk}
                   ask={askOk}
                   tickTimeMs={tickTimeMs}
+                  marketOpen={marketOpen}
+                  symbolAvailable={symbolAvailable}
                   ticketRef={ticketRef}
                 />
               </div>
