@@ -89,6 +89,12 @@ class AiScalpingConfig:
     multi_asset_scan_enabled: bool = True
     continuous_operation_enabled: bool = True
     post_close_rescan_enabled: bool = True
+    # Soft daily opportunity objective — NEVER a forced minimum.
+    target_trades_per_day: int = 3
+    # Focused opportunity review cadence (continuous scan still runs ~5s).
+    opportunity_review_interval_seconds: float = 1800.0
+    # After fill / meaningful PME event — arm rescan for a NEW valid setup only.
+    post_event_rescan_enabled: bool = True
     # Dynamic broker-driven universe (discovery + priority). Quality floors unchanged.
     dynamic_universe_enabled: bool = True
     max_universe_symbols: int = 36
@@ -364,6 +370,9 @@ class AiScalpingConfig:
             "multi_asset_scan_enabled": self.multi_asset_scan_enabled,
             "continuous_operation_enabled": self.continuous_operation_enabled,
             "post_close_rescan_enabled": self.post_close_rescan_enabled,
+            "target_trades_per_day": self.target_trades_per_day,
+            "opportunity_review_interval_seconds": self.opportunity_review_interval_seconds,
+            "post_event_rescan_enabled": self.post_event_rescan_enabled,
             "dynamic_universe_enabled": self.dynamic_universe_enabled,
             "max_universe_symbols": self.max_universe_symbols,
             "session_symbol_priority_enabled": self.session_symbol_priority_enabled,

@@ -949,6 +949,10 @@ export function AutoTradingWorkspace() {
   const forceBanner = Boolean(forceFirst.banner);
   const riskLockOverride = asRecord(asRecord(autoQ.data).risk_lock_override);
   const riskLockBanner = Boolean(riskLockOverride.banner);
+  const opportunityTarget = asRecord(asRecord(autoQ.data).daily_opportunity_target);
+  const oppPerf = asRecord(opportunityTarget.performance);
+  const tradesTodayTarget = num(opportunityTarget.trades_today, executedToday);
+  const targetTradesDay = num(opportunityTarget.target_trades_per_day, 3);
   return (
     <div className="space-y-3">
       {forceBanner ? (
@@ -1035,6 +1039,62 @@ export function AutoTradingWorkspace() {
       </section>
 
       <LaunchReadinessPanel />
+
+      <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Daily opportunity target
+          </h2>
+          <Badge tone="neutral" className="h-5 px-1.5 text-[10px]">
+            {str(opportunityTarget.seeking_mode, "seeking_quality_opportunities")}
+          </Badge>
+        </div>
+        <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+          Target is opportunity-based — never forces trades. Safety/Risk/OMS always win.
+        </p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div>
+            <p className="text-[9px] uppercase text-[var(--fg-subtle)]">Trades today</p>
+            <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+              {tradesTodayTarget} / {targetTradesDay}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-[var(--fg-subtle)]">Remaining</p>
+            <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+              {str(opportunityTarget.remaining_trade_opportunities, "—")}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-[var(--fg-subtle)]">Open positions</p>
+            <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+              {positions.length}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-[var(--fg-subtle)]">Win rate</p>
+            <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+              {Number.isFinite(num(oppPerf.win_rate, NaN))
+                ? `${(num(oppPerf.win_rate) * 100).toFixed(0)}%`
+                : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-[var(--fg-subtle)]">Expectancy</p>
+            <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+              {Number.isFinite(num(oppPerf.expectancy_per_trade, NaN))
+                ? num(oppPerf.expectancy_per_trade).toFixed(2)
+                : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-[var(--fg-subtle)]">Last reject gate</p>
+            <p className="truncate font-mono text-[11px] text-[var(--fg)]">
+              {str(opportunityTarget.last_reject_gate, "—")}
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Controls */}
       <OpsPanel

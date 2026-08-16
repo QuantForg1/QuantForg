@@ -200,8 +200,24 @@ class ContinuousOperationController:
 
     def request_rescan_after_close(self) -> None:
         """After a trade closes, scan again for a NEW valid setup only."""
+        self.request_opportunity_rescan("position_closed")
+
+    def request_opportunity_rescan(self, reason: str = "event") -> None:
+        """Arm an immediate opportunity rescan — never forces a trade."""
         with self._lock:
             self.pending_rescan = True
+        try:
+            from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
+                get_daily_opportunity_tracker,
+            )
+
+            get_daily_opportunity_tracker(
+                target_trades_per_day=int(
+                    getattr(self.config, "target_trades_per_day", 3) or 3
+                )
+            ).note_rescan(reason)
+        except Exception:
+            pass
 
     def consume_rescan(self) -> bool:
         with self._lock:

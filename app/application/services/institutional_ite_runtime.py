@@ -1346,6 +1346,10 @@ class InstitutionalIteRuntime:
                                 from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (  # noqa: E501
                                     get_adaptive_cooldown_gate,
                                 )
+                                from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (  # noqa: E501
+                                    ClosedTradeRecord,
+                                    get_daily_opportunity_tracker,
+                                )
                                 from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
                                     get_symbol_state_book,
                                 )
@@ -1358,6 +1362,64 @@ class InstitutionalIteRuntime:
                                 ).upper()
                                 if closed_sym:
                                     get_symbol_state_book().reset(closed_sym)
+                                # Opportunity target — record close stats (observe only).
+                                try:
+                                    _ai = getattr(
+                                        self.decision_pipeline, "_last_ai_score", None
+                                    )
+                                    _ai_d = _ai if isinstance(_ai, dict) else {}
+                                    pnl = float(
+                                        getattr(pos, "realized_pnl", None)
+                                        or getattr(pos, "profit", None)
+                                        or 0.0
+                                    )
+                                    r_mult = float(
+                                        getattr(pos, "r_multiple", None) or 0.0
+                                    )
+                                    hold_m = float(
+                                        getattr(pos, "holding_time_minutes", None) or 0.0
+                                    )
+                                    get_daily_opportunity_tracker(
+                                        target_trades_per_day=int(
+                                            getattr(
+                                                DEFAULT_AI_SCALPING_CONFIG,
+                                                "target_trades_per_day",
+                                                3,
+                                            )
+                                            or 3
+                                        )
+                                    ).note_trade_closed(
+                                        ClosedTradeRecord(
+                                            symbol=closed_sym or "",
+                                            strategy=str(
+                                                getattr(
+                                                    self.plane, "trading_mode", "swing"
+                                                )
+                                                or "swing"
+                                            ),
+                                            session="",
+                                            market_regime=str(
+                                                _ai_d.get("market_regime")
+                                                or _ai_d.get("regime")
+                                                or ""
+                                            ),
+                                            realized_pnl=pnl,
+                                            risk_pct_at_entry=0.0,
+                                            equity_at_exit=0.0,
+                                            realized_r=r_mult,
+                                            expected_r=0.0,
+                                            holding_seconds=hold_m * 60.0,
+                                            exit_reason=str(
+                                                _close_reason or reason or "closed"
+                                            ),
+                                            won=pnl > 0,
+                                            closed_at=datetime.now(UTC).isoformat(),
+                                        )
+                                    )
+                                except Exception:
+                                    logger.exception(
+                                        "daily_opportunity_target_close_record_failed"
+                                    )
                                 # Invalidate handoff queue — force full parallel rescan
                                 with self._lock:
                                     self._eligible_handoff_queue = []
@@ -1570,6 +1632,29 @@ class InstitutionalIteRuntime:
 
             if _scalp_cfg.continuous_operation_enabled:
                 ctrl = _get_co(_scalp_cfg)
+                # Soft 30-minute opportunity review (continuous ~5s scan still runs).
+                try:
+                    import time as _time
+
+                    from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
+                        get_daily_opportunity_tracker as _get_dot,
+                    )
+
+                    _dot = _get_dot(
+                        target_trades_per_day=int(
+                            getattr(_scalp_cfg, "target_trades_per_day", 3) or 3
+                        )
+                    )
+                    if _dot.due_for_opportunity_review(now_mono=_time.monotonic()):
+                        _dot.note_analysis(decision="opportunity_review_tick")
+                        logger.info(
+                            "opportunity_review_tick",
+                            trades_today=_dot.trades_today,
+                            target=_dot.target_trades_per_day,
+                            seeking_mode=_dot.seeking_mode(),
+                        )
+                except Exception:
+                    logger.exception("opportunity_review_tick_failed")
                 # After close: clear entry spacing so a NEW valid setup can scan
                 if _scalp_cfg.post_close_rescan_enabled and ctrl.consume_rescan():
                     try:
@@ -2580,6 +2665,29 @@ class InstitutionalIteRuntime:
                         ),
                         latency_ms=lat,
                     )
+                    # Daily opportunity target — observe only; never forces next entry.
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.config import (
+                            DEFAULT_AI_SCALPING_CONFIG as _tgt_cfg,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.continuous_operation import (
+                            get_continuous_operation_controller as _tgt_co,
+                        )
+                        from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
+                            get_daily_opportunity_tracker,
+                        )
+
+                        get_daily_opportunity_tracker(
+                            target_trades_per_day=int(
+                                getattr(_tgt_cfg, "target_trades_per_day", 3) or 3
+                            )
+                        ).note_trade_executed(
+                            symbol=str(getattr(decision, "symbol", "") or "")
+                        )
+                        if getattr(_tgt_cfg, "post_event_rescan_enabled", True):
+                            _tgt_co(_tgt_cfg).request_opportunity_rescan("position_opened")
+                    except Exception:
+                        logger.exception("daily_opportunity_target_post_fill_failed")
                     # Calibration updated when outcome known; seed sample as pending via confidence only later  # noqa: E501
                     _ = get_calibration_store
                 except Exception:

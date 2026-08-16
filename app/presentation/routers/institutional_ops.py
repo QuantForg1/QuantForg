@@ -725,7 +725,34 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "risk_lock_override": _risk_lock_override_payload(settings),
         "ai_scalping": _ai_scalping_payload(),
         "institutional_alpha": _institutional_alpha_payload(),
+        "daily_opportunity_target": _daily_opportunity_target_payload(),
     }
+
+
+def _daily_opportunity_target_payload() -> dict[str, Any]:
+    """Opportunity target progress — never forces trades."""
+    try:
+        from app.domain.institutional_trading.ai_scalping.config import (
+            DEFAULT_AI_SCALPING_CONFIG,
+        )
+        from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
+            get_daily_opportunity_tracker,
+        )
+
+        tracker = get_daily_opportunity_tracker(
+            target_trades_per_day=int(
+                getattr(DEFAULT_AI_SCALPING_CONFIG, "target_trades_per_day", 3) or 3
+            )
+        )
+        return tracker.snapshot()
+    except Exception:
+        return {
+            "target_trades_per_day": 3,
+            "trades_today": 0,
+            "forced": False,
+            "force_trade_for_target": False,
+            "policy": "Opportunity target only — unavailable this cycle",
+        }
 
 
 def _institutional_alpha_payload() -> dict[str, Any]:
