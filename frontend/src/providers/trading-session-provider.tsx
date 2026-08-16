@@ -21,8 +21,10 @@ import { useAuth } from "@/providers/auth-provider";
 
 export type TradingSessionState = {
   connected: boolean;
-  gatewayOnline: boolean;
-  brokerConnected: boolean;
+  /** null = unknown (do not invent disconnected from API/auth outage). */
+  gatewayOnline: boolean | null;
+  /** null = unknown. */
+  brokerConnected: boolean | null;
   /**
    * Explicit EXECUTION_ENABLED from gateway health when present.
    * null = unknown — callers must not invent Enabled.
@@ -58,9 +60,9 @@ const TradingSessionContext = createContext<TradingSessionState | null>(null);
 /** Shared broker session for the whole app shell — one source of truth. */
 export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const { isAuthenticated } = useAuth();
-  // Broker/gateway probes require Bearer auth — never fire on the login shell.
-  const sessionEnabled = isAuthenticated;
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  // Wait for auth bootstrap — never race protected probes ahead of /auth/me.
+  const sessionEnabled = isAuthenticated && !authLoading;
   useBrokerStatusStream(sessionEnabled);
 
   const healthQ = useQuery({
@@ -136,12 +138,16 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
     (healthQ.isFetched && !healthQ.isLoading) ||
     (statusQ.isFetched && !statusQ.isLoading);
   const healthUsable = healthUsablePreview;
+  // Keep gateway/broker UNKNOWN when health is not usable — do not collapse
+  // API/auth outages into "Gateway Disconnected" / "Broker Disconnected".
   const gatewayOnline = healthUsable
-    ? Boolean(health.gateway_online || health.gateway_reachable || connected)
-    : connected;
+    ? Boolean(health.gateway_online || health.gateway_reachable)
+    : null;
   const brokerConnected = healthUsable
     ? Boolean(health.weltrade_connected || health.mt5_connected || connected)
-    : connected;
+    : connected
+      ? true
+      : null;
   const executionEnabled = !healthUsable
     ? null
     : !("execution_enabled" in health)
@@ -153,15 +159,16 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
     : healthQ.isError
       ? "Broker health feed unavailable — using MT5 status"
       : "";
-  const gatewayLabel = gatewayOnline
-    ? "Gateway Online"
-    : healthUsable
-      ? gatewayStatusLabel(health)
-      : connected
-        ? "Gateway Online"
+  const gatewayLabel =
+    gatewayOnline === true
+      ? "Gateway Online"
+      : healthUsable
+        ? gatewayStatusLabel(health)
         : healthQ.isError
           ? "Gateway status unknown"
-          : "Gateway unreachable";
+          : connected
+            ? "Gateway status unknown"
+            : "Gateway status unknown";
 
   // After health reports an attached gateway session, refresh MT5 status so
   // ticks/symbols see the healed process-local handle.

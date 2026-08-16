@@ -32,7 +32,7 @@ export function isMarketClosedApiError(error: unknown): boolean {
  */
 export function catalogueLoadErrorMessage(
   error: unknown,
-  gatewayOnline: boolean,
+  gatewayOnline: boolean | null,
 ): string {
   if (error instanceof ApiError) {
     if (error.status === 401 || error.code === "unauthorized") {
@@ -42,29 +42,29 @@ export function catalogueLoadErrorMessage(
       return "Market closed. Symbol quotes may be unavailable until the trading session opens.";
     }
     if (error.code === "timeout") {
-      return "Backend response delayed while loading symbols. Retrying…";
+      return "Catalogue degraded — backend delayed. Tap Retry.";
     }
     if (error.status === 404) {
-      return gatewayOnline
+      return gatewayOnline === true
         ? "Symbol catalogue awaiting broker session bind. Retry shortly."
         : "Broker session not attached. Open Broker to reconnect.";
     }
     if (error.code === "network_error") {
-      return gatewayOnline
+      return gatewayOnline === true
         ? "Symbol catalogue temporarily unavailable from the broker feed."
-        : "Gateway unavailable. Symbol catalogue temporarily unavailable.";
+        : "API unreachable. Symbol catalogue temporarily unavailable.";
     }
   }
-  return gatewayOnline
+  return gatewayOnline === true
     ? "Symbol catalogue unavailable from the broker feed."
-    : "Gateway unavailable. Symbol catalogue temporarily unavailable.";
+    : "Catalogue degraded. Open Broker if reconnect is needed.";
 }
 
 /** Candle load failure — market-closed must not read as gateway down. */
 export function candleLoadErrorMessage(
   error: unknown,
   symbol: string,
-  gatewayOnline: boolean,
+  gatewayOnline: boolean | null,
 ): string {
   if (error instanceof ApiError) {
     if (isMarketClosedApiError(error)) {
@@ -74,12 +74,12 @@ export function candleLoadErrorMessage(
       return "Session expired. Please sign in again.";
     }
     if (error.code === "timeout") {
-      return "Backend response delayed while loading candles. Retrying…";
+      return "Backend response delayed while loading candles. Tap Retry.";
     }
     if (error.code === "network_error") {
-      return gatewayOnline
+      return gatewayOnline === true
         ? `Candle data temporarily unavailable for ${symbol}.`
-        : "Gateway unavailable. MT5 candle data temporarily unavailable.";
+        : "API unreachable. Candle data temporarily unavailable.";
     }
   }
   return "Unable to load candles from MT5.";

@@ -25,6 +25,7 @@ import { asList, asRecord, num, str } from "@/lib/desk";
 import { cn, formatNumber } from "@/lib/utils";
 import { candleLoadErrorMessage } from "@/lib/trading/market-status";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { useConnectMt5 } from "@/hooks/use-connect-mt5";
 import { Cable } from "lucide-react";
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"] as const;
@@ -99,6 +100,7 @@ export const WorkspaceChart = memo(function WorkspaceChart({
   lastPrice?: number;
 }) {
   const session = useTradingSession();
+  const { connect: connectMt5, pending: connectPending } = useConnectMt5();
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const mainRef = useRef<ISeriesApi<"Candlestick"> | ISeriesApi<"Line"> | ISeriesApi<"Area"> | null>(
@@ -351,8 +353,10 @@ export const WorkspaceChart = memo(function WorkspaceChart({
               icon={Cable}
               title="Broker not connected"
               description="Connect your MT5 account to start receiving live market data and trading signals."
-              actionLabel="Connect MT5"
-              actionHref="/broker"
+              actionLabel={connectPending ? "Connecting…" : "Connect MT5"}
+              onAction={() => {
+                void connectMt5();
+              }}
             />
           </div>
         ) : candlesQ.isLoading ? (

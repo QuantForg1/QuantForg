@@ -24,7 +24,8 @@ let softFailures = 0;
 let hardFailures = 0;
 
 const SOFT_DEGRADED_AT = 2;
-const SOFT_UNREACHABLE_AT = 8;
+/** Auth/boot timeouts must not flip the whole platform offline easily. */
+const SOFT_UNREACHABLE_AT = 12;
 const HARD_UNREACHABLE_AT = 2;
 
 function emit(next: ApiConnectionState) {

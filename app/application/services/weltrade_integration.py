@@ -7,6 +7,7 @@ restore profile may be persisted locally (never plain text).
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -60,6 +61,16 @@ class WeltradeIntegrationService:
     adapter: MT5Adapter
     uow_factory: Any = None
     _last_sync_at: str | None = field(default=None, init=False)
+    _connect_gate: asyncio.Lock | None = field(default=None, init=False)
+    _connect_inflight: asyncio.Task[Any] | None = field(default=None, init=False)
+    _connect_inflight_key: str | None = field(default=None, init=False)
+    _auth_failed: bool = field(default=False, init=False)
+    _reconnect_task: asyncio.Task[Any] | None = field(default=None, init=False)
+
+    def _gate(self) -> asyncio.Lock:
+        if self._connect_gate is None:
+            self._connect_gate = asyncio.Lock()
+        return self._connect_gate
 
     def profile(self) -> dict[str, Any]:
         return {
@@ -614,19 +625,80 @@ class WeltradeIntegrationService:
         if not server_name or server_name.lower() in {"auto", "auto detect"}:
             server_name = WELTRADE_SERVERS[account_type][0]
 
+        # Idempotent: concurrent Connect clicks share one in-flight attempt.
+        key = f"{int(login)}:{server_name}:{account_type}"
+        task: asyncio.Task[Any]
+        async with self._gate():
+            if (
+                self._connect_inflight is not None
+                and not self._connect_inflight.done()
+                and self._connect_inflight_key == key
+            ):
+                logger.info(
+                    "broker_connection_deduped",
+                    login=login,
+                    server=server_name,
+                    correlation_id=key,
+                )
+                task = self._connect_inflight
+            else:
+                task = asyncio.create_task(
+                    self._connect_unlocked(
+                        user_id=user_id,
+                        login=login,
+                        password=password,
+                        server_name=server_name,
+                        account_type=account_type,
+                        prefer_attach=prefer_attach,
+                        path=path,
+                        correlation_id=key,
+                    ),
+                    name=f"weltrade-connect-{login}",
+                )
+                self._connect_inflight = task
+                self._connect_inflight_key = key
+        try:
+            return await task
+        finally:
+            async with self._gate():
+                if self._connect_inflight is task and task.done():
+                    self._connect_inflight = None
+                    self._connect_inflight_key = None
+
+    async def _connect_unlocked(
+        self,
+        *,
+        user_id: UUID,
+        login: int,
+        password: str,
+        server_name: str,
+        account_type: str,
+        prefer_attach: bool,
+        path: str,
+        correlation_id: str,
+    ) -> dict[str, Any]:
+        t0 = datetime.now(UTC)
         logger.info(
-            "weltrade_connect_start",
+            "broker_connection_started",
             login=login,
             server=server_name,
             account_type=account_type,
             prefer_attach=prefer_attach,
             password_provided=bool(password),
             gateway_backed=self._gateway() is not None,
+            correlation_id=correlation_id,
+            state="CONNECTING",
         )
 
         steps: list[dict[str, Any]] = []
         gw = self._gateway()
         if gw is None:
+            logger.warning(
+                "gateway_unavailable",
+                reason="gateway_not_configured",
+                correlation_id=correlation_id,
+                state="GATEWAY_UNAVAILABLE",
+            )
             raise RuntimeError(
                 "Windows MT5 Gateway is not configured on Railway. "
                 "Set MT5_GATEWAY_BASE_URL and MT5_GATEWAY_CALLER_TOKEN "
@@ -659,10 +731,12 @@ class WeltradeIntegrationService:
                 }
             )
             logger.exception(
-                "weltrade_connect_gateway_unavailable",
+                "gateway_unavailable",
                 error=detail,
                 base_url=gw.base_url,
                 last_upstream=upstream,
+                correlation_id=correlation_id,
+                state="GATEWAY_UNAVAILABLE",
             )
             raise RuntimeError(
                 f"MT5 gateway unavailable at {gw.base_url}: {detail}"
@@ -693,6 +767,7 @@ class WeltradeIntegrationService:
                     login=login,
                     server=server_name,
                     gateway_health_connected=True,
+                    correlation_id=correlation_id,
                 )
             except Exception as exc:
                 steps.append(
@@ -707,6 +782,7 @@ class WeltradeIntegrationService:
                     login=login,
                     server=server_name,
                     error=str(exc),
+                    correlation_id=correlation_id,
                 )
                 detail = str(exc)
                 if "Invalid Gateway Token" in detail or "HTTP 401" in detail:
@@ -738,6 +814,7 @@ class WeltradeIntegrationService:
                     "weltrade_connect_attached",
                     login=login,
                     server=server_name,
+                    correlation_id=correlation_id,
                 )
             except Exception as exc:
                 steps.append({"step": "attach", "ok": False, "detail": str(exc)})
@@ -746,6 +823,7 @@ class WeltradeIntegrationService:
                     error=str(exc),
                     login=login,
                     server=server_name,
+                    correlation_id=correlation_id,
                 )
 
         if not attached:
@@ -754,6 +832,13 @@ class WeltradeIntegrationService:
                     "No active MT5 session to attach and password was empty. "
                     "Log into Weltrade in MetaTrader, or provide password."
                 )
+            logger.info(
+                "broker_connection_validating",
+                login=login,
+                server=server_name,
+                correlation_id=correlation_id,
+                state="VALIDATING",
+            )
             request = MT5LoginRequest(
                 login=login,
                 password=password,
@@ -765,16 +850,20 @@ class WeltradeIntegrationService:
             try:
                 session_ref = self.adapter.login(request)
             except Exception as exc:
+                self._auth_failed = True
                 logger.exception(
-                    "weltrade_login_failed",
+                    "broker_auth_failed",
                     login=login,
                     server=server_name,
                     error=str(exc),
                     last_upstream=(
                         gw.last_upstream() if hasattr(gw, "last_upstream") else None
                     ),
+                    correlation_id=correlation_id,
+                    state="AUTH_FAILED",
                 )
                 raise RuntimeError(f"Weltrade authentication failed: {exc}") from exc
+            self._auth_failed = False
             steps.append(
                 {
                     "step": "connect",
@@ -798,14 +887,19 @@ class WeltradeIntegrationService:
             server=server_name,
             path=path,
             password=password,
+            user_id=user_id,
         )
         sync = await self.dashboard(user_id=user_id)
         steps.append({"step": "sync", "ok": True, "detail": "Account synchronized"})
+        latency_ms = round((datetime.now(UTC) - t0).total_seconds() * 1000.0, 1)
         logger.info(
-            "weltrade_connect_ok",
+            "broker_connected",
             login=login,
             server=server_name,
             mt5_connected=sync["connection"]["mt5_connected"],
+            correlation_id=correlation_id,
+            state="CONNECTED",
+            latency_ms=latency_ms,
         )
         return {
             "ok": True,
@@ -820,6 +914,7 @@ class WeltradeIntegrationService:
                 "server": sync["connection"].get("server"),
             },
             "status": sync.get("status"),
+            "state": "CONNECTED",
         }
 
     def _persist_broker_runtime_profile(
@@ -829,6 +924,7 @@ class WeltradeIntegrationService:
         server: str,
         path: str = "",
         password: str = "",
+        user_id: UUID | None = None,
     ) -> None:
         """Persist broker/server/login/terminal_path; encrypt password if present."""
         try:
@@ -847,6 +943,7 @@ class WeltradeIntegrationService:
                 terminal_path=path or "",
                 password_plaintext=password or None,
                 secret_key=secret,
+                user_id=str(user_id) if user_id else None,
             )
         except Exception:
             logger.exception("broker_runtime_profile_persist_failed")
@@ -878,6 +975,15 @@ class WeltradeIntegrationService:
             profile = store.load()
             if profile is None or profile.login <= 0:
                 return None
+            if self._auth_failed:
+                logger.warning(
+                    "broker_auth_failed",
+                    reason="skip_restore_after_auth_failure",
+                    login=profile.login,
+                    server=profile.server,
+                    state="AUTH_FAILED",
+                )
+                return None
             password = ""
             if profile.password_ciphertext:
                 secret = get_settings().secret_key.get_secret_value()
@@ -895,6 +1001,220 @@ class WeltradeIntegrationService:
             logger.exception("broker_runtime_profile_restore_failed")
             return None
 
+    async def auto_restore_on_startup(self) -> dict[str, Any] | None:
+        """Backend-owned reconnect after Railway worker/process restart.
+
+        Does not require a browser. Uses encrypted profile + attach-first.
+        """
+        try:
+            from app.domain.institutional_trading.ai_scalping import (
+                broker_profile_store as _bps,
+            )
+
+            profile = _bps.get_broker_profile_store().load()
+            if profile is None or profile.login <= 0:
+                logger.info(
+                    "broker_connection_started",
+                    reason="no_persisted_profile",
+                    state="NOT_CONFIGURED",
+                )
+                return None
+            if self._auth_failed:
+                return None
+
+            user_id: UUID | None = None
+            if profile.user_id:
+                with contextlib.suppress(Exception):
+                    user_id = UUID(str(profile.user_id))
+
+            logger.info(
+                "broker_reconnect_started",
+                login=profile.login,
+                server=profile.server,
+                state="RECONNECTING",
+                has_user_id=bool(user_id),
+            )
+
+            if user_id is not None:
+                result = await self.restore_from_persisted_profile(user_id=user_id)
+                if result is not None:
+                    logger.info(
+                        "broker_reconnected",
+                        login=profile.login,
+                        server=profile.server,
+                        state="CONNECTED",
+                    )
+                    self.schedule_bounded_reconnect_watch()
+                return result
+
+            # No stored user — heal gateway session only; bind on next auth hit.
+            gw = self._gateway()
+            if gw is None:
+                logger.warning(
+                    "gateway_unavailable",
+                    reason="startup_restore_no_gateway",
+                    state="GATEWAY_UNAVAILABLE",
+                )
+                return None
+            try:
+                health = gw.gateway_health()
+                if _gateway_mt5_already_connected(health):
+                    self.adapter.attach(path=profile.terminal_path or "")
+                    logger.info(
+                        "broker_reconnected",
+                        login=profile.login,
+                        server=profile.server,
+                        state="CONNECTED",
+                        mode="attach_only",
+                    )
+                    self.schedule_bounded_reconnect_watch()
+                    return {
+                        "ok": True,
+                        "broker": WELTRADE_BROKER,
+                        "server": profile.server,
+                        "state": "CONNECTED",
+                        "mode": "attach_only",
+                    }
+            except Exception as exc:
+                logger.warning(
+                    "broker_disconnected",
+                    reason=str(exc),
+                    state="DISCONNECTED",
+                )
+            # Prefer encrypted login when gateway has no session yet
+            from core.config.settings import get_settings
+
+            store = _bps.get_broker_profile_store()
+            password = ""
+            if profile.password_ciphertext:
+                secret = get_settings().secret_key.get_secret_value()
+                password = store.decrypt_password(profile, secret_key=secret) or ""
+            if not password:
+                return None
+            request = MT5LoginRequest(
+                login=profile.login,
+                password=password,
+                server=profile.server,
+                path=profile.terminal_path or "",
+            )
+            if not self.adapter.initialize(path=profile.terminal_path or ""):
+                return None
+            try:
+                self.adapter.login(request)
+            except Exception as exc:
+                self._auth_failed = True
+                logger.exception(
+                    "broker_auth_failed",
+                    login=profile.login,
+                    error=str(exc),
+                    state="AUTH_FAILED",
+                )
+                return None
+            finally:
+                del request
+            logger.info(
+                "broker_reconnected",
+                login=profile.login,
+                server=profile.server,
+                state="CONNECTED",
+                mode="login_without_user_bind",
+            )
+            self.schedule_bounded_reconnect_watch()
+            return {
+                "ok": True,
+                "broker": WELTRADE_BROKER,
+                "server": profile.server,
+                "state": "CONNECTED",
+                "mode": "login_without_user_bind",
+            }
+        except Exception:
+            logger.exception(
+                "broker_disconnected",
+                reason="startup_restore_failed",
+                state="DISCONNECTED",
+            )
+            return None
+
+    def schedule_bounded_reconnect_watch(self) -> None:
+        """Bounded exponential backoff if gateway/MT5 drops after restore."""
+        import os
+
+        if os.environ.get("QF_BROKER_RECONNECT_WATCH", "true").lower() in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }:
+            return
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            return
+        if self._auth_failed:
+            return
+
+        async def _watch() -> None:
+            delays = (2.0, 4.0, 8.0, 16.0, 32.0, 60.0)
+            failures = 0
+            while failures < len(delays):
+                await asyncio.sleep(delays[failures])
+                if self._auth_failed:
+                    logger.warning(
+                        "broker_auth_failed",
+                        reason="reconnect_watch_halted",
+                        state="AUTH_FAILED",
+                    )
+                    return
+                gw = self._gateway()
+                if gw is None:
+                    logger.warning(
+                        "gateway_unavailable",
+                        reason="reconnect_watch",
+                        state="GATEWAY_UNAVAILABLE",
+                    )
+                    failures += 1
+                    continue
+                try:
+                    health = gw.gateway_health()
+                    if _gateway_mt5_already_connected(health):
+                        if failures:
+                            logger.info(
+                                "gateway_recovered",
+                                state="CONNECTED",
+                            )
+                        failures = 0
+                        # Keep watching lightly after recovery
+                        await asyncio.sleep(30.0)
+                        continue
+                except Exception as exc:
+                    logger.warning(
+                        "gateway_unavailable",
+                        error=str(exc),
+                        state="GATEWAY_UNAVAILABLE",
+                    )
+                    failures += 1
+                    continue
+                # MT5 dropped — attempt restore once per backoff step
+                logger.info(
+                    "broker_reconnect_started",
+                    attempt=failures + 1,
+                    state="RECONNECTING",
+                )
+                restored = await self.auto_restore_on_startup()
+                if restored is not None:
+                    logger.info("broker_reconnected", state="CONNECTED")
+                    failures = 0
+                    await asyncio.sleep(30.0)
+                else:
+                    failures += 1
+            logger.warning(
+                "broker_disconnected",
+                reason="reconnect_backoff_exhausted",
+                state="DISCONNECTED",
+            )
+
+        self._reconnect_task = asyncio.create_task(
+            _watch(), name="weltrade-reconnect-watch"
+        )
+
     async def attach(self, *, user_id: UUID, path: str = "") -> dict[str, Any]:
         session_ref = self.adapter.attach(path=path)
         await self.bind_user_session(
@@ -910,6 +1230,7 @@ class WeltradeIntegrationService:
             self.adapter, "_live_session_ref", None
         ):
             self.adapter.shutdown()
+        logger.info("broker_disconnected", state="DISCONNECTED", reason="user_disconnect")
         return {
             "ok": True,
             "broker": WELTRADE_BROKER,
@@ -919,6 +1240,11 @@ class WeltradeIntegrationService:
     async def reconnect(self, *, user_id: UUID) -> dict[str, Any]:
         # Prefer gateway-side passwordless reconnect / attach from a real session.
         # Never fall through to a synthetic login=1 credential.
+        logger.info(
+            "broker_reconnect_started",
+            user_id=str(user_id),
+            state="RECONNECTING",
+        )
         live = self.adapter._live_session_ref
         request: MT5LoginRequest | None = None
         if live and live in self.adapter._sessions:
@@ -935,6 +1261,7 @@ class WeltradeIntegrationService:
             restored = await self.restore_from_persisted_profile(user_id=user_id)
             if restored is not None:
                 restored["restored_from_profile"] = True
+                logger.info("broker_reconnected", state="CONNECTED")
                 return restored
             raise RuntimeError(
                 "Weltrade reconnect refused: no live session and no persisted "
@@ -947,6 +1274,7 @@ class WeltradeIntegrationService:
             restored = await self.restore_from_persisted_profile(user_id=user_id)
             if restored is not None:
                 restored["restored_from_profile"] = True
+                logger.info("broker_reconnected", state="CONNECTED")
                 return restored
             raise
         await self.bind_user_session(
@@ -956,6 +1284,7 @@ class WeltradeIntegrationService:
             path=request.path,
             session_ref=session_ref,
         )
+        logger.info("broker_reconnected", login=request.login, state="CONNECTED")
         return {
             "ok": True,
             "broker": WELTRADE_BROKER,

@@ -19,7 +19,10 @@ export type AuditAction =
   | "organization_change"
   | "feedback_submit"
   | "beta_unlock"
-  | "feature_flag_override";
+  | "feature_flag_override"
+  | "session_timeout"
+  | "api_degraded"
+  | "catalogue_degraded";
 
 export type AuditEvent = ObservabilityContext & {
   id: string;

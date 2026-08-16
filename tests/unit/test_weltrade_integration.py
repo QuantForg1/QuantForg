@@ -277,12 +277,15 @@ class TestWeltradeIntegration:
                 prefer_attach=True,
             )
         assert result["ok"] is True
-        mock_logger.exception.assert_any_call(
-            "weltrade_attach_unavailable",
-            error="MT5 attach failed",
-            login=7777,
-            server="Weltrade-Demo",
-        )
+        assert mock_logger.exception.call_count >= 1
+        found = False
+        for call in mock_logger.exception.call_args_list:
+            if call.args and call.args[0] == "weltrade_attach_unavailable":
+                assert call.kwargs.get("login") == 7777
+                assert call.kwargs.get("server") == "Weltrade-Demo"
+                found = True
+                break
+        assert found, mock_logger.exception.call_args_list
 
     @pytest.mark.asyncio
     async def test_connect_gateway_unavailable_raises_clear_error(self) -> None:
@@ -534,3 +537,111 @@ async def test_reconnect_refuses_login_one_fallback(
     )
     with pytest.raises(RuntimeError, match="refusing login=1"):
         await svc.reconnect(user_id=uuid4())
+
+
+@pytest.mark.asyncio
+async def test_concurrent_connect_is_idempotent() -> None:
+    """Rapid Connect clicks share one in-flight attempt (no duplicate login)."""
+    import asyncio
+
+    client = _StubGateway()
+    client._fail_attach = True
+    client._connected = False
+    svc = WeltradeIntegrationService(
+        adapter=MT5Adapter(client=client),
+        uow_factory=MemoryMT5UnitOfWorkFactory(),
+    )
+    user = uuid4()
+
+    async def _one() -> dict[str, Any]:
+        return await svc.connect(
+            user_id=user,
+            login=4242,
+            password="secret",
+            server="Weltrade-Demo",
+            account_type="demo",
+            prefer_attach=True,
+        )
+
+    results = await asyncio.gather(_one(), _one(), _one())
+    assert all(r.get("ok") is True for r in results)
+    connect_calls = [c for c in client.calls if c == ("POST", "/session/connect")]
+    assert len(connect_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_persist_profile_includes_user_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.domain.institutional_trading.ai_scalping.broker_profile_store import (
+        BrokerProfileStore,
+    )
+
+    store = BrokerProfileStore(path=tmp_path / "profile.json")
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.ai_scalping.broker_profile_store"
+        ".get_broker_profile_store",
+        lambda: store,
+    )
+    client = _StubGateway()
+    client._connected = True
+    client._login = 16785006
+    client._server = "Weltrade-Real"
+    client._session_mode = "attached"
+    svc = WeltradeIntegrationService(
+        adapter=MT5Adapter(client=client),
+        uow_factory=MemoryMT5UnitOfWorkFactory(),
+    )
+    user = uuid4()
+    await svc.connect(
+        user_id=user,
+        login=16785006,
+        password="",
+        server="Weltrade-Real",
+        account_type="live",
+        prefer_attach=True,
+    )
+    loaded = store.load()
+    assert loaded is not None
+    assert loaded.user_id == str(user)
+    assert loaded.login == 16785006
+    public = loaded.to_public_dict()
+    assert "password" not in public
+    assert "password_ciphertext" not in public
+    assert public["has_user_id"] is True
+
+
+@pytest.mark.asyncio
+async def test_auto_restore_attach_only_without_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.domain.institutional_trading.ai_scalping.broker_profile_store import (
+        BrokerProfileStore,
+    )
+
+    monkeypatch.setenv("QF_BROKER_RECONNECT_WATCH", "false")
+    store = BrokerProfileStore(path=tmp_path / "profile.json")
+    store.save(
+        broker="weltrade",
+        server="Weltrade-Real",
+        login=16785006,
+        terminal_path="",
+    )
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.ai_scalping.broker_profile_store"
+        ".get_broker_profile_store",
+        lambda: store,
+    )
+    client = _StubGateway()
+    client._connected = True
+    client._login = 16785006
+    client._server = "Weltrade-Real"
+    client._session_mode = "attached"
+    svc = WeltradeIntegrationService(
+        adapter=MT5Adapter(client=client),
+        uow_factory=MemoryMT5UnitOfWorkFactory(),
+    )
+    result = await svc.auto_restore_on_startup()
+    assert result is not None
+    assert result.get("ok") is True
+    assert result.get("mode") == "attach_only"

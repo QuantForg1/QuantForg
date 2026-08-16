@@ -26,6 +26,8 @@ class BrokerRuntimeProfile:
     terminal_path: str = ""
     password_ciphertext: str | None = None
     updated_at: str | None = None
+    # Optional owner for backend-owned restore after worker restart (never a secret).
+    user_id: str | None = None
 
     def to_public_dict(self) -> dict[str, Any]:
         """Safe for logs/API — never includes ciphertext."""
@@ -36,6 +38,7 @@ class BrokerRuntimeProfile:
             "terminal_path": self.terminal_path,
             "has_encrypted_password": bool(self.password_ciphertext),
             "updated_at": self.updated_at,
+            "has_user_id": bool(self.user_id),
         }
 
     def to_storage_dict(self) -> dict[str, Any]:
@@ -46,6 +49,7 @@ class BrokerRuntimeProfile:
             "terminal_path": self.terminal_path,
             "password_ciphertext": self.password_ciphertext,
             "updated_at": self.updated_at,
+            "user_id": self.user_id,
         }
 
 
@@ -86,8 +90,10 @@ class BrokerProfileStore:
         password_plaintext: str | None = None,
         secret_key: str | None = None,
         preserve_existing_password: bool = True,
+        user_id: str | None = None,
     ) -> BrokerRuntimeProfile:
         ciphertext: str | None = None
+        prior = self.load() if (preserve_existing_password or not user_id) else None
         if password_plaintext:
             if not secret_key or len(secret_key) < 32:
                 raise ValueError(
@@ -99,9 +105,11 @@ class BrokerProfileStore:
                 password_plaintext, secret_key=secret_key, key_version=1
             )
         elif preserve_existing_password:
-            prior = self.load()
             if prior is not None and prior.password_ciphertext:
                 ciphertext = prior.password_ciphertext
+        resolved_user = (user_id or "").strip() or (
+            (prior.user_id or "").strip() if prior is not None else ""
+        ) or None
         profile = BrokerRuntimeProfile(
             broker=str(broker or "").strip(),
             server=str(server or "").strip(),
@@ -109,6 +117,7 @@ class BrokerProfileStore:
             terminal_path=str(terminal_path or "").strip(),
             password_ciphertext=ciphertext,
             updated_at=datetime.now(UTC).isoformat(),
+            user_id=resolved_user,
         )
         path = self.path or _default_path()
         with self._lock:
@@ -123,6 +132,7 @@ class BrokerProfileStore:
             server=profile.server,
             login=profile.login,
             has_password=bool(ciphertext),
+            has_user_id=bool(resolved_user),
         )
         return profile
 
@@ -134,6 +144,7 @@ class BrokerProfileStore:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 return None
+            uid = raw.get("user_id")
             return BrokerRuntimeProfile(
                 broker=str(raw.get("broker") or ""),
                 server=str(raw.get("server") or ""),
@@ -145,6 +156,7 @@ class BrokerProfileStore:
                     else None
                 ),
                 updated_at=raw.get("updated_at"),
+                user_id=str(uid).strip() if uid else None,
             )
         except Exception:
             logger.exception("broker_runtime_profile_load_failed")

@@ -3,7 +3,7 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Bookmark, Plus, Search } from "lucide-react";
+import { Bookmark, Cable, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import {
 } from "@/lib/trading/gold-only";
 import { catalogueLoadErrorMessage } from "@/lib/trading/market-status";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { useConnectMt5 } from "@/hooks/use-connect-mt5";
 import {
   loadWatchlists,
   saveWatchlists,
@@ -28,7 +29,6 @@ import {
   type WorkspacePresetId,
   WORKSPACE_FAV_KEY,
 } from "@/components/workspace/layout-store";
-import { Cable } from "lucide-react";
 
 const ALL_CATS = [
   "all",
@@ -85,6 +85,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
   hideStatusChrome?: boolean;
 }) {
   const session = useTradingSession();
+  const { connect: connectMt5, pending: connectPending } = useConnectMt5();
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [cat, setCat] = useState<MarketCategory>("all");
@@ -115,7 +116,7 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
       }),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.has_more ? last.offset + last.limit : undefined),
-    retry: false,
+    retry: 1,
     enabled: connected && (MULTI_SYMBOL_ENABLED || searchQ !== null),
     staleTime: 45_000,
   });
@@ -310,8 +311,10 @@ export const WorkspaceLeftRail = memo(function WorkspaceLeftRail({
               icon={Cable}
               title="No market feed"
               description="Connect MT5 to load the symbol universe."
-              actionLabel="Connect"
-              actionHref="/broker"
+              actionLabel={connectPending ? "Connecting…" : "Connect"}
+              onAction={() => {
+                void connectMt5();
+              }}
             />
           </div>
         ) : symbolsQ.isLoading ? (

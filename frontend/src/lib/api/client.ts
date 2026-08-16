@@ -42,9 +42,12 @@ export class ApiError extends Error {
 
 /** Default hard timeout so UI never spins forever on a hung API. */
 export const API_DEFAULT_TIMEOUT_MS = 25_000;
-export const API_AUTH_TIMEOUT_MS = 15_000;
+export const API_AUTH_TIMEOUT_MS = 22_000;
 export const API_HEALTH_TIMEOUT_MS = 8_000;
 export const API_HEAVY_TIMEOUT_MS = 45_000;
+
+/** In-flight GET dedupe — identical health/catalogue probes share one promise. */
+const inflightGets = new Map<string, Promise<unknown>>();
 
 type RequestOptions = {
   method?: string;
@@ -218,6 +221,33 @@ export async function apiFetch<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
+  const method = (options.method || "GET").toUpperCase();
+  const safePathEarly = path.startsWith("http") ? new URL(path).pathname : path;
+  const dedupe =
+    method === "GET" &&
+    !options.signal &&
+    (safePathEarly.includes("/health") ||
+      safePathEarly.includes("/weltrade/health") ||
+      safePathEarly.includes("/mt5/status") ||
+      safePathEarly.includes("/mt5/symbols") ||
+      safePathEarly.includes("/auth/me"));
+  if (dedupe) {
+    const key = `${method}:${safePathEarly}:${options.auth === false ? "0" : "1"}`;
+    const existing = inflightGets.get(key);
+    if (existing) return existing as Promise<T>;
+    const pending = apiFetchUndeduped<T>(path, options).finally(() => {
+      inflightGets.delete(key);
+    });
+    inflightGets.set(key, pending);
+    return pending;
+  }
+  return apiFetchUndeduped<T>(path, options);
+}
+
+async function apiFetchUndeduped<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
   const { method = "GET", body, auth = true, signal, silent = false } = options;
   const requestId = newRequestId("req");
   const headers: Record<string, string> = {
@@ -271,9 +301,18 @@ export async function apiFetch<T>(
     cleanup();
     const networkErr = toNetworkApiError(err, requestId);
     if (networkErr.code === "timeout") {
-      // Heavy MT5/Weltrade/ITE routes under load must not escalate the whole
-      // platform to "API unreachable" — cap at degraded (noteApiSlow).
-      if (timeoutMs >= API_HEAVY_TIMEOUT_MS || kind === "mt5" || kind === "execution") {
+      // Heavy MT5/Weltrade/ITE routes and auth/boot must not escalate the
+      // whole platform to "API unreachable" — cap at degraded (noteApiSlow).
+      const isAuthPath =
+        safePath.includes("/auth/") ||
+        timeoutMs === API_AUTH_TIMEOUT_MS ||
+        kind === "api" && safePath.includes("/auth");
+      if (
+        timeoutMs >= API_HEAVY_TIMEOUT_MS ||
+        kind === "mt5" ||
+        kind === "execution" ||
+        isAuthPath
+      ) {
         noteApiSlow();
       } else {
         noteApiTimeout();

@@ -22,7 +22,9 @@ import {
 import { recordAudit } from "@/lib/observability/audit";
 
 /** Hard cap so AppShell never waits forever on /auth/me. */
-const SESSION_BOOT_TIMEOUT_MS = 18_000;
+const SESSION_BOOT_TIMEOUT_MS = 25_000;
+/** One silent retry before surfacing AUTH_TIMEOUT (Railway cold starts). */
+const SESSION_ME_RETRY_MS = 800;
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -50,8 +52,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setBootError(null);
       return;
     }
+    const tryMe = async () => authApi.me();
     try {
-      const me = await authApi.me();
+      let me;
+      try {
+        me = await tryMe();
+      } catch (first) {
+        // Bounded single retry on timeout/transient — avoids false AUTH_TIMEOUT
+        // during Railway cold start without infinite loops.
+        if (
+          first instanceof ApiError &&
+          (first.code === "timeout" ||
+            first.status === 502 ||
+            first.status === 503 ||
+            first.status === 504)
+        ) {
+          await new Promise((r) => window.setTimeout(r, SESSION_ME_RETRY_MS));
+          me = await tryMe();
+        } else {
+          throw first;
+        }
+      }
       setUser(me);
       setBootError(null);
     } catch (e) {
@@ -85,6 +106,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ? "Session check timed out. You can retry or sign in again."
             : "API unreachable. Retry when the connection recovers.",
         );
+        if (e.code === "timeout") {
+          recordAudit("session_timeout", "info", "auth_me_timeout");
+        } else {
+          recordAudit(
+            "api_degraded",
+            "info",
+            e.code || `status_${e.status}`,
+          );
+        }
         return;
       }
       // Unknown non-ApiError (e.g. parse): keep session if tokens still present.

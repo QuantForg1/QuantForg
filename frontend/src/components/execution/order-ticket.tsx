@@ -427,7 +427,9 @@ export const ExecutionOrderTicket = forwardRef<
       if (!gateOk) {
         const reason =
           !session.gatewayOnline || !session.connected
-            ? "Gateway or broker session is offline"
+            ? session.gatewayOnline == null
+              ? "Gateway status unknown — new entries blocked until health recovers"
+              : "Gateway or broker session is offline"
             : marketOpen === false
               ? "Market closed — trading session blocked"
               : "Pre-trade checklist failed — check spread, margin, and risk";

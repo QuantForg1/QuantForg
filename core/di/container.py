@@ -437,6 +437,57 @@ class Container:
         except Exception as exc:
             logger.warning("ite_runtime_wire_failed", error=str(exc))
 
+        # Backend-owned broker auto-restore (encrypted profile → gateway).
+        # Independent of ITE wiring; browser not required; no second Gateway.
+        try:
+            import asyncio
+            import os
+
+            restore_enabled = (
+                self.mt5_adapter is not None
+                and os.environ.get("QF_BROKER_AUTO_RESTORE", "true").lower()
+                not in {"0", "false", "no", "off"}
+            )
+            if restore_enabled:
+                from app.application.services.weltrade_integration import (
+                    WeltradeIntegrationService,
+                )
+
+                adapter = self.mt5_adapter
+                uow = self.mt5_uow_factory
+
+                async def _broker_restore_bg() -> None:
+                    await asyncio.sleep(1.5)
+                    try:
+                        existing = getattr(self, "weltrade_integration", None)
+                        if existing is None:
+                            existing = WeltradeIntegrationService(
+                                adapter=adapter,
+                                uow_factory=uow,
+                            )
+                            self.weltrade_integration = existing
+                        result = await existing.auto_restore_on_startup()
+                        logger.info(
+                            "broker_startup_restore_finished",
+                            ok=bool(result and result.get("ok")),
+                            state=(result or {}).get("state"),
+                        )
+                    except Exception as restore_exc:
+                        logger.warning(
+                            "broker_startup_restore_failed",
+                            error=str(restore_exc),
+                        )
+
+                asyncio.create_task(  # noqa: RUF006
+                    _broker_restore_bg(), name="broker-auto-restore"
+                )
+                logger.info("broker_auto_restore_scheduled_background")
+        except Exception as restore_sched_exc:
+            logger.warning(
+                "broker_auto_restore_schedule_failed",
+                error=str(restore_sched_exc),
+            )
+
         logger.info(
             "container_startup_complete",
             env=self.settings.app_env.value,

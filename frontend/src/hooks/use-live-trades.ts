@@ -27,7 +27,7 @@ export function useLiveTrades(range: HistoryRange = "month") {
     staleTime: 30_000,
     refetchInterval: 60_000,
     retry: false,
-    enabled: session.connected || session.gatewayOnline,
+    enabled: Boolean(session.connected || session.gatewayOnline === true),
   });
 
   const trades = useMemo((): LiveTrade[] => {

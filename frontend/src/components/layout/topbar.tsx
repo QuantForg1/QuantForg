@@ -59,23 +59,27 @@ export function Topbar({
             "qf-caption truncate tabular",
             session.connected
               ? "text-[var(--success)]"
-              : session.gatewayOnline
+              : session.gatewayOnline === true
                 ? "text-[var(--warning)]"
                 : "text-[var(--fg-subtle)]",
           )}
           title={
             session.connected
               ? "Broker session attached"
-              : session.gatewayOnline
+              : session.gatewayOnline === true
                 ? "Gateway reachable — broker session not attached"
-                : "No live broker session"
+                : session.gatewayOnline == null
+                  ? "Connectivity status unknown (API/auth)"
+                  : "No live broker session"
           }
         >
           {session.connected
             ? "MT5"
-            : session.gatewayOnline
+            : session.gatewayOnline === true
               ? "Gateway"
-              : "Broker off"}
+              : session.gatewayOnline == null
+                ? "Unknown"
+                : "Broker off"}
         </span>
       </div>
 

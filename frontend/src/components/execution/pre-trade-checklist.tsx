@@ -96,9 +96,14 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
   const checks = useMemo(() => {
     const list = [
       {
-        ok: session.gatewayOnline,
+        ok: session.gatewayOnline === true,
         label: "Gateway Connected",
-        detail: session.gatewayOnline ? "Connected" : session.gatewayLabel || "unavailable",
+        detail:
+          session.gatewayOnline === true
+            ? "Connected"
+            : session.gatewayOnline == null
+              ? "unknown"
+              : session.gatewayLabel || "unavailable",
       },
       {
         ok: session.connected,
@@ -173,16 +178,22 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
       },
       {
         ok:
-          session.connected &&
-          marketOpenExplicit !== false &&
-          hasQuote,
+          session.executionEnabled === true ||
+          (session.executionEnabled == null &&
+            session.connected &&
+            marketOpenExplicit !== false &&
+            hasQuote),
         label: "Trading Enabled",
         detail:
-          marketOpenExplicit === false
-            ? "Market Closed"
-            : session.connected && hasQuote
-              ? "session live"
-              : "blocked",
+          session.executionEnabled === false
+            ? "execution disabled"
+            : marketOpenExplicit === false
+              ? "Market Closed"
+              : session.executionEnabled === true
+                ? "enabled"
+                : session.connected && hasQuote
+                  ? "session live"
+                  : "unknown",
       },
     ];
     return list;
@@ -256,7 +267,7 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
 });
 
 export function preTradeAllowsExecution(inputs: PreTradeInputs, session: {
-  gatewayOnline: boolean;
+  gatewayOnline: boolean | null;
   connected: boolean;
   freeMargin: string;
 }): boolean {
@@ -271,7 +282,8 @@ export function preTradeAllowsExecution(inputs: PreTradeInputs, session: {
   const vol = num(inputs.volume, 0);
   const free = num(session.freeMargin, NaN);
   const marginNeeded = num(inputs.marginRequired, NaN);
-  if (!session.gatewayOnline || !session.connected) return false;
+  // API/gateway unknown must block new entries (not invent connected).
+  if (session.gatewayOnline !== true || !session.connected) return false;
   if (inputs.marketOpen === false) return false;
   if (!inputs.symbol.trim() || vol <= 0) return false;
   if (!Number.isFinite(spread) || spread <= 0 || spread > maxSpread) return false;

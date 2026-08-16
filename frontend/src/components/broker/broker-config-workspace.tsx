@@ -290,7 +290,7 @@ export function BrokerConfigWorkspace() {
     onMutate: () => setProgress("Saving…"),
     onSuccess: async () => {
       setPassword("");
-      toast.success("Broker settings saved to gateway session");
+      toast.success("Broker configured — session validated and connected");
       await refresh();
       setProgress(null);
     },
@@ -307,7 +307,33 @@ export function BrokerConfigWorkspace() {
     saveMut.isPending;
 
   const onConnect = () => {
+    if (connected) {
+      toast.message("Broker already connected");
+      return;
+    }
     const loginNum = Number(login);
+    if ((!Number.isFinite(loginNum) || loginNum <= 0) && !password) {
+      // Configured profile may exist server-side — prefer reconnect.
+      void (async () => {
+        setProgress("Reconnecting…");
+        try {
+          await weltradeApi.reconnect();
+          toast.success("Broker reconnected");
+          await refresh();
+        } catch (e) {
+          try {
+            await weltradeApi.restoreProfile();
+            toast.success("Broker restored from secure profile");
+            await refresh();
+          } catch {
+            toast.error(e instanceof ApiError ? e.message : "Reconnect failed");
+          }
+        } finally {
+          setProgress(null);
+        }
+      })();
+      return;
+    }
     if (!Number.isFinite(loginNum) || loginNum <= 0) {
       toast.error("Enter a valid login");
       return;
