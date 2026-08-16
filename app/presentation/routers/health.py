@@ -122,17 +122,23 @@ async def liveness() -> dict[str, str]:
     description=(
         "Observe-only component statuses derived from live gateway probes and "
         "ITE runtime presence. Never fabricates HEALTHY. Does not enable "
-        "execution or change strategy."
+        "execution or change strategy. Gateway-only probe (no Railway "
+        "self-probe); short process cache for concurrent Mission Control cards."
     ),
     status_code=status.HTTP_200_OK,
 )
 async def trading_components_health() -> dict[str, object]:
     """Return Gateway / OMS / MT5 / AI health for production readiness."""
+    from starlette.concurrency import run_in_threadpool
+
     from app.application.services.production_component_health import (
         collect_trading_component_health,
     )
 
-    payload = collect_trading_component_health(get_settings())
+    # Sync httpx probes must not block the async event loop / other requests.
+    payload = await run_in_threadpool(
+        collect_trading_component_health, get_settings()
+    )
     payload["status"] = "ok"
     return payload
 

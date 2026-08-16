@@ -3010,6 +3010,6 @@ export const platformApi = {
   tradingComponents: () =>
     apiFetch<Record<string, unknown>>(
       `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/api/v1/health/trading-components`,
-      { auth: false, silent: true, timeoutMs: 20_000 },
+      { auth: false, silent: true, timeoutMs: 12_000 },
     ),
 };

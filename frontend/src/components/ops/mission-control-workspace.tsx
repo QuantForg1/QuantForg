@@ -237,13 +237,13 @@ export function MissionControlWorkspace() {
     staleTime: 30_000,
   });
 
-  // Authoritative LIVE planes — overlay stale control-center "disconnected" labels.
+  // Authoritative LIVE planes — shares cache with PlatformStatusBoard / AutoRecovery.
   const componentsQ = useQuery({
-    queryKey: ["trading-components-health", "mission-executive"],
+    queryKey: ["trading-components-health"],
     queryFn: platformApi.tradingComponents,
-    staleTime: 15_000,
-    refetchInterval: 20_000,
-    retry: 2,
+    staleTime: 20_000,
+    refetchInterval: 45_000,
+    retry: 1,
     refetchIntervalInBackground: false,
   });
   const authHealth = resolveTradingComponentsView({

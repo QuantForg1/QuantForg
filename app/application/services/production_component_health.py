@@ -2,16 +2,37 @@
 
 Derives Gateway / OMS / MT5 / AI statuses from runtime evidence only.
 Never fabricates HEALTHY. Never enables execution or changes strategy.
+
+Latency: trading-components probes Gateway only (MT5 status is embedded in
+gateway /health). Railway self-probes and other platform telemetry are skipped
+so Mission Control is not blocked by optional observability.
 """
 
 from __future__ import annotations
 
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
-from app.application.services.institutional_live_probes import LiveProbeCollector
+from app.application.services.institutional_live_probes import (
+    TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
+    LiveProbeCollector,
+)
 from app.domain.institutional_trading.reliability.health import ProbeInputs
 from core.config.settings import Settings
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Fresh cache window — concurrent Mission Control cards share one probe.
+_CACHE_TTL_S = 5.0
+# Serve last-known-good on probe failure / timeout within this window.
+_STALE_TTL_S = 60.0
+
+_cache_lock = threading.Lock()
+_cache_payload: dict[str, Any] | None = None
+_cache_at: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,30 +132,14 @@ def derive_ai_status(*, ite_runtime_present: bool) -> ComponentHealth:
     )
 
 
-def collect_trading_component_health(
+def _build_payload(
     settings: Settings,
+    live: ProbeInputs,
     *,
-    probes: ProbeInputs | None = None,
-    ite_runtime_present: bool | None = None,
+    ite_runtime_present: bool,
+    ai_error: str | None,
+    timing: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build Gateway/OMS/MT5/AI component health from live probes + runtime."""
-    collector = LiveProbeCollector(settings=settings)
-    live = probes or collector.collect()
-
-    ai_error: str | None = None
-    if ite_runtime_present is None:
-        try:
-            from app.application.services.institutional_ite_runtime import (
-                get_ite_runtime,
-            )
-
-            ite_runtime_present = get_ite_runtime() is not None
-        except Exception as exc:
-            ite_runtime_present = False
-            ai_error = f"{type(exc).__name__}"
-    else:
-        ai_error = None
-
     execution_enabled = bool(getattr(settings, "execution_enabled", False))
     mt5_use_mock = bool(getattr(settings, "mt5_use_mock", True))
     mt5_enabled = bool(getattr(settings, "mt5_enabled", False))
@@ -199,4 +204,131 @@ def collect_trading_component_health(
             and mt5.status == "CONNECTED"
             and ai.status == "HEALTHY"
         ),
+        "timing": timing,
     }
+
+
+def reset_trading_components_cache() -> None:
+    """Test helper — clear process cache."""
+    global _cache_payload, _cache_at
+    with _cache_lock:
+        _cache_payload = None
+        _cache_at = 0.0
+
+
+def collect_trading_component_health(
+    settings: Settings,
+    *,
+    probes: ProbeInputs | None = None,
+    ite_runtime_present: bool | None = None,
+    use_cache: bool = True,
+) -> dict[str, Any]:
+    """Build Gateway/OMS/MT5/AI component health from live probes + runtime.
+
+    Skips Railway/platform self-probes. Uses a short process TTL cache so
+    concurrent Mission Control cards share one gateway RTT.
+    """
+    global _cache_payload, _cache_at
+    t_total = time.perf_counter()
+    now = time.time()
+
+    if use_cache and probes is None:
+        with _cache_lock:
+            if (
+                _cache_payload is not None
+                and (now - _cache_at) <= _CACHE_TTL_S
+            ):
+                cached = dict(_cache_payload)
+                timing = dict(cached.get("timing") or {})
+                timing.update(
+                    {
+                        "cache_hit": True,
+                        "cache_age_ms": round((now - _cache_at) * 1000.0, 1),
+                        "total_ms": round(
+                            (time.perf_counter() - t_total) * 1000.0, 1
+                        ),
+                    }
+                )
+                cached["timing"] = timing
+                return cached
+
+    ai_error: str | None = None
+    if ite_runtime_present is None:
+        try:
+            from app.application.services.institutional_ite_runtime import (
+                get_ite_runtime,
+            )
+
+            ite_runtime_present = get_ite_runtime() is not None
+        except Exception as exc:
+            ite_runtime_present = False
+            ai_error = f"{type(exc).__name__}"
+
+    gateway_ms = 0.0
+    cache_stale = False
+    try:
+        if probes is None:
+            collector = LiveProbeCollector(settings=settings)
+            live = collector.collect(
+                include_platform_probes=False,
+                gateway_timeout_s=TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
+            )
+        else:
+            live = probes
+        gateway_ms = float(live.gateway_latency_ms or 0.0)
+    except Exception as exc:
+        logger.info(
+            "trading_components_probe_failed",
+            error=f"{type(exc).__name__}",
+        )
+        if use_cache:
+            with _cache_lock:
+                if (
+                    _cache_payload is not None
+                    and (now - _cache_at) <= _STALE_TTL_S
+                ):
+                    cached = dict(_cache_payload)
+                    timing = dict(cached.get("timing") or {})
+                    timing.update(
+                        {
+                            "cache_hit": True,
+                            "stale": True,
+                            "probe_error": type(exc).__name__,
+                            "total_ms": round(
+                                (time.perf_counter() - t_total) * 1000.0, 1
+                            ),
+                        }
+                    )
+                    cached["timing"] = timing
+                    return cached
+        raise
+
+    total_ms = round((time.perf_counter() - t_total) * 1000.0, 1)
+    timing = {
+        "cache_hit": False,
+        "stale": cache_stale,
+        "gateway_ms": round(gateway_ms, 1),
+        "platform_probes": False,
+        "total_ms": total_ms,
+    }
+    payload = _build_payload(
+        settings,
+        live,
+        ite_runtime_present=bool(ite_runtime_present),
+        ai_error=ai_error,
+        timing=timing,
+    )
+
+    if use_cache and probes is None:
+        with _cache_lock:
+            _cache_payload = dict(payload)
+            _cache_at = time.time()
+
+    logger.info(
+        "trading_components_health",
+        gateway_ms=round(gateway_ms, 1),
+        total_ms=total_ms,
+        gateway=payload["statuses"]["gateway"],
+        mt5=payload["statuses"]["mt5"],
+    )
+    return payload

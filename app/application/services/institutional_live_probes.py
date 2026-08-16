@@ -17,6 +17,10 @@ logger = get_logger(__name__)
 
 # Cloudflare Quick Tunnels often exceed a 3s cold-start; keep probes honest.
 _GATEWAY_PROBE_TIMEOUT_S = 8.0
+# Trading-components only needs gateway /health (includes MT5). Keep tight so
+# Mission Control never waits on an 8s ceiling when the tunnel is healthy (~1s).
+TRADING_COMPONENTS_GATEWAY_TIMEOUT_S = 3.5
+_RAILWAY_PROBE_TIMEOUT_S = 5.0
 
 
 def response_indicates_cloudflare(headers: Any) -> bool:
@@ -117,18 +121,73 @@ class LiveProbeCollector:
     supabase: Any | None = None
     last_health_payload: dict[str, Any] | None = None
 
-    def collect(self) -> ProbeInputs:
+    def collect(
+        self,
+        *,
+        include_platform_probes: bool = True,
+        gateway_timeout_s: float | None = None,
+    ) -> ProbeInputs:
+        """Collect live probe inputs.
+
+        ``include_platform_probes=False`` skips the Railway public-domain HTTP
+        self-probe (often 3–5s and unused by trading-components). Gateway and
+        Railway probes run concurrently when both are requested.
+        """
+        gateway_timeout = (
+            float(gateway_timeout_s)
+            if gateway_timeout_s is not None
+            else _GATEWAY_PROBE_TIMEOUT_S
+        )
         gateway_url = (self.settings.mt5_gateway_base_url or "").rstrip("/")
+        domain = (self.settings.railway_public_domain or "").strip()
+        want_railway = bool(include_platform_probes and domain)
+
+        gateway_result: tuple[
+            bool, float, int | None, dict[str, Any] | None, bool
+        ] | None = None
+        railway_result: tuple[
+            bool, float, int | None, dict[str, Any] | None, bool
+        ] | None = None
+
+        def _probe_gateway() -> tuple[
+            bool, float, int | None, dict[str, Any] | None, bool
+        ]:
+            if not gateway_url:
+                return False, 0.0, None, None, False
+            return _http_get_json(
+                f"{gateway_url}/health", timeout=gateway_timeout
+            )
+
+        def _probe_railway() -> tuple[
+            bool, float, int | None, dict[str, Any] | None, bool
+        ]:
+            base = domain if domain.startswith("http") else f"https://{domain}"
+            return _http_get_json(
+                f"{base.rstrip('/')}/health", timeout=_RAILWAY_PROBE_TIMEOUT_S
+            )
+
+        if gateway_url and want_railway:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                fut_gw = pool.submit(_probe_gateway)
+                fut_rw = pool.submit(_probe_railway)
+                gateway_result = fut_gw.result()
+                railway_result = fut_rw.result()
+        elif gateway_url:
+            gateway_result = _probe_gateway()
+        elif want_railway:
+            railway_result = _probe_railway()
+
         gateway_ok = False
         gateway_lat = 0.0
         tunnel_ok = False
         mt5_ok = False
         health_payload: dict[str, Any] | None = None
+        via_cf = False
 
-        if gateway_url:
-            ok, lat, _code, body, via_cf = _http_get_json(
-                f"{gateway_url}/health", timeout=_GATEWAY_PROBE_TIMEOUT_S
-            )
+        if gateway_result is not None:
+            ok, lat, _code, body, via_cf = gateway_result
             gateway_lat = lat
             if body is not None:
                 health_payload = body
@@ -138,7 +197,8 @@ class LiveProbeCollector:
                 getattr(self.mt5_adapter, "client", None) if self.mt5_adapter else None
             )
             health_fn = getattr(client, "gateway_health", None)
-            if callable(health_fn):
+            # Prefer public /health body when present — avoid a second slow RTT.
+            if callable(health_fn) and health_payload is None:
                 try:
                     t0 = time.perf_counter()
                     payload = health_fn()
@@ -187,30 +247,27 @@ class LiveProbeCollector:
 
         railway_ok = False
         railway_lat = 0.0
-        domain = (self.settings.railway_public_domain or "").strip()
-        if domain:
-            base = domain if domain.startswith("http") else f"https://{domain}"
-            railway_ok, railway_lat, _, _, _ = _http_get_json(
-                f"{base.rstrip('/')}/health", timeout=5.0
-            )
+        if railway_result is not None:
+            railway_ok, railway_lat, _, _, _ = railway_result
 
         supabase_ok = False
         db_lat = 0.0
-        if self.supabase is not None and getattr(
-            self.settings, "supabase_configured", False
-        ):
-            t0 = time.perf_counter()
-            try:
-                supabase_ok = bool(
-                    getattr(self.supabase, "client", None) is not None
-                    or getattr(self.supabase, "configured", False)
-                )
-            except Exception:
-                supabase_ok = False
-            db_lat = (time.perf_counter() - t0) * 1000.0
-        elif getattr(self.settings, "database_url", ""):
-            supabase_ok = True
-            db_lat = 1.0
+        if include_platform_probes:
+            if self.supabase is not None and getattr(
+                self.settings, "supabase_configured", False
+            ):
+                t0 = time.perf_counter()
+                try:
+                    supabase_ok = bool(
+                        getattr(self.supabase, "client", None) is not None
+                        or getattr(self.supabase, "configured", False)
+                    )
+                except Exception:
+                    supabase_ok = False
+                db_lat = (time.perf_counter() - t0) * 1000.0
+            elif getattr(self.settings, "database_url", ""):
+                supabase_ok = True
+                db_lat = 1.0
 
         return ProbeInputs(
             gateway_latency_ms=gateway_lat,

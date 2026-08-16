@@ -58,20 +58,20 @@ export function AutoRecoveryPanel() {
     return () => window.clearInterval(id);
   }, []);
 
-  // Authoritative plane — same source as PlatformStatusBoard (no auth).
+  // Authoritative plane — shares React Query cache with PlatformStatusBoard.
   const componentsQ = useQuery({
-    queryKey: ["trading-components-health", "auto-recovery"],
+    queryKey: ["trading-components-health"],
     queryFn: platformApi.tradingComponents,
-    staleTime: 15_000,
-    refetchInterval: 20_000,
-    retry: 2,
+    staleTime: 20_000,
+    refetchInterval: 45_000,
+    retry: 1,
     refetchIntervalInBackground: false,
   });
   const healthQ = useQuery({
     queryKey: ["weltrade-health", "auto-recovery"],
     queryFn: weltradeApi.health,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
     retry: 1,
   });
   const health = asRecord(healthQ.data);

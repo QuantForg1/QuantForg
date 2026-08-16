@@ -73,15 +73,6 @@ async function timedHealthLive(): Promise<{
   return { payload, latencyMs: Math.round(performance.now() - started) };
 }
 
-async function timedTradingComponents(): Promise<{
-  payload: Record<string, unknown>;
-  latencyMs: number;
-}> {
-  const started = performance.now();
-  const payload = await platformApi.tradingComponents();
-  return { payload, latencyMs: Math.round(performance.now() - started) };
-}
-
 function StatusCard({ card }: { card: CardModel }) {
   return (
     <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
@@ -161,11 +152,12 @@ export function PlatformStatusBoard() {
     refetchIntervalInBackground: false,
   });
   const componentsQ = useQuery({
-    queryKey: ["trading-components-health", "timed"],
-    queryFn: timedTradingComponents,
+    // Shared key — AutoRecovery + Executive reuse this cache (no triple poll).
+    queryKey: ["trading-components-health"],
+    queryFn: platformApi.tradingComponents,
     staleTime: 20_000,
-    refetchInterval: 30_000,
-    retry: 2,
+    refetchInterval: 45_000,
+    retry: 1,
     refetchIntervalInBackground: false,
   });
   // Optional broker detail — do not hammer; trading-components is authoritative for MT5/gateway.
@@ -227,12 +219,12 @@ export function PlatformStatusBoard() {
         ? ("other" as const)
         : null;
   const authHealth = resolveTradingComponentsView({
-    payload: componentsQ.data?.payload ?? componentsQ.data,
+    payload: componentsQ.data,
     isSuccess: componentsQ.isSuccess,
     isError: componentsQ.isError,
     errorKind: componentsErrorKind,
   });
-  const components = asRecord(componentsQ.data?.payload ?? componentsQ.data);
+  const components = asRecord(componentsQ.data);
   const statuses = asRecord(
     authHealth
       ? {
@@ -255,8 +247,14 @@ export function PlatformStatusBoard() {
     str(version.version || version.git_sha || version.build || version.release, "—") ||
     "—";
   const backendLatencyMs = backendQ.data?.latencyMs ?? null;
-  const componentsAggregateRttMs = componentsQ.data?.latencyMs ?? null;
-  const gatewayProbeMs = num(gatewayEvidence.latency_ms, NaN);
+  const timing = asRecord(components.timing);
+  const componentsAggregateRttMs = Number.isFinite(num(timing.total_ms, NaN))
+    ? Math.round(num(timing.total_ms))
+    : null;
+  const gatewayProbeMs = num(
+    gatewayEvidence.latency_ms ?? timing.gateway_ms,
+    NaN,
+  );
 
   const cards = useMemo((): CardModel[] => {
     const backendOk =
