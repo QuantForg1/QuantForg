@@ -17,6 +17,7 @@ import {
   gatewayDiagnosticDetail,
   gatewayStatusLabel,
 } from "@/lib/gateway-diagnostics";
+import { useAuth } from "@/providers/auth-provider";
 
 export type TradingSessionState = {
   connected: boolean;
@@ -57,15 +58,39 @@ const TradingSessionContext = createContext<TradingSessionState | null>(null);
 /** Shared broker session for the whole app shell — one source of truth. */
 export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  useBrokerStatusStream(true);
+  const { isAuthenticated } = useAuth();
+  // Broker/gateway probes require Bearer auth — never fire on the login shell.
+  const sessionEnabled = isAuthenticated;
+  useBrokerStatusStream(sessionEnabled);
+
+  const healthQ = useQuery({
+    queryKey: ["weltrade-health"],
+    queryFn: weltradeApi.health,
+    staleTime: 15_000,
+    retry: 1,
+    enabled: sessionEnabled,
+  });
 
   const statusQ = useQuery({
     queryKey: ["mt5-status"],
     queryFn: mt5Api.status,
     staleTime: 5_000,
     retry: 1,
+    // Run after health settles so cold Railway workers heal/bind first.
+    enabled: sessionEnabled && (healthQ.isFetched || healthQ.isError),
   });
-  const connectedFlag = Boolean(asRecord(statusQ.data).connected);
+  const statusConnected = Boolean(asRecord(statusQ.data).connected);
+  const healthPreview = asRecord(healthQ.data);
+  const healthUsablePreview =
+    healthQ.isSuccess && Object.keys(healthPreview).length > 0;
+  const healthAttached = Boolean(
+    healthPreview.weltrade_connected ||
+      healthPreview.mt5_connected ||
+      healthPreview.mt5_attached,
+  );
+  // Prefer MT5 status; fall back to weltrade health while status heals.
+  const connectedFlag =
+    statusConnected || (healthUsablePreview && healthAttached);
 
   // Keep the MT5 book hot whenever the session is attached (all app surfaces).
   useBookStream(connectedFlag);
@@ -76,12 +101,6 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
     staleTime: 5_000,
     retry: 1,
     enabled: connectedFlag,
-  });
-  const healthQ = useQuery({
-    queryKey: ["weltrade-health"],
-    queryFn: weltradeApi.health,
-    staleTime: 15_000,
-    retry: 1,
   });
   const positionsQ = useQuery({
     queryKey: ["positions"],
@@ -108,15 +127,15 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const status = asRecord(statusQ.data);
   const portfolio = asRecord(portfolioQ.data);
   const account = asRecord(portfolio.account);
-  const health = asRecord(healthQ.data);
+  const health = healthPreview;
 
-  const connected = Boolean(status.connected);
+  const connected = connectedFlag;
   // Health feed may 500 under DB pressure — do not treat that as broker down
   // when MT5 status already proves an attached session.
   const healthKnown =
     (healthQ.isFetched && !healthQ.isLoading) ||
     (statusQ.isFetched && !statusQ.isLoading);
-  const healthUsable = healthQ.isSuccess && Object.keys(health).length > 0;
+  const healthUsable = healthUsablePreview;
   const gatewayOnline = healthUsable
     ? Boolean(health.gateway_online || health.gateway_reachable || connected)
     : connected;
@@ -143,6 +162,20 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
         : healthQ.isError
           ? "Gateway status unknown"
           : "Gateway unreachable";
+
+  // After health reports an attached gateway session, refresh MT5 status so
+  // ticks/symbols see the healed process-local handle.
+  const healedOnce = useRef(false);
+  useEffect(() => {
+    if (!sessionEnabled || !healthUsable || !healthAttached) return;
+    if (statusConnected) {
+      healedOnce.current = false;
+      return;
+    }
+    if (healedOnce.current) return;
+    healedOnce.current = true;
+    void qc.invalidateQueries({ queryKey: ["mt5-status"] });
+  }, [sessionEnabled, healthUsable, healthAttached, statusConnected, qc]);
 
   const invalidateAll = useCallback(async () => {
     // Drop all broker/gateway caches so reconnect never serves stale status.

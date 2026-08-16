@@ -36,8 +36,15 @@ class GetMT5StatusUseCase:
     adapter: MT5Adapter
 
     async def execute(self, *, user_id: UUID) -> MT5StatusDTO:
-        async with self.uow_factory() as uow:
-            connection = await uow.connections.get_active_for_user(user_id)
+        # Heal gateway process-local handle before reading status so Terminal
+        # does not show Broker offline while Railway↔Gateway↔MT5 is healthy.
+        from app.application.services.mt5_session_guard import (
+            ensure_live_mt5_session_for_user,
+        )
+
+        connection = await ensure_live_mt5_session_for_user(
+            self.uow_factory, self.adapter, user_id
+        )
         if connection is not None and connection.connected:
             session_ref = (connection.session_ref or "").strip()
             if not session_ref or not self.adapter.is_live_session(session_ref):
@@ -51,7 +58,8 @@ class GetMT5StatusUseCase:
                     await uow.commit()
             except (OSError, RuntimeError, ValueError):
                 pass
-        return MT5StatusDTO.from_connection(connection)
+            return MT5StatusDTO.from_connection(connection)
+        return MT5StatusDTO.from_connection(None)
 
 
 @dataclass(frozen=True, slots=True)
