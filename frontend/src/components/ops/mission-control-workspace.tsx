@@ -565,6 +565,113 @@ export function MissionControlWorkspace() {
           })()}
         </Panel>
 
+        <Panel
+          title="Phase C — Research Integrity & Model Governance"
+          status={
+            asRecord(executive?.data).phase_c
+              ? "available"
+              : executive?.status === "available"
+                ? "empty"
+                : executive?.status
+          }
+        >
+          {(() => {
+            const phaseC = asRecord(asRecord(executive?.data).phase_c);
+            if (!asRecord(executive?.data).phase_c) {
+              return (
+                <FeedEmpty
+                  title="No Phase C feed"
+                  description="Research/shadow plane not yet populated — live trading unaffected"
+                />
+              );
+            }
+            const research = asRecord(phaseC.research);
+            const challenger = asRecord(phaseC.challenger);
+            const promotion = asRecord(phaseC.promotion);
+            const pbo = asRecord(research.PBO);
+            const dsr = asRecord(research.DSR);
+            const candidates = asList(promotion.candidates);
+            return (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat label="Mode" value={str(phaseC.mode, "RESEARCH_SHADOW")} />
+                  <Stat
+                    label="Challenger exec"
+                    value={
+                      phaseC.challenger_execution_authority === true
+                        ? "TRUE"
+                        : "FALSE"
+                    }
+                    tone={
+                      phaseC.challenger_execution_authority === true
+                        ? "danger"
+                        : "ok"
+                    }
+                  />
+                  <Stat
+                    label="PBO"
+                    value={str(pbo.state, str(pbo.PBO, "—"))}
+                  />
+                  <Stat
+                    label="DSR"
+                    value={str(dsr.CONFIDENCE_STATE, str(dsr.DEFLATED_SHARPE, "—"))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat
+                    label="Champion"
+                    value={str(asRecord(phaseC.champion).version, "—")}
+                  />
+                  <Stat
+                    label="Challenger"
+                    value={str(challenger.challenger_version, "—")}
+                  />
+                  <Stat
+                    label="Shadow samples"
+                    value={str(challenger.shadow_samples, "0")}
+                  />
+                  <Stat
+                    label="Promotion candidates"
+                    value={str(promotion.count, "0")}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] uppercase tracking-wider text-[var(--fg-subtle)]">
+                    Promotion (recent)
+                  </p>
+                  <ul className="max-h-24 space-y-1 overflow-auto font-mono text-[10px]">
+                    {candidates.length === 0 ? (
+                      <li className="text-[var(--fg-subtle)]">No candidates</li>
+                    ) : (
+                      candidates
+                        .slice(-5)
+                        .reverse()
+                        .map((row, i) => {
+                          const r = asRecord(row);
+                          return (
+                            <li
+                              key={str(r.candidate_id, String(i))}
+                              className="border-b border-[var(--border)]/50 py-0.5"
+                            >
+                              <span>{str(r.strategy_id, "—")}</span>
+                              {" · "}
+                              <span className="text-[var(--fg-subtle)]">
+                                {str(r.state, "—")}
+                                {r.blocking_reason
+                                  ? ` / ${str(r.blocking_reason)}`
+                                  : ""}
+                              </span>
+                            </li>
+                          );
+                        })
+                    )}
+                  </ul>
+                </div>
+              </div>
+            );
+          })()}
+        </Panel>
+
         <Panel title="Capital Overview" status={capital?.status}>
           {!capital || capital.status !== "available" ? (
             <FeedEmpty

@@ -242,6 +242,27 @@ def run_champion_challenger(
         challenger_executed=False,
     )
     get_duel_store().record(duel)
+    # Phase C — shadow store mirror (never executes)
+    try:
+        from app.domain.institutional_trading.phase_c import get_phase_c_plane
+
+        get_phase_c_plane().shadow.record_shadow(
+            id=duel.id,
+            timestamp=duel.at,
+            symbol=duel.symbol,
+            direction=champion.direction,
+            strategy=str(getattr(decision, "strategy", "") or ""),
+            champion_score=float(champion.opportunity_score),
+            challenger_score=float(challenger.opportunity_score),
+            champion_action=champion.direction,
+            challenger_action=challenger.direction,
+            market_regime=regime,
+            execution_assumptions={"mode": "SHADOW_ONLY"},
+            hypothetical_R=float(challenger.expected_rr),
+            hypothetical_outcome=None,
+        )
+    except Exception:
+        logger.exception("phase_c_shadow_mirror_failed")
     logger.info(
         "champion_challenger_duel",
         symbol=duel.symbol,

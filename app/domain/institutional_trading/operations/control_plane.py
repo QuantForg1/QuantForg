@@ -866,6 +866,7 @@ class OperationsControlPlane:
         health = self.health.latest()
         phase_a_snap: dict[str, Any] | None = None
         phase_b_snap: dict[str, Any] | None = None
+        phase_c_snap: dict[str, Any] | None = None
         kill_switch_state = "ACTIVE"
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
@@ -882,6 +883,12 @@ class OperationsControlPlane:
             phase_b_snap = get_phase_b_plane().snapshot()
         except Exception:
             phase_b_snap = None
+        try:
+            from app.domain.institutional_trading.phase_c import get_phase_c_plane
+
+            phase_c_snap = get_phase_c_plane().snapshot()
+        except Exception:
+            phase_c_snap = None
         with self._lock:
             return {
                 "system_status": (
@@ -905,6 +912,7 @@ class OperationsControlPlane:
                 "kill_switch_state": kill_switch_state,
                 "phase_a": phase_a_snap,
                 "phase_b": phase_b_snap,
+                "phase_c": phase_c_snap,
                 "shadow_mode": self.mode is OpsExecutionMode.SHADOW,
                 "canary_mode": self.mode is OpsExecutionMode.CANARY,
                 "live_mode": self.mode is OpsExecutionMode.LIVE,
@@ -1177,6 +1185,14 @@ def reset_control_plane_for_tests() -> OperationsControlPlane:
         )
 
         reset_phase_b_plane_for_tests()
+    except Exception:
+        pass
+    try:
+        from app.domain.institutional_trading.phase_c import (
+            reset_phase_c_plane_for_tests,
+        )
+
+        reset_phase_c_plane_for_tests()
     except Exception:
         pass
     return _GLOBAL_PLANE

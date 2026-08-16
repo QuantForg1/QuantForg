@@ -170,6 +170,7 @@ class MissionControlCenter:
                     "kill_switch_state": cc.get("kill_switch_state"),
                     "phase_a": cc.get("phase_a"),
                     "phase_b": cc.get("phase_b"),
+                    "phase_c": cc.get("phase_c"),
                     "gateway_status": cc.get("gateway_status"),
                     "mt5_status": cc.get("mt5_status"),
                     "oms_orders_allowed": cc.get("oms_orders_allowed"),
