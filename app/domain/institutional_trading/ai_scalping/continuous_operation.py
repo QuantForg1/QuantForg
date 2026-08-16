@@ -180,6 +180,37 @@ class ContinuousOperationController:
                     or "UNKNOWN_REASON"
                 )
                 reasons.append(f"phase_a:{gate_name}")
+            # Phase B explain journal — observe only
+            try:
+                from app.domain.institutional_trading.phase_b import get_phase_b_plane
+
+                pb = get_phase_b_plane()
+                md = gate.get("market_data") or {}
+                pb.explain.record(
+                    symbol=symbol,
+                    strategy=strategy,
+                    direction=direction,
+                    signal_state="CANDIDATE",
+                    market_data_state=str(md.get("state") or "UNKNOWN"),
+                    regime=(pb.last_regime or {}).get("operational_regime")
+                    or "UNKNOWN",
+                    safety_state="PASS" if not reasons else "REVIEW",
+                    risk_state="UNKNOWN",
+                    portfolio_state="UNKNOWN",
+                    execution_quality_state="UNKNOWN",
+                    control_state=str(gate.get("final_control_state") or "UNKNOWN"),
+                    first_blocking_gate=str(
+                        gate.get("first_blocking_gate") or "UNKNOWN_REASON"
+                    ),
+                    why_signalled=(
+                        f"{strategy or 'strategy'} candidate"
+                        if strategy
+                        else "UNKNOWN_REASON"
+                    ),
+                    why_ranked="UNKNOWN_REASON",
+                )
+            except Exception:
+                pass
         except Exception:
             reasons.append("phase_a:gate_unavailable")
 

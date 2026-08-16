@@ -321,6 +321,27 @@ def evaluate_balance(
             f"{profile.drawdown_horizon_pct}% drawdown - fragile for micro sizing."
         )
 
+    # Phase B — small-account observability (never changes ceilings / sizing)
+    try:
+        from app.domain.institutional_trading.phase_b import get_phase_b_plane
+        from app.domain.institutional_trading.phase_b.small_account_observe import (
+            observe_small_account_xau_block,
+        )
+
+        snap = observe_small_account_xau_block(
+            equity=float(equity),
+            symbol="XAUUSD",
+            min_lot_risk_pct=float(required_pct),
+            hard_max_risk_pct=float(profile.hard_max_risk_pct),
+            blocked_by_min_lot=tradability is MicroTradability.NOT_TRADABLE,
+            block_reason=(
+                reasons[0] if tradability is MicroTradability.NOT_TRADABLE and reasons else None
+            ),
+        )
+        get_phase_b_plane().last_small_account = snap
+    except Exception:
+        pass
+
     return MicroBalanceFeasibility(
         equity=equity,
         atr=atr,

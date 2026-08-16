@@ -434,6 +434,137 @@ export function MissionControlWorkspace() {
           )}
         </Panel>
 
+        <Panel
+          title="Phase B — Performance & Execution Intelligence"
+          status={
+            asRecord(executive?.data).phase_b
+              ? "available"
+              : executive?.status === "available"
+                ? "empty"
+                : executive?.status
+          }
+        >
+          {(() => {
+            const phaseB = asRecord(asRecord(executive?.data).phase_b);
+            if (!asRecord(executive?.data).phase_b) {
+              return (
+                <FeedEmpty
+                  title="No Phase B feed"
+                  description="Observation plane not yet populated — trading connectivity unaffected"
+                />
+              );
+            }
+            const portfolio = asRecord(phaseB.portfolio);
+            const execution = asRecord(phaseB.execution);
+            const maeMfe = asRecord(phaseB.mae_mfe);
+            const regime = asRecord(phaseB.regime);
+            const strategies = asRecord(phaseB.strategies);
+            const parity = asRecord(phaseB.live_vs_research);
+            const comparisons = asList(parity.comparisons);
+            const journal = asList(phaseB.explain_journal);
+            return (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Stat
+                  label="Mode"
+                  value={str(phaseB.mode, "OBSERVE")}
+                />
+                <Stat
+                  label="Open MAE/MFE"
+                  value={str(maeMfe.open_count, "0")}
+                />
+                <Stat
+                  label="Exec samples"
+                  value={str(execution.samples, "0")}
+                />
+                <Stat
+                  label="Exec quality"
+                  value={str(execution.avg_execution_quality_score, "—")}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Stat
+                  label="Open risk"
+                  value={str(
+                    portfolio.CURRENT_PORTFOLIO_RISK ?? portfolio.current_open_risk,
+                    "—",
+                  )}
+                />
+                <Stat
+                  label="Incremental"
+                  value={str(
+                    portfolio.NEW_TRADE_INCREMENTAL_RISK ?? portfolio.new_trade_risk,
+                    "—",
+                  )}
+                />
+                <Stat
+                  label="Projected"
+                  value={str(
+                    portfolio.PROJECTED_PORTFOLIO_RISK ??
+                      portfolio.projected_total_risk,
+                    "—",
+                  )}
+                />
+                <Stat
+                  label="USD factors"
+                  value={str(
+                    asRecord(portfolio.currency_factor_exposure).USD,
+                    "—",
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <Stat
+                  label="Regime"
+                  value={str(regime.operational_regime, "—")}
+                />
+                <Stat
+                  label="Matrix cells"
+                  value={str(strategies.cell_count, "0")}
+                />
+                <Stat
+                  label="Live vs research"
+                  value={
+                    comparisons.length
+                      ? str(asRecord(comparisons[0]).state, "—")
+                      : "—"
+                  }
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] uppercase tracking-wider text-[var(--fg-subtle)]">
+                  Trade explainability (recent)
+                </p>
+                <ul className="max-h-28 space-y-1 overflow-auto font-mono text-[10px]">
+                  {journal.length === 0 ? (
+                    <li className="text-[var(--fg-subtle)]">No journal rows yet</li>
+                  ) : (
+                    journal
+                      .slice(-5)
+                      .reverse()
+                      .map((row, i) => {
+                        const r = asRecord(row);
+                        return (
+                          <li
+                            key={str(r.candidate_id, String(i))}
+                            className="border-b border-[var(--border)]/50 py-0.5"
+                          >
+                            <span>{str(r.symbol, "—")}</span>
+                            {" · "}
+                            <span className="text-[var(--fg-subtle)]">
+                              {str(r.WHY_BLOCKED, str(r.WHY_ALLOWED, "—"))}
+                            </span>
+                          </li>
+                        );
+                      })
+                  )}
+                </ul>
+              </div>
+            </div>
+            );
+          })()}
+        </Panel>
+
         <Panel title="Capital Overview" status={capital?.status}>
           {!capital || capital.status !== "available" ? (
             <FeedEmpty

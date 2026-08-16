@@ -1040,6 +1040,48 @@ class InstitutionalIteRuntime:
             )
             result = self.position_management.evaluate(ticket, pctx)
             managed += 1
+            # Phase B — live MAE/MFE mark (observe-only; never changes PME action)
+            try:
+                from app.domain.institutional_trading.phase_b import get_phase_b_plane
+
+                pb = get_phase_b_plane()
+                tid = str(ticket)
+                if tid not in pb.mae_mfe.open:
+                    entry = float(getattr(pos, "entry_price", 0) or 0)
+                    stop = float(
+                        getattr(pos, "current_stop", 0)
+                        or getattr(pos, "initial_stop", 0)
+                        or 0
+                    ) or None
+                    if entry > 0:
+                        pb.mae_mfe.observe_entry(
+                            trade_id=tid,
+                            symbol=str(getattr(pos, "symbol", "") or ""),
+                            strategy="live",
+                            direction=str(
+                                getattr(pos, "side", None)
+                                or getattr(pos, "direction", "")
+                                or ""
+                            ),
+                            entry_price=entry,
+                            initial_stop=stop,
+                            initial_target=float(
+                                getattr(pos, "current_tp", 0) or 0
+                            )
+                            or None,
+                        )
+                mark = float(current_px) if current_px is not None else None
+                pb.mae_mfe.observe_mark(tid, mark_price=mark)
+                # Seed MFE from PME max_favorable_r when available
+                mfr = getattr(pos, "max_favorable_r", None)
+                rec = pb.mae_mfe.open.get(tid)
+                if rec is not None and mfr is not None and rec.mfe_r is None:
+                    try:
+                        rec.mfe_r = float(mfr)
+                    except Exception:
+                        pass
+            except Exception:
+                logger.exception("phase_b_mae_mfe_mark_failed")
             try:
                 from app.domain.institutional_trading.ai_scalping.institutional_position_monitor import (  # noqa: E501
                     build_position_monitor,
@@ -1302,6 +1344,114 @@ class InstitutionalIteRuntime:
                                 },
                             )
                         get_scalping_learning_store().record(trade_rec)
+                        # Phase B — observe-only post-trade / MAE-MFE close
+                        try:
+                            from app.domain.institutional_trading.phase_b import (
+                                get_phase_b_plane,
+                            )
+
+                            pb = get_phase_b_plane()
+                            tid = str(ticket)
+                            exit_px = None
+                            try:
+                                exit_px = float(
+                                    getattr(pos, "exit_price", None)
+                                    or getattr(account, "mid_price", None)
+                                    or 0
+                                ) or None
+                            except Exception:
+                                exit_px = None
+                            closed = pb.mae_mfe.observe_close(
+                                tid,
+                                exit_price=exit_px,
+                                exit_reason=str(
+                                    _close_reason or reason or "closed"
+                                ),
+                            )
+                            rr = None
+                            if closed and closed.realized_r is not None:
+                                rr = closed.realized_r
+                            elif getattr(pos, "r_multiple", None) is not None:
+                                try:
+                                    rr = float(pos.r_multiple)
+                                except Exception:
+                                    rr = None
+                            pb.post_trade.record(
+                                trade_id=tid,
+                                symbol=str(getattr(pos, "symbol", "") or ""),
+                                realized_r=rr,
+                                mae_r=closed.final_mae_r if closed else None,
+                                mfe_r=closed.final_mfe_r if closed else None,
+                                holding_time=(
+                                    closed.holding_time_s if closed else None
+                                ),
+                                exit_reason=str(
+                                    _close_reason or reason or "closed"
+                                ),
+                                entry_risk=(
+                                    closed.risk_distance if closed else None
+                                ),
+                            )
+                            pb.matrix.record(
+                                strategy=str(
+                                    ai_d.get("strategy")
+                                    or ai_d.get("setup_family")
+                                    or "scalping"
+                                ),
+                                symbol=str(getattr(pos, "symbol", "") or ""),
+                                regime=str(
+                                    (pb.last_regime or {}).get("operational_regime")
+                                    or ai_d.get("market_regime")
+                                    or ai_d.get("regime")
+                                    or "UNKNOWN"
+                                ),
+                                session=str(trade_rec.session or ""),
+                                direction=direction,
+                                realized_r=rr,
+                                win=bool(pnl_f > 0),
+                                mae_r=closed.final_mae_r if closed else None,
+                                mfe_r=closed.final_mfe_r if closed else None,
+                            )
+                            pb.parity.record_live(
+                                strategy=str(
+                                    ai_d.get("strategy")
+                                    or ai_d.get("setup_family")
+                                    or "ALL"
+                                ),
+                                realized_r=rr,
+                                win=bool(pnl_f > 0),
+                                mae_r=closed.final_mae_r if closed else None,
+                                mfe_r=closed.final_mfe_r if closed else None,
+                                holding_time_s=(
+                                    closed.holding_time_s if closed else None
+                                ),
+                            )
+                            pb.model_monitor.observe(
+                                confidence=float(
+                                    ai_d.get("ai_confidence")
+                                    or ai_d.get("confidence")
+                                    or 0
+                                )
+                                or None,
+                                quality=float(
+                                    ai_d.get("trade_quality")
+                                    or ai_d.get("quality")
+                                    or 0
+                                )
+                                or None,
+                                signal=direction,
+                                realized_r=rr,
+                            )
+                            pb.observe_regime(
+                                str(
+                                    ai_d.get("market_regime")
+                                    or ai_d.get("regime")
+                                    or ""
+                                )
+                                or None
+                            )
+                        except Exception:
+                            logger.exception("phase_b_post_close_observe_failed")
                         # AI v8 — append-only observation (never auto-applies)
                         try:
                             from app.domain.institutional_trading.ai_scalping.institutional_learning_engine import (  # noqa: E501

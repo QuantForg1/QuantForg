@@ -630,6 +630,53 @@ class InstitutionalDecisionPipeline:
                     self._last_ai_score = self._last_ai_score or {}
                     if isinstance(self._last_ai_score, dict):
                         self._last_ai_score["portfolio_risk_v2"] = alloc.to_dict()
+                    # Phase B — incremental portfolio risk visibility (observe only)
+                    try:
+                        from app.domain.institutional_trading.phase_b import (
+                            get_phase_b_plane,
+                        )
+
+                        book = alloc.book
+                        existing = tuple(
+                            str(getattr(p, "symbol", "") or "")
+                            for p in (live_positions or ())
+                        )
+                        get_phase_b_plane().observe_incremental_risk(
+                            current_open_risk=float(book.exposure_pct)
+                            if book.exposure_pct is not None
+                            else None,
+                            new_trade_risk=float(cfg.risk_per_trade_pct)
+                            if cfg.risk_per_trade_pct is not None
+                            else None,
+                            max_portfolio_risk=float(
+                                getattr(scalp_cfg, "max_daily_exposure_pct", 0) or 0
+                            )
+                            or None,
+                            correlation_score=float(alloc.correlation_score)
+                            if alloc.correlation_score is not None
+                            else None,
+                            symbol=str(getattr(snapshot, "symbol", "") or ""),
+                            symbol_exposure=float(alloc.symbol_exposure_pct)
+                            if alloc.symbol_exposure_pct is not None
+                            else None,
+                            directional_exposure=float(
+                                alloc.correlated_exposure_pct
+                            )
+                            if alloc.correlated_exposure_pct is not None
+                            else None,
+                            existing_symbols=existing,
+                            hard_blocked=not bool(alloc.allow),
+                            hard_block_reason=alloc.rejection_reason,
+                        )
+                        raw_reg = None
+                        if ai_score is not None:
+                            raw_reg = getattr(ai_score, "market_regime", None) or getattr(
+                                ai_score, "regime", None
+                            )
+                        if raw_reg:
+                            get_phase_b_plane().observe_regime(str(raw_reg))
+                    except Exception:
+                        pass
                     if alloc.allow:
                         # Never exceed RiskEngine REDUCE_SIZE / caps — take stricter
                         pre_lots = alloc.approved_lots

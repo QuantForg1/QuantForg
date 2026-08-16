@@ -789,6 +789,7 @@ class ExecutionBridge:
         # Measure slippage before journaling so the attempt record stores it
         slip_str: str | None = None
         slip_exceeded = False
+        fill_price_obs: float | None = None
         try:
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
@@ -799,12 +800,13 @@ class ExecutionBridge:
             )
 
             if status is ExecutionAttemptStatus.OMS_SUCCESS:
+                fill_price_obs = extract_fill_price(oms_result.raw)
                 slip = measure_slippage(
                     side=str(
                         getattr(decision.action, "value", decision.action)
                     ).lower(),
                     requested_price=context.account.mid_price,
-                    filled_price=extract_fill_price(oms_result.raw),
+                    filled_price=fill_price_obs,
                     max_slippage=DEFAULT_AI_SCALPING_CONFIG.max_entry_slippage,
                     latency_ms=latency,
                 )
@@ -822,6 +824,43 @@ class ExecutionBridge:
                     )
         except Exception:
             logger.exception("scalping_slippage_measure_failed")
+
+        # Phase B — execution quality observation (never blocks)
+        try:
+            from app.domain.institutional_trading.phase_b import get_phase_b_plane
+
+            get_phase_b_plane().execution.record(
+                symbol=str(getattr(decision, "symbol", "") or ""),
+                outcome=(
+                    "success"
+                    if status is ExecutionAttemptStatus.OMS_SUCCESS
+                    else (
+                        "ambiguous"
+                        if abort_reason is BridgeAbortReason.GATEWAY_FAILURE
+                        else "reject"
+                    )
+                ),
+                spread=float(spread) if spread is not None else None,
+                spread_at_entry=float(spread) if spread is not None else None,
+                fill_latency_ms=latency,
+                order_submit_latency_ms=latency,
+                broker_retcode=oms_result.retcode,
+                slippage=float(slip_str) if slip_str is not None else None,
+                fill_price=fill_price_obs,
+                quote_age_ms=(
+                    float(getattr(context.account, "quote_age_seconds", 0) or 0)
+                    * 1000.0
+                    if getattr(context.account, "quote_age_seconds", None) is not None
+                    else None
+                ),
+                requested_price=(
+                    float(context.account.mid_price)
+                    if getattr(context.account, "mid_price", None) is not None
+                    else None
+                ),
+            )
+        except Exception:
+            logger.exception("phase_b_execution_observe_failed")
 
         entry = self._record(
             decision=decision,
