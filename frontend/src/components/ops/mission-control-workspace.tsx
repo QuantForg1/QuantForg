@@ -373,8 +373,48 @@ export function MissionControlWorkspace() {
               <Stat label="Mode" value={str(executive.data.execution_mode, "—")} />
               <Stat
                 label="Kill switch"
-                value={executive.data.kill_switch ? "ARMED" : "clear"}
-                tone={executive.data.kill_switch ? "danger" : "ok"}
+                value={str(
+                  executive.data.kill_switch_state,
+                  executive.data.kill_switch ? "HALT_ALL_TRADING" : "ACTIVE",
+                )}
+                tone={
+                  str(executive.data.kill_switch_state, "ACTIVE") !== "ACTIVE" ||
+                  executive.data.kill_switch
+                    ? "danger"
+                    : "ok"
+                }
+              />
+              <Stat
+                label="Burst latch"
+                value={
+                  asRecord(asRecord(executive.data.phase_a).burst_latch).latched
+                    ? "LATCHED"
+                    : asRecord(executive.data.phase_a).burst_latch
+                      ? "clear"
+                      : "—"
+                }
+                tone={
+                  asRecord(asRecord(executive.data.phase_a).burst_latch).latched
+                    ? "danger"
+                    : "ok"
+                }
+              />
+              <Stat
+                label="Recon"
+                value={
+                  asRecord(asRecord(executive.data.phase_a).reconciliation)
+                    .blocking
+                    ? "REQUIRED"
+                    : asRecord(executive.data.phase_a).reconciliation
+                      ? "clear"
+                      : "—"
+                }
+                tone={
+                  asRecord(asRecord(executive.data.phase_a).reconciliation)
+                    .blocking
+                    ? "danger"
+                    : "ok"
+                }
               />
               <Stat label="Gateway" value={gatewayDisplay} />
               <Stat label="MT5" value={mt5Display} />
@@ -382,6 +422,13 @@ export function MissionControlWorkspace() {
                 label="OMS"
                 value={executive.data.oms_orders_allowed ? "allowed" : "blocked"}
                 tone={executive.data.oms_orders_allowed ? "ok" : "danger"}
+              />
+              <Stat
+                label="Data quality"
+                value={str(
+                  asRecord(asRecord(executive.data.phase_a).market_data).state,
+                  "—",
+                )}
               />
             </div>
           )}

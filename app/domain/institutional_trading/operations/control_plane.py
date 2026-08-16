@@ -159,6 +159,18 @@ class OperationsControlPlane:
         with self._lock:
             old = self.kill_switch_armed
             self.kill_switch_armed = True
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+            from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+            get_phase_a_plane().set_halt(
+                HaltMode.HALT_ALL_TRADING,
+                actor=operator.display_name or operator.user_id,
+                reason=reason,
+            )
+            get_phase_a_plane().sync_legacy_kill_flag(self)
+        except Exception:
+            pass
         self.audit.record(
             operator=operator,
             action="kill_switch_arm",
@@ -191,6 +203,18 @@ class OperationsControlPlane:
         with self._lock:
             old = self.kill_switch_armed
             self.kill_switch_armed = False
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+            from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+            get_phase_a_plane().set_halt(
+                HaltMode.ACTIVE,
+                actor=operator.display_name or operator.user_id,
+                reason=reason,
+            )
+            get_phase_a_plane().sync_legacy_kill_flag(self)
+        except Exception:
+            pass
         self.audit.record(
             operator=operator,
             action="kill_switch_disarm",
@@ -200,17 +224,69 @@ class OperationsControlPlane:
             now=now,
         )
 
+    def set_halt_mode(
+        self,
+        operator: OperatorIdentity,
+        *,
+        mode: str,
+        reason: str,
+        confirmed: bool = True,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Phase A durable halt: ACTIVE | HALT_NEW_ENTRIES | HALT_ALL_TRADING."""
+        from app.domain.institutional_trading.phase_a import get_phase_a_plane
+        from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+        target = HaltMode(str(mode).strip().upper())
+        if target is HaltMode.ACTIVE:
+            self.require(operator, OpsPermission.DISABLE_KILL_SWITCH)
+        else:
+            self.require(operator, OpsPermission.CHANGE_MODE)
+        if not confirmed:
+            raise ValueError("operator confirmation required")
+        transition = get_phase_a_plane().set_halt(
+            target,
+            actor=operator.display_name or operator.user_id,
+            reason=reason,
+        )
+        get_phase_a_plane().sync_legacy_kill_flag(self)
+        self.audit.record(
+            operator=operator,
+            action="phase_a_halt_mode",
+            old_value=str(transition.get("previous_state")),
+            new_value=str(transition.get("new_state")),
+            reason=reason,
+            now=now,
+        )
+        return transition
+
     def oms_orders_allowed(self) -> bool:
         """Decision/research/sim continue.
 
-        OMS receives zero when kill armed or SHADOW.
+        OMS receives zero when kill armed, Phase A halt, or SHADOW.
         """
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+            if not get_phase_a_plane().halt.oms_market_submit_allowed():
+                return False
+        except Exception:
+            pass
         with self._lock:
             if self.kill_switch_armed:
                 return False
             return self.mode is not OpsExecutionMode.SHADOW
 
     def pme_modifications_allowed(self) -> bool:
+        # Phase A halt modes keep PME safety / reconciliation alive.
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+            from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+            if get_phase_a_plane().halt.mode is not HaltMode.ACTIVE:
+                return bool(get_phase_a_plane().halt.pme_safety_allowed())
+        except Exception:
+            pass
         with self._lock:
             return not self.kill_switch_armed
 
@@ -788,6 +864,17 @@ class OperationsControlPlane:
     def control_center(self) -> dict[str, Any]:
         active = self.configs.active()
         health = self.health.latest()
+        phase_a_snap: dict[str, Any] | None = None
+        kill_switch_state = "ACTIVE"
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+            phase_a_snap = get_phase_a_plane().snapshot()
+            kill_switch_state = str(
+                (phase_a_snap.get("kill_switch") or {}).get("state") or "ACTIVE"
+            )
+        except Exception:
+            phase_a_snap = None
         with self._lock:
             return {
                 "system_status": (
@@ -805,8 +892,11 @@ class OperationsControlPlane:
                 ),
                 "execution_mode": self.mode.value,
                 "mode": self.mode.value,
-                "kill_switch": self.kill_switch_armed,
+                "kill_switch": self.kill_switch_armed
+                or kill_switch_state != "ACTIVE",
                 "kill_switch_armed": self.kill_switch_armed,
+                "kill_switch_state": kill_switch_state,
+                "phase_a": phase_a_snap,
                 "shadow_mode": self.mode is OpsExecutionMode.SHADOW,
                 "canary_mode": self.mode is OpsExecutionMode.CANARY,
                 "live_mode": self.mode is OpsExecutionMode.LIVE,
@@ -821,7 +911,9 @@ class OperationsControlPlane:
                     "enabled": self.auto_trading_enabled,
                     "status": (
                         "armed"
-                        if self.auto_trading_enabled and not self.kill_switch_armed
+                        if self.auto_trading_enabled
+                        and not self.kill_switch_armed
+                        and kill_switch_state == "ACTIVE"
                         else "off"
                     ),
                     "policy": {
@@ -932,6 +1024,20 @@ def get_control_plane() -> OperationsControlPlane:
             raw_mode = str(state.get("ops_mode") or "").strip().upper()
             if raw_mode in {m.value for m in OpsExecutionMode}:
                 plane.mode = OpsExecutionMode(raw_mode)
+            # Phase A durable kill / ambiguity — restore before auto-resume
+            try:
+                from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+                pa = get_phase_a_plane(refresh_config=True)
+                pa.hydrate(state)
+                pa.sync_legacy_kill_flag(plane)
+            except Exception as phase_a_exc:
+                from core.logging import get_logger as _get_logger
+
+                _get_logger(__name__).warning(
+                    "phase_a_hydrate_failed",
+                    error=str(phase_a_exc),
+                )
             if "auto_trading_enabled" in state:
                 plane.auto_trading_enabled = bool(state.get("auto_trading_enabled"))
             raw_run = state.get("auto_trading_run_state")
@@ -1049,4 +1155,12 @@ def reset_control_plane_for_tests() -> OperationsControlPlane:
     global _GLOBAL_PLANE
     _GLOBAL_PLANE = OperationsControlPlane()
     _ensure_multi_symbol_allowlist(_GLOBAL_PLANE)
+    try:
+        from app.domain.institutional_trading.phase_a import (
+            reset_phase_a_plane_for_tests,
+        )
+
+        reset_phase_a_plane_for_tests()
+    except Exception:
+        pass
     return _GLOBAL_PLANE

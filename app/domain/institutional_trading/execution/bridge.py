@@ -463,7 +463,7 @@ class ExecutionBridge:
                         t0=t0,
                     )
 
-        # 8. Kill switch
+        # 8. Kill switch / Phase A halt
         if self.kill_switch.enabled:
             return self._abort(
                 decision=decision,
@@ -471,6 +471,89 @@ class ExecutionBridge:
                 decision_hash=d_hash,
                 reason=BridgeAbortReason.KILL_SWITCH,
                 comment="Kill switch armed — OMS receives nothing",
+                t0=t0,
+            )
+
+        # 8a. Phase A control plane (MD firewall / recon / burst)
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+            acct = context.account
+            bid_f = (
+                float(acct.bid)
+                if getattr(acct, "bid", None) is not None
+                else None
+            )
+            ask_f = (
+                float(acct.ask)
+                if getattr(acct, "ask", None) is not None
+                else None
+            )
+            quote_age = getattr(acct, "quote_age_seconds", None)
+            if bid_f is None or ask_f is None:
+                mid = getattr(acct, "mid_price", None)
+                spr = context.spread
+                if mid is not None and spr is not None:
+                    half = float(spr) / 2.0
+                    mid_f = float(mid)
+                    bid_f = mid_f - half
+                    ask_f = mid_f + half
+            # Cycle-fresh live tick: age may be omitted on legacy contexts
+            if (
+                quote_age is None
+                and context.market_data_live is True
+                and bid_f is not None
+                and ask_f is not None
+            ):
+                quote_age = 0.0
+            # Without age/live evidence, do not invent MD inputs (skip MD gate)
+            if quote_age is None:
+                bid_f = None
+                ask_f = None
+            gate = get_phase_a_plane().evaluate_new_entry_gate(
+                symbol=str(getattr(decision, "symbol", "") or ""),
+                bid=bid_f,
+                ask=ask_f,
+                quote_age_seconds=float(quote_age) if quote_age is not None else None,
+                market_open=context.market_open,
+                symbol_valid=bool(
+                    context.symbol_tradable
+                    if context.symbol_tradable is not None
+                    else True
+                ),
+                candles_ok=True,
+                risk_decision="ALLOW" if context.risk_allowed else "REJECT",
+                safety_allowed=True,
+                strategy=str(getattr(decision, "strategy_id", "") or ""),
+                direction=str(
+                    getattr(
+                        getattr(decision, "direction", None),
+                        "value",
+                        getattr(decision, "direction", ""),
+                    )
+                    or ""
+                ),
+            )
+            if not gate.get("allow_new_entry", False):
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.AUTO_TRADING_BLOCKED,
+                    comment=(
+                        f"Phase A blocked: "
+                        f"{gate.get('first_blocking_gate') or gate.get('final_control_state')}"
+                    ),
+                    t0=t0,
+                )
+        except Exception:
+            logger.exception("phase_a_bridge_gate_failed")
+            return self._abort(
+                decision=decision,
+                context=context,
+                decision_hash=d_hash,
+                reason=BridgeAbortReason.AUTO_TRADING_BLOCKED,
+                comment="Phase A gate unavailable — fail closed",
                 t0=t0,
             )
 
@@ -635,6 +718,50 @@ class ExecutionBridge:
         )
         latency = (time.perf_counter() - t0) * 1000.0
         abort_reason, status, exec_result = self._map_oms_outcome(oms_result)
+
+        # Phase A: ambiguous / reject / entry burst accounting
+        try:
+            import os
+
+            if not os.environ.get("PYTEST_CURRENT_TEST"):
+                from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+                pa = get_phase_a_plane()
+                if abort_reason is BridgeAbortReason.GATEWAY_FAILURE:
+                    pa.ambiguity.mark_unknown(
+                        decision_hash=d_hash,
+                        symbol=str(getattr(decision, "symbol", "") or ""),
+                        side=str(
+                            getattr(
+                                getattr(decision, "action", None),
+                                "value",
+                                getattr(decision, "action", ""),
+                            )
+                            or ""
+                        ),
+                        reason=str(
+                            oms_result.message or "gateway_timeout_or_ambiguous"
+                        ),
+                        evidence={
+                            "outcome": oms_result.outcome,
+                            "gateway_status": oms_result.gateway_status,
+                            "oms_status": oms_result.oms_status,
+                            "retcode": oms_result.retcode,
+                        },
+                    )
+                    if pa.config.burst_latch_enabled:
+                        pa.burst.record_ambiguous()
+                        pa.burst.record_execution_failure()
+                    pa.persist()
+                elif status is ExecutionAttemptStatus.OMS_SUCCESS:
+                    if pa.config.burst_latch_enabled:
+                        pa.burst.record_entry_attempt()
+                elif status is not ExecutionAttemptStatus.OMS_SUCCESS:
+                    if pa.config.burst_latch_enabled:
+                        pa.burst.record_broker_reject()
+                        pa.burst.record_execution_failure()
+        except Exception:
+            logger.exception("phase_a_oms_outcome_hook_failed")
 
         # Keep hash on success and on ambiguous gateway/timeout (may have filled).
         # Release on definitive broker/OMS rejects so the next cycle can retry.

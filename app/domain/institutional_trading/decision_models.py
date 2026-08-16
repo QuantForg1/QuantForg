@@ -161,6 +161,10 @@ class AccountRiskState:
     used_margin: Decimal | None = None
     floating_pnl: Decimal | None = None
     leverage: Decimal | None = None
+    # Phase A market-data firewall inputs (optional; fail-closed when absent)
+    bid: Decimal | None = None
+    ask: Decimal | None = None
+    quote_age_seconds: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -188,4 +192,7 @@ class AccountRiskState:
                 str(self.floating_pnl) if self.floating_pnl is not None else None
             ),
             "leverage": str(self.leverage) if self.leverage is not None else None,
+            "bid": str(self.bid) if self.bid is not None else None,
+            "ask": str(self.ask) if self.ask is not None else None,
+            "quote_age_seconds": self.quote_age_seconds,
         }

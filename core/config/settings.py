@@ -478,6 +478,151 @@ class Settings(BaseSettings):
         ),
     ] = False
 
+    # -- Phase A institutional safety hardening (rollback = set False) -------
+    phase_a_kill_persistence_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Phase A: restore durable kill/halt from ops state on restart. "
+                "When false, in-memory kill remains; persisted state is retained."
+            ),
+            validation_alias=AliasChoices(
+                "PHASE_A_KILL_PERSISTENCE_ENABLED",
+                "phase_a_kill_persistence_enabled",
+            ),
+        ),
+    ] = True
+    phase_a_recon_gate_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Phase A: block NEW entries while UNKNOWN/RECONCILIATION_REQUIRED "
+                "orders remain unresolved."
+            ),
+            validation_alias=AliasChoices(
+                "PHASE_A_RECON_GATE_ENABLED",
+                "phase_a_recon_gate_enabled",
+            ),
+        ),
+    ] = True
+    phase_a_md_firewall_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Phase A: enforce LIVE market-data freshness before new entries."
+            ),
+            validation_alias=AliasChoices(
+                "PHASE_A_MD_FIREWALL_ENABLED",
+                "phase_a_md_firewall_enabled",
+            ),
+        ),
+    ] = True
+    phase_a_burst_latch_enabled: Annotated[
+        bool,
+        Field(
+            description=(
+                "Phase A: per-minute / reject-burst latch for new entries."
+            ),
+            validation_alias=AliasChoices(
+                "PHASE_A_BURST_LATCH_ENABLED",
+                "phase_a_burst_latch_enabled",
+            ),
+        ),
+    ] = True
+    phase_a_control_vocab_enabled: Annotated[
+        bool,
+        Field(
+            description="Phase A: ALLOW/REDUCE/BLOCK/HALT mapping layer.",
+            validation_alias=AliasChoices(
+                "PHASE_A_CONTROL_VOCAB_ENABLED",
+                "phase_a_control_vocab_enabled",
+            ),
+        ),
+    ] = True
+    phase_a_decision_journal_enabled: Annotated[
+        bool,
+        Field(
+            description="Phase A: decision audit journal for entry candidates.",
+            validation_alias=AliasChoices(
+                "PHASE_A_DECISION_JOURNAL_ENABLED",
+                "phase_a_decision_journal_enabled",
+            ),
+        ),
+    ] = True
+    phase_a_max_tick_age_seconds: Annotated[
+        float,
+        Field(
+            description=(
+                "Phase A max quote age (seconds). Default matches "
+                "StrategyRuntimeConfig.max_tick_age_seconds=120."
+            ),
+            validation_alias=AliasChoices(
+                "PHASE_A_MAX_TICK_AGE_SECONDS",
+                "phase_a_max_tick_age_seconds",
+            ),
+        ),
+    ] = 120.0
+    phase_a_degraded_tick_age_seconds: Annotated[
+        float,
+        Field(
+            description="Phase A soft degraded quote age band (seconds).",
+            validation_alias=AliasChoices(
+                "PHASE_A_DEGRADED_TICK_AGE_SECONDS",
+                "phase_a_degraded_tick_age_seconds",
+            ),
+        ),
+    ] = 60.0
+    phase_a_max_entries_per_minute: Annotated[
+        int,
+        Field(
+            description="Phase A entry-burst latch threshold (per 60s).",
+            validation_alias=AliasChoices(
+                "PHASE_A_MAX_ENTRIES_PER_MINUTE",
+                "phase_a_max_entries_per_minute",
+            ),
+        ),
+    ] = 6
+    phase_a_reject_burst_threshold: Annotated[
+        int,
+        Field(
+            description="Phase A broker-reject burst threshold.",
+            validation_alias=AliasChoices(
+                "PHASE_A_REJECT_BURST_THRESHOLD",
+                "phase_a_reject_burst_threshold",
+            ),
+        ),
+    ] = 5
+    phase_a_failure_burst_threshold: Annotated[
+        int,
+        Field(
+            description="Phase A execution-failure burst threshold.",
+            validation_alias=AliasChoices(
+                "PHASE_A_FAILURE_BURST_THRESHOLD",
+                "phase_a_failure_burst_threshold",
+            ),
+        ),
+    ] = 5
+    phase_a_ambiguous_burst_threshold: Annotated[
+        int,
+        Field(
+            description="Phase A ambiguous-order burst threshold.",
+            validation_alias=AliasChoices(
+                "PHASE_A_AMBIGUOUS_BURST_THRESHOLD",
+                "phase_a_ambiguous_burst_threshold",
+            ),
+        ),
+    ] = 3
+    phase_a_burst_cooldown_seconds: Annotated[
+        float,
+        Field(
+            description="Phase A burst-latch cooldown seconds.",
+            validation_alias=AliasChoices(
+                "PHASE_A_BURST_COOLDOWN_SECONDS",
+                "phase_a_burst_cooldown_seconds",
+            ),
+        ),
+    ] = 300.0
+
     # -- Closed beta (server-side invite; never NEXT_PUBLIC) ------------------
     beta_mode: Annotated[
         bool,

@@ -121,6 +121,14 @@ class ContinuousOperationController:
         flash_crash: bool = False,
         network_failure: bool = False,
         mt5_connected: bool = True,
+        symbol: str = "",
+        bid: float | None = None,
+        ask: float | None = None,
+        quote_age_seconds: float | None = None,
+        symbol_valid: bool = True,
+        candles_ok: bool = True,
+        strategy: str = "",
+        direction: str = "",
     ) -> NewEntryPauseDecision:
         """Pause NEW entries only — open positions always continue."""
         reasons: list[str] = []
@@ -149,6 +157,32 @@ class ContinuousOperationController:
         miss = {m.lower() for m in missing_heartbeats}
         if miss & critical:
             reasons.append(f"stale heartbeat:{','.join(sorted(miss & critical))}")
+
+        # Phase A control plane — fail closed for NEW risk on gate errors
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+            gate = get_phase_a_plane().evaluate_new_entry_gate(
+                symbol=symbol,
+                bid=bid,
+                ask=ask,
+                quote_age_seconds=quote_age_seconds,
+                market_open=market_open,
+                symbol_valid=symbol_valid,
+                candles_ok=candles_ok,
+                strategy=strategy,
+                direction=direction,
+            )
+            if not gate.get("allow_new_entry", False):
+                gate_name = str(
+                    gate.get("first_blocking_gate")
+                    or gate.get("final_control_state")
+                    or "UNKNOWN_REASON"
+                )
+                reasons.append(f"phase_a:{gate_name}")
+        except Exception:
+            reasons.append("phase_a:gate_unavailable")
+
         return NewEntryPauseDecision(
             pause_new_entries=bool(reasons),
             reasons=tuple(reasons),

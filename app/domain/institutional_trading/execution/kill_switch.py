@@ -33,6 +33,13 @@ class KillSwitch:
     @property
     def enabled(self) -> bool:
         if self.plane is not None:
+            try:
+                from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+                if not get_phase_a_plane().halt.oms_market_submit_allowed():
+                    return True
+            except Exception:
+                pass
             return bool(self.plane.kill_switch_armed)
         with self._lock:
             return self._local_enabled
@@ -40,16 +47,38 @@ class KillSwitch:
     def arm(self) -> None:
         """Enable kill switch — block all OMS forwards / PME mods."""
         if self.plane is not None:
-            with self.plane._lock:
-                self.plane.kill_switch_armed = True
+            try:
+                from app.domain.institutional_trading.phase_a import get_phase_a_plane
+                from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+                get_phase_a_plane().set_halt(
+                    HaltMode.HALT_ALL_TRADING,
+                    actor="kill_switch.arm",
+                    reason="KillSwitch.arm",
+                )
+                get_phase_a_plane().sync_legacy_kill_flag(self.plane)
+            except Exception:
+                with self.plane._lock:
+                    self.plane.kill_switch_armed = True
             return
         with self._lock:
             self._local_enabled = True
 
     def disarm(self) -> None:
         if self.plane is not None:
-            with self.plane._lock:
-                self.plane.kill_switch_armed = False
+            try:
+                from app.domain.institutional_trading.phase_a import get_phase_a_plane
+                from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+
+                get_phase_a_plane().set_halt(
+                    HaltMode.ACTIVE,
+                    actor="kill_switch.disarm",
+                    reason="KillSwitch.disarm",
+                )
+                get_phase_a_plane().sync_legacy_kill_flag(self.plane)
+            except Exception:
+                with self.plane._lock:
+                    self.plane.kill_switch_armed = False
             return
         with self._lock:
             self._local_enabled = False

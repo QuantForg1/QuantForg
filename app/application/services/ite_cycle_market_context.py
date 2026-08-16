@@ -334,6 +334,9 @@ async def build_ite_cycle_market_context(
 
     spread: Decimal | None = None
     market_data_live = False
+    quote_bid: Decimal | None = None
+    quote_ask: Decimal | None = None
+    quote_age_seconds: float | None = None
     try:
         tick = await _offload_sync(mt5_adapter.latest_tick, symbol)
         if tick is not None:
@@ -349,9 +352,21 @@ async def build_ite_cycle_market_context(
                 if ts is not None and hasattr(ts, "isoformat")
                 else str(ts or "")
             )
+            if ts is not None and hasattr(ts, "tzinfo"):
+                try:
+                    from datetime import UTC as _UTC
+
+                    moment = datetime.now(_UTC)
+                    qt = ts if ts.tzinfo is not None else ts.replace(tzinfo=_UTC)
+                    quote_age_seconds = max(0.0, (moment - qt).total_seconds())
+                    diag["quote_age_seconds"] = quote_age_seconds
+                except Exception:
+                    quote_age_seconds = None
             if ask > 0 and bid > 0:
                 spread = ask - bid
                 market_data_live = True
+                quote_bid = bid
+                quote_ask = ask
                 diag["ticks"] = "LIVE"
                 diag["spread"] = str(spread)
             else:
@@ -662,6 +677,9 @@ async def build_ite_cycle_market_context(
             if diag.get("leverage") not in (None, 0, "0")
             else None
         ),
+        bid=quote_bid,
+        ask=quote_ask,
+        quote_age_seconds=quote_age_seconds,
     )
 
     # Sizing diagnostics (observational) — live broker volume_min/step when available.

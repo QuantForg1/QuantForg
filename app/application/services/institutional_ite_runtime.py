@@ -1716,6 +1716,35 @@ class InstitutionalIteRuntime:
                         gateway_available=bool(gateway_connected),
                         market_open=market_open,
                         portfolio_risk_exceeded=portfolio_risk_exceeded,
+                        symbol=str(
+                            getattr(decision, "symbol", "")
+                            or getattr(snapshot, "symbol", "")
+                            or ""
+                        ),
+                        bid=(
+                            float(account.bid)
+                            if getattr(account, "bid", None) is not None
+                            else None
+                        ),
+                        ask=(
+                            float(account.ask)
+                            if getattr(account, "ask", None) is not None
+                            else None
+                        ),
+                        quote_age_seconds=getattr(account, "quote_age_seconds", None),
+                        strategy=str(
+                            getattr(decision, "strategy_id", "")
+                            or getattr(decision, "strategy", "")
+                            or ""
+                        ),
+                        direction=str(
+                            getattr(
+                                getattr(decision, "direction", None),
+                                "value",
+                                decision.direction,
+                            )
+                            or ""
+                        ),
                     ).to_dict()
                 if pause.get("pause_new_entries") and decision.action in {
                     _DA.BUY,

@@ -468,7 +468,13 @@ def arm_kill(
             status_code=403 if isinstance(exc, PermissionDenied) else 400,
             detail=str(exc),
         ) from exc
-    return {"kill_switch": True}
+    try:
+        from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+        snap = get_phase_a_plane().halt.snapshot()
+    except Exception:
+        snap = {"state": "HALT_ALL_TRADING"}
+    return {"kill_switch": True, "kill_switch_state": snap.get("state"), "phase_a_halt": snap}
 
 
 @router.post("/kill-switch/disarm")
@@ -487,7 +493,32 @@ def disarm_kill(
             status_code=403 if isinstance(exc, PermissionDenied) else 400,
             detail=str(exc),
         ) from exc
-    return {"kill_switch": False}
+    return {"kill_switch": False, "kill_switch_state": "ACTIVE"}
+
+
+class HaltModeBody(ConfirmBody):
+    mode: str = "HALT_NEW_ENTRIES"
+
+
+@router.post("/kill-switch/halt-mode")
+def set_halt_mode(
+    body: HaltModeBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    plane = get_control_plane()
+    op = _operator(user, request, x_forwarded_for)
+    try:
+        transition = plane.set_halt_mode(
+            op, mode=body.mode, reason=body.reason, confirmed=body.confirmed
+        )
+    except (PermissionDenied, ValueError) as exc:
+        raise HTTPException(
+            status_code=403 if isinstance(exc, PermissionDenied) else 400,
+            detail=str(exc),
+        ) from exc
+    return {"ok": True, "transition": transition}
 
 
 @router.post("/config/promote")

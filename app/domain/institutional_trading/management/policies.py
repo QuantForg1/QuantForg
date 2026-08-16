@@ -117,12 +117,22 @@ def plan_action(
             target_state=PositionLifecycleState.EXITED,
         )
     if context.kill_switch_armed:
-        return PlannedAction(
-            ManageActionKind.DAILY_SHUTDOWN,
-            "Kill switch armed — flatten",
-            volume=position.remaining_volume,
-            target_state=PositionLifecycleState.EXITED,
-        )
+        # Phase A durable halt: manage positions; do not auto-flatten solely
+        # because halt mode is armed (fail-safe for orphaned risk via PME).
+        suppress_flatten = False
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+            suppress_flatten = bool(get_phase_a_plane().halt.suppress_auto_flatten())
+        except Exception:
+            suppress_flatten = False
+        if not suppress_flatten:
+            return PlannedAction(
+                ManageActionKind.DAILY_SHUTDOWN,
+                "Kill switch armed — flatten",
+                volume=position.remaining_volume,
+                target_state=PositionLifecycleState.EXITED,
+            )
     if context.news_requests_exit:
         return PlannedAction(
             ManageActionKind.DAILY_SHUTDOWN,

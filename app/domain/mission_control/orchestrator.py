@@ -167,6 +167,8 @@ class MissionControlCenter:
                     "system_status": cc.get("system_status"),
                     "execution_mode": cc.get("execution_mode"),
                     "kill_switch": cc.get("kill_switch"),
+                    "kill_switch_state": cc.get("kill_switch_state"),
+                    "phase_a": cc.get("phase_a"),
                     "gateway_status": cc.get("gateway_status"),
                     "mt5_status": cc.get("mt5_status"),
                     "oms_orders_allowed": cc.get("oms_orders_allowed"),
