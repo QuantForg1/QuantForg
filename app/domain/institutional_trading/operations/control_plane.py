@@ -889,6 +889,13 @@ class OperationsControlPlane:
             phase_c_snap = get_phase_c_plane().snapshot()
         except Exception:
             phase_c_snap = None
+        phase_d_snap: dict[str, Any] | None = None
+        try:
+            from app.domain.institutional_trading.phase_d import get_phase_d_plane
+
+            phase_d_snap = get_phase_d_plane().snapshot()
+        except Exception:
+            phase_d_snap = None
         with self._lock:
             return {
                 "system_status": (
@@ -913,6 +920,7 @@ class OperationsControlPlane:
                 "phase_a": phase_a_snap,
                 "phase_b": phase_b_snap,
                 "phase_c": phase_c_snap,
+                "phase_d": phase_d_snap,
                 "shadow_mode": self.mode is OpsExecutionMode.SHADOW,
                 "canary_mode": self.mode is OpsExecutionMode.CANARY,
                 "live_mode": self.mode is OpsExecutionMode.LIVE,
@@ -1193,6 +1201,11 @@ def reset_control_plane_for_tests() -> OperationsControlPlane:
         )
 
         reset_phase_c_plane_for_tests()
+        from app.domain.institutional_trading.phase_d import (
+            reset_phase_d_plane_for_tests,
+        )
+
+        reset_phase_d_plane_for_tests()
     except Exception:
         pass
     return _GLOBAL_PLANE

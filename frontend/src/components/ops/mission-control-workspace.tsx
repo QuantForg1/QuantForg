@@ -733,6 +733,90 @@ export function MissionControlWorkspace() {
           })()}
         </Panel>
 
+        <Panel
+          title="Phase D — Alpha Governance"
+          status={
+            asRecord(executive?.data).phase_d
+              ? "available"
+              : executive?.status === "available"
+                ? "empty"
+                : executive?.status
+          }
+        >
+          {(() => {
+            const phaseD = asRecord(asRecord(executive?.data).phase_d);
+            if (!asRecord(executive?.data).phase_d) {
+              return (
+                <FeedEmpty
+                  title="No Phase D feed"
+                  description="Alpha governance plane not yet populated — live trading unaffected"
+                />
+              );
+            }
+            const candidates = asRecord(phaseD.candidates);
+            const canary = asRecord(phaseD.canary);
+            const gates = asRecord(phaseD.gates);
+            const sample = asRecord(phaseD.sample);
+            const approvals = asRecord(phaseD.approvals);
+            const rollback = asRecord(phaseD.rollback);
+            const canaryRows = asList(canary.records);
+            const latestCanary = asRecord(canaryRows[canaryRows.length - 1]);
+            return (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat label="Mode" value={str(phaseD.mode, "EVIDENCE_GATED")} />
+                  <Stat
+                    label="Candidate exec"
+                    value={
+                      phaseD.candidate_execution_authority === true ? "TRUE" : "FALSE"
+                    }
+                    tone={
+                      phaseD.candidate_execution_authority === true ? "danger" : "ok"
+                    }
+                  />
+                  <Stat
+                    label="Auto promote"
+                    value={phaseD.auto_promote_to_live === true ? "TRUE" : "FALSE"}
+                    tone={phaseD.auto_promote_to_live === true ? "danger" : "ok"}
+                  />
+                  <Stat label="Champion" value={str(asRecord(phaseD.champion).version, "—")} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat label="Candidates" value={str(candidates.count, "0")} />
+                  <Stat label="Promotable" value={str(candidates.promotable, "0")} />
+                  <Stat label="Gate result" value={str(gates.result, "—")} />
+                  <Stat label="Sample" value={str(sample.state, "—")} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat label="Canary state" value={str(latestCanary.state, "—")} />
+                  <Stat label="Approvals" value={str(approvals.count, "0")} />
+                  <Stat label="Rollback" value={str(rollback.action, "—")} />
+                  <Stat
+                    label="Why blocked"
+                    value={str(
+                      gates.why_blocked,
+                      str(latestCanary.why_blocked, "—"),
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+                  <Stat
+                    label="Why promoted"
+                    value={str(latestCanary.why_promoted, "—")}
+                  />
+                  <Stat
+                    label="Why rolled back"
+                    value={str(
+                      latestCanary.why_rolled_back,
+                      str(rollback.why_rolled_back, "—"),
+                    )}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+        </Panel>
+
         <Panel title="Capital Overview" status={capital?.status}>
           {!capital || capital.status !== "available" ? (
             <FeedEmpty
