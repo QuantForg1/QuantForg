@@ -18,22 +18,30 @@ import {
 import {
   autoTradingSurfaceCopy,
   classifyOpsFailure,
+  OPS_SLOW_MS,
   resolveAutoTradingSurface,
   resolveApiPhase,
   resolveTradingInfraState,
 } from "../ops/auto-trading-surface";
+import {
+  readOpsTelemetry,
+  rememberOpsTelemetry,
+  resetOpsTelemetryLastGood,
+} from "../ops/ops-telemetry-cache";
 
 function surface(partial: {
   authPhase?: Parameters<typeof resolveAutoTradingSurface>[0]["authPhase"];
   opsQuery?: Parameters<typeof resolveAutoTradingSurface>[0]["opsQuery"];
   hasOpsData?: boolean;
   tradingInfra?: Parameters<typeof resolveAutoTradingSurface>[0]["tradingInfra"];
+  opsWaitMs?: number;
 }) {
   return resolveAutoTradingSurface({
     authPhase: partial.authPhase ?? "AUTH_READY",
     opsQuery: partial.opsQuery ?? "success",
     hasOpsData: partial.hasOpsData ?? true,
     tradingInfra: partial.tradingInfra ?? "TRADING_HEALTHY",
+    opsWaitMs: partial.opsWaitMs,
   });
 }
 
@@ -85,8 +93,9 @@ function surface(partial: {
     opsQuery: "loading",
     hasOpsData: false,
   });
-  assert.equal(s.surface, "LOADING");
+  assert.equal(s.surface, "LOADING_OPS");
   assert.equal(s.reportMt5Disconnected, false);
+  assert.doesNotMatch(autoTradingSurfaceCopy(s).detail, /Waiting for authenticated ops data/);
 }
 
 // 4. API timeout
@@ -202,5 +211,54 @@ assert.ok(sessionBootBudgetMs() > API_AUTH_TIMEOUT_MS);
 assert.equal(classifyOpsFailure({ code: "timeout", status: 408 }), "timeout");
 assert.equal(classifyOpsFailure({ status: 401 }), "unauthorized");
 assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "forbidden");
+
+// Authenticated session ready → LOADING_OPS, never the old auth-wait copy
+{
+  const s = surface({
+    authPhase: "AUTH_READY",
+    opsQuery: "loading",
+    hasOpsData: false,
+    tradingInfra: "TRADING_HEALTHY",
+  });
+  assert.equal(s.surface, "LOADING_OPS");
+  assert.match(autoTradingSurfaceCopy(s).detail, /healthy/i);
+  assert.doesNotMatch(autoTradingSurfaceCopy(s).detail, /Waiting for authenticated ops data/);
+}
+
+// API slow but healthy infra → DEGRADED, not Gateway disconnected
+{
+  const s = surface({
+    authPhase: "AUTH_READY",
+    opsQuery: "loading",
+    hasOpsData: false,
+    tradingInfra: "TRADING_HEALTHY",
+    opsWaitMs: OPS_SLOW_MS,
+  });
+  assert.equal(s.surface, "DEGRADED");
+  assert.equal(s.tradingInfra, "TRADING_HEALTHY");
+  assert.equal(s.reportGatewayDisconnected, false);
+}
+
+// Last-known-good ops telemetry is bounded and not fabricated
+{
+  resetOpsTelemetryLastGood();
+  rememberOpsTelemetry({ status: "enabled", execution_enabled: true }, 1_000);
+  const hit = readOpsTelemetry(1_000 + 30_000);
+  assert.equal(hit?.payload.status, "enabled");
+  assert.equal(hit?.stale, true);
+  assert.equal(readOpsTelemetry(1_000 + 6 * 60_000), null);
+  resetOpsTelemetryLastGood();
+}
+
+// In-flight ops with last-known-good stays READY (not a full-page wait)
+{
+  const s = surface({
+    authPhase: "AUTH_READY",
+    opsQuery: "loading",
+    hasOpsData: true,
+    tradingInfra: "TRADING_HEALTHY",
+  });
+  assert.equal(s.surface, "READY");
+}
 
 console.log("bootstrap.test.ts: ok");

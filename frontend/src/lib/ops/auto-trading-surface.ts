@@ -1,18 +1,20 @@
 /**
  * Auto Trading page surface — never collapse auth/API waits into "trading down".
  *
- * LOADING → AUTHENTICATING → READY → DEGRADED → UNAVAILABLE / AUTH_REQUIRED
+ * AUTHENTICATING → LOADING_OPS → READY → DEGRADED → AUTH_REQUIRED /
+ * API_UNREACHABLE / UNAVAILABLE
  */
 
 import type { AuthPhase } from "../auth/bootstrap";
 
 export type AutoTradingSurface =
-  | "LOADING"
   | "AUTHENTICATING"
+  | "LOADING_OPS"
   | "READY"
   | "DEGRADED"
   | "UNAVAILABLE"
-  | "AUTH_REQUIRED";
+  | "AUTH_REQUIRED"
+  | "API_UNREACHABLE";
 
 export type ApiPhase =
   | "API_LOADING"
@@ -30,6 +32,9 @@ export type OpsQueryKind =
   | "unauthorized"
   | "forbidden"
   | "error";
+
+/** After this wait, slow ops with healthy infra is DEGRADED — not a full-page auth wait. */
+export const OPS_SLOW_MS = 8_000;
 
 export function classifyOpsFailure(error: {
   status?: number;
@@ -78,7 +83,6 @@ export type AutoTradingSurfaceResult = {
   apiPhase: ApiPhase;
   tradingInfra: TradingInfraState;
   blockNewEntries: boolean;
-  /** Timeouts / auth must never set these. */
   reportGatewayDisconnected: boolean;
   reportMt5Disconnected: boolean;
   reportBrokerDisconnected: boolean;
@@ -95,12 +99,14 @@ export function resolveAutoTradingSurface(input: {
   opsQuery: OpsQueryKind;
   hasOpsData: boolean;
   tradingInfra: TradingInfraState;
+  opsWaitMs?: number;
 }): AutoTradingSurfaceResult {
   const apiPhase = resolveApiPhase({
     opsQuery: input.opsQuery,
     infra: input.tradingInfra,
   });
   const tradingInfra = input.tradingInfra;
+  const waited = input.opsWaitMs ?? 0;
 
   if (input.authPhase === "AUTH_LOADING") {
     return {
@@ -115,16 +121,6 @@ export function resolveAutoTradingSurface(input: {
   if (input.authPhase === "AUTH_REQUIRED" || input.opsQuery === "unauthorized") {
     return {
       surface: "AUTH_REQUIRED",
-      apiPhase,
-      tradingInfra,
-      blockNewEntries: true,
-      ...noDisconnects,
-    };
-  }
-
-  if (input.opsQuery === "idle" || input.opsQuery === "loading") {
-    return {
-      surface: "LOADING",
       apiPhase,
       tradingInfra,
       blockNewEntries: true,
@@ -153,11 +149,47 @@ export function resolveAutoTradingSurface(input: {
     };
   }
 
-  // Timeout / error: infra from trading-components stays independent.
-  // A frontend timeout is never Gateway/MT5/Broker disconnected.
   if (input.opsQuery === "timeout" || input.opsQuery === "error") {
+    if (input.opsQuery === "error" && tradingInfra === "UNKNOWN" && !input.hasOpsData) {
+      return {
+        surface: "API_UNREACHABLE",
+        apiPhase: "API_UNREACHABLE",
+        tradingInfra,
+        blockNewEntries: true,
+        ...noDisconnects,
+      };
+    }
     return {
       surface: "DEGRADED",
+      apiPhase,
+      tradingInfra,
+      blockNewEntries: true,
+      ...noDisconnects,
+    };
+  }
+
+  // In-flight ops: keep last-known-good on screen. Never call this "auth wait".
+  if (input.opsQuery === "idle" || input.opsQuery === "loading") {
+    if (input.hasOpsData) {
+      return {
+        surface: tradingInfra === "TRADING_DEGRADED" ? "DEGRADED" : "READY",
+        apiPhase,
+        tradingInfra,
+        blockNewEntries: false,
+        ...noDisconnects,
+      };
+    }
+    if (waited >= OPS_SLOW_MS) {
+      return {
+        surface: "DEGRADED",
+        apiPhase: "API_DEGRADED",
+        tradingInfra,
+        blockNewEntries: true,
+        ...noDisconnects,
+      };
+    }
+    return {
+      surface: "LOADING_OPS",
       apiPhase,
       tradingInfra,
       blockNewEntries: true,
@@ -181,8 +213,14 @@ export function autoTradingSurfaceCopy(result: AutoTradingSurfaceResult): {
   if (result.surface === "AUTHENTICATING") {
     return { title: "Authenticating", detail: "Restoring session before loading Auto Trading." };
   }
-  if (result.surface === "LOADING") {
-    return { title: "Loading Auto Trading", detail: "Waiting for authenticated ops data." };
+  if (result.surface === "LOADING_OPS") {
+    return {
+      title: "Loading ops telemetry",
+      detail:
+        result.tradingInfra === "TRADING_HEALTHY"
+          ? "Trading infrastructure is healthy. Loading authenticated Auto Trading telemetry."
+          : "Loading authenticated Auto Trading telemetry.",
+    };
   }
   if (result.surface === "AUTH_REQUIRED") {
     return {
@@ -190,18 +228,25 @@ export function autoTradingSurfaceCopy(result: AutoTradingSurfaceResult): {
       detail: "Your session expired. Sign in again. Trading infrastructure is not reported down.",
     };
   }
+  if (result.surface === "API_UNREACHABLE") {
+    return {
+      title: "API unreachable",
+      detail:
+        "The API did not respond. This is not a Gateway, MT5, or broker disconnect unless those planes independently report down.",
+    };
+  }
   if (result.surface === "DEGRADED") {
     if (result.tradingInfra === "TRADING_HEALTHY") {
       return {
         title: "Ops telemetry delayed",
         detail:
-          "Trading infrastructure is healthy. Auto Trading ops did not respond in time — new entries stay blocked until the API recovers.",
+          "Trading infrastructure is healthy. Auto Trading ops is slow or timed out — new entries stay blocked until telemetry recovers.",
       };
     }
     return {
       title: "Auto Trading degraded",
       detail:
-        "The API did not respond in time. This is not a Gateway, MT5, or broker disconnect unless those planes independently report down.",
+        "Ops telemetry is delayed. This is not a Gateway, MT5, or broker disconnect unless those planes independently report down.",
     };
   }
   if (result.surface === "UNAVAILABLE") {

@@ -231,8 +231,6 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
       qc.invalidateQueries({ queryKey: ["weltrade-dashboard"] }),
       qc.invalidateQueries({ queryKey: ["brokers"] }),
       qc.invalidateQueries({ queryKey: ["mt5-account"] }),
-      qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] }),
-      qc.invalidateQueries({ queryKey: ["ite-ops-center"] }),
       qc.invalidateQueries({ queryKey: ["portfolio-positions"] }),
     ]);
   }, [qc]);

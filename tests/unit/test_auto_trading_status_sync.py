@@ -11,6 +11,7 @@ import pytest
 from app.application.services.auto_trading_status import (
     build_auto_trading_status,
     build_status_facts,
+    reset_auto_trading_status_cache,
     resolve_primary_blocker,
 )
 from app.domain.institutional_trading.auto_trading import (
@@ -39,6 +40,7 @@ def _op() -> OperatorIdentity:
 @pytest.mark.unit
 class TestAutoTradingStatusLiveProbes:
     def test_gateway_connected_when_live_probe_up(self) -> None:
+        reset_auto_trading_status_cache()
         plane = OperationsControlPlane()
         probes = ProbeInputs(
             gateway_latency_ms=12.0,
@@ -76,6 +78,7 @@ class TestAutoTradingStatusLiveProbes:
             facts, live = build_status_facts(plane, settings=settings)
             snap = build_auto_trading_status(plane, settings=settings)
 
+        collector.collect.assert_called_with(include_platform_probes=False)
         assert facts.gateway_connected is True
         assert facts.broker_connected is True
         assert facts.market_data_live is True

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -52,6 +52,10 @@ import {
   resolveTradingInfraState,
   type OpsQueryKind,
 } from "@/lib/ops/auto-trading-surface";
+import {
+  readOpsTelemetry,
+  rememberOpsTelemetry,
+} from "@/lib/ops/ops-telemetry-cache";
 import {
   BiasMeter,
   ExecutionPipeline,
@@ -111,18 +115,22 @@ export function AutoTradingWorkspace() {
     queryFn: iteOpsApi.autoTrading,
     enabled: opsEnabled,
     retry: false,
-    staleTime: 10_000,
-    refetchInterval: opsEnabled ? 15_000 : false,
+    staleTime: 20_000,
+    refetchInterval: opsEnabled ? 30_000 : false,
   });
+  if (autoQ.isSuccess && autoQ.data) {
+    rememberOpsTelemetry(autoQ.data);
+  }
+  const opsPayload = autoQ.data ?? readOpsTelemetry()?.payload ?? null;
   const coreSettled = autoQ.isFetched || autoQ.isError;
   const telemetryEnabled = opsEnabled && coreSettled;
   const centerQ = useQuery({
     queryKey: ["ite-ops-center"],
     queryFn: iteOpsApi.controlCenter,
-    enabled: opsEnabled,
+    enabled: telemetryEnabled,
     retry: false,
-    staleTime: 15_000,
-    refetchInterval: opsEnabled ? 20_000 : false,
+    staleTime: 20_000,
+    refetchInterval: telemetryEnabled ? 30_000 : false,
   });
   const signalsQ = useQuery({
     queryKey: ["strategy-signals", "auto-ws"],
@@ -169,18 +177,18 @@ export function AutoTradingWorkspace() {
   const mt5Q = useQuery({
     queryKey: ["mt5-status"],
     queryFn: () => mt5Api.status(),
-    enabled: opsEnabled,
+    enabled: telemetryEnabled,
     retry: false,
     staleTime: 10_000,
-    refetchInterval: opsEnabled ? 15_000 : false,
+    refetchInterval: telemetryEnabled ? 15_000 : false,
   });
   const healthQ = useQuery({
     queryKey: ["weltrade-health"],
     queryFn: () => weltradeApi.health(),
-    enabled: opsEnabled,
+    enabled: telemetryEnabled,
     retry: false,
     staleTime: 15_000,
-    refetchInterval: opsEnabled ? 20_000 : false,
+    refetchInterval: telemetryEnabled ? 20_000 : false,
   });
   const tickQ = useQuery({
     queryKey: ["mt5-tick", TRADING_SYMBOL],
@@ -226,7 +234,7 @@ export function AutoTradingWorkspace() {
     refetchInterval: telemetryEnabled ? 30_000 : false,
   });
 
-  const policy = asRecord(asRecord(autoQ.data).policy);
+  const policy = asRecord(asRecord(opsPayload).policy);
   const runState = ((): RunState => {
     const rs = str(policy.run_state).toLowerCase();
     if (rs === "running" || rs === "paused" || rs === "stopped" || rs === "off") {
@@ -239,65 +247,55 @@ export function AutoTradingWorkspace() {
   const maxOpen = num(policy.max_open_positions, 1);
   const tradingMode = str(policy.trading_mode, "swing").toLowerCase();
   const compoundingEnabled = Boolean(policy.compounding_enabled);
-  const aiScalping = asRecord(asRecord(autoQ.data).ai_scalping);
+  const aiScalping = asRecord(asRecord(opsPayload).ai_scalping);
   const aiScore = asRecord(aiScalping.ai_score);
-  const gateStatus = str(asRecord(autoQ.data).status, "—");
-  const failedReasons = asList(asRecord(autoQ.data).failed_reasons).map(String);
-  const reasonGroups = asRecord(asRecord(autoQ.data).reason_groups);
-  const primaryBlocker = str(asRecord(autoQ.data).primary_blocker, "");
-  const blockingCategory = str(asRecord(autoQ.data).blocking_category, "");
-  const executionState = asRecord(asRecord(autoQ.data).execution_state);
+  const gateStatus = str(asRecord(opsPayload).status, "—");
+  const failedReasons = asList(asRecord(opsPayload).failed_reasons).map(String);
+  const reasonGroups = asRecord(asRecord(opsPayload).reason_groups);
+  const primaryBlocker = str(asRecord(opsPayload).primary_blocker, "");
+  const blockingCategory = str(asRecord(opsPayload).blocking_category, "");
+  const executionState = asRecord(asRecord(opsPayload).execution_state);
   const executionEnabled = Boolean(
-    executionState.execution_enabled ?? asRecord(autoQ.data).execution_enabled,
+    executionState.execution_enabled ?? asRecord(opsPayload).execution_enabled,
   );
   const riskReasons = asList(reasonGroups.risk).map(String);
-  const liveFacts = asRecord(asRecord(autoQ.data).live);
+  const liveFacts = asRecord(asRecord(opsPayload).live);
   const gatewayLive = Boolean(
     executionState.gateway_connected ??
       liveFacts.gateway_connected ??
-      asRecord(asRecord(autoQ.data).facts).gateway_connected,
+      asRecord(asRecord(opsPayload).facts).gateway_connected,
   );
   const brokerLive = Boolean(
     executionState.broker_connected ??
       liveFacts.broker_connected ??
-      asRecord(asRecord(autoQ.data).facts).broker_connected,
+      asRecord(asRecord(opsPayload).facts).broker_connected,
   );
   const killArmed = Boolean(
     executionState.kill_switch_armed ??
       asRecord(centerQ.data).kill_switch_armed ??
-      asRecord(autoQ.data).emergency_stop,
+      asRecord(opsPayload).emergency_stop,
   );
   const opsMode = str(
     executionState.ops_mode ||
-      asRecord(autoQ.data).ops_mode ||
+      asRecord(opsPayload).ops_mode ||
       asRecord(centerQ.data).execution_mode ||
       asRecord(centerQ.data).mode,
     "—",
   );
 
-  // Keep Auto Trading gate in sync with broker session — skip the initial
-  // null → value paint so first load does not duplicate auto-trading.
-  const prevSessionPlanes = useRef<{
-    gateway: boolean | null;
-    connected: boolean;
-  } | null>(null);
+  const [opsWaitMs, setOpsWaitMs] = useState(0);
   useEffect(() => {
-    const next = {
-      gateway: session.gatewayOnline,
-      connected: session.connected,
-    };
-    if (prevSessionPlanes.current == null) {
-      prevSessionPlanes.current = next;
+    if (!opsEnabled || opsPayload || autoQ.isError) {
+      setOpsWaitMs(0);
       return;
     }
-    if (
-      prevSessionPlanes.current.gateway !== next.gateway ||
-      prevSessionPlanes.current.connected !== next.connected
-    ) {
-      prevSessionPlanes.current = next;
-      void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
-    }
-  }, [qc, session.gatewayOnline, session.connected]);
+    const started = Date.now();
+    setOpsWaitMs(0);
+    const id = window.setInterval(() => setOpsWaitMs(Date.now() - started), 500);
+    return () => window.clearInterval(id);
+  }, [opsEnabled, opsPayload, autoQ.isError]);
+
+  // Do not abort in-flight auto-trading when session planes flip on first load.
 
   const positions = useMemo(
     () => asList(asRecord(positionsQ.data).items ?? positionsQ.data).map(asRecord),
@@ -698,12 +696,13 @@ export function AutoTradingWorkspace() {
   const surface = resolveAutoTradingSurface({
     authPhase,
     opsQuery: opsQueryKind,
-    hasOpsData: Boolean(autoQ.data),
+    hasOpsData: Boolean(opsPayload),
     tradingInfra,
+    opsWaitMs,
   });
   const surfaceCopy = autoTradingSurfaceCopy(surface);
 
-  if (surface.surface === "AUTHENTICATING" || surface.surface === "LOADING") {
+  if (surface.surface === "AUTHENTICATING") {
     return (
       <div className="space-y-3">
         <p className="text-sm text-[var(--fg-muted)]">{surfaceCopy.detail}</p>
@@ -731,10 +730,10 @@ export function AutoTradingWorkspace() {
       />
     );
   }
-  if (surface.surface === "DEGRADED" && !autoQ.data) {
+  if (surface.surface === "API_UNREACHABLE") {
     return (
       <div className="space-y-4" role="status">
-        <div className="rounded-[var(--radius-os)] border border-[var(--warning)]/30 bg-[var(--surface)] p-[var(--space-3)]">
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-[var(--space-3)]">
           <p className="text-sm font-medium text-[var(--fg)]">{surfaceCopy.title}</p>
           <p className="mt-1 text-sm text-[var(--fg-muted)]">{surfaceCopy.detail}</p>
           <p className="mt-2 font-mono text-[11px] text-[var(--fg-subtle)]">
@@ -749,7 +748,6 @@ export function AutoTradingWorkspace() {
             variant="secondary"
             onClick={() => {
               void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
-              void qc.invalidateQueries({ queryKey: ["trading-components-health"] });
             }}
           >
             Retry ops
@@ -758,11 +756,44 @@ export function AutoTradingWorkspace() {
       </div>
     );
   }
-  if (!autoQ.data) {
+  if (
+    (surface.surface === "LOADING_OPS" || surface.surface === "DEGRADED") &&
+    !opsPayload
+  ) {
+    return (
+      <div className="space-y-4" role="status">
+        <div className="rounded-[var(--radius-os)] border border-[var(--warning)]/30 bg-[var(--surface)] p-[var(--space-3)]">
+          <p className="text-sm font-medium text-[var(--fg)]">{surfaceCopy.title}</p>
+          <p className="mt-1 text-sm text-[var(--fg-muted)]">{surfaceCopy.detail}</p>
+          <p className="mt-2 font-mono text-[11px] text-[var(--fg-subtle)]">
+            infra={tradingInfra} · gateway=
+            {componentsView?.gateway.status || "UNKNOWN"} · mt5=
+            {componentsView?.mt5.status || "UNKNOWN"} · oms=
+            {componentsView?.oms.status || "UNKNOWN"}
+          </p>
+          {surface.surface === "LOADING_OPS" ? <DeskSkeleton rows={6} /> : null}
+          {surface.surface === "DEGRADED" ? (
+            <Button
+              className="mt-3"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
+                void qc.invalidateQueries({ queryKey: ["trading-components-health"] });
+              }}
+            >
+              Retry ops
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+  if (!opsPayload) {
     return <DeskSkeleton rows={8} />;
   }
 
-  const orch = asRecord(asRecord(autoQ.data).orchestrator);
+  const orch = asRecord(asRecord(opsPayload).orchestrator);
   const last = asRecord(orch.last_cycle);
   const diag = asRecord(last.market_context_diagnostics);
   const decisionReasons = asList(last.decision_reasons).map(String);
@@ -1094,11 +1125,11 @@ export function AutoTradingWorkspace() {
   const pnlToday = todayPl + floating;
   const mt5Connected = mt5HealthOk;
   const gateEnabled = gateStatus.toLowerCase() === "enabled";
-  const forceFirst = asRecord(asRecord(autoQ.data).force_first_trade);
+  const forceFirst = asRecord(asRecord(opsPayload).force_first_trade);
   const forceBanner = Boolean(forceFirst.banner);
-  const riskLockOverride = asRecord(asRecord(autoQ.data).risk_lock_override);
+  const riskLockOverride = asRecord(asRecord(opsPayload).risk_lock_override);
   const riskLockBanner = Boolean(riskLockOverride.banner);
-  const opportunityTarget = asRecord(asRecord(autoQ.data).daily_opportunity_target);
+  const opportunityTarget = asRecord(asRecord(opsPayload).daily_opportunity_target);
   const oppPerf = asRecord(opportunityTarget.performance);
   const tradesTodayTarget = num(opportunityTarget.trades_today, executedToday);
   const targetTradesDay = num(opportunityTarget.target_trades_per_day, 3);

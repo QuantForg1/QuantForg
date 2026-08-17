@@ -7,6 +7,7 @@ and must never invent PASS for trade-context gates that were not evaluated.
 from __future__ import annotations
 
 import contextlib
+import time
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -257,7 +258,9 @@ def build_status_facts(
     """Authoritative connectivity facts for Auto Trading status GET."""
     cfg = settings or get_settings()
     collector = _probe_collector(cfg)
-    probes = collector.collect()
+    # Status GET must not wait on the Railway self-probe (often 3–5s).
+    # Gateway /health already carries MT5; trading-components is the public plane.
+    probes = collector.collect(include_platform_probes=False)
     _sync_ops_health(plane, probes=probes)
     enriched = _enrich_from_adapter(collector)
 
@@ -400,11 +403,34 @@ def build_execution_state(
     }
 
 
+_STATUS_SNAPSHOT_TTL_S = 2.0
+_status_snapshot_cache: tuple[float, int, AutoTradingStatusSnapshot] | None = None
+
+
+def reset_auto_trading_status_cache() -> None:
+    """Test helper — drop the short GET snapshot cache."""
+    global _status_snapshot_cache
+    _status_snapshot_cache = None
+
+
 def build_auto_trading_status(
     plane: OperationsControlPlane,
     *,
     settings: Settings | None = None,
 ) -> AutoTradingStatusSnapshot:
+    """Read-only status snapshot. 2s cache collapses duplicate Auto Trading +
+    control-center GETs without changing Safety / Risk evaluation inputs.
+    """
+    global _status_snapshot_cache
+    now = time.monotonic()
+    plane_id = id(plane)
+    cached = _status_snapshot_cache
+    if (
+        cached is not None
+        and now - cached[0] <= _STATUS_SNAPSHOT_TTL_S
+        and cached[1] == plane_id
+    ):
+        return cached[2]
     facts, live = build_status_facts(plane, settings=settings)
     safety = plane.evaluate_auto_trading(facts)
     primary, category = resolve_primary_blocker(safety)
@@ -415,7 +441,7 @@ def build_auto_trading_status(
         primary_blocker=primary,
         blocking_category=category,
     )
-    return AutoTradingStatusSnapshot(
+    snap = AutoTradingStatusSnapshot(
         facts=facts,
         safety=safety,
         live=live,
@@ -424,3 +450,5 @@ def build_auto_trading_status(
         blocking_category=category,
         execution_state=execution_state,
     )
+    _status_snapshot_cache = (now, plane_id, snap)
+    return snap
