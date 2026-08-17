@@ -174,7 +174,7 @@ async def test_scan_ranks_best_eligible_only(
                 "reject": True,
                 "reject_reason": "no edge",
                 "direction": "NONE",
-                "ai_confidence": 40,
+                "ai_confidence": 99,
                 "trade_quality": 40,
                 "liquidity": 50,
                 "expected_rr": "1.0",
@@ -235,6 +235,9 @@ async def test_scan_ranks_best_eligible_only(
     )
     assert out["best_symbol"] == "EURUSD"
     assert out["eligible_count"] >= 1
+    assert out["no_eligible_setup"] is False
+    eligible = out.get("best_eligible_candidate") or {}
+    assert eligible.get("symbol") == "EURUSD"
     assert out["forced_trades"] is False
     assert out["governed_by_existing_ai_and_risk"] is True
     symbols = {r["symbol"] for r in out["noc_rows"]}

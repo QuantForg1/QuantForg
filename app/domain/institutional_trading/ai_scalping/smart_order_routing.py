@@ -72,8 +72,22 @@ def estimate_smart_routing(
     execution_quality_score = int(round(0.55 * quality + 0.45 * hist_score))
 
     poor = execution_quality_score < 55
-    recommendation = "WAIT_BETTER_TICK" if poor else "SUBMIT"
-    if opt.get("recommendation") == "PROCEED_DEGRADED":
+    opt_state = str(opt.get("final_state") or "")
+    opt_rec = str(opt.get("recommendation") or "")
+    # Optimizer owns bounded wait. Do not duplicate spread/tick waits here.
+    if opt_state == "EXECUTE_NOW" or opt_rec in {"PROCEED", "PROCEED_DEGRADED"}:
+        recommendation = (
+            "SUBMIT_DEGRADED" if opt_rec == "PROCEED_DEGRADED" else "SUBMIT"
+        )
+        poor = False
+    elif opt_state == "WAIT_BOUNDED" or opt_rec == "DEFER_TICK":
+        recommendation = "WAIT_BOUNDED"
+    elif opt_state == "BLOCK" or opt_rec == "SKIP":
+        recommendation = "BLOCK"
+        poor = True
+    else:
+        recommendation = "WAIT_BETTER_TICK" if poor else "SUBMIT"
+    if opt_rec == "PROCEED_DEGRADED":
         recommendation = "SUBMIT_DEGRADED"
         poor = False
 
@@ -88,6 +102,8 @@ def estimate_smart_routing(
         "execution_quality_score": execution_quality_score,
         "poor_execution_quality": poor,
         "recommendation": recommendation,
+        "optimizer_final_state": opt_state or None,
+        "remaining_wait_ms": opt.get("remaining_wait_ms"),
         "inputs": {
             "optimizer_score": quality,
             "avg_slippage": hist_slip,

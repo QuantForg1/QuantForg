@@ -123,7 +123,13 @@ export type PipelineStageState = "waiting" | "running" | "success" | "failed";
 export function ExecutionPipeline({
   stages,
 }: {
-  stages: { id: string; label: string; state: PipelineStageState; detail?: string }[];
+  stages: {
+    id: string;
+    label: string;
+    state: PipelineStageState;
+    detail?: string;
+    statusLabel?: string;
+  }[];
 }) {
   return (
     <div className="overflow-x-auto pb-1">
@@ -147,13 +153,15 @@ export function ExecutionPipeline({
                 {s.label}
               </p>
               <p className="mt-1 font-mono text-[10px] tabular opacity-90">
-                {s.state === "waiting"
-                  ? "WAITING"
-                  : s.state === "running"
-                    ? "RUNNING"
-                    : s.state === "success"
-                      ? "OK"
-                      : "FAIL"}
+                {s.statusLabel
+                  ? s.statusLabel
+                  : s.state === "waiting"
+                    ? "WAITING"
+                    : s.state === "running"
+                      ? "RUNNING"
+                      : s.state === "success"
+                        ? "OK"
+                        : "FAIL"}
               </p>
               {s.detail ? (
                 <p className="mt-1 truncate text-[9px] text-[var(--fg-muted)]" title={s.detail}>

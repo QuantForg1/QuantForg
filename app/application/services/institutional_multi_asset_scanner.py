@@ -347,6 +347,10 @@ async def run_institutional_multi_asset_scan(
             "ranked": [],
             "best": None,
             "best_symbol": None,
+            "best_candidate": None,
+            "best_eligible_candidate": None,
+            "no_eligible_setup": True,
+            "first_blocking_gate": "NO_ELIGIBLE_SETUP",
             "eligible_count": 0,
             "eligible_symbols": [],
             "overlap_skipped": True,
@@ -437,6 +441,10 @@ async def _run_institutional_multi_asset_scan_body(
             "ranked": [],
             "best": None,
             "best_symbol": None,
+            "best_candidate": None,
+            "best_eligible_candidate": None,
+            "no_eligible_setup": True,
+            "first_blocking_gate": "NO_ELIGIBLE_SETUP",
             "eligible_count": 0,
             "eligible_symbols": [],
             "note": "multi_asset_scan_disabled",
@@ -457,6 +465,10 @@ async def _run_institutional_multi_asset_scan_body(
             "ranked": [],
             "best": None,
             "best_symbol": None,
+            "best_candidate": None,
+            "best_eligible_candidate": None,
+            "no_eligible_setup": True,
+            "first_blocking_gate": "NO_ELIGIBLE_SETUP",
             "eligible_count": 0,
             "eligible_symbols": [],
             "note": "mt5_adapter_unavailable",
@@ -834,6 +846,49 @@ async def _run_institutional_multi_asset_scan_body(
             enriched["decision"] = "NO_TRADE"
         enriched_noc.append(enriched)
 
+    first_blocking_gate = None
+    if bool(scan.get("blocked_by_portfolio")):
+        first_blocking_gate = str(
+            scan.get("portfolio_block_reason") or "PORTFOLIO_RISK_LIMIT"
+        )
+    elif not best_symbol:
+        for row in opportunity_ranked:
+            if not isinstance(row, dict):
+                continue
+            if row.get("reject") or not row.get("opportunity_eligible"):
+                first_blocking_gate = str(
+                    row.get("reject_reason")
+                    or row.get("blocking_gate")
+                    or "NO_ELIGIBLE_SETUP"
+                )
+                break
+        if not first_blocking_gate:
+            first_blocking_gate = "NO_ELIGIBLE_SETUP"
+
+    def _candidate_view(row: Any) -> dict[str, Any] | None:
+        if not isinstance(row, dict):
+            return None
+        return {
+            "symbol": str(row.get("symbol") or "").upper() or None,
+            "direction": row.get("direction"),
+            "quality": row.get("quality") or row.get("trade_quality"),
+            "confidence": row.get("confidence") or row.get("ai_confidence"),
+            "opportunity_score": row.get("opportunity_score"),
+            "estimated_probability": row.get("estimated_probability"),
+            "eligible": bool(
+                row.get("opportunity_eligible")
+                if "opportunity_eligible" in row
+                else row.get("eligible")
+            ),
+            "blocking_gate": row.get("reject_reason") or row.get("blocking_gate"),
+            "strategy_id": row.get("strategy_id"),
+        }
+
+    best_candidate = _candidate_view(
+        opportunity_ranked[0] if opportunity_ranked else None
+    )
+    best_eligible_candidate = _candidate_view(best) if best_symbol else None
+
     payload: dict[str, Any] = {
         "as_of": as_of,
         "enabled": True,
@@ -858,6 +913,10 @@ async def _run_institutional_multi_asset_scan_body(
         "trade_queue": queue_snap,
         "best": best,
         "best_symbol": best_symbol,
+        "best_candidate": best_candidate,
+        "best_eligible_candidate": best_eligible_candidate,
+        "no_eligible_setup": best_symbol is None,
+        "first_blocking_gate": first_blocking_gate,
         "eligible_count": len(ranked) if not eligible_symbols else len(eligible_symbols),
         "eligible_symbols": list(eligible_symbols),
         "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),

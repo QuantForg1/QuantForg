@@ -253,6 +253,23 @@ def build_intelligence_panels(
         "opportunity_ranking": {
             "rows": ranking_rows,
             "best_symbol": scan.get("best_symbol") if isinstance(scan, dict) else None,
+            "best_candidate": (
+                scan.get("best_candidate") if isinstance(scan, dict) else None
+            ),
+            "best_eligible_candidate": (
+                scan.get("best_eligible_candidate")
+                if isinstance(scan, dict)
+                else None
+            ),
+            "eligible_count": (
+                scan.get("eligible_count") if isinstance(scan, dict) else 0
+            ),
+            "no_eligible_setup": (
+                scan.get("no_eligible_setup") if isinstance(scan, dict) else True
+            ),
+            "first_blocking_gate": (
+                scan.get("first_blocking_gate") if isinstance(scan, dict) else None
+            ),
             "as_of": scan.get("as_of") if isinstance(scan, dict) else None,
             "observe_only": True,
         },

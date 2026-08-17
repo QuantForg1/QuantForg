@@ -2313,6 +2313,7 @@ class InstitutionalIteRuntime:
             from app.domain.institutional_trading.ai_scalping.execution_optimizer import (
                 clear_optimizer_defers,
                 evaluate_execution_moment,
+                should_defer_submit,
             )
             from app.domain.institutional_trading.ai_scalping.smart_order_routing import (
                 estimate_smart_routing,
@@ -2369,22 +2370,28 @@ class InstitutionalIteRuntime:
                     optimizer=optimizer_payload,
                 )
                 rec = str(optimizer_payload.get("recommendation") or "")
-                if rec == "DEFER_TICK" or (
-                    sor_payload.get("recommendation") == "WAIT_BETTER_TICK"
-                    and rec != "PROCEED_DEGRADED"
-                    and rec != "PROCEED"
-                ):
-                    # Soft defer only when optimizer agrees to wait within limits
-                    if rec == "DEFER_TICK":
-                        defer_submit = True
-                        logger.warning(
-                            "execution_optimizer_defer_tick",
-                            symbol=optimizer_payload.get("symbol"),
-                            score=optimizer_payload.get("execution_quality_score"),
-                            reason=optimizer_payload.get("reason"),
-                            defer_count=optimizer_payload.get("defer_count"),
-                        )
-                elif rec in {"PROCEED", "PROCEED_DEGRADED"}:
+                final_state = str(optimizer_payload.get("final_state") or "")
+                # Soft wait is optimizer-owned. SOR must not add a second wait loop.
+                if should_defer_submit(optimizer_payload):
+                    defer_submit = True
+                    logger.warning(
+                        "execution_optimizer_defer_tick",
+                        symbol=optimizer_payload.get("symbol"),
+                        score=optimizer_payload.get("execution_quality_score"),
+                        reason=optimizer_payload.get("reason"),
+                        final_state=final_state,
+                        defer_count=optimizer_payload.get("defer_count"),
+                        remaining_wait_ms=optimizer_payload.get(
+                            "remaining_wait_ms"
+                        ),
+                        remaining_attempts=optimizer_payload.get(
+                            "remaining_attempts"
+                        ),
+                    )
+                elif final_state == "EXECUTE_NOW" or rec in {
+                    "PROCEED",
+                    "PROCEED_DEGRADED",
+                }:
                     clear_optimizer_defers(
                         f"{str(getattr(decision, 'symbol', '') or '').upper()}"
                         f":{action_for_exec}"
@@ -2408,9 +2415,12 @@ class InstitutionalIteRuntime:
                 )
             except Exception:
                 logger.exception("execution_optimizer_defer_manage_failed")
+            opt = optimizer_payload or {}
             detail = (
                 f"execution_optimizer_defer:"
-                f"{(optimizer_payload or {}).get('reason') or 'await_better_tick'}"
+                f"{opt.get('reason') or 'wait_for_better_tick_within_limits'}"
+                f":count={opt.get('defer_count') or 0}"
+                f":remaining_wait_ms={opt.get('remaining_wait_ms') or 0}"
             )
             result = ShadowCycleResult(
                 ok=True,

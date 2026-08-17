@@ -7,20 +7,38 @@ Never changes direction. Never forces trades. Soft defer only within limits.
 from __future__ import annotations
 
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 _LOCK = threading.RLock()
 _DEFER_COUNTS: dict[str, dict[str, Any]] = {}
 _LAST_OPTIMIZER: dict[str, Any] | None = None
 
-# Soft limits — never hold forever
-MAX_DEFERS_PER_DECISION = 3
-MAX_DEFER_WINDOW_SECONDS = 45
-MIN_QUALITY_TO_PROCEED = 45
-# Was 55: LIVE XAUUSD scored 54 after gold ATR% <0.15 compression penalty and
-# never reached OMS (new input_hash each cycle reset defer_count to 1).
-DEFER_BELOW_QUALITY = 50
+# Fallback bounds when config cannot be loaded. Prefer AiScalpingConfig.
+_FALLBACK_MAX_DEFERS = 2
+_FALLBACK_MAX_DEFER_MS = 2500
+_FALLBACK_PROCEED_QUALITY = 45
+_FALLBACK_DEFER_BELOW_QUALITY = 40
+
+HARD_BLOCK_REASONS = frozenset(
+    {
+        "STALE_MARKET_DATA",
+        "MISSING_QUOTE",
+        "MARKET_CLOSED",
+        "UNACCEPTABLE_SPREAD",
+        "INVALID_PRICE",
+        "INSUFFICIENT_MARGIN",
+        "MIN_LOT_CONSTRAINT",
+        "PORTFOLIO_RISK_LIMIT",
+        "SAFETY_BLOCK",
+        "RISK_BLOCK",
+        "RECONCILIATION_REQUIRED",
+        "KILL_SWITCH",
+        "BURST_LATCH",
+        "EXECUTION_AUTHORITY_DISABLED",
+        "NO_ELIGIBLE_SETUP",
+    }
+)
 
 
 def _now() -> datetime:
@@ -174,25 +192,56 @@ def _slippage_history_score() -> dict[str, Any]:
         return {"avg_slippage": None, "score": 55}
 
 
+def _optimizer_bounds() -> tuple[int, int, int, int]:
+    """(max_attempts, max_duration_ms, proceed_quality, defer_below_quality)."""
+    try:
+        from app.domain.institutional_trading.ai_scalping.config import (
+            DEFAULT_AI_SCALPING_CONFIG,
+        )
+
+        cfg = DEFAULT_AI_SCALPING_CONFIG
+        return (
+            int(cfg.optimizer_max_defer_attempts),
+            int(cfg.optimizer_max_defer_duration_ms),
+            int(cfg.optimizer_proceed_quality),
+            int(cfg.optimizer_defer_below_quality),
+        )
+    except Exception:
+        return (
+            _FALLBACK_MAX_DEFERS,
+            _FALLBACK_MAX_DEFER_MS,
+            _FALLBACK_PROCEED_QUALITY,
+            _FALLBACK_DEFER_BELOW_QUALITY,
+        )
+
+
 def _defer_state(decision_key: str) -> dict[str, Any]:
+    """Read defer bookkeeping. Never reset the window — expiry means EXECUTE."""
     with _LOCK:
         row = _DEFER_COUNTS.get(decision_key)
         if not row:
-            return {"count": 0, "first_at": None}
+            return {"count": 0, "first_at": None, "elapsed_ms": 0}
         first = row.get("first_at")
+        elapsed_ms = 0
         try:
             when = datetime.fromisoformat(str(first).replace("Z", "+00:00"))
-            if _now() - when > timedelta(seconds=MAX_DEFER_WINDOW_SECONDS):
-                _DEFER_COUNTS.pop(decision_key, None)
-                return {"count": 0, "first_at": None}
+            elapsed_ms = int(max(0.0, (_now() - when).total_seconds() * 1000.0))
         except Exception:
-            pass
-        return {"count": int(row.get("count") or 0), "first_at": first}
+            elapsed_ms = 0
+        return {
+            "count": int(row.get("count") or 0),
+            "first_at": first,
+            "elapsed_ms": elapsed_ms,
+        }
 
 
 def _bump_defer(decision_key: str) -> int:
     with _LOCK:
-        row = _DEFER_COUNTS.get(decision_key) or {"count": 0, "first_at": _iso()}
+        row = _DEFER_COUNTS.get(decision_key)
+        if not row:
+            row = {"count": 0, "first_at": _iso()}
+        elif not row.get("first_at"):
+            row["first_at"] = _iso()
         row["count"] = int(row.get("count") or 0) + 1
         _DEFER_COUNTS[decision_key] = row
         return int(row["count"])
@@ -205,20 +254,22 @@ def evaluate_execution_moment(
     snapshot: Any | None = None,
     account: Any | None = None,
     decision_key: str | None = None,
+    hard_block_reason: str | None = None,
+    hard_gates_pass: bool = True,
 ) -> dict[str, Any]:
     """Score current micro-structure for OMS submit timing.
 
-    Returns recommendation PROCEED | DEFER_TICK | PROCEED_DEGRADED.
-    Never alters AI direction. Never forces a trade.
+    Soft optimizer only. Hard Safety/Risk/spread/stale gates belong upstream.
+    Returns final_state EXECUTE_NOW | WAIT_BOUNDED | BLOCK.
+    Never alters AI direction. Never forces a trade. Never waits forever.
     """
+    max_attempts, max_defer_ms, proceed_q, defer_below_q = _optimizer_bounds()
     sym = str(symbol or getattr(decision, "symbol", "") or "").upper()
     action = str(
         getattr(getattr(decision, "action", None), "value", None)
         or getattr(decision, "action", None)
         or ""
     ).upper()
-    # Stable key so soft defers accumulate within the window across cycles.
-    # Unique input_hash/tid per cycle permanently reset defer_count → forever DEFER.
     key = (
         decision_key
         or f"{sym}:{action}"
@@ -239,7 +290,6 @@ def evaluate_execution_moment(
         "broker_response_history": int(broker["score"]),
         "slippage_history": int(slip["score"]),
     }
-    # Equal-ish weights; quality dominant factors listed first
     weights = {
         "spread_trend": 20,
         "tick_momentum": 15,
@@ -253,32 +303,59 @@ def evaluate_execution_moment(
         round(sum(components[k] * weights[k] for k in weights) / total_w)
     )
     defer = _defer_state(key)
-    if action not in {"BUY", "SELL"}:
-        recommendation = "SKIP"
-        reason = "no_buy_sell_action"
-    elif quality >= DEFER_BELOW_QUALITY:
-        recommendation = "PROCEED"
-        reason = "execution_moment_acceptable"
-    elif defer["count"] >= MAX_DEFERS_PER_DECISION:
-        recommendation = "PROCEED_DEGRADED"
-        reason = "max_defers_reached_submit_anyway"
-    elif defer["first_at"] is not None:
-        recommendation = "DEFER_TICK"
-        reason = "await_better_tick_within_limits"
-        _bump_defer(key)
-    else:
-        recommendation = "DEFER_TICK"
-        reason = "await_better_tick_within_limits"
-        _bump_defer(key)
 
-    # Absolute floor: never block forever — if quality catastrophic but
-    # max defers hit, PROCEED_DEGRADED already set. If quality above min
-    # after defer bump still DEFER — ok.
-    if recommendation == "DEFER_TICK" and quality < MIN_QUALITY_TO_PROCEED:
-        # Still allow defer only within window; otherwise proceed degraded
-        if defer["count"] + 1 >= MAX_DEFERS_PER_DECISION:
+    block_code = str(hard_block_reason or "").strip().upper() or None
+    if block_code in HARD_BLOCK_REASONS or hard_gates_pass is False:
+        recommendation = "SKIP"
+        final_state = "BLOCK"
+        reason = block_code or "HARD_GATE_FAILED"
+        remaining_wait_ms = 0
+        remaining_attempts = max(0, max_attempts - int(defer["count"]))
+    elif action not in {"BUY", "SELL"}:
+        recommendation = "SKIP"
+        final_state = "BLOCK"
+        reason = "no_buy_sell_action"
+        remaining_wait_ms = 0
+        remaining_attempts = max(0, max_attempts - int(defer["count"]))
+    else:
+        spread_worsening = str(spread.get("trend") or "") == "worsening"
+        momentum_spike = str(mom.get("momentum") or "") == "spike"
+        current_tick_acceptable = quality >= proceed_q
+        better_tick_required = quality < defer_below_q and (
+            spread_worsening or momentum_spike
+        )
+        elapsed_ms = int(defer["elapsed_ms"] or 0)
+        count = int(defer["count"] or 0)
+        remaining_wait_ms = max(0, max_defer_ms - elapsed_ms)
+        remaining_attempts = max(0, max_attempts - count)
+        bound_exhausted = remaining_wait_ms <= 0 or remaining_attempts <= 0
+
+        if (not better_tick_required) or current_tick_acceptable:
+            recommendation = "PROCEED"
+            final_state = "EXECUTE_NOW"
+            reason = "all_hard_gates_pass_current_tick_acceptable"
+            remaining_wait_ms = 0
+        elif bound_exhausted:
             recommendation = "PROCEED_DEGRADED"
-            reason = "poor_quality_but_defer_limit"
+            final_state = "EXECUTE_NOW"
+            reason = (
+                "max_defer_duration_reached_submit"
+                if remaining_wait_ms <= 0
+                else "max_defers_reached_submit_anyway"
+            )
+            remaining_wait_ms = 0
+        else:
+            recommendation = "DEFER_TICK"
+            final_state = "WAIT_BOUNDED"
+            reason = (
+                "spread_improvement_expected"
+                if spread_worsening
+                else "wait_for_better_tick_within_limits"
+            )
+            _bump_defer(key)
+            defer = _defer_state(key)
+            remaining_wait_ms = max(0, max_defer_ms - int(defer["elapsed_ms"] or 0))
+            remaining_attempts = max(0, max_attempts - int(defer["count"] or 0))
 
     payload = {
         "as_of": _iso(),
@@ -294,11 +371,23 @@ def evaluate_execution_moment(
             "slippage_history": slip,
         },
         "recommendation": recommendation,
+        "final_state": final_state,
         "reason": reason,
         "defer_count": _defer_state(key)["count"],
-        "max_defers": MAX_DEFERS_PER_DECISION,
-        "max_defer_window_seconds": MAX_DEFER_WINDOW_SECONDS,
+        "defer_started_at": _defer_state(key)["first_at"],
+        "max_defers": max_attempts,
+        "max_defer_attempts": max_attempts,
+        "max_defer_duration_ms": max_defer_ms,
+        "max_defer_window_seconds": round(max_defer_ms / 1000.0, 3),
+        "remaining_wait_ms": int(remaining_wait_ms),
+        "remaining_attempts": int(remaining_attempts),
         "decision_key": key,
+        "current_tick_acceptable": quality >= proceed_q,
+        "better_tick_required": reason
+        in {
+            "spread_improvement_expected",
+            "wait_for_better_tick_within_limits",
+        },
         "forced_trades": False,
         "direction_unchanged": True,
         "fabricated": False,
@@ -308,6 +397,13 @@ def evaluate_execution_moment(
     with _LOCK:
         _LAST_OPTIMIZER = dict(payload)
     return payload
+
+
+def should_defer_submit(payload: dict[str, Any] | None) -> bool:
+    """True only for an in-bound soft wait. EXECUTE_NOW / BLOCK never defer."""
+    if not isinstance(payload, dict):
+        return False
+    return str(payload.get("final_state") or "") == "WAIT_BOUNDED"
 
 
 def get_last_execution_optimizer() -> dict[str, Any] | None:

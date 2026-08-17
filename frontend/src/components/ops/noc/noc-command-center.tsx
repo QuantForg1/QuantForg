@@ -794,12 +794,38 @@ export function NocCommandCenter() {
           title="4f · Opportunity Ranking"
           action={
             <Badge tone="neutral">
-              best · {fmt(oppRanking.best_symbol, "none")}
+              eligible · {fmt(oppRanking.eligible_count, "0")}
             </Badge>
           }
         >
+          <NocRow
+            label="Best candidate"
+            value={fmt(
+              asRecord(oppRanking.best_candidate).symbol,
+              fmt(oppRanking.best_symbol, "none"),
+            )}
+          />
+          <NocRow
+            label="Best eligible"
+            value={
+              oppRanking.no_eligible_setup
+                ? "NO_ELIGIBLE_SETUP"
+                : fmt(
+                    asRecord(oppRanking.best_eligible_candidate).symbol,
+                    fmt(oppRanking.best_symbol, "none"),
+                  )
+            }
+          />
+          <NocRow
+            label="Eligible count"
+            value={fmt(oppRanking.eligible_count, "0")}
+          />
+          <NocRow
+            label="First blocking gate"
+            value={fmt(oppRanking.first_blocking_gate, "—")}
+          />
           {oppRows.length === 0 ? (
-            <p className="text-[12px] text-[var(--fg-muted)]">
+            <p className="mt-2 text-[12px] text-[var(--fg-muted)]">
               Awaiting live opportunity ranking from multi-asset scan.
             </p>
           ) : (
@@ -1044,12 +1070,32 @@ export function NocCommandCenter() {
             id="noc-execution-optimizer"
             title="4l · Execution Optimizer"
             action={
-              <Badge tone="neutral">
-                {fmt(executionOptimizer.recommendation, "idle")}
+              <Badge
+                tone={
+                  str(executionOptimizer.final_state) === "BLOCK"
+                    ? "danger"
+                    : str(executionOptimizer.final_state) === "WAIT_BOUNDED"
+                      ? "warning"
+                      : str(executionOptimizer.final_state) === "EXECUTE_NOW"
+                        ? "success"
+                        : "neutral"
+                }
+              >
+                {fmt(
+                  executionOptimizer.final_state,
+                  fmt(executionOptimizer.recommendation, "idle"),
+                )}
               </Badge>
             }
           >
             <NocRow label="Symbol" value={fmt(executionOptimizer.symbol)} />
+            <NocRow
+              label="State"
+              value={fmt(
+                executionOptimizer.final_state,
+                fmt(executionOptimizer.recommendation),
+              )}
+            />
             <NocRow
               label="Quality score"
               value={fmt(executionOptimizer.execution_quality_score)}
@@ -1062,9 +1108,18 @@ export function NocCommandCenter() {
             <NocRow
               label="Defer count"
               value={`${fmt(executionOptimizer.defer_count, "0")} / ${fmt(
-                executionOptimizer.max_defers,
-                "3",
+                executionOptimizer.max_defer_attempts ??
+                  executionOptimizer.max_defers,
+                "2",
               )}`}
+            />
+            <NocRow
+              label="Remaining wait"
+              value={
+                str(executionOptimizer.final_state) === "WAIT_BOUNDED"
+                  ? `${fmt(executionOptimizer.remaining_wait_ms, "0")} ms`
+                  : "0 ms"
+              }
             />
             <NocRow
               label="Direction unchanged"

@@ -883,6 +883,22 @@ def _ai_scalping_payload() -> dict[str, Any]:
         }
     snap["compounding_enabled"] = bool(getattr(plane, "compounding_enabled", False))
     snap["config"] = DEFAULT_AI_SCALPING_CONFIG.to_dict()
+    try:
+        from app.application.services.institutional_multi_asset_scanner import (
+            get_last_multi_asset_scan,
+        )
+
+        snap["scan"] = get_last_multi_asset_scan()
+    except Exception:
+        snap["scan"] = None
+    try:
+        from app.domain.institutional_trading.ai_scalping.execution_optimizer import (
+            get_last_execution_optimizer,
+        )
+
+        snap["execution_optimizer"] = get_last_execution_optimizer()
+    except Exception:
+        snap["execution_optimizer"] = None
     return snap
 
 

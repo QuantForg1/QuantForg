@@ -194,6 +194,13 @@ class AiScalpingConfig:
     cooldown_max_seconds: int = 420
     adaptive_cooldown_enabled: bool = True
 
+    # Bounded execution optimizer — soft wait only. Never a Safety/Risk bypass.
+    # Duration is wall-clock across ITE cycles (no intra-cycle sleep / PME block).
+    optimizer_max_defer_attempts: int = 2
+    optimizer_max_defer_duration_ms: int = 2500
+    optimizer_proceed_quality: int = 45
+    optimizer_defer_below_quality: int = 40
+
     # Multi-trade - prefer quality, not stacking losers
     # v7.1: up to 5 concurrent when portfolio exposure/risk still allow
     max_open_trades: int = 5
@@ -357,6 +364,14 @@ class AiScalpingConfig:
             object.__setattr__(self, "vol_exceptional_min_quality", 80)
         if self.vol_exceptional_min_confidence < 80:
             object.__setattr__(self, "vol_exceptional_min_confidence", 80)
+        attempts = max(1, min(5, int(self.optimizer_max_defer_attempts)))
+        duration = max(500, min(8_000, int(self.optimizer_max_defer_duration_ms)))
+        proceed_q = max(30, min(70, int(self.optimizer_proceed_quality)))
+        defer_q = max(20, min(proceed_q, int(self.optimizer_defer_below_quality)))
+        object.__setattr__(self, "optimizer_max_defer_attempts", attempts)
+        object.__setattr__(self, "optimizer_max_defer_duration_ms", duration)
+        object.__setattr__(self, "optimizer_proceed_quality", proceed_q)
+        object.__setattr__(self, "optimizer_defer_below_quality", defer_q)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -444,6 +459,12 @@ class AiScalpingConfig:
                 "min_seconds": self.cooldown_min_seconds,
                 "base_seconds": self.cooldown_base_seconds,
                 "max_seconds": self.cooldown_max_seconds,
+            },
+            "execution_optimizer": {
+                "max_defer_attempts": self.optimizer_max_defer_attempts,
+                "max_defer_duration_ms": self.optimizer_max_defer_duration_ms,
+                "proceed_quality": self.optimizer_proceed_quality,
+                "defer_below_quality": self.optimizer_defer_below_quality,
             },
             "max_open_trades": self.max_open_trades,
             "risk_per_trade_pct": str(self.risk_per_trade_pct),

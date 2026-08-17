@@ -125,14 +125,18 @@ def build_adaptive_recommendations() -> dict[str, Any]:
         )
 
         opt = get_last_execution_optimizer() or {}
-        if opt.get("recommendation") == "DEFER_TICK":
+        if str(opt.get("final_state") or "") == "WAIT_BOUNDED" or opt.get(
+            "recommendation"
+        ) == "DEFER_TICK":
             recs.append(
                 {
                     "code": "microstructure_wait",
                     "severity": "info",
                     "message": (
                         "Last optimizer evaluation deferred submit for a better tick "
-                        f"(score={opt.get('execution_quality_score')})."
+                        f"(score={opt.get('execution_quality_score')}, "
+                        f"remaining_wait_ms={opt.get('remaining_wait_ms')}, "
+                        f"defer_count={opt.get('defer_count')})."
                     ),
                     "requires_human_approval": True,
                 }

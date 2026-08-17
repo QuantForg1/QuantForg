@@ -351,11 +351,31 @@ export function PlatformStatusBoard() {
         autoCardStatus = raw;
         autoTone = executionEnabled ? "success" : "warning";
       }
+      const scan = asRecord(asRecord(auto.ai_scalping).scan);
+      const opt = asRecord(
+        asRecord(auto.ai_scalping).execution_optimizer,
+      );
+      const optState = str(opt.final_state, str(opt.recommendation, ""));
+      const optDetail =
+        optState === "WAIT_BOUNDED" || optState === "DEFER_TICK"
+          ? `OPTIMIZER: WAIT_BOUNDED remaining=${str(opt.remaining_wait_ms, "0")}ms`
+          : optState
+            ? `OPTIMIZER: ${optState}`
+            : null;
       autoDetail = [
         opsMode ? `Mode: ${opsMode}` : null,
         executionEnabled ? "Mock: OFF" : null,
         runState ? `Run: ${runState}` : null,
         blocker ? `Blocker: ${blocker}` : null,
+        scan.best_eligible_candidate || scan.best_symbol
+          ? `Best eligible: ${str(
+              asRecord(scan.best_eligible_candidate).symbol,
+              str(scan.best_symbol),
+            )}`
+          : scan.no_eligible_setup
+            ? "NO_ELIGIBLE_SETUP"
+            : null,
+        optDetail,
       ]
         .filter(Boolean)
         .join(" · ");

@@ -59,6 +59,7 @@ def test_execution_optimizer_never_forces_or_changes_direction() -> None:
         "PROCEED_DEGRADED",
         "SKIP",
     }
+    assert out["final_state"] in {"EXECUTE_NOW", "WAIT_BOUNDED", "BLOCK"}
     for key in (
         "spread_trend",
         "tick_momentum",
@@ -91,8 +92,15 @@ def test_optimizer_defer_respects_max_limit() -> None:
             decision_key="hash-defer",
         )
     assert last is not None
-    assert last["recommendation"] in {"PROCEED_DEGRADED", "PROCEED", "DEFER_TICK"}
+    assert last["recommendation"] in {
+        "PROCEED",
+        "PROCEED_DEGRADED",
+        "DEFER_TICK",
+        "SKIP",
+    }
+    assert last["final_state"] in {"EXECUTE_NOW", "WAIT_BOUNDED", "BLOCK"}
     assert last["defer_count"] <= last["max_defers"]
+    assert last["final_state"] != "WAITING"
 
 
 @pytest.mark.unit

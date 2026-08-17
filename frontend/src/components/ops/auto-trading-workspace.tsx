@@ -797,6 +797,39 @@ export function AutoTradingWorkspace() {
   const orch = asRecord(asRecord(opsPayload).orchestrator);
   const last = asRecord(orch.last_cycle);
   const diag = asRecord(last.market_context_diagnostics);
+  const scanSnap = asRecord(aiScalping.scan);
+  const optimizerSnap = asRecord(
+    diag.execution_optimizer ?? aiScalping.execution_optimizer,
+  );
+  const bestCandidate = asRecord(
+    scanSnap.best_candidate ?? scanSnap.best,
+  );
+  const bestEligible = asRecord(scanSnap.best_eligible_candidate);
+  const eligibleCount = str(scanSnap.eligible_count, "0");
+  const noEligibleSetup = Boolean(scanSnap.no_eligible_setup) && !str(scanSnap.best_symbol);
+  const firstBlockingGate = str(
+    scanSnap.first_blocking_gate ||
+      optimizerSnap.reason ||
+      last.abort_reason ||
+      primaryBlocker,
+    noEligibleSetup ? "NO_ELIGIBLE_SETUP" : "—",
+  );
+  const optimizerState = str(
+    optimizerSnap.final_state,
+    str(optimizerSnap.recommendation, "—"),
+  );
+  const optimizerRemaining = str(optimizerSnap.remaining_wait_ms, "0");
+  const optimizerDeferCount = str(optimizerSnap.defer_count, "0");
+  const optimizerLabel =
+    optimizerState === "WAIT_BOUNDED" || optimizerState === "DEFER_TICK"
+      ? `WAIT_BOUNDED remaining=${optimizerRemaining}ms count=${optimizerDeferCount}`
+      : optimizerState === "EXECUTE_NOW" ||
+          optimizerState === "PROCEED" ||
+          optimizerState === "PROCEED_DEGRADED"
+        ? `EXECUTE_NOW ${str(optimizerSnap.reason, "")}`.trim()
+        : optimizerState === "BLOCK" || optimizerState === "SKIP"
+          ? `BLOCK ${str(optimizerSnap.reason, "")}`.trim()
+          : optimizerState;
   const decisionReasons = asList(last.decision_reasons).map(String);
   const safetyCycleReasons = asList(
     last.safety_failed_reasons ?? failedReasons,
@@ -936,6 +969,7 @@ export function AutoTradingWorkspace() {
     label: string;
     state: PipelineStageState;
     detail?: string;
+    statusLabel?: string;
   }[] = [
     {
       id: "market",
@@ -980,10 +1014,48 @@ export function AutoTradingWorkspace() {
       id: "safety",
       label: "Safety",
       state: stageOf(
-        forwarded || hasTicket || cycleOutcome === "forwarded",
+        forwarded ||
+          hasTicket ||
+          cycleOutcome === "forwarded" ||
+          cycleOutcome === "execution_deferred",
         cycleOutcome.includes("safety") || safetyCycleReasons.length > 0,
       ),
-      detail: safetyCycleReasons[0] || str(last.detail, ""),
+      detail: safetyCycleReasons[0] || "",
+    },
+    {
+      id: "optimizer",
+      label: "Optimizer",
+      state:
+        optimizerState === "BLOCK" || optimizerState === "SKIP"
+          ? "failed"
+          : optimizerState === "WAIT_BOUNDED" ||
+              optimizerState === "DEFER_TICK" ||
+              cycleOutcome === "execution_deferred"
+            ? "running"
+            : optimizerState === "EXECUTE_NOW" ||
+                optimizerState === "PROCEED" ||
+                optimizerState === "PROCEED_DEGRADED" ||
+                forwarded
+              ? "success"
+              : "waiting",
+      statusLabel:
+        optimizerState === "WAIT_BOUNDED" ||
+        optimizerState === "DEFER_TICK" ||
+        cycleOutcome === "execution_deferred"
+          ? "WAIT_BOUNDED"
+          : optimizerState === "EXECUTE_NOW" ||
+              optimizerState === "PROCEED" ||
+              optimizerState === "PROCEED_DEGRADED"
+            ? "EXECUTE_NOW"
+            : optimizerState === "BLOCK" || optimizerState === "SKIP"
+              ? "BLOCK"
+              : undefined,
+      detail:
+        optimizerState === "WAIT_BOUNDED" ||
+        optimizerState === "DEFER_TICK" ||
+        cycleOutcome === "execution_deferred"
+          ? `remaining=${optimizerRemaining}ms count=${optimizerDeferCount} ${str(optimizerSnap.reason, "")}`.trim()
+          : str(optimizerSnap.reason || last.detail, ""),
     },
     {
       id: "oms",
@@ -992,7 +1064,10 @@ export function AutoTradingWorkspace() {
         forwarded,
         Boolean(str(last.oms_message)) && !forwarded && cycleOutcome.includes("oms"),
       ),
-      detail: str(last.oms_message, ""),
+      detail:
+        cycleOutcome === "execution_deferred"
+          ? `WAIT_BOUNDED remaining=${optimizerRemaining}ms`
+          : str(last.oms_message, ""),
     },
     {
       id: "broker",
@@ -1671,6 +1746,45 @@ export function AutoTradingWorkspace() {
             }
           />
         </div>
+      </OpsPanel>
+
+      {/* Best eligible / optimizer (observe-only) */}
+      <OpsPanel title="Best eligible setup · execution optimizer">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+          <MetricCard
+            label="Best candidate"
+            value={str(bestCandidate.symbol || scanSnap.best_symbol, "—")}
+          />
+          <MetricCard
+            label="Best eligible"
+            value={
+              noEligibleSetup
+                ? "NO_ELIGIBLE_SETUP"
+                : str(bestEligible.symbol || scanSnap.best_symbol, "—")
+            }
+          />
+          <MetricCard label="Eligible count" value={eligibleCount} />
+          <MetricCard label="First blocking gate" value={firstBlockingGate} />
+          <MetricCard
+            label="Optimizer"
+            value={optimizerLabel}
+            tone={
+              optimizerState === "BLOCK"
+                ? "bad"
+                : optimizerState === "WAIT_BOUNDED" || optimizerState === "DEFER_TICK"
+                  ? "warn"
+                  : optimizerState === "EXECUTE_NOW" ||
+                      optimizerState === "PROCEED" ||
+                      optimizerState === "PROCEED_DEGRADED"
+                    ? "ok"
+                    : "neutral"
+            }
+          />
+        </div>
+        <p className="mt-2 text-[11px] text-[var(--fg-muted)]">
+          Soft optimizer never waits forever. Hard Safety / Risk / min-lot gates remain
+          authoritative. No forced or synthetic orders.
+        </p>
       </OpsPanel>
 
       {/* Pipeline */}
