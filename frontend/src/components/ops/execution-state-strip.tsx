@@ -8,6 +8,9 @@ import { iteOpsApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 import { firstBlockingLock, isExecutionBlockingLock } from "@/lib/ops/launch-locks";
+import { useAuth } from "@/providers/auth-provider";
+import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
+import { ApiError } from "@/lib/api/client";
 
 type Props = {
   className?: string;
@@ -25,18 +28,21 @@ export function ExecutionStateStrip({
   executionState,
   compact = false,
 }: Props) {
+  const { user, opsReady } = useAuth();
+  const opsEnabled = opsReady && canAccessIteOps(user);
   const autoQ = useQuery({
     queryKey: ["ite-ops-auto-trading"],
     queryFn: iteOpsApi.autoTrading,
     retry: false,
-    refetchInterval: 15_000,
-    enabled: executionState == null,
+    refetchInterval: opsEnabled ? 15_000 : false,
+    enabled: executionState == null && opsEnabled,
   });
   const launchQ = useQuery({
     queryKey: ["ite-ops-launch-readiness"],
     queryFn: iteOpsApi.launchReadiness,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: opsEnabled ? 15_000 : false,
+    enabled: opsEnabled,
   });
 
   const raw = executionState ?? asRecord(asRecord(autoQ.data).execution_state);
@@ -66,7 +72,7 @@ export function ExecutionStateStrip({
   );
   const launchReady = Boolean(launch.ready_for_promotion) && Boolean(launch.ready_for_gate_enabled);
 
-  if (autoQ.isError && executionState == null) {
+  if (!opsEnabled && executionState == null) {
     return (
       <div
         className={cn(
@@ -74,7 +80,24 @@ export function ExecutionStateStrip({
           className,
         )}
       >
-        Execution state unavailable — OWNER/ADMIN required for ITE ops.
+        Execution state — authenticating session.
+      </div>
+    );
+  }
+  if (autoQ.isError && executionState == null) {
+    const timedOut =
+      autoQ.error instanceof ApiError &&
+      (autoQ.error.code === "timeout" || autoQ.error.status === 408);
+    return (
+      <div
+        className={cn(
+          "border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--fg-muted)]",
+          className,
+        )}
+      >
+        {timedOut
+          ? "Execution telemetry delayed — API timeout. Gateway/MT5 are not inferred from this."
+          : "Execution state unavailable — OWNER/ADMIN required for ITE ops."}
       </div>
     );
   }

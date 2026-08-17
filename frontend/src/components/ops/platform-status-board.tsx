@@ -134,7 +134,7 @@ function StatusCard({ card }: { card: CardModel }) {
  * Backend / Gateway / MT5 / Broker / Session never collapse into one Offline bit.
  */
 export function PlatformStatusBoard() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, opsReady } = useAuth();
   const session = useTradingSession();
   const [apiState, setApiState] = useState<ApiConnectionState>(() =>
     getApiConnectionState(),
@@ -168,6 +168,7 @@ export function PlatformStatusBoard() {
     refetchInterval: 180_000,
     retry: false,
     refetchIntervalInBackground: false,
+    enabled: opsReady,
   });
   const mt5Q = useQuery({
     queryKey: ["mt5-status"],
@@ -176,22 +177,25 @@ export function PlatformStatusBoard() {
     refetchInterval: 60_000,
     retry: 1,
     refetchIntervalInBackground: false,
+    enabled: opsReady,
   });
   const autoQ = useQuery({
     queryKey: ["ite-ops-auto-trading"],
     queryFn: iteOpsApi.autoTrading,
     staleTime: 60_000,
-    refetchInterval: 90_000,
+    refetchInterval: opsReady ? 90_000 : false,
     retry: 1,
     refetchIntervalInBackground: false,
+    enabled: opsReady,
   });
   const signalsQ = useQuery({
     queryKey: ["signals-center", "mission"],
     queryFn: () => signalCenterApi.list({}),
     staleTime: 60_000,
-    refetchInterval: 120_000,
+    refetchInterval: opsReady ? 120_000 : false,
     retry: 1,
     refetchIntervalInBackground: false,
+    enabled: opsReady,
   });
   const versionQ = useQuery({
     queryKey: ["platform-version"],

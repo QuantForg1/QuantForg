@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { mt5Api, portfolioApi, weltradeApi } from "@/lib/api/endpoints";
+import { mt5Api, platformApi, portfolioApi, weltradeApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 import { useBrokerStatusStream, useBookStream } from "@/hooks/realtime";
 import {
@@ -18,6 +18,12 @@ import {
   gatewayStatusLabel,
 } from "@/lib/gateway-diagnostics";
 import { useAuth } from "@/providers/auth-provider";
+import { ApiError } from "@/lib/api/client";
+import {
+  mergePlaneOk,
+  planeConnectionLabel,
+  resolveTradingComponentsView,
+} from "@/lib/trading/component-health";
 
 export type TradingSessionState = {
   connected: boolean;
@@ -60,9 +66,32 @@ const TradingSessionContext = createContext<TradingSessionState | null>(null);
 /** Shared broker session for the whole app shell — one source of truth. */
 export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, opsReady } = useAuth();
   // Wait for auth bootstrap — never race protected probes ahead of /auth/me.
-  const sessionEnabled = isAuthenticated && !authLoading;
+  const sessionEnabled = opsReady && isAuthenticated && !authLoading;
+
+  const componentsQ = useQuery({
+    queryKey: ["trading-components-health"],
+    queryFn: platformApi.tradingComponents,
+    staleTime: 15_000,
+    retry: 1,
+  });
+  const componentsError =
+    componentsQ.error instanceof ApiError ? componentsQ.error : null;
+  const componentsView = resolveTradingComponentsView({
+    payload: componentsQ.data,
+    isSuccess: componentsQ.isSuccess,
+    isError: componentsQ.isError,
+    errorKind:
+      componentsError?.code === "timeout"
+        ? "timeout"
+        : componentsError?.code === "network_error"
+          ? "network"
+          : componentsQ.isError
+            ? "other"
+            : null,
+  });
+
   useBrokerStatusStream(sessionEnabled);
 
   const healthQ = useQuery({
@@ -131,44 +160,48 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const account = asRecord(portfolio.account);
   const health = healthPreview;
 
-  const connected = connectedFlag;
+  const connected = connectedFlag || componentsView?.mt5.ok === true;
   // Health feed may 500 under DB pressure — do not treat that as broker down
   // when MT5 status already proves an attached session.
   const healthKnown =
     (healthQ.isFetched && !healthQ.isLoading) ||
-    (statusQ.isFetched && !statusQ.isLoading);
+    (statusQ.isFetched && !statusQ.isLoading) ||
+    Boolean(componentsView);
   const healthUsable = healthUsablePreview;
-  // Keep gateway/broker UNKNOWN when health is not usable — do not collapse
-  // API/auth outages into "Gateway Disconnected" / "Broker Disconnected".
-  const gatewayOnline = healthUsable
-    ? Boolean(health.gateway_online || health.gateway_reachable)
-    : null;
-  const brokerConnected = healthUsable
-    ? Boolean(health.weltrade_connected || health.mt5_connected || connected)
-    : connected
-      ? true
+  // Authoritative trading-components first. Session/weltrade are secondary
+  // and must not collapse API/auth outages into Disconnected.
+  const gatewayOnline = mergePlaneOk(
+    componentsView?.gateway.ok ?? null,
+    healthUsable ? Boolean(health.gateway_online || health.gateway_reachable) : null,
+  );
+  const brokerConnected = mergePlaneOk(
+    componentsView?.mt5.ok ?? null,
+    healthUsable
+      ? Boolean(health.weltrade_connected || health.mt5_connected || connectedFlag)
+      : connectedFlag
+        ? true
+        : null,
+  );
+  const executionEnabled =
+    healthUsable && "execution_enabled" in health
+      ? Boolean(health.execution_enabled)
       : null;
-  const executionEnabled = !healthUsable
-    ? null
-    : !("execution_enabled" in health)
-      ? null
-      : Boolean(health.execution_enabled);
 
   const gatewayDetail = healthUsable
     ? gatewayDiagnosticDetail(health)
-    : healthQ.isError
-      ? "Broker health feed unavailable — using MT5 status"
-      : "";
+    : componentsView?.gateway.ok === true
+      ? str(componentsView.gateway.detail, "Authoritative trading-components")
+      : healthQ.isError
+        ? "Broker health feed unavailable — using trading-components"
+        : "";
   const gatewayLabel =
     gatewayOnline === true
-      ? "Gateway Online"
+      ? componentsView?.gateway.stale
+        ? "Gateway Online (cached)"
+        : "Gateway Online"
       : healthUsable
         ? gatewayStatusLabel(health)
-        : healthQ.isError
-          ? "Gateway status unknown"
-          : connected
-            ? "Gateway status unknown"
-            : "Gateway status unknown";
+        : planeConnectionLabel(gatewayOnline, Boolean(componentsView?.gateway.stale));
 
   // After health reports an attached gateway session, refresh MT5 status so
   // ticks/symbols see the healed process-local handle.

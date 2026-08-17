@@ -11,6 +11,8 @@ import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 import { isExecutionBlockingLock } from "@/lib/ops/launch-locks";
+import { useAuth } from "@/providers/auth-provider";
+import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 
 /** Preferred display order for the Launch Lock Inspector. */
 const LOCK_ORDER = [
@@ -66,11 +68,14 @@ function resolutionLines(raw: string): string[] {
  */
 export function LaunchReadinessPanel({ className }: { className?: string }) {
   const qc = useQueryClient();
+  const { user, opsReady } = useAuth();
+  const opsEnabled = opsReady && canAccessIteOps(user);
   const q = useQuery({
     queryKey: ["ite-ops-launch-readiness"],
     queryFn: iteOpsApi.launchReadiness,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: opsEnabled ? 15_000 : false,
+    enabled: opsEnabled,
   });
 
   const promote = useMutation({
@@ -101,10 +106,19 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
     },
   });
 
-  if (q.isLoading && !q.data) return <DeskSkeleton rows={8} />;
+  if (!opsEnabled || (q.isLoading && !q.data)) return <DeskSkeleton rows={8} />;
   if (q.isError) {
+    const timedOut =
+      q.error instanceof ApiError &&
+      (q.error.code === "timeout" || q.error.status === 408);
     return (
-      <DeskError message="Launch Lock Inspector unavailable — OWNER/ADMIN required." />
+      <DeskError
+        message={
+          timedOut
+            ? "Launch Lock Inspector delayed — API timeout. Trading connectivity is not inferred from this."
+            : "Launch Lock Inspector unavailable — OWNER/ADMIN required."
+        }
+      />
     );
   }
 

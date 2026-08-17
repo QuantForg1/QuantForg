@@ -9,7 +9,16 @@ import {
   useState,
 } from "react";
 import { authApi } from "@/lib/api/endpoints";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, API_AUTH_TIMEOUT_MS } from "@/lib/api/client";
+import { sessionBootBudgetMs } from "@/lib/api/request-policy";
+import {
+  authBootBanner,
+  canIssueProtectedOps,
+  isAuthenticatedPhase,
+  resolveAuthPhase,
+  type AuthPhase,
+  type MeAttemptStatus,
+} from "@/lib/auth/bootstrap";
 import {
   clearSession,
   getAccessToken,
@@ -21,9 +30,7 @@ import {
 } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/observability/audit";
 
-/** Hard cap so AppShell never waits forever on /auth/me. */
-const SESSION_BOOT_TIMEOUT_MS = 25_000;
-/** One silent retry before surfacing AUTH_TIMEOUT (Railway cold starts). */
+/** One silent background retry after AUTH_TIMEOUT (Railway cold starts). */
 const SESSION_ME_RETRY_MS = 800;
 
 type AuthContextValue = {
@@ -31,6 +38,9 @@ type AuthContextValue = {
   loading: boolean;
   bootError: string | null;
   isAuthenticated: boolean;
+  authPhase: AuthPhase;
+  /** True only after /auth/me settled (success or timeout-with-token). */
+  opsReady: boolean;
   login: (email: string, password: string, options?: { remember?: boolean }) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<string | void>;
   logout: () => Promise<void>;
@@ -41,52 +51,40 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Deterministic SSR/client first paint: never read localStorage during render.
-  // Session is restored in useEffect so server HTML and client hydrate match.
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [hasToken, setHasToken] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [meStatus, setMeStatus] = useState<MeAttemptStatus>("idle");
   const [bootError, setBootError] = useState<string | null>(null);
 
-  const refreshMe = useCallback(async () => {
-    if (!getAccessToken()) {
+  const refreshMe = useCallback(async (opts?: { background?: boolean }) => {
+    const token = getAccessToken();
+    if (!token) {
+      setHasToken(false);
       setUser(null);
+      setMeStatus("unauthorized");
       setBootError(null);
       return;
     }
-    const tryMe = async () => authApi.me();
+    setHasToken(true);
     try {
-      let me;
-      try {
-        me = await tryMe();
-      } catch (first) {
-        // Bounded single retry on timeout/transient — avoids false AUTH_TIMEOUT
-        // during Railway cold start without infinite loops.
-        if (
-          first instanceof ApiError &&
-          (first.code === "timeout" ||
-            first.status === 502 ||
-            first.status === 503 ||
-            first.status === 504)
-        ) {
-          await new Promise((r) => window.setTimeout(r, SESSION_ME_RETRY_MS));
-          me = await tryMe();
-        } else {
-          throw first;
-        }
-      }
+      const me = await authApi.me();
       setUser(me);
+      setMeStatus("success");
       setBootError(null);
     } catch (e) {
-      // Preserve session on transient network loss; only wipe on auth failure.
       if (
         e instanceof ApiError &&
         (e.status === 401 || e.status === 403 || e.code === "unauthorized")
       ) {
         clearSession();
+        setHasToken(false);
         setUser(null);
+        setMeStatus("unauthorized");
         setBootError(null);
         return;
       }
-      if (
+      const transient =
         e instanceof ApiError &&
         (e.code === "network_error" ||
           e.code === "timeout" ||
@@ -96,43 +94,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           e.status === 500 ||
           e.status === 502 ||
           e.status === 503 ||
-          e.status === 504)
-      ) {
-        // Keep stored user for UI; ConnectionBanner / retry covers transient API errors.
+          e.status === 504);
+      if (transient) {
         const stored = getStoredUser();
+        const stillHasToken = Boolean(getAccessToken());
+        setHasToken(stillHasToken);
         setUser(stored);
-        setBootError(
-          e.code === "timeout"
-            ? "Session check timed out. You can retry or sign in again."
-            : "API unreachable. Retry when the connection recovers.",
-        );
-        if (e.code === "timeout") {
-          recordAudit("session_timeout", "info", "auth_me_timeout");
-        } else {
-          recordAudit(
-            "api_degraded",
-            "info",
-            e.code || `status_${e.status}`,
-          );
+        const timedOut = e instanceof ApiError && e.code === "timeout";
+        setMeStatus(timedOut ? "timeout" : "error");
+        if (stillHasToken && stored) {
+          setBootError(authBootBanner("AUTH_TIMEOUT"));
+          if (timedOut) {
+            recordAudit("session_timeout", "info", "auth_me_timeout");
+          } else {
+            recordAudit("api_degraded", "info", e instanceof ApiError ? e.code || `status_${e.status}` : "error");
+          }
+          if (!opts?.background) {
+            window.setTimeout(() => {
+              void refreshMe({ background: true });
+            }, SESSION_ME_RETRY_MS);
+          }
+          return;
         }
+        setMeStatus("unauthorized");
+        setBootError("Sign in required.");
         return;
       }
-      // Unknown non-ApiError (e.g. parse): keep session if tokens still present.
       if (!(e instanceof ApiError) && getAccessToken()) {
         const stored = getStoredUser();
+        setHasToken(true);
         setUser(stored);
+        setMeStatus(stored ? "error" : "unauthorized");
         return;
       }
       clearSession();
+      setHasToken(false);
       setUser(null);
+      setMeStatus("unauthorized");
     }
   }, []);
 
   useEffect(() => {
-    const stored = getStoredUser();
-    if (stored && getAccessToken()) {
-      setUser(stored);
-    }
+    // Restore token presence only — do not mark authenticated until /auth/me settles.
+    setHasToken(Boolean(getAccessToken()));
     let settled = false;
     const finish = () => {
       if (settled) return;
@@ -141,15 +145,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     const timer = window.setTimeout(() => {
       if (settled) return;
-      setBootError((prev) => prev ?? "Session restore timed out. Retry or sign in again.");
-      // Prefer stored user over infinite skeleton when /auth/me hangs.
-      if (!getAccessToken()) {
+      const stored = getStoredUser();
+      const token = getAccessToken();
+      if (token && stored) {
+        setHasToken(true);
+        setUser((u) => u ?? stored);
+        setMeStatus((prev) => (prev === "success" ? prev : "timeout"));
+        setBootError((prev) => prev ?? authBootBanner("AUTH_TIMEOUT"));
+      } else if (!token) {
+        setHasToken(false);
         setUser(null);
-      } else {
-        setUser((u) => u ?? getStoredUser());
+        setMeStatus("unauthorized");
       }
       finish();
-    }, SESSION_BOOT_TIMEOUT_MS);
+    }, sessionBootBudgetMs(API_AUTH_TIMEOUT_MS));
 
     void refreshMe().finally(() => {
       window.clearTimeout(timer);
@@ -161,6 +170,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return onSessionCleared(() => {
       setUser(null);
+      setHasToken(false);
+      setMeStatus("unauthorized");
       setBootError(null);
     });
   }, []);
@@ -169,7 +180,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const session = await authApi.login(email, password);
       saveSession(session, { remember: options?.remember !== false });
+      setHasToken(true);
       setUser(session.user);
+      setMeStatus("success");
       setBootError(null);
       recordAudit("login", "success", "User signed in", { email });
     } catch (e) {
@@ -184,7 +197,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const result = await authApi.register(email, password, displayName);
         if ("access_token" in result) {
           saveSession(result as AuthSession);
+          setHasToken(true);
           setUser((result as AuthSession).user);
+          setMeStatus("success");
           setBootError(null);
           recordAudit("register", "success", "Account registered", { email });
           return;
@@ -207,22 +222,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       recordAudit("logout", "info", "Sign-out completed locally after API error");
     }
     clearSession();
+    setHasToken(false);
     setUser(null);
+    setMeStatus("unauthorized");
     setBootError(null);
   }, []);
+
+  const authPhase = resolveAuthPhase({
+    loading,
+    hasToken,
+    hasUser: Boolean(user),
+    meStatus,
+  });
+  const opsReady = canIssueProtectedOps(authPhase, hasToken);
+  const isAuthenticated = isAuthenticatedPhase(authPhase, Boolean(user));
 
   const value = useMemo(
     () => ({
       user,
       loading,
       bootError,
-      isAuthenticated: Boolean(user),
+      isAuthenticated,
+      authPhase,
+      opsReady,
       login,
       register,
       logout,
-      refreshMe,
+      refreshMe: () => refreshMe(),
     }),
-    [user, loading, bootError, login, register, logout, refreshMe],
+    [user, loading, bootError, isAuthenticated, authPhase, opsReady, login, register, logout, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

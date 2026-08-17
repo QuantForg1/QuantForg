@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ import {
   weltradeApi,
 } from "@/lib/api/endpoints";
 import { useAuth } from "@/providers/auth-provider";
-import { iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-access";
+import { canAccessIteOps, iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-access";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import {
@@ -42,6 +42,16 @@ import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
 import { LaunchReadinessPanel } from "@/components/ops/launch-readiness-panel";
+import {
+  resolveTradingComponentsView,
+} from "@/lib/trading/component-health";
+import {
+  autoTradingSurfaceCopy,
+  classifyOpsFailure,
+  resolveAutoTradingSurface,
+  resolveTradingInfraState,
+  type OpsQueryKind,
+} from "@/lib/ops/auto-trading-surface";
 import {
   BiasMeter,
   ExecutionPipeline,
@@ -73,7 +83,8 @@ function toneRun(state: RunState): "success" | "warning" | "danger" | "neutral" 
  * (Risk + Safety + gateway) — never direct MT5.
  */
 export function AutoTradingWorkspace() {
-  const { user } = useAuth();
+  const auth = useAuth();
+  const { user, opsReady, authPhase, loading: authLoading } = auth;
   const qc = useQueryClient();
   const session = useTradingSession();
   const [toggles, setToggles] = useState<StrategyToggleState>(() => loadStrategyToggles());
@@ -86,103 +97,133 @@ export function AutoTradingWorkspace() {
     null,
   );
 
+  const opsEnabled = opsReady && canAccessIteOps(user);
+
+  const componentsQ = useQuery({
+    queryKey: ["trading-components-health"],
+    queryFn: platformApi.tradingComponents,
+    staleTime: 15_000,
+    refetchInterval: 20_000,
+    retry: 1,
+  });
   const autoQ = useQuery({
     queryKey: ["ite-ops-auto-trading"],
     queryFn: iteOpsApi.autoTrading,
+    enabled: opsEnabled,
     retry: false,
-    refetchInterval: 15_000,
+    staleTime: 10_000,
+    refetchInterval: opsEnabled ? 15_000 : false,
   });
+  const coreSettled = autoQ.isFetched || autoQ.isError;
+  const telemetryEnabled = opsEnabled && coreSettled;
   const centerQ = useQuery({
     queryKey: ["ite-ops-center"],
     queryFn: iteOpsApi.controlCenter,
+    enabled: opsEnabled,
     retry: false,
-    refetchInterval: 20_000,
+    staleTime: 15_000,
+    refetchInterval: opsEnabled ? 20_000 : false,
   });
   const signalsQ = useQuery({
     queryKey: ["strategy-signals", "auto-ws"],
     queryFn: strategyApi.signals,
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 20_000,
+    refetchInterval: telemetryEnabled ? 20_000 : false,
   });
   const journalQ = useQuery({
     queryKey: ["execution-journal", "auto-ws"],
     queryFn: () => executionApi.journal(60),
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: telemetryEnabled ? 15_000 : false,
   });
   const auditsQ = useQuery({
     queryKey: ["execution-audits", "auto-ws"],
     queryFn: () => executionApi.audits(80),
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: telemetryEnabled ? 15_000 : false,
   });
   const analyticsQ = useQuery({
     queryKey: ["execution-analytics", "auto-ws"],
     queryFn: () => executionApi.analytics(100),
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: telemetryEnabled ? 30_000 : false,
   });
   const positionsQ = useQuery({
     queryKey: ["portfolio-positions", "auto-ws"],
     queryFn: () => portfolioApi.positions(),
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 12_000,
+    refetchInterval: telemetryEnabled ? 12_000 : false,
   });
   const ordersQ = useQuery({
     queryKey: ["portfolio-orders", "auto-ws"],
     queryFn: () => portfolioApi.orders(),
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: telemetryEnabled ? 15_000 : false,
   });
   const mt5Q = useQuery({
     queryKey: ["mt5-status"],
     queryFn: () => mt5Api.status(),
+    enabled: opsEnabled,
     retry: false,
-    refetchInterval: 15_000,
+    staleTime: 10_000,
+    refetchInterval: opsEnabled ? 15_000 : false,
   });
   const healthQ = useQuery({
     queryKey: ["weltrade-health"],
     queryFn: () => weltradeApi.health(),
+    enabled: opsEnabled,
     retry: false,
-    refetchInterval: 20_000,
+    staleTime: 15_000,
+    refetchInterval: opsEnabled ? 20_000 : false,
   });
   const tickQ = useQuery({
     queryKey: ["mt5-tick", TRADING_SYMBOL],
     queryFn: () => mt5Api.tick(TRADING_SYMBOL),
-    enabled: session.connected,
+    enabled: opsEnabled && session.connected,
     staleTime: 4_000,
-    refetchInterval: session.connected ? 5_000 : false,
+    refetchInterval: opsEnabled && session.connected ? 5_000 : false,
     retry: false,
   });
   const auditLogQ = useQuery({
     queryKey: ["ite-ops-audit", "auto-ws"],
     queryFn: () => iteOpsApi.audit(40),
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: telemetryEnabled ? 30_000 : false,
   });
   const servicesHealthQ = useQuery({
     queryKey: ["ite-ops-services-health", "auto-ws"],
     queryFn: iteOpsApi.servicesHealth,
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: telemetryEnabled ? 30_000 : false,
   });
   const obsHealthQ = useQuery({
     queryKey: ["institutional-observability", "auto-ws"],
     queryFn: institutionalObservabilityApi.health,
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 45_000,
+    refetchInterval: telemetryEnabled ? 45_000 : false,
   });
   const obsResourcesQ = useQuery({
     queryKey: ["institutional-observability-resources", "auto-ws"],
     queryFn: institutionalObservabilityApi.resources,
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 45_000,
+    refetchInterval: telemetryEnabled ? 45_000 : false,
   });
   const apiHealthQ = useQuery({
     queryKey: ["system-health", "auto-ws"],
     queryFn: platformApi.health,
+    enabled: telemetryEnabled,
     retry: false,
-    refetchInterval: 30_000,
+    refetchInterval: telemetryEnabled ? 30_000 : false,
   });
 
   const policy = asRecord(asRecord(autoQ.data).policy);
@@ -234,9 +275,28 @@ export function AutoTradingWorkspace() {
     "—",
   );
 
-  // Keep Auto Trading gate in sync with the same session the Broker page uses.
+  // Keep Auto Trading gate in sync with broker session — skip the initial
+  // null → value paint so first load does not duplicate auto-trading.
+  const prevSessionPlanes = useRef<{
+    gateway: boolean | null;
+    connected: boolean;
+  } | null>(null);
   useEffect(() => {
-    void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
+    const next = {
+      gateway: session.gatewayOnline,
+      connected: session.connected,
+    };
+    if (prevSessionPlanes.current == null) {
+      prevSessionPlanes.current = next;
+      return;
+    }
+    if (
+      prevSessionPlanes.current.gateway !== next.gateway ||
+      prevSessionPlanes.current.connected !== next.connected
+    ) {
+      prevSessionPlanes.current = next;
+      void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
+    }
   }, [qc, session.gatewayOnline, session.connected]);
 
   const positions = useMemo(
@@ -598,19 +658,108 @@ export function AutoTradingWorkspace() {
     };
   };
 
-  if (autoQ.isLoading && !autoQ.data) {
-    return <DeskSkeleton rows={8} />;
+  const componentsView = resolveTradingComponentsView({
+    payload: componentsQ.data,
+    isSuccess: componentsQ.isSuccess,
+    isError: componentsQ.isError,
+    errorKind:
+      componentsQ.error instanceof ApiError && componentsQ.error.code === "timeout"
+        ? "timeout"
+        : componentsQ.error instanceof ApiError && componentsQ.error.code === "network_error"
+          ? "network"
+          : componentsQ.isError
+            ? "other"
+            : null,
+  });
+  const tradingInfra = resolveTradingInfraState({
+    gatewayOk: componentsView?.gateway.ok,
+    mt5Ok: componentsView?.mt5.ok,
+    omsOk: componentsView?.oms.ok,
+  });
+  const opsQueryKind: OpsQueryKind = !opsEnabled
+    ? authLoading || authPhase === "AUTH_LOADING"
+      ? "idle"
+      : authPhase === "AUTH_REQUIRED"
+        ? "unauthorized"
+        : user && !canAccessIteOps(user)
+          ? "forbidden"
+          : "idle"
+    : autoQ.isSuccess
+      ? "success"
+      : autoQ.isError
+        ? classifyOpsFailure(
+            autoQ.error instanceof ApiError
+              ? { status: autoQ.error.status, code: autoQ.error.code }
+              : null,
+          )
+        : autoQ.isLoading || autoQ.isFetching
+          ? "loading"
+          : "idle";
+  const surface = resolveAutoTradingSurface({
+    authPhase,
+    opsQuery: opsQueryKind,
+    hasOpsData: Boolean(autoQ.data),
+    tradingInfra,
+  });
+  const surfaceCopy = autoTradingSurfaceCopy(surface);
+
+  if (surface.surface === "AUTHENTICATING" || surface.surface === "LOADING") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-[var(--fg-muted)]">{surfaceCopy.detail}</p>
+        <DeskSkeleton rows={8} />
+      </div>
+    );
   }
-  if (autoQ.isError) {
+  if (surface.surface === "AUTH_REQUIRED") {
     return (
       <DeskError
-        message={iteOpsAccessDeniedMessage(
-          user,
-          autoQ.error,
-          "Auto Trading",
-        )}
+        message={surfaceCopy.detail}
+        onRetry={() => {
+          void auth.refreshMe();
+        }}
       />
     );
+  }
+  if (surface.surface === "UNAVAILABLE") {
+    return (
+      <DeskError
+        message={iteOpsAccessDeniedMessage(user, autoQ.error, "Auto Trading")}
+        onRetry={() => {
+          void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
+        }}
+      />
+    );
+  }
+  if (surface.surface === "DEGRADED" && !autoQ.data) {
+    return (
+      <div className="space-y-4" role="status">
+        <div className="rounded-[var(--radius-os)] border border-[var(--warning)]/30 bg-[var(--surface)] p-[var(--space-3)]">
+          <p className="text-sm font-medium text-[var(--fg)]">{surfaceCopy.title}</p>
+          <p className="mt-1 text-sm text-[var(--fg-muted)]">{surfaceCopy.detail}</p>
+          <p className="mt-2 font-mono text-[11px] text-[var(--fg-subtle)]">
+            infra={tradingInfra} · gateway=
+            {componentsView?.gateway.status || "UNKNOWN"} · mt5=
+            {componentsView?.mt5.status || "UNKNOWN"} · oms=
+            {componentsView?.oms.status || "UNKNOWN"}
+          </p>
+          <Button
+            className="mt-3"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
+              void qc.invalidateQueries({ queryKey: ["trading-components-health"] });
+            }}
+          >
+            Retry ops
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (!autoQ.data) {
+    return <DeskSkeleton rows={8} />;
   }
 
   const orch = asRecord(asRecord(autoQ.data).orchestrator);
@@ -955,6 +1104,17 @@ export function AutoTradingWorkspace() {
   const targetTradesDay = num(opportunityTarget.target_trades_per_day, 3);
   return (
     <div className="space-y-3">
+      {surface.surface === "DEGRADED" ? (
+        <section
+          role="status"
+          className="border border-[var(--warning)] bg-[var(--warning)]/10 px-3 py-2.5"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--warning)]">
+            {surfaceCopy.title}
+          </p>
+          <p className="mt-1 text-xs text-[var(--fg-muted)]">{surfaceCopy.detail}</p>
+        </section>
+      ) : null}
       {forceBanner ? (
         <section
           role="status"

@@ -72,6 +72,16 @@ export function iteOpsAccessDeniedMessage(
       `(user=${user.id} role=${role} required=${ITE_OPS_ROLES.join("|")}).`
     );
   }
+  if (
+    api?.code === "timeout" ||
+    api?.status === 408 ||
+    api?.code === "network_error"
+  ) {
+    return (
+      `${surface} delayed — API did not respond in time. ` +
+      `Trading connectivity is not inferred from this timeout.`
+    );
+  }
   if (api) {
     return `${surface} unavailable — ${api.message} (${api.code || api.status}).`;
   }

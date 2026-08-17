@@ -76,7 +76,7 @@ const DESK_SHORTCUTS: string[] = (() => {
 })();
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { loading, isAuthenticated, bootError, refreshMe } = useAuth();
+  const { loading, isAuthenticated, bootError, refreshMe, authPhase } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -120,19 +120,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-24 w-full" />
           </div>
-          <span className="sr-only">Loading QuantForg</span>
+          <span className="sr-only">Authenticating QuantForg</span>
         </div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
-    if (bootError) {
+    if (bootError || authPhase === "AUTH_REQUIRED" || authPhase === "AUTH_TIMEOUT") {
       return (
         <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-4">
           <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
             <BrandMark size={48} className="opacity-90" />
-            <p className="text-sm text-[var(--fg-muted)]">{bootError}</p>
+            <p className="text-sm text-[var(--fg-muted)]">
+              {bootError || "Sign in required."}
+            </p>
+            <p className="text-xs text-[var(--fg-subtle)]">
+              Trading connectivity is not inferred from this session check.
+            </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
@@ -150,7 +155,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--fg)]"
                 onClick={() => router.replace("/login")}
               >
-                Sign in
+                Sign in again
               </button>
             </div>
           </div>

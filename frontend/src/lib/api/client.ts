@@ -17,6 +17,22 @@ import {
 import { newRequestId } from "@/lib/observability/context";
 import { captureError } from "@/lib/observability/error-monitor";
 import { recordApiRequestSample } from "@/lib/api/request-log";
+import {
+  API_AUTH_TIMEOUT_MS,
+  API_DEFAULT_TIMEOUT_MS,
+  API_HEALTH_TIMEOUT_MS,
+  API_HEAVY_TIMEOUT_MS,
+  defaultTimeoutForPath,
+  shouldAttemptTokenRefresh,
+  shouldDedupeGet,
+} from "@/lib/api/request-policy";
+
+export {
+  API_AUTH_TIMEOUT_MS,
+  API_DEFAULT_TIMEOUT_MS,
+  API_HEALTH_TIMEOUT_MS,
+  API_HEAVY_TIMEOUT_MS,
+};
 
 export class ApiError extends Error {
   status: number;
@@ -40,13 +56,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Default hard timeout so UI never spins forever on a hung API. */
-export const API_DEFAULT_TIMEOUT_MS = 25_000;
-export const API_AUTH_TIMEOUT_MS = 22_000;
-export const API_HEALTH_TIMEOUT_MS = 8_000;
-export const API_HEAVY_TIMEOUT_MS = 45_000;
-
-/** In-flight GET dedupe — identical health/catalogue probes share one promise. */
+/** In-flight GET dedupe — identical health/catalogue/ops probes share one promise. */
 const inflightGets = new Map<string, Promise<unknown>>();
 
 type RequestOptions = {
@@ -192,45 +202,13 @@ function toNetworkApiError(err: unknown, requestId: string): ApiError {
   );
 }
 
-function defaultTimeoutForPath(path: string): number {
-  const p = path.startsWith("http") ? new URL(path).pathname : path;
-  if (
-    p.includes("/auth/login") ||
-    p.includes("/auth/refresh") ||
-    p.includes("/auth/me")
-  ) {
-    return API_AUTH_TIMEOUT_MS;
-  }
-  if (p.endsWith("/health") || p.includes("/health/") || p.endsWith("/health/live")) {
-    return API_HEALTH_TIMEOUT_MS;
-  }
-  if (
-    p.includes("/mt5") ||
-    p.includes("/weltrade") ||
-    p.includes("/signals") ||
-    p.includes("/symbol") ||
-    p.includes("/auto-trading") ||
-    p.includes("/ite")
-  ) {
-    return API_HEAVY_TIMEOUT_MS;
-  }
-  return API_DEFAULT_TIMEOUT_MS;
-}
-
 export async function apiFetch<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
   const method = (options.method || "GET").toUpperCase();
   const safePathEarly = path.startsWith("http") ? new URL(path).pathname : path;
-  const dedupe =
-    method === "GET" &&
-    !options.signal &&
-    (safePathEarly.includes("/health") ||
-      safePathEarly.includes("/weltrade/health") ||
-      safePathEarly.includes("/mt5/status") ||
-      safePathEarly.includes("/mt5/symbols") ||
-      safePathEarly.includes("/auth/me"));
+  const dedupe = method === "GET" && !options.signal && shouldDedupeGet(safePathEarly);
   if (dedupe) {
     const key = `${method}:${safePathEarly}:${options.auth === false ? "0" : "1"}`;
     const existing = inflightGets.get(key);
@@ -336,7 +314,13 @@ async function apiFetchUndeduped<T>(
 
   markApiReachable();
 
-  if (res.status === 401 && auth) {
+  if (
+    shouldAttemptTokenRefresh({
+      status: res.status,
+      authEnabled: auth,
+      alreadyRetried: retries > 0,
+    })
+  ) {
     if (!refreshPromise) {
       refreshPromise = refreshAccessToken().finally(() => {
         refreshPromise = null;
