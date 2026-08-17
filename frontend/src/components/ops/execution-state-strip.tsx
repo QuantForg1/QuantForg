@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { iteOpsApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
+import { firstBlockingLock, isExecutionBlockingLock } from "@/lib/ops/launch-locks";
 
 type Props = {
   className?: string;
@@ -52,8 +53,17 @@ export function ExecutionStateStrip({
 
   const launch = asRecord(launchQ.data);
   const launchItems = asList(launch.items).map(asRecord);
-  const firstLock = launchItems.find((item) => !item.passed);
-  const lockCount = launchItems.filter((item) => !item.passed).length;
+  const firstLock = firstBlockingLock(
+    launchItems,
+    asRecord(launch.first_blocking_lock),
+  );
+  const remaining = asList(launch.remaining_locks);
+  const lockCount =
+    remaining.length || launchItems.filter((item) => isExecutionBlockingLock(item)).length;
+  const blockCode = str(
+    launch.execution_block_code || asRecord(firstLock).execution_code,
+    "",
+  );
   const launchReady = Boolean(launch.ready_for_promotion) && Boolean(launch.ready_for_gate_enabled);
 
   if (autoQ.isError && executionState == null) {
@@ -124,16 +134,28 @@ export function ExecutionStateStrip({
           </p>
           {firstLock ? (
             <>
+              {blockCode ? (
+                <p className="font-mono text-[11px] text-[var(--fg)]">
+                  FIRST_BLOCKING_LOCK={blockCode}
+                </p>
+              ) : null}
               <p>
                 ✘ {str(firstLock.label)} · Current: {str(firstLock.value)}
               </p>
               <p className="text-[var(--fg-muted)]">
                 Why: {str(firstLock.why)}
               </p>
-              <p className="whitespace-pre-line font-mono text-[11px] text-[var(--fg)]">
-                Resolution:{"\n"}
-                {str(firstLock.how_to_resolve)}
-              </p>
+              {str(firstLock.how_to_resolve) ? (
+                <p className="whitespace-pre-line font-mono text-[11px] text-[var(--fg)]">
+                  Resolution:{"\n"}
+                  {str(firstLock.how_to_resolve)}
+                </p>
+              ) : null}
+              {lockCount > 1 ? (
+                <p className="text-[var(--fg-muted)]">
+                  Remaining execution locks: {lockCount - 1}
+                </p>
+              ) : null}
             </>
           ) : primary ? (
             <p>

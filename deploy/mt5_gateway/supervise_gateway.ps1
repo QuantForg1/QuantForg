@@ -63,10 +63,27 @@ function Get-ProjectPython {
   throw "Project venv not found. Run: py -3.13 -m poetry install"
 }
 
+function Test-PortListening {
+  try {
+    $props = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+    foreach ($ep in $props.GetActiveTcpListeners()) {
+      if ($ep.Port -eq $Port) { return $true }
+    }
+  } catch {}
+  return $false
+}
+
 function Get-ListenPids {
+  # Avoid Get-NetTCPConnection — it can hang for tens of seconds on this host
+  # and block supervisor restart after a Gateway crash.
+  if (-not (Test-PortListening)) { return @() }
   $pids = @()
-  Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
-    ForEach-Object { $pids += $_.OwningProcess }
+  $lines = & netstat -ano -p tcp 2>$null
+  foreach ($line in $lines) {
+    if ($line -match ":$Port\s+\S+\s+LISTENING\s+(\d+)\s*$") {
+      $pids += [int]$Matches[1]
+    }
+  }
   return @($pids | Select-Object -Unique)
 }
 
@@ -142,14 +159,19 @@ function Wait-GatewayReady {
 }
 
 function Ensure-SingleHealthyInstance {
+  # HTTP first — connection-refused is immediate; do not wait on TCP table APIs.
+  if (Test-LiveOk) {
+    $listen = Get-ListenPids
+    $pidValue = if ($listen.Count -gt 0) { $listen[0] } else { 0 }
+    Write-SupLog ("gateway already live on :{0} pids={1}" -f $Port, ($listen -join ","))
+    if ($pidValue -gt 0) {
+      Set-Content -Path $PidFile -Value $pidValue -Encoding ASCII
+    }
+    return $true
+  }
   $listen = Get-ListenPids
   if ($listen.Count -eq 0) {
     return $false
-  }
-  if (Test-LiveOk) {
-    Write-SupLog ("gateway already live on :{0} pids={1}" -f $Port, ($listen -join ","))
-    Set-Content -Path $PidFile -Value $listen[0] -Encoding ASCII
-    return $true
   }
   # Port occupied but process unresponsive - reclaim.
   Write-SupLog ("port {0} occupied but /health/live failed - reclaiming" -f $Port)

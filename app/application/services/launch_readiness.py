@@ -98,6 +98,14 @@ _RESOLVE: dict[str, str] = {
         "Authenticate as OWNER or ADMIN\n"
         "Pass confirmed=true on promotion / mode / auto-trading mutations"
     ),
+    "burst_latch": (
+        "Wait for Phase A burst-latch cooldown to expire\n"
+        "Do not bypass Safety — new entries stay blocked until CLEAR"
+    ),
+    "reconciliation": (
+        "Reconcile ambiguous OMS/MT5 order state\n"
+        "New entries stay blocked until RECONCILIATION_REQUIRED clears"
+    ),
 }
 
 # Shared infra/safety locks for any promotion step.
@@ -116,6 +124,8 @@ _INFRA_KEYS = frozenset(
         "trading_allowed",
         "symbol_ready",
         "owner_authorization",
+        "burst_latch",
+        "reconciliation",
     }
 )
 
@@ -131,6 +141,11 @@ class LaunchChecklistItem:
     required_for_promotion: bool = True
     required_for_canary: bool = True
     required_for_live: bool = True
+    category: str = "CONFIG"
+    blocks_execution: bool = True
+    canonical_state: str = ""
+    evaluated: bool = True
+    execution_code: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -143,6 +158,11 @@ class LaunchChecklistItem:
             "required_for_promotion": self.required_for_promotion,
             "required_for_canary": self.required_for_canary,
             "required_for_live": self.required_for_live,
+            "category": self.category,
+            "blocks_execution": self.blocks_execution,
+            "canonical_state": self.canonical_state,
+            "evaluated": self.evaluated,
+            "execution_code": self.execution_code,
         }
 
 
@@ -159,6 +179,9 @@ class LaunchReadinessReport:
     promotion_plan: tuple[str, ...]
     demo_certified: bool
     verification: dict[str, Any] = field(default_factory=dict)
+    first_blocking_lock: dict[str, Any] | None = None
+    remaining_locks: tuple[dict[str, Any], ...] = ()
+    execution_block_code: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -173,6 +196,9 @@ class LaunchReadinessReport:
             "promotion_plan": list(self.promotion_plan),
             "demo_certified": self.demo_certified,
             "verification": self.verification,
+            "first_blocking_lock": self.first_blocking_lock,
+            "remaining_locks": list(self.remaining_locks),
+            "execution_block_code": self.execution_block_code,
             "never_bypasses_risk": True,
             "never_bypasses_safety": True,
             "never_flips_execution_enabled": True,
@@ -191,6 +217,11 @@ def _item(
     required_for_promotion: bool = True,
     required_for_canary: bool = True,
     required_for_live: bool = True,
+    category: str = "CONFIG",
+    blocks_execution: bool = True,
+    canonical_state: str = "",
+    evaluated: bool = True,
+    execution_code: str = "",
 ) -> LaunchChecklistItem:
     return LaunchChecklistItem(
         key=key,
@@ -204,7 +235,41 @@ def _item(
         required_for_promotion=required_for_promotion,
         required_for_canary=required_for_canary,
         required_for_live=required_for_live,
+        category=category,
+        blocks_execution=blocks_execution,
+        canonical_state=canonical_state,
+        evaluated=evaluated,
+        execution_code=execution_code if not passed else "",
     )
+
+
+def _phase_a_safety_flags() -> tuple[bool, bool]:
+    """Burst latch / reconciliation — never invent latched."""
+    try:
+        from app.domain.institutional_trading.phase_a.plane import get_phase_a_plane
+
+        snap = get_phase_a_plane().snapshot()
+    except Exception:
+        return False, False
+    burst = snap.get("burst_latch") if isinstance(snap, dict) else None
+    recon = snap.get("reconciliation") if isinstance(snap, dict) else None
+    burst_latched = bool(isinstance(burst, dict) and burst.get("latched"))
+    recon_required = bool(isinstance(recon, dict) and recon.get("blocking"))
+    return burst_latched, recon_required
+
+
+def _blocker_dict(item: LaunchChecklistItem) -> dict[str, str]:
+    return {
+        "key": item.key,
+        "label": item.label,
+        "why": item.why,
+        "how_to_resolve": item.how_to_resolve,
+        "value": item.value,
+        "category": item.category,
+        "canonical_state": item.canonical_state,
+        "execution_code": item.execution_code,
+        "blocks_execution": "true" if item.blocks_execution else "false",
+    }
 
 
 def _demo_certified() -> bool:
@@ -234,7 +299,9 @@ def build_launch_readiness(
     policy = plane.auto_trade_policy()
     demo_ok = _demo_certified()
 
-    mt5_login_ok = bool(facts.broker_connected and facts.gateway_connected)
+    gateway_ok = bool(facts.gateway_connected)
+    broker_ok = bool(facts.broker_connected)
+    mt5_login_ok = bool(gateway_ok and broker_ok)
     trading_allowed = bool(facts.account_trading_enabled)
     symbol_ready = bool(facts.symbol_tradable and facts.symbol)
     market_open = bool(facts.market_data_live)
@@ -244,6 +311,50 @@ def build_launch_readiness(
     mode = plane.mode
     mode_ok = mode in {OpsExecutionMode.CANARY, OpsExecutionMode.LIVE}
     exec_ok = bool(facts.execution_enabled)
+    burst_latched, recon_required = _phase_a_safety_flags()
+
+    # Independent vs dependent locks: Gateway down must not be reported as
+    # broker-invalid-credentials, market-closed, or missing MT5 login.
+    broker_state = (
+        "CONNECTED"
+        if broker_ok
+        else ("GATEWAY_UNAVAILABLE" if not gateway_ok else "DISCONNECTED")
+    )
+    mt5_state = (
+        "CONNECTED"
+        if mt5_login_ok
+        else ("GATEWAY_UNAVAILABLE" if not gateway_ok else "DISCONNECTED")
+    )
+    if not gateway_ok:
+        market_state = "GATEWAY_UNAVAILABLE"
+        market_code = "GATEWAY_OFFLINE"
+        market_why = (
+            "Not evaluated — MT5 Gateway offline "
+            "(not a market-hours determination)"
+        )
+        market_value = "UNAVAILABLE"
+        market_blocks = False
+        market_eval = False
+    elif not broker_ok:
+        market_state = "DISCONNECTED"
+        market_code = "BROKER_DISCONNECTED"
+        market_why = "Not evaluated — broker/MT5 session is not connected"
+        market_value = "UNAVAILABLE"
+        market_blocks = False
+        market_eval = False
+    else:
+        market_state = "CONNECTED" if market_open else "DEGRADED"
+        market_code = "" if market_open else "NO_QUOTE"
+        market_why = "Market data is not live (no quote / stale / closed)"
+        market_value = "OPEN" if market_open else "NO_QUOTE"
+        market_blocks = True
+        market_eval = True
+
+    flags_eval = bool(facts.account_flags_evaluated)
+    trading_eval = bool(gateway_ok and broker_ok and flags_eval)
+    trading_pass = trading_allowed if trading_eval else False
+    symbol_eval = bool(broker_ok)
+    symbol_pass = bool(symbol_ready) if symbol_eval else False
 
     items = (
         _item(
@@ -255,6 +366,10 @@ def build_launch_readiness(
             required_for_canary=False,
             required_for_live=False,
             required_for_promotion=False,
+            category="EXECUTION",
+            blocks_execution=True,
+            canonical_state=mode.value,
+            execution_code="",
         ),
         _item(
             "execution_enabled",
@@ -262,6 +377,9 @@ def build_launch_readiness(
             passed=exec_ok,
             value="true" if exec_ok else "false",
             why="EXECUTION_ENABLED=false — OMS not permitted",
+            category="CONFIG",
+            canonical_state="CONNECTED" if exec_ok else "NOT_CONFIGURED",
+            execution_code="" if exec_ok else "AUTH_REQUIRED",
         ),
         _item(
             "kill_switch",
@@ -269,6 +387,9 @@ def build_launch_readiness(
             passed=not plane.kill_switch_armed,
             value="ARMED" if plane.kill_switch_armed else "DISARMED",
             why="Kill switch is armed — OMS blocked",
+            category="RISK",
+            canonical_state="CONNECTED" if not plane.kill_switch_armed else "DISCONNECTED",
+            execution_code="" if not plane.kill_switch_armed else "KILL_SWITCH",
         ),
         _item(
             "emergency_stop",
@@ -276,6 +397,8 @@ def build_launch_readiness(
             passed=not facts.emergency_stop,
             value="STOP" if facts.emergency_stop else "READY",
             why="Emergency STOP is active",
+            category="RISK",
+            execution_code="" if not facts.emergency_stop else "KILL_SWITCH",
         ),
         _item(
             "safety_lock",
@@ -283,6 +406,8 @@ def build_launch_readiness(
             passed=not safety_locked,
             value="LOCKED" if safety_locked else "CLEAR",
             why="Safety lock active (kill switch armed)",
+            category="RISK",
+            execution_code="" if not safety_locked else "KILL_SWITCH",
         ),
         _item(
             "risk_lock",
@@ -290,6 +415,8 @@ def build_launch_readiness(
             passed=not risk_locked,
             value="LOCKED" if risk_locked else "CLEAR",
             why="Risk lock active (daily loss exceeded)",
+            category="RISK",
+            execution_code="" if not risk_locked else "RISK_HALTED",
         ),
         _item(
             "daily_loss_lock",
@@ -297,68 +424,165 @@ def build_launch_readiness(
             passed=not plane.daily_loss_exceeded,
             value="EXCEEDED" if plane.daily_loss_exceeded else "OK",
             why="Maximum daily loss exceeded",
+            category="RISK",
+            execution_code="" if not plane.daily_loss_exceeded else "RISK_HALTED",
+        ),
+        _item(
+            "burst_latch",
+            "Burst Latch",
+            passed=not burst_latched,
+            value="LATCHED" if burst_latched else "CLEAR",
+            why="Phase A burst latch is armed — new entries blocked",
+            category="RISK",
+            execution_code="" if not burst_latched else "BURST_LATCH",
+        ),
+        _item(
+            "reconciliation",
+            "Reconciliation",
+            passed=not recon_required,
+            value="REQUIRED" if recon_required else "CLEAR",
+            why="Ambiguous order state — new entries blocked until reconciled",
+            category="RISK",
+            execution_code="" if not recon_required else "RECON_REQUIRED",
         ),
         _item(
             "gateway",
             "Gateway",
-            passed=bool(facts.gateway_connected),
-            value="CONNECTED" if facts.gateway_connected else "OFFLINE",
+            passed=gateway_ok,
+            value="CONNECTED" if gateway_ok else "OFFLINE",
             why="MT5 Gateway not connected",
+            category="GATEWAY",
+            canonical_state="CONNECTED" if gateway_ok else "GATEWAY_UNAVAILABLE",
+            execution_code="" if gateway_ok else "GATEWAY_OFFLINE",
         ),
         _item(
             "broker",
             "Broker",
-            passed=bool(facts.broker_connected),
-            value="CONNECTED" if facts.broker_connected else "OFF",
-            why="Broker / MT5 not connected",
+            passed=broker_ok,
+            value="CONNECTED" if broker_ok else broker_state,
+            why=(
+                "Broker session not evaluated — Gateway unavailable "
+                "(not a credential failure)"
+                if not gateway_ok
+                else "Broker / MT5 not connected"
+            ),
+            category="BROKER",
+            blocks_execution=gateway_ok,
+            canonical_state=broker_state,
+            evaluated=gateway_ok,
+            execution_code=(
+                ""
+                if broker_ok
+                else ("GATEWAY_OFFLINE" if not gateway_ok else "BROKER_DISCONNECTED")
+            ),
         ),
         _item(
             "mt5_login",
             "MT5 Login",
             passed=mt5_login_ok,
-            value="OK" if mt5_login_ok else "MISSING",
-            why="MT5 session not logged in / gateway offline",
+            value="OK" if mt5_login_ok else mt5_state,
+            why=(
+                "MT5 login not evaluated — Gateway unavailable"
+                if not gateway_ok
+                else "MT5 session not logged in"
+            ),
+            category="BROKER",
+            blocks_execution=gateway_ok,
+            canonical_state=mt5_state,
+            evaluated=gateway_ok,
+            execution_code=(
+                ""
+                if mt5_login_ok
+                else ("GATEWAY_OFFLINE" if not gateway_ok else "MT5_NOT_READY")
+            ),
         ),
         _item(
             "market_open",
             "Market Open",
-            passed=market_open,
-            value="OPEN" if market_open else "CLOSED/QUIET",
-            why="Market data is not live",
+            passed=market_open if market_eval else False,
+            value=market_value,
+            why=market_why,
+            category="MARKET",
+            blocks_execution=market_blocks,
+            canonical_state=market_state,
+            evaluated=market_eval,
+            execution_code=market_code,
         ),
         _item(
             "trading_allowed",
             "Trading Allowed",
-            passed=(
-                trading_allowed
-                if facts.account_flags_evaluated
-                else bool(facts.broker_connected)
-            ),
+            passed=trading_pass if trading_eval else False,
             value=(
                 "YES"
-                if (
-                    trading_allowed
-                    if facts.account_flags_evaluated
-                    else bool(facts.broker_connected)
-                )
-                else "NO"
+                if trading_pass and trading_eval
+                else ("UNAVAILABLE" if not trading_eval else "NO")
             ),
-            why="Account trading disabled or flags unavailable while broker down",
+            why=(
+                "Account trading flags not evaluated — waiting on Gateway/Broker"
+                if not trading_eval
+                else "Account trading disabled"
+            ),
+            category="BROKER",
+            blocks_execution=trading_eval,
+            canonical_state=(
+                "CONNECTED"
+                if trading_pass and trading_eval
+                else (
+                    "GATEWAY_UNAVAILABLE"
+                    if not gateway_ok
+                    else ("DISCONNECTED" if not broker_ok else "DEGRADED")
+                )
+            ),
+            evaluated=trading_eval,
+            execution_code=(
+                ""
+                if trading_pass and trading_eval
+                else (
+                    "GATEWAY_OFFLINE"
+                    if not gateway_ok
+                    else (
+                        "BROKER_DISCONNECTED" if not broker_ok else "MT5_NOT_READY"
+                    )
+                )
+            ),
         ),
         _item(
             "symbol_ready",
             "Symbol Ready",
-            passed=(
-                symbol_ready
-                if facts.symbol_tradable or facts.broker_connected
-                else False
-            ),
+            passed=symbol_pass,
             value=(
                 "XAUUSD READY"
-                if symbol_ready or facts.broker_connected
-                else "NOT READY"
+                if symbol_pass
+                else ("UNAVAILABLE" if not symbol_eval else "NOT READY")
             ),
-            why="Symbol XAUUSD not tradable / not ready",
+            why=(
+                "Symbol tradability not evaluated — waiting on Broker"
+                if not symbol_eval
+                else "Symbol XAUUSD not tradable / not ready"
+            ),
+            category="MARKET",
+            blocks_execution=symbol_eval,
+            canonical_state=(
+                "CONNECTED"
+                if symbol_pass
+                else (
+                    "GATEWAY_UNAVAILABLE"
+                    if not gateway_ok
+                    else ("DISCONNECTED" if not broker_ok else "DEGRADED")
+                )
+            ),
+            evaluated=symbol_eval,
+            execution_code=(
+                ""
+                if symbol_pass
+                else (
+                    "GATEWAY_OFFLINE"
+                    if not gateway_ok
+                    else (
+                        "BROKER_DISCONNECTED" if not broker_ok else "NO_QUOTE"
+                    )
+                )
+            ),
         ),
         _item(
             "demo_certification",
@@ -369,6 +593,8 @@ def build_launch_readiness(
             required_for_canary=False,
             required_for_live=False,
             required_for_promotion=False,
+            category="CONFIG",
+            blocks_execution=False,
         ),
         _item(
             "auto_trading_run_state",
@@ -379,6 +605,8 @@ def build_launch_readiness(
             required_for_promotion=False,
             required_for_canary=False,
             required_for_live=False,
+            category="EXECUTION",
+            blocks_execution=False,
         ),
         _item(
             "owner_authorization",
@@ -386,11 +614,22 @@ def build_launch_readiness(
             passed=owner_authorized,
             value="CONFIRMED" if owner_authorized else "REQUIRED",
             why="OWNER/ADMIN confirmation required for promotion",
+            category="AUTH",
+            blocks_execution=False,
+            execution_code="" if owner_authorized else "AUTH_REQUIRED",
         ),
     )
 
     by_key = {i.key: i for i in items}
-    infra_ok = all(by_key[k].passed for k in _INFRA_KEYS if k in by_key)
+    execution_infra_ok = all(
+        by_key[k].passed
+        for k in _INFRA_KEYS
+        if k in by_key and by_key[k].blocks_execution
+    )
+    owner_ok = bool(
+        by_key.get("owner_authorization") and by_key["owner_authorization"].passed
+    )
+    infra_ok = execution_infra_ok and owner_ok
     ready_for_canary = infra_ok
     ready_for_live = infra_ok
 
@@ -400,13 +639,7 @@ def build_launch_readiness(
         next_target = "LIVE" if ready_for_live else "CANARY"
         ready_for_promotion = ready_for_canary
         blockers = tuple(
-            {
-                "key": i.key,
-                "label": i.label,
-                "why": i.why,
-                "how_to_resolve": i.how_to_resolve,
-                "value": i.value,
-            }
+            _blocker_dict(i)
             for i in items
             if not i.passed and i.required_for_canary
         )
@@ -414,20 +647,32 @@ def build_launch_readiness(
         next_target = "LIVE"
         ready_for_promotion = ready_for_live
         blockers = tuple(
-            {
-                "key": i.key,
-                "label": i.label,
-                "why": i.why,
-                "how_to_resolve": i.how_to_resolve,
-                "value": i.value,
-            }
+            _blocker_dict(i)
             for i in items
             if not i.passed and i.required_for_live
         )
     else:
         next_target = "NONE"
         ready_for_promotion = False
-        blockers = ()
+        blockers = tuple(
+            _blocker_dict(i)
+            for i in items
+            if not i.passed and i.blocks_execution
+        )
+
+    exec_blockers = tuple(i for i in items if not i.passed and i.blocks_execution)
+    first_blocking = exec_blockers[0] if exec_blockers else None
+    remaining = tuple(_blocker_dict(i) for i in exec_blockers)
+    first_dict = _blocker_dict(first_blocking) if first_blocking else None
+    exec_code = (
+        first_blocking.execution_code
+        if first_blocking and first_blocking.execution_code
+        else None
+    )
+    state = dict(state)
+    state["first_blocking_lock"] = first_dict
+    state["remaining_locks"] = list(remaining)
+    state["execution_block_code"] = exec_code
 
     plan: list[str] = []
     if mode is OpsExecutionMode.SHADOW:
@@ -455,6 +700,8 @@ def build_launch_readiness(
         "next_promotion_target": next_target,
         "primary_blocker": snap.primary_blocker,
         "blocking_category": snap.blocking_category,
+        "first_blocking_lock": first_dict,
+        "execution_block_code": exec_code,
         "persistence": persistence,
         "persisted_ops_mode": persistence.get("persisted_ops_mode"),
         "ops_mode_matches_persistence": (
@@ -475,6 +722,9 @@ def build_launch_readiness(
         promotion_plan=tuple(plan),
         demo_certified=demo_ok,
         verification=verification,
+        first_blocking_lock=first_dict,
+        remaining_locks=remaining,
+        execution_block_code=exec_code,
     )
 
 

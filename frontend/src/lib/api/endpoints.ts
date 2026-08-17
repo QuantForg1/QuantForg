@@ -977,6 +977,8 @@ export const iteOpsApi = {
     }),
   launchReadiness: () =>
     apiFetch<Record<string, unknown>>("/ite/ops/launch-readiness"),
+  liveEvidence: () =>
+    apiFetch<Record<string, unknown>>("/ite/ops/live-evidence"),
   promoteLaunch: (body: {
     reason: string;
     confirmed: boolean;

@@ -224,6 +224,16 @@ def get_launch_readiness(_user: OperatorUser) -> dict[str, Any]:
     return report.to_dict()
 
 
+@router.get("/live-evidence")
+def get_live_ops_evidence(_user: OperatorUser) -> dict[str, Any]:
+    """Authenticated read-only live evidence. Never submits orders or mutates risk."""
+    from app.application.services.live_ops_evidence import build_live_ops_evidence
+
+    plane = get_control_plane()
+    settings = get_settings()
+    return build_live_ops_evidence(plane, settings=settings)
+
+
 class LaunchPromoteBody(ConfirmBody):
     activate_auto_trading: bool = True
 

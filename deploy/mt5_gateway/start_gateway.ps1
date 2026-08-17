@@ -43,25 +43,28 @@ function Test-LocalGatewayLive {
 Write-Host "RepoRoot=$RepoRoot"
 Write-Host "TIP: For production use deploy\mt5_gateway\supervise_gateway.ps1 (survives terminal close)."
 
-$listen = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue
-if ($listen) {
-  if (Test-LocalGatewayLive) {
-    Write-Host "Gateway already live on :8765 - not starting a second process."
-    try {
-      $h = Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec 5
-      Write-Host ("status={0} mt5.connected={1} trade_allowed={2} autotrading={3}" -f `
-        $h.status, $h.mt5.connected, $h.mt5.trade_allowed, $h.mt5.mt5_autotrading_enabled)
-    } catch {
-      Write-Host "Gateway process is live; /health degraded or slow (MT5 busy) --- not restarting."
-    }
-    exit 0
+if (Test-LocalGatewayLive) {
+  Write-Host "Gateway already live on :8765 - not starting a second process."
+  try {
+    $h = Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec 5
+    Write-Host ("status={0} mt5.connected={1} trade_allowed={2} autotrading={3}" -f `
+      $h.status, $h.mt5.connected, $h.mt5.trade_allowed, $h.mt5.mt5_autotrading_enabled)
+  } catch {
+    Write-Host "Gateway process is live; /health degraded or slow (MT5 busy) --- not restarting."
   }
+  exit 0
+}
+
+$listen = $false
+try {
+  $props = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+  foreach ($ep in $props.GetActiveTcpListeners()) {
+    if ($ep.Port -eq 8765) { $listen = $true; break }
+  }
+} catch {}
+if ($listen) {
   Write-Host "Port 8765 is occupied but /health/live failed (hung/stale process)."
   Write-Host "Reclaim with: powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1 -Once"
-  $listen | ForEach-Object {
-    $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue
-    Write-Host ("LISTEN pid={0} name={1}" -f $_.OwningProcess, $p.ProcessName)
-  }
   exit 1
 }
 

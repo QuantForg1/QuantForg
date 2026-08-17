@@ -10,6 +10,7 @@ import { iteOpsApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
+import { isExecutionBlockingLock } from "@/lib/ops/launch-locks";
 
 /** Preferred display order for the Launch Lock Inspector. */
 const LOCK_ORDER = [
@@ -26,6 +27,8 @@ const LOCK_ORDER = [
   "safety_lock",
   "risk_lock",
   "daily_loss_lock",
+  "burst_latch",
+  "reconciliation",
   "demo_certification",
   "owner_authorization",
   "auto_trading_run_state",
@@ -45,6 +48,8 @@ const LABEL_OVERRIDE: Record<string, string> = {
   market_open: "Market Open",
   trading_allowed: "Trading Allowed",
   symbol_ready: "Symbol",
+  burst_latch: "Burst Latch",
+  reconciliation: "Reconciliation",
   auto_trading_run_state: "Auto Trading",
 };
 
@@ -120,11 +125,11 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
   ];
 
   const failed = ordered.filter((item) => {
-    if (item.passed) return false;
+    if (!isExecutionBlockingLock(item)) return false;
     const target = str(d.next_promotion_target, "LIVE").toUpperCase();
     if (target === "CANARY") return item.required_for_canary !== false;
     if (target === "LIVE") return item.required_for_live !== false;
-    return Boolean(item.required_for_promotion);
+    return Boolean(item.required_for_promotion) || item.blocks_execution !== false;
   });
   const ready = Boolean(d.ready_for_promotion);
   const nextTarget = str(d.next_promotion_target, "LIVE").toUpperCase();
@@ -206,57 +211,64 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
         {ordered.map((item) => {
           const key = str(item.key);
           const passed = Boolean(item.passed);
-          const advisory =
-            key === "demo_certification" &&
-            item.required_for_live === false &&
-            item.required_for_canary === false;
+          const optional =
+            key === "demo_certification" && item.blocks_execution === false;
+          const waiting =
+            !passed && item.blocks_execution === false && !optional;
+          const locked = !passed && item.blocks_execution !== false;
           const label = LABEL_OVERRIDE[key] || str(item.label);
           const steps = resolutionLines(str(item.how_to_resolve));
+          const category = str(item.category, "");
+          const code = str(item.execution_code || item.canonical_state, "");
           return (
             <article
               key={key}
               className={cn(
                 "border px-3 py-2.5",
-                passed || advisory
+                passed || optional
                   ? "border-[var(--border)] bg-[var(--bg)]/25"
-                  : "border-[var(--warning)]/40 bg-[var(--warning)]/5",
+                  : locked
+                    ? "border-[var(--warning)]/40 bg-[var(--warning)]/5"
+                    : "border-[var(--border)] bg-[var(--bg)]/25",
               )}
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="flex items-start gap-2">
-                  {passed || advisory ? (
-                    <Check
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]"
+                  {locked ? (
+                    <X
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning)]"
                       aria-hidden
                     />
                   ) : (
-                    <X
-                      className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning)]"
+                    <Check
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]"
                       aria-hidden
                     />
                   )}
                   <div>
                     <p className="text-sm font-medium text-[var(--fg)]">
-                      {passed || advisory ? "✓" : "✘"} {label}
+                      {locked ? "✘" : "✓"} {label}
                     </p>
                     <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[var(--fg-subtle)]">
                       Current
                     </p>
                     <p className="font-mono text-xs text-[var(--fg)]">
                       {str(item.value, "—")}
+                      {code ? ` · ${code}` : ""}
+                      {category ? ` · ${category}` : ""}
                     </p>
                   </div>
                 </div>
                 <Badge
                   tone={
-                    passed ? "success" : advisory ? "neutral" : "warning"
+                    passed ? "success" : locked ? "warning" : "neutral"
                   }
                 >
-                  {passed ? "PASS" : advisory ? "OPTIONAL" : "LOCK"}
+                  {passed ? "PASS" : optional ? "OPTIONAL" : waiting ? "WAITING" : "LOCK"}
                 </Badge>
               </div>
 
-              {!passed && !advisory ? (
+              {locked ? (
                 <div className="mt-2 border-t border-[var(--border)] pt-2 text-xs">
                   <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--fg-subtle)]">
                     Why
@@ -277,7 +289,11 @@ export function LaunchReadinessPanel({ className }: { className?: string }) {
                     <p className="mt-0.5 text-[var(--fg-muted)]">See OWNER Ops controls</p>
                   )}
                 </div>
-              ) : advisory && !passed ? (
+              ) : waiting ? (
+                <p className="mt-2 border-t border-[var(--border)] pt-2 text-xs text-[var(--fg-muted)]">
+                  {str(item.why, "Waiting on an upstream lock — not an independent blocker.")}
+                </p>
+              ) : optional && !passed ? (
                 <p className="mt-2 border-t border-[var(--border)] pt-2 text-xs text-[var(--fg-muted)]">
                   Optional advisory — not required for LIVE under OWNER policy.
                 </p>
