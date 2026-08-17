@@ -111,4 +111,5 @@ def build_live_ops_evidence(
         },
         "verification": readiness.verification,
     }
-    return _scrub(payload)
+    cleaned = _scrub(payload)
+    return cleaned if isinstance(cleaned, dict) else payload

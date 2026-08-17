@@ -388,7 +388,9 @@ def build_launch_readiness(
             value="ARMED" if plane.kill_switch_armed else "DISARMED",
             why="Kill switch is armed — OMS blocked",
             category="RISK",
-            canonical_state="CONNECTED" if not plane.kill_switch_armed else "DISCONNECTED",
+            canonical_state=(
+                "CONNECTED" if not plane.kill_switch_armed else "DISCONNECTED"
+            ),
             execution_code="" if not plane.kill_switch_armed else "KILL_SWITCH",
         ),
         _item(

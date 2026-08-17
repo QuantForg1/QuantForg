@@ -9,13 +9,13 @@ import pytest
 
 from app.application.services.launch_readiness import build_launch_readiness
 from app.application.services.live_ops_evidence import build_live_ops_evidence
+from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
 from app.domain.institutional_trading.operations.control_plane import (
     OperationsControlPlane,
 )
 from app.domain.institutional_trading.operations.models import OpsExecutionMode
 from app.domain.institutional_trading.phase_a.plane import reset_phase_a_plane_for_tests
 from app.domain.institutional_trading.reliability.health import ProbeInputs
-from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
 
 
 def _probes(*, gateway: bool, mt5: bool) -> ProbeInputs:
@@ -40,7 +40,9 @@ def _patch(*, execution_enabled: bool, gateway: bool, mt5: bool, market: bool):
         "mt5_autotrading_enabled": True if mt5 else None,
         "symbol_tradable": True if mt5 else None,
         "no_broker_restrictions": True if mt5 else None,
-        "market_data_live": False if not market else (True if gateway and mt5 else None),
+        "market_data_live": (
+            False if not market else (True if gateway and mt5 else None)
+        ),
         "margin_available": True if mt5 else None,
         "spread": Decimal("0.35") if market and mt5 else None,
         "session": "london" if market else None,
@@ -89,7 +91,8 @@ class TestPhaseELaunchLockMapping:
         assert broker.canonical_state == "GATEWAY_UNAVAILABLE"
         market = next(i for i in report.items if i.key == "market_open")
         assert market.blocks_execution is False
-        assert "market-hours" in market.why.lower() or "not evaluated" in market.why.lower()
+        why = market.why.lower()
+        assert "market-hours" in why or "not evaluated" in why
         owner = next(i for i in report.items if i.key == "owner_authorization")
         assert owner.category == "AUTH"
         assert owner.blocks_execution is False
