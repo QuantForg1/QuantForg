@@ -280,3 +280,93 @@ def test_research_failure_does_not_alter_phase_a() -> None:
     pc.provenance.register(strategy_id="x")
     pc.run_pbo([[1.0]])
     assert pa.halt.mode.value == before
+
+
+def test_provenance_aliases_and_model_id_required() -> None:
+    store = ProvenanceStore()
+    missing_model = store.register(
+        strategy_id="s",
+        code_commit="abc",
+        dataset_id="ds",
+        dataset_hash="h",
+        data_start="2020",
+        data_end="2024",
+        timeframe="M15",
+        symbols=["EURUSD"],
+        validation_method="walk_forward",
+        number_of_trials=10,
+    )
+    assert missing_model.status == "UNVERIFIED_RESEARCH_RESULT"
+    rec = store.register(
+        strategy_id="s",
+        model_id="m1",
+        code_commit="abc",
+        dataset_id="ds",
+        dataset_hash="h",
+        data_start="2020",
+        data_end="2024",
+        timeframe="M15",
+        symbols=["EURUSD"],
+        validation_method="walk_forward",
+        number_of_trials=10,
+    )
+    d = rec.to_dict()
+    assert d["trial_count"] == 10
+    assert d["created_at"] == d["research_timestamp"]
+    assert d["timeframes"] == ["M15"]
+    assert store.snapshot()["latest"]["research_run_id"] == rec.research_run_id
+
+
+def test_regime_specific_drift_keeps_cells_distinct() -> None:
+    from app.domain.institutional_trading.phase_c.drift import regime_specific_drift
+
+    trending = regime_specific_drift(
+        strategy="trend_continuation",
+        symbol="EURUSD_I",
+        session="LONDON",
+        regime="TRENDING",
+        direction="BUY",
+        baseline_r=[1.0] * 25,
+        live_r=[0.9] * 25,
+        min_sample=20,
+    )
+    ranging = regime_specific_drift(
+        strategy="trend_continuation",
+        symbol="EURUSD_I",
+        session="LONDON",
+        regime="RANGING",
+        direction="BUY",
+        baseline_r=[1.0] * 25,
+        live_r=[0.2] * 25,
+        min_sample=20,
+    )
+    assert trending["cell"]["regime"] == "TRENDING"
+    assert ranging["cell"]["regime"] == "RANGING"
+    assert ranging["state"] in {"WARN", "ALERT", "STABLE"}
+    assert ranging["auto_disable"] is False
+
+
+def test_corrupted_research_never_auto_approved() -> None:
+    sm = PromotionStateMachine()
+    cand = sm.register(strategy_id="bad", research_run_id="")
+    # Missing / corrupted evidence — stay in RESEARCH or fail validation
+    sm.transition(
+        cand.candidate_id,
+        PromotionState.VALIDATION_FAILED,
+        note="missing dataset hash",
+    )
+    assert sm.candidates[cand.candidate_id].state is PromotionState.VALIDATION_FAILED
+    assert sm.snapshot()["auto_approve_for_live"] is False
+    # Shadow crash isolation: plane still reports no live authority
+    pc = get_phase_c_plane()
+    snap = pc.snapshot()
+    assert snap["challenger_execution_authority"] is False
+    assert snap["live_decision_authority"] is False
+
+
+def test_challenger_hypothetical_metrics_insufficient() -> None:
+    store = ChampionChallengerShadowStore()
+    store.record_shadow(symbol="XAUUSD", hypothetical_R=0.5)
+    snap = store.snapshot()
+    assert snap["hypothetical"]["state"] == "INSUFFICIENT_SAMPLE"
+    assert snap["challenger_execution_authority"] is False

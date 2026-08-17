@@ -13,6 +13,7 @@ from uuid import uuid4
 
 REQUIRED_FIELDS = (
     "strategy_id",
+    "model_id",
     "code_commit",
     "dataset_id",
     "dataset_hash",
@@ -50,6 +51,8 @@ class ResearchProvenanceRecord:
     status: str  # VERIFIED_RESEARCH_RESULT | UNVERIFIED_RESEARCH_RESULT
 
     def to_dict(self) -> dict[str, Any]:
+        # Spec aliases (trial_count / created_at / timeframes) keep API explicit
+        # without inventing metrics when fields are empty.
         return {
             "research_run_id": self.research_run_id,
             "strategy_id": self.strategy_id,
@@ -60,6 +63,7 @@ class ResearchProvenanceRecord:
             "data_start": self.data_start,
             "data_end": self.data_end,
             "timeframe": self.timeframe,
+            "timeframes": [self.timeframe] if self.timeframe else [],
             "symbols": list(self.symbols),
             "broker_assumptions": dict(self.broker_assumptions),
             "spread_assumptions": dict(self.spread_assumptions),
@@ -67,9 +71,12 @@ class ResearchProvenanceRecord:
             "commission_assumptions": dict(self.commission_assumptions),
             "parameter_space": dict(self.parameter_space),
             "number_of_trials": self.number_of_trials,
+            "trial_count": self.number_of_trials,
             "validation_method": self.validation_method,
             "random_seed": self.random_seed,
+            "random_seed_if_used": self.random_seed,
             "research_timestamp": self.research_timestamp,
+            "created_at": self.research_timestamp,
             "verified": self.verified,
             "status": self.status,
         }
@@ -148,9 +155,11 @@ class ProvenanceStore:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             rows = [r.to_dict() for r in self.records]
+        latest = rows[-1] if rows else None
         return {
             "count": len(rows),
             "verified_count": sum(1 for r in rows if r.get("verified")),
             "unverified_count": sum(1 for r in rows if not r.get("verified")),
+            "latest": latest,
             "recent": rows[-15:],
         }

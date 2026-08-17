@@ -588,8 +588,15 @@ export function MissionControlWorkspace() {
             const research = asRecord(phaseC.research);
             const challenger = asRecord(phaseC.challenger);
             const promotion = asRecord(phaseC.promotion);
+            const provenance = asRecord(research.provenance);
+            const latestRun = asRecord(provenance.latest);
             const pbo = asRecord(research.PBO);
             const dsr = asRecord(research.DSR);
+            const mc = asRecord(research.monte_carlo);
+            const sens = asRecord(research.parameter_sensitivity);
+            const leakage = asRecord(research.leakage);
+            const drift = asRecord(phaseC.drift);
+            const hyp = asRecord(challenger.hypothetical);
             const candidates = asList(promotion.candidates);
             return (
               <div className="space-y-3">
@@ -619,6 +626,42 @@ export function MissionControlWorkspace() {
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Stat
+                    label="Latest run"
+                    value={str(latestRun.research_run_id, "—").slice(0, 8) || "—"}
+                  />
+                  <Stat label="Dataset" value={str(latestRun.dataset_id, "—")} />
+                  <Stat
+                    label="Commit"
+                    value={str(latestRun.code_commit, "—").slice(0, 8) || "—"}
+                  />
+                  <Stat
+                    label="Trials"
+                    value={str(
+                      latestRun.trial_count,
+                      str(latestRun.number_of_trials, "—"),
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat
+                    label="OOS / leakage"
+                    value={
+                      leakage.oos_certified === true
+                        ? "CERTIFIED"
+                        : leakage.ok === false
+                          ? "FAILED"
+                          : str(leakage.state, "—")
+                    }
+                  />
+                  <Stat label="Monte Carlo" value={str(mc.state, "—")} />
+                  <Stat label="Sensitivity" value={str(sens.state, "—")} />
+                  <Stat
+                    label="Provenance"
+                    value={str(latestRun.status, str(provenance.count, "0"))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat
                     label="Champion"
                     value={str(asRecord(phaseC.champion).version, "—")}
                   />
@@ -629,6 +672,24 @@ export function MissionControlWorkspace() {
                   <Stat
                     label="Shadow samples"
                     value={str(challenger.shadow_samples, "0")}
+                  />
+                  <Stat
+                    label="Hyp expectancy"
+                    value={str(hyp.hypothetical_expectancy, "—")}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Stat
+                    label="Hyp drawdown"
+                    value={str(hyp.hypothetical_drawdown, "—")}
+                  />
+                  <Stat
+                    label="Shadow quality"
+                    value={str(hyp.state, "—")}
+                  />
+                  <Stat
+                    label="Drift kinds"
+                    value={String(asList(drift.kinds).length || "—")}
                   />
                   <Stat
                     label="Promotion candidates"

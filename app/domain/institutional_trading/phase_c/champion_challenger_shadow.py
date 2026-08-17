@@ -158,6 +158,48 @@ class ChampionChallengerShadowStore:
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             rows = [o.to_dict() for o in self.opportunities]
+            hyp_r = [
+                float(o.hypothetical_R)
+                for o in self.opportunities
+                if o.hypothetical_R is not None
+            ]
+            champ_r = [
+                float(o.champion_score)
+                for o in self.opportunities
+                if o.champion_score is not None
+            ]
+        hyp_metrics: dict[str, Any] | None = None
+        relative: dict[str, Any] | None = None
+        if hyp_r:
+            n = len(hyp_r)
+            wins = [r for r in hyp_r if r > 0]
+            avg = sum(hyp_r) / n
+            eq = 0.0
+            peak = 0.0
+            max_dd = 0.0
+            for r in hyp_r:
+                eq += r
+                peak = max(peak, eq)
+                max_dd = max(max_dd, peak - eq)
+            hyp_metrics = {
+                "sample_count": n,
+                "hypothetical_expectancy": round(avg, 6),
+                "hypothetical_drawdown": round(max_dd, 6),
+                "win_rate": round(100.0 * len(wins) / n, 2) if n else None,
+                "state": "COMPUTED" if n >= 20 else "INSUFFICIENT_SAMPLE",
+            }
+        if hyp_r and champ_r and min(len(hyp_r), len(champ_r)) >= 1:
+            from app.domain.institutional_trading.phase_c.fair_comparison import (
+                compare_champion_challenger,
+            )
+
+            # Matched on available length — never invent superiority on thin data
+            m = min(len(hyp_r), len(champ_r))
+            relative = compare_champion_challenger(
+                champion_r=champ_r[-m:],
+                challenger_r=hyp_r[-m:],
+                min_sample=20,
+            )
         return {
             "champion_version": self.champion_version,
             "challenger_version": self.challenger_version,
@@ -166,5 +208,7 @@ class ChampionChallengerShadowStore:
             "challenger_may_call_oms": False,
             "challenger_may_call_gateway": False,
             "challenger_may_call_mt5": False,
+            "hypothetical": hyp_metrics,
+            "relative_performance": relative,
             "recent": rows[-20:],
         }
