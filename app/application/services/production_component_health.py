@@ -18,6 +18,7 @@ from typing import Any
 from app.application.services.institutional_live_probes import (
     TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
     LiveProbeCollector,
+    reset_gateway_probe_cache,
 )
 from app.domain.institutional_trading.reliability.health import ProbeInputs
 from core.config.settings import Settings
@@ -214,6 +215,7 @@ def reset_trading_components_cache() -> None:
     with _cache_lock:
         _cache_payload = None
         _cache_at = 0.0
+    reset_gateway_probe_cache()
 
 
 def collect_trading_component_health(

@@ -14,6 +14,9 @@ from app.application.services.auto_trading_status import (
     reset_auto_trading_status_cache,
     resolve_primary_blocker,
 )
+from app.application.services.institutional_live_probes import (
+    TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
+)
 from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
     AutoTradePolicy,
@@ -78,11 +81,16 @@ class TestAutoTradingStatusLiveProbes:
             facts, live = build_status_facts(plane, settings=settings)
             snap = build_auto_trading_status(plane, settings=settings)
 
-        collector.collect.assert_called_with(include_platform_probes=False)
+        collector.collect.assert_called_with(
+            include_platform_probes=False,
+            gateway_timeout_s=TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
+        )
         assert facts.gateway_connected is True
         assert facts.broker_connected is True
         assert facts.market_data_live is True
         assert live["gateway_connected"] is True
+        assert live["timing"]["live_io"] is False
+        assert "collect_ms" in live["timing"]
         assert plane.health.latest() is not None
         assert plane.health.latest().gateway_available is True
         assert "MT5 Gateway not connected" not in snap.safety.failed_reasons
@@ -143,6 +151,24 @@ class TestEnrichFromPublicHealth:
         out = _enrich_from_adapter(collector)
         assert out["mt5_autotrading_enabled"] is True
         assert out["health_payload"] is not None
+        collector.mt5_adapter.latest_tick.assert_not_called()
+        collector.mt5_adapter.account_info.assert_not_called()
+
+    def test_status_hot_path_skips_live_io(self) -> None:
+        from app.application.services.auto_trading_status import _enrich_from_adapter
+
+        collector = MagicMock()
+        collector.mt5_adapter = MagicMock()
+        collector.mt5_adapter.client = MagicMock()
+        collector.settings = MagicMock()
+        collector.last_health_payload = {
+            "status": "ok",
+            "mt5": {"connected": True, "terminal_trade_allowed": True},
+        }
+        out = _enrich_from_adapter(collector, include_live_io=False)
+        assert out["health_payload"] is not None
+        collector.mt5_adapter.client.gateway_health.assert_not_called()
+        collector.mt5_adapter.latest_tick.assert_not_called()
 
 
 @pytest.mark.unit

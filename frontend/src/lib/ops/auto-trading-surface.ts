@@ -100,13 +100,14 @@ export function resolveAutoTradingSurface(input: {
   hasOpsData: boolean;
   tradingInfra: TradingInfraState;
   opsWaitMs?: number;
+  opsFresh?: boolean;
 }): AutoTradingSurfaceResult {
   const apiPhase = resolveApiPhase({
     opsQuery: input.opsQuery,
     infra: input.tradingInfra,
   });
   const tradingInfra = input.tradingInfra;
-  const waited = input.opsWaitMs ?? 0;
+  const opsFresh = input.opsFresh ?? (input.opsQuery === "success" && input.hasOpsData);
 
   if (input.authPhase === "AUTH_LOADING") {
     return {
@@ -139,7 +140,7 @@ export function resolveAutoTradingSurface(input: {
   }
 
   if (input.opsQuery === "success" && input.hasOpsData) {
-    const degraded = tradingInfra === "TRADING_DEGRADED";
+    const degraded = tradingInfra === "TRADING_DEGRADED" || !opsFresh;
     return {
       surface: degraded ? "DEGRADED" : "READY",
       apiPhase,
@@ -168,23 +169,16 @@ export function resolveAutoTradingSurface(input: {
     };
   }
 
-  // In-flight ops: keep last-known-good on screen. Never call this "auth wait".
+  // In-flight ops: keep last-known-good on screen. Stay LOADING_OPS until the
+  // request settles — do not flip to DEGRADED on browser RTT (~8–12s).
   if (input.opsQuery === "idle" || input.opsQuery === "loading") {
     if (input.hasOpsData) {
+      const freshEnough = opsFresh && tradingInfra !== "TRADING_DEGRADED";
       return {
-        surface: tradingInfra === "TRADING_DEGRADED" ? "DEGRADED" : "READY",
+        surface: freshEnough ? "READY" : "DEGRADED",
         apiPhase,
         tradingInfra,
-        blockNewEntries: false,
-        ...noDisconnects,
-      };
-    }
-    if (waited >= OPS_SLOW_MS) {
-      return {
-        surface: "DEGRADED",
-        apiPhase: "API_DEGRADED",
-        tradingInfra,
-        blockNewEntries: true,
+        blockNewEntries: !freshEnough,
         ...noDisconnects,
       };
     }

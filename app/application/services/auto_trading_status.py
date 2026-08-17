@@ -14,9 +14,11 @@ from typing import Any
 
 from app.application.services.institutional_ite_runtime import get_ite_runtime
 from app.application.services.institutional_live_probes import (
+    TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
     LiveProbeCollector,
     gateway_available_from_health,
     mt5_connected_from_gateway_health,
+    reset_gateway_probe_cache,
 )
 from app.domain.institutional_trading.auto_trading import (
     AutoTradeLiveFacts,
@@ -165,8 +167,15 @@ def _apply_health_payload_flags(out: dict[str, Any], payload: dict[str, Any]) ->
 
 def _enrich_from_adapter(
     collector: LiveProbeCollector,
+    *,
+    include_live_io: bool = False,
 ) -> dict[str, Any]:
-    """Best-effort account/symbol flags from gateway health / adapter."""
+    """Best-effort account/symbol flags from gateway health / adapter.
+
+    Status GET uses the Gateway ``/health`` payload already collected by
+    ``collect()``. Extra ``gateway_health`` / tick / account HTTP calls use
+    the 30s gateway client timeout and must not delay the ops snapshot.
+    """
     out: dict[str, Any] = {
         "account_trading_enabled": None,
         "mt5_autotrading_enabled": None,
@@ -186,9 +195,13 @@ def _enrich_from_adapter(
         if collector.mt5_adapter is not None
         else None
     )
-    health_fn = getattr(client, "gateway_health", None)
     payload: dict[str, Any] | None = None
-    if callable(health_fn):
+    cached = getattr(collector, "last_health_payload", None)
+    if isinstance(cached, dict):
+        payload = cached
+
+    health_fn = getattr(client, "gateway_health", None)
+    if payload is None and include_live_io and callable(health_fn):
         try:
             raw = health_fn()
             if isinstance(raw, dict):
@@ -196,14 +209,7 @@ def _enrich_from_adapter(
         except Exception as exc:
             logger.info("auto_trading_status_gateway_health_failed", error=str(exc))
 
-    # Prefer authenticated client health; fall back to last public /health probe
-    # so terminal AutoTrading flags are not lost when MockMT5Client is wired.
-    if payload is None:
-        cached = getattr(collector, "last_health_payload", None)
-        if isinstance(cached, dict):
-            payload = cached
-
-    if payload is None:
+    if payload is None and include_live_io:
         # Orchestrator may enrich before tick_health runs — fetch public /health.
         base = (getattr(collector.settings, "mt5_gateway_base_url", None) or "").rstrip(
             "/"
@@ -227,9 +233,9 @@ def _enrich_from_adapter(
     if payload is not None:
         _apply_health_payload_flags(out, payload)
 
-    # Live tick → market data + spread (same evidence Broker uses for Market Open).
+    # Optional live tick / account — never on the status GET hot path.
     adapter = collector.mt5_adapter
-    if adapter is not None:
+    if include_live_io and adapter is not None:
         with contextlib.suppress(Exception):
             tick = adapter.latest_tick(GOLD_SYMBOL)
             bid = getattr(tick, "bid", None)
@@ -257,12 +263,19 @@ def build_status_facts(
 ) -> tuple[AutoTradeLiveFacts, dict[str, Any]]:
     """Authoritative connectivity facts for Auto Trading status GET."""
     cfg = settings or get_settings()
+    t0 = time.perf_counter()
     collector = _probe_collector(cfg)
     # Status GET must not wait on the Railway self-probe (often 3–5s).
-    # Gateway /health already carries MT5; trading-components is the public plane.
-    probes = collector.collect(include_platform_probes=False)
+    # Reuse the same 3.5s Gateway /health cache as trading-components.
+    probes = collector.collect(
+        include_platform_probes=False,
+        gateway_timeout_s=TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
+    )
+    collect_ms = (time.perf_counter() - t0) * 1000.0
     _sync_ops_health(plane, probes=probes)
-    enriched = _enrich_from_adapter(collector)
+    t1 = time.perf_counter()
+    enriched = _enrich_from_adapter(collector, include_live_io=False)
+    enrich_ms = (time.perf_counter() - t1) * 1000.0
 
     gateway_ok = bool(probes.gateway_available)
     broker_ok = bool(probes.mt5_connected)
@@ -332,6 +345,14 @@ def build_status_facts(
         "cloudflare_tunnel_up": bool(probes.cloudflare_tunnel_up),
         "source": "live_probe",
         "ops_health_synced": True,
+        "timing": {
+            "collect_ms": round(collect_ms, 1),
+            "enrich_ms": round(enrich_ms, 1),
+            "gateway_ms": round(float(probes.gateway_latency_ms or 0.0), 1),
+            "db_ms": round(float(probes.database_latency_ms or 0.0), 1),
+            "platform_probes": False,
+            "live_io": False,
+        },
     }
     return facts, live
 
@@ -411,6 +432,7 @@ def reset_auto_trading_status_cache() -> None:
     """Test helper — drop the short GET snapshot cache."""
     global _status_snapshot_cache
     _status_snapshot_cache = None
+    reset_gateway_probe_cache()
 
 
 def build_auto_trading_status(

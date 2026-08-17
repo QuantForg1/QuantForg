@@ -90,6 +90,25 @@ class TestOpsStatePersistence:
         assert diag["postgres_has_state"] is True
         assert diag["durable"] is True
 
+    def test_diagnostics_does_not_double_fetch_postgres(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "ops_state.json"
+        monkeypatch.setenv("QUANTFORG_OPS_STATE_PATH", str(path))
+        calls = {"n": 0}
+
+        def _pg() -> dict[str, Any]:
+            calls["n"] += 1
+            return {"ops_mode": "LIVE"}
+
+        monkeypatch.setattr(
+            osp, "_supabase_rest_config", lambda: ("https://example.test/rest/v1", "k")
+        )
+        monkeypatch.setattr(osp, "_load_postgres_state", _pg)
+        diag = ops_state_diagnostics()
+        assert diag["postgres_has_state"] is True
+        assert calls["n"] == 1
+
     def test_report_from_dict_rejects_uncertified(self) -> None:
         assert report_from_dict({"certified": False}) is None
         assert report_from_dict({}) is None

@@ -35,6 +35,7 @@ function surface(partial: {
   hasOpsData?: boolean;
   tradingInfra?: Parameters<typeof resolveAutoTradingSurface>[0]["tradingInfra"];
   opsWaitMs?: number;
+  opsFresh?: boolean;
 }) {
   return resolveAutoTradingSurface({
     authPhase: partial.authPhase ?? "AUTH_READY",
@@ -42,6 +43,7 @@ function surface(partial: {
     hasOpsData: partial.hasOpsData ?? true,
     tradingInfra: partial.tradingInfra ?? "TRADING_HEALTHY",
     opsWaitMs: partial.opsWaitMs,
+    opsFresh: partial.opsFresh,
   });
 }
 
@@ -225,7 +227,7 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
   assert.doesNotMatch(autoTradingSurfaceCopy(s).detail, /Waiting for authenticated ops data/);
 }
 
-// API slow but healthy infra → DEGRADED, not Gateway disconnected
+// API slow but healthy infra while still in-flight → stay LOADING_OPS
 {
   const s = surface({
     authPhase: "AUTH_READY",
@@ -234,9 +236,55 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
     tradingInfra: "TRADING_HEALTHY",
     opsWaitMs: OPS_SLOW_MS,
   });
-  assert.equal(s.surface, "DEGRADED");
+  assert.equal(s.surface, "LOADING_OPS");
+  assert.equal(s.blockNewEntries, true);
   assert.equal(s.tradingInfra, "TRADING_HEALTHY");
   assert.equal(s.reportGatewayDisconnected, false);
+}
+
+// Ops timeout with healthy infra → DEGRADED, entries blocked, not Gateway down
+{
+  const s = surface({
+    authPhase: "AUTH_READY",
+    opsQuery: "timeout",
+    hasOpsData: false,
+    tradingInfra: "TRADING_HEALTHY",
+  });
+  assert.equal(s.surface, "DEGRADED");
+  assert.equal(s.blockNewEntries, true);
+  assert.equal(s.reportGatewayDisconnected, false);
+}
+
+// Recovery: timeout then success → READY, entries unblocked
+{
+  const blocked = surface({
+    opsQuery: "timeout",
+    hasOpsData: false,
+    tradingInfra: "TRADING_HEALTHY",
+  });
+  assert.equal(blocked.surface, "DEGRADED");
+  assert.equal(blocked.blockNewEntries, true);
+  const recovered = surface({
+    opsQuery: "success",
+    hasOpsData: true,
+    opsFresh: true,
+    tradingInfra: "TRADING_HEALTHY",
+  });
+  assert.equal(recovered.surface, "READY");
+  assert.equal(recovered.blockNewEntries, false);
+}
+
+// Stale last-known-good during load → DEGRADED, entries blocked
+{
+  const s = surface({
+    authPhase: "AUTH_READY",
+    opsQuery: "loading",
+    hasOpsData: true,
+    opsFresh: false,
+    tradingInfra: "TRADING_HEALTHY",
+  });
+  assert.equal(s.surface, "DEGRADED");
+  assert.equal(s.blockNewEntries, true);
 }
 
 // Last-known-good ops telemetry is bounded and not fabricated
@@ -250,15 +298,17 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
   resetOpsTelemetryLastGood();
 }
 
-// In-flight ops with last-known-good stays READY (not a full-page wait)
+// In-flight ops with last-known-good stays on screen but entries stay blocked
 {
   const s = surface({
     authPhase: "AUTH_READY",
     opsQuery: "loading",
     hasOpsData: true,
+    opsFresh: false,
     tradingInfra: "TRADING_HEALTHY",
   });
-  assert.equal(s.surface, "READY");
+  assert.equal(s.surface, "DEGRADED");
+  assert.equal(s.blockNewEntries, true);
 }
 
 console.log("bootstrap.test.ts: ok");

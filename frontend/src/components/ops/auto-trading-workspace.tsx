@@ -699,6 +699,7 @@ export function AutoTradingWorkspace() {
     hasOpsData: Boolean(opsPayload),
     tradingInfra,
     opsWaitMs,
+    opsFresh: autoQ.isSuccess && Boolean(autoQ.data),
   });
   const surfaceCopy = autoTradingSurfaceCopy(surface);
 
@@ -1320,7 +1321,7 @@ export function AutoTradingWorkspace() {
           </Button>
           <Button
             variant="outline"
-            disabled={executeNowMut.isPending}
+            disabled={executeNowMut.isPending || surface.blockNewEntries}
             onClick={() => executeNowMut.mutate()}
           >
             <Zap className="h-4 w-4" />

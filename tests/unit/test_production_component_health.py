@@ -154,6 +154,7 @@ def test_live_probe_skips_railway_when_platform_disabled(
         )
 
     monkeypatch.setattr(probes_mod, "_http_get_json", fake_http)
+    probes_mod.reset_gateway_probe_cache()
     collector = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
     result = collector.collect(include_platform_probes=False)
     assert result.gateway_available is True
@@ -191,8 +192,46 @@ def test_live_probe_runs_gateway_and_railway_concurrently(
         )
 
     monkeypatch.setattr(probes_mod, "_http_get_json", fake_http)
+    probes_mod.reset_gateway_probe_cache()
     collector = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
     result = collector.collect(include_platform_probes=True)
     assert result.gateway_available is True
     assert result.railway_api_up is True
     assert len(urls) == 2
+
+
+def test_live_probe_cache_dedupes_duplicate_gateway_health(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.application.services import institutional_live_probes as probes_mod
+    from app.application.services.institutional_live_probes import LiveProbeCollector
+
+    class _Settings:
+        mt5_gateway_base_url = "https://gateway.quantforg.com"
+        railway_public_domain = ""
+        supabase_configured = False
+        database_url = ""
+
+    urls: list[str] = []
+
+    def fake_http(url: str, *, timeout: float = 8.0):
+        urls.append(url)
+        return (
+            True,
+            40.0,
+            200,
+            {"status": "ok", "mt5": {"connected": True}},
+            True,
+        )
+
+    monkeypatch.setattr(probes_mod, "_http_get_json", fake_http)
+    probes_mod.reset_gateway_probe_cache()
+    a = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
+    b = LiveProbeCollector(settings=_Settings())  # type: ignore[arg-type]
+    first = a.collect(include_platform_probes=False)
+    second = b.collect(include_platform_probes=False)
+    assert first.gateway_available is True
+    assert second.gateway_available is True
+    assert len(urls) == 1
+    assert b.last_health_payload is not None
+

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import urlparse
 
@@ -21,6 +22,20 @@ _GATEWAY_PROBE_TIMEOUT_S = 8.0
 # Mission Control never waits on an 8s ceiling when the tunnel is healthy (~1s).
 TRADING_COMPONENTS_GATEWAY_TIMEOUT_S = 3.5
 _RAILWAY_PROBE_TIMEOUT_S = 5.0
+# Shared across trading-components + Auto Trading status so one Gateway RTT
+# is reused instead of stacking sequential /health calls.
+_GATEWAY_PROBE_CACHE_TTL_S = 5.0
+_gateway_probe_cache_lock = threading.Lock()
+_gateway_probe_cache: tuple[float, str, ProbeInputs, dict[str, Any] | None] | None = (
+    None
+)
+
+
+def reset_gateway_probe_cache() -> None:
+    """Test helper — drop the short Gateway /health process cache."""
+    global _gateway_probe_cache
+    with _gateway_probe_cache_lock:
+        _gateway_probe_cache = None
 
 
 def response_indicates_cloudflare(headers: Any) -> bool:
@@ -133,6 +148,7 @@ class LiveProbeCollector:
         self-probe (often 3–5s and unused by trading-components). Gateway and
         Railway probes run concurrently when both are requested.
         """
+        global _gateway_probe_cache
         gateway_timeout = (
             float(gateway_timeout_s)
             if gateway_timeout_s is not None
@@ -141,6 +157,20 @@ class LiveProbeCollector:
         gateway_url = (self.settings.mt5_gateway_base_url or "").rstrip("/")
         domain = (self.settings.railway_public_domain or "").strip()
         want_railway = bool(include_platform_probes and domain)
+        cache_key = f"{gateway_url}|platform={int(include_platform_probes)}"
+
+        if not include_platform_probes and gateway_url:
+            with _gateway_probe_cache_lock:
+                cached = _gateway_probe_cache
+            if (
+                cached is not None
+                and cached[1] == cache_key
+                and (time.monotonic() - cached[0]) <= _GATEWAY_PROBE_CACHE_TTL_S
+            ):
+                self.last_health_payload = (
+                    dict(cached[3]) if isinstance(cached[3], dict) else None
+                )
+                return replace(cached[2])
 
         gateway_result: tuple[
             bool, float, int | None, dict[str, Any] | None, bool
@@ -269,7 +299,7 @@ class LiveProbeCollector:
                 supabase_ok = True
                 db_lat = 1.0
 
-        return ProbeInputs(
+        probes = ProbeInputs(
             gateway_latency_ms=gateway_lat,
             gateway_available=gateway_ok,
             mt5_connected=mt5_ok,
@@ -282,3 +312,17 @@ class LiveProbeCollector:
             decision_latency_ms=0.0,
             pme_latency_ms=0.0,
         )
+        if not include_platform_probes and gateway_url:
+            payload_copy = (
+                dict(self.last_health_payload)
+                if isinstance(self.last_health_payload, dict)
+                else None
+            )
+            with _gateway_probe_cache_lock:
+                _gateway_probe_cache = (
+                    time.monotonic(),
+                    cache_key,
+                    replace(probes),
+                    payload_copy,
+                )
+        return probes

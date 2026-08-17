@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from decimal import Decimal
 from typing import Annotated, Any, cast
 from uuid import UUID
@@ -714,15 +715,20 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
 
     plane = get_control_plane()
     settings = get_settings()
+    t0 = time.perf_counter()
     ensure_auto_trading_running(
         plane,
         settings=settings,
         reason="api_get_auto_trading_resume",
     )
+    resume_ms = (time.perf_counter() - t0) * 1000.0
+    t1 = time.perf_counter()
     snap = build_auto_trading_status(plane, settings=settings)
+    builder_ms = (time.perf_counter() - t1) * 1000.0
     safety = snap.safety
     orchestrator = None
     recent_attempts: list[dict[str, Any]] = []
+    t2 = time.perf_counter()
     try:
         from app.application.services.institutional_ite_runtime import get_ite_runtime
 
@@ -737,6 +743,22 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
                 ]
     except Exception:
         orchestrator = None
+    runtime_ms = (time.perf_counter() - t2) * 1000.0
+    t3 = time.perf_counter()
+    persistence = ops_state_diagnostics()
+    persistence_ms = (time.perf_counter() - t3) * 1000.0
+    live = dict(snap.live)
+    timing = dict(live.get("timing") or {})
+    timing.update(
+        {
+            "resume_ms": round(resume_ms, 1),
+            "ops_builder_ms": round(builder_ms, 1),
+            "runtime_ms": round(runtime_ms, 1),
+            "persistence_ms": round(persistence_ms, 1),
+            "server_total_ms": round((time.perf_counter() - t0) * 1000.0, 1),
+        }
+    )
+    live["timing"] = timing
     return {
         "status": safety.status,
         "allowed": safety.allowed,
@@ -750,7 +772,7 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "emergency_stop": plane.kill_switch_armed,
         "execution_enabled": bool(snap.execution_state["execution_enabled"]),
         "ops_mode": plane.mode.value,
-        "live": snap.live,
+        "live": live,
         "facts": {
             "gateway_connected": snap.facts.gateway_connected,
             "broker_connected": snap.facts.broker_connected,
@@ -761,7 +783,7 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         },
         "orchestrator": orchestrator,
         "recent_execution_attempts": recent_attempts,
-        "persistence": ops_state_diagnostics(),
+        "persistence": persistence,
         "force_first_trade": _force_first_trade_payload(snap, settings),
         "risk_lock_override": _risk_lock_override_payload(settings),
         "ai_scalping": _ai_scalping_payload(),

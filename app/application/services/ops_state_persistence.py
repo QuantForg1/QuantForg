@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -27,6 +28,14 @@ logger = get_logger(__name__)
 
 _LOCK = Lock()
 _TABLE = "ite_ops_runtime_state"
+_PG_CACHE_TTL_S = 15.0
+_pg_state_cache: tuple[float, dict[str, Any]] | None = None
+
+
+def reset_postgres_state_cache() -> None:
+    """Test helper — drop the short Postgres ops-state GET cache."""
+    global _pg_state_cache
+    _pg_state_cache = None
 
 
 def ops_state_path() -> Path:
@@ -71,6 +80,11 @@ def _supabase_rest_config() -> tuple[str, str] | None:
 
 
 def _load_postgres_state() -> dict[str, Any]:
+    global _pg_state_cache
+    now = time.monotonic()
+    cached = _pg_state_cache
+    if cached is not None and (now - cached[0]) <= _PG_CACHE_TTL_S:
+        return dict(cached[1])
     cfg = _supabase_rest_config()
     if cfg is None:
         return {}
@@ -88,6 +102,7 @@ def _load_postgres_state() -> dict[str, Any]:
                 headers=headers,
             )
             if resp.status_code == 404:
+                _pg_state_cache = (now, {})
                 return {}
             resp.raise_for_status()
             rows = resp.json()
@@ -95,9 +110,12 @@ def _load_postgres_state() -> dict[str, Any]:
         logger.warning("ops_state_postgres_load_failed", error=str(exc))
         return {}
     if not isinstance(rows, list) or not rows:
+        _pg_state_cache = (now, {})
         return {}
     payload = rows[0].get("payload") if isinstance(rows[0], dict) else None
-    return payload if isinstance(payload, dict) else {}
+    result = payload if isinstance(payload, dict) else {}
+    _pg_state_cache = (now, dict(result))
+    return result
 
 
 def _save_postgres_state(state: dict[str, Any]) -> bool:
@@ -234,6 +252,7 @@ def save_ops_state(patch: dict[str, Any]) -> None:
             logger.warning("ops_state_save_failed", path=str(path), error=str(exc))
 
         pg_ok = _save_postgres_state(current)
+        reset_postgres_state_cache()
         new_mode = str(current.get("ops_mode") or "").strip().upper()
         if pg_ok and new_mode and new_mode != prev_mode:
             _record_mode_transition(
@@ -248,13 +267,13 @@ def ops_state_diagnostics() -> dict[str, Any]:
     path = ops_state_path()
     state = load_ops_state()
     pg_cfg = _supabase_rest_config() is not None
-    pg_state = _load_postgres_state() if pg_cfg else {}
-    durable = bool(pg_state) or is_volume_backed()
+    postgres_has_state = state.get("_hydrate_source") == "postgres"
+    durable = postgres_has_state or is_volume_backed()
     return {
         "durable": durable,
         "volume_backed": is_volume_backed(),
         "postgres_configured": pg_cfg,
-        "postgres_has_state": bool(pg_state),
+        "postgres_has_state": postgres_has_state,
         "file_path": str(path),
         "file_present": path.is_file(),
         "hydrate_source": state.get("_hydrate_source", "empty"),
