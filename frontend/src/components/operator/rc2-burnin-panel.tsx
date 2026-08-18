@@ -23,6 +23,7 @@ import {
 } from "@/lib/operator/burnin-metrics";
 import { downloadText } from "@/lib/operator/export";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { formatNumber } from "@/lib/utils";
 
 function Cell({ label, value }: { label: string; value: string }) {
@@ -42,6 +43,7 @@ function Cell({ label, value }: { label: string; value: string }) {
  */
 export function Rc2BurnInPanel() {
   const session = useTradingSession();
+  const { opsReady } = useAuth();
   const { trades, analytics } = useLiveTrades("today");
   const [tick, setTick] = useState(0);
   const lastSampleAt = useRef(0);
@@ -56,29 +58,33 @@ export function Rc2BurnInPanel() {
   const autoQ = useQuery({
     queryKey: ["ite-ops-auto-trading", "rc2-burnin"],
     queryFn: iteOpsApi.autoTrading,
+    enabled: opsReady,
     staleTime: 45_000,
-    refetchInterval: 60_000,
+    refetchInterval: opsReady ? 60_000 : false,
     retry: false,
   });
   const signalsQ = useQuery({
     queryKey: ["signals-center", "rc2-burnin"],
     queryFn: () => signalCenterApi.list({}),
+    enabled: opsReady,
     staleTime: 45_000,
-    refetchInterval: 90_000,
+    refetchInterval: opsReady ? 90_000 : false,
     retry: false,
   });
   const obsQ = useQuery({
     queryKey: ["institutional-observability-latency", "rc2-burnin"],
     queryFn: institutionalObservabilityApi.latency,
+    enabled: opsReady,
     staleTime: 60_000,
-    refetchInterval: 120_000,
+    refetchInterval: opsReady ? 120_000 : false,
     retry: false,
   });
   const relQ = useQuery({
     queryKey: ["ite-rel-metrics", "rc2-burnin"],
     queryFn: iteReliabilityApi.metrics,
+    enabled: opsReady,
     staleTime: 60_000,
-    refetchInterval: 120_000,
+    refetchInterval: opsReady ? 120_000 : false,
     retry: false,
   });
 

@@ -14,6 +14,7 @@ import {
   resolveTradingComponentsView,
 } from "@/lib/trading/component-health";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 
 type Plane = "gateway" | "broker" | "mt5";
@@ -39,6 +40,7 @@ const INITIAL: RecoveryState = {
  */
 export function AutoRecoveryPanel() {
   const session = useTradingSession();
+  const { opsReady } = useAuth();
   const qc = useQueryClient();
   const [autoEnabled, setAutoEnabled] = useState(false);
   const [states, setStates] = useState<Record<Plane, RecoveryState>>({
@@ -70,8 +72,9 @@ export function AutoRecoveryPanel() {
   const healthQ = useQuery({
     queryKey: ["weltrade-health", "auto-recovery"],
     queryFn: weltradeApi.health,
+    enabled: opsReady,
     staleTime: 60_000,
-    refetchInterval: 120_000,
+    refetchInterval: opsReady ? 120_000 : false,
     retry: 1,
   });
   const health = asRecord(healthQ.data);

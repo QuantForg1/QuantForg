@@ -7,6 +7,7 @@ import {
   saveSession,
   type AuthSession,
 } from "@/lib/auth/session";
+import { resolveBearerAuthorization } from "@/lib/auth/protected-request";
 import {
   isNetworkFailure,
   markApiReachable,
@@ -238,10 +239,23 @@ async function apiFetchUndeduped<T>(
 
   let token = options.token;
   if (auth && token === undefined) token = getAccessToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
+  const authResolution = resolveBearerAuthorization({
+    auth,
+    explicitToken: token === undefined ? undefined : token,
+    storedToken: getAccessToken(),
+  });
   const url = path.startsWith("http") ? path : `${env.apiBaseUrl}${path}`;
   const safePath = path.startsWith("http") ? new URL(path).pathname : path;
+  if (authResolution.rejectCode) {
+    throw new ApiError(
+      "Sign in required",
+      401,
+      authResolution.rejectCode,
+      { authenticated: false, endpoint: safePath },
+      requestId,
+    );
+  }
+  if (authResolution.header) headers.Authorization = authResolution.header;
   const kind = options.errorKind || classifyPath(safePath);
   const timeoutMs =
     options.timeoutMs !== undefined ? options.timeoutMs : defaultTimeoutForPath(safePath);

@@ -21,12 +21,17 @@ import {
   portfolioApi,
 } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
+import {
+  classifyProtectedFailure,
+  protectedFailureCopy,
+} from "@/lib/auth/protected-request";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import {
   overlayExecutiveStatus,
   resolveTradingComponentsView,
 } from "@/lib/trading/component-health";
+import { useAuth } from "@/providers/auth-provider";
 import { cn, formatNumber } from "@/lib/utils";
 
 type PanelView = {
@@ -153,6 +158,7 @@ function fmtMoney(v: unknown): string {
 }
 
 export function MissionControlWorkspace() {
+  const { opsReady, authPhase } = useAuth();
   const qc = useQueryClient();
   const [noteText, setNoteText] = useState("");
   const [searchQ, setSearchQ] = useState("");
@@ -161,6 +167,7 @@ export function MissionControlWorkspace() {
   const accountQ = useQuery({
     queryKey: ["mission-control-mt5-account"],
     queryFn: () => mt5Api.account(),
+    enabled: opsReady,
     staleTime: 8_000,
     retry: false,
   });
@@ -168,6 +175,7 @@ export function MissionControlWorkspace() {
   const positionsQ = useQuery({
     queryKey: ["mission-control-positions", TRADING_SYMBOL],
     queryFn: () => portfolioApi.positions(TRADING_SYMBOL),
+    enabled: opsReady,
     staleTime: 8_000,
     retry: false,
   });
@@ -175,9 +183,10 @@ export function MissionControlWorkspace() {
   const tickQ = useQuery({
     queryKey: ["mission-control-tick", TRADING_SYMBOL],
     queryFn: () => mt5Api.tick(TRADING_SYMBOL),
+    enabled: opsReady,
     staleTime: 5_000,
     retry: false,
-    refetchInterval: 10_000,
+    refetchInterval: opsReady ? 10_000 : false,
   });
 
   const liveFeeds = useMemo(() => {
@@ -227,13 +236,15 @@ export function MissionControlWorkspace() {
         positions: liveFeeds.positions,
         xauusd: liveFeeds.xauusd,
       }),
+    enabled: opsReady,
     staleTime: 5_000,
-    refetchInterval: 15_000,
+    refetchInterval: opsReady ? 15_000 : false,
   });
 
   const statusQ = useQuery({
     queryKey: ["mission-control-status"],
     queryFn: () => missionControlApi.status(),
+    enabled: opsReady,
     staleTime: 30_000,
   });
 
@@ -313,17 +324,23 @@ export function MissionControlWorkspace() {
   const killArmed = Boolean(asRecord(emergency?.data).kill_switch);
   const caps = asRecord(statusQ.data?.capabilities);
 
+  if (!opsReady && (authPhase === "AUTH_LOADING" || authPhase === "AUTH_TIMEOUT")) {
+    return <DeskSkeleton rows={8} />;
+  }
   if (dashQ.isLoading && !dashQ.data) {
     return <DeskSkeleton rows={8} />;
   }
   if (dashQ.isError && !dashQ.data) {
+    const kind = classifyProtectedFailure({
+      authPhase,
+      opsReady,
+      error: dashQ.error,
+    });
+    const copy = protectedFailureCopy(kind, "Mission Control");
     return (
       <DeskError
-        message={
-          dashQ.error instanceof ApiError
-            ? dashQ.error.message
-            : "Mission Control unavailable"
-        }
+        message={`${copy.title}. ${copy.detail}`}
+        onRetry={() => void dashQ.refetch()}
       />
     );
   }

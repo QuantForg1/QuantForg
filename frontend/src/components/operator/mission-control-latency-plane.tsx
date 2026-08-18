@@ -10,6 +10,7 @@ import {
 import { listApiRequestSamples } from "@/lib/api/request-log";
 import { asRecord, num } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { useAuth } from "@/providers/auth-provider";
 import { formatNumber } from "@/lib/utils";
 
 function Cell({ label, value }: { label: string; value: string }) {
@@ -26,6 +27,7 @@ function Cell({ label, value }: { label: string; value: string }) {
 /** Mission Control V2 — resource & latency plane from LIVE observability. */
 export function MissionControlLatencyPlane() {
   const session = useTradingSession();
+  const { opsReady } = useAuth();
   const healthQ = useQuery({
     queryKey: ["platform-health-live"],
     queryFn: platformApi.healthLive,
@@ -36,22 +38,25 @@ export function MissionControlLatencyPlane() {
   const latQ = useQuery({
     queryKey: ["institutional-observability-latency", "mc-v2"],
     queryFn: institutionalObservabilityApi.latency,
+    enabled: opsReady,
     staleTime: 60_000,
-    refetchInterval: 90_000,
+    refetchInterval: opsReady ? 90_000 : false,
     retry: false,
   });
   const resQ = useQuery({
     queryKey: ["institutional-observability-resources", "mc-v2"],
     queryFn: institutionalObservabilityApi.resources,
+    enabled: opsReady,
     staleTime: 60_000,
-    refetchInterval: 90_000,
+    refetchInterval: opsReady ? 90_000 : false,
     retry: false,
   });
   const relQ = useQuery({
     queryKey: ["ite-rel-metrics", "mc-v2"],
     queryFn: iteReliabilityApi.metrics,
+    enabled: opsReady,
     staleTime: 60_000,
-    refetchInterval: 120_000,
+    refetchInterval: opsReady ? 120_000 : false,
     retry: false,
   });
 

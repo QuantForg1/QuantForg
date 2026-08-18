@@ -7,116 +7,98 @@ import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { executionApi, iteOpsApi } from "@/lib/api/endpoints";
-import { asList, asRecord, str } from "@/lib/desk";
+import {
+  classifyProtectedFailure,
+  protectedFailureCopy,
+} from "@/lib/auth/protected-request";
+import { mergeTimelineEvents } from "@/lib/ops/mission-timeline";
+import { useAuth } from "@/providers/auth-provider";
 import { Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type TimelineEvent = {
-  id: string;
-  at: string;
-  title: string;
-  detail: string;
-  href?: string;
-  tone: "ok" | "warn" | "off" | "neutral";
-};
-
-function pickTime(row: Record<string, unknown>): string {
-  return str(
-    row.at ||
-      row.timestamp ||
-      row.created_at ||
-      row.ts ||
-      row.time ||
-      row.as_of ||
-      "",
-  );
-}
-
-function classify(row: Record<string, unknown>): TimelineEvent {
-  const title = str(
-    row.event ||
-      row.action ||
-      row.type ||
-      row.stage ||
-      row.message ||
-      row.outcome ||
-      "Event",
-  );
-  const detail = str(
-    row.detail ||
-      row.reason ||
-      row.symbol ||
-      row.request_id ||
-      row.status ||
-      "",
-  );
-  const lower = `${title} ${detail}`.toLowerCase();
-  let tone: TimelineEvent["tone"] = "neutral";
-  if (/accept|connected|approved|recovered|filled|closed|success|ok/.test(lower)) {
-    tone = "ok";
-  } else if (/reject|fail|error|timeout|disconnect|kill/.test(lower)) {
-    tone = "off";
-  } else if (/retry|degraded|warn|pending|risk|scan/.test(lower)) {
-    tone = "warn";
-  }
-  const id = str(row.id || row.request_id || `${pickTime(row)}:${title}`);
-  return {
-    id,
-    at: pickTime(row) || new Date().toISOString(),
-    title,
-    detail,
-    href: row.request_id
-      ? `/execution/diagnostics?request_id=${encodeURIComponent(String(row.request_id))}`
-      : undefined,
-    tone,
-  };
-}
-
 /** LIVE institutional event timeline from execution journal + ITE audit. */
 export function EventTimelinePanel() {
+  const { opsReady, authPhase } = useAuth();
   const [selected, setSelected] = useState<string | null>(null);
   const journalQ = useQuery({
     queryKey: ["execution-journal", "mission-timeline"],
     queryFn: () => executionApi.journal(80),
+    enabled: opsReady,
     staleTime: 25_000,
-    refetchInterval: 45_000,
+    refetchInterval: opsReady ? 45_000 : false,
     retry: false,
   });
   const auditQ = useQuery({
     queryKey: ["ite-ops-audit", "mission-timeline"],
     queryFn: () => iteOpsApi.audit(60),
+    enabled: opsReady,
     staleTime: 25_000,
-    refetchInterval: 45_000,
+    refetchInterval: opsReady ? 45_000 : false,
     retry: false,
   });
 
-  const events = useMemo(() => {
-    const journalRows = asList(
-      asRecord(journalQ.data).items ||
-        asRecord(journalQ.data).events ||
-        asRecord(journalQ.data).journal ||
-        journalQ.data,
-    ).map(asRecord);
-    const auditRows = asList(
-      asRecord(auditQ.data).items ||
-        asRecord(auditQ.data).events ||
-        asRecord(auditQ.data).audit ||
-        auditQ.data,
-    ).map(asRecord);
-    return [...journalRows, ...auditRows]
-      .map(classify)
-      .filter((e) => e.title && e.title !== "Event")
-      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-      .slice(0, 80);
-  }, [auditQ.data, journalQ.data]);
+  const events = useMemo(
+    () => mergeTimelineEvents(journalQ.data, auditQ.data),
+    [auditQ.data, journalQ.data],
+  );
 
-  const timelineDegraded = journalQ.isError || auditQ.isError;
-  const timelineUnavailable = journalQ.isError && auditQ.isError;
+  const journalKind = classifyProtectedFailure({
+    authPhase,
+    opsReady,
+    error: journalQ.error,
+  });
+  const auditKind = classifyProtectedFailure({
+    authPhase,
+    opsReady,
+    error: auditQ.error,
+  });
+  const authBlocked =
+    journalKind === "AUTH_BOOTSTRAP_PENDING" ||
+    journalKind === "AUTH_REQUIRED" ||
+    journalKind === "AUTH_EXPIRED" ||
+    journalKind === "FORBIDDEN" ||
+    auditKind === "AUTH_BOOTSTRAP_PENDING" ||
+    auditKind === "AUTH_REQUIRED" ||
+    auditKind === "AUTH_EXPIRED" ||
+    auditKind === "FORBIDDEN";
+  const feedKind =
+    journalKind !== "OK"
+      ? journalKind
+      : auditKind !== "OK"
+        ? auditKind
+        : "OK";
+  const copy = protectedFailureCopy(feedKind === "OK" ? "SERVER_ERROR" : feedKind, "Timeline");
 
-  if ((journalQ.isLoading || auditQ.isLoading) && events.length === 0) {
+  if (!opsReady && (authPhase === "AUTH_LOADING" || authPhase === "AUTH_TIMEOUT")) {
+    return (
+      <div className="space-y-2 border border-[var(--border)] bg-[var(--surface)] p-4">
+        <p className="text-[12px] text-[var(--fg-muted)]">Authenticating…</p>
+        <DeskSkeleton rows={4} />
+      </div>
+    );
+  }
+
+  if ((journalQ.isLoading || auditQ.isLoading) && events.length === 0 && opsReady) {
     return <DeskSkeleton rows={6} />;
   }
-  if (timelineUnavailable && events.length === 0) {
+
+  if (authBlocked && events.length === 0) {
+    return (
+      <div className="space-y-2 border border-[var(--border)] bg-[var(--surface)] p-4">
+        <span className="text-[12px] font-medium text-[var(--fg)]">{copy.title}</span>
+        <p className="text-[12px] text-[var(--fg-muted)]">{copy.detail}</p>
+      </div>
+    );
+  }
+
+  const bothFailed = journalQ.isError && auditQ.isError;
+  const timelineDegraded = journalQ.isError || auditQ.isError;
+
+  if (bothFailed && events.length === 0) {
+    const unavailable = protectedFailureCopy(
+      feedKind === "OK" ? "SERVER_ERROR" : feedKind,
+      "Timeline",
+    );
     return (
       <div className="space-y-2 border border-[var(--border)] bg-[var(--surface)] p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -124,13 +106,10 @@ export function EventTimelinePanel() {
             DEGRADED
           </Badge>
           <span className="text-[12px] font-medium text-[var(--fg)]">
-            Event timeline unavailable
+            {unavailable.title}
           </span>
         </div>
-        <p className="text-[12px] text-[var(--fg-muted)]">
-          Journal and ITE audit feeds failed. This does not change Gateway, Broker,
-          or MT5 connectivity — those planes use trading-components health.
-        </p>
+        <p className="text-[12px] text-[var(--fg-muted)]">{unavailable.detail}</p>
         <Button
           size="sm"
           variant="outline"
@@ -159,7 +138,7 @@ export function EventTimelinePanel() {
         ) : null}
         <DeskEmpty
           icon={Activity}
-          title="No live events yet"
+          title="No events yet"
           description="Execution journal and ITE audit events appear here as the platform runs."
         />
       </div>

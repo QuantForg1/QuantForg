@@ -116,3 +116,21 @@ def test_empty_incidents_and_ai_health() -> None:
     assert dash["panels"]["capital_overview"]["data"]["equity"] == 10000
     assert dash["panels"]["xauusd_watchlist"]["data"]["symbol"] == "XAUUSD"
     assert dash["panels"]["floating_action_bar"]["status"] == "available"
+
+
+def test_dashboard_route_requires_bearer() -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.presentation.middleware.error_handler import register_exception_handlers
+    from app.presentation.routers.mission_control import router
+
+    application = FastAPI()
+    register_exception_handlers(application)
+    application.include_router(router, prefix="/api/v1")
+    client = TestClient(application)
+    response = client.get("/api/v1/mission-control/dashboard")
+    assert response.status_code == 401
+    body = response.json()
+    assert body["error"]["code"] == "missing_token"
+

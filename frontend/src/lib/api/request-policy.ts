@@ -63,6 +63,9 @@ export function shouldDedupeGet(path: string): boolean {
     p.includes("/ite/ops/auto-trading") ||
     p.includes("/ite/ops/control-center") ||
     p.includes("/ite/ops/launch-readiness") ||
+    p.includes("/ite/ops/audit") ||
+    p.includes("/execution/journal") ||
+    p.includes("/mission-control") ||
     p.includes("/trading-components") ||
     p.endsWith("/portfolio") ||
     p.endsWith("/positions") ||
