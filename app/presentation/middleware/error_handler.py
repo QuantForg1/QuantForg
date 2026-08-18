@@ -18,6 +18,7 @@ from app.domain.exceptions.base import (
     ConflictError,
     DomainError,
     NotFoundError,
+    ServiceUnavailableError,
     ValidationError,
 )
 from core.logging import get_logger
@@ -118,6 +119,20 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
+            content=_error_body(
+                code=exc.code,
+                message=exc.message,
+                details=exc.details,
+                request_id=_request_id_from(request),
+            ),
+        )
+
+    @app.exception_handler(ServiceUnavailableError)
+    async def service_unavailable_handler(
+        request: Request, exc: ServiceUnavailableError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=_error_body(
                 code=exc.code,
                 message=exc.message,

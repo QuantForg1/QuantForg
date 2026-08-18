@@ -3001,12 +3001,12 @@ export const platformApi = {
   health: () =>
     apiFetch<Record<string, unknown>>(
       `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/health`,
-      { auth: false, silent: true, timeoutMs: 15_000 },
+      { auth: false, silent: true },
     ),
   healthLive: () =>
     apiFetch<Record<string, unknown>>(
       `${env.apiBaseUrl.replace(/\/api\/v1$/, "")}/health/live`,
-      { auth: false, silent: true, timeoutMs: 15_000 },
+      { auth: false, silent: true },
     ),
   /** Authoritative Gateway / OMS / MT5 / AI plane (observe-only). */
   tradingComponents: () =>

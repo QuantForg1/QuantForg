@@ -240,6 +240,11 @@ class GatewayMT5Client:
     _positions_cache: list[MT5Position] | None = field(default=None, init=False)
     _positions_cache_at: float = field(default=0.0, init=False)
     _snapshot_ttl_seconds: float = field(default=0.75, init=False)
+    _health_snapshot_cache: MT5HealthSnapshot | None = field(default=None, init=False)
+    _health_snapshot_at: float = field(default=0.0, init=False)
+    _health_snapshot_ttl_seconds: float = field(default=2.0, init=False)
+    _gw_health_cache: dict[str, Any] | None = field(default=None, init=False)
+    _gw_health_at: float = field(default=0.0, init=False)
     _http: Any = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -318,9 +323,17 @@ class GatewayMT5Client:
             headers["X-QuantForg-Gateway-Token"] = token
         return headers
 
-    def _timeout(self) -> httpx.Timeout:
+    @staticmethod
+    def _is_light_gateway_path(path: str) -> bool:
+        return path in {"/health", "/health/live", "/session/status"}
+
+    def _timeout(self, *, path: str = "") -> httpx.Timeout:
         # Cloudflare Quick Tunnels can be slow on first connect; keep reads
         # shorter than a full minute so stalled tunnels fail closed faster.
+        # Health/session probes stay tight so they cannot occupy the worker
+        # for the 15s frontend abort window.
+        if self._is_light_gateway_path(path):
+            return httpx.Timeout(3.5, connect=2.0, read=3.5, write=3.5, pool=2.0)
         connect = min(15.0, float(self.timeout_seconds))
         read = min(float(self.timeout_seconds), 30.0)
         return httpx.Timeout(
@@ -461,7 +474,9 @@ class GatewayMT5Client:
             client = self._http_client()
             # Safe retries: GET + transient transport only. Never retry order_send
             # after the request may have reached the broker (duplicate risk).
-            attempts = 4 if method.upper() == "GET" else 1
+            attempts = 2 if method.upper() == "GET" else 1
+            if method.upper() == "GET" and not self._is_light_gateway_path(path):
+                attempts = 3
             last_exc: Exception | None = None
             response = None
             for attempt_i in range(attempts):
@@ -472,6 +487,7 @@ class GatewayMT5Client:
                         headers=headers,
                         json=json_body,
                         params=params,
+                        timeout=self._timeout(path=path),
                     )
                     last_exc = None
                     break
@@ -733,8 +749,17 @@ class GatewayMT5Client:
         return {"data": data}
 
     def gateway_health(self) -> dict[str, Any]:
+        now = time.monotonic()
+        cached = self._gw_health_cache
+        if (
+            cached is not None
+            and now - self._gw_health_at <= self._health_snapshot_ttl_seconds
+        ):
+            return dict(cached)
         data = self._request("GET", "/health", auth=False)
         self._last_gateway_health = data
+        self._gw_health_cache = data if isinstance(data, dict) else {}
+        self._gw_health_at = now
         return data
 
     def diagnostics_probe(self) -> dict[str, Any]:
@@ -901,6 +926,10 @@ class GatewayMT5Client:
         self._account_cache_at = 0.0
         self._positions_cache = None
         self._positions_cache_at = 0.0
+        self._health_snapshot_cache = None
+        self._health_snapshot_at = 0.0
+        self._gw_health_cache = None
+        self._gw_health_at = 0.0
 
     def invalidate_positions_cache(self) -> None:
         """Force next list_positions() to hit gateway GET /positions."""
@@ -1074,6 +1103,13 @@ class GatewayMT5Client:
         return self._catalogue_cache
 
     def health(self) -> MT5HealthSnapshot:
+        now = time.monotonic()
+        cached = self._health_snapshot_cache
+        if (
+            cached is not None
+            and now - self._health_snapshot_at <= self._health_snapshot_ttl_seconds
+        ):
+            return cached
         latency: float | None = None
         terminal_build: int | None = None
         version = ""
@@ -1124,7 +1160,7 @@ class GatewayMT5Client:
             connected = False
             self._connected = False
             logger.warning("gateway_health_probe_failed", error=str(exc))
-        return MT5HealthSnapshot(
+        snap = MT5HealthSnapshot(
             connected=connected,
             latency_ms=latency,
             terminal_build=terminal_build,
@@ -1135,6 +1171,9 @@ class GatewayMT5Client:
             ),
             version=version,
         )
+        self._health_snapshot_cache = snap
+        self._health_snapshot_at = now
+        return snap
 
     def list_symbols(
         self,

@@ -123,36 +123,39 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const connectedFlag =
     statusConnected || (healthUsablePreview && healthAttached);
 
-  // Keep the MT5 book hot whenever the session is attached (all app surfaces).
-  useBookStream(connectedFlag);
+  // Book polls only after /mt5/status has a live session — not merely after
+  // Weltrade health, which used to fan out /portfolio+/positions+/orders+/history
+  // and 404 "No active MT5 connection" during heal.
+  const bookEnabled = sessionEnabled && statusConnected;
+  useBookStream(bookEnabled);
 
   const portfolioQ = useQuery({
     queryKey: ["portfolio"],
     queryFn: portfolioApi.get,
-    staleTime: 5_000,
+    staleTime: 8_000,
     retry: 1,
-    enabled: connectedFlag,
+    enabled: bookEnabled,
   });
   const positionsQ = useQuery({
     queryKey: ["positions"],
     queryFn: () => portfolioApi.positions(),
-    staleTime: 4_000,
+    staleTime: 8_000,
     retry: 1,
-    enabled: connectedFlag,
+    enabled: bookEnabled,
   });
   const ordersQ = useQuery({
     queryKey: ["orders"],
     queryFn: portfolioApi.orders,
-    staleTime: 4_000,
+    staleTime: 8_000,
     retry: 1,
-    enabled: connectedFlag,
+    enabled: bookEnabled,
   });
   const historyQ = useQuery({
     queryKey: ["history"],
     queryFn: portfolioApi.history,
-    staleTime: 8_000,
+    staleTime: 12_000,
     retry: 1,
-    enabled: connectedFlag,
+    enabled: bookEnabled,
   });
 
   const status = asRecord(statusQ.data);

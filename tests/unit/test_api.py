@@ -112,9 +112,12 @@ class TestVersionEndpoint:
 class TestHealthEndpoints:
     def test_liveness(self) -> None:
         client = TestClient(_build_test_app())
+        t0 = __import__("time").perf_counter()
         response = client.get("/api/v1/health/live")
+        elapsed_ms = (__import__("time").perf_counter() - t0) * 1000.0
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
+        assert elapsed_ms < 250.0
 
     def test_readiness(self) -> None:
         client = TestClient(_build_test_app())

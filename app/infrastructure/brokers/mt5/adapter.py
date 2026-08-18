@@ -168,12 +168,23 @@ class MT5Adapter:
         return session_ref
 
     def is_live_session(self, session_ref: str) -> bool:
-        """True if ``session_ref`` is bound to the live terminal login."""
-        return (
-            bool(session_ref)
-            and session_ref == self._live_session_ref
-            and bool(getattr(self._client, "is_connected", False))
-        )
+        """True if ``session_ref`` is bound to the live terminal login.
+
+        Gateway-backed clients share one Windows terminal. A stale Postgres
+        UUID must not look like a disconnect when this process already holds
+        the live handle.
+        """
+        if not getattr(self._client, "is_connected", False):
+            return False
+        live = (self._live_session_ref or "").strip()
+        if not live:
+            return False
+        ref = (session_ref or "").strip()
+        if ref == live:
+            return True
+        if getattr(self._client, "stores_credentials_remotely", False) and ref:
+            return True
+        return False
 
     def shutdown(self) -> None:
         self._client.shutdown()

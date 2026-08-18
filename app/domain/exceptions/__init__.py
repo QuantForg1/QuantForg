@@ -9,6 +9,7 @@ from app.domain.exceptions.base import (
     ConflictError,
     DomainError,
     NotFoundError,
+    ServiceUnavailableError,
     ValidationError,
 )
 
@@ -18,5 +19,6 @@ __all__ = [
     "ConflictError",
     "DomainError",
     "NotFoundError",
+    "ServiceUnavailableError",
     "ValidationError",
 ]

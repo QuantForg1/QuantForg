@@ -20,6 +20,7 @@ import { recordApiRequestSample } from "@/lib/api/request-log";
 import {
   API_AUTH_TIMEOUT_MS,
   API_DEFAULT_TIMEOUT_MS,
+  API_HEALTH_LIVE_TIMEOUT_MS,
   API_HEALTH_TIMEOUT_MS,
   API_HEAVY_TIMEOUT_MS,
   defaultTimeoutForPath,
@@ -30,6 +31,7 @@ import {
 export {
   API_AUTH_TIMEOUT_MS,
   API_DEFAULT_TIMEOUT_MS,
+  API_HEALTH_LIVE_TIMEOUT_MS,
   API_HEALTH_TIMEOUT_MS,
   API_HEAVY_TIMEOUT_MS,
 };

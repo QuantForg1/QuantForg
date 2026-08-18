@@ -174,7 +174,7 @@ class WeltradeIntegrationService:
             }
 
         try:
-            gateway_payload = gw.gateway_health()
+            gateway_payload = await asyncio.to_thread(gw.gateway_health)
             tunnel_reachable = True
             gateway_reachable = gateway_payload.get("status") == "ok"
             if not gateway_reachable:
@@ -198,7 +198,7 @@ class WeltradeIntegrationService:
 
         if gateway_reachable:
             try:
-                snap = self.adapter.health()
+                snap = await asyncio.to_thread(self.adapter.health)
                 latency_ms = snap.latency_ms
                 version = snap.version or ""
                 server = snap.server or None
@@ -210,7 +210,7 @@ class WeltradeIntegrationService:
                     getattr(self.adapter.client, "session_mode", "none") or "none"
                 )
                 if mt5_attached:
-                    info = self.adapter.account_info()
+                    info = await asyncio.to_thread(self.adapter.account_info)
                     account = {
                         "login": info.login,
                         "name": info.name,

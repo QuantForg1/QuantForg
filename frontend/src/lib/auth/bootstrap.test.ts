@@ -10,6 +10,8 @@ import {
 } from "./bootstrap";
 import {
   API_AUTH_TIMEOUT_MS,
+  API_HEALTH_LIVE_TIMEOUT_MS,
+  API_HEALTH_TIMEOUT_MS,
   defaultTimeoutForPath,
   sessionBootBudgetMs,
   shouldAttemptTokenRefresh,
@@ -155,7 +157,10 @@ function surface(partial: {
   assert.equal(shouldDedupeGet("/ite/ops/auto-trading"), true);
   assert.equal(shouldDedupeGet("/ite/ops/control-center"), true);
   assert.equal(shouldDedupeGet("/ite/ops/launch-readiness"), true);
-  assert.equal(shouldDedupeGet("/portfolio"), false);
+  assert.equal(shouldDedupeGet("/portfolio"), true);
+  assert.equal(shouldDedupeGet("/positions"), true);
+  assert.equal(shouldDedupeGet("/orders"), true);
+  assert.equal(shouldDedupeGet("/history"), true);
 }
 
 // 8. trading-components healthy + ops timeout → infra READY, ops DEGRADED
@@ -209,6 +214,9 @@ function surface(partial: {
 // Timeouts after vs before
 assert.equal(defaultTimeoutForPath("/auth/me"), API_AUTH_TIMEOUT_MS);
 assert.equal(API_AUTH_TIMEOUT_MS, 40_000);
+assert.equal(defaultTimeoutForPath("/health/live"), API_HEALTH_LIVE_TIMEOUT_MS);
+assert.equal(defaultTimeoutForPath("/health"), API_HEALTH_TIMEOUT_MS);
+assert.ok(API_HEALTH_LIVE_TIMEOUT_MS < 8_000);
 assert.ok(sessionBootBudgetMs() > API_AUTH_TIMEOUT_MS);
 assert.equal(classifyOpsFailure({ code: "timeout", status: 408 }), "timeout");
 assert.equal(classifyOpsFailure({ status: 401 }), "unauthorized");

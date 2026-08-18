@@ -8,8 +8,10 @@
 export const API_DEFAULT_TIMEOUT_MS = 25_000;
 /** /auth/me, login, refresh — Railway cold-start budget. */
 export const API_AUTH_TIMEOUT_MS = 40_000;
-/** Public health probes. */
-export const API_HEALTH_TIMEOUT_MS = 15_000;
+/** Public health probes — /health/live must fail fast, never wait on MT5. */
+export const API_HEALTH_LIVE_TIMEOUT_MS = 4_000;
+/** Other /health* probes (still lightweight on the server). */
+export const API_HEALTH_TIMEOUT_MS = 8_000;
 /** MT5 / Weltrade / ITE ops. */
 export const API_HEAVY_TIMEOUT_MS = 45_000;
 
@@ -30,7 +32,10 @@ export function defaultTimeoutForPath(path: string): number {
   ) {
     return API_AUTH_TIMEOUT_MS;
   }
-  if (p.endsWith("/health") || p.includes("/health/") || p.endsWith("/health/live")) {
+  if (p.endsWith("/health/live") || p.includes("/health/live")) {
+    return API_HEALTH_LIVE_TIMEOUT_MS;
+  }
+  if (p.endsWith("/health") || p.includes("/health/")) {
     return API_HEALTH_TIMEOUT_MS;
   }
   if (
@@ -58,7 +63,11 @@ export function shouldDedupeGet(path: string): boolean {
     p.includes("/ite/ops/auto-trading") ||
     p.includes("/ite/ops/control-center") ||
     p.includes("/ite/ops/launch-readiness") ||
-    p.includes("/trading-components")
+    p.includes("/trading-components") ||
+    p.endsWith("/portfolio") ||
+    p.endsWith("/positions") ||
+    p.endsWith("/orders") ||
+    p.endsWith("/history")
   );
 }
 

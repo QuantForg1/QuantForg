@@ -50,14 +50,8 @@ class GetMT5StatusUseCase:
             if not session_ref or not self.adapter.is_live_session(session_ref):
                 # Stale DB row after another tenant claimed the process terminal.
                 return MT5StatusDTO.from_connection(None)
-            try:
-                snap = self.adapter.health()
-                connection.mark_heartbeat(latency_ms=snap.latency_ms or 0.0)
-                async with self.uow_factory() as uow:
-                    await uow.connections.update(connection)
-                    await uow.commit()
-            except (OSError, RuntimeError, ValueError):
-                pass
+            # Heal already probed Gateway. Do not add another health()+DB write
+            # on every status poll — that stacked 8–15s under Inspector storms.
             return MT5StatusDTO.from_connection(connection)
         return MT5StatusDTO.from_connection(None)
 

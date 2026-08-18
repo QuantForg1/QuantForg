@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -37,26 +38,33 @@ class GetPortfolioUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        record = self.sync_service.synchronize(user_id=user_id)
+        record = await asyncio.to_thread(
+            self.sync_service.synchronize, user_id=user_id
+        )
         _ = self.sync_service.drain_events()
         async with self.portfolio_uow_factory() as uow:
             await uow.syncs.add(record)
             await uow.commit()
-        positions = [
-            PositionDTO.from_entity(p) for p in self.sync_service.list_positions()
-        ]
-        pending = [
-            PendingOrderDTO.from_entity(o) for o in self.sync_service.list_orders()
-        ]
-        hist_orders = [
-            HistoryOrderDTO.from_entity(o) for o in self.sync_service.history_orders()
-        ]
-        hist_deals = [DealDTO.from_entity(d) for d in self.sync_service.history_deals()]
+
+        def _cached_snapshot() -> tuple[Any, ...]:
+            return (
+                self.sync_service.list_positions(),
+                self.sync_service.list_orders(),
+                self.sync_service.history_orders(),
+                self.sync_service.history_deals(),
+                self.sync_service.account_snapshot(),
+            )
+
+        positions_raw, pending_raw, hist_orders_raw, hist_deals_raw, account_raw = (
+            await asyncio.to_thread(_cached_snapshot)
+        )
+        positions = [PositionDTO.from_entity(p) for p in positions_raw]
+        pending = [PendingOrderDTO.from_entity(o) for o in pending_raw]
+        hist_orders = [HistoryOrderDTO.from_entity(o) for o in hist_orders_raw]
+        hist_deals = [DealDTO.from_entity(d) for d in hist_deals_raw]
         return PortfolioDTO(
             sync_id=record.id,
-            account=AccountSnapshotDTO.from_entity(
-                self.sync_service.account_snapshot()
-            ),
+            account=AccountSnapshotDTO.from_entity(account_raw),
             positions=positions,
             pending_orders=pending,
             history_orders=hist_orders,
@@ -79,9 +87,11 @@ class ListPositionsUseCase:
             self.mt5_uow_factory, self.sync_service, user_id
         )
         if symbol:
-            rows = self.sync_service.position_by_symbol(symbol)
+            rows = await asyncio.to_thread(
+                self.sync_service.position_by_symbol, symbol
+            )
         else:
-            rows = self.sync_service.list_positions()
+            rows = await asyncio.to_thread(self.sync_service.list_positions)
         return [PositionDTO.from_entity(p) for p in rows]
 
 
@@ -94,7 +104,7 @@ class GetPositionByTicketUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        pos = self.sync_service.position_by_ticket(ticket)
+        pos = await asyncio.to_thread(self.sync_service.position_by_ticket, ticket)
         if pos is None:
             raise NotFoundError(f"Position ticket {ticket} not found")
         return PositionDTO.from_entity(pos)
@@ -109,7 +119,8 @@ class ListOrdersUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        return [PendingOrderDTO.from_entity(o) for o in self.sync_service.list_orders()]
+        orders = await asyncio.to_thread(self.sync_service.list_orders)
+        return [PendingOrderDTO.from_entity(o) for o in orders]
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +132,7 @@ class GetOrderByTicketUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        order = self.sync_service.order_by_ticket(ticket)
+        order = await asyncio.to_thread(self.sync_service.order_by_ticket, ticket)
         if order is None:
             raise NotFoundError(f"Pending order ticket {ticket} not found")
         return PendingOrderDTO.from_entity(order)
@@ -142,8 +153,12 @@ class GetHistoryUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        orders = self.sync_service.history_orders(date_from=date_from, date_to=date_to)
-        deals = self.sync_service.history_deals(date_from=date_from, date_to=date_to)
+        orders = await asyncio.to_thread(
+            self.sync_service.history_orders, date_from=date_from, date_to=date_to
+        )
+        deals = await asyncio.to_thread(
+            self.sync_service.history_deals, date_from=date_from, date_to=date_to
+        )
         return HistoryDTO(
             orders=[HistoryOrderDTO.from_entity(o) for o in orders],
             deals=[DealDTO.from_entity(d) for d in deals],
@@ -159,4 +174,5 @@ class GetAccountSnapshotUseCase:
         await _require_active_connection(
             self.mt5_uow_factory, self.sync_service, user_id
         )
-        return AccountSnapshotDTO.from_entity(self.sync_service.account_snapshot())
+        snap = await asyncio.to_thread(self.sync_service.account_snapshot)
+        return AccountSnapshotDTO.from_entity(snap)

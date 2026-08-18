@@ -49,6 +49,19 @@ class NotFoundError(DomainError):
         super().__init__(message, code=code, details=details)
 
 
+class ServiceUnavailableError(DomainError):
+    """Raised when a required dependency is temporarily unavailable."""
+
+    def __init__(
+        self,
+        message: str = "Service unavailable",
+        *,
+        code: str = "service_unavailable",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message, code=code, details=details)
+
+
 class ValidationError(DomainError):
     """Raised when a domain invariant or input constraint is violated."""
 

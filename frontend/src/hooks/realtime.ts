@@ -65,7 +65,6 @@ export function useBrokerStatusStream(enabled = true) {
   useChannel("mt5-status", undefined, enabled);
   useChannel("weltrade-health", undefined, enabled);
   useChannel("brokers", undefined, enabled);
-  useChannel("health", undefined, enabled);
   return useRealtimeContext().status;
 }
 
