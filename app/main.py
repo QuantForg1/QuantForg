@@ -530,6 +530,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await container.shutdown()
     except Exception as exc:
         logger.warning("application_shutdown_error", error=str(exc))
+    try:
+        from app.application.services.blocking_io_offload import (
+            shutdown_blocking_io_executor,
+        )
+
+        shutdown_blocking_io_executor(wait=False)
+    except Exception as exc:
+        logger.warning("blocking_io_executor_shutdown_error", error=str(exc))
     logger.info("application_stopped")
 
 

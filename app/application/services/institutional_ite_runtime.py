@@ -3944,12 +3944,17 @@ class InstitutionalIteRuntime:
                     ),
                 )
                 return None
-            preferred = self._alpha_preferred_symbol() or GOLD_SYMBOL
-        symbol, skipped = resolve_executable_symbol(
+            preferred = (
+                await self._offload_blocking_io(self._alpha_preferred_symbol)
+                or GOLD_SYMBOL
+            )
+        alpha_ranking = await self._offload_blocking_io(self._alpha_ranking_rows)
+        symbol, skipped = await self._offload_blocking_io(
+            resolve_executable_symbol,
             self.mt5_adapter,
             preferred=preferred,
             plane=self.plane,
-            alpha_ranking=self._alpha_ranking_rows(),
+            alpha_ranking=alpha_ranking,
         )
         if skipped:
             logger.warning(
@@ -4106,7 +4111,7 @@ class InstitutionalIteRuntime:
             except Exception:
                 logger.exception("pvm_execute_now_market_stages_failed")
             if not ctx.ok or ctx.snapshot is None or ctx.account is None:
-                health = self.tick_health()
+                health = await self._offload_blocking_io(self.tick_health)
                 result = ShadowCycleResult(
                     ok=True,
                     trace_id=None,
@@ -4168,13 +4173,15 @@ class InstitutionalIteRuntime:
                 key="no_broker_restrictions",
             )
             if self.plane.mode is OpsExecutionMode.SHADOW:
-                cycle = self.run_shadow_cycle(
+                cycle = await self._offload_blocking_io(
+                    self.run_shadow_cycle,
                     snapshot=ctx.snapshot,
                     account=ctx.account,
                     market_context_diagnostics=dict(ctx.diagnostics),
                 )
             else:
-                cycle = self.run_auto_cycle(
+                cycle = await self._offload_blocking_io(
+                    self.run_auto_cycle,
                     snapshot=ctx.snapshot,
                     account=ctx.account,
                     gateway_connected=True,
@@ -4245,6 +4252,16 @@ class InstitutionalIteRuntime:
 
     def stop(self) -> None:
         self._stop.set()
+
+    async def _offload_blocking_io(self, fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+        """Run sync ITE/Gateway work on the bounded I/O pool.
+
+        Keeps the FastAPI event loop free for /health/live and /auth/me.
+        Does not change trading decisions — only the executing thread.
+        """
+        from app.application.services.blocking_io_offload import offload_blocking
+
+        return await offload_blocking(fn, *args, **kwargs)
 
     async def run_forever(self) -> None:
         """Background loop — live market context → Decision→Risk→Safety→OMS."""
@@ -4472,7 +4489,7 @@ class InstitutionalIteRuntime:
                     continue
 
                 if not ctx.ok or ctx.snapshot is None or ctx.account is None:
-                    health = self.tick_health()
+                    health = await self._offload_blocking_io(self.tick_health)
                     result = ShadowCycleResult(
                         ok=True,
                         trace_id=None,
@@ -4578,13 +4595,15 @@ class InstitutionalIteRuntime:
                         key="no_broker_restrictions",
                     )
                     if self.plane.mode is OpsExecutionMode.SHADOW:
-                        self.run_shadow_cycle(
+                        await self._offload_blocking_io(
+                            self.run_shadow_cycle,
                             snapshot=ctx.snapshot,
                             account=ctx.account,
                             market_context_diagnostics=dict(ctx.diagnostics),
                         )
                     else:
-                        self.run_auto_cycle(
+                        await self._offload_blocking_io(
+                            self.run_auto_cycle,
                             snapshot=ctx.snapshot,
                             account=ctx.account,
                             gateway_connected=True,

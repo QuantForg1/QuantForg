@@ -6,7 +6,6 @@ If market data cannot be loaded, returns an explicit failure reason.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -30,11 +29,12 @@ async def _offload_sync(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
 
     Production bug: sync httpx gateway calls inside ``async`` market context
     starved login/health. Trading decisions are unchanged — only the thread
-    that performs I/O moves.
+    that performs I/O moves. Uses the bounded ITE I/O pool (not unlimited
+    threads, not the request-path default executor).
     """
-    if kwargs:
-        return await asyncio.to_thread(lambda: fn(*args, **kwargs))
-    return await asyncio.to_thread(fn, *args)
+    from app.application.services.blocking_io_offload import offload_blocking
+
+    return await offload_blocking(fn, *args, **kwargs)
 
 _TF_COUNTS: tuple[tuple[Timeframe, int], ...] = (
     (Timeframe.H4, 180),
@@ -199,6 +199,23 @@ def _ensure_gateway_session(mt5_adapter: Any, diag: dict[str, Any]) -> str | Non
     return "MT5 gateway session not connected (process flag false; adopt unavailable)"
 
 
+def _load_history_deals(
+    mt5_adapter: Any,
+    *,
+    date_from: datetime,
+    date_to: datetime,
+) -> tuple[bool, list[Any] | None, str | None]:
+    """Sync Gateway history fetch — caller must offload this off the event loop."""
+    hist = getattr(mt5_adapter, "history_deals", None)
+    if callable(hist):
+        return True, list(hist(date_from=date_from, date_to=date_to)), None
+    client = _client_of(mt5_adapter)
+    hist_c = getattr(client, "history_deals", None)
+    if callable(hist_c):
+        return True, list(hist_c(date_from=date_from, date_to=date_to)), None
+    return False, None, "UNAVAILABLE"
+
+
 async def build_ite_cycle_market_context(
     mt5_adapter: Any | None,
     *,
@@ -253,7 +270,7 @@ async def build_ite_cycle_market_context(
             connection="NO_ADAPTER",
         )
 
-    session_err = _ensure_gateway_session(mt5_adapter, diag)
+    session_err = await _offload_sync(_ensure_gateway_session, mt5_adapter, diag)
     if session_err:
         return _fail(session_err)
 
@@ -269,7 +286,7 @@ async def build_ite_cycle_market_context(
 
     broker_rows: tuple[dict[str, Any], ...] = ()
     try:
-        broker_rows = fetch_broker_symbol_rows(mt5_adapter)
+        broker_rows = await _offload_sync(fetch_broker_symbol_rows, mt5_adapter)
     except Exception:
         broker_rows = ()
     if broker_rows:
@@ -553,28 +570,14 @@ async def build_ite_cycle_market_context(
             day_start = datetime.now(UTC).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
-            hist = getattr(mt5_adapter, "history_deals", None)
-            if callable(hist):
-                deals = list(
-                    hist(
-                        date_from=day_start,
-                        date_to=datetime.now(UTC) + timedelta(days=1),
-                    )
-                )
-                deals_fetch_ok = True
-            else:
-                client = _client_of(mt5_adapter)
-                hist_c = getattr(client, "history_deals", None)
-                if callable(hist_c):
-                    deals = list(
-                        hist_c(
-                            date_from=day_start,
-                            date_to=datetime.now(UTC) + timedelta(days=1),
-                        )
-                    )
-                    deals_fetch_ok = True
-                else:
-                    diag["history_deals"] = "UNAVAILABLE"
+            deals_fetch_ok, deals, deals_note = await _offload_sync(
+                _load_history_deals,
+                mt5_adapter,
+                date_from=day_start,
+                date_to=datetime.now(UTC) + timedelta(days=1),
+            )
+            if deals_note:
+                diag["history_deals"] = deals_note
         except Exception as exc:
             logger.warning("ite_cycle_history_deals_failed", error=str(exc))
             diag["history_deals"] = f"ERROR: {exc}"
@@ -760,7 +763,7 @@ async def build_ite_cycle_market_context(
     diag["reason"] = "market context ready"
     diag["snapshot"] = "OK"
     # Terminal AutoTrading — must not hardcode False when /health reports true.
-    mt5_at = _read_mt5_autotrading_enabled(mt5_adapter, diag)
+    mt5_at = await _offload_sync(_read_mt5_autotrading_enabled, mt5_adapter, diag)
     if mt5_at is None:
         # Unknown → fail-closed for safety gate (same as orchestrator).
         diag["mt5_autotrading_enabled"] = False
