@@ -41,6 +41,7 @@ import { recordAudit } from "@/lib/observability/audit";
 import { readOpsTelemetry } from "@/lib/ops/ops-telemetry-cache";
 import {
   bookIntegrityFromCycle,
+  extractCanonicalContext,
   extractAuthorizedExecution,
   focusObservability,
   initialTerminalFocus,
@@ -201,6 +202,7 @@ export function TerminalShell() {
         gatewayOnline: session.gatewayOnline,
       }),
       userSelected,
+      canonical: extractCanonicalContext(autoPayload),
     });
     if (!sameTerminalFocus(focusRef.current, next)) {
       focusRef.current = next;
@@ -214,7 +216,20 @@ export function TerminalShell() {
     const auditKey = `${obs.terminal_mode}:${obs.terminal_symbol}:${obs.symbol_source}`;
     if (auditKey !== lastAuditKey.current) {
       lastAuditKey.current = auditKey;
-      recordAudit("terminal_focus", "info", "Terminal view symbol updated", obs);
+      const prevMode = focus.mode;
+      const action =
+        next.mode === "AUTONOMOUS_EXECUTING" && prevMode === "MANUAL"
+          ? "execution_submitted"
+          : next.mode === "AUTONOMOUS_POSITION_OPEN" &&
+              prevMode !== "AUTONOMOUS_POSITION_OPEN"
+            ? "execution_filled"
+            : next.mode === "MANUAL" && prevMode !== "MANUAL"
+              ? "terminal_return_to_manual"
+              : "terminal_focus";
+      recordAudit(action, "info", "Terminal view symbol updated", {
+        ...obs,
+        mt5_chart_sync: "unsupported",
+      });
     }
   }, [
     hydrated,

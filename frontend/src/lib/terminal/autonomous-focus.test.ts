@@ -42,7 +42,7 @@ assert.equal(MANUAL_HOME_SYMBOL, "XAUUSD_i");
   const focused = apply(home, {
     authorized: { symbol: "NZDUSD_I", authKey: "t1" },
   });
-  assert.equal(focused.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(focused.mode, "AUTONOMOUS_EXECUTING");
   assert.equal(focused.terminalSymbol, "NZDUSD_i");
   assert.equal(focused.manualSymbol, "XAUUSD_i");
   assert.equal(focused.symbolSource, "AUTONOMOUS_EXECUTION");
@@ -81,7 +81,7 @@ assert.equal(MANUAL_HOME_SYMBOL, "XAUUSD_i");
   });
   assert.equal(authorized?.symbol, "NZDUSD_i");
   const focused = apply(home, { authorized });
-  assert.equal(focused.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(focused.mode, "AUTONOMOUS_EXECUTING");
   assert.equal(focused.terminalSymbol, "NZDUSD_i");
 }
 
@@ -91,7 +91,7 @@ assert.equal(MANUAL_HOME_SYMBOL, "XAUUSD_i");
     apply(home, { authorized: { symbol: "NZDUSD_I", authKey: "t1" } }),
     { openPositionSymbols: ["NZDUSD_I"] },
   );
-  assert.equal(opened.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(opened.mode, "AUTONOMOUS_POSITION_OPEN");
   assert.equal(opened.terminalSymbol, "NZDUSD_i");
   assert.equal(opened.sawAutonomousPosition, true);
 }
@@ -138,11 +138,11 @@ assert.equal(MANUAL_HOME_SYMBOL, "XAUUSD_i");
   const multi = apply(home, {
     openPositionSymbols: ["NZDUSD_I", "EURUSD_I"],
   });
-  assert.equal(multi.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(multi.mode, "AUTONOMOUS_POSITION_OPEN");
   const still = apply(multi, {
     openPositionSymbols: ["EURUSD_I"],
   });
-  assert.equal(still.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(still.mode, "AUTONOMOUS_POSITION_OPEN");
   assert.ok(["NZDUSD_i", "EURUSD_i"].includes(still.terminalSymbol));
 }
 
@@ -155,14 +155,14 @@ assert.equal(MANUAL_HOME_SYMBOL, "XAUUSD_i");
     openPositionSymbols: [],
     bookIntegrity: "unknown",
   });
-  assert.equal(unknown.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(unknown.mode, "AUTONOMOUS_RECONCILIATION");
   assert.equal(unknown.terminalSymbol, "NZDUSD_i");
 
   const recon = apply(focused, {
     openPositionSymbols: [],
     bookIntegrity: "reconciliation_required",
   });
-  assert.equal(recon.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(recon.mode, "AUTONOMOUS_RECONCILIATION");
 }
 
 {
@@ -206,7 +206,7 @@ assert.equal(MANUAL_HOME_SYMBOL, "XAUUSD_i");
     userSelected: true,
     openPositionSymbols: ["NZDUSD_I"],
   });
-  assert.equal(ignored.mode, "AUTONOMOUS_FOCUS");
+  assert.equal(ignored.mode, "AUTONOMOUS_POSITION_OPEN");
   assert.equal(ignored.terminalSymbol, "NZDUSD_i");
 }
 
@@ -235,7 +235,33 @@ assert.deepEqual(symbolsFromBookRows([{ symbol: "NZDUSD_I" }]), ["NZDUSD_I"]);
   assert.equal(obs.manual_symbol, "XAUUSD_i");
   assert.equal(obs.execution_symbol, "NZDUSD_i");
   assert.equal(obs.symbol_source, "AUTONOMOUS_EXECUTION");
-  assert.equal(obs.terminal_mode, "AUTONOMOUS_FOCUS");
+  assert.equal(obs.terminal_mode, "AUTONOMOUS_EXECUTING");
+}
+
+{
+  const fromCanonical = apply(home, {
+    canonical: {
+      terminal_mode: "AUTONOMOUS_EXECUTING",
+      execution_symbol: "NZDUSD_I",
+      broker_symbol: "NZDUSD_I",
+      symbol: "NZDUSD_I",
+      manual_symbol: "XAUUSD_i",
+      symbol_source: "AUTONOMOUS_EXECUTION",
+      execution_status: "EXECUTING",
+      mt5_status: "MT5_CONNECTED",
+      mt5_chart_symbol: null,
+      mt5_chart_sync: "unsupported",
+      position_symbols: [],
+      open_position_count: 0,
+      unresolved_order_count: 1,
+      failure_mode: "NONE",
+      order_id: "4242",
+      position_id: null,
+    },
+  });
+  assert.equal(fromCanonical.mode, "AUTONOMOUS_EXECUTING");
+  assert.equal(fromCanonical.terminalSymbol, "NZDUSD_i");
+  assert.equal(fromCanonical.manualSymbol, "XAUUSD_i");
 }
 
 console.log("autonomous-focus.test.ts: ok");

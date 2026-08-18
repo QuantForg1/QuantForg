@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { TerminalSymbolSwitcher } from "@/components/terminal/symbol-switcher";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { num, str } from "@/lib/desk";
+import {
+  isAutonomousTerminalMode,
+  type TerminalMode,
+} from "@/lib/terminal/autonomous-focus";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { RealtimeStatus } from "@/lib/realtime/types";
 
@@ -29,7 +33,7 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
   bid?: number;
   ask?: number;
   realtime?: RealtimeStatus;
-  terminalMode?: "MANUAL" | "AUTONOMOUS_FOCUS";
+  terminalMode?: TerminalMode;
   className?: string;
 }) {
   const session = useTradingSession();
@@ -92,12 +96,12 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
             {symbol}
           </span>
         )}
-        {terminalMode === "AUTONOMOUS_FOCUS" ? (
+        {isAutonomousTerminalMode(terminalMode) ? (
           <Badge
             tone="accent"
             className="hidden h-5 shrink-0 px-1.5 text-[10px] sm:inline-flex"
           >
-            Auto
+            {terminalMode === "AUTONOMOUS_POSITION_OPEN" ? "Position" : "Auto"}
           </Badge>
         ) : null}
         {spread != null ? (

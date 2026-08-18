@@ -24,6 +24,9 @@ from app.domain.institutional_trading.operations.models import (
 )
 from app.presentation.dependencies.auth import require_roles
 from core.config.settings import get_settings
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/ite/ops", tags=["ite-operations"])
 
@@ -485,7 +488,11 @@ def arm_kill(
         snap = get_phase_a_plane().halt.snapshot()
     except Exception:
         snap = {"state": "HALT_ALL_TRADING"}
-    return {"kill_switch": True, "kill_switch_state": snap.get("state"), "phase_a_halt": snap}
+    return {
+        "kill_switch": True,
+        "kill_switch_state": snap.get("state"),
+        "phase_a_halt": snap,
+    }
 
 
 @router.post("/kill-switch/disarm")
@@ -789,20 +796,65 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "ai_scalping": _ai_scalping_payload(),
         "institutional_alpha": _institutional_alpha_payload(),
         "daily_opportunity_target": _daily_opportunity_target_payload(),
+        "execution_context": _autonomous_execution_context_payload(
+            orchestrator=orchestrator,
+            recent_attempts=recent_attempts,
+            live=live,
+            gateway_connected=snap.facts.gateway_connected,
+            broker_connected=snap.facts.broker_connected,
+        ),
     }
+
+
+def _autonomous_execution_context_payload(
+    *,
+    orchestrator: dict[str, Any] | None,
+    recent_attempts: list[dict[str, Any]],
+    live: dict[str, Any],
+    gateway_connected: bool | None,
+    broker_connected: bool | None,
+) -> dict[str, Any]:
+    """Compose in-process execution view. No Gateway I/O, no order path."""
+    try:
+        from app.application.services.autonomous_execution_context import (
+            build_autonomous_execution_context,
+            collect_pme_positions_from_runtime,
+        )
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        return build_autonomous_execution_context(
+            orchestrator=orchestrator,
+            recent_attempts=recent_attempts,
+            pme_positions=collect_pme_positions_from_runtime(runtime),
+            live=live,
+            gateway_connected=gateway_connected,
+            broker_connected=broker_connected,
+        ).to_dict()
+    except Exception:
+        logger.exception("autonomous_execution_context_build_failed")
+        return {
+            "manual_symbol": "XAUUSD_i",
+            "terminal_mode": "MANUAL",
+            "symbol_source": "MANUAL",
+            "mt5_chart_sync": "unsupported",
+            "mt5_chart_symbol": None,
+            "status": "IDLE",
+            "execution_status": "IDLE",
+        }
 
 
 def _daily_opportunity_target_payload() -> dict[str, Any]:
     """Opportunity target progress — never forces trades."""
     try:
+        from app.domain.institutional_trading.ai_scalping import (
+            daily_opportunity_target as _dot,
+        )
         from app.domain.institutional_trading.ai_scalping.config import (
             DEFAULT_AI_SCALPING_CONFIG,
         )
-        from app.domain.institutional_trading.ai_scalping.daily_opportunity_target import (
-            get_daily_opportunity_tracker,
-        )
 
-        tracker = get_daily_opportunity_tracker(
+        tracker = _dot.get_daily_opportunity_tracker(
             target_trades_per_day=int(
                 getattr(DEFAULT_AI_SCALPING_CONFIG, "target_trades_per_day", 3) or 3
             )

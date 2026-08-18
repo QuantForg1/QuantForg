@@ -11,9 +11,22 @@ import { resolveTradingSymbol, TRADING_SYMBOL } from "@/lib/trading/gold-only";
 
 export const MANUAL_HOME_SYMBOL = TRADING_SYMBOL;
 
-export type TerminalMode = "MANUAL" | "AUTONOMOUS_FOCUS";
+export type TerminalMode =
+  | "MANUAL"
+  | "AUTONOMOUS_PENDING"
+  | "AUTONOMOUS_EXECUTING"
+  | "AUTONOMOUS_POSITION_OPEN"
+  | "AUTONOMOUS_POSITION_CLOSING"
+  | "AUTONOMOUS_RECONCILIATION"
+  | "RETURNING_TO_MANUAL"
+  | "AUTONOMOUS_FOCUS";
+
 export type SymbolSource = "MANUAL" | "AUTONOMOUS_EXECUTION";
 export type BookIntegrity = "ok" | "unknown" | "reconciliation_required";
+
+export function isAutonomousTerminalMode(mode: TerminalMode): boolean {
+  return mode !== "MANUAL" && mode !== "RETURNING_TO_MANUAL";
+}
 
 export type AuthorizedExecution = {
   symbol: string;
@@ -38,7 +51,59 @@ export type TerminalFocusInput = {
   pendingOrderSymbols: string[];
   bookIntegrity: BookIntegrity;
   userSelected: boolean;
+  canonical?: CanonicalExecutionContext | null;
 };
+
+export type CanonicalExecutionContext = {
+  terminal_mode: string;
+  execution_symbol: string | null;
+  broker_symbol: string | null;
+  symbol: string | null;
+  manual_symbol: string;
+  symbol_source: string;
+  execution_status: string;
+  mt5_status: string;
+  mt5_chart_symbol: string | null;
+  mt5_chart_sync: string;
+  position_symbols: string[];
+  open_position_count: number;
+  unresolved_order_count: number;
+  failure_mode: string;
+  order_id: string | null;
+  position_id: string | null;
+};
+
+export function extractCanonicalContext(
+  payload: unknown,
+): CanonicalExecutionContext | null {
+  const ctx = asRecord(asRecord(payload).execution_context);
+  if (!Object.keys(ctx).length) return null;
+  const positions = Array.isArray(ctx.position_symbols)
+    ? ctx.position_symbols.map((item) => String(item))
+    : [];
+  return {
+    terminal_mode: String(ctx.terminal_mode || "MANUAL"),
+    execution_symbol: ctx.execution_symbol
+      ? String(ctx.execution_symbol)
+      : ctx.symbol
+        ? String(ctx.symbol)
+        : null,
+    broker_symbol: ctx.broker_symbol ? String(ctx.broker_symbol) : null,
+    symbol: ctx.symbol ? String(ctx.symbol) : null,
+    manual_symbol: String(ctx.manual_symbol || MANUAL_HOME_SYMBOL),
+    symbol_source: String(ctx.symbol_source || "MANUAL"),
+    execution_status: String(ctx.execution_status || ctx.status || "IDLE"),
+    mt5_status: String(ctx.mt5_status || ""),
+    mt5_chart_symbol: ctx.mt5_chart_symbol ? String(ctx.mt5_chart_symbol) : null,
+    mt5_chart_sync: String(ctx.mt5_chart_sync || "unsupported"),
+    position_symbols: positions,
+    open_position_count: Number(ctx.open_position_count || 0),
+    unresolved_order_count: Number(ctx.unresolved_order_count || 0),
+    failure_mode: String(ctx.failure_mode || "NONE"),
+    order_id: ctx.order_id != null ? String(ctx.order_id) : null,
+    position_id: ctx.position_id != null ? String(ctx.position_id) : null,
+  };
+}
 
 export function initialTerminalFocus(manualSymbol?: string): TerminalFocusState {
   const home = resolveTradingSymbol(manualSymbol || MANUAL_HOME_SYMBOL);
@@ -152,16 +217,24 @@ export function focusObservability(state: TerminalFocusState): {
   manual_symbol: string;
   autonomous_symbol: string | null;
   execution_symbol: string | null;
+  broker_symbol: string | null;
+  mt5_chart_symbol: string | null;
   symbol_source: SymbolSource;
   terminal_mode: TerminalMode;
+  execution_status: string;
+  mt5_status: string;
 } {
   return {
     terminal_symbol: state.terminalSymbol,
     manual_symbol: state.manualSymbol,
     autonomous_symbol: state.autonomousSymbol,
     execution_symbol: state.autonomousSymbol,
+    broker_symbol: state.autonomousSymbol,
+    mt5_chart_symbol: null,
     symbol_source: state.symbolSource,
     terminal_mode: state.mode,
+    execution_status: state.mode,
+    mt5_status: "",
   };
 }
 
@@ -189,7 +262,15 @@ export function nextTerminalFocus(
   const live = uniqResolved([
     ...input.openPositionSymbols,
     ...input.pendingOrderSymbols,
+    ...(input.canonical?.position_symbols ?? []),
   ]);
+  const canonical = input.canonical;
+  const canonicalMode = (canonical?.terminal_mode || "") as TerminalMode;
+  const reconciling =
+    unresolvedBook(input.bookIntegrity) ||
+    canonicalMode === "AUTONOMOUS_RECONCILIATION" ||
+    (canonical?.failure_mode || "").toUpperCase().includes("RECONCIL") ||
+    (canonical?.execution_status || "").toUpperCase().includes("RECONCIL");
   const authorizedRaw =
     input.authorized && input.authorized.authKey !== prev.consumedAuthKey
       ? input.authorized
@@ -208,7 +289,7 @@ export function nextTerminalFocus(
         ? resolveTradingSymbol(prev.autonomousSymbol)
         : live[0];
     return {
-      mode: "AUTONOMOUS_FOCUS",
+      mode: "AUTONOMOUS_POSITION_OPEN",
       terminalSymbol: stay,
       manualSymbol: manual,
       autonomousSymbol: stay,
@@ -218,8 +299,28 @@ export function nextTerminalFocus(
     };
   }
 
-  if (unresolvedBook(input.bookIntegrity) && prev.mode === "AUTONOMOUS_FOCUS") {
-    return { ...prev, manualSymbol: manual };
+  if (
+    reconciling &&
+    (isAutonomousTerminalMode(prev.mode) ||
+      canonicalMode === "AUTONOMOUS_RECONCILIATION")
+  ) {
+    const stay = resolveTradingSymbol(
+      prev.autonomousSymbol ||
+        canonical?.broker_symbol ||
+        canonical?.execution_symbol ||
+        "",
+    );
+    if (stay) {
+      return {
+        mode: "AUTONOMOUS_RECONCILIATION",
+        terminalSymbol: stay,
+        manualSymbol: manual,
+        autonomousSymbol: stay,
+        symbolSource: "AUTONOMOUS_EXECUTION",
+        sawAutonomousPosition: prev.sawAutonomousPosition,
+        consumedAuthKey: prev.consumedAuthKey,
+      };
+    }
   }
 
   if (input.userSelected) {
@@ -234,19 +335,37 @@ export function nextTerminalFocus(
     };
   }
 
-  if (authorized && !(prev.mode === "AUTONOMOUS_FOCUS" && prev.sawAutonomousPosition)) {
+  const execSymbol =
+    authorized?.symbol ||
+    (canonical?.broker_symbol
+      ? resolveTradingSymbol(canonical.broker_symbol)
+      : null) ||
+    (canonical?.execution_symbol
+      ? resolveTradingSymbol(canonical.execution_symbol)
+      : null);
+
+  const enterExecuting =
+    Boolean(authorized) ||
+    canonicalMode === "AUTONOMOUS_EXECUTING" ||
+    canonical?.execution_status === "EXECUTING";
+
+  if (
+    enterExecuting &&
+    execSymbol &&
+    !(isAutonomousTerminalMode(prev.mode) && prev.sawAutonomousPosition)
+  ) {
     return {
-      mode: "AUTONOMOUS_FOCUS",
-      terminalSymbol: authorized.symbol,
+      mode: "AUTONOMOUS_EXECUTING",
+      terminalSymbol: execSymbol,
       manualSymbol: manual,
-      autonomousSymbol: authorized.symbol,
+      autonomousSymbol: execSymbol,
       symbolSource: "AUTONOMOUS_EXECUTION",
       sawAutonomousPosition: prev.sawAutonomousPosition,
       consumedAuthKey: prev.consumedAuthKey,
     };
   }
 
-  if (prev.mode === "AUTONOMOUS_FOCUS") {
+  if (isAutonomousTerminalMode(prev.mode)) {
     return {
       mode: "MANUAL",
       terminalSymbol: home,

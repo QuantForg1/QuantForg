@@ -23,7 +23,13 @@ export type AuditAction =
   | "session_timeout"
   | "api_degraded"
   | "catalogue_degraded"
-  | "terminal_focus";
+  | "terminal_focus"
+  | "execution_symbol_resolved"
+  | "mt5_symbol_ready"
+  | "execution_submitted"
+  | "execution_filled"
+  | "execution_closed"
+  | "terminal_return_to_manual";
 
 export type AuditEvent = ObservabilityContext & {
   id: string;
