@@ -178,7 +178,9 @@ class InstitutionalIteRuntime:
 
     def tick_health(self) -> dict[str, Any]:
         """Live probes → ReliabilityPlatform.tick (no POST body flags)."""
-        probes = self.probes.collect()
+        # Trading-cycle health: Gateway/MT5/OMS only. Railway/Supabase/Cloudflare
+        # HTTP self-probes are advisory and must not add 3–5s to every tick.
+        probes = self.probes.collect(include_platform_probes=False)
         # Heartbeats only for components that are currently healthy — never
         # refresh a failed dependency as alive (stale-heartbeat pause must work).
         now = datetime.now(UTC)
@@ -3450,6 +3452,7 @@ class InstitutionalIteRuntime:
                 if hasattr(self.decision_pipeline, "last_ai_score")
                 else None
             ),
+            "fast_decision": self._fast_decision_snapshot(),
         }
 
     def strategy_diagnostics(self, *, limit: int = 100) -> dict[str, Any]:
@@ -3907,6 +3910,27 @@ class InstitutionalIteRuntime:
                 else None
             )
 
+    def _fast_decision_snapshot(self) -> dict[str, Any]:
+        """Observability only — never becomes an execution gate."""
+        try:
+            from app.domain.institutional_trading.operations.fast_decision_path import (
+                opportunity_window_snapshot,
+            )
+
+            snap = opportunity_window_snapshot()
+            with self._lock:
+                last = self._last_cycle
+                queue = list(self._eligible_handoff_queue)
+            snap["eligible_symbols"] = queue[:16]
+            snap["last_abort_reason"] = getattr(last, "abort_reason", None) if last else None
+            snap["last_cycle_outcome"] = (
+                getattr(last, "cycle_outcome", None) if last else None
+            )
+            return snap
+        except Exception:
+            logger.exception("fast_decision_snapshot_failed")
+            return {"window": "FIRST_TRADE_OPPORTUNITY_WINDOW", "forces_trades": False}
+
     async def _pick_executable_symbol_async(self) -> str | None:
         """Highest-ranked full-mode symbol after institutional multi-asset scan.
 
@@ -4302,6 +4326,14 @@ class InstitutionalIteRuntime:
             autonomous=True,
             continuous_24_7=True,
         )
+        try:
+            from app.domain.institutional_trading.operations.fast_decision_path import (
+                ensure_opportunity_window,
+            )
+
+            ensure_opportunity_window()
+        except Exception:
+            logger.exception("opportunity_window_start_failed")
         # Mark open-book resume after process start / reconnect path.
         try:
             from app.domain.institutional_trading.ai_scalping.config import (
@@ -4739,6 +4771,64 @@ class InstitutionalIteRuntime:
                 from app.domain.institutional_trading.ai_scalping.continuous_operation import (
                     get_continuous_operation_controller,
                 )
+                from app.domain.institutional_trading.operations.fast_decision_path import (
+                    classify_candidate_outcome,
+                    record_cycle_classification,
+                )
+
+                last_for_cls = None
+                last_decision = None
+                with self._lock:
+                    last_for_cls = self._last_cycle
+                    last_decision = self._last_decision
+                cls = classify_candidate_outcome(
+                    abort_reason=getattr(last_for_cls, "abort_reason", None)
+                    if last_for_cls
+                    else None,
+                    failed_reasons=tuple(
+                        getattr(last_for_cls, "safety_failed_reasons", ()) or ()
+                    )
+                    if last_for_cls
+                    else (),
+                    cycle_outcome=getattr(last_for_cls, "cycle_outcome", None)
+                    if last_for_cls
+                    else None,
+                    forwarded_to_oms=bool(
+                        getattr(last_for_cls, "forwarded_to_oms", False)
+                    )
+                    if last_for_cls
+                    else False,
+                    decision_action=str(
+                        getattr(
+                            getattr(last_decision, "action", None),
+                            "value",
+                            None,
+                        )
+                        or getattr(last_for_cls, "decision_action", None)
+                        or ""
+                    )
+                    if last_for_cls or last_decision
+                    else "",
+                )
+                record_cycle_classification(
+                    cls,
+                    cycle_ms=round((time.perf_counter() - cycle_t0) * 1000.0, 1),
+                    forwarded_to_oms=bool(
+                        getattr(last_for_cls, "forwarded_to_oms", False)
+                    )
+                    if last_for_cls
+                    else False,
+                    fill_symbol=str(
+                        getattr(last_for_cls, "symbol", None)
+                        or getattr(last_decision, "symbol", None)
+                        or ""
+                    )
+                    or None,
+                )
+                if cls.get("release_entry_budget"):
+                    with self._lock:
+                        if self._entries_this_scan > 0:
+                            self._entries_this_scan -= 1
 
                 nxt = None
                 with self._lock:
@@ -4763,7 +4853,16 @@ class InstitutionalIteRuntime:
                             break
                     entries = int(self._entries_this_scan)
                 max_e = max(1, int(getattr(_sc, "max_entries_per_cycle", 3) or 3))
-                if nxt and entries < max_e:
+                if cls.get("skip_idle_sleep") and nxt:
+                    sleep_s = 0.0
+                    logger.warning(
+                        "fast_decision_rotate_or_continue",
+                        next_symbol=nxt,
+                        next_action=cls.get("next_action"),
+                        fault_code=cls.get("fault_code"),
+                        decision_state=cls.get("decision_state"),
+                    )
+                elif nxt and entries < max_e:
                     sleep_s = 0.0
                     logger.warning(
                         "multi_symbol_continue_no_idle",

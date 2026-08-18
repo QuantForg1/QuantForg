@@ -1305,6 +1305,101 @@ export function AutoTradingWorkspace() {
         ) : null}
       </section>
 
+      <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            30-minute opportunity window
+          </h2>
+          <Badge
+            tone={
+              Boolean(asRecord(asRecord(opsPayload).fast_decision).active)
+                ? "warning"
+                : "neutral"
+            }
+            className="h-5 px-1.5 text-[10px]"
+          >
+            {str(
+              asRecord(asRecord(opsPayload).fast_decision).decision_state,
+              "FOCUS_FORMING",
+            )}
+          </Badge>
+        </div>
+        <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+          Observes the first natural authorized setup. Does not force trades or
+          bypass Safety/Risk/OMS.
+        </p>
+        {(() => {
+          const fd = asRecord(asRecord(opsPayload).fast_decision);
+          const remain = num(fd.remaining_seconds, 0);
+          const mm = Math.floor(Math.max(0, remain) / 60);
+          const ss = Math.floor(Math.max(0, remain) % 60);
+          const pad = (n: number) => String(n).padStart(2, "0");
+          const blockers = asList(fd.primary_blockers).map(asRecord);
+          return (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Time remaining
+                </p>
+                <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+                  {pad(mm)}:{pad(ss)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Current focus
+                </p>
+                <p className="font-mono text-[13px] text-[var(--fg)]">
+                  {str(fd.current_focus, "—")}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Blocking stage
+                </p>
+                <p className="font-mono text-[13px] text-[var(--fg)]">
+                  {str(fd.blocking_stage, "—")}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Next action
+                </p>
+                <p className="font-mono text-[13px] text-[var(--fg)]">
+                  {str(fd.next_action, "—")}
+                </p>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Fault
+                </p>
+                <p className="text-[12px] text-[var(--fg)]">
+                  {str(fd.fault_code, "—")}
+                  {str(fd.fault_reason)
+                    ? ` — ${str(fd.fault_reason)}`
+                    : ""}
+                </p>
+                {blockers.length > 0 ? (
+                  <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                    {blockers
+                      .slice(0, 4)
+                      .map(
+                        (b) =>
+                          `${str(b.fault_code, "block")}: ${num(b.count, 0)}`,
+                      )
+                      .join(" · ")}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                    No cycle classification yet.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </section>
+
       <LaunchReadinessPanel />
 
       <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">

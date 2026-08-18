@@ -818,6 +818,43 @@ async def _run_institutional_multi_asset_scan_body(
             },
         )
 
+    # Focused Pair Watch — hold a still-eligible desk; rotate only when invalid
+    # or another eligible candidate is materially more executable.
+    try:
+        from app.domain.institutional_trading.operations.fast_decision_path import (
+            apply_focus_hysteresis,
+            opportunity_window_snapshot,
+            set_focus,
+        )
+
+        scores = {
+            str(r.get("symbol") or "").upper(): float(r.get("opportunity_score") or 0)
+            for r in opportunity_ranked
+            if isinstance(r, dict) and str(r.get("symbol") or "").strip()
+        }
+        prior = str(
+            (opportunity_window_snapshot().get("current_focus") or "")
+        ).upper() or None
+        held, focus_why = apply_focus_hysteresis(
+            current_focus=prior,
+            eligible_symbols=list(eligible_symbols),
+            scores=scores,
+            proposed=best_symbol,
+        )
+        if held and held != best_symbol:
+            best_symbol = held
+            for row in opportunity_ranked:
+                if str(row.get("symbol") or "").upper() == held:
+                    best = {**(best or {}), **row, "symbol": held}
+                    break
+            if held in eligible_symbols:
+                eligible_symbols = [held] + [s for s in eligible_symbols if s != held]
+            else:
+                eligible_symbols.insert(0, held)
+        set_focus(best_symbol, reason=focus_why)
+    except Exception:
+        logger.exception("focused_pair_watch_hysteresis_failed")
+
     noc_rows = [_noc_row_from_score(r) for r in scored]
     # Prefer ranked portfolio rows for richer reject/cooldown annotations
     by_sym = {
