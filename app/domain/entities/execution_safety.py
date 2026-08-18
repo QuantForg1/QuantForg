@@ -56,60 +56,33 @@ class ExecutionPolicy:
         # Gold-only mode: never widen beyond XAUUSD.
         # Multi-symbol / Alpha: expand the default gold-only set so close-only
         # rotation (e.g. EURUSD) can pass the execution policy gate.
+        from app.domain.trading.execution_universe import (
+            canonical_execution_universe,
+            with_broker_execution_forms,
+        )
         from app.domain.trading.gold_only import gold_only_enabled
 
         if gold_only_enabled():
-            resolved = cleaned & SYMBOL_WHITELIST if cleaned else SYMBOL_WHITELIST
+            gold = with_broker_execution_forms(SYMBOL_WHITELIST)
+            resolved = (cleaned & gold) if cleaned else gold
         else:
-            try:
-                from app.domain.institutional_trading.ai_scalping.config import (
-                    DEFAULT_SCALPING_UNIVERSE,
-                )
-                from app.domain.institutional_trading.alpha_engine.config import (
-                    DEFAULT_ALPHA_UNIVERSE,
-                )
-
-                universe = (
-                    frozenset(
-                        str(s).strip().upper() for s in DEFAULT_SCALPING_UNIVERSE if s
-                    )
-                    | frozenset(
-                        str(s).strip().upper() for s in DEFAULT_ALPHA_UNIVERSE if s
-                    )
-                    | SYMBOL_WHITELIST
-                )
-            except Exception:
-                universe = SYMBOL_WHITELIST | frozenset(
-                    {
-                        "EURUSD",
-                        "GBPUSD",
-                        "USDJPY",
-                        "USDCHF",
-                        "USDCAD",
-                        "AUDUSD",
-                        "NZDUSD",
-                        "NAS100",
-                        "US30",
-                        "GER40",
-                        "BTCUSD",
-                        "ETHUSD",
-                        "USDCAD",
-                        "USDCHF",
-                        "NZDUSD",
-                    }
-                )
+            universe = canonical_execution_universe()
             # Default factory still stamps SYMBOL_WHITELIST — treat that as
-            # "use full multi-symbol universe", not gold-only.
+            # "use canonical multi-symbol universe", not gold-only.
             if not cleaned or cleaned <= SYMBOL_WHITELIST:
                 resolved = universe
             else:
-                resolved = cleaned | SYMBOL_WHITELIST
+                resolved = with_broker_execution_forms(cleaned) | (
+                    with_broker_execution_forms(SYMBOL_WHITELIST)
+                )
         object.__setattr__(self, "symbol_whitelist", resolved)
 
     def allows_symbol(self, symbol: str) -> bool:
         if not self.symbol_whitelist:
             return True
-        return symbol.strip().upper() in self.symbol_whitelist
+        from app.domain.trading.execution_universe import execution_symbol_allowed
+
+        return execution_symbol_allowed(symbol, self.symbol_whitelist)
 
     def allows_account(self, login: int) -> bool:
         if not self.account_whitelist:

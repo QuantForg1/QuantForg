@@ -13,24 +13,13 @@ AutoTradeRunState = Literal["off", "running", "paused", "stopped"]
 def allowlist_matches(symbol: str, allowed: set[str] | frozenset[str]) -> bool:
     """Desk-code aware: allowlist XAUUSD matches broker XAUUSD_I.
 
-    Safety is unchanged — only identity normalization between desk and catalogue.
+    Delegates to the canonical execution-universe identity matcher.
     """
-    symbol_u = (symbol or "").strip().upper()
-    if not symbol_u or not allowed:
-        return False
-    if symbol_u in allowed:
-        return True
-    try:
-        from app.domain.institutional_trading.ai_scalping.asset_class import (
-            desk_symbol_code,
-        )
+    from app.domain.trading.execution_universe import execution_symbol_allowed
 
-        desk = desk_symbol_code(symbol_u)
-        if desk and desk in allowed:
-            return True
-        return any(desk_symbol_code(a) == desk for a in allowed if desk)
-    except Exception:
+    if not allowed:
         return False
+    return execution_symbol_allowed(symbol, allowed)
 
 
 def prefer_allowlisted_handoff(

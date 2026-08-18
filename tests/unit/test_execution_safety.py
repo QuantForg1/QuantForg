@@ -105,7 +105,12 @@ class TestExecutionPolicy:
         )
         policy = ExecutionPolicy()
         assert policy.allows_symbol("EURUSD")
+        assert policy.allows_symbol("EURUSD_I")
         assert policy.allows_symbol("XAUUSD")
+        assert policy.allows_symbol("USDCHF_I")
+        assert policy.allows_symbol("AUDUSD_I")
+        assert not policy.allows_symbol("EURJPY_I")
+        assert not policy.allows_symbol("CADCHF_I")
 
 
 @pytest.mark.unit
