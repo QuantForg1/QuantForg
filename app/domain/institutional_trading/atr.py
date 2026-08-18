@@ -35,9 +35,11 @@ def compute_atr(
     window = trs[-period:] if len(trs) >= period else trs
     if not window:
         return None
-    return (sum(window, start=Decimal("0")) / Decimal(len(window))).quantize(
-        Decimal("0.0001")
-    )
+    # Mean of true ranges — do not quantize to 0.0001 (1 pip on 5-digit FX).
+    # That gold-oriented rounding can push a passing 0.03% ATR% under the FX
+    # hard floor when mid < 0.50. Stop distance still quantizes separately.
+    mean = sum(window, start=Decimal("0")) / Decimal(len(window))
+    return mean.quantize(Decimal("0.00000001"))
 
 
 def stop_distance_from_atr(

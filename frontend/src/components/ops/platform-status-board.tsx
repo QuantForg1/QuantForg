@@ -352,16 +352,23 @@ export function PlatformStatusBoard() {
         autoTone = executionEnabled ? "success" : "warning";
       }
       const scan = asRecord(asRecord(auto.ai_scalping).scan);
+      const currentScan = asRecord(scan.current_scan);
       const opt = asRecord(
-        asRecord(auto.ai_scalping).execution_optimizer,
+        str(currentScan.optimizer_state) &&
+          str(currentScan.optimizer_state) !== "NOT_RUN"
+          ? asRecord(auto.ai_scalping).execution_optimizer
+          : {},
       );
-      const optState = str(opt.final_state, str(opt.recommendation, ""));
+      const optState = str(
+        currentScan.optimizer_state,
+        str(opt.final_state, str(opt.recommendation, "")),
+      );
       const optDetail =
-        optState === "WAIT_BOUNDED" || optState === "DEFER_TICK"
-          ? `OPTIMIZER: WAIT_BOUNDED remaining=${str(opt.remaining_wait_ms, "0")}ms`
-          : optState
-            ? `OPTIMIZER: ${optState}`
-            : null;
+        !optState || optState === "NOT_RUN"
+          ? "OPTIMIZER: NOT_RUN"
+          : optState === "WAIT_BOUNDED" || optState === "DEFER_TICK"
+            ? `OPTIMIZER: WAIT_BOUNDED remaining=${str(opt.remaining_wait_ms, "0")}ms`
+            : `OPTIMIZER: ${optState}`;
       autoDetail = [
         opsMode ? `Mode: ${opsMode}` : null,
         executionEnabled ? "Mock: OFF" : null,

@@ -951,9 +951,21 @@ def _ai_scalping_payload() -> dict[str, Any]:
             get_last_execution_optimizer,
         )
 
-        snap["execution_optimizer"] = get_last_execution_optimizer()
+        current = None
+        scan = snap.get("scan") if isinstance(snap.get("scan"), dict) else None
+        if isinstance(scan, dict) and isinstance(scan.get("current_scan"), dict):
+            current = scan.get("current_scan")
+        reached_optimizer = bool(
+            current
+            and str(current.get("optimizer_state") or "NOT_RUN") not in {"", "NOT_RUN"}
+        )
+        last_opt = get_last_execution_optimizer()
+        # Never attach a stale global EXECUTE_NOW to the current scan.
+        snap["execution_optimizer"] = last_opt if reached_optimizer else None
+        snap["last_execution_optimizer"] = last_opt
     except Exception:
         snap["execution_optimizer"] = None
+        snap["last_execution_optimizer"] = None
     return snap
 
 

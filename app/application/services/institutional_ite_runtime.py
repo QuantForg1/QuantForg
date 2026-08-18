@@ -3453,6 +3453,8 @@ class InstitutionalIteRuntime:
                 else None
             ),
             "fast_decision": self._fast_decision_snapshot(),
+            "current_scan": self._current_scan_snapshot(),
+            "last_pipeline": self._last_pipeline_snapshot(),
         }
 
     def strategy_diagnostics(self, *, limit: int = 100) -> dict[str, Any]:
@@ -3910,6 +3912,42 @@ class InstitutionalIteRuntime:
                 else None
             )
 
+    def _last_pipeline_snapshot(self) -> dict[str, Any] | None:
+        from app.domain.institutional_trading.operations.fast_decision_path import (
+            build_last_pipeline_snapshot,
+        )
+
+        with self._lock:
+            last = self._last_cycle
+        return build_last_pipeline_snapshot(last.to_dict() if last else None)
+
+    def _current_scan_snapshot(self) -> dict[str, Any] | None:
+        from app.domain.institutional_trading.operations.fast_decision_path import (
+            build_current_scan_decision,
+        )
+
+        with self._lock:
+            scan = (
+                dict(self._last_multi_asset_scan)
+                if isinstance(self._last_multi_asset_scan, dict)
+                else None
+            )
+        if not scan:
+            try:
+                from app.application.services.institutional_multi_asset_scanner import (
+                    get_last_multi_asset_scan,
+                )
+
+                scan = get_last_multi_asset_scan()
+            except Exception:
+                scan = None
+        if not isinstance(scan, dict):
+            return None
+        current = scan.get("current_scan")
+        if isinstance(current, dict) and current.get("label") == "CURRENT_SCAN":
+            return dict(current)
+        return build_current_scan_decision(scan)
+
     def _fast_decision_snapshot(self) -> dict[str, Any]:
         """Observability only — never becomes an execution gate."""
         try:
@@ -3918,6 +3956,8 @@ class InstitutionalIteRuntime:
             )
 
             snap = opportunity_window_snapshot()
+            current = self._current_scan_snapshot() or {}
+            last_pipeline = self._last_pipeline_snapshot()
             with self._lock:
                 last = self._last_cycle
                 queue = list(self._eligible_handoff_queue)
@@ -3926,6 +3966,33 @@ class InstitutionalIteRuntime:
             snap["last_cycle_outcome"] = (
                 getattr(last, "cycle_outcome", None) if last else None
             )
+            snap["current_scan"] = current or None
+            snap["last_pipeline"] = last_pipeline
+            snap["current_scan_symbol"] = current.get("current_scan_symbol")
+            snap["last_pipeline_symbol"] = (
+                last_pipeline.get("last_pipeline_symbol") if last_pipeline else None
+            )
+            snap["last_safety_symbol"] = (
+                last_pipeline.get("last_safety_symbol") if last_pipeline else None
+            )
+            snap["last_optimizer_symbol"] = (
+                last_pipeline.get("last_optimizer_symbol") if last_pipeline else None
+            )
+            snap["current_best_candidate"] = current.get("symbol")
+            if current:
+                snap["eligible_count"] = current.get("eligible_count")
+                snap["first_blocking_gate"] = current.get("first_blocking_gate")
+            if int(current.get("eligible_count") or 0) == 0 and current:
+                snap["decision_state"] = current.get("decision_state") or current.get(
+                    "state"
+                )
+                snap["blocking_stage"] = current.get("blocking_stage") or "SCANNER"
+                snap["fault_class"] = current.get("fault_class")
+                snap["fault_code"] = current.get("fault_code")
+                snap["fault_reason"] = current.get("fault_reason")
+                snap["next_action"] = current.get("next_action")
+                snap["current_focus"] = current.get("executable_focus")
+                snap["focus_reason"] = current.get("focus_reason")
             return snap
         except Exception:
             logger.exception("fast_decision_snapshot_failed")

@@ -337,6 +337,19 @@ async def run_institutional_multi_asset_scan(
         if last:
             skipped = dict(last)
             skipped["overlap_skipped"] = True
+            try:
+                from app.domain.institutional_trading.operations.fast_decision_path import (
+                    build_current_scan_decision,
+                    publish_current_scan_decision,
+                )
+
+                current = skipped.get("current_scan")
+                if not isinstance(current, dict):
+                    current = build_current_scan_decision(skipped)
+                    skipped["current_scan"] = current
+                publish_current_scan_decision(current)
+            except Exception:
+                logger.exception("current_scan_overlap_publish_failed")
             return skipped
         return {
             "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -919,6 +932,9 @@ async def _run_institutional_multi_asset_scan_body(
             ),
             "blocking_gate": row.get("reject_reason") or row.get("blocking_gate"),
             "strategy_id": row.get("strategy_id"),
+            "atr_pct": row.get("atr_pct"),
+            "volatility_decision": row.get("volatility_decision"),
+            "thresholds": row.get("thresholds"),
         }
 
     best_candidate = _candidate_view(
@@ -943,7 +959,12 @@ async def _run_institutional_multi_asset_scan_body(
                 "direction": r.get("direction"),
                 "eligible": r.get("opportunity_eligible"),
                 "blocking_gate": r.get("reject_reason"),
+                "reject": r.get("reject"),
+                "reject_reason": r.get("reject_reason"),
                 "estimated_probability": r.get("estimated_probability"),
+                "atr_pct": r.get("atr_pct"),
+                "volatility_decision": r.get("volatility_decision"),
+                "thresholds": r.get("thresholds"),
             }
             for r in opportunity_ranked[:20]
         ],
@@ -983,7 +1004,21 @@ async def _run_institutional_multi_asset_scan_body(
         "strategy_stats": None,
         "forced_trades": False,
         "governed_by_existing_ai_and_risk": True,
+        "atr_source_timeframe": "M15",
+        "atr_source_period": 14,
     }
+    try:
+        from app.domain.institutional_trading.operations.fast_decision_path import (
+            build_current_scan_decision,
+            publish_current_scan_decision,
+        )
+
+        current_scan = build_current_scan_decision(payload)
+        payload["current_scan"] = current_scan
+        payload["first_blocking_gate_code"] = current_scan.get("fault_code")
+        publish_current_scan_decision(current_scan)
+    except Exception:
+        logger.exception("current_scan_decision_publish_failed")
     try:
         from app.domain.institutional_trading.ai_scalping.strategies import (
             get_strategy_stats_book,

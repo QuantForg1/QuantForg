@@ -134,6 +134,17 @@ def test_focus_rotates_when_materially_better() -> None:
     assert reason == "ROTATE_MATERIAL_BETTER"
 
 
+def test_focus_no_eligible_is_no_executable_focus() -> None:
+    symbol, reason = apply_focus_hysteresis(
+        current_focus="NZDUSD_I",
+        eligible_symbols=[],
+        scores={"NZDUSD_I": 40},
+        proposed="NZDUSD_I",
+    )
+    assert symbol is None
+    assert reason == "NO_EXECUTABLE_FOCUS"
+
+
 def test_focus_rotates_when_current_invalid() -> None:
     symbol, reason = apply_focus_hysteresis(
         current_focus="XAUUSD_I",

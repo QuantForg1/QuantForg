@@ -798,42 +798,60 @@ export function AutoTradingWorkspace() {
   const last = asRecord(orch.last_cycle);
   const diag = asRecord(last.market_context_diagnostics);
   const scanSnap = asRecord(aiScalping.scan);
-  const optimizerSnap = asRecord(
-    diag.execution_optimizer ?? aiScalping.execution_optimizer,
+  const currentScan = asRecord(
+    orch.current_scan ??
+      scanSnap.current_scan ??
+      asRecord(asRecord(opsPayload).fast_decision).current_scan,
+  );
+  const lastPipeline = asRecord(
+    orch.last_pipeline ??
+      asRecord(asRecord(opsPayload).fast_decision).last_pipeline,
   );
   const bestCandidate = asRecord(
-    scanSnap.best_candidate ?? scanSnap.best,
+    currentScan.best_candidate ?? scanSnap.best_candidate ?? scanSnap.best,
   );
-  const bestEligible = asRecord(scanSnap.best_eligible_candidate);
-  const eligibleCount = str(scanSnap.eligible_count, "0");
-  const noEligibleSetup = Boolean(scanSnap.no_eligible_setup) && !str(scanSnap.best_symbol);
-  const firstBlockingGate = str(
-    scanSnap.first_blocking_gate ||
-      optimizerSnap.reason ||
-      last.abort_reason ||
-      primaryBlocker,
+  const bestEligible = asRecord(
+    currentScan.best_eligible ?? scanSnap.best_eligible_candidate,
+  );
+  const eligibleCount = str(
+    currentScan.eligible_count ?? scanSnap.eligible_count,
+    "0",
+  );
+  const noEligibleSetup =
+    str(currentScan.state) === "NO_ELIGIBLE_SETUP" ||
+    (Boolean(scanSnap.no_eligible_setup) && !str(scanSnap.best_symbol)) ||
+    num(currentScan.eligible_count ?? scanSnap.eligible_count, 0) === 0;
+  const firstBlockingGateFull = str(
+    currentScan.fault_reason ||
+      currentScan.first_blocking_gate ||
+      scanSnap.first_blocking_gate,
     noEligibleSetup ? "NO_ELIGIBLE_SETUP" : "—",
   );
-  const optimizerState = str(
-    optimizerSnap.final_state,
-    str(optimizerSnap.recommendation, "—"),
+  const firstBlockingGateShort =
+    firstBlockingGateFull.length > 28
+      ? `${firstBlockingGateFull.slice(0, 26)}…`
+      : firstBlockingGateFull;
+  const optimizerSnap = asRecord(
+    noEligibleSetup
+      ? {}
+      : (diag.execution_optimizer ?? lastPipeline.optimizer_result ?? {}),
   );
+  const optimizerState = "NOT_RUN";
   const optimizerRemaining = str(optimizerSnap.remaining_wait_ms, "0");
-  const optimizerDeferCount = str(optimizerSnap.defer_count, "0");
-  const optimizerLabel =
-    optimizerState === "WAIT_BOUNDED" || optimizerState === "DEFER_TICK"
-      ? `WAIT_BOUNDED remaining=${optimizerRemaining}ms count=${optimizerDeferCount}`
-      : optimizerState === "EXECUTE_NOW" ||
-          optimizerState === "PROCEED" ||
-          optimizerState === "PROCEED_DEGRADED"
-        ? `EXECUTE_NOW ${str(optimizerSnap.reason, "")}`.trim()
-        : optimizerState === "BLOCK" || optimizerState === "SKIP"
-          ? `BLOCK ${str(optimizerSnap.reason, "")}`.trim()
-          : optimizerState;
-  const decisionReasons = asList(last.decision_reasons).map(String);
-  const safetyCycleReasons = asList(
-    last.safety_failed_reasons ?? failedReasons,
+  const optimizerLabel = "NOT_RUN";
+  const lastPipelineOutcome = str(
+    lastPipeline.cycle_outcome || last.cycle_outcome,
+    "",
+  ).toLowerCase();
+  const lastSafetyState = str(lastPipeline.safety_state, "");
+  const lastOptimizerState = str(lastPipeline.optimizer_state, "NOT_RUN");
+  const currentSafetyState = "NOT_REACHED";
+  const lastSafetyReasons = asList(
+    lastPipeline.safety_failed_reasons ?? last.safety_failed_reasons,
   ).map(String);
+  const decisionReasons = asList(last.decision_reasons).map(String);
+  const pipelineSafetyState = "NOT_REACHED";
+  const pipelineOptimizerState = "NOT_RUN";
 
   const tradingSession = str(diag.trading_session || diag.session, "—");
   const sessionAllowed =
@@ -994,78 +1012,57 @@ export function AutoTradingWorkspace() {
       id: "decision",
       label: "Decision",
       state: stageOf(
-        Boolean(last.decision_action) || cycleOutcome.includes("no_trade"),
+        Boolean(last.decision_action) ||
+          cycleOutcome.includes("no_trade") ||
+          noEligibleSetup,
         cycleOutcome.includes("decision") && cycleOutcome.includes("fail"),
       ),
-      detail: str(last.decision_action || last.cycle_outcome, ""),
+      statusLabel: noEligibleSetup ? "NO_ELIGIBLE" : undefined,
+      detail: noEligibleSetup
+        ? str(currentScan.state, "NO_ELIGIBLE_SETUP")
+        : str(last.decision_action || last.cycle_outcome, ""),
     },
     {
       id: "risk",
       label: "Risk",
-      state: stageOf(
-        cycleOutcome === "forwarded" ||
-          cycleOutcome === "safety_blocked" ||
-          (cycleOutcome.length > 0 && !cycleOutcome.includes("risk")),
-        cycleOutcome.includes("risk") || riskReasons.length > 0,
-      ),
-      detail: riskReasons[0] || "",
+      state: noEligibleSetup
+        ? "waiting"
+        : stageOf(
+            cycleOutcome === "forwarded" ||
+              cycleOutcome === "safety_blocked" ||
+              (cycleOutcome.length > 0 && !cycleOutcome.includes("risk")),
+            cycleOutcome.includes("risk") || riskReasons.length > 0,
+          ),
+      statusLabel: noEligibleSetup ? "NOT_REACHED" : undefined,
+      detail: noEligibleSetup ? "Current scan did not reach Risk" : riskReasons[0] || "",
     },
     {
       id: "safety",
       label: "Safety",
-      state: stageOf(
-        forwarded ||
-          hasTicket ||
-          cycleOutcome === "forwarded" ||
-          cycleOutcome === "execution_deferred",
-        cycleOutcome.includes("safety") || safetyCycleReasons.length > 0,
-      ),
-      detail: safetyCycleReasons[0] || "",
+      state: "waiting",
+      statusLabel: pipelineSafetyState,
+      detail: "Current scan did not reach Safety",
     },
     {
       id: "optimizer",
       label: "Optimizer",
-      state:
-        optimizerState === "BLOCK" || optimizerState === "SKIP"
-          ? "failed"
-          : optimizerState === "WAIT_BOUNDED" ||
-              optimizerState === "DEFER_TICK" ||
-              cycleOutcome === "execution_deferred"
-            ? "running"
-            : optimizerState === "EXECUTE_NOW" ||
-                optimizerState === "PROCEED" ||
-                optimizerState === "PROCEED_DEGRADED" ||
-                forwarded
-              ? "success"
-              : "waiting",
-      statusLabel:
-        optimizerState === "WAIT_BOUNDED" ||
-        optimizerState === "DEFER_TICK" ||
-        cycleOutcome === "execution_deferred"
-          ? "WAIT_BOUNDED"
-          : optimizerState === "EXECUTE_NOW" ||
-              optimizerState === "PROCEED" ||
-              optimizerState === "PROCEED_DEGRADED"
-            ? "EXECUTE_NOW"
-            : optimizerState === "BLOCK" || optimizerState === "SKIP"
-              ? "BLOCK"
-              : undefined,
-      detail:
-        optimizerState === "WAIT_BOUNDED" ||
-        optimizerState === "DEFER_TICK" ||
-        cycleOutcome === "execution_deferred"
-          ? `remaining=${optimizerRemaining}ms count=${optimizerDeferCount} ${str(optimizerSnap.reason, "")}`.trim()
-          : str(optimizerSnap.reason || last.detail, ""),
+      state: "waiting",
+      statusLabel: pipelineOptimizerState,
+      detail: "Current scan did not reach Optimizer",
     },
     {
       id: "oms",
       label: "OMS",
-      state: stageOf(
-        forwarded,
-        Boolean(str(last.oms_message)) && !forwarded && cycleOutcome.includes("oms"),
-      ),
-      detail:
-        cycleOutcome === "execution_deferred"
+      state: noEligibleSetup
+        ? "waiting"
+        : stageOf(
+            forwarded,
+            Boolean(str(last.oms_message)) && !forwarded && cycleOutcome.includes("oms"),
+          ),
+      statusLabel: noEligibleSetup ? "NOT_REACHED" : undefined,
+      detail: noEligibleSetup
+        ? "Current scan did not reach OMS"
+        : cycleOutcome === "execution_deferred"
           ? `WAIT_BOUNDED remaining=${optimizerRemaining}ms`
           : str(last.oms_message, ""),
     },
@@ -1177,17 +1174,18 @@ export function AutoTradingWorkspace() {
         ? /healthy|ok/i.test(str(asRecord(obsComps.api).status))
         : apiOk;
 
-  const safetyBlocked =
-    safetyCycleReasons.length > 0 || cycleOutcome.includes("safety");
-  const safetyStatusLabel = safetyBlocked
+  const safetyBlocked = killArmed || failedReasons.length > 0;
+  const safetyStatusLabel = killArmed
     ? "BLOCK"
-    : gateStatus.toLowerCase() === "enabled" && !killArmed
-      ? "PASS"
-      : str(gateStatus, "—").toUpperCase();
-  const exactSafetyReason =
-    safetyCycleReasons[0] ||
-    primaryBlocker ||
-    str(last.detail || last.abort_reason, "—");
+    : failedReasons.length
+      ? "BLOCK"
+      : gateStatus.toLowerCase() === "enabled"
+        ? "PASS"
+        : str(gateStatus, "—").toUpperCase();
+  const exactSafetyReason = killArmed
+    ? "Emergency STOP is armed"
+    : failedReasons[0] ||
+      "Ops safety poll — cycle Safety is on Last completed ITE cycle";
 
   const riskStatusLabel = riskReasons.length
     ? "BLOCK"
@@ -1335,6 +1333,25 @@ export function AutoTradingWorkspace() {
           const ss = Math.floor(Math.max(0, remain) % 60);
           const pad = (n: number) => String(n).padStart(2, "0");
           const blockers = asList(fd.primary_blockers).map(asRecord);
+          const windowFocus = noEligibleSetup
+            ? "—"
+            : str(fd.current_focus || currentScan.executable_focus, "—");
+          const windowBest = str(
+            fd.current_best_candidate || currentScan.symbol || bestCandidate.symbol,
+            "—",
+          );
+          const windowEligible = str(
+            fd.eligible_count ?? currentScan.eligible_count,
+            eligibleCount,
+          );
+          const windowGate = str(
+            fd.first_blocking_gate || currentScan.first_blocking_gate,
+            firstBlockingGateFull,
+          );
+          const windowNext = str(
+            fd.next_action || currentScan.next_action,
+            "—",
+          );
           return (
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div>
@@ -1350,15 +1367,23 @@ export function AutoTradingWorkspace() {
                   Current focus
                 </p>
                 <p className="font-mono text-[13px] text-[var(--fg)]">
-                  {str(fd.current_focus, "—")}
+                  {windowFocus}
                 </p>
               </div>
               <div>
                 <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
-                  Blocking stage
+                  Current best candidate
                 </p>
                 <p className="font-mono text-[13px] text-[var(--fg)]">
-                  {str(fd.blocking_stage, "—")}
+                  {windowBest}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Eligible count
+                </p>
+                <p className="font-mono text-[13px] text-[var(--fg)]">
+                  {windowEligible}
                 </p>
               </div>
               <div>
@@ -1366,18 +1391,16 @@ export function AutoTradingWorkspace() {
                   Next action
                 </p>
                 <p className="font-mono text-[13px] text-[var(--fg)]">
-                  {str(fd.next_action, "—")}
+                  {windowNext}
                 </p>
               </div>
-              <div className="sm:col-span-2 lg:col-span-4">
+              <div className="sm:col-span-2 lg:col-span-3">
                 <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
-                  Fault
+                  Current blocking gate
                 </p>
-                <p className="text-[12px] text-[var(--fg)]">
-                  {str(fd.fault_code, "—")}
-                  {str(fd.fault_reason)
-                    ? ` — ${str(fd.fault_reason)}`
-                    : ""}
+                <p className="text-[12px] text-[var(--fg)]" title={windowGate}>
+                  {str(fd.fault_code || currentScan.fault_code, "—")}
+                  {windowGate ? ` — ${windowGate}` : ""}
                 </p>
                 {blockers.length > 0 ? (
                   <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
@@ -1843,47 +1866,109 @@ export function AutoTradingWorkspace() {
         </div>
       </OpsPanel>
 
-      {/* Best eligible / optimizer (observe-only) */}
-      <OpsPanel title="Best eligible setup · execution optimizer">
+      {/* Current scan vs last ITE cycle — never merged */}
+      <OpsPanel title="Current scan">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           <MetricCard
             label="Best candidate"
-            value={str(bestCandidate.symbol || scanSnap.best_symbol, "—")}
+            value={str(bestCandidate.symbol || currentScan.symbol, "—")}
           />
           <MetricCard
             label="Best eligible"
             value={
               noEligibleSetup
-                ? "NO_ELIGIBLE_SETUP"
+                ? "—"
                 : str(bestEligible.symbol || scanSnap.best_symbol, "—")
             }
           />
           <MetricCard label="Eligible count" value={eligibleCount} />
-          <MetricCard label="First blocking gate" value={firstBlockingGate} />
+          <MetricCard
+            label="First blocking gate"
+            value={firstBlockingGateShort}
+          />
           <MetricCard
             label="Optimizer"
             value={optimizerLabel}
-            tone={
-              optimizerState === "BLOCK"
-                ? "bad"
-                : optimizerState === "WAIT_BOUNDED" || optimizerState === "DEFER_TICK"
-                  ? "warn"
-                  : optimizerState === "EXECUTE_NOW" ||
-                      optimizerState === "PROCEED" ||
-                      optimizerState === "PROCEED_DEGRADED"
-                    ? "ok"
-                    : "neutral"
-            }
+            tone="neutral"
+          />
+          <MetricCard
+            label="Safety"
+            value={currentSafetyState}
+            tone="neutral"
+          />
+          <MetricCard
+            label="Next action"
+            value={str(currentScan.next_action, "—")}
+          />
+          <MetricCard
+            label="Fault code"
+            value={str(currentScan.fault_code, "—")}
           />
         </div>
         <p className="mt-2 text-[11px] text-[var(--fg-muted)]">
-          Soft optimizer never waits forever. Hard Safety / Risk / min-lot gates remain
-          authoritative. No forced or synthetic orders.
+          Best Candidate may be rejected. Only Best Eligible / execution-ready
+          can become an execution focus. Soft optimizer never waits forever.
+          Hard Safety / Risk / min-lot gates remain authoritative.
+        </p>
+        <div className="mt-3 border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+            First blocking gate · detail
+          </p>
+          <p className="mt-1 font-mono text-[12px] text-[var(--fg)]">
+            {str(currentScan.symbol || bestCandidate.symbol, "—")} ·{" "}
+            {str(currentScan.fault_code, "—")} · {firstBlockingGateFull}
+          </p>
+          <p className="mt-1 font-mono text-[11px] text-[var(--fg-muted)]">
+            ATR%={str(currentScan.atr_pct, "—")} hard_min=
+            {str(currentScan.hard_min_pct, "—")} band=
+            {str(currentScan.band, "—")} tf=
+            {str(currentScan.atr_source_timeframe, "M15")} as_of=
+            {str(currentScan.as_of, "—")} next=
+            {str(currentScan.next_action, "—")}
+          </p>
+        </div>
+      </OpsPanel>
+
+      <OpsPanel title="Last completed ITE cycle">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+          <MetricCard
+            label="Pipeline symbol"
+            value={str(lastPipeline.last_pipeline_symbol || lastPipeline.symbol, "—")}
+          />
+          <MetricCard
+            label="Cycle outcome"
+            value={str(lastPipeline.cycle_outcome || lastPipelineOutcome, "—")}
+          />
+          <MetricCard
+            label="Safety"
+            value={str(lastSafetyState, "—")}
+            tone={
+              lastSafetyState === "FAIL"
+                ? "bad"
+                : lastSafetyState === "PASS"
+                  ? "ok"
+                  : "neutral"
+            }
+          />
+          <MetricCard
+            label="Optimizer"
+            value={str(lastOptimizerState, "NOT_RUN")}
+          />
+          <MetricCard
+            label="OMS"
+            value={str(lastPipeline.oms_state, "—")}
+          />
+        </div>
+        <p className="mt-2 text-[11px] text-[var(--fg-muted)]">
+          Separate from Current scan. Safety symbol={" "}
+          {str(lastPipeline.last_safety_symbol, "—")} · Optimizer symbol={" "}
+          {str(lastPipeline.last_optimizer_symbol, "—")}
+          {lastSafetyReasons[0] ? ` · ${lastSafetyReasons[0]}` : ""}
         </p>
       </OpsPanel>
 
       {/* Pipeline */}
-      <OpsPanel title="Execution pipeline · last cycle">
+      <OpsPanel title="Execution pipeline · current scan">
         <ExecutionPipeline stages={livePipeline} />
         {!orch.last_cycle ? (
           <p className="mt-2 text-sm text-[var(--fg-muted)]">

@@ -42,6 +42,8 @@ class DecisionState(StrEnum):
     RECONCILIATION_REQUIRED = "RECONCILIATION_REQUIRED"
     POSITION_OPEN = "POSITION_OPEN"
     NO_TRADE = "NO_TRADE"
+    NO_ELIGIBLE_SETUP = "NO_ELIGIBLE_SETUP"
+    NO_EXECUTABLE_FOCUS = "NO_EXECUTABLE_FOCUS"
 
 
 class FaultClass(StrEnum):
@@ -60,6 +62,12 @@ class CandidateAction(StrEnum):
     ROTATE_FOCUS = "ROTATE_FOCUS"
     FAIL_CLOSED = "FAIL_CLOSED"
     RECONCILE = "RECONCILE"
+    NO_EXECUTABLE_FOCUS = "NO_EXECUTABLE_FOCUS"
+
+
+# Snapshot ATR used by the scanner quality gate (pipeline DEFAULT_ITE_CONFIG).
+SCAN_ATR_TIMEFRAME = "M15"
+SCAN_ATR_PERIOD = 14
 
 
 def _norm(text: str) -> str:
@@ -305,7 +313,7 @@ def apply_focus_hysteresis(
         return nxt, "FOCUS_SELECTED"
     if eligible:
         return eligible[0], "FOCUS_SELECTED"
-    return None, "FOCUS_FORMING"
+    return None, "NO_EXECUTABLE_FOCUS"
 
 
 @dataclass
@@ -456,4 +464,322 @@ def opportunity_window_snapshot(*, now_mono: float | None = None) -> dict[str, A
             },
             "forces_trades": False,
             "order_send_retries": False,
+            "current_best_candidate": cls.get("current_scan_symbol"),
+            "eligible_count": cls.get("eligible_count"),
+            "first_blocking_gate": cls.get("fault_reason"),
         }
+
+
+def blocking_gate_fault_code(reason: str | None) -> str:
+    """Map a scanner reject string to a stable observability code.
+
+    Does not change Safety / Risk / OMS. Observability only.
+    """
+    hay = _norm(reason or "")
+    if "volatility below hard" in hay or "dead tape" in hay:
+        return "VOLATILITY_HARD_MIN"
+    if "volatility unavailable" in hay:
+        return "VOLATILITY_UNAVAILABLE"
+    if "invalid volatility" in hay or "atr% ≤ 0" in hay or "atr% <=" in hay:
+        return "VOLATILITY_INVALID"
+    if "volatility too compressed" in hay:
+        return "VOLATILITY_COMPRESSED"
+    if "portfolio" in hay:
+        return "PORTFOLIO_RISK_LIMIT"
+    if "no eligible" in hay:
+        return "NO_ELIGIBLE_SETUP"
+    if not hay:
+        return "NO_ELIGIBLE_SETUP"
+    classified = classify_candidate_outcome(
+        abort_reason=reason,
+        failed_reasons=(str(reason),) if reason else (),
+        cycle_outcome="no_eligible_setup",
+        decision_action="NO_TRADE",
+    )
+    return str(classified.get("fault_code") or "NO_ELIGIBLE_SETUP")
+
+
+def _row_symbol(row: Any) -> str | None:
+    if not isinstance(row, dict):
+        return None
+    return str(row.get("symbol") or "").strip().upper() or None
+
+
+def _scan_eligible_symbols(scan: dict[str, Any]) -> list[str]:
+    raw = scan.get("eligible_symbols") if isinstance(scan, dict) else None
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw or []:
+        sym = str(item or "").strip().upper()
+        if not sym or sym in seen:
+            continue
+        seen.add(sym)
+        out.append(sym)
+    return out
+
+
+def _best_candidate_row(scan: dict[str, Any]) -> dict[str, Any]:
+    cand = scan.get("best_candidate")
+    if isinstance(cand, dict) and _row_symbol(cand):
+        return dict(cand)
+    ranked = scan.get("opportunity_ranked")
+    if isinstance(ranked, list) and ranked:
+        first = ranked[0]
+        if isinstance(first, dict):
+            return dict(first)
+    best = scan.get("best")
+    if isinstance(best, dict) and _row_symbol(best):
+        return dict(best)
+    return {}
+
+
+def _row_for_symbol(scan: dict[str, Any], symbol: str | None) -> dict[str, Any]:
+    want = str(symbol or "").strip().upper()
+    if not want:
+        return {}
+    for key in ("rows", "opportunity_ranked", "ranked", "noc_rows"):
+        blob = scan.get(key)
+        if not isinstance(blob, list):
+            continue
+        for row in blob:
+            if _row_symbol(row) == want and isinstance(row, dict):
+                return dict(row)
+    cand = scan.get("best_candidate")
+    if isinstance(cand, dict) and _row_symbol(cand) == want:
+        return dict(cand)
+    return {}
+
+
+def _volatility_fields(scan: dict[str, Any], symbol: str | None) -> dict[str, Any]:
+    row = _row_for_symbol(scan, symbol)
+    vol = row.get("volatility_decision") if isinstance(row.get("volatility_decision"), dict) else {}
+    thresholds = row.get("thresholds") if isinstance(row.get("thresholds"), dict) else {}
+    atr_pct = vol.get("atr_pct") if vol.get("atr_pct") is not None else row.get("atr_pct")
+    hard_min = vol.get("hard_min_pct")
+    band = vol.get("band") or thresholds.get("band")
+    return {
+        "atr_pct": str(atr_pct) if atr_pct is not None else None,
+        "hard_min_pct": str(hard_min) if hard_min is not None else None,
+        "band": str(band) if band else None,
+        "atr_source_timeframe": SCAN_ATR_TIMEFRAME,
+        "atr_source_period": SCAN_ATR_PERIOD,
+        "volatility_reason": vol.get("reason") or row.get("reject_reason") or row.get("blocking_gate"),
+    }
+
+
+def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
+    """CURRENT SCAN snapshot — never copies last ITE Safety / Optimizer.
+
+    Observability only. Does not authorize trades or bypass Safety.
+    Best Candidate may be a rejected row; only eligible symbols are executable.
+    """
+    payload = dict(scan or {})
+    eligible = _scan_eligible_symbols(payload)
+    best_row = _best_candidate_row(payload)
+    scan_symbol = _row_symbol(best_row)
+    gate = str(
+        payload.get("first_blocking_gate")
+        or best_row.get("blocking_gate")
+        or best_row.get("reject_reason")
+        or ""
+    ).strip() or None
+    if not eligible:
+        gate = gate or "NO_ELIGIBLE_SETUP"
+    vol = _volatility_fields(payload, scan_symbol)
+    as_of = payload.get("as_of")
+    scores = {
+        str(r.get("symbol") or "").upper(): float(r.get("opportunity_score") or 0)
+        for r in (payload.get("opportunity_ranked") or [])
+        if isinstance(r, dict) and str(r.get("symbol") or "").strip()
+    }
+    proposed = str(payload.get("best_symbol") or "").upper() or None
+    prior_focus = None
+    try:
+        prior_focus = (
+            str(opportunity_window_snapshot().get("current_focus") or "").upper() or None
+        )
+    except Exception:
+        prior_focus = None
+    held, focus_why = apply_focus_hysteresis(
+        current_focus=prior_focus,
+        eligible_symbols=eligible,
+        scores=scores,
+        proposed=proposed,
+    )
+    classified = classify_candidate_outcome(
+        abort_reason=gate,
+        failed_reasons=(gate,) if gate else (),
+        cycle_outcome="no_eligible_setup" if not eligible else payload.get("note"),
+        decision_action="NO_TRADE" if not eligible else "",
+    )
+    if not eligible:
+        state = DecisionState.NO_ELIGIBLE_SETUP.value
+        next_action = CandidateAction.NO_EXECUTABLE_FOCUS.value
+        executable_focus = None
+        focus_why = "NO_EXECUTABLE_FOCUS"
+        fault_class = str(classified.get("fault_class") or FaultClass.WAIT.value)
+        if classified.get("next_action") == CandidateAction.ROTATE_FOCUS.value:
+            fault_class = FaultClass.CANDIDATE_BLOCK.value
+        elif "volatility" in _norm(gate or ""):
+            fault_class = FaultClass.WAIT.value
+        decision_state = DecisionState.NO_EXECUTABLE_FOCUS.value
+        blocking_stage = "SCANNER"
+        safety_state = "NOT_REACHED"
+        optimizer_state = "NOT_RUN"
+    else:
+        state = "ELIGIBLE_PRESENT"
+        executable_focus = held
+        next_action = (
+            CandidateAction.WAIT_SAME_FOCUS.value
+            if focus_why in {"HOLD_FOCUS", "WAIT_SAME_FOCUS"}
+            else (
+                CandidateAction.ROTATE_FOCUS.value
+                if "ROTATE" in focus_why
+                else CandidateAction.HOLD_FOCUS.value
+            )
+        )
+        fault_class = FaultClass.NONE.value
+        decision_state = DecisionState.FOCUS_FORMING.value
+        blocking_stage = None
+        safety_state = "NOT_REACHED"
+        optimizer_state = "NOT_RUN"
+        gate = None
+
+    fault_code = blocking_gate_fault_code(gate) if gate else None
+    best_eligible = payload.get("best_eligible_candidate")
+    if not isinstance(best_eligible, dict):
+        best_eligible = None
+    return {
+        "label": "CURRENT_SCAN",
+        "state": state,
+        "decision_state": decision_state,
+        "symbol": scan_symbol,
+        "current_scan_symbol": scan_symbol,
+        "best_candidate": {
+            "symbol": scan_symbol,
+            "eligible": bool(best_row.get("eligible") or best_row.get("opportunity_eligible")),
+            "blocking_gate": best_row.get("blocking_gate") or best_row.get("reject_reason") or gate,
+            "direction": best_row.get("direction"),
+            "quality": best_row.get("quality") or best_row.get("trade_quality"),
+            "confidence": best_row.get("confidence") or best_row.get("ai_confidence"),
+            "opportunity_score": best_row.get("opportunity_score"),
+        }
+        if scan_symbol
+        else None,
+        "best_eligible": best_eligible,
+        "eligible_count": len(eligible),
+        "eligible_symbols": list(eligible),
+        "executable_focus": executable_focus,
+        "focus_reason": focus_why,
+        "first_blocking_gate": gate,
+        "blocking_stage": blocking_stage or classified.get("blocking_stage") or "SCANNER",
+        "fault_class": fault_class,
+        "fault_code": fault_code,
+        "fault_reason": gate,
+        "next_action": next_action,
+        "safety_state": safety_state,
+        "optimizer_state": optimizer_state,
+        "as_of": as_of,
+        "atr_pct": vol.get("atr_pct"),
+        "hard_min_pct": vol.get("hard_min_pct"),
+        "band": vol.get("band"),
+        "atr_source_timeframe": vol.get("atr_source_timeframe"),
+        "atr_source_period": vol.get("atr_source_period"),
+        "volatility_reason": vol.get("volatility_reason"),
+        "forces_trades": False,
+        "execution_ready": bool(eligible) and bool(payload.get("best_symbol")),
+    }
+
+
+def publish_current_scan_decision(scan_or_decision: dict[str, Any] | None) -> dict[str, Any]:
+    """Push CURRENT SCAN into the observability window. Never order_send."""
+    blob = dict(scan_or_decision or {})
+    decision = blob if blob.get("label") == "CURRENT_SCAN" else build_current_scan_decision(blob)
+    classification = {
+        "decision_state": decision.get("decision_state") or decision.get("state"),
+        "fault_class": decision.get("fault_class"),
+        "fault_code": decision.get("fault_code"),
+        "fault_reason": decision.get("fault_reason"),
+        "next_action": decision.get("next_action"),
+        "blocking_stage": decision.get("blocking_stage"),
+        "current_scan_symbol": decision.get("current_scan_symbol"),
+        "eligible_count": decision.get("eligible_count"),
+        "retryable": True,
+        "candidate_action": decision.get("next_action"),
+        "skip_idle_sleep": False,
+        "release_entry_budget": True,
+    }
+    set_focus(decision.get("executable_focus"), reason=str(decision.get("focus_reason") or ""))
+    record_cycle_classification(classification)
+    return decision
+
+
+def build_last_pipeline_snapshot(last_cycle: dict[str, Any] | None) -> dict[str, Any] | None:
+    """LAST COMPLETED ITE CYCLE — separate from CURRENT SCAN.
+
+    Does not mutate Safety / Risk / OMS. Read-only projection.
+    """
+    if not isinstance(last_cycle, dict) or not last_cycle:
+        return None
+    diag = last_cycle.get("market_context_diagnostics")
+    if not isinstance(diag, dict):
+        diag = {}
+    symbol = (
+        str(diag.get("symbol") or diag.get("broker_symbol_resolved") or "").upper()
+        or None
+    )
+    outcome = str(last_cycle.get("cycle_outcome") or "").lower()
+    abort = str(last_cycle.get("abort_reason") or "").upper()
+    safety_reasons = [
+        str(r)
+        for r in (last_cycle.get("safety_failed_reasons") or ())
+        if str(r).strip()
+    ]
+    if outcome == "no_snapshot" or abort == "NO_MARKET_CONTEXT":
+        safety_state = "NOT_REACHED"
+    elif outcome == "safety_blocked" or abort == "SAFETY_BLOCKED" or safety_reasons:
+        safety_state = "FAIL"
+    elif outcome in {
+        "forwarded",
+        "execution_deferred",
+        "no_trade",
+        "aborted",
+        "shadow",
+    }:
+        safety_state = "PASS"
+    else:
+        safety_state = "NOT_REACHED"
+    opt = diag.get("execution_optimizer")
+    if isinstance(opt, dict) and str(opt.get("final_state") or "").strip():
+        optimizer_state = str(opt.get("final_state"))
+        optimizer_symbol = str(opt.get("symbol") or "").upper() or symbol
+        optimizer_result = dict(opt)
+    else:
+        optimizer_state = "NOT_RUN"
+        optimizer_symbol = None
+        optimizer_result = None
+    forwarded = bool(last_cycle.get("forwarded_to_oms"))
+    if forwarded:
+        oms_state = "FORWARDED"
+    elif last_cycle.get("oms_message"):
+        oms_state = "MESSAGE"
+    else:
+        oms_state = "NOT_REACHED"
+    return {
+        "label": "LAST_COMPLETED_ITE_CYCLE",
+        "symbol": symbol,
+        "last_pipeline_symbol": symbol,
+        "last_safety_symbol": symbol if safety_state != "NOT_REACHED" else None,
+        "last_optimizer_symbol": optimizer_symbol,
+        "cycle_outcome": last_cycle.get("cycle_outcome"),
+        "abort_reason": last_cycle.get("abort_reason"),
+        "safety_state": safety_state,
+        "safety_failed_reasons": safety_reasons,
+        "optimizer_state": optimizer_state,
+        "optimizer_result": optimizer_result,
+        "oms_state": oms_state,
+        "decision_action": last_cycle.get("decision_action"),
+        "forwarded_to_oms": forwarded,
+        "timestamp": diag.get("as_of") or last_cycle.get("timestamp"),
+        "detail": last_cycle.get("detail"),
+    }
