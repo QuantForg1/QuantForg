@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from typing import Any
 from uuid import UUID
 
 from app.domain.entities.mt5_order import (
@@ -491,9 +492,77 @@ class MT5OrderValidationService:
             request_snapshot=snapshot,
         )
 
+    def resolve_canonical_broker_symbol(self, symbol: str) -> str:
+        """Map desk seed to catalogue broker code — same mapper as live OMS.
+
+        Uses ``resolve_seed_to_broker_symbol`` and the adapter catalogue.
+        Never invents a suffix that is not in the catalogue.
+        """
+        from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+            resolve_seed_to_broker_symbol,
+        )
+
+        raw = (symbol or "").strip()
+        if not raw:
+            return raw
+        rows = self._broker_catalogue_rows()
+        if not rows:
+            return raw
+        resolved = resolve_seed_to_broker_symbol(raw, broker_symbol_rows=rows)
+        target = resolved.strip().upper()
+        for row in rows:
+            code = str(row.get("code") or row.get("name") or "")
+            if code.upper() == target:
+                return code
+        return resolved
+
+    def _broker_catalogue_rows(self) -> tuple[dict[str, Any], ...]:
+        listing: Any = None
+        try:
+            if hasattr(self.adapter, "list_symbols"):
+                listing = self.adapter.list_symbols()
+            if not listing and hasattr(self.adapter, "symbols"):
+                listing = self.adapter.symbols()
+        except (OSError, RuntimeError, ValueError):
+            return ()
+        rows: list[dict[str, Any]] = []
+        for item in listing or []:
+            if isinstance(item, dict):
+                code = str(item.get("code") or item.get("name") or "").strip()
+                if code:
+                    rows.append({"code": code, "name": code})
+                continue
+            code = str(
+                getattr(item, "code", None) or getattr(item, "name", "") or ""
+            ).strip()
+            if code:
+                rows.append({"code": code, "name": code})
+        return tuple(rows)
+
+    @staticmethod
+    def _intent_with_symbol(intent: OrderIntent, symbol: str) -> OrderIntent:
+        return OrderIntent(
+            symbol=symbol,
+            side=intent.side,
+            order_type=intent.order_type,
+            volume=intent.volume,
+            price=intent.price,
+            stop_loss=intent.stop_loss,
+            take_profit=intent.take_profit,
+            slippage=intent.slippage,
+            magic=intent.magic,
+            comment=intent.comment,
+            position=intent.position,
+            order_ticket=intent.order_ticket,
+            oms_kind=intent.oms_kind,
+        )
+
     def calculate(
         self, intent: OrderIntent
     ) -> tuple[TradeRequest, MT5MarginResult, MT5ProfitResult]:
+        canonical = self.resolve_canonical_broker_symbol(intent.symbol)
+        if canonical and canonical != intent.symbol:
+            intent = self._intent_with_symbol(intent, canonical)
         intent, _ = self.normalize_intent(intent)
         request = self.build_order_request(intent)
         if request.oms_kind in {"sltp", "modify_sltp"}:
@@ -507,6 +576,11 @@ class MT5OrderValidationService:
                 ),
             )
         margin = self.adapter.order_calc_margin(request)
+        if int(margin.retcode) not in {0, RETCODE_DONE}:
+            raise RuntimeError(
+                (margin.comment or "").strip()
+                or f"order_calc_margin retcode {margin.retcode}"
+            )
         profit = self.adapter.order_calc_profit(request)
         return request, margin, profit
 

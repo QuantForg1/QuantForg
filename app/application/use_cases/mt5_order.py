@@ -160,6 +160,10 @@ class ValidateMT5OrderUseCase:
         return MT5OrderValidationDTO.from_entity(stored)
 
 
+_CALCULATION_FUNCTION = "MT5OrderValidationService.calculate"
+_FAILURE_CLASS_CALCULATION = "A_CALCULATION"
+
+
 @dataclass(frozen=True, slots=True)
 class CalculateMT5OrderUseCase:
     uow_factory: Any
@@ -170,19 +174,42 @@ class CalculateMT5OrderUseCase:
             self.uow_factory, self.validation_service.adapter, command.user_id
         )
         intent = _parse_intent(command)
+        logical_symbol = (command.symbol or intent.symbol or "").strip()
         try:
             request, margin, profit = self.validation_service.calculate(intent)
         except (OSError, RuntimeError, ValueError) as exc:
+            details = {
+                "failure_class": _FAILURE_CLASS_CALCULATION,
+                "exception_type": type(exc).__name__,
+                "error": str(exc),
+                "calculation_function": _CALCULATION_FUNCTION,
+            }
+            logger.error(
+                "[QF][MT5_CALC_FAILED]",
+                failure_class=_FAILURE_CLASS_CALCULATION,
+                exception_type=type(exc).__name__,
+                exception=str(exc),
+                calculation_function=_CALCULATION_FUNCTION,
+                symbol=intent.symbol,
+                side=intent.side.value,
+                volume=str(intent.volume.value),
+                price=str(intent.price) if intent.price is not None else None,
+                sl=str(intent.stop_loss.value) if intent.stop_loss else None,
+                tp=str(intent.take_profit.value) if intent.take_profit else None,
+            )
             raise ValidationError(
-                "MT5 order calculation failed",
-                details={"error": str(exc)},
+                f"MT5 order calculation failed: {exc}",
+                details=details,
             ) from exc
+        snapshot = request.to_dict()
+        snapshot["logical_symbol"] = logical_symbol
+        snapshot["resolved_broker_symbol"] = request.symbol
         messages = [
             f"margin: {margin.comment} ({margin.retcode})",
             f"profit: {profit.comment} ({profit.retcode})",
         ]
         return MT5OrderCalculateDTO(
-            symbol=intent.symbol,
+            symbol=request.symbol,
             side=intent.side.value,
             order_type=intent.order_type.value,
             volume=str(intent.volume.value),
@@ -193,5 +220,5 @@ class CalculateMT5OrderUseCase:
                 margin.retcode if margin.retcode != RETCODE_DONE else profit.retcode
             ),
             messages=tuple(messages),
-            request_snapshot=request.to_dict(),
+            request_snapshot=snapshot,
         )
