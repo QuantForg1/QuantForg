@@ -62,6 +62,7 @@ function surface(partial: {
   const s = surface({});
   assert.equal(s.surface, "READY");
   assert.equal(s.blockNewEntries, false);
+  assert.equal(s.haltsAutonomousTrading, false);
   assert.equal(s.reportGatewayDisconnected, false);
 }
 
@@ -157,6 +158,9 @@ function surface(partial: {
   assert.equal(shouldDedupeGet("/ite/ops/auto-trading"), true);
   assert.equal(shouldDedupeGet("/ite/ops/control-center"), true);
   assert.equal(shouldDedupeGet("/ite/ops/launch-readiness"), true);
+  assert.equal(shouldDedupeGet("/ite/ops/audit?limit=60"), true);
+  assert.equal(shouldDedupeGet("/execution/journal?limit=80"), true);
+  assert.equal(shouldDedupeGet("/mission-control/dashboard"), true);
   assert.equal(shouldDedupeGet("/portfolio"), true);
   assert.equal(shouldDedupeGet("/positions"), true);
   assert.equal(shouldDedupeGet("/orders"), true);
@@ -245,12 +249,13 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
     opsWaitMs: OPS_SLOW_MS,
   });
   assert.equal(s.surface, "LOADING_OPS");
-  assert.equal(s.blockNewEntries, true);
+  assert.equal(s.blockNewEntries, false);
+  assert.equal(s.haltsAutonomousTrading, false);
   assert.equal(s.tradingInfra, "TRADING_HEALTHY");
   assert.equal(s.reportGatewayDisconnected, false);
 }
 
-// Ops timeout with healthy infra → DEGRADED, entries blocked, not Gateway down
+// Ops timeout with healthy infra → DEGRADED advisory, must not halt trades
 {
   const s = surface({
     authPhase: "AUTH_READY",
@@ -259,19 +264,21 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
     tradingInfra: "TRADING_HEALTHY",
   });
   assert.equal(s.surface, "DEGRADED");
-  assert.equal(s.blockNewEntries, true);
+  assert.equal(s.blockNewEntries, false);
+  assert.equal(s.haltsAutonomousTrading, false);
   assert.equal(s.reportGatewayDisconnected, false);
+  assert.match(autoTradingSurfaceCopy(s).detail, /does not halt new entries/i);
 }
 
 // Recovery: timeout then success → READY, entries unblocked
 {
-  const blocked = surface({
+  const delayed = surface({
     opsQuery: "timeout",
     hasOpsData: false,
     tradingInfra: "TRADING_HEALTHY",
   });
-  assert.equal(blocked.surface, "DEGRADED");
-  assert.equal(blocked.blockNewEntries, true);
+  assert.equal(delayed.surface, "DEGRADED");
+  assert.equal(delayed.blockNewEntries, false);
   const recovered = surface({
     opsQuery: "success",
     hasOpsData: true,
@@ -282,7 +289,7 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
   assert.equal(recovered.blockNewEntries, false);
 }
 
-// Stale last-known-good during load → DEGRADED, entries blocked
+// Stale last-known-good during load → DEGRADED advisory, must not halt
 {
   const s = surface({
     authPhase: "AUTH_READY",
@@ -292,7 +299,8 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
     tradingInfra: "TRADING_HEALTHY",
   });
   assert.equal(s.surface, "DEGRADED");
-  assert.equal(s.blockNewEntries, true);
+  assert.equal(s.blockNewEntries, false);
+  assert.equal(s.haltsAutonomousTrading, false);
 }
 
 // Last-known-good ops telemetry is bounded and not fabricated
@@ -306,7 +314,7 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
   resetOpsTelemetryLastGood();
 }
 
-// In-flight ops with last-known-good stays on screen but entries stay blocked
+// In-flight ops with last-known-good stays on screen; telemetry stale is advisory
 {
   const s = surface({
     authPhase: "AUTH_READY",
@@ -316,7 +324,23 @@ assert.equal(classifyOpsFailure({ status: 403, code: "insufficient_role" }), "fo
     tradingInfra: "TRADING_HEALTHY",
   });
   assert.equal(s.surface, "DEGRADED");
+  assert.equal(s.blockNewEntries, false);
+  assert.equal(s.haltsAutonomousTrading, false);
+}
+
+// Hard infra (Gateway/MT5/OMS down) still hard-blocks
+{
+  const s = surface({
+    authPhase: "AUTH_READY",
+    opsQuery: "success",
+    hasOpsData: true,
+    opsFresh: true,
+    tradingInfra: "TRADING_DEGRADED",
+  });
+  assert.equal(s.surface, "DEGRADED");
   assert.equal(s.blockNewEntries, true);
+  assert.equal(s.haltsAutonomousTrading, true);
+  assert.match(autoTradingSurfaceCopy(s).detail, /hard-blocked/i);
 }
 
 console.log("bootstrap.test.ts: ok");

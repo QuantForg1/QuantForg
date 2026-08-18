@@ -165,18 +165,8 @@ def _apply_health_payload_flags(out: dict[str, Any], payload: dict[str, Any]) ->
             out["margin_available"] = Decimal(str(free)) > 0
 
 
-def _enrich_from_adapter(
-    collector: LiveProbeCollector,
-    *,
-    include_live_io: bool = False,
-) -> dict[str, Any]:
-    """Best-effort account/symbol flags from gateway health / adapter.
-
-    Status GET uses the Gateway ``/health`` payload already collected by
-    ``collect()``. Extra ``gateway_health`` / tick / account HTTP calls use
-    the 30s gateway client timeout and must not delay the ops snapshot.
-    """
-    out: dict[str, Any] = {
+def _empty_enrich() -> dict[str, Any]:
+    return {
         "account_trading_enabled": None,
         "mt5_autotrading_enabled": None,
         "dlls_allowed": None,
@@ -190,6 +180,36 @@ def _enrich_from_adapter(
         "session": None,
         "health_payload": None,
     }
+
+
+def _enrich_from_adapter(
+    collector: LiveProbeCollector,
+    *,
+    include_live_io: bool = False,
+) -> dict[str, Any]:
+    """Best-effort account/symbol flags from gateway health / adapter.
+
+    Status GET uses the Gateway ``/health`` payload already collected by
+    ``collect()``. Extra ``gateway_health`` / tick / account HTTP calls use
+    the 30s gateway client timeout and must not delay the ops snapshot.
+    Optional enrichment miss must not abort a cycle (advisory, not a hard block).
+    """
+    out = _empty_enrich()
+    try:
+        return _enrich_from_adapter_inner(
+            collector, out, include_live_io=include_live_io
+        )
+    except Exception:
+        logger.exception("optional_enrichment_unavailable")
+        return _empty_enrich()
+
+
+def _enrich_from_adapter_inner(
+    collector: LiveProbeCollector,
+    out: dict[str, Any],
+    *,
+    include_live_io: bool,
+) -> dict[str, Any]:
     client = (
         getattr(collector.mt5_adapter, "client", None)
         if collector.mt5_adapter is not None

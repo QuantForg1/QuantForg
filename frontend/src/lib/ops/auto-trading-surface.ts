@@ -3,6 +3,9 @@
  *
  * AUTHENTICATING → LOADING_OPS → READY → DEGRADED → AUTH_REQUIRED /
  * API_UNREACHABLE / UNAVAILABLE
+ *
+ * UI/telemetry stale is advisory. Hard halt only when Gateway / MT5 / OMS
+ * independently report down (or the operator cannot authenticate a submit).
  */
 
 import type { AuthPhase } from "../auth/bootstrap";
@@ -82,7 +85,10 @@ export type AutoTradingSurfaceResult = {
   surface: AutoTradingSurface;
   apiPhase: ApiPhase;
   tradingInfra: TradingInfraState;
+  /** Disable Execute Now in this browser (auth/API/hard infra). */
   blockNewEntries: boolean;
+  /** True only when Gateway / MT5 / OMS independently report down. */
+  haltsAutonomousTrading: boolean;
   reportGatewayDisconnected: boolean;
   reportMt5Disconnected: boolean;
   reportBrokerDisconnected: boolean;
@@ -93,6 +99,15 @@ const noDisconnects = {
   reportMt5Disconnected: false,
   reportBrokerDisconnected: false,
 } as const;
+
+function operatorCannotSubmit(authPhase: AuthPhase, opsQuery: OpsQueryKind): boolean {
+  return (
+    authPhase === "AUTH_LOADING" ||
+    authPhase === "AUTH_REQUIRED" ||
+    opsQuery === "unauthorized" ||
+    opsQuery === "forbidden"
+  );
+}
 
 export function resolveAutoTradingSurface(input: {
   authPhase: AuthPhase;
@@ -108,96 +123,59 @@ export function resolveAutoTradingSurface(input: {
   });
   const tradingInfra = input.tradingInfra;
   const opsFresh = input.opsFresh ?? (input.opsQuery === "success" && input.hasOpsData);
+  const hardHalt = tradingInfra === "TRADING_DEGRADED";
+  const authBlocksSubmit = operatorCannotSubmit(input.authPhase, input.opsQuery);
+
+  const pack = (
+    surface: AutoTradingSurface,
+    extra?: { blockNewEntries?: boolean; apiPhase?: ApiPhase },
+  ): AutoTradingSurfaceResult => ({
+    surface,
+    apiPhase: extra?.apiPhase ?? apiPhase,
+    tradingInfra,
+    blockNewEntries: extra?.blockNewEntries ?? (authBlocksSubmit || hardHalt),
+    haltsAutonomousTrading: hardHalt,
+    ...noDisconnects,
+  });
 
   if (input.authPhase === "AUTH_LOADING") {
-    return {
-      surface: "AUTHENTICATING",
-      apiPhase,
-      tradingInfra,
-      blockNewEntries: true,
-      ...noDisconnects,
-    };
+    return pack("AUTHENTICATING", { blockNewEntries: true });
   }
 
   if (input.authPhase === "AUTH_REQUIRED" || input.opsQuery === "unauthorized") {
-    return {
-      surface: "AUTH_REQUIRED",
-      apiPhase,
-      tradingInfra,
-      blockNewEntries: true,
-      ...noDisconnects,
-    };
+    return pack("AUTH_REQUIRED", { blockNewEntries: true });
   }
 
   if (input.opsQuery === "forbidden") {
-    return {
-      surface: "UNAVAILABLE",
-      apiPhase,
-      tradingInfra,
-      blockNewEntries: true,
-      ...noDisconnects,
-    };
+    return pack("UNAVAILABLE", { blockNewEntries: true });
   }
 
   if (input.opsQuery === "success" && input.hasOpsData) {
-    const degraded = tradingInfra === "TRADING_DEGRADED" || !opsFresh;
-    return {
-      surface: degraded ? "DEGRADED" : "READY",
-      apiPhase,
-      tradingInfra,
-      blockNewEntries: degraded,
-      ...noDisconnects,
-    };
+    const degraded = hardHalt || !opsFresh;
+    return pack(degraded ? "DEGRADED" : "READY");
   }
 
   if (input.opsQuery === "timeout" || input.opsQuery === "error") {
     if (input.opsQuery === "error" && tradingInfra === "UNKNOWN" && !input.hasOpsData) {
-      return {
-        surface: "API_UNREACHABLE",
+      return pack("API_UNREACHABLE", {
         apiPhase: "API_UNREACHABLE",
-        tradingInfra,
         blockNewEntries: true,
-        ...noDisconnects,
-      };
+      });
     }
-    return {
-      surface: "DEGRADED",
-      apiPhase,
-      tradingInfra,
-      blockNewEntries: true,
-      ...noDisconnects,
-    };
+    return pack("DEGRADED");
   }
 
   // In-flight ops: keep last-known-good on screen. Stay LOADING_OPS until the
   // request settles — do not flip to DEGRADED on browser RTT (~8–12s).
   if (input.opsQuery === "idle" || input.opsQuery === "loading") {
     if (input.hasOpsData) {
-      const freshEnough = opsFresh && tradingInfra !== "TRADING_DEGRADED";
-      return {
-        surface: freshEnough ? "READY" : "DEGRADED",
-        apiPhase,
-        tradingInfra,
-        blockNewEntries: !freshEnough,
-        ...noDisconnects,
-      };
+      const freshEnough = opsFresh && !hardHalt;
+      return pack(freshEnough ? "READY" : "DEGRADED");
     }
-    return {
-      surface: "LOADING_OPS",
-      apiPhase,
-      tradingInfra,
-      blockNewEntries: true,
-      ...noDisconnects,
-    };
+    return pack("LOADING_OPS");
   }
 
-  return {
-    surface: "UNAVAILABLE",
-    apiPhase,
-    tradingInfra,
-    blockNewEntries: true,
-    ...noDisconnects,
-  };
+  return pack("UNAVAILABLE", { blockNewEntries: true });
 }
 
 export function autoTradingSurfaceCopy(result: AutoTradingSurfaceResult): {
@@ -234,7 +212,14 @@ export function autoTradingSurfaceCopy(result: AutoTradingSurfaceResult): {
       return {
         title: "Ops telemetry delayed",
         detail:
-          "Trading infrastructure is healthy. Auto Trading ops is slow or timed out — new entries stay blocked until telemetry recovers.",
+          "Trading infrastructure is healthy. Auto Trading ops telemetry is stale or timed out — this does not halt new entries.",
+      };
+    }
+    if (result.haltsAutonomousTrading) {
+      return {
+        title: "Auto Trading blocked",
+        detail:
+          "Gateway, MT5, or OMS reported down. New entries stay hard-blocked until those planes recover.",
       };
     }
     return {
