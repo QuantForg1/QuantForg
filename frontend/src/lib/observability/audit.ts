@@ -22,7 +22,8 @@ export type AuditAction =
   | "feature_flag_override"
   | "session_timeout"
   | "api_degraded"
-  | "catalogue_degraded";
+  | "catalogue_degraded"
+  | "terminal_focus";
 
 export type AuditEvent = ObservabilityContext & {
   id: string;

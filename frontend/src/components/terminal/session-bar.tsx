@@ -21,6 +21,7 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
   bid,
   ask,
   realtime,
+  terminalMode = "MANUAL",
   className,
 }: {
   symbol: string;
@@ -28,6 +29,7 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
   bid?: number;
   ask?: number;
   realtime?: RealtimeStatus;
+  terminalMode?: "MANUAL" | "AUTONOMOUS_FOCUS";
   className?: string;
 }) {
   const session = useTradingSession();
@@ -90,6 +92,14 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
             {symbol}
           </span>
         )}
+        {terminalMode === "AUTONOMOUS_FOCUS" ? (
+          <Badge
+            tone="accent"
+            className="hidden h-5 shrink-0 px-1.5 text-[10px] sm:inline-flex"
+          >
+            Auto
+          </Badge>
+        ) : null}
         {spread != null ? (
           <span className="hidden tabular text-[10px] text-[var(--fg-subtle)] md:inline">
             spr {spread.toFixed(5)}

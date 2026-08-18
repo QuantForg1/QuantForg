@@ -32,9 +32,24 @@ import {
 } from "@/components/terminal/layout-store";
 import type { OrderTicketHandle } from "@/components/execution/order-ticket";
 import { useExecutionStream } from "@/hooks/realtime";
+import { useAuth } from "@/providers/auth-provider";
 import { useTradingSession } from "@/providers/trading-session-provider";
-import { mt5Api } from "@/lib/api/endpoints";
+import { iteOpsApi, mt5Api } from "@/lib/api/endpoints";
+import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { asRecord, num } from "@/lib/desk";
+import { recordAudit } from "@/lib/observability/audit";
+import { readOpsTelemetry } from "@/lib/ops/ops-telemetry-cache";
+import {
+  bookIntegrityFromCycle,
+  extractAuthorizedExecution,
+  focusObservability,
+  initialTerminalFocus,
+  MANUAL_HOME_SYMBOL,
+  nextTerminalFocus,
+  sameTerminalFocus,
+  symbolsFromBookRows,
+  type TerminalFocusState,
+} from "@/lib/terminal/autonomous-focus";
 import { TRADING_SYMBOL, resolveTradingSymbol } from "@/lib/trading/gold-only";
 import {
   isMarketClosedApiError,
@@ -81,16 +96,26 @@ const PRESET_LABEL: Record<TerminalPresetId, string> = {
 export function TerminalShell() {
   const searchParams = useSearchParams();
   const [layout, setLayout] = useState<TerminalLayoutState>(DEFAULT_TERMINAL_LAYOUT);
-  const [symbol, setSymbol] = useState(TRADING_SYMBOL);
+  const [manualSymbol, setManualSymbol] = useState(TRADING_SYMBOL);
+  const [userSelected, setUserSelected] = useState(false);
+  const [focus, setFocus] = useState<TerminalFocusState>(() =>
+    initialTerminalFocus(TRADING_SYMBOL),
+  );
   const [hydrated, setHydrated] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const ticketRef = useRef<OrderTicketHandle | null>(null);
   const layoutRef = useRef(layout);
+  const focusRef = useRef(focus);
+  const lastAuditKey = useRef("");
 
   useEffect(() => {
     layoutRef.current = layout;
   }, [layout]);
+
+  useEffect(() => {
+    focusRef.current = focus;
+  }, [focus]);
 
   useEffect(() => {
     const stored = loadTerminalLayout();
@@ -98,7 +123,11 @@ export function TerminalShell() {
     try {
       const fromUrl = searchParams.get("symbol")?.trim();
       const fromLs = localStorage.getItem(TERMINAL_SYMBOL_KEY);
-      setSymbol(resolveTradingSymbol(fromUrl || fromLs));
+      const initial = resolveTradingSymbol(fromUrl || fromLs);
+      setManualSymbol(initial);
+      const seed = initialTerminalFocus(initial);
+      focusRef.current = seed;
+      setFocus(seed);
     } catch {
       /* ignore */
     }
@@ -114,14 +143,15 @@ export function TerminalShell() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(TERMINAL_SYMBOL_KEY, symbol);
+      localStorage.setItem(TERMINAL_SYMBOL_KEY, manualSymbol);
     } catch {
       /* ignore */
     }
-  }, [symbol, hydrated]);
+  }, [manualSymbol, hydrated]);
 
   const onSymbolSelect = useCallback((code: string) => {
-    setSymbol(resolveTradingSymbol(code));
+    setManualSymbol(resolveTradingSymbol(code));
+    setUserSelected(true);
   }, []);
 
   useEffect(() => {
@@ -141,9 +171,61 @@ export function TerminalShell() {
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  const realtime = useExecutionStream(symbol);
+  const realtime = useExecutionStream(focus.terminalSymbol);
   const session = useTradingSession();
+  const { user, isAuthenticated, opsReady } = useAuth();
   const connected = session.connected;
+  const symbol = focus.terminalSymbol;
+
+  const autoQ = useQuery({
+    queryKey: ["ite-ops-auto-trading"],
+    queryFn: iteOpsApi.autoTrading,
+    enabled: Boolean(opsReady && isAuthenticated && canAccessIteOps(user)),
+    staleTime: 20_000,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const autoPayload = autoQ.data ?? readOpsTelemetry()?.payload ?? null;
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const next = nextTerminalFocus(focusRef.current, {
+      homeSymbol: MANUAL_HOME_SYMBOL,
+      manualSymbol,
+      authorized: extractAuthorizedExecution(autoPayload),
+      openPositionSymbols: symbolsFromBookRows(session.positions),
+      pendingOrderSymbols: symbolsFromBookRows(session.orders),
+      bookIntegrity: bookIntegrityFromCycle(autoPayload, {
+        healthKnown: session.healthKnown,
+        gatewayOnline: session.gatewayOnline,
+      }),
+      userSelected,
+    });
+    if (!sameTerminalFocus(focusRef.current, next)) {
+      focusRef.current = next;
+      setFocus(next);
+    }
+    if (next.manualSymbol !== manualSymbol) {
+      setManualSymbol(next.manualSymbol);
+    }
+    if (userSelected) setUserSelected(false);
+    const obs = focusObservability(next);
+    const auditKey = `${obs.terminal_mode}:${obs.terminal_symbol}:${obs.symbol_source}`;
+    if (auditKey !== lastAuditKey.current) {
+      lastAuditKey.current = auditKey;
+      recordAudit("terminal_focus", "info", "Terminal view symbol updated", obs);
+    }
+  }, [
+    hydrated,
+    manualSymbol,
+    userSelected,
+    autoPayload,
+    session.positions,
+    session.orders,
+    session.healthKnown,
+    session.gatewayOnline,
+  ]);
 
   const tickQ = useQuery({
     queryKey: ["mt5-tick", symbol],
@@ -328,6 +410,11 @@ export function TerminalShell() {
       className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[var(--bg)]"
       role="application"
       aria-label="QuantForg Terminal"
+      data-terminal-mode={focus.mode}
+      data-symbol-source={focus.symbolSource}
+      data-terminal-symbol={focus.terminalSymbol}
+      data-manual-symbol={focus.manualSymbol}
+      data-execution-symbol={focus.autonomousSymbol ?? ""}
     >
       <header className="shrink-0">
         <div className="flex h-8 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--bg-elevated)] px-2">
@@ -429,6 +516,7 @@ export function TerminalShell() {
           bid={bidOk}
           ask={askOk}
           realtime={realtime}
+          terminalMode={focus.mode}
         />
         {showCounsel ? (
           <TerminalCounselStrip
