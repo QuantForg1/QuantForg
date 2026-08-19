@@ -1351,7 +1351,7 @@ export function AutoTradingWorkspace() {
       <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-            30-minute opportunity window
+            30-minute opportunity tracker
           </h2>
           <Badge
             tone={
@@ -1362,7 +1362,8 @@ export function AutoTradingWorkspace() {
             className="h-5 px-1.5 text-[10px]"
           >
             {str(
-              asRecord(asRecord(opsPayload).fast_decision).decision_state,
+              asRecord(asRecord(opsPayload).fast_decision).tracker_state
+                || asRecord(asRecord(opsPayload).fast_decision).decision_state,
               "FOCUS_FORMING",
             )}
           </Badge>
@@ -1390,14 +1391,39 @@ export function AutoTradingWorkspace() {
           );
           const windowFault = str(fd.fault_code, "—");
           const windowDetail = str(fd.fault_reason, windowGate);
+          const trackerState = str(fd.tracker_state, str(fd.decision_state, "FOCUS_FORMING"));
+          const blockingStage = str(fd.blocking_stage, "—");
+          const readiness = asRecord(asRecord(fd.readiness_matrix).stages);
+          const bottleneck = asRecord(fd.bottleneck_report);
+          const stageOrder = [
+            "MARKET",
+            "STRATEGY",
+            "DECISION",
+            "SAFETY",
+            "RISK",
+            "SIZING",
+            "PORTFOLIO",
+            "OPTIMIZER",
+            "OMS",
+            "BROKER",
+          ] as const;
           return (
-            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-2 space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
                   Time remaining
                 </p>
                 <p className="font-mono text-[13px] tabular text-[var(--fg)]">
                   {pad(mm)}:{pad(ss)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Current state
+                </p>
+                <p className="font-mono text-[13px] text-[var(--fg)]">
+                  {trackerState}
                 </p>
               </div>
               <div>
@@ -1432,18 +1458,68 @@ export function AutoTradingWorkspace() {
                   {windowNext}
                 </p>
               </div>
-              <div className="sm:col-span-2 lg:col-span-3">
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Blocking stage
+                </p>
+                <p className="font-mono text-[13px] text-[var(--fg)]">
+                  {blockingStage}
+                </p>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-1">
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Current fault
+                </p>
+                <p className="truncate font-mono text-[12px] text-[var(--fg)]" title={windowDetail}>
+                  {windowFault}
+                </p>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4">
                 <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
                   Current blocking gate
                 </p>
                 <p className="text-[12px] text-[var(--fg)]" title={windowGate}>
-                  {windowFault}
-                  {windowGate ? ` — ${windowGate}` : ""}
+                  {windowGate}
                 </p>
                 <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
                   {windowDetail}
                 </p>
               </div>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+                  Execution readiness
+                </p>
+                <div className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-5">
+                  {stageOrder.map((stage) => {
+                    const status = str(readiness[stage], "NOT_REACHED");
+                    const tone =
+                      status === "PASS"
+                        ? "text-[var(--success)]"
+                        : status === "BLOCK"
+                          ? "text-[var(--danger)]"
+                          : status === "WAIT"
+                            ? "text-[var(--warning)]"
+                            : "text-[var(--fg-muted)]";
+                    return (
+                      <div
+                        key={stage}
+                        className="border border-[var(--border)] px-2 py-1"
+                      >
+                        <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                          {stage}
+                        </p>
+                        <p className={`font-mono text-[11px] ${tone}`}>{status}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {str(bottleneck.why_no_order) ? (
+                <p className="font-mono text-[11px] text-[var(--fg-muted)]">
+                  Bottleneck: {str(bottleneck.why_no_order)}
+                </p>
+              ) : null}
             </div>
           );
         })()}

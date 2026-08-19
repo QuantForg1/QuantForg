@@ -509,7 +509,15 @@ async def _run_institutional_multi_asset_scan_body(
         except Exception:
             logger.exception("dynamic_universe_log_failed")
 
-    if not bool(getattr(cfg, "multi_asset_scan_enabled", True)):
+    scan_enabled = bool(getattr(cfg, "multi_asset_scan_enabled", True))
+    try:
+        from app.domain.trading.gold_only import gold_only_enabled
+
+        if gold_only_enabled():
+            scan_enabled = True
+    except Exception:
+        logger.exception("gold_only_scanner_enable_failed")
+    if not scan_enabled:
         payload = {
             "as_of": as_of,
             "enabled": False,

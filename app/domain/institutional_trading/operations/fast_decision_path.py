@@ -534,6 +534,17 @@ class _WindowState:
     unknown_orders: int = 0
     cycle_ms: deque[float] = field(default_factory=lambda: deque(maxlen=_LATENCY_SAMPLES))
     blocker_counts: dict[str, int] = field(default_factory=dict)
+    cycle_id: int = 0
+    last_tracker_state: str | None = None
+    last_tracker_mono: float | None = None
+    dwell_ms: dict[str, float] = field(default_factory=dict)
+    cycle_events: deque[dict[str, Any]] = field(
+        default_factory=lambda: deque(maxlen=120)
+    )
+    oms_ready: int = 0
+    broker_ready: int = 0
+    soft_waits: int = 0
+    scan_published_mono: float | None = None
 
 
 _LOCK = threading.RLock()
@@ -585,8 +596,11 @@ def record_cycle_classification(
     fill_symbol: str | None = None,
 ) -> None:
     ensure_opportunity_window()
+    now = time.monotonic()
     with _LOCK:
         _WINDOW.last_classification = dict(classification)
+        _WINDOW.cycle_id += 1
+        cycle_id = int(_WINDOW.cycle_id)
         _WINDOW.candidates_evaluated += 1
         code = str(classification.get("fault_code") or "NONE")
         if _should_count_as_blocker(code):
@@ -596,6 +610,8 @@ def record_cycle_classification(
             _WINDOW.hard_blocks += 1
         elif fc == FaultClass.CANDIDATE_BLOCK.value:
             _WINDOW.candidate_blocks += 1
+        elif fc == FaultClass.WAIT.value:
+            _WINDOW.soft_waits += 1
         elif fc == FaultClass.ADVISORY.value:
             _WINDOW.advisory_degradations += 1
         state = str(classification.get("decision_state") or "")
@@ -607,13 +623,27 @@ def record_cycle_classification(
             _WINDOW.execution_ready += 1
         if forwarded_to_oms:
             _WINDOW.orders_submitted += 1
+            _WINDOW.oms_ready += 1
             if _WINDOW.first_fill_at is None and fill_symbol:
-                _WINDOW.first_fill_at = time.monotonic()
+                _WINDOW.first_fill_at = now
                 _WINDOW.first_fill_symbol = str(fill_symbol).upper()
         if state == DecisionState.ORDER_UNKNOWN.value:
             _WINDOW.unknown_orders += 1
         if cycle_ms is not None:
             _WINDOW.cycle_ms.append(float(cycle_ms))
+        event = {
+            "cycle_id": cycle_id,
+            "timestamp": _iso_now(),
+            "decision_state": state,
+            "fault_class": fc,
+            "fault_code": code,
+            "fault_reason": classification.get("fault_reason"),
+            "blocking_stage": classification.get("blocking_stage"),
+            "next_action": classification.get("next_action"),
+            "cycle_latency_ms": cycle_ms,
+            "forwarded_to_oms": bool(forwarded_to_oms),
+        }
+        _WINDOW.cycle_events.append(event)
 
 
 def _percentile(samples: list[float], p: float) -> float | None:
@@ -740,8 +770,14 @@ def opportunity_window_snapshot(
             "execution_ready": _WINDOW.execution_ready,
             "orders_submitted": _WINDOW.orders_submitted,
             "unknown_orders": _WINDOW.unknown_orders,
+            "oms_ready": _WINDOW.oms_ready,
+            "broker_ready": _WINDOW.broker_ready,
+            "soft_waits": _WINDOW.soft_waits,
+            "cycle_id": int(_WINDOW.cycle_id),
             "first_natural_trade": bool(_WINDOW.first_fill_symbol),
             "first_fill_symbol": _WINDOW.first_fill_symbol,
+            "dwell_ms": dict(_WINDOW.dwell_ms),
+            "recent_events": list(_WINDOW.cycle_events)[-12:],
             "cycle_event_counts": [
                 {"fault_code": k, "count": v} for k, v in event_counts[:8]
             ],
@@ -857,6 +893,80 @@ def opportunity_window_snapshot(
         setup_state = DecisionState.MARKET_CONTEXT_NOT_READY.value
         focus_reason = "NO_CURRENT_SCAN"
 
+    from app.domain.institutional_trading.operations.gold_execution_readiness import (
+        bottleneck_report,
+        build_readiness_matrix,
+        parse_as_of_age_seconds,
+        production_feature_inventory,
+        resolve_tracker_state,
+    )
+
+    scan_age = parse_as_of_age_seconds(as_of if has_current_scan else None)
+    named_reject = None
+    if has_current_scan:
+        named_reject = str(
+            current.get("fault_reason")
+            or current.get("first_blocking_gate")
+            or coherent["fault_reason"]
+            or ""
+        ).strip() or None
+        if named_reject in {NO_CURRENT_BLOCKING_GATE, NO_CURRENT_BLOCK, "NONE"}:
+            named_reject = None
+    last_cls = {}
+    with _LOCK:
+        last_cls = dict(_WINDOW.last_classification) if _WINDOW.last_classification else {}
+        last_tracker = _WINDOW.last_tracker_state
+        last_tracker_mono = _WINDOW.last_tracker_mono
+    overlay_cls = last_cls if eligible_count > 0 else {}
+    forwarded = bool(overlay_cls.get("decision_state") == DecisionState.ORDER_SUBMITTED.value)
+    readiness = build_readiness_matrix(
+        has_current_scan=has_current_scan,
+        eligible_count=eligible_count,
+        execution_ready=execution_ready,
+        blocking_stage=str(overlay_cls.get("blocking_stage") or blocking_stage),
+        fault_class=str(overlay_cls.get("fault_class") or fault_class),
+        next_action=coherent["next_action"],
+        named_reject=named_reject,
+        last_classification=overlay_cls or None,
+        scan_age_seconds=scan_age,
+        forwarded_to_oms=forwarded,
+    )
+    tracker_state = resolve_tracker_state(
+        has_current_scan=has_current_scan,
+        eligible_count=eligible_count,
+        execution_ready=execution_ready,
+        current_focus=coherent["current_focus"],
+        next_action=coherent["next_action"],
+        fault_class=str(overlay_cls.get("fault_class") or fault_class),
+        decision_state=str(overlay_cls.get("decision_state") or setup_state),
+        named_reject=named_reject,
+        window_active=bool(window_meta.get("active")),
+        window_started=bool(window_meta.get("started")),
+        first_natural_trade=bool(window_meta.get("first_natural_trade")),
+        forwarded_to_oms=forwarded,
+    )
+    now_mono = ts
+    dwell = dict(window_meta.get("dwell_ms") or {})
+    with _LOCK:
+        if last_tracker_mono is not None:
+            elapsed = max(0.0, (now_mono - float(last_tracker_mono)) * 1000.0)
+            key = last_tracker or tracker_state
+            dwell[key] = round(float(dwell.get(key) or 0.0) + elapsed, 1)
+        _WINDOW.dwell_ms = dwell
+        _WINDOW.last_tracker_state = tracker_state
+        _WINDOW.last_tracker_mono = now_mono
+    window_meta["dwell_ms"] = dwell
+    bottleneck = None
+    if (not window_meta.get("active") and window_meta.get("started")) or tracker_state == "TIMEOUT_NO_TRADE":
+        bottleneck = bottleneck_report(
+            tracker_state=tracker_state,
+            readiness=readiness,
+            window=window_meta,
+            named_reject=named_reject,
+            first_blocking_gate=coherent["first_blocking_gate"],
+            dwell_ms=dwell,
+        )
+
     return {
         **window_meta,
         "snapshot_id": snap_id,
@@ -869,8 +979,9 @@ def opportunity_window_snapshot(
         "eligible_count": eligible_count,
         "setup_state": setup_state,
         "decision_state": setup_state,
-        "blocking_stage": blocking_stage,
-        "fault_class": fault_class,
+        "tracker_state": tracker_state,
+        "blocking_stage": overlay_cls.get("blocking_stage") or blocking_stage,
+        "fault_class": overlay_cls.get("fault_class") or fault_class,
         "fault_code": coherent["fault_code"],
         "fault_reason": coherent["fault_reason"],
         "blocking_gate": coherent["blocking_gate"],
@@ -879,6 +990,10 @@ def opportunity_window_snapshot(
         "safety_state": safety_state,
         "optimizer_state": optimizer_state,
         "execution_ready": execution_ready,
+        "readiness_matrix": readiness,
+        "production_features": production_feature_inventory(),
+        "bottleneck_report": bottleneck,
+        "scan_age_seconds": readiness.get("scan_age_seconds"),
         "primary_blockers": [],
     }
 
@@ -1333,6 +1448,7 @@ def publish_current_scan_decision(scan_or_decision: dict[str, Any] | None) -> di
         _WINDOW.snapshot_id = f"current-scan-{_WINDOW.snapshot_seq}"
         _WINDOW.current_scan = dict(decision)
         _WINDOW.current_scan["snapshot_id"] = _WINDOW.snapshot_id
+        _WINDOW.scan_published_mono = time.monotonic()
     record_cycle_classification(classification)
     return decision
 

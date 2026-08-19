@@ -3780,9 +3780,18 @@ class InstitutionalIteRuntime:
                 DEFAULT_AI_SCALPING_CONFIG,
             )
 
-            if not bool(
+            scan_on = bool(
                 getattr(DEFAULT_AI_SCALPING_CONFIG, "multi_asset_scan_enabled", True)
-            ):
+            )
+            try:
+                from app.domain.trading.gold_only import gold_only_enabled
+
+                if gold_only_enabled():
+                    # Gold-only is a universe restriction, not a scanner bypass.
+                    scan_on = True
+            except Exception:
+                logger.exception("gold_only_scanner_required_flag_failed")
+            if not scan_on:
                 return None
             open_n = 0
             try:
