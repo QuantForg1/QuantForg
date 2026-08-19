@@ -93,16 +93,15 @@ def test_stale_quote_hard_blocks() -> None:
     assert out["candidate_action"] == CandidateAction.FAIL_CLOSED.value
 
 
-def test_setup_not_ready_waits_same_focus() -> None:
+def test_setup_not_ready_is_no_executable_focus() -> None:
     out = classify_candidate_outcome(
         abort_reason="NO_ELIGIBLE_SETUP",
         decision_action="NO_TRADE",
     )
-    assert out["next_action"] == CandidateAction.WAIT_SAME_FOCUS.value
-    assert out["decision_state"] in {
-        DecisionState.SETUP_NOT_READY.value,
-        DecisionState.WAIT_SAME_FOCUS.value,
-    }
+    assert out["next_action"] == CandidateAction.NO_EXECUTABLE_FOCUS.value
+    assert out["decision_state"] == DecisionState.SETUP_NOT_READY.value
+    assert out["fault_code"] != "ignored_action"
+    assert out["next_action"] != CandidateAction.WAIT_SAME_FOCUS.value
 
 
 def test_spread_wait_does_not_rotate() -> None:

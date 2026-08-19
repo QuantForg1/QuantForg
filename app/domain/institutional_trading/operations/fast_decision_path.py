@@ -13,6 +13,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -29,7 +30,9 @@ _LATENCY_SAMPLES = 64
 
 class DecisionState(StrEnum):
     SETUP_NOT_READY = "SETUP_NOT_READY"
+    MARKET_CONTEXT_NOT_READY = "MARKET_CONTEXT_NOT_READY"
     FOCUS_FORMING = "FOCUS_FORMING"
+    WAITING = "WAITING"
     WAIT_SAME_FOCUS = "WAIT_SAME_FOCUS"
     DEGRADED = "DEGRADED"
     CANDIDATE_BLOCK = "CANDIDATE_BLOCK"
@@ -63,6 +66,14 @@ class CandidateAction(StrEnum):
     FAIL_CLOSED = "FAIL_CLOSED"
     RECONCILE = "RECONCILE"
     NO_EXECUTABLE_FOCUS = "NO_EXECUTABLE_FOCUS"
+    MARKET_CONTEXT_NOT_READY = "MARKET_CONTEXT_NOT_READY"
+    SETUP_NOT_READY = "SETUP_NOT_READY"
+
+
+NO_CURRENT_BLOCK = "NO_CURRENT_BLOCK"
+NO_CURRENT_BLOCKING_GATE = "NO_CURRENT_BLOCKING_GATE"
+SAFETY_NOT_REACHED = "NOT_REACHED"
+OPTIMIZER_NOT_RUN = "NOT_RUN"
 
 
 # Snapshot ATR used by the scanner quality gate (pipeline DEFAULT_ITE_CONFIG).
@@ -138,6 +149,95 @@ def _hay(*parts: str) -> str:
     return _norm(" ".join(p for p in parts if p))
 
 
+def is_ignored_action_value(value: Any) -> bool:
+    """True for the OMS NO_TRADE abort token — not a current trading fault."""
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    lowered = raw.lower().replace("-", "_")
+    if lowered == "ignored_action" or lowered.startswith("ignored_action "):
+        return True
+    hay = _norm(raw)
+    return hay == "ignored action" or hay.startswith("ignored action ")
+
+
+def _is_valid_wait_focus(symbol: str | None) -> bool:
+    focus = str(symbol or "").strip().upper() or None
+    if not focus:
+        return False
+    try:
+        from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+        if gold_only_enabled():
+            return bool(is_gold_symbol(focus))
+    except Exception:
+        pass
+    return True
+
+
+def coherent_next_action(
+    *,
+    current_focus: str | None,
+    next_action: str | None,
+) -> str:
+    """WAIT_SAME_FOCUS is valid only while Gold focus is still active."""
+    action = str(next_action or "").strip() or CandidateAction.NO_EXECUTABLE_FOCUS.value
+    if is_ignored_action_value(action):
+        return CandidateAction.NO_EXECUTABLE_FOCUS.value
+    if action == CandidateAction.WAIT_SAME_FOCUS.value and not _is_valid_wait_focus(
+        current_focus
+    ):
+        return CandidateAction.NO_EXECUTABLE_FOCUS.value
+    return action
+
+
+def sanitize_blocking_gate(
+    value: str | None,
+    *,
+    fallback: str = NO_CURRENT_BLOCKING_GATE,
+) -> str:
+    raw = str(value or "").strip()
+    if not raw or is_ignored_action_value(raw):
+        return fallback
+    return raw
+
+
+def sanitize_fault_code(
+    value: str | None,
+    *,
+    blocking_gate: str | None = None,
+) -> str:
+    raw = str(value or "").strip()
+    gate = sanitize_blocking_gate(blocking_gate) if blocking_gate is not None else None
+    if not raw or is_ignored_action_value(raw):
+        if not gate or gate == NO_CURRENT_BLOCKING_GATE:
+            return NO_CURRENT_BLOCK
+        return blocking_gate_fault_code(gate)
+    upper = raw.upper()
+    if upper in {"WAIT_SAME_FOCUS", "NO_TRADE", "WATCH", "NONE", "IGNORED_ACTION"}:
+        if not gate or gate == NO_CURRENT_BLOCKING_GATE:
+            return NO_CURRENT_BLOCK
+        return blocking_gate_fault_code(gate)
+    return raw
+
+
+def _should_count_as_blocker(code: str) -> bool:
+    if is_ignored_action_value(code):
+        return False
+    upper = str(code or "").strip().upper()
+    return upper not in {
+        "",
+        "NONE",
+        "NO_TRADE",
+        "WATCH",
+        "WAIT_SAME_FOCUS",
+        NO_CURRENT_BLOCK,
+        NO_CURRENT_BLOCKING_GATE,
+        CandidateAction.NO_EXECUTABLE_FOCUS.value,
+        CandidateAction.MARKET_CONTEXT_NOT_READY.value,
+    }
+
+
 def classify_candidate_outcome(
     *,
     abort_reason: str | None = None,
@@ -182,6 +282,20 @@ def classify_candidate_outcome(
             "blocking_stage": "OMS",
             "skip_idle_sleep": False,
             "release_entry_budget": False,
+        }
+
+    if is_ignored_action_value(abort) or is_ignored_action_value(outcome):
+        return {
+            "decision_state": DecisionState.SETUP_NOT_READY.value,
+            "fault_class": FaultClass.WAIT.value,
+            "fault_code": NO_CURRENT_BLOCK,
+            "fault_reason": NO_CURRENT_BLOCKING_GATE,
+            "retryable": True,
+            "candidate_action": CandidateAction.NO_EXECUTABLE_FOCUS.value,
+            "next_action": CandidateAction.NO_EXECUTABLE_FOCUS.value,
+            "blocking_stage": "DECISION",
+            "skip_idle_sleep": False,
+            "release_entry_budget": True,
         }
 
     if any(n in hay for n in _UNKNOWN_NEEDLES):
@@ -302,29 +416,47 @@ def classify_candidate_outcome(
             "WATCH",
             "",
         }
+        spread_wait = "spread" in hay
+        next_action = (
+            CandidateAction.WAIT_SAME_FOCUS.value
+            if spread_wait
+            else CandidateAction.NO_EXECUTABLE_FOCUS.value
+        )
+        fault_code = abort or (reasons[0] if reasons else "")
+        if not fault_code or is_ignored_action_value(fault_code) or fault_code == "WAIT_SAME_FOCUS":
+            fault_code = "NO_ELIGIBLE_SETUP" if setup else NO_CURRENT_BLOCK
+        fault_reason = abort or "; ".join(reasons) or outcome or action or "NO_TRADE"
+        if is_ignored_action_value(fault_reason):
+            fault_reason = NO_CURRENT_BLOCKING_GATE
         return {
             "decision_state": DecisionState.SETUP_NOT_READY.value
-            if setup and "spread" not in hay
-            else DecisionState.WAIT_SAME_FOCUS.value,
+            if setup and not spread_wait
+            else DecisionState.WAITING.value,
             "fault_class": FaultClass.WAIT.value,
-            "fault_code": abort or (reasons[0] if reasons else "WAIT_SAME_FOCUS"),
-            "fault_reason": abort or "; ".join(reasons) or outcome or action or "NO_TRADE",
+            "fault_code": fault_code,
+            "fault_reason": fault_reason,
             "retryable": True,
-            "candidate_action": CandidateAction.WAIT_SAME_FOCUS.value,
-            "next_action": CandidateAction.WAIT_SAME_FOCUS.value,
+            "candidate_action": next_action,
+            "next_action": next_action,
             "blocking_stage": "STRATEGY" if setup else "OPTIMIZER",
             "skip_idle_sleep": False,
             "release_entry_budget": True,
         }
 
+    fallback_code = abort or outcome or "NO_TRADE"
+    if is_ignored_action_value(fallback_code) or fallback_code in {"NO_TRADE", "WATCH"}:
+        fallback_code = NO_CURRENT_BLOCK
+    fallback_reason = abort or outcome or "NO_TRADE"
+    if is_ignored_action_value(fallback_reason):
+        fallback_reason = NO_CURRENT_BLOCKING_GATE
     return {
         "decision_state": DecisionState.NO_TRADE.value,
         "fault_class": FaultClass.WAIT.value,
-        "fault_code": abort or outcome or "NO_TRADE",
-        "fault_reason": abort or outcome or "NO_TRADE",
+        "fault_code": fallback_code,
+        "fault_reason": fallback_reason,
         "retryable": True,
-        "candidate_action": CandidateAction.WAIT_SAME_FOCUS.value,
-        "next_action": CandidateAction.WAIT_SAME_FOCUS.value,
+        "candidate_action": CandidateAction.NO_EXECUTABLE_FOCUS.value,
+        "next_action": CandidateAction.NO_EXECUTABLE_FOCUS.value,
         "blocking_stage": "DECISION",
         "skip_idle_sleep": False,
         "release_entry_budget": True,
@@ -389,6 +521,9 @@ class _WindowState:
     focus_symbol: str | None = None
     focus_reason: str = "FOCUS_FORMING"
     last_classification: dict[str, Any] = field(default_factory=dict)
+    current_scan: dict[str, Any] = field(default_factory=dict)
+    snapshot_seq: int = 0
+    snapshot_id: str | None = None
     candidates_evaluated: int = 0
     focus_rotations: int = 0
     hard_blocks: int = 0
@@ -454,7 +589,8 @@ def record_cycle_classification(
         _WINDOW.last_classification = dict(classification)
         _WINDOW.candidates_evaluated += 1
         code = str(classification.get("fault_code") or "NONE")
-        _WINDOW.blocker_counts[code] = int(_WINDOW.blocker_counts.get(code) or 0) + 1
+        if _should_count_as_blocker(code):
+            _WINDOW.blocker_counts[code] = int(_WINDOW.blocker_counts.get(code) or 0) + 1
         fc = str(classification.get("fault_class") or "")
         if fc == FaultClass.HARD_BLOCK.value or fc == FaultClass.SYSTEM_BLOCK.value:
             _WINDOW.hard_blocks += 1
@@ -490,7 +626,83 @@ def _percentile(samples: list[float], p: float) -> float | None:
     return round(ordered[idx], 1)
 
 
-def opportunity_window_snapshot(*, now_mono: float | None = None) -> dict[str, Any]:
+def _iso_now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def _window_setup_state(
+    *,
+    current_focus: str | None,
+    eligible_count: int,
+    execution_ready: bool,
+    fault_class: str | None,
+    next_action: str | None,
+    has_current_scan: bool,
+) -> str:
+    if not has_current_scan:
+        return DecisionState.MARKET_CONTEXT_NOT_READY.value
+    if execution_ready:
+        return DecisionState.EXECUTION_READY.value
+    fc = str(fault_class or "")
+    nxt = str(next_action or "")
+    if nxt == CandidateAction.FAIL_CLOSED.value or fc in {
+        FaultClass.HARD_BLOCK.value,
+        FaultClass.SYSTEM_BLOCK.value,
+    }:
+        return DecisionState.HARD_BLOCK.value
+    if _is_valid_wait_focus(current_focus) and nxt == CandidateAction.WAIT_SAME_FOCUS.value:
+        return DecisionState.WAITING.value
+    if int(eligible_count or 0) == 0 or not current_focus:
+        return DecisionState.SETUP_NOT_READY.value
+    return DecisionState.FOCUS_FORMING.value
+
+
+def _cohere_opportunity_fields(
+    *,
+    current_focus: str | None,
+    next_action: str | None,
+    fault_code: str | None,
+    fault_reason: str | None,
+    blocking_gate: str | None,
+) -> dict[str, Any]:
+    focus = str(current_focus or "").strip().upper() or None
+    nxt = coherent_next_action(current_focus=focus, next_action=next_action)
+    gate = sanitize_blocking_gate(blocking_gate or fault_reason)
+    code = sanitize_fault_code(fault_code, blocking_gate=gate)
+    reason = sanitize_blocking_gate(fault_reason, fallback=gate)
+    if is_ignored_action_value(code) or is_ignored_action_value(nxt) or is_ignored_action_value(gate):
+        code = NO_CURRENT_BLOCK
+        gate = NO_CURRENT_BLOCKING_GATE
+        reason = NO_CURRENT_BLOCKING_GATE
+        if nxt == CandidateAction.WAIT_SAME_FOCUS.value and not _is_valid_wait_focus(focus):
+            nxt = CandidateAction.NO_EXECUTABLE_FOCUS.value
+    if gate == NO_CURRENT_BLOCKING_GATE and code == NO_CURRENT_BLOCK:
+        if nxt not in {
+            CandidateAction.FAIL_CLOSED.value,
+            CandidateAction.RECONCILE.value,
+            CandidateAction.WAIT_SAME_FOCUS.value,
+            CandidateAction.HOLD_FOCUS.value,
+            CandidateAction.MARKET_CONTEXT_NOT_READY.value,
+        }:
+            nxt = coherent_next_action(
+                current_focus=focus,
+                next_action=nxt or CandidateAction.NO_EXECUTABLE_FOCUS.value,
+            )
+    return {
+        "current_focus": focus,
+        "next_action": nxt,
+        "fault_code": code,
+        "fault_reason": reason,
+        "blocking_gate": gate,
+        "first_blocking_gate": gate,
+    }
+
+
+def opportunity_window_snapshot(
+    *,
+    now_mono: float | None = None,
+    current_scan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     ts = float(now_mono if now_mono is not None else time.monotonic())
     with _LOCK:
         started = _WINDOW.started_mono
@@ -501,25 +713,25 @@ def opportunity_window_snapshot(*, now_mono: float | None = None) -> dict[str, A
             remaining = max(0.0, WINDOW_SECONDS - elapsed)
             active = remaining > 0
         samples = list(_WINDOW.cycle_ms)
-        cls = dict(_WINDOW.last_classification)
-        blockers = sorted(
-            _WINDOW.blocker_counts.items(),
+        stored_scan = dict(_WINDOW.current_scan) if _WINDOW.current_scan else {}
+        snapshot_id = _WINDOW.snapshot_id
+        snapshot_seq = int(_WINDOW.snapshot_seq)
+        focus_symbol = _WINDOW.focus_symbol
+        focus_reason = _WINDOW.focus_reason
+        event_counts = sorted(
+            (
+                (k, v)
+                for k, v in _WINDOW.blocker_counts.items()
+                if _should_count_as_blocker(str(k))
+            ),
             key=lambda kv: (-kv[1], kv[0]),
         )
-        return {
+        window_meta = {
             "window": "FIRST_TRADE_OPPORTUNITY_WINDOW",
             "duration_seconds": WINDOW_SECONDS,
             "active": active,
             "remaining_seconds": round(remaining, 1) if remaining is not None else None,
             "started": started is not None,
-            "current_focus": _WINDOW.focus_symbol,
-            "focus_reason": _WINDOW.focus_reason,
-            "decision_state": cls.get("decision_state") or DecisionState.FOCUS_FORMING.value,
-            "blocking_stage": cls.get("blocking_stage"),
-            "fault_class": cls.get("fault_class"),
-            "fault_code": cls.get("fault_code"),
-            "fault_reason": cls.get("fault_reason"),
-            "next_action": cls.get("next_action"),
             "candidates_evaluated": _WINDOW.candidates_evaluated,
             "focus_rotations": _WINDOW.focus_rotations,
             "hard_blocks": _WINDOW.hard_blocks,
@@ -530,8 +742,8 @@ def opportunity_window_snapshot(*, now_mono: float | None = None) -> dict[str, A
             "unknown_orders": _WINDOW.unknown_orders,
             "first_natural_trade": bool(_WINDOW.first_fill_symbol),
             "first_fill_symbol": _WINDOW.first_fill_symbol,
-            "primary_blockers": [
-                {"fault_code": k, "count": v} for k, v in blockers[:8]
+            "cycle_event_counts": [
+                {"fault_code": k, "count": v} for k, v in event_counts[:8]
             ],
             "cycle_latency_ms": {
                 "n": len(samples),
@@ -541,10 +753,134 @@ def opportunity_window_snapshot(*, now_mono: float | None = None) -> dict[str, A
             },
             "forces_trades": False,
             "order_send_retries": False,
-            "current_best_candidate": cls.get("current_scan_symbol"),
-            "eligible_count": cls.get("eligible_count"),
-            "first_blocking_gate": cls.get("fault_reason"),
         }
+
+    current = (
+        dict(current_scan)
+        if isinstance(current_scan, dict) and current_scan.get("label") == "CURRENT_SCAN"
+        else stored_scan
+    )
+    has_current_scan = bool(current)
+    if has_current_scan:
+        symbol = str(current.get("symbol") or current.get("current_scan_symbol") or "").strip().upper() or None
+        try:
+            from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+            if gold_only_enabled() and symbol and not is_gold_symbol(symbol):
+                symbol = None
+        except Exception:
+            pass
+        if "executable_focus" in current:
+            focus = current.get("executable_focus")
+        else:
+            focus = focus_symbol
+        try:
+            from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+            if gold_only_enabled() and focus and not is_gold_symbol(str(focus)):
+                focus = None
+        except Exception:
+            pass
+        eligible_count = int(current.get("eligible_count") or 0)
+        best = current.get("best_candidate")
+        if isinstance(best, dict):
+            best_symbol = str(best.get("symbol") or "").strip().upper() or None
+        else:
+            best_symbol = str(current.get("current_scan_symbol") or symbol or "").strip().upper() or None
+        try:
+            from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+            if gold_only_enabled() and best_symbol and not is_gold_symbol(best_symbol):
+                best_symbol = None
+        except Exception:
+            pass
+        coherent = _cohere_opportunity_fields(
+            current_focus=str(focus or "").strip().upper() or None,
+            next_action=str(current.get("next_action") or ""),
+            fault_code=str(current.get("fault_code") or ""),
+            fault_reason=str(current.get("fault_reason") or current.get("first_blocking_gate") or ""),
+            blocking_gate=str(current.get("first_blocking_gate") or current.get("fault_reason") or ""),
+        )
+        execution_ready = bool(current.get("execution_ready"))
+        safety_state = str(current.get("safety_state") or SAFETY_NOT_REACHED)
+        optimizer_state = str(current.get("optimizer_state") or OPTIMIZER_NOT_RUN)
+        as_of = str(current.get("as_of") or "") or _iso_now()
+        snap_id = snapshot_id or f"current-scan-{snapshot_seq or 0}"
+        blocking_stage = current.get("blocking_stage") or "SCANNER"
+        fault_class = current.get("fault_class") or FaultClass.WAIT.value
+        setup_state = _window_setup_state(
+            current_focus=coherent["current_focus"],
+            eligible_count=eligible_count,
+            execution_ready=execution_ready,
+            fault_class=str(fault_class),
+            next_action=coherent["next_action"],
+            has_current_scan=True,
+        )
+        if (
+            coherent["fault_code"] == NO_CURRENT_BLOCK
+            and coherent["blocking_gate"] == NO_CURRENT_BLOCKING_GATE
+            and not coherent["current_focus"]
+            and coherent["next_action"]
+            not in {
+                CandidateAction.FAIL_CLOSED.value,
+                CandidateAction.RECONCILE.value,
+                CandidateAction.MARKET_CONTEXT_NOT_READY.value,
+            }
+        ):
+            coherent["next_action"] = CandidateAction.NO_EXECUTABLE_FOCUS.value
+    else:
+        try:
+            from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+            focus = focus_symbol
+            if gold_only_enabled() and focus and not is_gold_symbol(str(focus)):
+                focus = None
+        except Exception:
+            focus = focus_symbol
+        coherent = _cohere_opportunity_fields(
+            current_focus=str(focus or "").strip().upper() or None,
+            next_action=CandidateAction.MARKET_CONTEXT_NOT_READY.value,
+            fault_code=NO_CURRENT_BLOCK,
+            fault_reason=NO_CURRENT_BLOCKING_GATE,
+            blocking_gate=NO_CURRENT_BLOCKING_GATE,
+        )
+        symbol = None
+        best_symbol = None
+        eligible_count = 0
+        execution_ready = False
+        safety_state = SAFETY_NOT_REACHED
+        optimizer_state = OPTIMIZER_NOT_RUN
+        as_of = _iso_now()
+        snap_id = snapshot_id or "current-scan-0"
+        blocking_stage = "SCANNER"
+        fault_class = FaultClass.WAIT.value
+        setup_state = DecisionState.MARKET_CONTEXT_NOT_READY.value
+        focus_reason = "NO_CURRENT_SCAN"
+
+    return {
+        **window_meta,
+        "snapshot_id": snap_id,
+        "as_of": as_of,
+        "symbol": symbol,
+        "current_focus": coherent["current_focus"],
+        "focus_reason": focus_reason,
+        "best_candidate": best_symbol,
+        "current_best_candidate": best_symbol,
+        "eligible_count": eligible_count,
+        "setup_state": setup_state,
+        "decision_state": setup_state,
+        "blocking_stage": blocking_stage,
+        "fault_class": fault_class,
+        "fault_code": coherent["fault_code"],
+        "fault_reason": coherent["fault_reason"],
+        "blocking_gate": coherent["blocking_gate"],
+        "first_blocking_gate": coherent["first_blocking_gate"],
+        "next_action": coherent["next_action"],
+        "safety_state": safety_state,
+        "optimizer_state": optimizer_state,
+        "execution_ready": execution_ready,
+        "primary_blockers": [],
+    }
 
 
 def blocking_gate_fault_code(reason: str | None) -> str:
@@ -552,6 +888,8 @@ def blocking_gate_fault_code(reason: str | None) -> str:
 
     Does not change Safety / Risk / OMS. Observability only.
     """
+    if is_ignored_action_value(reason):
+        return NO_CURRENT_BLOCK
     hay = _norm(reason or "")
     if "volatility below hard" in hay or "dead tape" in hay:
         return "VOLATILITY_HARD_MIN"
@@ -573,7 +911,10 @@ def blocking_gate_fault_code(reason: str | None) -> str:
         cycle_outcome="no_eligible_setup",
         decision_action="NO_TRADE",
     )
-    return str(classified.get("fault_code") or "NO_ELIGIBLE_SETUP")
+    code = str(classified.get("fault_code") or "NO_ELIGIBLE_SETUP")
+    if is_ignored_action_value(code):
+        return NO_CURRENT_BLOCK
+    return code
 
 
 def _row_symbol(row: Any) -> str | None:
@@ -674,10 +1015,20 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             is_gold_symbol,
         )
 
-        if gold_only_enabled() and scan_symbol and not is_gold_symbol(scan_symbol):
-            universe = autonomous_execution_symbols()
-            scan_symbol = universe[0] if universe else None
-            best_row = _row_for_symbol(payload, scan_symbol) or {}
+        if gold_only_enabled():
+            if scan_symbol and is_gold_symbol(scan_symbol):
+                pass
+            else:
+                gold_row: dict[str, Any] = {}
+                gold_symbol = None
+                for cand in autonomous_execution_symbols():
+                    row = _row_for_symbol(payload, cand)
+                    if row:
+                        gold_row = row
+                        gold_symbol = _row_symbol(row) or str(cand).upper()
+                        break
+                scan_symbol = gold_symbol
+                best_row = gold_row
     except Exception:
         pass
     gate = str(
@@ -726,8 +1077,8 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
                 from app.domain.trading.gold_only import gold_only_enabled
 
                 if gold_only_enabled():
-                    next_action = CandidateAction.WAIT_SAME_FOCUS.value
-                    focus_why = "WAIT_SAME_FOCUS"
+                    next_action = CandidateAction.NO_EXECUTABLE_FOCUS.value
+                    focus_why = "NO_EXECUTABLE_FOCUS"
                 else:
                     fault_class = FaultClass.CANDIDATE_BLOCK.value
             except Exception:
@@ -736,8 +1087,8 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             fault_class = FaultClass.WAIT.value
         decision_state = DecisionState.NO_EXECUTABLE_FOCUS.value
         blocking_stage = "SCANNER"
-        safety_state = "NOT_REACHED"
-        optimizer_state = "NOT_RUN"
+        safety_state = SAFETY_NOT_REACHED
+        optimizer_state = OPTIMIZER_NOT_RUN
     else:
         state = "ELIGIBLE_PRESENT"
         executable_focus = held
@@ -754,17 +1105,37 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             from app.domain.trading.gold_only import gold_only_enabled
 
             if gold_only_enabled() and next_action == CandidateAction.ROTATE_FOCUS.value:
-                next_action = CandidateAction.WAIT_SAME_FOCUS.value
+                next_action = (
+                    CandidateAction.WAIT_SAME_FOCUS.value
+                    if _is_valid_wait_focus(executable_focus)
+                    else CandidateAction.NO_EXECUTABLE_FOCUS.value
+                )
         except Exception:
             pass
+        next_action = coherent_next_action(
+            current_focus=executable_focus,
+            next_action=next_action,
+        )
         fault_class = FaultClass.NONE.value
         decision_state = DecisionState.FOCUS_FORMING.value
         blocking_stage = None
-        safety_state = "NOT_REACHED"
-        optimizer_state = "NOT_RUN"
+        safety_state = SAFETY_NOT_REACHED
+        optimizer_state = OPTIMIZER_NOT_RUN
         gate = None
 
+    if is_ignored_action_value(gate):
+        gate = "NO_ELIGIBLE_SETUP" if not eligible else NO_CURRENT_BLOCKING_GATE
     fault_code = blocking_gate_fault_code(gate) if gate else None
+    if is_ignored_action_value(fault_code) or str(fault_code or "") in {
+        "WAIT_SAME_FOCUS",
+        "NO_TRADE",
+        "WATCH",
+    }:
+        fault_code = NO_CURRENT_BLOCK if not gate else blocking_gate_fault_code(gate)
+    next_action = coherent_next_action(
+        current_focus=executable_focus,
+        next_action=next_action,
+    )
     best_eligible = payload.get("best_eligible_candidate")
     if not isinstance(best_eligible, dict):
         best_eligible = None
@@ -829,6 +1200,11 @@ def publish_current_scan_decision(scan_or_decision: dict[str, Any] | None) -> di
         "release_entry_budget": True,
     }
     set_focus(decision.get("executable_focus"), reason=str(decision.get("focus_reason") or ""))
+    with _LOCK:
+        _WINDOW.snapshot_seq += 1
+        _WINDOW.snapshot_id = f"current-scan-{_WINDOW.snapshot_seq}"
+        _WINDOW.current_scan = dict(decision)
+        _WINDOW.current_scan["snapshot_id"] = _WINDOW.snapshot_id
     record_cycle_classification(classification)
     return decision
 

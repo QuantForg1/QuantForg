@@ -1365,34 +1365,19 @@ export function AutoTradingWorkspace() {
           const mm = Math.floor(Math.max(0, remain) / 60);
           const ss = Math.floor(Math.max(0, remain) % 60);
           const pad = (n: number) => String(n).padStart(2, "0");
-          const blockers = asList(fd.primary_blockers).map(asRecord);
-          const rawFocus = noEligibleSetup
-            ? ""
-            : str(fd.current_focus || currentScan.executable_focus, "");
-          const windowFocus =
-            goldOnlyMode && rawFocus && !isGoldSymbol(rawFocus)
-              ? "NONE"
-              : rawFocus || (noEligibleSetup ? "—" : "—");
-          const rawBest = str(
-            fd.current_best_candidate || currentScan.symbol || bestCandidate.symbol,
-            "",
+          const windowFocus = str(fd.current_focus, "NONE") || "NONE";
+          const windowBest = str(
+            fd.best_candidate || fd.current_best_candidate || fd.symbol,
+            "NONE",
           );
-          const windowBest =
-            goldOnlyMode && rawBest && !isGoldSymbol(rawBest)
-              ? "NONE"
-              : rawBest || "—";
-          const windowEligible = str(
-            fd.eligible_count ?? currentScan.eligible_count,
-            eligibleCount,
-          );
+          const windowEligible = str(fd.eligible_count, "0");
+          const windowNext = str(fd.next_action, "—");
           const windowGate = str(
-            fd.first_blocking_gate || currentScan.first_blocking_gate,
-            firstBlockingGateFull,
-          );
-          const windowNext = str(
-            fd.next_action || currentScan.next_action,
+            fd.blocking_gate || fd.fault_reason || fd.first_blocking_gate,
             "—",
           );
+          const windowFault = str(fd.fault_code, "—");
+          const windowDetail = str(fd.fault_reason, windowGate);
           return (
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div>
@@ -1440,24 +1425,12 @@ export function AutoTradingWorkspace() {
                   Current blocking gate
                 </p>
                 <p className="text-[12px] text-[var(--fg)]" title={windowGate}>
-                  {str(fd.fault_code || currentScan.fault_code, "—")}
+                  {windowFault}
                   {windowGate ? ` — ${windowGate}` : ""}
                 </p>
-                {blockers.length > 0 ? (
-                  <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
-                    {blockers
-                      .slice(0, 4)
-                      .map(
-                        (b) =>
-                          `${str(b.fault_code, "block")}: ${num(b.count, 0)}`,
-                      )
-                      .join(" · ")}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
-                    No cycle classification yet.
-                  </p>
-                )}
+                <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+                  {windowDetail}
+                </p>
               </div>
             </div>
           );
