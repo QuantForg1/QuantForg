@@ -232,7 +232,7 @@ def test_safety_and_risk_remain_authoritative(gold_only: None) -> None:
     assert kill["candidate_action"] == CandidateAction.FAIL_CLOSED.value
     leverage = classify_candidate_outcome(
         abort_reason="SAFETY_BLOCKED",
-        failed_reasons=("account leverage 2000 exceeds max 1000",),
+        failed_reasons=("account leverage 2001 exceeds max 2000",),
     )
     assert leverage["fault_code"] == "LEVERAGE_POLICY_EXCEEDED"
     assert leverage["fault_class"] == FaultClass.HARD_BLOCK.value
@@ -241,10 +241,13 @@ def test_safety_and_risk_remain_authoritative(gold_only: None) -> None:
     assert all(is_gold_symbol(s) for s in policy.allowed_symbols)
 
 
-def test_max_leverage_remains_1000() -> None:
+def test_max_leverage_is_2000() -> None:
     src = (ROOT / "app/domain/trading/xauusd_specs.py").read_text(encoding="utf-8")
-    assert 'MAX_LEVERAGE = Decimal("1000")' in src
-    assert MAX_LEVERAGE == Decimal("1000")
+    assert 'MAX_LEVERAGE = Decimal("2000")' in src
+    assert MAX_LEVERAGE == Decimal("2000")
+    from app.domain.entities.execution_safety import ExecutionPolicy
+
+    assert ExecutionPolicy().max_leverage == MAX_LEVERAGE
 
 
 def test_no_order_send_bypass_or_retry() -> None:
@@ -322,3 +325,4 @@ def test_gold_only_diagnostics_keys(gold_only: None) -> None:
     diag = gold_only_diagnostics(broker_symbol_rows=WELTRADE_ROWS)
     assert set(diag["execution_universe"]) == {"XAUUSD_i"}
     assert diag["gold_only_mode"] is True
+    assert diag["desk_max_leverage"] == str(MAX_LEVERAGE)

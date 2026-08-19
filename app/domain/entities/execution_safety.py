@@ -31,7 +31,7 @@ class ExecutionPolicy:
     trading_hours_end: time = time(23, 59, 59)
     symbol_whitelist: frozenset[str] = SYMBOL_WHITELIST
     account_whitelist: frozenset[int] = frozenset()  # empty = all accounts allowed
-    max_leverage: Decimal = MAX_LEVERAGE  # match Weltrade XAU desk (1:1000)
+    max_leverage: Decimal = MAX_LEVERAGE  # Weltrade XAUUSD desk policy (1:2000)
     max_lot: Decimal = VOLUME_MAX
     min_lot: Decimal = VOLUME_MIN
     duplicate_window_seconds: int = 5

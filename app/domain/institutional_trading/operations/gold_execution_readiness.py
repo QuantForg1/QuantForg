@@ -330,6 +330,13 @@ def resolve_tracker_state(
     return TrackerState.SETUP_NOT_READY.value
 
 
+def _desk_max_leverage() -> str:
+    """Authoritative XAUUSD desk ceiling from xauusd_specs.MAX_LEVERAGE."""
+    from app.domain.trading.xauusd_specs import MAX_LEVERAGE
+
+    return str(MAX_LEVERAGE)
+
+
 def production_feature_inventory() -> list[dict[str, Any]]:
     """Runtime feature table for Gold-only production. Observability only."""
     gold_only = True
@@ -500,9 +507,9 @@ def production_feature_inventory() -> list[dict[str, Any]]:
             path="core/config/settings.py",
         ),
         row(
-            "MAX_LEVERAGE=1000",
-            "1000",
-            "1000",
+            f"MAX_LEVERAGE={_desk_max_leverage()}",
+            _desk_max_leverage(),
+            _desk_max_leverage(),
             "KEEP",
             authoritative=True,
             can_block=True,

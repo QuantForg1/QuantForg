@@ -104,10 +104,10 @@ def test_unapproved_cross_remains_blocked(multi_symbol: None) -> None:
 
 
 @pytest.mark.unit
-def test_leverage_2000_vs_max_1000_remains_blocked(multi_symbol: None) -> None:
-    assert MAX_LEVERAGE == Decimal("1000")
+def test_leverage_2000_vs_max_2000_passes(multi_symbol: None) -> None:
+    assert MAX_LEVERAGE == Decimal("2000")
     policy = ExecutionPolicy()
-    assert policy.max_leverage == Decimal("1000")
+    assert policy.max_leverage == MAX_LEVERAGE
     adapter = MT5Adapter(client=MockMT5Client())
     safety = ExecutionSafetyService(
         adapter=adapter,
@@ -126,10 +126,65 @@ def test_leverage_2000_vs_max_1000_remains_blocked(multi_symbol: None) -> None:
         spread=Decimal("0.00007"),
         leverage=Decimal("2000"),
     )
+    assert ok is True
+    assert checks["symbol_whitelist"] is True
+    assert checks["leverage_limit"] is True
+    assert not any("exceeds max_leverage" in r for r in reasons)
+
+
+@pytest.mark.unit
+def test_leverage_2001_vs_max_2000_hard_blocked(multi_symbol: None) -> None:
+    policy = ExecutionPolicy()
+    assert policy.max_leverage == Decimal("2000")
+    adapter = MT5Adapter(client=MockMT5Client())
+    safety = ExecutionSafetyService(
+        adapter=adapter,
+        order_validation=MT5OrderValidationService(adapter=adapter),
+        policy=policy,
+    )
+    intent = OrderIntent(
+        symbol="USDCHF_I",
+        side=OrderSide.SELL,
+        order_type=OrderType.MARKET,
+        volume=LotSize.of("0.01"),
+    )
+    ok, reasons, _warnings, checks = safety.evaluate_policy(
+        intent,
+        login=1,
+        spread=Decimal("0.00007"),
+        leverage=Decimal("2001"),
+    )
     assert ok is False
     assert checks["symbol_whitelist"] is True
     assert checks["leverage_limit"] is False
-    assert any("leverage 2000 exceeds max_leverage 1000" in r for r in reasons)
+    assert any("leverage 2001 exceeds max_leverage 2000" in r for r in reasons)
+
+
+@pytest.mark.unit
+def test_nzdusd_i_leverage_3000_vs_max_2000_hard_blocked(multi_symbol: None) -> None:
+    policy = ExecutionPolicy()
+    assert policy.max_leverage == MAX_LEVERAGE
+    adapter = MT5Adapter(client=MockMT5Client())
+    safety = ExecutionSafetyService(
+        adapter=adapter,
+        order_validation=MT5OrderValidationService(adapter=adapter),
+        policy=policy,
+    )
+    intent = OrderIntent(
+        symbol="NZDUSD_I",
+        side=OrderSide.SELL,
+        order_type=OrderType.MARKET,
+        volume=LotSize.of("0.01"),
+    )
+    ok, reasons, _warnings, checks = safety.evaluate_policy(
+        intent,
+        login=1,
+        spread=Decimal("0.00005"),
+        leverage=Decimal("3000"),
+    )
+    assert ok is False
+    assert checks["leverage_limit"] is False
+    assert any("leverage 3000 exceeds max_leverage 2000" in r for r in reasons)
 
 
 @pytest.mark.unit

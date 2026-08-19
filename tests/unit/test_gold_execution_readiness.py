@@ -182,11 +182,13 @@ def test_leverage_policy_preserved() -> None:
     from decimal import Decimal
 
     src = (ROOT / "app/domain/trading/xauusd_specs.py").read_text(encoding="utf-8")
-    assert 'MAX_LEVERAGE = Decimal("1000")' in src
-    assert MAX_LEVERAGE == Decimal("1000")
+    assert 'MAX_LEVERAGE = Decimal("2000")' in src
+    assert MAX_LEVERAGE == Decimal("2000")
     inventory = production_feature_inventory()
     lev = next(r for r in inventory if r["feature"].startswith("MAX_LEVERAGE"))
-    assert lev["current"] == "1000"
+    assert lev["feature"] == "MAX_LEVERAGE=2000"
+    assert lev["current"] == "2000"
+    assert lev["intended"] == "2000"
     assert lev["action"] == "KEEP"
     forced = next(r for r in inventory if r["feature"] == "Forced Trade")
     assert forced["intended"] == "OFF"

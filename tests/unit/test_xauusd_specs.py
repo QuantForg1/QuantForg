@@ -64,7 +64,12 @@ class TestXauusdSpecs:
         assert margin == Decimal("4.02")
         assert pct == Decimal("4.05")
         assert notional_value(volume=volume, price=price) == Decimal("4017.00")
-        assert Decimal("1000") == MAX_LEVERAGE
+
+    def test_desk_max_leverage_is_weltrade_2000(self) -> None:
+        from app.domain.trading.xauusd_specs import EXPOSURE_LEVERAGE_FALLBACK
+
+        assert MAX_LEVERAGE == Decimal("2000")
+        assert EXPOSURE_LEVERAGE_FALLBACK == Decimal("1000")
 
     def test_risk_engine_exposure_uses_margin_not_fx_notional(self) -> None:
         engine = RiskEngine(config=RiskEngineConfig())

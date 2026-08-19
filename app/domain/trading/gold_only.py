@@ -144,6 +144,9 @@ def gold_only_diagnostics(
     else:
         display = universe
         canonical = universe[0] if universe else GOLD_SYMBOL
+    from app.domain.trading.xauusd_specs import MAX_LEVERAGE
+
+    desk_max = str(MAX_LEVERAGE)
     return {
         "gold_only_mode": enabled,
         "execution_universe": display,
@@ -153,6 +156,7 @@ def gold_only_diagnostics(
         "other_pairs_autonomous": "DISABLED" if enabled else "ENABLED",
         "trading_mode": "GOLD_ONLY" if enabled else "MULTI_SYMBOL",
         "rotate_focus_allowed": not enabled,
+        "desk_max_leverage": desk_max,
     }
 
 

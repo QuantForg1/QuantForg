@@ -1346,6 +1346,54 @@ export function AutoTradingWorkspace() {
             })()}
           </p>
         ) : null}
+        {(() => {
+          const accountLev = num(
+            session.leverage || asRecord(mt5Q.data).leverage,
+            NaN,
+          );
+          const deskMax = num(
+            goldOnly.desk_max_leverage ?? asRecord(policy).desk_max_leverage,
+            NaN,
+          );
+          const hasAccount = Number.isFinite(accountLev);
+          const hasDesk = Number.isFinite(deskMax) && deskMax > 0;
+          let status = "—";
+          if (hasAccount && hasDesk) {
+            status = accountLev <= deskMax ? "PASS" : "BLOCK";
+          }
+          const statusTone =
+            status === "PASS"
+              ? "text-[var(--success)]"
+              : status === "BLOCK"
+                ? "text-[var(--danger)]"
+                : "text-[var(--fg-muted)]";
+          return (
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  LEVERAGE · Account
+                </p>
+                <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+                  {hasAccount ? String(accountLev) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Desk Max
+                </p>
+                <p className="font-mono text-[13px] tabular text-[var(--fg)]">
+                  {hasDesk ? String(deskMax) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Leverage gate
+                </p>
+                <p className={`font-mono text-[13px] ${statusTone}`}>{status}</p>
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
       <section className="border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">

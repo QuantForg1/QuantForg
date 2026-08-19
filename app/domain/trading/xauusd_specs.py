@@ -34,9 +34,12 @@ MAX_SPREAD_TIGHT = Decimal("0.50")  # full confluence score
 # Any configured ceiling below this is treated as FX inheritance -> coerce.
 MIN_VALID_SPREAD_CEILING = Decimal("0.05")
 
-# Weltrade gold accounts commonly run 1:1000. Cap matches broker, not FX 1:500.
-MAX_LEVERAGE = Decimal("1000")
+# Current Weltrade XAUUSD desk policy permits up to 1:2000.
+# This is the execution-policy ceiling, not a sizing default.
+MAX_LEVERAGE = Decimal("2000")
 # Safer fallback when account.leverage is missing (never use FX 100k path).
+# Intentionally separate from MAX_LEVERAGE — unknown leverage must not
+# inherit the 1:2000 execution ceiling for exposure math.
 EXPOSURE_LEVERAGE_FALLBACK = Decimal("1000")
 
 # Whitelist - platform is single-instrument.
