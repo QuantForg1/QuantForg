@@ -563,6 +563,14 @@ def reset_fast_decision_path() -> None:
     global _WINDOW
     with _LOCK:
         _WINDOW = _WindowState()
+    try:
+        from app.domain.institutional_trading.operations.system_coherence import (
+            reset_system_coherence,
+        )
+
+        reset_system_coherence()
+    except Exception:
+        pass
 
 
 def ensure_opportunity_window(*, now_mono: float | None = None) -> None:
@@ -1476,6 +1484,46 @@ def publish_current_scan_decision(scan_or_decision: dict[str, Any] | None) -> di
         _WINDOW.current_scan = dict(decision)
         _WINDOW.current_scan["snapshot_id"] = _WINDOW.snapshot_id
         _WINDOW.scan_published_mono = time.monotonic()
+    try:
+        from app.domain.institutional_trading.operations.system_coherence import (
+            Plane,
+            get_coherence_store,
+            sanitize_next_action,
+        )
+
+        decision["next_action"] = sanitize_next_action(
+            focus=str(decision.get("executable_focus") or decision.get("symbol") or ""),
+            next_action=str(decision.get("next_action") or ""),
+            direction=str(
+                (decision.get("best_candidate") or {}).get("direction") or ""
+            ),
+        )
+        published = get_coherence_store().publish(
+            Plane.CURRENT_SCAN.value,
+            dict(decision),
+            sequence=_WINDOW.snapshot_seq,
+            source="fast_decision_path.publish_current_scan",
+            event_type="CURRENT_SCAN",
+        )
+        if published.get("accepted"):
+            decision["cycle_id"] = published.get("cycle_id")
+            decision["snapshot_id"] = published.get("snapshot_id")
+            decision["sequence"] = published.get("sequence")
+            decision["logical_symbol"] = published.get("logical_symbol")
+            decision["canonical_symbol"] = published.get("canonical_symbol")
+            with _LOCK:
+                _WINDOW.current_scan.update(
+                    {
+                        "cycle_id": decision["cycle_id"],
+                        "snapshot_id": decision["snapshot_id"],
+                        "sequence": decision["sequence"],
+                        "logical_symbol": decision["logical_symbol"],
+                        "canonical_symbol": decision["canonical_symbol"],
+                        "next_action": decision["next_action"],
+                    }
+                )
+    except Exception:
+        pass
     record_cycle_classification(classification)
     return decision
 
@@ -1539,7 +1587,7 @@ def build_last_pipeline_snapshot(last_cycle: dict[str, Any] | None) -> dict[str,
             autonomous_valid = bool(symbol and is_gold_symbol(symbol))
     except Exception:
         autonomous_valid = True
-    return {
+    snap = {
         "label": "LAST_COMPLETED_ITE_CYCLE",
         "symbol": symbol if autonomous_valid else None,
         "last_pipeline_symbol": symbol if autonomous_valid else None,
@@ -1557,5 +1605,25 @@ def build_last_pipeline_snapshot(last_cycle: dict[str, Any] | None) -> dict[str,
         "decision_action": last_cycle.get("decision_action"),
         "forwarded_to_oms": forwarded,
         "timestamp": diag.get("as_of") or last_cycle.get("timestamp"),
+        "as_of": diag.get("as_of") or last_cycle.get("timestamp"),
         "detail": last_cycle.get("detail"),
     }
+    try:
+        from app.domain.institutional_trading.operations.system_coherence import (
+            Plane,
+            get_coherence_store,
+            symbol_identity,
+        )
+
+        logical, canonical = symbol_identity(snap.get("symbol"))
+        snap["logical_symbol"] = logical
+        snap["canonical_symbol"] = canonical
+        get_coherence_store().publish(
+            Plane.LAST_PIPELINE.value,
+            dict(snap),
+            source="fast_decision_path.last_pipeline",
+            event_type="LAST_COMPLETED_ITE_CYCLE",
+        )
+    except Exception:
+        pass
+    return snap

@@ -55,6 +55,8 @@ class StageStatus(StrEnum):
     WAIT = "WAIT"
     BLOCK = "BLOCK"
     NOT_REACHED = "NOT_REACHED"
+    NOT_ASSESSED = "NOT_ASSESSED"
+    DEGRADED = "DEGRADED"
 
 
 class TrackerState(StrEnum):

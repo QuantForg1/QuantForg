@@ -54,6 +54,20 @@ class EvaluateRequest(BaseModel):
     operator_reason: str = ""
     alpha: dict[str, Any] | None = None
     alpha_advisory: dict[str, Any] | None = None
+    # Gold assessment handoff (never order_send)
+    symbol: str | None = None
+    equity: float | str | None = None
+    free_margin: float | str | None = None
+    leverage: float | str | None = None
+    entry_price: float | str | None = None
+    price: float | str | None = None
+    stop_distance: float | str | None = None
+    atr: float | str | None = None
+    peak_equity: float | str | None = None
+    daily_pnl: float | str | None = None
+    kill_switch: bool | None = None
+    market_open: bool | None = None
+    use_live_facts: bool = True
 
 
 class PoliciesRequest(BaseModel):

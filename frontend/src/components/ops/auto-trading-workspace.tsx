@@ -806,6 +806,11 @@ export function AutoTradingWorkspace() {
   const last = asRecord(orch.last_cycle);
   const diag = asRecord(last.market_context_diagnostics);
   const scanSnap = asRecord(aiScalping.scan);
+  const coherence = asRecord(
+    orch.system_coherence ??
+      asRecord(opsPayload).system_coherence ??
+      asRecord(asRecord(opsPayload).fast_decision).system_coherence,
+  );
   const currentScan = asRecord(
     orch.current_scan ??
       scanSnap.current_scan ??
@@ -1311,8 +1316,13 @@ export function AutoTradingWorkspace() {
               AUTONOMOUS = {String(runState || "off").toUpperCase()}
             </Badge>
             <Badge tone="neutral">
-              AUTO {autonomousSymbol}
+              AUTO {str(coherence.canonical_symbol, autonomousSymbol)}
             </Badge>
+            {str(coherence.cycle_id) ? (
+              <Badge tone="neutral" className="font-mono">
+                {str(coherence.cycle_id).slice(0, 18)}
+              </Badge>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="font-mono text-[11px] tabular text-[var(--fg-muted)]">

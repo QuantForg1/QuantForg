@@ -69,7 +69,10 @@ def test_hold_without_risk_safety() -> None:
     )
     assert result.decision == "HOLD"
     assert result.allow_execution_path is False
-    assert any(s.name == "risk_engine" and not s.passed for s in result.waterfall)
+    risk = next(s for s in result.waterfall if s.name == "risk_engine")
+    safety = next(s for s in result.waterfall if s.name == "safety_engine")
+    assert risk.state == "NOT_ASSESSED" and not risk.passed
+    assert safety.state == "NOT_ASSESSED" and not safety.passed
 
 
 def test_approve_when_gates_pass() -> None:

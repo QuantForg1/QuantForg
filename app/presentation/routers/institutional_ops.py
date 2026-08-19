@@ -792,6 +792,9 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "fast_decision": (orchestrator or {}).get("fast_decision")
         if isinstance(orchestrator, dict)
         else None,
+        "system_coherence": (orchestrator or {}).get("system_coherence")
+        if isinstance(orchestrator, dict)
+        else None,
         "recent_execution_attempts": recent_attempts,
         "persistence": persistence,
         "force_first_trade": _force_first_trade_payload(snap, settings),

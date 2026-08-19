@@ -3508,6 +3508,7 @@ class InstitutionalIteRuntime:
             gold = gold_only_diagnostics()
         except Exception:
             gold = {"gold_only_mode": True, "execution_universe": ["XAUUSD_i"]}
+        fd = self._fast_decision_snapshot()
         return {
             "mode": self.plane.mode.value,
             "kill_switch": self.plane.kill_switch_armed,
@@ -3529,9 +3530,12 @@ class InstitutionalIteRuntime:
                 if hasattr(self.decision_pipeline, "last_ai_score")
                 else None
             ),
-            "fast_decision": self._fast_decision_snapshot(),
+            "fast_decision": fd,
             "current_scan": self._current_scan_snapshot(),
             "last_pipeline": self._last_pipeline_snapshot(),
+            "system_coherence": (
+                fd.get("system_coherence") if isinstance(fd, dict) else None
+            ),
             "gold_only": gold,
         }
 
@@ -4124,6 +4128,25 @@ class InstitutionalIteRuntime:
             if is_ignored_action_value(snap.get("last_abort_reason")):
                 # Last ITE NO_TRADE abort is not the current-scan blocking gate.
                 snap["last_abort_reason_class"] = "NO_TRADE_EVENT"
+            try:
+                from app.domain.institutional_trading.operations.system_coherence import (
+                    compose_system_snapshot,
+                )
+
+                contract = None
+                if last is not None:
+                    diag = getattr(last, "market_context_diagnostics", None)
+                    if isinstance(diag, dict):
+                        contract = diag.get("execution_contract")
+                snap["system_coherence"] = compose_system_snapshot(
+                    current_scan=current
+                    if isinstance(current, dict)
+                    else None,
+                    last_pipeline=last_pipeline,
+                    contract=contract if isinstance(contract, dict) else None,
+                )
+            except Exception:
+                logger.exception("system_coherence_compose_failed")
             return snap
         except Exception:
             logger.exception("fast_decision_snapshot_failed")

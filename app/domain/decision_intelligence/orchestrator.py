@@ -38,7 +38,11 @@ from app.domain.decision_intelligence.waterfall import (
     WaterfallStage,
     evaluate_waterfall,
 )
-from app.domain.trading.gold_only import GOLD_SYMBOL
+from app.domain.trading.gold_only import (
+    CANONICAL_GOLD_BROKER_DISPLAY,
+    GOLD_SYMBOL,
+    display_autonomous_symbol,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +59,8 @@ class DecisionCenterInput:
     consecutive_losses: int = 0
     risk_engine_passed: bool | None = None
     safety_engine_passed: bool | None = None
+    risk_engine_reason: str = ""
+    safety_engine_reason: str = ""
     quality: QualityInput = field(default_factory=QualityInput)
     operator_action: str | None = None
     operator: str = "system"
@@ -129,6 +135,7 @@ class DecisionIntelligenceCenter:
         return {
             "version": self.config.version,
             "symbol": GOLD_SYMBOL,
+            "display_symbol": display_autonomous_symbol(CANONICAL_GOLD_BROKER_DISPLAY),
             "mission": cfg["mission"],
             "capabilities": self.capabilities(),
             "policies": cfg,
@@ -234,6 +241,8 @@ class DecisionIntelligenceCenter:
                 veto_clear=veto.clear,
                 risk_engine_passed=inp.risk_engine_passed,
                 safety_engine_passed=inp.safety_engine_passed,
+                risk_engine_reason=inp.risk_engine_reason or None,
+                safety_engine_reason=inp.safety_engine_reason or None,
             ),
         )
 
@@ -283,7 +292,7 @@ class DecisionIntelligenceCenter:
 
         result = DecisionCenterResult(
             version=self.config.version,
-            symbol=GOLD_SYMBOL,
+            symbol=display_autonomous_symbol(CANONICAL_GOLD_BROKER_DISPLAY),
             decision=decision,
             allow_execution_path=allow_execution_path,
             audit_id=audit_id,

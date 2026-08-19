@@ -7,10 +7,12 @@ import { Scale, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
-import { decisionIntelligenceApi } from "@/lib/api/endpoints";
+import { decisionIntelligenceApi, mt5Api, portfolioApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
-import { asList, asRecord, str } from "@/lib/desk";
-import { cn } from "@/lib/utils";
+import { asList, asRecord, num, str } from "@/lib/desk";
+import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { useTradingSession } from "@/providers/trading-session-provider";
+import { cn, formatNumber } from "@/lib/utils";
 
 function Panel({
   title,
@@ -36,6 +38,7 @@ function Panel({
 
 export function DecisionIntelligenceWorkspace() {
   const qc = useQueryClient();
+  const session = useTradingSession();
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [replayId, setReplayId] = useState("");
 
@@ -55,6 +58,21 @@ export function DecisionIntelligenceWorkspace() {
     queryKey: ["decision-intelligence-policies"],
     queryFn: () => decisionIntelligenceApi.policies(),
     staleTime: 30_000,
+  });
+
+  const portfolioQ = useQuery({
+    queryKey: ["portfolio-decision-intelligence"],
+    queryFn: () => portfolioApi.get(),
+    staleTime: 15_000,
+  });
+
+  const tickQ = useQuery({
+    queryKey: ["mt5-tick", TRADING_SYMBOL, "decision-intelligence"],
+    queryFn: () => mt5Api.tick(TRADING_SYMBOL),
+    enabled: session.connected,
+    staleTime: 2_000,
+    refetchInterval: session.connected ? 5_000 : false,
+    retry: false,
   });
 
   const evaluateM = useMutation({
@@ -106,13 +124,28 @@ export function DecisionIntelligenceWorkspace() {
       }));
   }, [statusQ.data]);
 
-  const baseBody = {
-    side: "buy",
+  const equity = num(asRecord(portfolioQ.data?.account).equity, 0);
+  const leverage = num(asRecord(portfolioQ.data?.account).leverage, 0);
+  const tick = asRecord(tickQ.data);
+  const bid = num(tick.bid);
+  const ask = num(tick.ask);
+  const spread =
+    Number.isFinite(bid) && Number.isFinite(ask) && ask >= bid
+      ? Number((ask - bid).toFixed(2))
+      : null;
+  const mid =
+    Number.isFinite(bid) && Number.isFinite(ask)
+      ? Number(((bid + ask) / 2).toFixed(2))
+      : null;
+
+  const evidenceBody = {
+    side: "buy" as const,
     strategy_id: "decision-intelligence",
+    symbol: TRADING_SYMBOL,
     signal_present: true,
     strategy_consensus_ok: true,
     market_regime_ok: true,
-    spread: 0.4,
+    spread: spread ?? 0.4,
     daily_drawdown_pct: 0.2,
     consecutive_losses: 0,
     confidence_factors: {
@@ -128,6 +161,16 @@ export function DecisionIntelligenceWorkspace() {
       override_rate: 5,
       audit_completeness: 100,
     },
+  };
+
+  const goldAssessBody = {
+    ...evidenceBody,
+    equity: equity || undefined,
+    leverage: leverage || undefined,
+    price: mid ?? undefined,
+    atr: mid != null ? Number((mid * 0.002).toFixed(2)) : undefined,
+    stop_distance: 5,
+    use_live_facts: true,
   };
 
   if (statusQ.isLoading) return <DeskSkeleton rows={6} />;
@@ -151,6 +194,7 @@ export function DecisionIntelligenceWorkspace() {
   const confidence = asRecord(asRecord(result).confidence);
   const veto = asRecord(asRecord(result).veto);
   const quality = asRecord(asRecord(result).quality);
+  const assessment = asRecord(asRecord(result).assessment);
   const decisions = asList(asRecord(historyQ.data).decisions);
   const policies = asRecord(policiesQ.data);
 
@@ -187,19 +231,53 @@ export function DecisionIntelligenceWorkspace() {
         </Panel>
 
         <Panel title="Executive decision panel">
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div className="border border-[var(--border)] px-2 py-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Symbol
+              </div>
+              <div className="font-mono text-[13px]">{TRADING_SYMBOL}</div>
+            </div>
+            <div className="border border-[var(--border)] px-2 py-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Equity
+              </div>
+              <div className="font-mono text-[13px]">
+                {equity ? formatNumber(equity, 2) : "—"}
+              </div>
+            </div>
+            <div className="border border-[var(--border)] px-2 py-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Leverage
+              </div>
+              <div className="font-mono text-[13px]">
+                {leverage ? formatNumber(leverage, 0) : "—"}
+              </div>
+            </div>
+            <div className="border border-[var(--border)] px-2 py-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Spread
+              </div>
+              <div className="font-mono text-[13px]">
+                {spread != null ? formatNumber(spread, 2) : "—"}
+              </div>
+            </div>
+            <div className="border border-[var(--border)] px-2 py-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Mid
+              </div>
+              <div className="font-mono text-[13px]">
+                {mid != null ? formatNumber(mid, 2) : "—"}
+              </div>
+            </div>
+          </div>
           <div className="mb-3 flex flex-wrap gap-2">
             <Button
               size="sm"
               disabled={evaluateM.isPending}
-              onClick={() =>
-                evaluateM.mutate({
-                  ...baseBody,
-                  risk_engine_passed: null,
-                  safety_engine_passed: null,
-                })
-              }
+              onClick={() => evaluateM.mutate(goldAssessBody)}
             >
-              Evaluate (fail-closed)
+              Evaluate Gold (run Risk/Safety)
             </Button>
             <Button
               size="sm"
@@ -207,13 +285,12 @@ export function DecisionIntelligenceWorkspace() {
               disabled={evaluateM.isPending}
               onClick={() =>
                 evaluateM.mutate({
-                  ...baseBody,
-                  risk_engine_passed: true,
-                  safety_engine_passed: true,
+                  ...evidenceBody,
+                  use_live_facts: false,
                 })
               }
             >
-              Simulate Risk+Safety ALLOW
+              Evaluate without Risk/Safety inputs
             </Button>
             <Button
               size="sm"
@@ -221,12 +298,13 @@ export function DecisionIntelligenceWorkspace() {
               disabled={evaluateM.isPending}
               onClick={() =>
                 evaluateM.mutate({
-                  ...baseBody,
-                  risk_engine_passed: true,
-                  safety_engine_passed: true,
+                  ...evidenceBody,
                   operator_action: "reject",
                   operator: "desk",
                   operator_reason: "Operator veto",
+                  use_live_facts: false,
+                  risk_engine_passed: true,
+                  safety_engine_passed: true,
                 })
               }
             >
@@ -238,9 +316,7 @@ export function DecisionIntelligenceWorkspace() {
               disabled={evaluateM.isPending}
               onClick={() =>
                 evaluateM.mutate({
-                  ...baseBody,
-                  risk_engine_passed: true,
-                  safety_engine_passed: true,
+                  ...goldAssessBody,
                   operator_action: "force_approve",
                   operator: "desk",
                 })
@@ -290,7 +366,13 @@ export function DecisionIntelligenceWorkspace() {
                   confidence {str(panel.confidence)}
                 </Badge>
                 <Badge tone="accent" className="font-mono">
+                  {str(asRecord(result).symbol, TRADING_SYMBOL)}
+                </Badge>
+                <Badge tone="neutral" className="font-mono">
                   audit {str(panel.audit_id).slice(0, 8)}
+                </Badge>
+                <Badge tone="neutral" className="font-mono">
+                  {str(assessment.evaluated_at).slice(0, 19) || "—"}
                 </Badge>
                 <Badge
                   tone={panel.allow_execution_path ? "success" : "neutral"}
@@ -304,23 +386,30 @@ export function DecisionIntelligenceWorkspace() {
               <div className="grid gap-1 sm:grid-cols-2">
                 {waterfall.map((row, i) => {
                   const r = asRecord(row);
+                  const state = str(r.state, r.passed ? "PASS" : "FAIL");
+                  const tone =
+                    state === "PASS"
+                      ? "success"
+                      : state === "NOT_ASSESSED"
+                        ? "warning"
+                        : "danger";
                   return (
                     <div
                       key={`${str(r.name)}-${i}`}
                       className={cn(
                         "border px-2 py-1.5",
-                        r.passed
+                        state === "PASS"
                           ? "border-[var(--border)]"
-                          : "border-[var(--danger)]/40",
+                          : state === "NOT_ASSESSED"
+                            ? "border-[var(--warning)]/40"
+                            : "border-[var(--danger)]/40",
                       )}
                     >
                       <div className="flex justify-between gap-2">
                         <span className="font-mono text-[10px] uppercase">
                           {str(r.name)}
                         </span>
-                        <Badge tone={r.passed ? "success" : "danger"}>
-                          {r.passed ? "pass" : "block"}
-                        </Badge>
+                        <Badge tone={tone}>{state}</Badge>
                       </div>
                       <p className="mt-1 text-[10px] text-[var(--fg-subtle)]">
                         {str(r.reason)}

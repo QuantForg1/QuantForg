@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -75,7 +76,7 @@ def test_gold_only_still_invokes_scanner_when_scan_flag_off(
 def test_rejected_gold_is_setup_not_ready_not_market_context(gold_only: None) -> None:
     publish_current_scan_decision(
         {
-            "as_of": "2026-08-19T14:00:00Z",
+            "as_of": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "best_symbol": None,
             "best_candidate": {
                 "symbol": _GOLD,
@@ -119,7 +120,7 @@ def test_missing_scan_is_market_context_not_ready(gold_only: None) -> None:
 def test_eligible_gold_readiness_and_tracker(gold_only: None) -> None:
     publish_current_scan_decision(
         {
-            "as_of": "2026-08-19T14:00:00Z",
+            "as_of": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "best_symbol": _GOLD,
             "best_candidate": {"symbol": _GOLD, "eligible": True},
             "best_eligible_candidate": {"symbol": _GOLD},
@@ -235,7 +236,7 @@ def test_timeout_bottleneck_when_window_expires(gold_only: None, monkeypatch: py
 
     publish_current_scan_decision(
         {
-            "as_of": "2026-08-19T14:00:00Z",
+            "as_of": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "best_symbol": None,
             "best_candidate": {
                 "symbol": _GOLD,

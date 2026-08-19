@@ -5,6 +5,10 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.application.services.decision_intelligence_assessment import (
+    assess_decision_center_engines,
+    resolve_claimed_bool,
+)
 from app.domain.decision_intelligence import (
     DecisionCenterInput,
     DecisionIntelligenceCenter,
@@ -48,6 +52,18 @@ class DecisionIntelligenceService:
         if not isinstance(q_raw, dict):
             q_raw = {}
 
+        use_live = payload.get("use_live_facts") is not False
+        _facts, risk_gate, safety_gate = assess_decision_center_engines(
+            payload,
+            use_live=bool(use_live),
+        )
+        claimed_risk = _opt_bool(payload.get("risk_engine_passed"))
+        claimed_safety = _opt_bool(payload.get("safety_engine_passed"))
+        # Engine result wins. Claimed True cannot bypass a FAIL.
+        # Claimed bool is only used when the engine was genuinely not runnable.
+        risk_passed = resolve_claimed_bool(engine=risk_gate, claimed=claimed_risk)
+        safety_passed = resolve_claimed_bool(engine=safety_gate, claimed=claimed_safety)
+
         inp = DecisionCenterInput(
             side=str(payload.get("side") or "buy"),
             strategy_id=str(payload.get("strategy_id") or "default"),
@@ -65,8 +81,10 @@ class DecisionIntelligenceService:
             spread=_dec(payload.get("spread")),
             daily_drawdown_pct=_dec(payload.get("daily_drawdown_pct")) or Decimal("0"),
             consecutive_losses=int(payload.get("consecutive_losses") or 0),
-            risk_engine_passed=_opt_bool(payload.get("risk_engine_passed")),
-            safety_engine_passed=_opt_bool(payload.get("safety_engine_passed")),
+            risk_engine_passed=risk_passed,
+            safety_engine_passed=safety_passed,
+            risk_engine_reason=risk_gate.reason,
+            safety_engine_reason=safety_gate.reason,
             quality=QualityInput(
                 approve_precision=_dec(q_raw.get("approve_precision")),
                 reject_precision=_dec(q_raw.get("reject_precision")),
@@ -82,6 +100,45 @@ class DecisionIntelligenceService:
             operator_reason=str(payload.get("operator_reason") or ""),
         )
         result = self._center.evaluate(inp).to_dict()
+        result["assessment"] = {
+            "symbol": risk_gate.symbol,
+            "evaluated_at": risk_gate.evaluated_at or safety_gate.evaluated_at,
+            "risk": risk_gate.to_dict(),
+            "safety": safety_gate.to_dict(),
+            "force_execution": False,
+            "bypass_risk": False,
+            "bypass_safety": False,
+            "execute_now_required": False,
+            "order_send": False,
+            "note": (
+                "Risk/Safety are assessed when prerequisites exist. "
+                "NOT_ASSESSED is not PASS. Confidence never bypasses either engine."
+            ),
+        }
+        try:
+            from app.domain.institutional_trading.operations.system_coherence import (
+                Plane,
+                get_coherence_store,
+            )
+
+            get_coherence_store().publish(
+                Plane.DECISION_INTELLIGENCE.value,
+                {
+                    "symbol": risk_gate.symbol,
+                    "as_of": risk_gate.evaluated_at,
+                    "risk": risk_gate.to_dict(),
+                    "safety": safety_gate.to_dict(),
+                    "decision": result.get("decision"),
+                },
+                source="decision_intelligence.evaluate",
+                event_type="DECISION_INTELLIGENCE",
+            )
+        except Exception:
+            from core.logging import get_logger
+
+            get_logger(__name__).debug(
+                "decision_intelligence_coherence_publish_failed", exc_info=True
+            )
         if payload.get("_alpha_audit"):
             result["alpha_integration"] = payload["_alpha_audit"]
         return result
