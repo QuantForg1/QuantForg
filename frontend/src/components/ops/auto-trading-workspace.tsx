@@ -38,7 +38,7 @@ import {
   type StrategyToggleState,
 } from "@/lib/auto-trading/strategy-modules";
 import { latestSuccessfulExecution } from "@/lib/execution/ops-metrics";
-import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { isGoldSymbol, TRADING_SYMBOL, WELTRADE_XAUUSD } from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
 import { LaunchReadinessPanel } from "@/components/ops/launch-readiness-panel";
@@ -255,6 +255,14 @@ export function AutoTradingWorkspace() {
   const primaryBlocker = str(asRecord(opsPayload).primary_blocker, "");
   const blockingCategory = str(asRecord(opsPayload).blocking_category, "");
   const executionState = asRecord(asRecord(opsPayload).execution_state);
+  const goldOnly = asRecord(
+    asRecord(opsPayload).gold_only ?? executionState,
+  );
+  const goldOnlyMode = goldOnly.gold_only_mode !== false;
+  const autonomousSymbol = str(
+    goldOnly.canonical_symbol,
+    WELTRADE_XAUUSD,
+  );
   const executionEnabled = Boolean(
     executionState.execution_enabled ?? asRecord(opsPayload).execution_enabled,
   );
@@ -810,6 +818,11 @@ export function AutoTradingWorkspace() {
   const bestCandidate = asRecord(
     currentScan.best_candidate ?? scanSnap.best_candidate ?? scanSnap.best,
   );
+  const bestCandidateSymbol = goldOnlyMode
+    ? isGoldSymbol(str(bestCandidate.symbol || currentScan.symbol))
+      ? str(bestCandidate.symbol || currentScan.symbol, autonomousSymbol)
+      : "NONE"
+    : str(bestCandidate.symbol || currentScan.symbol, "—");
   const bestEligible = asRecord(
     currentScan.best_eligible ?? scanSnap.best_eligible_candidate,
   );
@@ -1276,6 +1289,12 @@ export function AutoTradingWorkspace() {
             <Badge tone={executionEnabled ? "danger" : "neutral"}>
               EXEC={executionEnabled ? "ON" : "OFF"}
             </Badge>
+            <Badge tone={goldOnlyMode ? "neutral" : "warning"}>
+              {goldOnlyMode ? "GOLD ONLY" : "MULTI SYMBOL"}
+            </Badge>
+            <Badge tone="neutral">
+              AUTO {autonomousSymbol}
+            </Badge>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="font-mono text-[11px] tabular text-[var(--fg-muted)]">
@@ -1284,7 +1303,7 @@ export function AutoTradingWorkspace() {
             <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--fg-muted)]">
               {tradingSession}
             </span>
-            <span className="font-mono text-[11px] text-[var(--fg)]">{TRADING_SYMBOL}</span>
+            <span className="font-mono text-[11px] text-[var(--fg)]">{autonomousSymbol}</span>
             <UtcClock />
             <Button asChild size="sm" variant="ghost">
               <Link href="/ops">ITE Ops</Link>
@@ -1299,6 +1318,20 @@ export function AutoTradingWorkspace() {
             Primary blocker:{" "}
             <span className="font-medium text-[var(--fg)]">{primaryBlocker}</span>
             {blockingCategory ? ` · ${blockingCategory}` : ""}
+          </p>
+        ) : null}
+        {goldOnlyMode ? (
+          <p className="mt-2 font-mono text-[11px] text-[var(--fg-muted)]">
+            TRADING MODE: GOLD ONLY · AUTONOMOUS SYMBOL: {autonomousSymbol} ·
+            OTHER PAIRS: DISABLED FOR AUTONOMOUS EXECUTION · CURRENT FOCUS:{" "}
+            {(() => {
+              const focus = str(
+                currentScan.executable_focus || currentScan.symbol,
+                "",
+              );
+              if (!focus) return "NONE";
+              return isGoldSymbol(focus) ? focus : "NONE";
+            })()}
           </p>
         ) : null}
       </section>
@@ -1323,7 +1356,7 @@ export function AutoTradingWorkspace() {
           </Badge>
         </div>
         <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
-          Observes the first natural authorized setup. Does not force trades or
+          Observes {autonomousSymbol} only. Does not force trades or
           bypass Safety/Risk/OMS.
         </p>
         {(() => {
@@ -1333,13 +1366,21 @@ export function AutoTradingWorkspace() {
           const ss = Math.floor(Math.max(0, remain) % 60);
           const pad = (n: number) => String(n).padStart(2, "0");
           const blockers = asList(fd.primary_blockers).map(asRecord);
-          const windowFocus = noEligibleSetup
-            ? "—"
-            : str(fd.current_focus || currentScan.executable_focus, "—");
-          const windowBest = str(
+          const rawFocus = noEligibleSetup
+            ? ""
+            : str(fd.current_focus || currentScan.executable_focus, "");
+          const windowFocus =
+            goldOnlyMode && rawFocus && !isGoldSymbol(rawFocus)
+              ? "NONE"
+              : rawFocus || (noEligibleSetup ? "—" : "—");
+          const rawBest = str(
             fd.current_best_candidate || currentScan.symbol || bestCandidate.symbol,
-            "—",
+            "",
           );
+          const windowBest =
+            goldOnlyMode && rawBest && !isGoldSymbol(rawBest)
+              ? "NONE"
+              : rawBest || "—";
           const windowEligible = str(
             fd.eligible_count ?? currentScan.eligible_count,
             eligibleCount,
@@ -1871,7 +1912,7 @@ export function AutoTradingWorkspace() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           <MetricCard
             label="Best candidate"
-            value={str(bestCandidate.symbol || currentScan.symbol, "—")}
+            value={bestCandidateSymbol}
           />
           <MetricCard
             label="Best eligible"
@@ -1933,7 +1974,11 @@ export function AutoTradingWorkspace() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           <MetricCard
             label="Pipeline symbol"
-            value={str(lastPipeline.last_pipeline_symbol || lastPipeline.symbol, "—")}
+            value={
+              lastPipeline.autonomous_valid === false
+                ? "—"
+                : str(lastPipeline.last_pipeline_symbol || lastPipeline.symbol, "—")
+            }
           />
           <MetricCard
             label="Cycle outcome"

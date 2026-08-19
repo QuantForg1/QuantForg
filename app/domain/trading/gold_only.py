@@ -1,31 +1,32 @@
-"""Trading symbol policy — XAUUSD-only by default; multi-symbol when Alpha enabled."""
+"""Trading symbol policy — gold-only autonomous universe.
+
+``GOLD_ONLY_MODE`` is the single source of truth for autonomous execution.
+Alpha, multi-symbol, and multi-asset scan flags must not silently expand the
+universe when gold-only is enabled.
+
+Logical desk remains ``XAUUSD``. Catalogue/MT5 operations use the broker form
+returned by the existing canonical resolver (typically ``XAUUSD_I`` /
+``XAUUSD_i``). This module never invents suffixes.
+"""
 
 from __future__ import annotations
 
+from typing import Any
+
 GOLD_SYMBOL = "XAUUSD"
+CANONICAL_GOLD_BROKER_DISPLAY = "XAUUSD_i"
 
 
 def gold_only_enabled() -> bool:
-    """True unless multi-symbol / Alpha / multi-asset scanner is enabled."""
+    """Authoritative autonomous gold-only switch.
+
+    Reads ``settings.gold_only_mode`` only. Institutional Alpha, multi-symbol,
+    and multi-asset scan do not lift this mandate.
+    """
     try:
         from core.config.settings import get_settings
 
         settings = get_settings()
-        if bool(getattr(settings, "institutional_alpha_enabled", False)):
-            return False
-        if bool(getattr(settings, "multi_symbol_enabled", False)):
-            return False
-        try:
-            from app.domain.institutional_trading.ai_scalping.config import (
-                DEFAULT_AI_SCALPING_CONFIG,
-            )
-
-            if bool(
-                getattr(DEFAULT_AI_SCALPING_CONFIG, "multi_asset_scan_enabled", False)
-            ):
-                return False
-        except Exception:
-            pass
         return bool(getattr(settings, "gold_only_mode", True))
     except Exception:
         return True
@@ -54,12 +55,119 @@ def is_gold_symbol(code: str) -> bool:
     return "XAUUSD" in u or ("XAU" in u and "USD" in u)
 
 
-def resolve_trading_symbol(code: str | None = None) -> str:
-    """Resolve symbol — gold-only mandate when enabled; else pass-through."""
+def display_autonomous_symbol(code: str | None = None) -> str:
+    """Operator-facing catalogue spelling (``XAUUSD_i``), never invented for MD."""
+    raw = (code or "").strip()
+    if not raw:
+        return CANONICAL_GOLD_BROKER_DISPLAY if gold_only_enabled() else GOLD_SYMBOL
+    u = raw.upper()
+    if u.endswith("_I") and len(u) > 2:
+        return f"{u[:-2]}_i"
+    if is_gold_symbol(u):
+        return CANONICAL_GOLD_BROKER_DISPLAY
+    return raw
+
+
+def autonomous_execution_symbols(
+    *,
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+) -> tuple[str, ...]:
+    """Authoritative autonomous execution universe.
+
+    Gold-only: catalogue-resolved gold broker form only. Does not invent ``_i``.
+    When the catalogue is absent, returns the logical desk; market-data loaders
+    resolve via ``resolve_canonical_market_data_symbol``.
+    """
+    if not gold_only_enabled():
+        try:
+            from app.domain.trading.execution_universe import canonical_execution_desks
+
+            return tuple(sorted(canonical_execution_desks()))
+        except Exception:
+            return (GOLD_SYMBOL,)
+    resolved = ""
+    try:
+        from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+            resolve_canonical_market_data_symbol,
+        )
+
+        resolved = resolve_canonical_market_data_symbol(
+            GOLD_SYMBOL, broker_symbol_rows=broker_symbol_rows
+        )
+    except Exception:
+        resolved = ""
+    if resolved and is_gold_symbol(resolved):
+        return (resolved,)
+    return (GOLD_SYMBOL,)
+
+
+def is_autonomous_execution_symbol(code: str | None) -> bool:
+    raw = (code or "").strip()
+    if not raw:
+        return False
     if gold_only_enabled():
+        return is_gold_symbol(raw)
+    try:
+        from app.domain.trading.execution_universe import execution_symbol_allowed
+
+        return execution_symbol_allowed(raw)
+    except Exception:
+        return True
+
+
+def filter_autonomous_symbols(codes: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in codes:
+        code = str(raw or "").strip().upper()
+        if not code or code in seen:
+            continue
+        if not is_autonomous_execution_symbol(code):
+            continue
+        seen.add(code)
+        out.append(code)
+    return tuple(out)
+
+
+def gold_only_diagnostics(
+    *,
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Operator/API visibility. Backend remains authoritative."""
+    enabled = gold_only_enabled()
+    universe = list(autonomous_execution_symbols(broker_symbol_rows=broker_symbol_rows))
+    if enabled:
+        display = [display_autonomous_symbol(s) for s in universe] or [
+            CANONICAL_GOLD_BROKER_DISPLAY
+        ]
+        canonical = display[0]
+    else:
+        display = universe
+        canonical = universe[0] if universe else GOLD_SYMBOL
+    return {
+        "gold_only_mode": enabled,
+        "execution_universe": display,
+        "execution_universe_gateway": universe,
+        "logical_symbol": GOLD_SYMBOL,
+        "canonical_symbol": canonical,
+        "other_pairs_autonomous": "DISABLED" if enabled else "ENABLED",
+        "trading_mode": "GOLD_ONLY" if enabled else "MULTI_SYMBOL",
+        "rotate_focus_allowed": not enabled,
+    }
+
+
+def resolve_trading_symbol(code: str | None = None) -> str:
+    """Resolve symbol — gold-only mandate when enabled; else pass-through.
+
+    Preserves catalogue broker form (``XAUUSD_I``) when provided. Does not
+    strip gold to bare ``XAUUSD``.
+    """
+    raw = (code or "").strip().upper()
+    if gold_only_enabled():
+        if raw and is_gold_symbol(raw):
+            return raw
         return GOLD_SYMBOL
-    raw = (code or default_trading_symbol() or GOLD_SYMBOL).strip().upper()
-    return raw or GOLD_SYMBOL
+    return raw or default_trading_symbol() or GOLD_SYMBOL
 
 
 def filter_gold_symbols(codes: list[str]) -> list[str]:
@@ -67,10 +175,15 @@ def filter_gold_symbols(codes: list[str]) -> list[str]:
 
 
 def require_xauusd(symbol: str) -> str:
-    """Normalize and reject non-gold symbols when gold-only is active."""
-    if gold_only_enabled() and not is_gold_symbol(symbol):
+    """Normalize and reject non-gold symbols when gold-only is active.
+
+    Keeps the incoming gold broker form. Never rewrites ``XAUUSD_I`` to
+    bare ``XAUUSD``.
+    """
+    raw = (symbol or "").strip().upper()
+    if gold_only_enabled() and not is_gold_symbol(raw):
         msg = f"QuantForg trades XAUUSD only — rejected symbol {symbol!r}"
         raise ValueError(msg)
     if gold_only_enabled():
-        return GOLD_SYMBOL
+        return raw if raw else GOLD_SYMBOL
     return resolve_trading_symbol(symbol)

@@ -50,10 +50,10 @@ def _default_allowed_symbols(
     ``MULTI_SYMBOL_ENABLED`` / Alpha / multi-asset scan were on, collapsing the
     LIVE scanner to gold-only forever.
     """
-    from app.domain.trading.gold_only import gold_only_enabled
+    from app.domain.trading.gold_only import autonomous_execution_symbols, gold_only_enabled
 
     if gold_only_enabled():
-        return (GOLD_SYMBOL,)
+        return autonomous_execution_symbols()
     mode = (trading_mode or "").strip().lower()
     if alpha_engine_enabled or mode == "alpha":
         from app.domain.institutional_trading.alpha_engine.config import (
@@ -115,8 +115,7 @@ class OperationsControlPlane:
         from app.domain.trading.xauusd_specs import coerce_max_spread
 
         self.max_spread = coerce_max_spread(self.max_spread)
-        # Never hard-force gold-only when MULTI_SYMBOL / Alpha / multi-asset
-        # scan is enabled — that silently collapses the LIVE scanner universe.
+        # Gold-only policy owns the autonomous allowlist regardless of Alpha.
         self.allowed_symbols = _default_allowed_symbols(
             trading_mode=self.trading_mode,
             alpha_engine_enabled=self.alpha_engine_enabled,
@@ -552,10 +551,13 @@ class OperationsControlPlane:
                 )
                 if not cleaned_sym:
                     raise ValueError("allowed_symbols must not be empty")
-                from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+                from app.domain.trading.gold_only import gold_only_enabled
 
-                if gold_only_enabled() and self.trading_mode != "alpha":
-                    self.allowed_symbols = (GOLD_SYMBOL,)
+                if gold_only_enabled():
+                    self.allowed_symbols = _default_allowed_symbols(
+                        trading_mode=self.trading_mode,
+                        alpha_engine_enabled=self.alpha_engine_enabled,
+                    )
                 else:
                     self.allowed_symbols = cleaned_sym
             if max_spread is not None:
@@ -1004,7 +1006,10 @@ def _ensure_multi_symbol_allowlist(plane: OperationsControlPlane) -> None:
     from app.domain.trading.gold_only import gold_only_enabled
 
     if gold_only_enabled():
-        plane.allowed_symbols = (GOLD_SYMBOL,)
+        plane.allowed_symbols = _default_allowed_symbols(
+            trading_mode=plane.trading_mode,
+            alpha_engine_enabled=plane.alpha_engine_enabled,
+        )
         return
     try:
         from core.config.settings import get_settings

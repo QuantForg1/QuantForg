@@ -156,6 +156,20 @@ def classify_candidate_outcome(
     reasons = [str(r) for r in (failed_reasons or ()) if str(r).strip()]
     hay = _hay(abort, outcome, *reasons)
 
+    if "leverage" in hay and "exceeds" in hay:
+        return {
+            "decision_state": DecisionState.HARD_BLOCK.value,
+            "fault_class": FaultClass.HARD_BLOCK.value,
+            "fault_code": "LEVERAGE_POLICY_EXCEEDED",
+            "fault_reason": abort or "; ".join(reasons) or "LEVERAGE_POLICY_EXCEEDED",
+            "retryable": False,
+            "candidate_action": CandidateAction.FAIL_CLOSED.value,
+            "next_action": CandidateAction.FAIL_CLOSED.value,
+            "blocking_stage": "SAFETY",
+            "skip_idle_sleep": False,
+            "release_entry_budget": False,
+        }
+
     if forwarded_to_oms and action in {"BUY", "SELL"}:
         return {
             "decision_state": DecisionState.ORDER_SUBMITTED.value,
@@ -233,14 +247,23 @@ def classify_candidate_outcome(
             code = "MARKET_CLOSED"
         else:
             code = abort or (reasons[0] if reasons else "CANDIDATE_BLOCK")
+        rotate = CandidateAction.ROTATE_FOCUS.value
+        wait_same = CandidateAction.WAIT_SAME_FOCUS.value
+        try:
+            from app.domain.trading.gold_only import gold_only_enabled
+
+            if gold_only_enabled():
+                rotate = wait_same
+        except Exception:
+            pass
         return {
             "decision_state": DecisionState.CANDIDATE_BLOCK.value,
             "fault_class": FaultClass.CANDIDATE_BLOCK.value,
             "fault_code": code,
             "fault_reason": abort or "; ".join(reasons) or outcome,
             "retryable": False,
-            "candidate_action": CandidateAction.ROTATE_FOCUS.value,
-            "next_action": CandidateAction.ROTATE_FOCUS.value,
+            "candidate_action": rotate,
+            "next_action": rotate,
             "blocking_stage": "SIZING"
             if ("min lot" in hay or "minimum lot" in hay)
             else "ELIGIBILITY",
@@ -323,6 +346,28 @@ def apply_focus_hysteresis(
     eligible = [str(s).strip().upper() for s in eligible_symbols if str(s).strip()]
     hold = str(current_focus or "").strip().upper() or None
     nxt = str(proposed or "").strip().upper() or None
+    try:
+        from app.domain.trading.gold_only import (
+            filter_autonomous_symbols,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled():
+            eligible = list(filter_autonomous_symbols(eligible))
+            if hold and not is_gold_symbol(hold):
+                hold = None
+            if nxt and not is_gold_symbol(nxt):
+                nxt = None
+            if hold and hold in eligible:
+                return hold, "WAIT_SAME_FOCUS"
+            if nxt and nxt in eligible:
+                return nxt, "FOCUS_SELECTED"
+            if eligible:
+                return eligible[0], "FOCUS_SELECTED"
+            return None, "NO_EXECUTABLE_FOCUS"
+    except Exception:
+        pass
     if hold and hold in eligible:
         hold_score = float(scores.get(hold) or 0.0)
         new_score = float(scores.get(nxt or "") or 0.0) if nxt else 0.0
@@ -379,8 +424,20 @@ def set_focus(symbol: str | None, *, reason: str) -> None:
     with _LOCK:
         prev = _WINDOW.focus_symbol
         nxt = str(symbol or "").strip().upper() or None
+        why = str(reason or "")
+        try:
+            from app.domain.trading.gold_only import (
+                gold_only_enabled,
+                is_gold_symbol,
+            )
+
+            if gold_only_enabled() and nxt and not is_gold_symbol(nxt):
+                nxt = None
+                why = "NO_EXECUTABLE_FOCUS"
+        except Exception:
+            pass
         _WINDOW.focus_symbol = nxt
-        _WINDOW.focus_reason = str(reason or "")
+        _WINDOW.focus_reason = why
         if prev and nxt and prev != nxt:
             _WINDOW.focus_rotations += 1
 
@@ -595,8 +652,34 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     """
     payload = dict(scan or {})
     eligible = _scan_eligible_symbols(payload)
+    try:
+        from app.domain.trading.gold_only import (
+            autonomous_execution_symbols,
+            filter_autonomous_symbols,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled():
+            eligible = list(filter_autonomous_symbols(eligible))
+            payload["eligible_symbols"] = eligible
+    except Exception:
+        pass
     best_row = _best_candidate_row(payload)
     scan_symbol = _row_symbol(best_row)
+    try:
+        from app.domain.trading.gold_only import (
+            autonomous_execution_symbols,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled() and scan_symbol and not is_gold_symbol(scan_symbol):
+            universe = autonomous_execution_symbols()
+            scan_symbol = universe[0] if universe else None
+            best_row = _row_for_symbol(payload, scan_symbol) or {}
+    except Exception:
+        pass
     gate = str(
         payload.get("first_blocking_gate")
         or best_row.get("blocking_gate")
@@ -639,7 +722,16 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         focus_why = "NO_EXECUTABLE_FOCUS"
         fault_class = str(classified.get("fault_class") or FaultClass.WAIT.value)
         if classified.get("next_action") == CandidateAction.ROTATE_FOCUS.value:
-            fault_class = FaultClass.CANDIDATE_BLOCK.value
+            try:
+                from app.domain.trading.gold_only import gold_only_enabled
+
+                if gold_only_enabled():
+                    next_action = CandidateAction.WAIT_SAME_FOCUS.value
+                    focus_why = "WAIT_SAME_FOCUS"
+                else:
+                    fault_class = FaultClass.CANDIDATE_BLOCK.value
+            except Exception:
+                fault_class = FaultClass.CANDIDATE_BLOCK.value
         elif "volatility" in _norm(gate or ""):
             fault_class = FaultClass.WAIT.value
         decision_state = DecisionState.NO_EXECUTABLE_FOCUS.value
@@ -658,6 +750,13 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
                 else CandidateAction.HOLD_FOCUS.value
             )
         )
+        try:
+            from app.domain.trading.gold_only import gold_only_enabled
+
+            if gold_only_enabled() and next_action == CandidateAction.ROTATE_FOCUS.value:
+                next_action = CandidateAction.WAIT_SAME_FOCUS.value
+        except Exception:
+            pass
         fault_class = FaultClass.NONE.value
         decision_state = DecisionState.FOCUS_FORMING.value
         blocking_stage = None
@@ -785,10 +884,20 @@ def build_last_pipeline_snapshot(last_cycle: dict[str, Any] | None) -> dict[str,
         oms_state = "MESSAGE"
     else:
         oms_state = "NOT_REACHED"
+    autonomous_valid = True
+    try:
+        from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+
+        if gold_only_enabled():
+            autonomous_valid = bool(symbol and is_gold_symbol(symbol))
+    except Exception:
+        autonomous_valid = True
     return {
         "label": "LAST_COMPLETED_ITE_CYCLE",
-        "symbol": symbol,
-        "last_pipeline_symbol": symbol,
+        "symbol": symbol if autonomous_valid else None,
+        "last_pipeline_symbol": symbol if autonomous_valid else None,
+        "last_pipeline_raw_symbol": symbol,
+        "autonomous_valid": autonomous_valid,
         "last_safety_symbol": symbol if safety_state != "NOT_REACHED" else None,
         "last_optimizer_symbol": optimizer_symbol,
         "cycle_outcome": last_cycle.get("cycle_outcome"),

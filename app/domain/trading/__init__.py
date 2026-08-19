@@ -1,10 +1,14 @@
 """Trading domain helpers — XAUUSD-only platform."""
 
 from app.domain.trading.gold_only import (
+    CANONICAL_GOLD_BROKER_DISPLAY,
     GOLD_SYMBOL,
+    autonomous_execution_symbols,
     default_trading_symbol,
     filter_gold_symbols,
+    gold_only_diagnostics,
     gold_only_enabled,
+    is_autonomous_execution_symbol,
     is_gold_symbol,
     require_xauusd,
     resolve_trading_symbol,
@@ -22,16 +26,20 @@ from app.domain.trading.xauusd_specs import (
 )
 
 __all__ = [
+    "CANONICAL_GOLD_BROKER_DISPLAY",
     "CONTRACT_SIZE",
     "GOLD_SYMBOL",
     "MAX_LEVERAGE",
     "MAX_SPREAD",
     "SYMBOL",
+    "autonomous_execution_symbols",
     "coerce_max_spread",
     "default_trading_symbol",
     "exposure_pct_of_equity",
     "filter_gold_symbols",
+    "gold_only_diagnostics",
     "gold_only_enabled",
+    "is_autonomous_execution_symbol",
     "is_gold_symbol",
     "margin_required",
     "notional_value",

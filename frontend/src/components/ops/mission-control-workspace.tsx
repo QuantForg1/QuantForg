@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
 import {
+  iteOpsApi,
   missionControlApi,
   mt5Api,
   platformApi,
@@ -189,6 +190,14 @@ export function MissionControlWorkspace() {
     refetchInterval: opsReady ? 10_000 : false,
   });
 
+  const autoTradingQ = useQuery({
+    queryKey: ["ite-ops-auto-trading"],
+    queryFn: () => iteOpsApi.autoTrading(),
+    enabled: opsReady,
+    staleTime: 8_000,
+    retry: false,
+  });
+
   const liveFeeds = useMemo(() => {
     const capital =
       accountQ.data && !accountQ.isError
@@ -308,6 +317,9 @@ export function MissionControlWorkspace() {
   const aiHealth = panelOf(dash, "ai_health");
   const emergency = panelOf(dash, "emergency_panel");
   const xau = panelOf(dash, "xauusd_watchlist");
+  const goldOnly = asRecord(asRecord(autoTradingQ.data).gold_only);
+  const goldOnlyMode = goldOnly.gold_only_mode !== false;
+  const autonomousSymbol = str(goldOnly.canonical_symbol, TRADING_SYMBOL);
   const daily = panelOf(dash, "daily_summary");
   const notes = panelOf(dash, "operator_notes");
   const fab = panelOf(dash, "floating_action_bar");
@@ -1106,6 +1118,12 @@ export function MissionControlWorkspace() {
 
       <div className="grid gap-3 xl:grid-cols-3">
         <Panel title="XAUUSD Watchlist" status={xau?.status}>
+          {goldOnlyMode ? (
+            <p className="mb-2 font-mono text-[10px] text-[var(--fg-muted)]">
+              GOLD ONLY · autonomous {autonomousSymbol} · other pairs disabled
+              for autonomous execution
+            </p>
+          ) : null}
           {!xau || xau.status !== "available" ? (
             <FeedEmpty
               title="No live tick"

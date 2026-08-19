@@ -36,6 +36,7 @@ from app.domain.order_block.engine import OrderBlockEngine
 from app.domain.trading.gold_only import (
     GOLD_SYMBOL,
     gold_only_enabled,
+    is_gold_symbol,
     resolve_trading_symbol,
 )
 from app.domain.value_objects.identity import SymbolCode
@@ -101,7 +102,10 @@ class InstitutionalAnalysisPipeline:
         # (that mismatch triggers "swing must match snapshot symbol/timeframe").
         inferred = self._infer_symbol_from_bars()
         raw = (symbol or inferred or cfg.symbol or GOLD_SYMBOL).strip().upper()
-        code_str = GOLD_SYMBOL if gold_only_enabled() else resolve_trading_symbol(raw)
+        if gold_only_enabled():
+            code_str = raw if raw and is_gold_symbol(raw) else GOLD_SYMBOL
+        else:
+            code_str = resolve_trading_symbol(raw)
         code = SymbolCode(value=code_str)
         moment = as_of or datetime.now(UTC)
         if moment.tzinfo is None:

@@ -799,6 +799,7 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "ai_scalping": _ai_scalping_payload(),
         "institutional_alpha": _institutional_alpha_payload(),
         "daily_opportunity_target": _daily_opportunity_target_payload(),
+        "gold_only": _gold_only_payload(),
         "execution_context": _autonomous_execution_context_payload(
             orchestrator=orchestrator,
             recent_attempts=recent_attempts,
@@ -807,6 +808,12 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
             broker_connected=snap.facts.broker_connected,
         ),
     }
+
+
+def _gold_only_payload() -> dict[str, Any]:
+    from app.domain.trading.gold_only import gold_only_diagnostics
+
+    return gold_only_diagnostics()
 
 
 def _autonomous_execution_context_payload(

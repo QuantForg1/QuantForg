@@ -75,12 +75,30 @@ def build_opportunity_candidates(
     ordered: list[str] = []
     seen: set[str] = set()
 
+    from app.domain.trading.gold_only import (
+        GOLD_SYMBOL,
+        autonomous_execution_symbols,
+        gold_only_enabled,
+        is_gold_symbol,
+    )
+
+    gold_only = gold_only_enabled()
+
     def _add(sym: str | None) -> None:
         code = (sym or "").strip().upper()
         if not code or code in seen:
             return
+        if gold_only and not is_gold_symbol(code):
+            return
         seen.add(code)
         ordered.append(code)
+
+    if gold_only:
+        for sym in autonomous_execution_symbols():
+            _add(sym)
+        _add(preferred)
+        _add(GOLD_SYMBOL)
+        return ordered
 
     _add(preferred)
     for row in alpha_ranking or []:
@@ -99,7 +117,6 @@ def build_opportunity_candidates(
     from app.domain.institutional_trading.alpha_engine.config import (
         DEFAULT_ALPHA_UNIVERSE,
     )
-    from app.domain.trading.gold_only import GOLD_SYMBOL
 
     for sym in DEFAULT_SCALPING_UNIVERSE:
         _add(sym)
@@ -126,6 +143,22 @@ def select_full_mode_symbol(
 
     skipped: list[str] = []
     side = (direction or "").strip().upper()
+    try:
+        from app.domain.trading.gold_only import (
+            filter_autonomous_symbols,
+            gold_only_enabled,
+        )
+
+        if gold_only_enabled():
+            kept = filter_autonomous_symbols(candidates)
+            skipped.extend(
+                str(s).strip().upper()
+                for s in candidates
+                if str(s).strip() and str(s).strip().upper() not in set(kept)
+            )
+            candidates = list(kept)
+    except Exception:
+        logger.exception("gold_only_full_mode_filter_failed")
     tradable, cooled = filter_cooled_candidates(candidates)
     for sym in cooled:
         logger.warning("%s skipped (market closed cooldown)", sym)

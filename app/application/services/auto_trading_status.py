@@ -427,7 +427,7 @@ def build_execution_state(
     """Single shared snapshot for Auto Trading / Monitoring / Broker / Gateway."""
     policy = plane.auto_trade_policy()
     run_state = normalize_run_state(policy.run_state, enabled=policy.enabled)
-    return {
+    payload: dict[str, Any] = {
         "ops_mode": plane.mode.value,
         "execution_enabled": bool(facts.execution_enabled),
         "kill_switch_armed": bool(plane.kill_switch_armed),
@@ -442,6 +442,22 @@ def build_execution_state(
         "market_data_live": bool(facts.market_data_live),
         "source": "auto_trading_status",
     }
+    try:
+        from app.domain.trading.gold_only import gold_only_diagnostics
+
+        payload.update(gold_only_diagnostics())
+    except Exception:
+        payload["gold_only_mode"] = True
+        payload["execution_universe"] = ["XAUUSD_i"]
+    return payload
+    try:
+        from app.domain.trading.gold_only import gold_only_diagnostics
+
+        payload.update(gold_only_diagnostics())
+    except Exception:
+        payload["gold_only_mode"] = True
+        payload["execution_universe"] = ["XAUUSD_i"]
+    return payload
 
 
 _STATUS_SNAPSHOT_TTL_S = 2.0

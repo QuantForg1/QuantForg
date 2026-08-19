@@ -97,7 +97,11 @@ class AutoTradePolicy:
     alpha_engine_enabled: bool = False
 
     def __post_init__(self) -> None:
-        from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
+        from app.domain.trading.gold_only import (
+            GOLD_SYMBOL,
+            autonomous_execution_symbols,
+            gold_only_enabled,
+        )
         from app.domain.trading.xauusd_specs import coerce_max_spread
 
         object.__setattr__(self, "max_spread", coerce_max_spread(self.max_spread))
@@ -105,8 +109,10 @@ class AutoTradePolicy:
         if mode not in {"swing", "scalping", "alpha"}:
             mode = "swing"
         object.__setattr__(self, "trading_mode", mode)
-        if gold_only_enabled() and mode != "alpha":
-            object.__setattr__(self, "allowed_symbols", (GOLD_SYMBOL,))
+        if gold_only_enabled():
+            object.__setattr__(
+                self, "allowed_symbols", autonomous_execution_symbols()
+            )
         else:
             cleaned = tuple(
                 s.strip().upper() for s in self.allowed_symbols if s and str(s).strip()
@@ -114,8 +120,10 @@ class AutoTradePolicy:
             object.__setattr__(self, "allowed_symbols", cleaned)
 
     def to_dict(self) -> dict[str, Any]:
+        from app.domain.trading.gold_only import gold_only_diagnostics
+
         state = normalize_run_state(self.run_state, enabled=self.enabled)
-        return {
+        payload = {
             "enabled": self.enabled,
             "run_state": state,
             "max_open_positions": self.max_open_positions,
@@ -132,6 +140,8 @@ class AutoTradePolicy:
             "may_open_new_trades": state == "running",
             "may_manage_positions": state in {"running", "paused"},
         }
+        payload.update(gold_only_diagnostics())
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,13 +387,12 @@ def evaluate_auto_trade_safety(
     # tradable check below remains mandatory. Gold-only still enforced.
     if mode in {"scalping", "alpha"}:
         from app.domain.trading.gold_only import (
-            GOLD_SYMBOL,
             gold_only_enabled,
             is_gold_symbol,
         )
 
-        if gold_only_enabled() and mode != "alpha":
-            symbol_allowed = symbol_u == GOLD_SYMBOL or is_gold_symbol(symbol_u)
+        if gold_only_enabled():
+            symbol_allowed = is_gold_symbol(symbol_u)
         elif allowed_syms and len(allowed_syms) >= 2:
             # Operator Symbol Management / multi-symbol allowlist owns membership.
             # Desk-aware so configured XAUUSD authorizes catalogue XAUUSD_I.

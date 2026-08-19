@@ -297,8 +297,17 @@ class InstitutionalIteRuntime:
                         DEFAULT_SCALPING_UNIVERSE,
                     )
 
-                    # If any universe symbol is in market-closed cooldown, pause entries
-                    for sym in DEFAULT_SCALPING_UNIVERSE:
+                    from app.domain.trading.gold_only import (
+                        autonomous_execution_symbols,
+                        gold_only_enabled,
+                    )
+
+                    universe = (
+                        autonomous_execution_symbols()
+                        if gold_only_enabled()
+                        else DEFAULT_SCALPING_UNIVERSE
+                    )
+                    for sym in universe:
                         if is_market_closed_cooled(str(sym)):
                             market_open = False
                             break
@@ -3431,6 +3440,13 @@ class InstitutionalIteRuntime:
             last = self._last_cycle
             cycles = self._cycles
         settings = get_settings()
+        gold = {}
+        try:
+            from app.domain.trading.gold_only import gold_only_diagnostics
+
+            gold = gold_only_diagnostics()
+        except Exception:
+            gold = {"gold_only_mode": True, "execution_universe": ["XAUUSD_i"]}
         return {
             "mode": self.plane.mode.value,
             "kill_switch": self.plane.kill_switch_armed,
@@ -3455,6 +3471,7 @@ class InstitutionalIteRuntime:
             "fast_decision": self._fast_decision_snapshot(),
             "current_scan": self._current_scan_snapshot(),
             "last_pipeline": self._last_pipeline_snapshot(),
+            "gold_only": gold,
         }
 
     def strategy_diagnostics(self, *, limit: int = 100) -> dict[str, Any]:
@@ -3587,9 +3604,16 @@ class InstitutionalIteRuntime:
             if abort not in exact_reason_parts:
                 exact_reason_parts.append(abort)
         if cycle.broker_retcode is not None:
-            ret = f"retcode={cycle.broker_retcode}"
-            if ret not in exact_reason_parts:
-                exact_reason_parts.append(ret)
+            # MT5 TRADE_RETCODE_DONE is 0. A policy reject never called
+            # order_send — do not print retcode=0 as a broker execution.
+            send_reached = False
+            oms_raw = getattr(oms, "raw", None) if oms is not None else None
+            if isinstance(oms_raw, dict):
+                send_reached = bool(oms_raw.get("order_send_reached"))
+            if send_reached or int(cycle.broker_retcode) != 0:
+                ret = f"retcode={cycle.broker_retcode}"
+                if ret not in exact_reason_parts:
+                    exact_reason_parts.append(ret)
 
         reason = (
             "; ".join(exact_reason_parts)
@@ -3780,6 +3804,19 @@ class InstitutionalIteRuntime:
                 if str(s).strip()
             ]
             best = str(scan.get("best_symbol") or "").upper() or None
+            try:
+                from app.domain.trading.gold_only import (
+                    filter_autonomous_symbols,
+                    gold_only_enabled,
+                    is_gold_symbol,
+                )
+
+                if gold_only_enabled():
+                    eligible = list(filter_autonomous_symbols(eligible))
+                    if best and not is_gold_symbol(best):
+                        best = eligible[0] if eligible else None
+            except Exception:
+                logger.exception("gold_only_handoff_filter_failed")
             if best and best not in eligible:
                 eligible = [best, *[s for s in eligible if s != best]]
             # Prefer desk-allowlisted symbols for execution handoff (Safety still
@@ -3792,16 +3829,18 @@ class InstitutionalIteRuntime:
                 from app.domain.institutional_trading.auto_trading import (
                     prefer_allowlisted_handoff,
                 )
+                from app.domain.trading.gold_only import gold_only_enabled
 
-                plane_allowed = tuple(
-                    getattr(self.plane, "allowed_symbols", ()) or ()
-                )
-                allow_seed = (
-                    plane_allowed
-                    if plane_allowed and len(plane_allowed) >= 2
-                    else DEFAULT_SCALPING_UNIVERSE
-                )
-                eligible = prefer_allowlisted_handoff(eligible, allow_seed)
+                if not gold_only_enabled():
+                    plane_allowed = tuple(
+                        getattr(self.plane, "allowed_symbols", ()) or ()
+                    )
+                    allow_seed = (
+                        plane_allowed
+                        if plane_allowed and len(plane_allowed) >= 2
+                        else DEFAULT_SCALPING_UNIVERSE
+                    )
+                    eligible = prefer_allowlisted_handoff(eligible, allow_seed)
             except Exception:
                 logger.exception("prefer_allowlisted_handoff_failed")
             with self._lock:
@@ -3875,6 +3914,17 @@ class InstitutionalIteRuntime:
             for sym in self._eligible_handoff_queue:
                 if not sym or sym in self._eligible_consumed:
                     continue
+                try:
+                    from app.domain.trading.gold_only import (
+                        gold_only_enabled,
+                        is_gold_symbol,
+                    )
+
+                    if gold_only_enabled() and not is_gold_symbol(sym):
+                        self._eligible_consumed.add(sym)
+                        continue
+                except Exception:
+                    pass
                 # Never duplicate same-symbol via handoff (pyramid only via PRE).
                 if sym in open_syms:
                     self._eligible_consumed.add(sym)
@@ -4007,7 +4057,39 @@ class InstitutionalIteRuntime:
         from app.application.services.closeonly_symbol_router import (
             resolve_executable_symbol,
         )
-        from app.domain.trading.gold_only import GOLD_SYMBOL
+        from app.domain.trading.gold_only import (
+            GOLD_SYMBOL,
+            autonomous_execution_symbols,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled():
+            universe = autonomous_execution_symbols()
+            preferred = universe[0] if universe else GOLD_SYMBOL
+            symbol, skipped = await self._offload_blocking_io(
+                resolve_executable_symbol,
+                self.mt5_adapter,
+                preferred=preferred,
+                plane=self.plane,
+                alpha_ranking=None,
+            )
+            if skipped:
+                logger.warning(
+                    "gold_only_closeonly_or_blocked",
+                    skipped=skipped,
+                    preferred=preferred,
+                )
+            if symbol is None or not is_gold_symbol(symbol):
+                logger.warning(
+                    "no_full_mode_gold_symbol_available",
+                    preferred=preferred,
+                    skipped=skipped,
+                    selected=symbol,
+                )
+                return None
+            logger.warning("Submitting Order...", symbol=symbol)
+            return symbol
 
         preferred = self._take_next_handoff_symbol()
         if not preferred:
@@ -4068,7 +4150,25 @@ class InstitutionalIteRuntime:
         from app.application.services.closeonly_symbol_router import (
             resolve_executable_symbol,
         )
-        from app.domain.trading.gold_only import GOLD_SYMBOL
+        from app.domain.trading.gold_only import (
+            GOLD_SYMBOL,
+            autonomous_execution_symbols,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled():
+            universe = autonomous_execution_symbols()
+            preferred = universe[0] if universe else GOLD_SYMBOL
+            symbol, skipped = resolve_executable_symbol(
+                self.mt5_adapter,
+                preferred=preferred,
+                plane=self.plane,
+                alpha_ranking=None,
+            )
+            if symbol is None or not is_gold_symbol(symbol):
+                return None
+            return symbol
 
         preferred = self._alpha_preferred_symbol() or GOLD_SYMBOL
         # Prefer last multi-asset winner when a scan already completed this cycle.
@@ -4107,6 +4207,7 @@ class InstitutionalIteRuntime:
         as the background scheduler — does not duplicate trading logic.
         """
         t0 = time.perf_counter()
+        stage_timings_ms: dict[str, float] = {}
         self._manual_execution = True
         logger.warning("MANUAL EXECUTION STARTED")
         _pvm_vid = None
@@ -4140,8 +4241,12 @@ class InstitutionalIteRuntime:
             from app.domain.trading.gold_only import GOLD_SYMBOL
 
             logger.warning("Force Sync Positions")
+            t_pick = time.perf_counter()
             enrich = _enrich_from_adapter(self.probes)
             symbol = await self._pick_executable_symbol_async()
+            stage_timings_ms["signal_focus_pick_ms"] = round(
+                (time.perf_counter() - t_pick) * 1000.0, 1
+            )
             if not symbol:
                 logger.warning(
                     "no_full_mode_symbol_available — manage-only execute-now"
@@ -4172,10 +4277,16 @@ class InstitutionalIteRuntime:
                     "execution_ms": round((time.perf_counter() - t0) * 1000.0),
                 }
             logger.warning("Scanning Symbols", symbol=symbol)
+            t_md = time.perf_counter()
             ctx = await build_ite_cycle_market_context(
                 self.mt5_adapter,
                 symbol=symbol,
                 position_engine=self.position_management.engine,
+            )
+            stage_timings_ms["market_context_ms"] = round(
+                float(getattr(ctx, "latency_ms", 0.0) or 0.0)
+                or (time.perf_counter() - t_md) * 1000.0,
+                1,
             )
             try:
                 from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
@@ -4264,6 +4375,7 @@ class InstitutionalIteRuntime:
                 key="no_broker_restrictions",
             )
             if self.plane.mode is OpsExecutionMode.SHADOW:
+                t_cycle = time.perf_counter()
                 cycle = await self._offload_blocking_io(
                     self.run_shadow_cycle,
                     snapshot=ctx.snapshot,
@@ -4271,6 +4383,7 @@ class InstitutionalIteRuntime:
                     market_context_diagnostics=dict(ctx.diagnostics),
                 )
             else:
+                t_cycle = time.perf_counter()
                 cycle = await self._offload_blocking_io(
                     self.run_auto_cycle,
                     snapshot=ctx.snapshot,
@@ -4285,15 +4398,58 @@ class InstitutionalIteRuntime:
                     risk_allowed=True,
                     market_context_diagnostics=dict(ctx.diagnostics),
                 )
+            stage_timings_ms["decision_safety_risk_oms_ms"] = round(
+                (time.perf_counter() - t_cycle) * 1000.0, 1
+            )
+            oms_latency = None
             with self._lock:
                 if self._last_cycle is not None:
                     self._last_cycle.market_context_diagnostics = dict(ctx.diagnostics)
                     self._last_cycle.market_context_reason = ctx.reason
                     self._last_cycle.snapshot_present = True
                     cycle = self._last_cycle
+                bridge = self._last_bridge_result
+            oms = getattr(bridge, "oms_result", None) if bridge is not None else None
+            if oms is not None:
+                oms_latency = getattr(oms, "latency_ms", None)
+                raw = getattr(oms, "raw", None)
+                if isinstance(raw, dict):
+                    stages = raw.get("stages") or []
+                    for row in stages:
+                        if not isinstance(row, dict):
+                            continue
+                        name = str(row.get("stage") or "").strip().lower().replace(
+                            " ", "_"
+                        )
+                        if name:
+                            stage_timings_ms[f"oms_{name}_ms"] = float(
+                                row.get("elapsed_ms") or 0.0
+                            )
+                if oms_latency is not None:
+                    stage_timings_ms["oms_pipeline_ms"] = round(float(oms_latency), 1)
+            stage_timings_ms["execute_now_total_ms"] = round(
+                (time.perf_counter() - t0) * 1000.0, 1
+            )
             payload = self.build_execute_now_payload(
                 cycle,
                 execution_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+            payload["stage_timings_ms"] = dict(stage_timings_ms)
+            if oms is not None and isinstance(getattr(oms, "raw", None), dict):
+                raw_flags = oms.raw
+                payload["oms_reached"] = bool(raw_flags.get("oms_reached", True))
+                payload["gateway_reached"] = bool(raw_flags.get("gateway_reached"))
+                payload["order_check_reached"] = bool(
+                    raw_flags.get("order_check_reached")
+                )
+                payload["order_send_reached"] = bool(raw_flags.get("order_send_reached"))
+            logger.warning(
+                "[QF][EXEC_STAGE_TIMING]",
+                **{
+                    k: v
+                    for k, v in stage_timings_ms.items()
+                    if isinstance(v, (int, float))
+                },
             )
             logger.warning(
                 "Execution Finished",

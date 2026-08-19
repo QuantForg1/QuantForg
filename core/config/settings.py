@@ -303,8 +303,9 @@ class Settings(BaseSettings):
         bool,
         Field(
             description=(
-                "Restrict trading symbols to XAUUSD (Gold-only terminal). "
-                "Disable only when multi-symbol support is explicitly enabled."
+                "Authoritative autonomous execution universe. When true, only "
+                "XAUUSD_i (catalogue gold) may be scanned, focused, or executed. "
+                "Takes precedence over multi_symbol_enabled and Alpha."
             ),
             validation_alias=AliasChoices("GOLD_ONLY_MODE", "gold_only_mode"),
         ),
@@ -313,8 +314,8 @@ class Settings(BaseSettings):
         bool,
         Field(
             description=(
-                "Allow non-gold symbols. Takes precedence over "
-                "gold_only_mode when true."
+                "Allow non-gold symbols when gold_only_mode is explicitly false. "
+                "Does not override GOLD_ONLY_MODE=true."
             ),
             validation_alias=AliasChoices(
                 "MULTI_SYMBOL_ENABLED", "multi_symbol_enabled"
@@ -325,8 +326,9 @@ class Settings(BaseSettings):
         bool,
         Field(
             description=(
-                "Enable Institutional Alpha Engine (multi-symbol scanner). "
-                "When true, gold-only mandate is lifted for ranked execution."
+                "Enable Institutional Alpha Engine (ranked analysis). "
+                "Does not expand the autonomous execution universe when "
+                "gold_only_mode is true."
             ),
             validation_alias=AliasChoices(
                 "INSTITUTIONAL_ALPHA_ENABLED", "institutional_alpha_enabled"
@@ -807,35 +809,11 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "allow_risk_lock_override", False)
             if self.production_validation_mode:
                 object.__setattr__(self, "production_validation_mode", False)
-            # Multi-symbol / Alpha / institutional multi-asset scanner lifts
-            # the XAUUSD-only mandate. Do not overwrite MULTI_SYMBOL_ENABLED=true.
-            multi_asset_scan = False
-            try:
-                from app.domain.institutional_trading.ai_scalping.config import (
-                    DEFAULT_AI_SCALPING_CONFIG,
-                )
-
-                multi_asset_scan = bool(
-                    getattr(
-                        DEFAULT_AI_SCALPING_CONFIG,
-                        "multi_asset_scan_enabled",
-                        False,
-                    )
-                )
-            except Exception:
-                multi_asset_scan = False
-            multi = (
-                bool(getattr(self, "multi_symbol_enabled", False))
-                or bool(getattr(self, "institutional_alpha_enabled", False))
-                or multi_asset_scan
-            )
-            if multi:
-                object.__setattr__(self, "multi_symbol_enabled", True)
-                object.__setattr__(self, "gold_only_mode", False)
-            else:
-                object.__setattr__(self, "gold_only_mode", True)
-                object.__setattr__(self, "multi_symbol_enabled", False)
-                object.__setattr__(self, "default_trading_symbol", "XAUUSD")
+            # Product policy: GOLD_ONLY_MODE is the autonomous-universe source
+            # of truth. Multi-asset scan / Alpha must not silently restore FX.
+            object.__setattr__(self, "gold_only_mode", True)
+            object.__setattr__(self, "multi_symbol_enabled", False)
+            object.__setattr__(self, "default_trading_symbol", "XAUUSD")
             # Live trading requires an explicit flag AND a configured live gateway
             # (URL + caller token). Without a token DI uses MockMT5Client and
             # cannot place real orders — keep settings.execution_enabled aligned.

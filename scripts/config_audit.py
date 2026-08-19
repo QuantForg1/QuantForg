@@ -63,7 +63,7 @@ def main() -> int:
     conflicts: list[dict[str, str]] = [
         {
             "keys": "gold_only_mode, multi_symbol_enabled",
-            "rule": "multi_symbol_enabled=true overrides gold_only_mode",
+            "rule": "gold_only_mode=true wins; multi_symbol does not expand autonomous universe",
             "status": "documented",
         },
         {

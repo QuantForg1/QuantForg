@@ -112,6 +112,18 @@ def resolve_scan_universe(
     *which* symbols are scored each cycle.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    try:
+        from app.domain.trading.gold_only import (
+            autonomous_execution_symbols,
+            gold_only_enabled,
+        )
+
+        if gold_only_enabled():
+            return autonomous_execution_symbols(
+                broker_symbol_rows=broker_symbol_rows
+            )
+    except Exception:
+        logger.exception("gold_only_scan_universe_failed")
     seed = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
     seed = tuple(s for s in seed if s not in BROKER_UNAVAILABLE_SCALP_SYMBOLS)
 
@@ -181,10 +193,15 @@ def resolve_scan_universe(
                 from app.domain.trading.gold_only import GOLD_SYMBOL, gold_only_enabled
 
                 if gold_only_enabled():
-                    from app.domain.trading.gold_only import is_gold_symbol
+                    from app.domain.trading.gold_only import (
+                        autonomous_execution_symbols,
+                        is_gold_symbol,
+                    )
 
                     gold_only = tuple(s for s in base if is_gold_symbol(s))
-                    base = gold_only or (GOLD_SYMBOL,)
+                    base = gold_only or autonomous_execution_symbols(
+                        broker_symbol_rows=broker_symbol_rows
+                    )
                 elif len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}:
                     # Stale gold-only plane — keep dynamic / seed base
                     pass
@@ -230,6 +247,23 @@ async def score_symbol_for_scan(
     """Fetch market data + run existing AI score for one symbol (no Risk/OMS)."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     code = (symbol or "").strip().upper()
+    try:
+        from app.domain.trading.gold_only import (
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled() and code and not is_gold_symbol(code):
+            return {
+                "symbol": code,
+                "reject": True,
+                "reject_reason": "GOLD_ONLY_SYMBOL_REJECTED",
+                "direction": "NONE",
+                "ai_confidence": 0,
+                "trade_quality": 0,
+            }
+    except Exception:
+        logger.exception("gold_only_score_gate_failed")
     if not code:
         return {
             "symbol": "",

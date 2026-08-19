@@ -1,10 +1,11 @@
 /**
  * Trading symbol policy for the QuantForg frontend.
  *
- * Production supports multi-asset (LIVE MT5 universe). Default focus remains XAUUSD.
- * Weltrade live gold CFD is catalogue-spelled ``XAUUSD_i`` (lowercase i).
- * Order routing still goes through existing backend Risk/OMS gates — this file only
- * controls client display / API path encoding.
+ * Terminal watchlist/charts may list broker symbols for manual viewing.
+ * Autonomous execution is GOLD ONLY (backend ``gold_only_mode`` is
+ * authoritative). Default focus remains Weltrade gold CFD ``XAUUSD_i``.
+ * Order routing still goes through existing backend Risk/OMS gates — this file
+ * only controls client display / API path encoding.
  */
 
 export const GOLD_SYMBOL = "XAUUSD";
