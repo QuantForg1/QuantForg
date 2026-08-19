@@ -23,6 +23,16 @@ The QuantForg Railway/API process does **not** hold broker passwords. Existing Q
 | Diagnostics | `GET /diagnostics` |
 | Health | `GET /health` |
 
+## Cloudflare HTTP 530 (origin unreachable)
+
+`530` means the Cloudflare edge could not reach this Windows origin. It is **not** the same as a Gateway `503` (request reached `:8765`, symbol/MT5 data unavailable).
+
+If health is OK on `http://127.0.0.1:8765/health` but `https://gateway.quantforg.com/health` returns **530**:
+
+1. Restart only the **Cloudflared** Windows service (Automatic, `C:\cloudflared\cloudflared.exe tunnel run --token-file …`).
+2. Do **not** restart MT5 trading, OMS, the Gateway trading engine, or `order_send`.
+3. Do **not** add an unattended restart loop.
+
 ## Communication
 
 - **REST** — primary surface (this document)

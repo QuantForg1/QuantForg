@@ -154,8 +154,8 @@ def test_xauusd_resolves_to_catalogue_xauusd_i() -> None:
     discovered = discover_from_broker_rows(rows)
     assert resolve_seed_to_broker_symbol("XAUUSD", discovered=discovered) == "XAUUSD_I"
     ordered = catalogue_ordered_candidates("XAUUSD", discovered=discovered)
-    assert ordered[0] == "XAUUSD_I"
-    assert "XAUUSD" in ordered  # bare alias retained after catalogue form
+    assert ordered == ("XAUUSD_I",)
+    assert "XAUUSD" not in ordered
 
 
 @pytest.mark.unit

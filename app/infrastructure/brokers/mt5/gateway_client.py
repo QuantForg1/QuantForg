@@ -175,10 +175,14 @@ def classify_gateway_failure(
         return "404 Endpoint"
     if status_code == 429:
         return "Cloudflare rate limited"
+    if status_code == 530:
+        return "CLOUDFLARE_ORIGIN_UNREACHABLE"
+    if status_code in {502, 504}:
+        return "CLOUD_EDGE_ORIGIN_ERROR"
+    if status_code == 503:
+        return "GATEWAY_MARKET_DATA_UNAVAILABLE"
     if status_code is not None and status_code >= 500:
-        return (
-            "Cloudflare upstream error" if cloudflare else f"Gateway HTTP {status_code}"
-        )
+        return f"Gateway HTTP {status_code}"
 
     if "too many redirects" in err or "redirect loop" in err:
         return "Redirect loop"
@@ -717,6 +721,22 @@ class GatewayMT5Client:
             )
             upstream["error"] = msg
             upstream["diagnostic"] = label
+            upstream["http_status"] = int(response.status_code)
+            if int(response.status_code) == 530:
+                requested_symbol = path.rsplit("/", 1)[-1] if path else None
+                upstream["failure_class"] = "MARKET_DATA_ORIGIN_UNREACHABLE"
+                logger.error(
+                    "[QF][MD_ORIGIN_UNREACHABLE]",
+                    failure_class="MARKET_DATA_ORIGIN_UNREACHABLE",
+                    http_status=530,
+                    endpoint=path,
+                    canonical_broker_symbol=requested_symbol,
+                    gateway_host=self.base_url,
+                    timestamp=started,
+                    request_id=cf_ray or None,
+                    cloudflare_ray=cf_ray or None,
+                    next_action="FAIL_CLOSED",
+                )
             raise RuntimeError(msg)
 
         if not body_text.strip():

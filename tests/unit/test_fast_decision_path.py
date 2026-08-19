@@ -22,6 +22,21 @@ from app.domain.institutional_trading.operations.fast_decision_path import (
 pytestmark = [pytest.mark.unit, pytest.mark.trading_core]
 
 
+def test_no_market_context_stays_hard_block() -> None:
+    out = classify_candidate_outcome(
+        abort_reason="NO_MARKET_CONTEXT",
+        failed_reasons=(
+            "CLOUDFLARE_ORIGIN_UNREACHABLE: Gateway /candles/AUDUSD_I "
+            "failed upstream HTTP 530",
+        ),
+        cycle_outcome="no_snapshot",
+    )
+    assert out["fault_class"] == FaultClass.HARD_BLOCK.value
+    assert out["decision_state"] == DecisionState.HARD_BLOCK.value
+    assert out["next_action"] == CandidateAction.FAIL_CLOSED.value
+    assert out["decision_state"] != DecisionState.DEGRADED.value
+
+
 def test_advisory_does_not_block_or_rotate() -> None:
     out = classify_candidate_outcome(
         abort_reason="optional enrichment unavailable",

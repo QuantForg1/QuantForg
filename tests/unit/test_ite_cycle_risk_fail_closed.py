@@ -37,10 +37,16 @@ def _rate(tf: Timeframe, i: int) -> MT5Rate:
 
 
 def _ready_adapter(*, history_deals=None, list_positions=None, positions_raise=False):
+    import app.domain.institutional_trading.ai_scalping.universe_discovery as ud
+
+    ud._CATALOGUE_CACHE = None
     adapter = MagicMock()
     adapter.client = MagicMock()
     adapter.client.is_connected = True
     adapter.client.session_mode = "attached"
+    adapter.list_symbols.return_value = [
+        SimpleNamespace(code="XAUUSD_i", description="Gold", digits=3)
+    ]
 
     def _bars(symbol, tf, start, count):
         return [_rate(tf, i) for i in range(count)]

@@ -62,6 +62,11 @@ _HARD_NEEDLES: tuple[str, ...] = (
     "stale heartbeat gateway",
     "stale heartbeat mt5",
     "stale heartbeat oms",
+    "no market context",
+    "market data load failed",
+    "cloudflare origin unreachable",
+    "symbol catalogue resolution failed",
+    "http 530",
 )
 
 _ADVISORY_NEEDLES: tuple[str, ...] = (

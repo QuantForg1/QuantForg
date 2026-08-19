@@ -61,6 +61,9 @@ def test_require_connected_raises_when_adopt_fails() -> None:
 async def test_market_context_adopts_then_loads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import app.domain.institutional_trading.ai_scalping.universe_discovery as ud
+
+    monkeypatch.setattr(ud, "_CATALOGUE_CACHE", None)
     gw = MagicMock()
     gw.is_connected = False
     gw.session_mode = "none"
@@ -73,6 +76,9 @@ async def test_market_context_adopts_then_loads(
     gw.adopt_existing_session.side_effect = _adopt
     adapter = MagicMock()
     adapter.client = gw
+    adapter.list_symbols.return_value = [
+        SimpleNamespace(code="XAUUSD_i", description="Gold", digits=3)
+    ]
 
     def _bars(symbol, tf, start, count):
         return [_rate(tf, i) for i in range(count)]
@@ -130,6 +136,9 @@ async def test_market_context_reads_autotrading_from_gateway_health(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Regression: must not hardcode mt5_autotrading_enabled=False when true."""
+    import app.domain.institutional_trading.ai_scalping.universe_discovery as ud
+
+    monkeypatch.setattr(ud, "_CATALOGUE_CACHE", None)
     gw = MagicMock()
     gw.is_connected = True
     gw.session_mode = "attached"
@@ -144,6 +153,9 @@ async def test_market_context_reads_autotrading_from_gateway_health(
     }
     adapter = MagicMock()
     adapter.client = gw
+    adapter.list_symbols.return_value = [
+        SimpleNamespace(code="XAUUSD_i", description="Gold", digits=3)
+    ]
 
     def _bars(symbol, tf, start, count):
         return [_rate(tf, i) for i in range(count)]

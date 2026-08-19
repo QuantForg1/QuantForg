@@ -80,7 +80,8 @@ async def test_scanner_cycles_do_not_overlap() -> None:
 def test_catalogue_candidates_do_not_lead_with_invalid_bare_when_i_exists() -> None:
     rows = [{"code": "XAUUSD_I", "trade_mode": 4, "digits": 3}]
     ordered = catalogue_ordered_candidates("XAUUSD", broker_symbol_rows=rows)
-    assert ordered[0] == "XAUUSD_I"
+    assert ordered == ("XAUUSD_I",)
+    assert "XAUUSD" not in ordered
 
 
 @pytest.mark.unit

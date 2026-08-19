@@ -276,39 +276,78 @@ def resolve_seed_to_broker_symbol(
     return opts[0]
 
 
+def _catalogue_exact_map(
+    *,
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+    discovered: tuple[DiscoveredSymbol, ...] | list[DiscoveredSymbol] | None = None,
+) -> dict[str, str]:
+    """UPPER catalogue code → first exact spelling seen."""
+    mapping: dict[str, str] = {}
+    if discovered is not None:
+        for row in discovered:
+            code = str(getattr(row, "code", "") or "").strip()
+            if code:
+                mapping.setdefault(code.upper(), code)
+        return mapping
+    for row in broker_symbol_rows or ():
+        if not isinstance(row, dict):
+            continue
+        code = str(row.get("code") or row.get("name") or "").strip()
+        if code:
+            mapping.setdefault(code.upper(), code)
+    return mapping
+
+
+def resolve_canonical_market_data_symbol(
+    seed_code: str,
+    *,
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+    discovered: tuple[DiscoveredSymbol, ...] | list[DiscoveredSymbol] | None = None,
+) -> str:
+    """Single catalogue broker code for quotes/candles — never invents ``_i``.
+
+    Prefers an existing institutional ``_I`` form for the desk when the
+    catalogue lists it. Returns ``""`` when the seed cannot be resolved
+    from provided rows (caller must fail closed).
+    """
+    raw = (seed_code or "").strip()
+    if not raw:
+        return ""
+    codes = _catalogue_exact_map(
+        broker_symbol_rows=broker_symbol_rows, discovered=discovered
+    )
+    if not codes:
+        return ""
+    desk = scalp_desk_code(raw)
+    inst = f"{desk}_I"
+    if inst in codes:
+        return inst
+    key = raw.upper()
+    if key in codes:
+        return key
+    for upper in codes:
+        if scalp_desk_code(upper) == desk:
+            return upper
+    return ""
+
+
 def catalogue_ordered_candidates(
     symbol: str,
     *,
     broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
     discovered: tuple[DiscoveredSymbol, ...] | list[DiscoveredSymbol] | None = None,
 ) -> tuple[str, ...]:
-    """Catalogue-first candidate walk — resolved broker code before bare aliases.
+    """Canonical catalogue symbol only — no unsuffixed desk fallback.
 
-    When the catalogue exposes ``XAUUSD_I``, that form is tried first so bare
-    ``XAUUSD`` (not in Weltrade catalogue) is not hammered every cycle.
+    When the catalogue exposes ``AUDUSD_i`` / ``AUDUSD_I``, market-data
+    loaders must request that form only. Bare ``AUDUSD`` is not appended.
     """
-    from app.domain.institutional_trading.ai_scalping.asset_class import (
-        broker_symbol_candidates,
-    )
-
-    resolved = resolve_seed_to_broker_symbol(
+    canonical = resolve_canonical_market_data_symbol(
         symbol, discovered=discovered, broker_symbol_rows=broker_symbol_rows
     )
-    aliases = broker_symbol_candidates(symbol) or (symbol,)
-    ordered: list[str] = []
-    seen: set[str] = set()
-
-    def _add(name: str) -> None:
-        n = (name or "").strip().upper()
-        if not n or n in seen:
-            return
-        seen.add(n)
-        ordered.append(n)
-
-    _add(resolved)
-    for a in aliases:
-        _add(a)
-    return tuple(ordered)
+    if not canonical:
+        return ()
+    return (canonical,)
 
 
 def build_dynamic_scalping_universe(

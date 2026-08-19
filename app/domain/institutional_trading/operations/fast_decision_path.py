@@ -184,6 +184,26 @@ def classify_candidate_outcome(
             "release_entry_budget": False,
         }
 
+    if (
+        abort.strip().upper() == "NO_MARKET_CONTEXT"
+        or "no market context" in hay
+        or "market data load failed" in hay
+        or "cloudflare origin unreachable" in hay
+        or "symbol catalogue resolution failed" in hay
+    ):
+        return {
+            "decision_state": DecisionState.HARD_BLOCK.value,
+            "fault_class": FaultClass.HARD_BLOCK.value,
+            "fault_code": abort.strip().upper() or "NO_MARKET_CONTEXT",
+            "fault_reason": abort or "; ".join(reasons) or outcome or "NO_MARKET_CONTEXT",
+            "retryable": False,
+            "candidate_action": CandidateAction.FAIL_CLOSED.value,
+            "next_action": CandidateAction.FAIL_CLOSED.value,
+            "blocking_stage": "GATEWAY",
+            "skip_idle_sleep": False,
+            "release_entry_budget": False,
+        }
+
     halt = classify_halt_condition(hay)
     if halt is HaltClass.ADVISORY:
         return {

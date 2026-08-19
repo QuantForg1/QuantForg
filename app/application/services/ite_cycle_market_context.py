@@ -86,6 +86,44 @@ class IteCycleMarketContext:
         }
 
 
+def _market_data_failure_fields(
+    error_text: str,
+    *,
+    logical_symbol: str,
+    canonical_broker_symbol: str | None,
+) -> dict[str, Any]:
+    """Classify a bars-load exception without rewriting the HTTP status."""
+    import re
+
+    text = str(error_text or "")
+    match = re.search(r"HTTP\s+(\d{3})", text, flags=re.IGNORECASE)
+    http_status = int(match.group(1)) if match else None
+    endpoint_match = re.search(r"Gateway\s+(\S+)", text)
+    host_match = re.search(r"https?://[^/\s:]+", text)
+    fields: dict[str, Any] = {
+        "logical_symbol": logical_symbol,
+        "canonical_broker_symbol": canonical_broker_symbol,
+        "http_status": http_status,
+        "endpoint": endpoint_match.group(1) if endpoint_match else None,
+        "gateway_host": host_match.group(0) if host_match else None,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "next_action": "FAIL_CLOSED",
+        "reason_prefix": "Market data load failed",
+    }
+    if http_status == 530 or "CLOUDFLARE_ORIGIN_UNREACHABLE" in text:
+        fields["failure_class"] = "MARKET_DATA_ORIGIN_UNREACHABLE"
+        fields["reason_prefix"] = "CLOUDFLARE_ORIGIN_UNREACHABLE"
+    elif http_status == 503 or "GATEWAY_MARKET_DATA_UNAVAILABLE" in text:
+        fields["failure_class"] = "GATEWAY_MARKET_DATA_UNAVAILABLE"
+        fields["reason_prefix"] = "GATEWAY_MARKET_DATA_UNAVAILABLE"
+    elif http_status in {502, 504} or "CLOUD_EDGE_ORIGIN_ERROR" in text:
+        fields["failure_class"] = "CLOUD_EDGE_ORIGIN_ERROR"
+        fields["reason_prefix"] = "CLOUD_EDGE_ORIGIN_ERROR"
+    else:
+        fields["failure_class"] = "MARKET_DATA_UNAVAILABLE"
+    return fields
+
+
 def _rate_to_candle(rate: Any) -> Candle:
     close_time = rate.open_time + rate.timeframe.duration
     return Candle.create(
@@ -274,74 +312,85 @@ async def build_ite_cycle_market_context(
     if session_err:
         return _fail(session_err)
 
-    # Catalogue-first resolution: Weltrade exposes XAUUSD_I / EURUSD_I — do not
-    # hammer bare desk codes that are absent from the broker catalogue.
-    from app.domain.institutional_trading.ai_scalping.asset_class import (
-        broker_symbol_candidates,
-    )
+    # Catalogue-only resolution: Weltrade exposes XAUUSD_i / EURUSD_i.
+    # Never request unsuffixed desk aliases once the catalogue has the
+    # institutional form (bare AUDUSD is 503 on this broker).
     from app.domain.institutional_trading.ai_scalping.universe_discovery import (
         catalogue_ordered_candidates,
         fetch_broker_symbol_rows,
     )
 
+    logical_symbol = (symbol or "").strip()
+    diag["logical_symbol"] = logical_symbol
+    diag["canonical_broker_symbol"] = None
     broker_rows: tuple[dict[str, Any], ...] = ()
     try:
         broker_rows = await _offload_sync(fetch_broker_symbol_rows, mt5_adapter)
     except Exception:
         broker_rows = ()
-    if broker_rows:
-        symbol_candidates = catalogue_ordered_candidates(
-            symbol, broker_symbol_rows=broker_rows
+    symbol_candidates = (
+        catalogue_ordered_candidates(logical_symbol, broker_symbol_rows=broker_rows)
+        if broker_rows
+        else ()
+    )
+    if not symbol_candidates:
+        return _fail(
+            f"SYMBOL_CATALOGUE_RESOLUTION_FAILED: no catalogue broker symbol "
+            f"for {logical_symbol or 'unknown'}",
+            logical_symbol=logical_symbol,
+            canonical_broker_symbol=None,
+            next_action="FAIL_CLOSED",
         )
-    else:
-        symbol_candidates = broker_symbol_candidates(symbol) or (symbol,)
-    resolved_symbol = symbol
+    canonical_symbol = symbol_candidates[0]
+    diag["canonical_broker_symbol"] = canonical_symbol
+    diag["requested_symbol"] = logical_symbol
     bars_by_tf: dict[Timeframe, list[Candle]] = {}
     bars_loaded: dict[str, int] = {}
     last_bar_exc: Exception | None = None
-    for candidate in symbol_candidates:
-        bars_by_tf = {}
-        bars_loaded = {}
-        try:
-            for tf, count in _TF_COUNTS:
-                rates = await _offload_sync(
-                    mt5_adapter.copy_rates_from_pos, candidate, tf, 0, count
+    try:
+        for tf, count in _TF_COUNTS:
+            rates = await _offload_sync(
+                mt5_adapter.copy_rates_from_pos, canonical_symbol, tf, 0, count
+            )
+            candles = [_rate_to_candle(r) for r in (rates or [])]
+            bars_by_tf[tf] = candles
+            bars_loaded[tf.value] = len(candles)
+            diag["bars"][tf.value] = {
+                "requested": count,
+                "loaded": len(candles),
+                "ok": len(candles) >= 50,
+            }
+            if len(candles) < 50:
+                raise RuntimeError(
+                    f"Insufficient {tf.value} bars for analysis "
+                    f"(got {len(candles)}, need ≥50)"
                 )
-                candles = [_rate_to_candle(r) for r in (rates or [])]
-                bars_by_tf[tf] = candles
-                bars_loaded[tf.value] = len(candles)
-                diag["bars"][tf.value] = {
-                    "requested": count,
-                    "loaded": len(candles),
-                    "ok": len(candles) >= 50,
-                }
-                if len(candles) < 50:
-                    raise RuntimeError(
-                        f"Insufficient {tf.value} bars for analysis "
-                        f"(got {len(candles)}, need ≥50)"
-                    )
-            resolved_symbol = candidate
-            last_bar_exc = None
-            break
-        except Exception as exc:
-            last_bar_exc = exc
-            continue
+        last_bar_exc = None
+    except Exception as exc:
+        last_bar_exc = exc
     if last_bar_exc is not None or not bars_by_tf:
+        err_text = str(last_bar_exc or "no bars")
+        md_fields = _market_data_failure_fields(
+            err_text,
+            logical_symbol=logical_symbol,
+            canonical_broker_symbol=canonical_symbol,
+        )
+        prefix = str(md_fields.pop("reason_prefix", "Market data load failed"))
         logger.warning(
             "ite_cycle_bars_load_failed",
-            error=str(last_bar_exc),
-            symbol=symbol,
+            error=err_text,
             tried=list(symbol_candidates),
+            **md_fields,
         )
         return _fail(
-            f"Market data load failed: {last_bar_exc}",
+            f"{prefix}: {err_text}",
             bars=bars_loaded,
             broker_symbol_tried=list(symbol_candidates),
+            **md_fields,
         )
-    if resolved_symbol != symbol:
-        diag["broker_symbol_resolved"] = resolved_symbol
-        diag["requested_symbol"] = symbol
-        symbol = resolved_symbol
+    if canonical_symbol != logical_symbol:
+        diag["broker_symbol_resolved"] = canonical_symbol
+        symbol = canonical_symbol
         diag["symbol"] = symbol
 
     diag["bars"] = {

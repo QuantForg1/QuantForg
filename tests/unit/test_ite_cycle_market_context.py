@@ -42,8 +42,14 @@ async def test_refuses_without_adapter() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_refuses_insufficient_bars() -> None:
+async def test_refuses_insufficient_bars(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.domain.institutional_trading.ai_scalping.universe_discovery as ud
+
+    monkeypatch.setattr(ud, "_CATALOGUE_CACHE", None)
     adapter = MagicMock()
+    adapter.list_symbols.return_value = [
+        SimpleNamespace(code="XAUUSD_i", description="Gold", digits=3)
+    ]
     adapter.copy_rates_from_pos.return_value = [_rate(Timeframe.M5, 0)] * 10
     ctx = await build_ite_cycle_market_context(adapter)
     assert ctx.ok is False
@@ -53,7 +59,13 @@ async def test_refuses_insufficient_bars() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_refuses_zero_equity(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.domain.institutional_trading.ai_scalping.universe_discovery as ud
+
+    monkeypatch.setattr(ud, "_CATALOGUE_CACHE", None)
     adapter = MagicMock()
+    adapter.list_symbols.return_value = [
+        SimpleNamespace(code="XAUUSD_i", description="Gold", digits=3)
+    ]
 
     def _bars(symbol, tf, start, count):
         return [_rate(tf, i) for i in range(count)]

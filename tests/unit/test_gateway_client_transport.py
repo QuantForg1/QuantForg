@@ -46,6 +46,29 @@ class TestGatewayDiagnostics:
             )
             == "JSON parse error"
         )
+        assert (
+            classify_gateway_failure(status_code=530, cloudflare=True)
+            == "CLOUDFLARE_ORIGIN_UNREACHABLE"
+        )
+        assert (
+            classify_gateway_failure(
+                status_code=503,
+                cloudflare=True,
+                error="symbol unavailable: AUDUSD",
+            )
+            == "GATEWAY_MARKET_DATA_UNAVAILABLE"
+        )
+        assert classify_gateway_failure(status_code=503) == (
+            "GATEWAY_MARKET_DATA_UNAVAILABLE"
+        )
+        assert (
+            classify_gateway_failure(status_code=502, cloudflare=True)
+            == "CLOUD_EDGE_ORIGIN_ERROR"
+        )
+        assert (
+            classify_gateway_failure(status_code=504, cloudflare=True)
+            == "CLOUD_EDGE_ORIGIN_ERROR"
+        )
 
 
 @pytest.mark.unit
