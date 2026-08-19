@@ -3791,12 +3791,22 @@ class InstitutionalIteRuntime:
                 )
             except Exception:
                 open_n = 0
+            t_scan = time.perf_counter()
             scan = await run_institutional_multi_asset_scan(
                 self.mt5_adapter,
                 position_engine=getattr(self.position_management, "engine", None),
                 open_positions=open_n,
                 plane=self.plane,
                 config=DEFAULT_AI_SCALPING_CONFIG,
+            )
+            scan_ms = round((time.perf_counter() - t_scan) * 1000.0, 1)
+            if isinstance(scan, dict) and scan.get("scanner_duration_ms") is None:
+                scan["scanner_duration_ms"] = scan_ms
+            logger.warning(
+                "multi_asset_scan_timing",
+                scanner_duration_ms=scan.get("scanner_duration_ms")
+                if isinstance(scan, dict)
+                else scan_ms,
             )
             eligible = [
                 str(s).upper()
@@ -4006,8 +4016,12 @@ class InstitutionalIteRuntime:
                 opportunity_window_snapshot,
             )
 
-            current = self._current_scan_snapshot() or {}
-            snap = opportunity_window_snapshot(current_scan=current or None)
+            current = self._current_scan_snapshot()
+            snap = opportunity_window_snapshot(
+                current_scan=current
+                if isinstance(current, dict) and current.get("label") == "CURRENT_SCAN"
+                else None
+            )
             last_pipeline = self._last_pipeline_snapshot()
             with self._lock:
                 last = self._last_cycle
@@ -4017,10 +4031,16 @@ class InstitutionalIteRuntime:
             snap["last_cycle_outcome"] = (
                 getattr(last, "cycle_outcome", None) if last else None
             )
-            snap["current_scan"] = current or None
+            snap["current_scan"] = (
+                current
+                if isinstance(current, dict) and current.get("label") == "CURRENT_SCAN"
+                else None
+            )
             snap["last_pipeline"] = last_pipeline
             snap["current_scan_symbol"] = (
-                current.get("current_scan_symbol") if current else snap.get("symbol")
+                current.get("current_scan_symbol")
+                if isinstance(current, dict)
+                else snap.get("symbol")
             )
             snap["last_pipeline_symbol"] = (
                 last_pipeline.get("last_pipeline_symbol") if last_pipeline else None
@@ -4042,6 +4062,10 @@ class InstitutionalIteRuntime:
     async def _pick_executable_symbol_async(self) -> str | None:
         """Highest-ranked full-mode symbol after institutional multi-asset scan.
 
+        Gold-only is a universe restriction, not a scanner bypass. CURRENT_SCAN
+        is published by ``run_institutional_multi_asset_scan`` before any
+        executable symbol is returned.
+
         Reuses the last parallel scan's eligible queue when max_entries_per_cycle
         still has capacity — continuous multi-symbol handoff without re-scoring.
         """
@@ -4051,17 +4075,29 @@ class InstitutionalIteRuntime:
         from app.domain.trading.gold_only import (
             GOLD_SYMBOL,
             autonomous_execution_symbols,
+            filter_autonomous_symbols,
             gold_only_enabled,
             is_gold_symbol,
         )
 
+        preferred = self._take_next_handoff_symbol()
+        if not preferred:
+            preferred = await self._multi_asset_preferred_symbol()
+
         if gold_only_enabled():
+            if preferred and not is_gold_symbol(preferred):
+                logger.warning(
+                    "GOLD_ONLY_SYMBOL_REJECTED",
+                    symbol=preferred,
+                    next_action="NO_EXECUTABLE_FOCUS",
+                )
+                preferred = None
             universe = autonomous_execution_symbols()
-            preferred = universe[0] if universe else GOLD_SYMBOL
+            gold_desk = universe[0] if universe else GOLD_SYMBOL
             symbol, skipped = await self._offload_blocking_io(
                 resolve_executable_symbol,
                 self.mt5_adapter,
-                preferred=preferred,
+                preferred=preferred or gold_desk,
                 plane=self.plane,
                 alpha_ranking=None,
             )
@@ -4069,12 +4105,36 @@ class InstitutionalIteRuntime:
                 logger.warning(
                     "gold_only_closeonly_or_blocked",
                     skipped=skipped,
-                    preferred=preferred,
+                    preferred=preferred or gold_desk,
                 )
-            if symbol is None or not is_gold_symbol(symbol):
+            if symbol is not None and not is_gold_symbol(symbol):
+                logger.warning(
+                    "GOLD_ONLY_SYMBOL_REJECTED",
+                    symbol=symbol,
+                    next_action="NO_EXECUTABLE_FOCUS",
+                )
+                return None
+            with self._lock:
+                last = (
+                    dict(self._last_multi_asset_scan)
+                    if isinstance(self._last_multi_asset_scan, dict)
+                    else None
+                )
+            scan_complete = bool(
+                last
+                and last.get("as_of")
+                and last.get("note") != "multi_asset_scan_disabled"
+            )
+            eligible = list(
+                filter_autonomous_symbols(last.get("eligible_symbols") or [])
+            ) if last else []
+            if scan_complete and not eligible:
+                # Rejected / ineligible Gold — CURRENT_SCAN already published.
+                return None
+            if symbol is None:
                 logger.warning(
                     "no_full_mode_gold_symbol_available",
-                    preferred=preferred,
+                    preferred=preferred or gold_desk,
                     skipped=skipped,
                     selected=symbol,
                 )
@@ -4082,9 +4142,6 @@ class InstitutionalIteRuntime:
             logger.warning("Submitting Order...", symbol=symbol)
             return symbol
 
-        preferred = self._take_next_handoff_symbol()
-        if not preferred:
-            preferred = await self._multi_asset_preferred_symbol()
         with self._lock:
             last = (
                 dict(self._last_multi_asset_scan)
@@ -4618,7 +4675,9 @@ class InstitutionalIteRuntime:
                 except Exception:
                     logger.exception("pvm_scheduler_stage_failed")
 
+                t_pick = time.perf_counter()
                 symbol = await self._pick_executable_symbol_async()
+                pick_ms = round((time.perf_counter() - t_pick) * 1000.0, 1)
                 manage_only = False
                 if not symbol:
                     # Never force a close-only / market-closed symbol into OMS.
@@ -4645,6 +4704,25 @@ class InstitutionalIteRuntime:
                     symbol=symbol,
                     position_engine=self.position_management.engine,
                 )
+                try:
+                    with self._lock:
+                        last_scan = (
+                            dict(self._last_multi_asset_scan)
+                            if isinstance(self._last_multi_asset_scan, dict)
+                            else None
+                        )
+                    logger.warning(
+                        "ite_cycle_stage_timings",
+                        scanner_duration_ms=(
+                            last_scan.get("scanner_duration_ms") if last_scan else None
+                        ),
+                        signal_focus_pick_ms=pick_ms,
+                        market_context_duration_ms=round(
+                            float(getattr(ctx, "latency_ms", 0.0) or 0.0), 1
+                        ),
+                    )
+                except Exception:
+                    logger.exception("ite_cycle_stage_timings_failed")
                 try:
                     from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                         ValidationStage,

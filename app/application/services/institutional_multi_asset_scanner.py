@@ -432,6 +432,9 @@ async def _run_institutional_multi_asset_scan_body(
     plane: Any | None = None,
     ite_config: Any | None = None,
 ) -> dict[str, Any]:
+    import time as _time
+
+    t_scan = _time.perf_counter()
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     # LIVE broker catalogue → dynamic liquid universe (quality gates unchanged).
     broker_rows: tuple[dict[str, Any], ...] = ()
@@ -462,6 +465,32 @@ async def _run_institutional_multi_asset_scan_body(
         broker_symbol_rows=broker_rows or None,
         session=session_name,
     )
+    try:
+        from app.domain.trading.gold_only import (
+            autonomous_execution_symbols,
+            gold_only_enabled,
+            is_gold_symbol,
+        )
+
+        if gold_only_enabled():
+            cleaned: list[str] = []
+            for raw in universe:
+                code = str(raw or "").strip()
+                if not code:
+                    continue
+                if is_gold_symbol(code):
+                    cleaned.append(code)
+                    continue
+                logger.warning(
+                    "GOLD_ONLY_SYMBOL_REJECTED",
+                    symbol=code,
+                    next_action="NO_EXECUTABLE_FOCUS",
+                )
+            universe = tuple(cleaned) or autonomous_execution_symbols(
+                broker_symbol_rows=broker_rows or None
+            )
+    except Exception:
+        logger.exception("gold_only_scan_universe_clamp_failed")
     as_of = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     if broker_rows:
         try:
@@ -500,6 +529,7 @@ async def _run_institutional_multi_asset_scan_body(
             "version": cfg.version,
             "forced_trades": False,
             "governed_by_existing_ai_and_risk": True,
+            "scanner_duration_ms": round((_time.perf_counter() - t_scan) * 1000.0, 1),
         }
         _store_last_scan(payload)
         return payload
@@ -523,6 +553,7 @@ async def _run_institutional_multi_asset_scan_body(
             "note": "mt5_adapter_unavailable",
             "version": cfg.version,
             "governed_by_existing_ai_and_risk": True,
+            "scanner_duration_ms": round((_time.perf_counter() - t_scan) * 1000.0, 1),
         }
         _store_last_scan(payload)
         return payload
@@ -1062,6 +1093,7 @@ async def _run_institutional_multi_asset_scan_body(
         "governed_by_existing_ai_and_risk": True,
         "atr_source_timeframe": "M15",
         "atr_source_period": 14,
+        "scanner_duration_ms": round((_time.perf_counter() - t_scan) * 1000.0, 1),
     }
     try:
         from app.domain.institutional_trading.operations.fast_decision_path import (

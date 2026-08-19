@@ -1303,6 +1303,7 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "atr_source_timeframe": vol.get("atr_source_timeframe"),
         "atr_source_period": vol.get("atr_source_period"),
         "volatility_reason": vol.get("volatility_reason"),
+        "scanner_duration_ms": payload.get("scanner_duration_ms"),
         "forces_trades": False,
         "execution_ready": bool(eligible) and bool(payload.get("best_symbol")),
     }
