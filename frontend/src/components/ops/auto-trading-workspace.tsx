@@ -1307,6 +1307,9 @@ export function AutoTradingWorkspace() {
             <Badge tone={goldOnlyMode ? "neutral" : "warning"}>
               {goldOnlyMode ? "GOLD ONLY" : "MULTI SYMBOL"}
             </Badge>
+            <Badge tone={runState === "running" ? "success" : "neutral"}>
+              AUTONOMOUS = {String(runState || "off").toUpperCase()}
+            </Badge>
             <Badge tone="neutral">
               AUTO {autonomousSymbol}
             </Badge>
@@ -1338,6 +1341,7 @@ export function AutoTradingWorkspace() {
         {goldOnlyMode ? (
           <p className="mt-2 font-mono text-[11px] text-[var(--fg-muted)]">
             TRADING MODE: GOLD ONLY · AUTONOMOUS SYMBOL: {autonomousSymbol} ·
+            AUTONOMOUS = {runState === "running" ? "RUNNING" : String(runState || "off").toUpperCase()} ·
             OTHER PAIRS: DISABLED FOR AUTONOMOUS EXECUTION · CURRENT FOCUS:{" "}
             {(() => {
               const focus = str(currentScan.executable_focus, "");
@@ -1441,6 +1445,14 @@ export function AutoTradingWorkspace() {
           const windowDetail = str(fd.fault_reason, windowGate);
           const trackerState = str(fd.tracker_state, str(fd.decision_state, "FOCUS_FORMING"));
           const blockingStage = str(fd.blocking_stage, "—");
+          const executionReadiness = str(
+            fd.execution_readiness || fd.decision_state,
+            "NOT_READY",
+          );
+          const firstBlocker = str(
+            fd.first_authoritative_blocker || windowDetail,
+            "—",
+          );
           const readiness = asRecord(asRecord(fd.readiness_matrix).stages);
           const bottleneck = asRecord(fd.bottleneck_report);
           const stageOrder = [
@@ -1514,6 +1526,14 @@ export function AutoTradingWorkspace() {
                   {blockingStage}
                 </p>
               </div>
+              <div>
+                <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
+                  Execution readiness
+                </p>
+                <p className="font-mono text-[13px] text-[var(--fg)]">
+                  {executionReadiness}
+                </p>
+              </div>
               <div className="sm:col-span-2 lg:col-span-1">
                 <p className="text-[9px] uppercase text-[var(--fg-subtle)]">
                   Current fault
@@ -1532,6 +1552,11 @@ export function AutoTradingWorkspace() {
                 <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
                   {windowDetail}
                 </p>
+                {firstBlocker && firstBlocker !== "—" ? (
+                  <p className="mt-1 font-mono text-[11px] text-[var(--fg)]">
+                    First authoritative blocker: {firstBlocker}
+                  </p>
+                ) : null}
               </div>
               </div>
               <div>
@@ -1682,6 +1707,10 @@ export function AutoTradingWorkspace() {
             Emergency Stop
           </Button>
         </div>
+        <p className="mt-2 text-[11px] text-[var(--fg-muted)]">
+          Autonomous Gold execution uses the scheduler cycle — Execute Now is
+          manual only and is not required when AUTONOMOUS = RUNNING.
+        </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
             Engine mode

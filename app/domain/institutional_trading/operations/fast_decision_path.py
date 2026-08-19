@@ -76,6 +76,13 @@ SAFETY_NOT_REACHED = "NOT_REACHED"
 OPTIMIZER_NOT_RUN = "NOT_RUN"
 
 
+def _stage_flag(classification: dict[str, Any], name: str) -> bool:
+    stages = classification.get("stages")
+    if not isinstance(stages, dict):
+        return False
+    return str(stages.get(name) or "").upper() == "PASS"
+
+
 # Snapshot ATR used by the scanner quality gate (pipeline DEFAULT_ITE_CONFIG).
 SCAN_ATR_TIMEFRAME = "M15"
 SCAN_ATR_PERIOD = 14
@@ -642,6 +649,20 @@ def record_cycle_classification(
             "next_action": classification.get("next_action"),
             "cycle_latency_ms": cycle_ms,
             "forwarded_to_oms": bool(forwarded_to_oms),
+            "market_ready": _stage_flag(classification, "MARKET"),
+            "strategy_ready": _stage_flag(classification, "STRATEGY"),
+            "decision_ready": _stage_flag(classification, "DECISION"),
+            "safety_ready": _stage_flag(classification, "SAFETY"),
+            "risk_ready": _stage_flag(classification, "RISK"),
+            "sizing_ready": _stage_flag(classification, "SIZING"),
+            "portfolio_ready": _stage_flag(classification, "PORTFOLIO"),
+            "optimizer_ready": _stage_flag(classification, "OPTIMIZER"),
+            "oms_ready": _stage_flag(classification, "OMS"),
+            "broker_ready": _stage_flag(classification, "BROKER"),
+            "execution_readiness": classification.get("execution_readiness"),
+            "first_authoritative_blocker": classification.get(
+                "first_authoritative_blocker"
+            ),
         }
         _WINDOW.cycle_events.append(event)
 
@@ -990,6 +1011,12 @@ def opportunity_window_snapshot(
         "safety_state": safety_state,
         "optimizer_state": optimizer_state,
         "execution_ready": execution_ready,
+        "execution_readiness": overlay_cls.get("execution_readiness")
+        or ("EXECUTION_READY" if execution_ready else "NOT_READY"),
+        "first_authoritative_blocker": overlay_cls.get("first_authoritative_blocker")
+        or coherent["first_blocking_gate"],
+        "all_failed_conditions": overlay_cls.get("all_failed_conditions") or [],
+        "execute_now_required": False,
         "readiness_matrix": readiness,
         "production_features": production_feature_inventory(),
         "bottleneck_report": bottleneck,

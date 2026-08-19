@@ -2033,6 +2033,8 @@ class InstitutionalIteRuntime:
             logger.exception("performance_lab_duel_failed")
 
         # v9 Portfolio Intelligence — portfolio-aware queue/protection (no auto-reallocate)  # noqa: E501
+        portfolio_allow = True
+        portfolio_reasons: tuple[str, ...] = ()
         try:
             from app.domain.institutional_trading.portfolio_intelligence import (
                 build_portfolio_state,
@@ -2083,6 +2085,8 @@ class InstitutionalIteRuntime:
                 risk_budget_pct=float(budget["risk_budget_pct"]),
             )
             if not prot.allow_new_exposure:
+                portfolio_allow = False
+                portfolio_reasons = tuple(str(r) for r in (prot.reasons or ()) if r)
                 logger.warning(
                     "portfolio_capital_protection_block_new",
                     reasons=list(prot.reasons),
@@ -2450,6 +2454,63 @@ class InstitutionalIteRuntime:
                     if market_context_diagnostics
                     else None
                 ),
+                signal_id=str(getattr(decision, "id", "") or "") or None,
+            )
+            with self._lock:
+                self._last_cycle = result
+                self._last_decision = decision
+                self._cycles += 1
+            return result
+
+        from app.domain.institutional_trading.operations.gold_execution_contract import (
+            evaluate_gold_execution_contract,
+            facts_from_cycle,
+        )
+
+        contract = evaluate_gold_execution_contract(
+            facts_from_cycle(
+                snapshot=snapshot,
+                account=account,
+                decision=decision,
+                optimizer=optimizer_payload,
+                execution_enabled=execution_enabled,
+                force_shadow=force_shadow,
+                gateway_connected=gateway_connected,
+                broker_connected=broker_connected,
+                symbol_tradable=symbol_tradable,
+                auto_running=str(self.plane.auto_trading_run_state or "") == "running",
+                kill_switch=bool(self.plane.kill_switch_armed),
+                oms_orders_allowed=bool(self.plane.oms_orders_allowed()),
+                safety_allowed=not force_shadow,
+                portfolio_allow=portfolio_allow,
+                portfolio_reasons=portfolio_reasons,
+            )
+        )
+        if market_context_diagnostics is None:
+            market_context_diagnostics = {}
+        market_context_diagnostics["execution_contract"] = contract.to_dict()
+        if not contract.may_submit_oms and not force_shadow:
+            logger.warning(
+                "execution_contract_hold",
+                decision_state=contract.decision_state,
+                fault_code=contract.fault_code,
+                blocking_stage=contract.blocking_stage,
+                may_submit_oms=False,
+                execute_now_required=False,
+            )
+            result = ShadowCycleResult(
+                ok=True,
+                trace_id=tid,
+                mode=self.plane.mode.value,
+                decision_action=decision.action.value,
+                forwarded_to_oms=False,
+                detail=contract.fault_reason,
+                health=health.get("health") if isinstance(health, dict) else None,
+                cycle_outcome="execution_contract",
+                abort_reason=contract.fault_code,
+                decision_reasons=(contract.fault_reason,),
+                snapshot_present=True,
+                market_context_diagnostics=dict(market_context_diagnostics),
                 signal_id=str(getattr(decision, "id", "") or "") or None,
             )
             with self._lock:
@@ -5089,6 +5150,7 @@ class InstitutionalIteRuntime:
                     failed_reasons=tuple(
                         getattr(last_for_cls, "safety_failed_reasons", ()) or ()
                     )
+                    + tuple(getattr(last_for_cls, "decision_reasons", ()) or ())
                     if last_for_cls
                     else (),
                     cycle_outcome=getattr(last_for_cls, "cycle_outcome", None)
@@ -5111,6 +5173,34 @@ class InstitutionalIteRuntime:
                     if last_for_cls or last_decision
                     else "",
                 )
+                diag = (
+                    getattr(last_for_cls, "market_context_diagnostics", None)
+                    if last_for_cls
+                    else None
+                )
+                contract = diag.get("execution_contract") if isinstance(diag, dict) else None
+                if isinstance(contract, dict):
+                    if contract.get("decision_state"):
+                        cls["decision_state"] = contract["decision_state"]
+                    if contract.get("fault_code"):
+                        cls["fault_code"] = contract["fault_code"]
+                    if contract.get("fault_class"):
+                        cls["fault_class"] = contract["fault_class"]
+                    if contract.get("fault_reason"):
+                        cls["fault_reason"] = contract["fault_reason"]
+                    if contract.get("next_action"):
+                        cls["next_action"] = contract["next_action"]
+                    if contract.get("blocking_stage"):
+                        cls["blocking_stage"] = contract["blocking_stage"]
+                    cls["execution_readiness"] = contract.get("execution_readiness")
+                    cls["first_authoritative_blocker"] = contract.get(
+                        "first_authoritative_blocker"
+                    )
+                    cls["all_failed_conditions"] = contract.get(
+                        "all_failed_conditions"
+                    )
+                    cls["stages"] = contract.get("stages")
+                    cls["execute_now_required"] = False
                 record_cycle_classification(
                     cls,
                     cycle_ms=round((time.perf_counter() - cycle_t0) * 1000.0, 1),
