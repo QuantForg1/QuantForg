@@ -90,6 +90,8 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         "direction": direction,
         "blocking_gate": blocker,
         "reject": reject,
+        "reject_reason": score.get("reject_reason"),
+        "reject_reasons": list(score.get("reject_reasons") or []),
         "eligible": (not reject) and direction in {"BUY", "SELL"},
         "expected_rr": score.get("expected_rr"),
         "setup_family": score.get("setup_family"),
@@ -936,12 +938,24 @@ async def _run_institutional_multi_asset_scan_body(
             scan.get("portfolio_block_reason") or "PORTFOLIO_RISK_LIMIT"
         )
     elif not best_symbol:
+        try:
+            from app.domain.institutional_trading.operations.fast_decision_path import (
+                named_reject_reasons,
+            )
+        except Exception:
+            named_reject_reasons = None  # type: ignore[assignment]
         for row in opportunity_ranked:
             if not isinstance(row, dict):
                 continue
             if row.get("reject") or not row.get("opportunity_eligible"):
+                named = (
+                    named_reject_reasons(row)
+                    if named_reject_reasons is not None
+                    else []
+                )
                 first_blocking_gate = str(
-                    row.get("reject_reason")
+                    (named[0] if named else None)
+                    or row.get("reject_reason")
                     or row.get("blocking_gate")
                     or "NO_ELIGIBLE_SETUP"
                 )
@@ -952,6 +966,9 @@ async def _run_institutional_multi_asset_scan_body(
     def _candidate_view(row: Any) -> dict[str, Any] | None:
         if not isinstance(row, dict):
             return None
+        reasons = row.get("reject_reasons")
+        if not isinstance(reasons, list):
+            reasons = list(reasons) if isinstance(reasons, tuple) else []
         return {
             "symbol": str(row.get("symbol") or "").upper() or None,
             "direction": row.get("direction"),
@@ -964,7 +981,11 @@ async def _run_institutional_multi_asset_scan_body(
                 if "opportunity_eligible" in row
                 else row.get("eligible")
             ),
-            "blocking_gate": row.get("reject_reason") or row.get("blocking_gate"),
+            "blocking_gate": (reasons[0] if reasons else None)
+            or row.get("reject_reason")
+            or row.get("blocking_gate"),
+            "reject_reason": row.get("reject_reason"),
+            "reject_reasons": reasons,
             "strategy_id": row.get("strategy_id"),
             "atr_pct": row.get("atr_pct"),
             "volatility_decision": row.get("volatility_decision"),
@@ -995,6 +1016,7 @@ async def _run_institutional_multi_asset_scan_body(
                 "blocking_gate": r.get("reject_reason"),
                 "reject": r.get("reject"),
                 "reject_reason": r.get("reject_reason"),
+                "reject_reasons": list(r.get("reject_reasons") or []),
                 "estimated_probability": r.get("estimated_probability"),
                 "atr_pct": r.get("atr_pct"),
                 "volatility_decision": r.get("volatility_decision"),

@@ -834,16 +834,31 @@ export function AutoTradingWorkspace() {
     str(currentScan.state) === "NO_ELIGIBLE_SETUP" ||
     (Boolean(scanSnap.no_eligible_setup) && !str(scanSnap.best_symbol)) ||
     num(currentScan.eligible_count ?? scanSnap.eligible_count, 0) === 0;
-  const firstBlockingGateFull = str(
-    currentScan.fault_reason ||
-      currentScan.first_blocking_gate ||
+  const namedRejectReasons = asList(
+    currentScan.all_reject_reasons ?? bestCandidate.reject_reasons,
+  ).map(String);
+  const rawBlockingGate = str(
+    currentScan.first_blocking_gate ||
+      currentScan.fault_reason ||
+      namedRejectReasons[0] ||
       scanSnap.first_blocking_gate,
-    noEligibleSetup ? "NO_ELIGIBLE_SETUP" : "—",
+    "",
   );
-  const firstBlockingGateShort =
-    firstBlockingGateFull.length > 28
-      ? `${firstBlockingGateFull.slice(0, 26)}…`
-      : firstBlockingGateFull;
+  const genericBlockingGate =
+    !rawBlockingGate ||
+    rawBlockingGate === "NO_ELIGIBLE_SETUP" ||
+    rawBlockingGate === "NONE" ||
+    rawBlockingGate === "NO_CURRENT_BLOCKING_GATE";
+  const firstBlockingGateFull =
+    namedRejectReasons[0] ||
+    (!genericBlockingGate
+      ? rawBlockingGate
+      : noEligibleSetup
+        ? "NO_ELIGIBLE_SETUP"
+        : "—");
+  const otherRejectReasons = namedRejectReasons.filter(
+    (reason) => reason && reason !== firstBlockingGateFull,
+  );
   const optimizerSnap = asRecord(
     noEligibleSetup
       ? {}
@@ -1325,10 +1340,7 @@ export function AutoTradingWorkspace() {
             TRADING MODE: GOLD ONLY · AUTONOMOUS SYMBOL: {autonomousSymbol} ·
             OTHER PAIRS: DISABLED FOR AUTONOMOUS EXECUTION · CURRENT FOCUS:{" "}
             {(() => {
-              const focus = str(
-                currentScan.executable_focus || currentScan.symbol,
-                "",
-              );
+              const focus = str(currentScan.executable_focus, "");
               if (!focus) return "NONE";
               return isGoldSymbol(focus) ? focus : "NONE";
             })()}
@@ -1898,7 +1910,7 @@ export function AutoTradingWorkspace() {
           <MetricCard label="Eligible count" value={eligibleCount} />
           <MetricCard
             label="First blocking gate"
-            value={firstBlockingGateShort}
+            value={firstBlockingGateFull}
           />
           <MetricCard
             label="Optimizer"
@@ -1932,6 +1944,11 @@ export function AutoTradingWorkspace() {
             {str(currentScan.symbol || bestCandidate.symbol, "—")} ·{" "}
             {str(currentScan.fault_code, "—")} · {firstBlockingGateFull}
           </p>
+          {otherRejectReasons.length > 0 ? (
+            <p className="mt-1 font-mono text-[11px] text-[var(--fg-muted)]">
+              OTHER REJECTS: {otherRejectReasons.join(" · ")}
+            </p>
+          ) : null}
           <p className="mt-1 font-mono text-[11px] text-[var(--fg-muted)]">
             ATR%={str(currentScan.atr_pct, "—")} hard_min=
             {str(currentScan.hard_min_pct, "—")} band=

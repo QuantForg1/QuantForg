@@ -936,6 +936,132 @@ def _scan_eligible_symbols(scan: dict[str, Any]) -> list[str]:
     return out
 
 
+_GENERIC_SCAN_GATES = frozenset(
+    {
+        "NO_ELIGIBLE_SETUP",
+        NO_CURRENT_BLOCKING_GATE,
+        NO_CURRENT_BLOCK,
+        "NONE",
+        "IGNORED_ACTION",
+        "WAIT_SAME_FOCUS",
+        "NO_TRADE",
+        "WATCH",
+    }
+)
+
+
+def _is_generic_scan_gate(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return True
+    if is_ignored_action_value(raw):
+        return True
+    return raw.upper() in _GENERIC_SCAN_GATES
+
+
+def named_reject_reasons(*sources: Any) -> list[str]:
+    """First-authoritative reject list from a scored / ranked scan row.
+
+    Observability only. Does not change SCALPING_V1 floors or eligibility.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _push(text: str) -> None:
+        item = str(text or "").strip()
+        if not item or _is_generic_scan_gate(item):
+            return
+        key = item.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(item)
+
+    for source in sources:
+        if isinstance(source, dict):
+            raw = source.get("reject_reasons") or source.get("failed_gates")
+            if isinstance(raw, (list, tuple)):
+                for item in raw:
+                    _push(str(item))
+                if out:
+                    return out
+            joined = str(
+                source.get("reject_reason")
+                or source.get("blocking_gate")
+                or source.get("first_blocking_gate")
+                or ""
+            ).strip()
+            if joined and not _is_generic_scan_gate(joined):
+                for part in joined.split(";"):
+                    _push(part)
+                if out:
+                    return out
+        elif isinstance(source, (list, tuple)):
+            for item in source:
+                _push(str(item))
+            if out:
+                return out
+        else:
+            joined = str(source or "").strip()
+            if joined and not _is_generic_scan_gate(joined):
+                for part in joined.split(";"):
+                    _push(part)
+                if out:
+                    return out
+    return out
+
+
+def _iter_scan_rows(scan: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for key in ("opportunity_ranked", "rows", "ranked", "noc_rows"):
+        blob = scan.get(key)
+        if not isinstance(blob, list):
+            continue
+        rows.extend(r for r in blob if isinstance(r, dict))
+    for key in ("best_candidate", "best", "best_eligible_candidate"):
+        blob = scan.get(key)
+        if isinstance(blob, dict):
+            rows.append(blob)
+    return rows
+
+
+def _merge_scan_rows(*rows: Any) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for key, value in row.items():
+            if value is None or value == "":
+                continue
+            if isinstance(value, (list, tuple)) and not value:
+                continue
+            merged[key] = value
+    reasons = named_reject_reasons(*rows)
+    if reasons:
+        merged["reject_reasons"] = reasons
+    return merged
+
+
+def _find_gold_scan_row(
+    scan: dict[str, Any], preferred: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Locate a scored Gold row even when catalogue spelling differs (XAUUSD vs XAUUSD_I)."""
+    try:
+        from app.domain.trading.gold_only import is_gold_symbol
+    except Exception:
+        return dict(preferred) if isinstance(preferred, dict) else {}
+
+    matches: list[dict[str, Any]] = []
+    if isinstance(preferred, dict) and is_gold_symbol(_row_symbol(preferred) or ""):
+        matches.append(preferred)
+    for row in _iter_scan_rows(scan):
+        if is_gold_symbol(_row_symbol(row) or ""):
+            matches.append(row)
+    if not matches:
+        return {}
+    return _merge_scan_rows(*matches)
+
+
 def _best_candidate_row(scan: dict[str, Any]) -> dict[str, Any]:
     cand = scan.get("best_candidate")
     if isinstance(cand, dict) and _row_symbol(cand):
@@ -955,25 +1081,32 @@ def _row_for_symbol(scan: dict[str, Any], symbol: str | None) -> dict[str, Any]:
     want = str(symbol or "").strip().upper()
     if not want:
         return {}
-    for key in ("rows", "opportunity_ranked", "ranked", "noc_rows"):
-        blob = scan.get(key)
-        if not isinstance(blob, list):
-            continue
-        for row in blob:
-            if _row_symbol(row) == want and isinstance(row, dict):
-                return dict(row)
-    cand = scan.get("best_candidate")
-    if isinstance(cand, dict) and _row_symbol(cand) == want:
-        return dict(cand)
+    for row in _iter_scan_rows(scan):
+        if _row_symbol(row) == want:
+            return dict(row)
     return {}
 
 
-def _volatility_fields(scan: dict[str, Any], symbol: str | None) -> dict[str, Any]:
-    row = _row_for_symbol(scan, symbol)
+def _volatility_fields(
+    scan: dict[str, Any],
+    symbol: str | None,
+    row_hint: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    looked = _row_for_symbol(scan, symbol)
+    hint = dict(row_hint) if isinstance(row_hint, dict) else {}
+    row = {**hint, **looked} if looked else hint
+    if not isinstance(row.get("volatility_decision"), dict) and isinstance(
+        hint.get("volatility_decision"), dict
+    ):
+        row = {**row, "volatility_decision": hint.get("volatility_decision")}
+    if row.get("atr_pct") is None and hint.get("atr_pct") is not None:
+        row = {**row, "atr_pct": hint.get("atr_pct")}
     vol = row.get("volatility_decision") if isinstance(row.get("volatility_decision"), dict) else {}
     thresholds = row.get("thresholds") if isinstance(row.get("thresholds"), dict) else {}
     atr_pct = vol.get("atr_pct") if vol.get("atr_pct") is not None else row.get("atr_pct")
     hard_min = vol.get("hard_min_pct")
+    if hard_min is None:
+        hard_min = thresholds.get("hard_min_pct")
     band = vol.get("band") or thresholds.get("band")
     return {
         "atr_pct": str(atr_pct) if atr_pct is not None else None,
@@ -995,10 +1128,8 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     eligible = _scan_eligible_symbols(payload)
     try:
         from app.domain.trading.gold_only import (
-            autonomous_execution_symbols,
             filter_autonomous_symbols,
             gold_only_enabled,
-            is_gold_symbol,
         )
 
         if gold_only_enabled():
@@ -1008,38 +1139,31 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         pass
     best_row = _best_candidate_row(payload)
     scan_symbol = _row_symbol(best_row)
+    if scan_symbol:
+        best_row = _merge_scan_rows(best_row, _row_for_symbol(payload, scan_symbol))
     try:
-        from app.domain.trading.gold_only import (
-            autonomous_execution_symbols,
-            gold_only_enabled,
-            is_gold_symbol,
-        )
+        from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
         if gold_only_enabled():
-            if scan_symbol and is_gold_symbol(scan_symbol):
-                pass
-            else:
-                gold_row: dict[str, Any] = {}
-                gold_symbol = None
-                for cand in autonomous_execution_symbols():
-                    row = _row_for_symbol(payload, cand)
-                    if row:
-                        gold_row = row
-                        gold_symbol = _row_symbol(row) or str(cand).upper()
-                        break
-                scan_symbol = gold_symbol
+            gold_row = _find_gold_scan_row(payload, best_row)
+            if gold_row:
                 best_row = gold_row
+                scan_symbol = _row_symbol(gold_row)
+            elif scan_symbol and not is_gold_symbol(scan_symbol):
+                scan_symbol = None
+                best_row = {}
     except Exception:
         pass
-    gate = str(
-        payload.get("first_blocking_gate")
-        or best_row.get("blocking_gate")
-        or best_row.get("reject_reason")
-        or ""
-    ).strip() or None
+    named = named_reject_reasons(
+        best_row,
+        payload.get("reject_reasons"),
+        payload.get("first_blocking_gate"),
+        payload.get("reject_reason"),
+    )
+    gate = named[0] if named else None
     if not eligible:
         gate = gate or "NO_ELIGIBLE_SETUP"
-    vol = _volatility_fields(payload, scan_symbol)
+    vol = _volatility_fields(payload, scan_symbol, best_row)
     as_of = payload.get("as_of")
     scores = {
         str(r.get("symbol") or "").upper(): float(r.get("opportunity_score") or 0)
@@ -1139,6 +1263,7 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     best_eligible = payload.get("best_eligible_candidate")
     if not isinstance(best_eligible, dict):
         best_eligible = None
+    all_reasons = named if (not eligible and named) else []
     return {
         "label": "CURRENT_SCAN",
         "state": state,
@@ -1148,7 +1273,8 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "best_candidate": {
             "symbol": scan_symbol,
             "eligible": bool(best_row.get("eligible") or best_row.get("opportunity_eligible")),
-            "blocking_gate": best_row.get("blocking_gate") or best_row.get("reject_reason") or gate,
+            "blocking_gate": gate,
+            "reject_reasons": list(all_reasons),
             "direction": best_row.get("direction"),
             "quality": best_row.get("quality") or best_row.get("trade_quality"),
             "confidence": best_row.get("confidence") or best_row.get("ai_confidence"),
@@ -1162,6 +1288,7 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "executable_focus": executable_focus,
         "focus_reason": focus_why,
         "first_blocking_gate": gate,
+        "all_reject_reasons": list(all_reasons),
         "blocking_stage": blocking_stage or classified.get("blocking_stage") or "SCANNER",
         "fault_class": fault_class,
         "fault_code": fault_code,
