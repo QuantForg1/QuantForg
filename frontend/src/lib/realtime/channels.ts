@@ -100,7 +100,7 @@ export const CHANNEL_DEFINITIONS: ChannelDefinition[] = [
     fetcher: (opts?: ChannelSubscriptionOptions) => {
       const symbol = (opts?.symbol || "").trim();
       if (!symbol) return Promise.resolve(null);
-      return mt5Api.tick(symbol.toUpperCase());
+      return mt5Api.tick(symbol);
     },
     intervalMs: 4_000,
     hiddenIntervalMs: 20_000,

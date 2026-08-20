@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
+import { buildStrategyEvaluateRequest } from "@/lib/api/strategy-evaluate";
 import type { AuthSession, AuthUser } from "@/lib/auth/session";
 import { env } from "@/lib/env";
 import { asList, asRecord } from "@/lib/desk";
@@ -294,7 +295,7 @@ export const strategyApi = {
   evaluate: (body: Record<string, unknown>) =>
     apiFetch<Record<string, unknown>>("/strategy/evaluate", {
       method: "POST",
-      body: { ...body, symbol: resolveTradingSymbol(String(body.symbol ?? "")) },
+      body: buildStrategyEvaluateRequest(body),
     }),
   signals: () => apiFetch<Record<string, unknown>>("/strategy/signals"),
   catalog: () => apiFetch<Record<string, unknown>>("/strategy/catalog"),

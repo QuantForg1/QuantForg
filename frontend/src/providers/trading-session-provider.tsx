@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { mt5Api, platformApi, portfolioApi, weltradeApi } from "@/lib/api/endpoints";
+import { SNAPSHOT_QUERY_KEYS } from "@/lib/api/current-snapshot";
 import { asList, asRecord, str } from "@/lib/desk";
 import { useBrokerStatusStream, useBookStream } from "@/hooks/realtime";
 import {
@@ -95,7 +96,7 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   useBrokerStatusStream(sessionEnabled);
 
   const healthQ = useQuery({
-    queryKey: ["weltrade-health"],
+    queryKey: SNAPSHOT_QUERY_KEYS.health,
     queryFn: weltradeApi.health,
     staleTime: 15_000,
     retry: 1,
@@ -103,12 +104,13 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   });
 
   const statusQ = useQuery({
-    queryKey: ["mt5-status"],
+    queryKey: SNAPSHOT_QUERY_KEYS.mt5Status,
     queryFn: mt5Api.status,
     staleTime: 5_000,
     retry: 1,
     // Run after health settles so cold Railway workers heal/bind first.
-    enabled: sessionEnabled && (healthQ.isFetched || healthQ.isError),
+    // Critical path: do not wait on /weltrade/health telemetry before /mt5/status.
+    enabled: sessionEnabled,
   });
   const statusConnected = Boolean(asRecord(statusQ.data).connected);
   const healthPreview = asRecord(healthQ.data);
@@ -130,28 +132,28 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   useBookStream(bookEnabled);
 
   const portfolioQ = useQuery({
-    queryKey: ["portfolio"],
+    queryKey: SNAPSHOT_QUERY_KEYS.portfolio,
     queryFn: portfolioApi.get,
     staleTime: 8_000,
     retry: 1,
     enabled: bookEnabled,
   });
   const positionsQ = useQuery({
-    queryKey: ["positions"],
+    queryKey: SNAPSHOT_QUERY_KEYS.positions,
     queryFn: () => portfolioApi.positions(),
     staleTime: 8_000,
     retry: 1,
     enabled: bookEnabled,
   });
   const ordersQ = useQuery({
-    queryKey: ["orders"],
+    queryKey: SNAPSHOT_QUERY_KEYS.orders,
     queryFn: portfolioApi.orders,
     staleTime: 8_000,
     retry: 1,
     enabled: bookEnabled,
   });
   const historyQ = useQuery({
-    queryKey: ["history"],
+    queryKey: SNAPSHOT_QUERY_KEYS.history,
     queryFn: portfolioApi.history,
     staleTime: 12_000,
     retry: 1,

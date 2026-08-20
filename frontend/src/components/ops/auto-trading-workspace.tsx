@@ -29,6 +29,7 @@ import {
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps, iteOpsAccessDeniedMessage } from "@/lib/auth/ite-ops-access";
 import { ApiError } from "@/lib/api/client";
+import { SNAPSHOT_QUERY_KEYS } from "@/lib/api/current-snapshot";
 import { asList, asRecord, num, str } from "@/lib/desk";
 import {
   AUTO_STRATEGY_MODULES,
@@ -111,7 +112,7 @@ export function AutoTradingWorkspace() {
     retry: 1,
   });
   const autoQ = useQuery({
-    queryKey: ["ite-ops-auto-trading"],
+    queryKey: SNAPSHOT_QUERY_KEYS.autoTrading,
     queryFn: iteOpsApi.autoTrading,
     enabled: opsEnabled,
     retry: false,
@@ -161,21 +162,23 @@ export function AutoTradingWorkspace() {
     refetchInterval: telemetryEnabled ? 30_000 : false,
   });
   const positionsQ = useQuery({
-    queryKey: ["portfolio-positions", "auto-ws"],
+    queryKey: SNAPSHOT_QUERY_KEYS.positions,
     queryFn: () => portfolioApi.positions(),
     enabled: telemetryEnabled,
     retry: false,
+    staleTime: 8_000,
     refetchInterval: telemetryEnabled ? 12_000 : false,
   });
   const ordersQ = useQuery({
-    queryKey: ["portfolio-orders", "auto-ws"],
+    queryKey: SNAPSHOT_QUERY_KEYS.orders,
     queryFn: () => portfolioApi.orders(),
     enabled: telemetryEnabled,
     retry: false,
+    staleTime: 8_000,
     refetchInterval: telemetryEnabled ? 15_000 : false,
   });
   const mt5Q = useQuery({
-    queryKey: ["mt5-status"],
+    queryKey: SNAPSHOT_QUERY_KEYS.mt5Status,
     queryFn: () => mt5Api.status(),
     enabled: telemetryEnabled,
     retry: false,
@@ -183,7 +186,7 @@ export function AutoTradingWorkspace() {
     refetchInterval: telemetryEnabled ? 15_000 : false,
   });
   const healthQ = useQuery({
-    queryKey: ["weltrade-health"],
+    queryKey: SNAPSHOT_QUERY_KEYS.health,
     queryFn: () => weltradeApi.health(),
     enabled: telemetryEnabled,
     retry: false,
@@ -191,7 +194,7 @@ export function AutoTradingWorkspace() {
     refetchInterval: telemetryEnabled ? 20_000 : false,
   });
   const tickQ = useQuery({
-    queryKey: ["mt5-tick", TRADING_SYMBOL],
+    queryKey: SNAPSHOT_QUERY_KEYS.tick(TRADING_SYMBOL),
     queryFn: () => mt5Api.tick(TRADING_SYMBOL),
     enabled: opsEnabled && session.connected,
     staleTime: 4_000,

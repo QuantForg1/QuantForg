@@ -22,6 +22,7 @@ import {
   portfolioApi,
 } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
+import { SNAPSHOT_QUERY_KEYS } from "@/lib/api/current-snapshot";
 import {
   classifyProtectedFailure,
   protectedFailureCopy,
@@ -166,7 +167,7 @@ export function MissionControlWorkspace() {
   const [searchHits, setSearchHits] = useState<Record<string, unknown>[]>([]);
 
   const accountQ = useQuery({
-    queryKey: ["mission-control-mt5-account"],
+    queryKey: SNAPSHOT_QUERY_KEYS.mt5Account,
     queryFn: () => mt5Api.account(),
     enabled: opsReady,
     staleTime: 8_000,
@@ -174,15 +175,15 @@ export function MissionControlWorkspace() {
   });
 
   const positionsQ = useQuery({
-    queryKey: ["mission-control-positions", TRADING_SYMBOL],
-    queryFn: () => portfolioApi.positions(TRADING_SYMBOL),
+    queryKey: SNAPSHOT_QUERY_KEYS.positions,
+    queryFn: () => portfolioApi.positions(),
     enabled: opsReady,
     staleTime: 8_000,
     retry: false,
   });
 
   const tickQ = useQuery({
-    queryKey: ["mission-control-tick", TRADING_SYMBOL],
+    queryKey: SNAPSHOT_QUERY_KEYS.tick(TRADING_SYMBOL),
     queryFn: () => mt5Api.tick(TRADING_SYMBOL),
     enabled: opsReady,
     staleTime: 5_000,
@@ -191,7 +192,7 @@ export function MissionControlWorkspace() {
   });
 
   const autoTradingQ = useQuery({
-    queryKey: ["ite-ops-auto-trading"],
+    queryKey: SNAPSHOT_QUERY_KEYS.autoTrading,
     queryFn: () => iteOpsApi.autoTrading(),
     enabled: opsReady,
     staleTime: 8_000,

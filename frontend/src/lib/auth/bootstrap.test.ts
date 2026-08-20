@@ -163,6 +163,7 @@ function surface(partial: {
   assert.equal(shouldDedupeGet("/mission-control/dashboard"), true);
   assert.equal(shouldDedupeGet("/portfolio"), true);
   assert.equal(shouldDedupeGet("/positions"), true);
+  assert.equal(shouldDedupeGet("/positions?symbol=XAUUSD_i"), true);
   assert.equal(shouldDedupeGet("/orders"), true);
   assert.equal(shouldDedupeGet("/history"), true);
 }
@@ -220,6 +221,7 @@ assert.equal(defaultTimeoutForPath("/auth/me"), API_AUTH_TIMEOUT_MS);
 assert.equal(API_AUTH_TIMEOUT_MS, 40_000);
 assert.equal(defaultTimeoutForPath("/health/live"), API_HEALTH_LIVE_TIMEOUT_MS);
 assert.equal(defaultTimeoutForPath("/health"), API_HEALTH_TIMEOUT_MS);
+assert.equal(defaultTimeoutForPath("/weltrade/health"), 45_000);
 assert.ok(API_HEALTH_LIVE_TIMEOUT_MS < 8_000);
 assert.ok(sessionBootBudgetMs() > API_AUTH_TIMEOUT_MS);
 assert.equal(classifyOpsFailure({ code: "timeout", status: 408 }), "timeout");

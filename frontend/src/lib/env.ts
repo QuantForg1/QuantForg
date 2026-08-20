@@ -11,16 +11,21 @@
  * http://127.0.0.1:8000 — if that API is not running, every fetch fails loudly.
  */
 
-function normalizeApiBaseUrl(raw: string): string {
-  const trimmed = raw.replace(/\/$/, "");
-  if (trimmed.endsWith("/api/v1")) return trimmed;
-  return `${trimmed}/api/v1`;
-}
+import { isValidApiBaseUrl, normalizeApiBaseUrl } from "@/lib/api/api-base";
+
+export { isValidApiBaseUrl, normalizeApiBaseUrl } from "@/lib/api/api-base";
 
 const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "";
 
 function resolveApiBaseUrl(): string {
-  if (configuredApiBase) return normalizeApiBaseUrl(configuredApiBase);
+  if (configuredApiBase) {
+    if (!isValidApiBaseUrl(configuredApiBase)) {
+      throw new Error(
+        `NEXT_PUBLIC_API_BASE_URL is not a valid absolute URL: ${configuredApiBase}`,
+      );
+    }
+    return normalizeApiBaseUrl(configuredApiBase);
+  }
 
   // Local/dev fallback only — never silently bind production builds to a hardcoded host.
   if (process.env.NODE_ENV !== "production") {

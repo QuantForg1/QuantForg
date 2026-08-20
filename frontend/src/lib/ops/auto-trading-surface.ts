@@ -8,6 +8,7 @@
  * independently report down (or the operator cannot authenticate a submit).
  */
 
+import { classifyCommunicationFault } from "../api/communication-fault";
 import type { AuthPhase } from "../auth/bootstrap";
 
 export type AutoTradingSurface =
@@ -34,6 +35,7 @@ export type OpsQueryKind =
   | "timeout"
   | "unauthorized"
   | "forbidden"
+  | "validation"
   | "error";
 
 /** After this wait, slow ops with healthy infra is DEGRADED — not a full-page auth wait. */
@@ -44,17 +46,12 @@ export function classifyOpsFailure(error: {
   code?: string;
 } | null | undefined): OpsQueryKind {
   if (!error) return "error";
-  if (error.code === "timeout" || error.status === 408) return "timeout";
-  if (
-    error.status === 401 ||
-    error.code === "unauthorized" ||
-    error.code === "missing_token" ||
-    error.code === "authentication_failed"
-  ) {
-    return "unauthorized";
-  }
-  if (error.status === 403 || error.code === "insufficient_role") return "forbidden";
-  if (error.code === "network_error" || error.status === 0) return "error";
+  const fault = classifyCommunicationFault(error);
+  if (fault === "API_TIMEOUT") return "timeout";
+  if (fault === "AUTH_REQUIRED" || fault === "AUTH_REFRESH") return "unauthorized";
+  if (fault === "FORBIDDEN") return "forbidden";
+  if (fault === "CONTRACT_VALIDATION_ERROR") return "validation";
+  if (fault === "API_UNREACHABLE") return "error";
   return "error";
 }
 
@@ -76,6 +73,7 @@ export function resolveApiPhase(input: {
   if (input.opsQuery === "idle" || input.opsQuery === "loading") return "API_LOADING";
   if (input.opsQuery === "success") return "API_READY";
   if (input.opsQuery === "timeout") return "API_DEGRADED";
+  if (input.opsQuery === "validation") return "API_DEGRADED";
   if (input.opsQuery === "error" && input.infra === "TRADING_HEALTHY") return "API_DEGRADED";
   if (input.opsQuery === "error") return "API_UNREACHABLE";
   return "API_DEGRADED";
@@ -155,7 +153,7 @@ export function resolveAutoTradingSurface(input: {
     return pack(degraded ? "DEGRADED" : "READY");
   }
 
-  if (input.opsQuery === "timeout" || input.opsQuery === "error") {
+  if (input.opsQuery === "timeout" || input.opsQuery === "error" || input.opsQuery === "validation") {
     if (input.opsQuery === "error" && tradingInfra === "UNKNOWN" && !input.hasOpsData) {
       return pack("API_UNREACHABLE", {
         apiPhase: "API_UNREACHABLE",

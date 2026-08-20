@@ -6,10 +6,12 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StrategyEvaluateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     request_id: str = Field(min_length=1, max_length=128)
     symbol: str = Field(min_length=1, max_length=32)
     timeframe: str = Field(default="m15", max_length=16)

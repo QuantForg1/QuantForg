@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any
 
 from app.domain.institutional_observability.reports import build_observability_pack
+
+_PACK_TTL_SECONDS = 5.0
+_pack_lock = threading.Lock()
+_pack_cache: tuple[float, str, dict[str, Any]] | None = None
+
+
+def reset_observability_pack_cache() -> None:
+    global _pack_cache
+    with _pack_lock:
+        _pack_cache = None
 
 
 def _try_ops_facts() -> dict[str, Any]:
@@ -65,14 +77,36 @@ def run_observability(
     journal: Any | None = None,
     user_id: str | None = None,
 ) -> dict[str, Any]:
+    """Build the observability pack.
+
+    Slice endpoints (/health, /resources, …) share one pack for a short TTL so
+    dashboard telemetry cannot stampede the control plane.
+    """
+    global _pack_cache
+    cache_key = str(user_id or "")
+    now = time.monotonic()
+    if ops_facts is None and latency_samples is None and error_events is None:
+        with _pack_lock:
+            cached = _pack_cache
+        if (
+            cached is not None
+            and cached[1] == cache_key
+            and now - cached[0] < _PACK_TTL_SECONDS
+        ):
+            return cached[2]
+
     facts = dict(ops_facts or _try_ops_facts())
     facts.update(_try_journal_ok(journal, user_id))
     events = error_events if error_events is not None else _try_governance_events()
-    return build_observability_pack(
+    pack = build_observability_pack(
         ops_facts=facts,
         latency_samples=latency_samples,
         error_events=events,
     )
+    if ops_facts is None and latency_samples is None and error_events is None:
+        with _pack_lock:
+            _pack_cache = (now, cache_key, pack)
+    return pack
 
 
 def seed_demo_observability() -> dict[str, Any]:

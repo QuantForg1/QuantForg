@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
+import { SNAPSHOT_QUERY_KEYS } from "@/lib/api/current-snapshot";
 import { iteReliabilityApi, platformApi, weltradeApi } from "@/lib/api/endpoints";
 import { asRecord } from "@/lib/desk";
 import {
@@ -70,7 +71,7 @@ export function AutoRecoveryPanel() {
     refetchIntervalInBackground: false,
   });
   const healthQ = useQuery({
-    queryKey: ["weltrade-health", "auto-recovery"],
+    queryKey: SNAPSHOT_QUERY_KEYS.health,
     queryFn: weltradeApi.health,
     enabled: opsReady,
     staleTime: 60_000,

@@ -18,6 +18,7 @@ import {
 import { newRequestId } from "@/lib/observability/context";
 import { captureError } from "@/lib/observability/error-monitor";
 import { recordApiRequestSample } from "@/lib/api/request-log";
+import { dedupeInflight } from "@/lib/api/inflight";
 import {
   API_AUTH_TIMEOUT_MS,
   API_DEFAULT_TIMEOUT_MS,
@@ -25,8 +26,10 @@ import {
   API_HEALTH_TIMEOUT_MS,
   API_HEAVY_TIMEOUT_MS,
   defaultTimeoutForPath,
-  shouldAttemptTokenRefresh,
+  isTelemetryPath,
   shouldDedupeGet,
+  shouldHealSessionOnUnauthorized,
+  shouldReplayAfterRefresh,
 } from "@/lib/api/request-policy";
 
 export {
@@ -58,9 +61,6 @@ export class ApiError extends Error {
     this.requestId = requestId;
   }
 }
-
-/** In-flight GET dedupe — identical health/catalogue/ops probes share one promise. */
-const inflightGets = new Map<string, Promise<unknown>>();
 
 type RequestOptions = {
   method?: string;
@@ -192,7 +192,10 @@ function toNetworkApiError(err: unknown, requestId: string): ApiError {
       "Request timed out. The API did not respond in time — retry shortly.",
       408,
       "timeout",
-      { cause: err instanceof Error ? err.message : String(err) },
+      {
+        fault: "API_TIMEOUT",
+        cause: err instanceof Error ? err.message : String(err),
+      },
       requestId,
     );
   }
@@ -200,7 +203,11 @@ function toNetworkApiError(err: unknown, requestId: string): ApiError {
     "Unable to reach the QuantForg API. Check connection and API base URL.",
     0,
     "network_error",
-    { cause: err instanceof Error ? err.message : String(err) },
+    {
+      fault: "API_UNREACHABLE",
+      cause: err instanceof Error ? err.message : String(err),
+      apiBaseUrl: env.apiBaseUrl,
+    },
     requestId,
   );
 }
@@ -214,13 +221,7 @@ export async function apiFetch<T>(
   const dedupe = method === "GET" && !options.signal && shouldDedupeGet(safePathEarly);
   if (dedupe) {
     const key = `${method}:${safePathEarly}:${options.auth === false ? "0" : "1"}`;
-    const existing = inflightGets.get(key);
-    if (existing) return existing as Promise<T>;
-    const pending = apiFetchUndeduped<T>(path, options).finally(() => {
-      inflightGets.delete(key);
-    });
-    inflightGets.set(key, pending);
-    return pending;
+    return dedupeInflight(key, () => apiFetchUndeduped<T>(path, options));
   }
   return apiFetchUndeduped<T>(path, options);
 }
@@ -251,7 +252,7 @@ async function apiFetchUndeduped<T>(
       "Sign in required",
       401,
       authResolution.rejectCode,
-      { authenticated: false, endpoint: safePath },
+      { authenticated: false, endpoint: safePath, fault: "AUTH_REQUIRED" },
       requestId,
     );
   }
@@ -305,7 +306,8 @@ async function apiFetchUndeduped<T>(
         timeoutMs >= API_HEAVY_TIMEOUT_MS ||
         kind === "mt5" ||
         kind === "execution" ||
-        isAuthPath
+        isAuthPath ||
+        isTelemetryPath(safePath)
       ) {
         noteApiSlow();
       } else {
@@ -331,19 +333,21 @@ async function apiFetchUndeduped<T>(
   markApiReachable();
 
   if (
-    shouldAttemptTokenRefresh({
+    shouldHealSessionOnUnauthorized({
       status: res.status,
       authEnabled: auth,
       alreadyRetried: retries > 0,
     })
   ) {
-    if (!refreshPromise) {
-      refreshPromise = refreshAccessToken().finally(() => {
-        refreshPromise = null;
-      });
-    }
-    const next = await refreshPromise;
-    if (next) {
+    const next = await dedupeInflight("auth:refresh", async () => {
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
+      }
+      return refreshPromise;
+    });
+    if (next && shouldReplayAfterRefresh(method, safePath)) {
       retries += 1;
       headers.Authorization = `Bearer ${next}`;
       try {

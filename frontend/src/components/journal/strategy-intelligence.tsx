@@ -26,7 +26,13 @@ export const StrategyIntelligencePanel = memo(function StrategyIntelligencePanel
 
   const strategyQ = useQuery({
     queryKey: ["strategy-intel", symbol],
-    queryFn: () => strategyApi.evaluate({ symbol, side: "buy", volume: "0.01" }),
+    queryFn: () =>
+      strategyApi.evaluate({
+        request_id: `journal-intel-${symbol}`,
+        symbol,
+        requested_lots: "0.01",
+        check_risk: true,
+      }),
     enabled,
     staleTime: 30_000,
     retry: false,

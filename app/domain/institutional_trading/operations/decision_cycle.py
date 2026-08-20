@@ -78,6 +78,12 @@ class LatencyBudget:
     time_from_signal_to_last_order_send: float | None = None
     largest_stage: str | None = None
     largest_stage_ms: float = 0.0
+    api_connectivity_ms: float = 0.0
+    auth_ms: float = 0.0
+    strategy_ms: float = 0.0
+    market_data_ms: float = 0.0
+    signal_to_decision_ms: float = 0.0
+    signal_to_execution_ready_ms: float = 0.0
 
     def finalize(self) -> None:
         named = {
@@ -98,6 +104,25 @@ class LatencyBudget:
             self.total_cycle_ms = round(sum(named.values()), 3)
         self.decision_cycle_latency_ms = round(self.total_cycle_ms, 3)
         self.total_decision_cycle_ms = self.decision_cycle_latency_ms
+        if self.market_data_ms <= 0:
+            self.market_data_ms = round(self.market_ms, 3)
+        if self.strategy_ms <= 0:
+            self.strategy_ms = round(self.probability_ms, 3)
+        if self.signal_to_decision_ms <= 0:
+            self.signal_to_decision_ms = round(
+                self.signal_detect_to_snapshot_ms
+                + self.snapshot_to_probability_ms
+                + self.probability_to_decision_ms,
+                3,
+            )
+        if self.signal_to_execution_ready_ms <= 0:
+            self.signal_to_execution_ready_ms = round(
+                self.signal_to_decision_ms
+                + self.decision_to_risk_ms
+                + self.risk_to_safety_ms
+                + self.safety_to_plan_ms,
+                3,
+            )
         if named:
             key = max(named, key=named.get)
             self.largest_stage = key
@@ -119,18 +144,10 @@ class LatencyBudget:
             "gateway_ms": round(self.gateway_ms, 3),
             "reconciliation_ms": round(self.reconciliation_ms, 3),
             "total_cycle_ms": round(self.total_cycle_ms, 3),
-            "decision_cycle_latency_ms": round(
-                self.decision_cycle_latency_ms, 3
-            ),
-            "signal_detect_to_snapshot_ms": round(
-                self.signal_detect_to_snapshot_ms, 3
-            ),
-            "snapshot_to_probability_ms": round(
-                self.snapshot_to_probability_ms, 3
-            ),
-            "probability_to_decision_ms": round(
-                self.probability_to_decision_ms, 3
-            ),
+            "decision_cycle_latency_ms": round(self.decision_cycle_latency_ms, 3),
+            "signal_detect_to_snapshot_ms": round(self.signal_detect_to_snapshot_ms, 3),
+            "snapshot_to_probability_ms": round(self.snapshot_to_probability_ms, 3),
+            "probability_to_decision_ms": round(self.probability_to_decision_ms, 3),
             "decision_to_risk_ms": round(self.decision_to_risk_ms, 3),
             "risk_to_safety_ms": round(self.risk_to_safety_ms, 3),
             "safety_to_plan_ms": round(self.safety_to_plan_ms, 3),
@@ -150,6 +167,12 @@ class LatencyBudget:
             ),
             "largest_stage": self.largest_stage,
             "largest_stage_ms": self.largest_stage_ms,
+            "api_connectivity_ms": round(self.api_connectivity_ms, 3),
+            "auth_ms": round(self.auth_ms, 3),
+            "strategy_ms": round(self.strategy_ms, 3),
+            "market_data_ms": round(self.market_data_ms, 3),
+            "signal_to_decision_ms": round(self.signal_to_decision_ms, 3),
+            "signal_to_execution_ready_ms": round(self.signal_to_execution_ready_ms, 3),
             "measured": True,
         }
 
@@ -290,12 +313,15 @@ def build_authoritative_snapshot(
     logical, canonical = _symbol_identity(symbol)
     stamp = utc_stamp(getattr(snapshot, "as_of", None))
     sess = getattr(snapshot, "session", None)
-    session_name = str(
-        getattr(getattr(sess, "session", None), "value", None)
-        or getattr(sess, "session", None)
-        or diag.get("trading_session")
-        or ""
-    ) or None
+    session_name = (
+        str(
+            getattr(getattr(sess, "session", None), "value", None)
+            or getattr(sess, "session", None)
+            or diag.get("trading_session")
+            or ""
+        )
+        or None
+    )
     quote = {
         "bid": str(getattr(account, "bid", None) or diag.get("bid") or ""),
         "ask": str(getattr(account, "ask", None) or diag.get("ask") or ""),
@@ -365,9 +391,11 @@ def build_authoritative_snapshot(
         existing_quantforg_positions=qf,
         account_risk_state=dict(account_dict),
         broker_readiness={
-            "ready": bool(broker_ready)
-            if broker_ready is not None
-            else bool(diag.get("account") == "OK"),
+            "ready": (
+                bool(broker_ready)
+                if broker_ready is not None
+                else bool(diag.get("account") == "OK")
+            ),
             "mt5_autotrading_enabled": diag.get("mt5_autotrading_enabled"),
             "account_trading_enabled": diag.get("account_trading_enabled"),
         },

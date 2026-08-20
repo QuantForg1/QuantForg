@@ -62,7 +62,13 @@ export const AiDecisionCard = memo(function AiDecisionCard({
 
   const strategyQ = useQuery({
     queryKey: ["ai-decision-strategy", symbol, side, session.connected],
-    queryFn: () => strategyApi.evaluate({ symbol, side, volume }),
+    queryFn: () =>
+      strategyApi.evaluate({
+        request_id: `ai-decision-${symbol}-${side}`,
+        symbol,
+        requested_lots: volume,
+        check_risk: true,
+      }),
     enabled,
     staleTime: 90_000,
     refetchOnWindowFocus: false,
