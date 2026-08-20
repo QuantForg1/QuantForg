@@ -100,6 +100,54 @@ class DecisionIntelligenceService:
             operator_reason=str(payload.get("operator_reason") or ""),
         )
         result = self._center.evaluate(inp).to_dict()
+        try:
+            from app.domain.institutional_trading.operations.system_coherence import (
+                Plane,
+                get_coherence_store,
+            )
+
+            scan = get_coherence_store().get(Plane.CURRENT_SCAN.value) or {}
+        except Exception:
+            scan = {}
+        scan_cycle = scan.get("cycle_id")
+        scan_snap = scan.get("snapshot_id")
+        payload_cycle = payload.get("cycle_id")
+        payload_snap = payload.get("snapshot_id")
+        same_snapshot = bool(
+            payload_cycle
+            and scan_cycle
+            and str(payload_cycle) == str(scan_cycle)
+            and str(payload_snap or scan_snap) == str(scan_snap)
+        )
+        result["cycle_id"] = payload_cycle or (scan_cycle if same_snapshot else None)
+        result["snapshot_id"] = payload_snap or (scan_snap if same_snapshot else None)
+        result["decision_center_advisory"] = True
+        result["autonomous_execution_authoritative"] = True
+        if same_snapshot:
+            if scan.get("canonical_symbol") or scan.get("symbol"):
+                result["symbol"] = scan.get("canonical_symbol") or scan.get("symbol")
+            result["opportunity_score"] = (
+                payload.get("opportunity_score")
+                if payload.get("opportunity_score") is not None
+                else scan.get("opportunity_score")
+            )
+            result["direction"] = (
+                payload.get("direction")
+                or scan.get("direction")
+                or payload.get("side")
+            )
+            result["score_band"] = scan.get("score_band")
+            result["score_breakdown"] = scan.get("score_breakdown") or {}
+            result["opportunity_threshold"] = scan.get("opportunity_threshold")
+            result["stale_snapshot"] = False
+        else:
+            result["opportunity_score"] = payload.get("opportunity_score")
+            result["direction"] = payload.get("direction") or payload.get("side")
+            result["stale_snapshot"] = bool(
+                payload_cycle and scan_cycle and str(payload_cycle) != str(scan_cycle)
+            )
+        result["decision_center_advisory"] = True
+        result["autonomous_execution_authoritative"] = True
         result["assessment"] = {
             "symbol": risk_gate.symbol,
             "evaluated_at": risk_gate.evaluated_at or safety_gate.evaluated_at,

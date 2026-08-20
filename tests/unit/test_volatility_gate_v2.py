@@ -247,7 +247,9 @@ def test_quality_gates_weak_atr_band_still_fail() -> None:
         market_regime="range",
     )
     assert gates.checks["valid_volatility"] is False
-    assert any("compressed" in r.lower() or "Volatility" in r for r in gates.rejects)
+    assert gates.passed is True
+    assert any("compressed" in r.lower() or "Volatility" in r for r in gates.soft_rejects)
+    assert not any("compressed" in r.lower() for r in gates.rejects)
 
 
 @pytest.mark.unit

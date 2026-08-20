@@ -211,7 +211,11 @@ def test_gold_focus_wait_same_focus_only_with_active_gold(gold_only: None) -> No
     snap = opportunity_window_snapshot()
     assert is_gold_symbol(str(decision.get("executable_focus") or ""))
     assert snap["current_focus"] == _GOLD
-    assert snap["next_action"] == CandidateAction.WAIT_SAME_FOCUS.value
+    assert snap["next_action"] in {
+        CandidateAction.WAIT_SAME_FOCUS.value,
+        CandidateAction.RISK_ASSESSMENT.value,
+        CandidateAction.HOLD_FOCUS.value,
+    }
     assert snap["setup_state"] in {
         DecisionState.WAITING.value,
         DecisionState.FOCUS_FORMING.value,

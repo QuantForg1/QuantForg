@@ -68,6 +68,8 @@ class CandidateAction(StrEnum):
     NO_EXECUTABLE_FOCUS = "NO_EXECUTABLE_FOCUS"
     MARKET_CONTEXT_NOT_READY = "MARKET_CONTEXT_NOT_READY"
     SETUP_NOT_READY = "SETUP_NOT_READY"
+    WAIT = "WAIT"
+    RISK_ASSESSMENT = "RISK_ASSESSMENT"
 
 
 NO_CURRENT_BLOCK = "NO_CURRENT_BLOCK"
@@ -1041,8 +1043,8 @@ def blocking_gate_fault_code(reason: str | None) -> str:
     if is_ignored_action_value(reason):
         return NO_CURRENT_BLOCK
     hay = _norm(reason or "")
-    if "volatility below hard" in hay or "dead tape" in hay:
-        return "VOLATILITY_HARD_MIN"
+    if "opportunity_score_below" in hay or "opportunity score" in hay:
+        return "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
     if "volatility unavailable" in hay:
         return "VOLATILITY_UNAVAILABLE"
     if "invalid volatility" in hay or "atr% ≤ 0" in hay or "atr% <=" in hay:
@@ -1414,21 +1416,104 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(best_eligible, dict):
         best_eligible = None
     all_reasons = named if (not eligible and named) else []
+    try:
+        from app.domain.institutional_trading.operations.system_coherence import (
+            symbol_identity,
+        )
+    except Exception:
+        def symbol_identity(sym: str) -> tuple[str, str]:
+            u = str(sym or "").upper()
+            return u, u
+
+    if scan_symbol:
+        logical, canonical = symbol_identity(scan_symbol)
+    else:
+        logical, canonical = "", ""
+    opp_score = best_row.get("opportunity_score") if best_row else None
+    opp_threshold = (
+        best_row.get("opportunity_threshold") if best_row else None
+    ) or 70
+    score_band = best_row.get("score_band") if best_row else None
+    score_breakdown = (
+        best_row.get("score_breakdown")
+        or best_row.get("opportunity_components")
+        or {}
+    )
+    direction = (best_row.get("direction") if best_row else None) or None
+    row_eligible = bool(
+        (best_row.get("eligible") if best_row else False)
+        or (best_row.get("opportunity_eligible") if best_row else False)
+    )
+    try:
+        opp_i = int(opp_score) if opp_score is not None else None
+    except (TypeError, ValueError):
+        opp_i = None
+    if opp_i is not None:
+        from app.domain.institutional_trading.operations.probability_selector import (
+            score_band_for,
+        )
+
+        score_band = score_band or score_band_for(opp_i, threshold=int(opp_threshold))
+        if opp_i < int(opp_threshold):
+            row_eligible = False
+            if _is_generic_scan_gate(gate):
+                state = DecisionState.SETUP_NOT_READY.value
+                next_action = CandidateAction.WAIT.value
+                blocking_stage = "PROBABILITY"
+                fault_class = FaultClass.WAIT.value
+                fault_code = "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
+                gate = "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
+                decision_state = DecisionState.SETUP_NOT_READY.value
+            else:
+                next_action = next_action or CandidateAction.WAIT.value
+        elif str(direction or "").upper() not in {"BUY", "SELL"}:
+            row_eligible = False
+            if _is_generic_scan_gate(gate):
+                next_action = CandidateAction.WAIT.value
+                blocking_stage = "DECISION"
+                fault_code = "DIRECTION_NONE"
+                gate = "DIRECTION_NONE"
+        elif row_eligible:
+            next_action = CandidateAction.RISK_ASSESSMENT.value
+            blocking_stage = None
+            fault_code = None
+            gate = None
     return {
         "label": "CURRENT_SCAN",
         "state": state,
         "decision_state": decision_state,
         "symbol": scan_symbol,
+        "logical_symbol": logical or None,
+        "canonical_symbol": canonical or None,
+        "cycle_id": payload.get("cycle_id"),
+        "snapshot_id": payload.get("snapshot_id"),
         "current_scan_symbol": scan_symbol,
+        "direction": direction,
+        "opportunity_score": opp_i,
+        "opportunity_threshold": int(opp_threshold),
+        "score_band": score_band,
+        "score_breakdown": dict(score_breakdown) if isinstance(score_breakdown, dict) else {},
+        "eligible": bool(row_eligible and eligible),
         "best_candidate": {
             "symbol": scan_symbol,
-            "eligible": bool(best_row.get("eligible") or best_row.get("opportunity_eligible")),
+            "eligible": bool(row_eligible),
             "blocking_gate": gate,
             "reject_reasons": list(all_reasons),
-            "direction": best_row.get("direction"),
-            "quality": best_row.get("quality") or best_row.get("trade_quality"),
-            "confidence": best_row.get("confidence") or best_row.get("ai_confidence"),
-            "opportunity_score": best_row.get("opportunity_score"),
+            "direction": direction,
+            "quality": (
+                (best_row.get("quality") or best_row.get("trade_quality"))
+                if best_row
+                else None
+            ),
+            "confidence": (
+                (best_row.get("confidence") or best_row.get("ai_confidence"))
+                if best_row
+                else None
+            ),
+            "opportunity_score": opp_i,
+            "opportunity_threshold": int(opp_threshold),
+            "score_band": score_band,
+            "score_breakdown": dict(score_breakdown) if isinstance(score_breakdown, dict) else {},
         }
         if scan_symbol
         else None,

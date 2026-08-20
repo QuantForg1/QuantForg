@@ -36,14 +36,35 @@ class QualityGateResult:
     rejects: tuple[str, ...]
     checks: dict[str, bool]
     volatility_decision: dict[str, Any] | None = None
+    hard_rejects: tuple[str, ...] = ()
+    soft_rejects: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "passed": self.passed,
             "rejects": list(self.rejects),
+            "hard_rejects": list(self.hard_rejects),
+            "soft_rejects": list(self.soft_rejects),
             "checks": dict(self.checks),
             "volatility_decision": dict(self.volatility_decision or {}),
         }
+
+
+def _volatility_is_hard(vol_decision: VolatilityDecision) -> bool:
+    """ATR missing / non-positive / below hard_min is market validity, not strategy."""
+    if vol_decision.atr_pct is None:
+        return True
+    if vol_decision.atr_pct <= 0:
+        return True
+    if vol_decision.atr_pct < vol_decision.hard_min_pct:
+        return True
+    reason = (vol_decision.reason or "").lower()
+    return (
+        "unavailable" in reason
+        or "hard minimum" in reason
+        or "invalid volatility" in reason
+        or "fail closed" in reason
+    )
 
 
 def evaluate_quality_gates(
@@ -66,36 +87,42 @@ def evaluate_quality_gates(
     market_regime: MarketRegimeLabel | str | None = None,
     symbol: str | None = None,
 ) -> QualityGateResult:
-    """Trade only when structure, liquidity, momentum, spread, vol, session align."""
+    """Hard market/execution gates stay fail-closed; soft floors are evidence only.
+
+    Probability Center is the opportunity selector. Independent SCALPING_V1
+    structure/momentum/quality/confidence/PA/liquidity/RR floors no longer
+    AND-kill a candidate.
+    """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
-    rejects: list[str] = []
+    hard_rejects: list[str] = []
+    soft_rejects: list[str] = []
     checks: dict[str, bool] = {}
 
     strong_structure = structure_score >= cfg.min_structure_score
     checks["strong_structure"] = strong_structure
     if cfg.require_strong_structure and not strong_structure:
-        rejects.append(
+        soft_rejects.append(
             f"Weak structure score {structure_score} < {cfg.min_structure_score}"
         )
 
     liq_ok = liquidity >= cfg.min_liquidity_score
     checks["high_liquidity"] = liq_ok
     if cfg.require_liquidity_event and not liq_ok:
-        rejects.append(
+        soft_rejects.append(
             f"Insufficient liquidity score {liquidity} < {cfg.min_liquidity_score}"
         )
 
     mom_ok = momentum >= cfg.min_momentum_score
     checks["momentum_confirmation"] = mom_ok
     if cfg.require_momentum_confirm and not mom_ok:
-        rejects.append(
+        soft_rejects.append(
             f"Momentum {momentum} < {cfg.min_momentum_score} — no confirmation"
         )
 
     spread_ok = not spread.reject
     checks["tight_spread"] = spread_ok
     if cfg.require_tight_spread and not spread_ok:
-        rejects.append(spread.reason or "Spread reject")
+        hard_rejects.append(spread.reason or "Spread reject")
 
     direction_clear = direction.direction.value in {"BUY", "SELL"}
     pa_passed = True
@@ -122,23 +149,21 @@ def evaluate_quality_gates(
     vol_ok = vol_decision.passed
     checks["valid_volatility"] = vol_ok
     if cfg.require_valid_volatility and not vol_ok:
-        rejects.append(vol_decision.reason)
+        if _volatility_is_hard(vol_decision):
+            hard_rejects.append(vol_decision.reason)
+        else:
+            soft_rejects.append(vol_decision.reason)
 
     session_ok = session.stars >= cfg.min_session_stars
     checks["session_quality"] = session_ok
     if cfg.require_session_quality and not session_ok:
-        rejects.append(f"Session quality {session.stars}★ < {cfg.min_session_stars}★")
+        soft_rejects.append(f"Session quality {session.stars}★ < {cfg.min_session_stars}★")
 
     checks["clear_direction"] = direction_clear
     if not checks["clear_direction"]:
-        rejects.append("No clear BUY/SELL edge (balanced scores → reject)")
+        hard_rejects.append("No clear BUY/SELL edge (balanced scores → reject)")
 
-    # Dual-score reconciliation: trade_quality and confidence use different
-    # aggregations. Production chronically showed quality≈84–89 with confidence
-    # ≈54–65 under the same tape — blocking LIVE while quality already cleared.
-    # When they diverge by ≥15 and quality meets the adaptive floor, trust
-    # quality for the confidence gate (never invent scores; still require
-    # structure/momentum/spread/vol/PA independently).
+    # Dual-score reconciliation remains for evidence quality, not an AND-kill.
     gate_confidence = confidence
     if (
         trade_quality - confidence >= 15
@@ -148,7 +173,7 @@ def evaluate_quality_gates(
 
     checks["adaptive_confidence"] = gate_confidence >= thresholds.confidence
     if not checks["adaptive_confidence"]:
-        rejects.append(
+        soft_rejects.append(
             f"Confidence {confidence} < adaptive {thresholds.confidence} ({thresholds.band})"  # noqa: E501
             + (
                 f" (reconciled={gate_confidence})"
@@ -159,7 +184,7 @@ def evaluate_quality_gates(
 
     checks["adaptive_quality"] = trade_quality >= thresholds.quality
     if not checks["adaptive_quality"]:
-        rejects.append(
+        soft_rejects.append(
             f"Trade quality {trade_quality} < adaptive {thresholds.quality} ({thresholds.band})"  # noqa: E501
         )
 
@@ -177,22 +202,26 @@ def evaluate_quality_gates(
     rr_ok = expected_rr is not None and expected_rr >= min_rr
     checks["min_rr"] = bool(rr_ok)
     if not rr_ok:
-        rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
+        soft_rejects.append(f"Expected RR {expected_rr} below minimum {min_rr}")
 
     pa_ok = True
     if pa_confluence is not None:
         pa_ok = pa_confluence.passed
         checks["pa_confluence"] = pa_ok
         if cfg.require_pa_confluence and not pa_ok:
-            rejects.append(
+            soft_rejects.append(
                 f"PA confluence {pa_confluence.score} < {cfg.min_pa_confluence_score}"
             )
     else:
         checks["pa_confluence"] = True
 
+    hard = tuple(dict.fromkeys(hard_rejects))
+    soft = tuple(dict.fromkeys(soft_rejects))
     return QualityGateResult(
-        passed=len(rejects) == 0,
-        rejects=tuple(rejects),
+        passed=len(hard) == 0,
+        rejects=hard,
         checks=checks,
         volatility_decision=vol_decision.to_dict(),
+        hard_rejects=hard,
+        soft_rejects=soft,
     )

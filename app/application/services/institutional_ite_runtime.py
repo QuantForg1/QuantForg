@@ -2484,6 +2484,14 @@ class InstitutionalIteRuntime:
                 safety_allowed=not force_shadow,
                 portfolio_allow=portfolio_allow,
                 portfolio_reasons=portfolio_reasons,
+                last_ai_score=(
+                    getattr(self.decision_pipeline, "_last_ai_score", None)
+                    if isinstance(
+                        getattr(self.decision_pipeline, "_last_ai_score", None),
+                        dict,
+                    )
+                    else None
+                ),
             )
         )
         if market_context_diagnostics is None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.config import (
-    DEFAULT_AI_SCALPING_CONFIG,
     AiScalpingConfig,
 )
 from app.domain.institutional_trading.ai_scalping.strategies.models import (
@@ -80,8 +79,8 @@ def evaluate_strategy(
     config: AiScalpingConfig | None = None,
     live_rank_boost: float = 0.0,
 ) -> StrategyEvaluation:
-    """Score one strategy. Base SCALPING_V1 reject ⇒ strategy cannot pass."""
-    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    """Score one strategy. Hard base reject still blocks; soft floors do not."""
+    _ = config
     symbol = str(score.get("symbol") or "").upper()
     direction = str(score.get("direction") or "NONE").upper()
     comps, atr_band, regime, setup_fam = _components(score)
@@ -95,17 +94,9 @@ def evaluate_strategy(
             f"Base SCALPING_V1 gates reject: {score.get('reject_reason') or 'reject'}"
         )
 
-    # Floors — never below SCALPING_V1
-    min_struct = max(int(cfg.min_structure_score), int(strategy.min_structure or 0))
-    min_mom = max(int(cfg.min_momentum_score), int(strategy.min_momentum or 0))
-    struct_ok = comps["structure"] >= min_struct
-    mom_ok = comps["momentum"] >= min_mom
-    filters["structure_floor"] = struct_ok
-    filters["momentum_floor"] = mom_ok
-    if not struct_ok:
-        reasons.append(f"Structure {comps['structure']} < strategy floor {min_struct}")
-    if not mom_ok:
-        reasons.append(f"Momentum {comps['momentum']} < strategy floor {min_mom}")
+    # Floors are Probability Center evidence — no independent AND-kill.
+    filters["structure_floor"] = True
+    filters["momentum_floor"] = True
 
     if strategy.require_regimes:
         ok = regime in strategy.require_regimes
@@ -155,20 +146,8 @@ def evaluate_strategy(
         strategy_quality = min(100, strategy_quality + 3)
         reasons.append(f"Setup family {setup_fam} fits {strategy.name}")
 
-    q_floor = int(cfg.normal_vol.quality)
-    c_floor = int(cfg.normal_vol.confidence)
-    thresholds = score.get("thresholds") if isinstance(score.get("thresholds"), dict) else {}
-    if thresholds.get("quality") is not None:
-        q_floor = max(q_floor, _i(thresholds.get("quality"), q_floor))
-    if thresholds.get("confidence") is not None:
-        c_floor = max(c_floor, _i(thresholds.get("confidence"), c_floor))
-
-    filters["strategy_quality_floor"] = strategy_quality >= q_floor
-    filters["strategy_confidence_floor"] = strategy_confidence >= c_floor
-    if strategy_quality < q_floor:
-        reasons.append(f"Strategy quality {strategy_quality} < floor {q_floor}")
-    if strategy_confidence < c_floor:
-        reasons.append(f"Strategy confidence {strategy_confidence} < floor {c_floor}")
+    filters["strategy_quality_floor"] = True
+    filters["strategy_confidence_floor"] = True
 
     direction_ok = direction in {"BUY", "SELL"}
     filters["clear_direction"] = direction_ok

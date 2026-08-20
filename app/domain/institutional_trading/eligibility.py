@@ -86,6 +86,13 @@ class PositionEligibilityEngine:
             if not checks["confluence_ok"]:
                 rejects.append("Forced trade requires BUY or SELL direction")
             checks["quality_ok"] = True
+        elif cfg.is_scalping():
+            # Probability Center already selected. Direction is required; numeric
+            # quality/confluence floors are evidence, not independent AND gates.
+            checks["confluence_ok"] = confluence.direction is not TradeDirection.NONE
+            if not checks["confluence_ok"]:
+                rejects.append("Scalping requires BUY or SELL direction")
+            checks["quality_ok"] = True
         else:
             checks["confluence_ok"] = (
                 confluence.passed

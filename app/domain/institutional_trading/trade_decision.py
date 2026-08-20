@@ -66,9 +66,12 @@ class TradeDecisionEngine:
         hard_fail = (
             not eligibility.eligible
             or confluence.direction is TradeDirection.NONE
-            or confidence < cfg.min_confluence_score
-            or quality < cfg.min_trade_quality_score
         )
+        if not cfg.is_scalping():
+            hard_fail = hard_fail or (
+                confidence < cfg.min_confluence_score
+                or quality < cfg.min_trade_quality_score
+            )
 
         if hard_fail:
             action = DecisionAction.NO_TRADE

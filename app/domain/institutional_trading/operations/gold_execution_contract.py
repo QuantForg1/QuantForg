@@ -24,6 +24,13 @@ from app.domain.institutional_trading.operations.gold_execution_readiness import
     READINESS_STAGES,
     StageStatus,
 )
+from app.domain.institutional_trading.operations.opportunity_starvation import (
+    record_opportunity_cycle,
+)
+from app.domain.institutional_trading.operations.probability_selector import (
+    OPPORTUNITY_SCORE_THRESHOLD,
+    evaluate_from_facts,
+)
 from app.domain.institutional_trading.phase_a.market_data_firewall import (
     evaluate_market_data_firewall,
 )
@@ -111,6 +118,12 @@ class GoldExecutionFacts:
     broker_connected: bool = False
     force_shadow: bool = False
     gold_only: bool | None = None
+    opportunity_score: int | None = None
+    opportunity_threshold: int | None = None
+    score_breakdown: dict[str, int] | None = None
+    liquidity_score: int | None = None
+    spread_score: int | None = None
+    mtf_alignment: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +159,10 @@ class GoldExecutionContract:
     may_submit_oms: bool
     execute_now_required: bool = False
     timestamps: dict[str, str] = field(default_factory=dict)
+    opportunity_score: int | None = None
+    opportunity_threshold: int | None = None
+    score_band: str | None = None
+    score_breakdown: dict[str, int] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -178,6 +195,10 @@ class GoldExecutionContract:
             "may_submit_oms": self.may_submit_oms,
             "execute_now_required": self.execute_now_required,
             "timestamps": dict(self.timestamps),
+            "opportunity_score": self.opportunity_score,
+            "opportunity_threshold": self.opportunity_threshold,
+            "score_band": self.score_band,
+            "score_breakdown": dict(self.score_breakdown or {}),
         }
 
 
@@ -206,7 +227,6 @@ def evaluate_gold_execution_contract(
     facts: GoldExecutionFacts,
 ) -> GoldExecutionContract:
     """Return EXECUTION_READY only when every authoritative stage PASSES."""
-    floors = scalping_v1_floors()
     gold_only = (
         bool(gold_only_enabled()) if facts.gold_only is None else bool(facts.gold_only)
     )
@@ -299,66 +319,26 @@ def evaluate_gold_execution_contract(
         mark("MARKET", StageStatus.PASS.value)
         stamps["setup_ready"] = _utc_now()
 
-    # --- STRATEGY (SCALPING_V1 floors; skip numeric check only when scores absent
-    # after a real BUY/SELL — quality gates already ran in the decision engine) ---
+    # --- STRATEGY (Probability Center is the opportunity selector) ---
+    verdict = evaluate_from_facts(facts)
     strategy_fail: dict[str, Any] | None = None
     if not facts.volatility_ok:
         strategy_fail = _stage_fail(
             stage="STRATEGY",
             code="VOLATILITY_REJECT",
-            reason="Gold volatility policy rejected",
+            reason="Gold volatility policy rejected (hard market validity)",
             fault_class=FaultClass.CANDIDATE_BLOCK.value,
             next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
         )
-    elif facts.structure_score is not None and facts.structure_score < floors["structure"]:
+    elif verdict.fault_code == "OPPORTUNITY_SCORE_BELOW_THRESHOLD":
         strategy_fail = _stage_fail(
             stage="STRATEGY",
-            code="SETUP_NOT_READY",
-            reason=f"Weak structure score {facts.structure_score} < {floors['structure']}",
+            code="OPPORTUNITY_SCORE_BELOW_THRESHOLD",
+            reason=verdict.fault_reason or "opportunity score below threshold",
             fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
-            current=facts.structure_score,
-            required=floors["structure"],
-        )
-    elif facts.momentum_score is not None and facts.momentum_score < floors["momentum"]:
-        strategy_fail = _stage_fail(
-            stage="STRATEGY",
-            code="SETUP_NOT_READY",
-            reason=f"Momentum {facts.momentum_score} < {floors['momentum']}",
-            fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
-            current=facts.momentum_score,
-            required=floors["momentum"],
-        )
-    elif facts.quality is not None and facts.quality < floors["quality"]:
-        strategy_fail = _stage_fail(
-            stage="STRATEGY",
-            code="SETUP_NOT_READY",
-            reason=f"Trade quality {facts.quality} < {floors['quality']}",
-            fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
-            current=facts.quality,
-            required=floors["quality"],
-        )
-    elif facts.confidence is not None and facts.confidence < floors["confidence"]:
-        strategy_fail = _stage_fail(
-            stage="STRATEGY",
-            code="SETUP_NOT_READY",
-            reason=f"Confidence {facts.confidence} < {floors['confidence']}",
-            fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
-            current=facts.confidence,
-            required=floors["confidence"],
-        )
-    elif facts.pa_confluence is not None and facts.pa_confluence < floors["pa_confluence"]:
-        strategy_fail = _stage_fail(
-            stage="STRATEGY",
-            code="SETUP_NOT_READY",
-            reason=f"PA confluence {facts.pa_confluence} < {floors['pa_confluence']}",
-            fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
-            current=facts.pa_confluence,
-            required=floors["pa_confluence"],
+            next_action=CandidateAction.WAIT_SAME_FOCUS.value,
+            current=verdict.opportunity_score,
+            required=verdict.threshold,
         )
     if strategy_fail:
         mark("STRATEGY", StageStatus.BLOCK.value)
@@ -645,7 +625,10 @@ def evaluate_gold_execution_contract(
             if first and first["code"] in {"MARKET_CONTEXT_NOT_READY", "MARKET_CLOSED"}
             else (
                 DecisionState.SETUP_NOT_READY.value
-                if first and first["code"] == "SETUP_NOT_READY"
+                if first and first["code"] in {
+                    "SETUP_NOT_READY",
+                    "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
+                }
                 else (
                     DecisionState.NO_EXECUTABLE_FOCUS.value
                     if first and first["next_action"] == CandidateAction.NO_EXECUTABLE_FOCUS.value
@@ -676,7 +659,7 @@ def evaluate_gold_execution_contract(
         blocking = str(first["stage"] if first else "MARKET")
 
     display_symbol = CANONICAL_GOLD if (gold_only or is_gold_symbol(symbol)) else (raw_symbol or symbol)
-    return GoldExecutionContract(
+    contract = GoldExecutionContract(
         symbol=display_symbol if gold_only else (raw_symbol or symbol),
         direction=direction,
         signal_strength=facts.quality,
@@ -706,7 +689,24 @@ def evaluate_gold_execution_contract(
         may_submit_oms=may_submit,
         execute_now_required=False,
         timestamps=stamps,
+        opportunity_score=verdict.opportunity_score,
+        opportunity_threshold=verdict.threshold,
+        score_band=verdict.score_band,
+        score_breakdown=dict(verdict.score_breakdown),
     )
+    record_opportunity_cycle(
+        opportunity_score=verdict.opportunity_score,
+        threshold=int(verdict.threshold or OPPORTUNITY_SCORE_THRESHOLD),
+        score_breakdown=dict(verdict.score_breakdown),
+        direction=direction,
+        first_blocking_gate=None if may_submit else contract.fault_code,
+        fault_code=contract.fault_code,
+        fault_reason=contract.fault_reason,
+        eligible=bool(verdict.eligible),
+        hard_block=contract.fault_class == FaultClass.HARD_BLOCK.value,
+        execution_ready=bool(may_submit),
+    )
+    return contract
 
 
 def facts_from_cycle(
@@ -727,6 +727,7 @@ def facts_from_cycle(
     safety_reasons: tuple[str, ...] = (),
     portfolio_allow: bool = True,
     portfolio_reasons: tuple[str, ...] = (),
+    last_ai_score: dict[str, Any] | None = None,
 ) -> GoldExecutionFacts:
     """Map existing ITE artefacts into the contract facts object."""
     factors = {}
@@ -750,6 +751,8 @@ def facts_from_cycle(
         bid = getattr(snapshot, "bid", None)
     if ask is None:
         ask = getattr(snapshot, "ask", None)
+    ai = last_ai_score if isinstance(last_ai_score, dict) else {}
+    breakdown = ai.get("score_breakdown") if isinstance(ai.get("score_breakdown"), dict) else None
     return GoldExecutionFacts(
         symbol=str(getattr(decision, "symbol", "") or getattr(snapshot, "symbol", "") or ""),
         direction=str(
@@ -803,4 +806,17 @@ def facts_from_cycle(
         gateway_connected=bool(gateway_connected),
         broker_connected=bool(broker_connected),
         force_shadow=bool(force_shadow),
+        opportunity_score=_as_int(
+            ai.get("opportunity_score")
+            or getattr(decision, "opportunity_score", None)
+        ),
+        opportunity_threshold=_as_int(
+            ai.get("opportunity_threshold")
+        ) or OPPORTUNITY_SCORE_THRESHOLD,
+        score_breakdown=breakdown,
+        liquidity_score=_as_int(ai.get("liquidity")),
+        spread_score=_as_int(ai.get("spread_score")),
+        mtf_alignment=_as_int(
+            (ai.get("factors") or {}).get("mtf") if isinstance(ai.get("factors"), dict) else None
+        ),
     )

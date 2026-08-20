@@ -68,6 +68,8 @@ def _ready(**overrides: object) -> GoldExecutionFacts:
         broker_connected=True,
         force_shadow=False,
         gold_only=True,
+        opportunity_score=80,
+        opportunity_threshold=70,
     )
     base.update(overrides)
     return GoldExecutionFacts(**base)  # type: ignore[arg-type]
@@ -128,21 +130,33 @@ def test_direction_none_never_executes() -> None:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("field", "value", "needle"),
+    "field,value",
     [
-        ("structure_score", 0, "Weak structure score 0 <"),
-        ("momentum_score", 10, "Momentum 10 <"),
-        ("quality", 40, "Trade quality 40 <"),
-        ("confidence", 20, "Confidence 20 <"),
-        ("pa_confluence", 10, "PA confluence 10 <"),
+        ("structure_score", 0),
+        ("momentum_score", 10),
+        ("quality", 40),
+        ("confidence", 20),
+        ("pa_confluence", 10),
     ],
 )
-def test_weak_scalping_floors_block(field: str, value: int, needle: str) -> None:
-    out = evaluate_gold_execution_contract(_ready(**{field: value}))
+def test_isolated_soft_floors_do_not_block_when_score_meets_threshold(
+    field: str, value: int
+) -> None:
+    out = evaluate_gold_execution_contract(
+        _ready(**{field: value, "opportunity_score": 80})
+    )
+    assert out.may_submit_oms is True
+    assert out.fault_code == "NONE"
+    assert out.opportunity_score == 80
+
+
+@pytest.mark.unit
+def test_opportunity_score_69_is_not_a_candidate() -> None:
+    out = evaluate_gold_execution_contract(_ready(opportunity_score=69))
     assert out.may_submit_oms is False
-    assert out.fault_code == "SETUP_NOT_READY"
-    assert needle in out.fault_reason
+    assert out.fault_code == "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
     assert out.decision_state == DecisionState.SETUP_NOT_READY.value
+    assert out.direction == "BUY"
 
 
 @pytest.mark.unit

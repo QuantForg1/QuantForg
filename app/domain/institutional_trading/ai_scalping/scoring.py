@@ -85,6 +85,11 @@ class AiScalpingScore:
     setup_scan: dict[str, object] | None = None
     adaptive_cooldown: dict[str, object] | None = None
     volatility_decision: dict[str, object] | None = None
+    opportunity_score: int = 0
+    opportunity_threshold: int = 70
+    score_band: str = "SETUP_NOT_READY"
+    score_breakdown: dict[str, int] | None = None
+    opportunity_eligible: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -121,6 +126,11 @@ class AiScalpingScore:
             "setup_scan": dict(self.setup_scan or {}),
             "adaptive_cooldown": dict(self.adaptive_cooldown or {}),
             "volatility_decision": dict(self.volatility_decision or {}),
+            "opportunity_score": self.opportunity_score,
+            "opportunity_threshold": self.opportunity_threshold,
+            "score_band": self.score_band,
+            "score_breakdown": dict(self.score_breakdown or {}),
+            "opportunity_eligible": self.opportunity_eligible,
             "never_prefer_buy_only": True,
         }
 
@@ -447,11 +457,17 @@ def score_scalping_setup(
         if vol_reason:
             reasons.append(vol_reason)
 
+    from app.domain.institutional_trading.operations.probability_selector import (
+        evaluate_from_score_dict,
+    )
+
     reject_list: list[str] = list(gates.rejects)
+    for soft in gates.soft_rejects:
+        reasons.append(f"EVIDENCE: {soft}")
     # Setup scan ranks opportunities — absence does not poison global quality gates.
     if cfg.multi_setup_scan_enabled and (setup_scan is None or setup_scan.best is None):
         reasons.append(
-            "No setup family cleared local evidence — global gates still authoritative"
+            "No setup family cleared local evidence — Probability Center is selector"
         )
 
     # Live cooldown gate blocks NEW entries only (quality floors unchanged).
@@ -465,11 +481,43 @@ def score_scalping_setup(
             f"({cooldown_eval.remaining_seconds:.0f}s remaining)"
         )
 
+    verdict = evaluate_from_score_dict(
+        {
+            "direction": direction_dec.direction.value,
+            "trade_quality": trade_quality,
+            "ai_confidence": confidence,
+            "structure_score": direction_dec.structure_score,
+            "momentum": factors["momentum"],
+            "liquidity": liquidity_score,
+            "spread_score": spread_a.score,
+            "expected_rr": expected_rr,
+            "market_regime": regime.regime,
+            "mtf_alignment": int(trend.alignment_score),
+            "pa_confluence": pa.score,
+            "factors": factors,
+            "volatility_decision": gates.volatility_decision,
+        }
+    )
+    reasons.append(
+        f"opportunity_score={verdict.opportunity_score} "
+        f"threshold={verdict.threshold} band={verdict.score_band}"
+    )
+
     reject_list = list(dict.fromkeys(reject_list))
     reject = bool(reject_list)
     reject_reason = "; ".join(reject_list) if reject_list else None
-    if reject:
-        direction = TradeDirection.NONE
+    # Keep BUY/SELL for observability. Probability wait is not a direction wipe.
+    if not reject and not verdict.eligible:
+        reject = True
+        reject_reason = verdict.fault_reason or "SETUP_NOT_READY"
+        reject_list.append(reject_reason)
+        reasons.append(f"WAIT: {reject_reason}")
+        fam = f" setup={setup_family}" if setup_family else ""
+        entry_reason = (
+            f"WAIT {direction_dec.direction.value}: "
+            f"opportunity_score={verdict.opportunity_score}{fam}"
+        )
+    elif reject:
         for r in reject_list:
             reasons.append(f"REJECT: {r}")
         entry_reason = reject_reason
@@ -477,11 +525,12 @@ def score_scalping_setup(
         fam = f" setup={setup_family}" if setup_family else ""
         entry_reason = (
             f"TAKE {direction_dec.direction.value}: "
-            f"PA={pa.score} conf={confidence} regime={regime.regime}{fam} "
-            f"EMA/RSI/SMC confluence satisfied"
+            f"opportunity_score={verdict.opportunity_score} "
+            f"PA={pa.score} conf={confidence} regime={regime.regime}{fam}"
         )
         reasons.append(
-            f"TAKE {direction_dec.direction.value}: all institutional quality gates passed"  # noqa: E501
+            f"TAKE {direction_dec.direction.value}: Probability Center candidate "
+            f"(score={verdict.opportunity_score} >= {verdict.threshold})"
         )
 
     hold = _hold_time(
@@ -503,7 +552,7 @@ def score_scalping_setup(
         liquidity=liquidity_score,
         spread_score=spread_a.score,
         atr_pct=resolved.atr_pct,
-        direction=direction.value if not reject else TradeDirection.NONE.value,
+        direction=direction_dec.direction.value,
         factors=factors,
         thresholds=resolved.to_dict(),
         reasons=tuple(reasons),
@@ -526,4 +575,9 @@ def score_scalping_setup(
         setup_scan=setup_scan.to_dict() if setup_scan else None,
         adaptive_cooldown=cooldown_eval.to_dict(),
         volatility_decision=gates.volatility_decision,
+        opportunity_score=verdict.opportunity_score,
+        opportunity_threshold=verdict.threshold,
+        score_band=verdict.score_band,
+        score_breakdown=dict(verdict.score_breakdown),
+        opportunity_eligible=verdict.eligible,
     )

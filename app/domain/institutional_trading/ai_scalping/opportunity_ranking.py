@@ -87,47 +87,36 @@ def compute_opportunity_components(score: dict[str, Any]) -> dict[str, int]:
 
 
 def compute_opportunity_score(score: dict[str, Any]) -> dict[str, Any]:
-    """Weighted Opportunity Score 0–100 from existing production metrics only."""
+    """Weighted Opportunity Score 0-100. Probability Center is the selector."""
+    from app.domain.institutional_trading.operations.probability_selector import (
+        OPPORTUNITY_WEIGHTS,
+        evaluate_from_score_dict,
+    )
+
     c = compute_opportunity_components(score)
-    # Weights sum to 100 — keep existing AI quality/confidence dominant
-    weights = {
-        "ai_quality": 14,
-        "confidence": 14,
-        "mtf_alignment": 9,
-        "liquidity": 7,
-        "volatility": 7,
-        "spread_quality": 6,
-        "session_quality": 5,
-        "news_risk": 4,
-        "trend_strength": 6,
-        "structure_quality": 5,
-        "order_block_quality": 4,
-        "fvg_quality": 3,
-        "risk_reward": 5,
-        "execution_probability": 11,
-    }
-    total_w = sum(weights.values()) or 1
-    raw = sum(c[k] * weights[k] for k in weights) / total_w
-    reject = bool(score.get("reject"))
-    direction = str(score.get("direction") or "NONE").upper()
-    if reject or direction not in {"BUY", "SELL"}:
-        # Keep score for ranking visibility but mark ineligible
-        opportunity = int(_clamp(raw * 0.55))
-        eligible = False
-    else:
-        opportunity = int(_clamp(raw))
-        eligible = opportunity > 0
+    verdict = evaluate_from_score_dict(score)
+    eligible = bool(verdict.eligible)
+    if bool(score.get("reject")):
+        reason = str(score.get("reject_reason") or "").lower()
+        if "opportunity_score" not in reason:
+            eligible = False
     return {
-        "opportunity_score": opportunity,
+        "opportunity_score": verdict.opportunity_score,
         "components": c,
-        "eligible": eligible and not reject and direction in {"BUY", "SELL"},
+        "breakdown": dict(verdict.score_breakdown),
+        "eligible": eligible and verdict.eligible,
+        "score_band": verdict.score_band,
         "symbol": str(score.get("symbol") or "").upper(),
-        "direction": direction,
-        "reject": reject,
-        "blocking_gate": score.get("reject_reason") or score.get("blocking_gate"),
-        "weights": weights,
+        "direction": verdict.direction,
+        "reject": bool(score.get("reject")),
+        "blocking_gate": score.get("reject_reason")
+        or score.get("blocking_gate")
+        or verdict.fault_code,
+        "weights": dict(OPPORTUNITY_WEIGHTS),
         "fabricated": False,
-        "source": "existing_ai_scalping_score",
+        "source": "probability_center",
+        "opportunity_threshold": verdict.threshold,
+        "win_probability": False,
     }
 
 
@@ -142,6 +131,9 @@ def enrich_scores_with_opportunity(
         base["opportunity_score"] = opp["opportunity_score"]
         base["opportunity_components"] = opp["components"]
         base["opportunity_eligible"] = opp["eligible"]
+        base["score_band"] = opp.get("score_band")
+        base["opportunity_threshold"] = opp.get("opportunity_threshold")
+        base["score_breakdown"] = opp.get("breakdown") or {}
         out.append(base)
     return out
 
