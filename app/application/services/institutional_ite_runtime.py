@@ -122,6 +122,10 @@ class ShadowCycleResult:
     broker_retcode: int | None = None
     mt5_ticket: int | None = None
     latency_ms: float | None = None
+    trade_class: str | None = None
+    position_plan: dict[str, Any] | None = None
+    stage_timings_ms: dict[str, Any] | None = None
+    decision_cycle_latency_ms: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -144,6 +148,11 @@ class ShadowCycleResult:
             "broker_retcode": self.broker_retcode,
             "mt5_ticket": self.mt5_ticket,
             "latency_ms": self.latency_ms,
+            "trade_class": self.trade_class,
+            "position_plan": self.position_plan,
+            "stage_timings_ms": self.stage_timings_ms,
+            "decision_cycle_latency_ms": self.decision_cycle_latency_ms,
+            "execute_now_required": False,
         }
 
 
@@ -1620,6 +1629,167 @@ class InstitutionalIteRuntime:
             logger.exception("hardening_pme_persist_failed", reason=reason)
         return managed
 
+    def _submit_same_cycle_batch(
+        self,
+        *,
+        decision: Any,
+        ctx: Any,
+        tid: str,
+        contract: Any,
+        snapshot: Any,
+        account: Any,
+        diagnostics: dict[str, Any],
+        signal_t0: float,
+    ) -> tuple[Any, dict[str, Any]]:
+        """One thesis → one plan → existing OMS handle per authorized leg."""
+        import time as _time
+        from decimal import Decimal as _Dec
+
+        from app.domain.institutional_trading.operations.batch_execution import (
+            submit_position_plan_batch,
+        )
+        from app.domain.institutional_trading.operations.decision_cycle import (
+            build_authoritative_snapshot,
+            note_opportunity_change,
+            stale_authorization,
+        )
+        from app.domain.institutional_trading.operations.position_plan import (
+            build_position_plan,
+        )
+
+        ai = getattr(self.decision_pipeline, "_last_ai_score", None)
+        ai = ai if isinstance(ai, dict) else {}
+        trade_class = str(getattr(contract, "trade_class", "") or "SCALP")
+        score = int(
+            getattr(contract, "opportunity_score", None)
+            or ai.get("opportunity_score")
+            or 0
+        )
+        direction = str(
+            getattr(contract, "direction", None)
+            or getattr(getattr(decision, "direction", None), "value", None)
+            or "NONE"
+        )
+        snap = build_authoritative_snapshot(
+            cycle_id=diagnostics.get("cycle_id")
+            or getattr(contract, "cycle_id", None),
+            snapshot_id=diagnostics.get("snapshot_id")
+            or getattr(contract, "snapshot_id", None),
+            snapshot=snapshot,
+            account=account,
+            diagnostics=diagnostics,
+            opportunity={
+                **ai,
+                "opportunity_score": score,
+                "direction": direction,
+                "confidence": getattr(contract, "confidence", None),
+                "quality": getattr(contract, "quality", None),
+            },
+            quantforg_count=int(getattr(account, "open_positions", 0) or 0),
+            broker_ready=True,
+        )
+        diagnostics["authoritative_snapshot"] = snap.to_dict()
+        stale = stale_authorization(snap)
+        if stale:
+            logger.warning(
+                "same_cycle_stale_block",
+                reason=stale,
+                cycle_id=snap.cycle_id,
+                snapshot_id=snap.snapshot_id,
+            )
+            diagnostics["stale_authorization"] = stale
+            from dataclasses import replace as _dc_replace
+            from app.domain.institutional_trading.decision_models import (
+                DecisionAction as _DA_stale,
+            )
+
+            blocked = _dc_replace(
+                decision,
+                action=_DA_stale.NO_TRADE,
+                reasons=(*decision.reasons, stale),
+            )
+            return (
+                self.execution.bridge.handle(blocked, ctx, trace_id=tid),
+                diagnostics,
+            )
+
+        lots = getattr(decision, "approved_lots", None) or _Dec("0")
+        stop = None
+        target = None
+        try:
+            stop = str(decision.stop_zone.mid or decision.stop_zone.low)
+        except Exception:
+            stop = None
+        try:
+            target = str(decision.target_zone.mid or decision.target_zone.high)
+        except Exception:
+            target = None
+        free = getattr(account, "free_margin", None)
+        plan = build_position_plan(
+            cycle_id=snap.cycle_id,
+            snapshot_id=snap.snapshot_id,
+            symbol=snap.canonical_symbol,
+            direction=direction,
+            trade_class=trade_class,
+            opportunity_score=score,
+            confidence=getattr(contract, "confidence", None),
+            aggregate_lots=lots,
+            current_quantforg_count=snap.existing_quantforg_positions,
+            ite_config=self.decision_pipeline.config,
+            sl=stop,
+            tp=target,
+            base_input_hash=str(decision.input_hash),
+            free_margin=free,
+        )
+        note_opportunity_change(
+            score=score,
+            direction=direction,
+            trade_class=trade_class,
+        )
+        diagnostics["position_plan"] = plan.to_dict()
+        diagnostics["trade_class"] = trade_class
+        if plan.effective_count <= 0:
+            from dataclasses import replace as _dc_replace2
+            from app.domain.institutional_trading.decision_models import (
+                DecisionAction as _DA_zero,
+            )
+
+            blocked = _dc_replace2(
+                decision,
+                action=_DA_zero.NO_TRADE,
+                reasons=(*decision.reasons, "effective_position_count=0"),
+            )
+            return (
+                self.execution.bridge.handle(blocked, ctx, trace_id=tid),
+                diagnostics,
+            )
+
+        t_first = _time.perf_counter()
+
+        def _submit(leg_decision: Any, leg_ctx: Any) -> Any:
+            return self.execution.bridge.handle(
+                leg_decision, leg_ctx, trace_id=tid
+            )
+
+        plan, tally, last = submit_position_plan_batch(
+            plan=plan,
+            decision=decision,
+            context=ctx,
+            submit=_submit,
+            trade_class=trade_class,
+        )
+        diagnostics["position_plan"] = plan.to_dict()
+        diagnostics["batch_tally"] = tally.to_dict()
+        diagnostics["time_from_signal_to_first_order_send"] = round(
+            (t_first - signal_t0) * 1000.0, 3
+        )
+        diagnostics["time_from_signal_to_last_order_send"] = round(
+            (_time.perf_counter() - signal_t0) * 1000.0, 3
+        )
+        if last is None:
+            last = self.execution.bridge.handle(decision, ctx, trace_id=tid)
+        return last, diagnostics
+
     def _run_cycle(
         self,
         *,
@@ -1676,6 +1846,10 @@ class InstitutionalIteRuntime:
 
         tid = new_trace_id()
         t0 = time.perf_counter()
+        if market_context_diagnostics is None:
+            market_context_diagnostics = {}
+        market_context_diagnostics.setdefault("cycle_id", f"cycle-{tid[:12]}")
+        market_context_diagnostics.setdefault("snapshot_id", f"snap-{tid[:12]}")
         try:  # noqa: SIM105
             # Cache for continuous-ops portfolio pause probes on health ticks
             self._last_account_risk = account
@@ -2527,7 +2701,16 @@ class InstitutionalIteRuntime:
                 self._cycles += 1
             return result
 
-        bridge_result = self.execution.bridge.handle(decision, ctx, trace_id=tid)
+        bridge_result, market_context_diagnostics = self._submit_same_cycle_batch(
+            decision=decision,
+            ctx=ctx,
+            tid=tid,
+            contract=contract,
+            snapshot=snapshot,
+            account=account,
+            diagnostics=dict(market_context_diagnostics),
+            signal_t0=t0,
+        )
         with self._lock:
             self._last_bridge_result = bridge_result
         try:
@@ -3141,6 +3324,22 @@ class InstitutionalIteRuntime:
             broker_retcode=int(broker_retcode) if broker_retcode is not None else None,
             mt5_ticket=int(mt5_ticket) if mt5_ticket is not None else None,
             latency_ms=round(latency_ms, 3),
+            trade_class=(
+                (market_context_diagnostics or {}).get("trade_class")
+                if isinstance(market_context_diagnostics, dict)
+                else None
+            ),
+            position_plan=(
+                (market_context_diagnostics or {}).get("position_plan")
+                if isinstance(market_context_diagnostics, dict)
+                else None
+            ),
+            stage_timings_ms=(
+                (market_context_diagnostics or {}).get("stage_timings_ms")
+                if isinstance(market_context_diagnostics, dict)
+                else None
+            ),
+            decision_cycle_latency_ms=round(latency_ms, 3),
         )
         with self._lock:
             self._last_cycle = result
@@ -5158,6 +5357,20 @@ class InstitutionalIteRuntime:
             # 2) PME just closed → immediate rescan (post_close_rescan)
             sleep_s = float(self.interval_seconds)
             try:
+                from app.domain.institutional_trading.operations.decision_cycle import (
+                    consume_immediate_wakeup,
+                )
+
+                wakeup = consume_immediate_wakeup()
+                if wakeup:
+                    sleep_s = 0.0
+                    logger.warning(
+                        "event_driven_decision_wakeup",
+                        reason=wakeup,
+                    )
+            except Exception:
+                logger.exception("event_driven_wakeup_failed")
+            try:
                 from app.domain.institutional_trading.ai_scalping.config import (
                     DEFAULT_AI_SCALPING_CONFIG as _sc,
                 )
@@ -5337,6 +5550,17 @@ def build_ite_runtime(
     )
 
     plane = get_control_plane()
+    try:
+        from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+            align_live_scalp_cap,
+        )
+
+        plane.max_open_trades = align_live_scalp_cap(
+            plane.max_open_trades,
+            trading_mode=str(plane.trading_mode or ""),
+        )
+    except Exception:
+        logger.exception("scalp_cap_align_failed")
     reliability = get_reliability_platform()
     # Force shadow defaults for production shadow readiness
     if plane.mode is not OpsExecutionMode.SHADOW:

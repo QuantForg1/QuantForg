@@ -32,6 +32,7 @@ class PositionTruthSync:
     tickets: tuple[int, ...] = ()
     quantforg_positions: int = 0
     quantforg_tickets: tuple[int, ...] = ()
+    rows: tuple[Any, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -259,6 +260,7 @@ def force_sync_positions(
         tickets=tickets,
         quantforg_positions=qf_count,
         quantforg_tickets=qf_tickets,
+        rows=tuple(rows),
     )
 
 

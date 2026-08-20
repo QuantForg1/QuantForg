@@ -368,15 +368,26 @@ async def build_ite_cycle_market_context(
     bars_loaded: dict[str, int] = {}
     last_bar_exc: Exception | None = None
     try:
-        for tf, count in _TF_COUNTS:
+        import asyncio
+
+        async def _one_tf(tf: Timeframe, count: int) -> tuple[Timeframe, list[Candle]]:
             rates = await _offload_sync(
-                mt5_adapter.copy_rates_from_pos, canonical_symbol, tf, 0, count
+                mt5_adapter.copy_rates_from_pos,
+                canonical_symbol,
+                tf,
+                0,
+                count,
             )
-            candles = [_rate_to_candle(r) for r in (rates or [])]
+            return tf, [_rate_to_candle(r) for r in (rates or [])]
+
+        loaded = await asyncio.gather(
+            *[_one_tf(tf, count) for tf, count in _TF_COUNTS]
+        )
+        for tf, candles in loaded:
             bars_by_tf[tf] = candles
             bars_loaded[tf.value] = len(candles)
             diag["bars"][tf.value] = {
-                "requested": count,
+                "requested": dict(_TF_COUNTS).get(tf, 0),
                 "loaded": len(candles),
                 "ok": len(candles) >= 50,
             }
@@ -563,6 +574,7 @@ async def build_ite_cycle_market_context(
             account="ZERO_EQUITY",
         )
 
+    book_rows: list[Any] = []
     try:
         from app.application.services.mt5_position_truth import force_sync_positions
 
@@ -586,6 +598,7 @@ async def build_ite_cycle_market_context(
         )
         diag["position_tickets"] = list(qf_tickets or [])
         diag["position_cap_identity"] = 260720
+        book_rows = list(getattr(sync, "rows", ()) or ())
     except Exception as exc:
         logger.warning("ite_cycle_positions_failed", error=str(exc))
         diag["positions"] = f"ERROR: {exc}"
@@ -612,7 +625,7 @@ async def build_ite_cycle_market_context(
             filter_quantforg_positions,
         )
 
-        rows = await _offload_sync(mt5_adapter.list_positions)
+        rows = book_rows
         owned = filter_quantforg_positions(rows or [], symbol=symbol)
         dirs, entries = book_facts_from_positions(owned)
         open_directions = list(dirs)
@@ -712,12 +725,11 @@ async def build_ite_cycle_market_context(
         diag["orders"] = f"ERROR: {exc}"
 
     mid = None
-    try:
-        tick = await _offload_sync(mt5_adapter.latest_tick, symbol)
-        mid = Decimal(str(getattr(tick, "mid", 0) or getattr(tick, "bid", 0) or 0))
-        if mid <= 0:
-            mid = None
-    except Exception:
+    if quote_bid is not None and quote_ask is not None:
+        mid = (quote_bid + quote_ask) / Decimal("2")
+    elif quote_bid is not None:
+        mid = quote_bid
+    if mid is not None and mid <= 0:
         mid = None
 
     atr = None

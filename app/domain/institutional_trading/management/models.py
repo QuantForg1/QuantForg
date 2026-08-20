@@ -102,6 +102,10 @@ class ManagedPosition:
     exit_reason: str | None = None
     magic: int = 260720
     comment: str = ""
+    cycle_id: str = ""
+    snapshot_id: str = ""
+    position_plan_id: str = ""
+    trade_class: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -125,6 +129,10 @@ class ManagedPosition:
             "exit_reason": self.exit_reason,
             "magic": self.magic,
             "comment": self.comment,
+            "cycle_id": self.cycle_id,
+            "snapshot_id": self.snapshot_id,
+            "position_plan_id": self.position_plan_id,
+            "trade_class": self.trade_class,
         }
 
 

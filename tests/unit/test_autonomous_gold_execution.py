@@ -18,7 +18,6 @@ from app.domain.institutional_trading.operations.fast_decision_path import (
     reset_fast_decision_path,
 )
 from app.domain.institutional_trading.operations.gold_execution_contract import (
-    CANONICAL_GOLD,
     GoldExecutionFacts,
     evaluate_gold_execution_contract,
     scalping_v1_floors,
@@ -96,15 +95,26 @@ def test_execute_now_is_not_required_for_autonomous_submit() -> None:
         ROOT / "app/application/services/institutional_ite_runtime.py"
     ).read_text(encoding="utf-8")
     tree = ast.parse(runtime_src)
+    found_cycle = False
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == "_run_cycle":
             src = ast.get_source_segment(runtime_src, node) or ""
             assert "self.execute_now" not in src
             assert "evaluate_gold_execution_contract" in src
-            assert "self.execution.bridge.handle" in src
+            assert "_submit_same_cycle_batch" in src
+            found_cycle = True
             break
-    else:
-        pytest.fail("_run_cycle not found")
+    assert found_cycle
+    helper = None
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.FunctionDef)
+            and node.name == "_submit_same_cycle_batch"
+        ):
+            helper = ast.get_source_segment(runtime_src, node) or ""
+            break
+    assert helper is not None
+    assert "self.execution.bridge.handle" in helper
 
 
 @pytest.mark.unit
@@ -163,7 +173,7 @@ def test_opportunity_score_69_is_not_a_candidate() -> None:
 def test_leverage_2000_passes_and_2001_blocks() -> None:
     ok = evaluate_gold_execution_contract(_ready(account_leverage=Decimal("2000")))
     assert ok.may_submit_oms is True
-    assert MAX_LEVERAGE == Decimal("2000")
+    assert Decimal("2000") == MAX_LEVERAGE
     blocked = evaluate_gold_execution_contract(_ready(account_leverage=Decimal("2001")))
     assert blocked.may_submit_oms is False
     assert blocked.fault_code == "LEVERAGE_POLICY_EXCEEDED"

@@ -79,7 +79,7 @@ def test_v7_universe_and_quality_risk_locked() -> None:
     assert cfg.normal_vol.quality == 74
     assert cfg.min_expected_rr == Decimal("1.20")
     assert cfg.risk_per_trade_pct == Decimal("0.50")
-    assert cfg.max_open_trades == 5
+    assert cfg.max_open_trades == 10
     assert cfg.allow_martingale is False
     assert cfg.allow_grid is False
     assert cfg.absolute_max_hold_minutes == 12

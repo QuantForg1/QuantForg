@@ -1478,6 +1478,39 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
             blocking_stage = None
             fault_code = None
             gate = None
+    trade_class = "NO_TRADE"
+    trade_class_reason = "No classified opportunity on this scan."
+    try:
+        from app.domain.institutional_trading.operations.trade_classifier import (
+            classify_trade,
+        )
+
+        trade_classified = classify_trade(
+            opportunity_score=int(opp_i or 0),
+            direction=str(direction or "NONE"),
+            confidence=(
+                (best_row.get("confidence") or best_row.get("ai_confidence"))
+                if best_row
+                else None
+            ),
+            structure=(
+                (best_row.get("structure") or best_row.get("structure_score"))
+                if best_row
+                else None
+            ),
+            risk_reward=best_row.get("expected_rr") if best_row else None,
+            regime=best_row.get("market_regime") if best_row else None,
+            mtf_alignment=best_row.get("mtf") if best_row else None,
+            execution_quality=(
+                best_row.get("spread_score") if best_row else None
+            ),
+            cycle_id=str(payload.get("cycle_id") or "") or None,
+            snapshot_id=str(payload.get("snapshot_id") or "") or None,
+        )
+        trade_class = trade_classified.trade_class.value
+        trade_class_reason = trade_classified.reason
+    except Exception:
+        pass
     return {
         "label": "CURRENT_SCAN",
         "state": state,
@@ -1489,6 +1522,8 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "snapshot_id": payload.get("snapshot_id"),
         "current_scan_symbol": scan_symbol,
         "direction": direction,
+        "trade_class": trade_class,
+        "trade_class_reason": trade_class_reason,
         "opportunity_score": opp_i,
         "opportunity_threshold": int(opp_threshold),
         "score_band": score_band,

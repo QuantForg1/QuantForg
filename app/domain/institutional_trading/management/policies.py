@@ -215,17 +215,22 @@ def plan_action(
             pass
 
     hold_minutes = (context.now - position.opened_at).total_seconds() / 60.0
+    trade_class = str(getattr(position, "trade_class", "") or "").upper()
+    time_stop_minutes = int(config.time_stop_minutes)
+    abs_hold = int(config.absolute_max_hold_minutes or 0)
+    if trade_class == "HOLD":
+        time_stop_minutes = max(time_stop_minutes, 20)
+        abs_hold = max(abs_hold, 45)
+    elif trade_class == "SCALP" and abs_hold <= 0:
+        abs_hold = int(config.time_stop_minutes)
 
-    # --- Absolute max hold (scalping) — never keep trades open unnecessarily ---
-    if (
-        config.absolute_max_hold_minutes > 0
-        and hold_minutes >= config.absolute_max_hold_minutes
-    ):
+    # --- Absolute max hold — SCALP tighter, HOLD longer, same engine ---
+    if abs_hold > 0 and hold_minutes >= abs_hold:
         return PlannedAction(
             ManageActionKind.TIME_STOP,
             (
-                f"Absolute max hold {config.absolute_max_hold_minutes}m reached "
-                f"(held {hold_minutes:.1f}m) — flatten scalp"
+                f"Absolute max hold {abs_hold}m reached "
+                f"(held {hold_minutes:.1f}m) — flatten {trade_class or 'scalp'}"
             ),
             volume=position.remaining_volume,
             target_state=PositionLifecycleState.EXITED,
@@ -233,7 +238,7 @@ def plan_action(
 
     # --- Time stop (weak R within window) ---
     if (
-        hold_minutes >= config.time_stop_minutes
+        hold_minutes >= time_stop_minutes
         and position.max_favorable_r < config.time_stop_min_r
         and r < config.time_stop_min_r
     ):

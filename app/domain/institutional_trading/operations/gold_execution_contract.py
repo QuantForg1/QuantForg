@@ -124,6 +124,8 @@ class GoldExecutionFacts:
     liquidity_score: int | None = None
     spread_score: int | None = None
     mtf_alignment: int | None = None
+    cycle_id: str | None = None
+    snapshot_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +165,10 @@ class GoldExecutionContract:
     opportunity_threshold: int | None = None
     score_band: str | None = None
     score_breakdown: dict[str, int] | None = None
+    trade_class: str | None = None
+    trade_class_reason: str | None = None
+    cycle_id: str | None = None
+    snapshot_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -196,6 +202,10 @@ class GoldExecutionContract:
             "execute_now_required": self.execute_now_required,
             "timestamps": dict(self.timestamps),
             "opportunity_score": self.opportunity_score,
+            "trade_class": self.trade_class,
+            "trade_class_reason": self.trade_class_reason,
+            "cycle_id": self.cycle_id,
+            "snapshot_id": self.snapshot_id,
             "opportunity_threshold": self.opportunity_threshold,
             "score_band": self.score_band,
             "score_breakdown": dict(self.score_breakdown or {}),
@@ -659,6 +669,29 @@ def evaluate_gold_execution_contract(
         blocking = str(first["stage"] if first else "MARKET")
 
     display_symbol = CANONICAL_GOLD if (gold_only or is_gold_symbol(symbol)) else (raw_symbol or symbol)
+    from app.domain.institutional_trading.operations.trade_classifier import (
+        classify_trade,
+    )
+
+    classified = classify_trade(
+        opportunity_score=int(verdict.opportunity_score),
+        direction=direction,
+        confidence=facts.confidence,
+        structure=facts.structure_score,
+        risk_reward=facts.risk_reward,
+        regime=facts.market_regime,
+        mtf_alignment=facts.mtf_alignment,
+        execution_quality=facts.spread_score,
+        hard_market_invalid=bool(
+            market_fail
+            and market_fail.get("fault_class") == FaultClass.HARD_BLOCK.value
+        ),
+        hard_invalid_reason=(
+            str(market_fail["reason"]) if market_fail else None
+        ),
+        cycle_id=facts.cycle_id,
+        snapshot_id=facts.snapshot_id,
+    )
     contract = GoldExecutionContract(
         symbol=display_symbol if gold_only else (raw_symbol or symbol),
         direction=direction,
@@ -693,6 +726,10 @@ def evaluate_gold_execution_contract(
         opportunity_threshold=verdict.threshold,
         score_band=verdict.score_band,
         score_breakdown=dict(verdict.score_breakdown),
+        trade_class=classified.trade_class.value,
+        trade_class_reason=classified.reason,
+        cycle_id=facts.cycle_id,
+        snapshot_id=facts.snapshot_id,
     )
     record_opportunity_cycle(
         opportunity_score=verdict.opportunity_score,
@@ -817,6 +854,14 @@ def facts_from_cycle(
         liquidity_score=_as_int(ai.get("liquidity")),
         spread_score=_as_int(ai.get("spread_score")),
         mtf_alignment=_as_int(
-            (ai.get("factors") or {}).get("mtf") if isinstance(ai.get("factors"), dict) else None
+            (ai.get("factors") or {}).get("mtf")
+            if isinstance(ai.get("factors"), dict)
+            else None
+        ),
+        cycle_id=(
+            str(ai.get("cycle_id") or "") or None
+        ),
+        snapshot_id=(
+            str(ai.get("snapshot_id") or "") or None
         ),
     )

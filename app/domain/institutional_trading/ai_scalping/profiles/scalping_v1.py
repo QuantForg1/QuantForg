@@ -71,9 +71,10 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         cooldown_min_seconds=20,
         cooldown_base_seconds=45,
         cooldown_max_seconds=180,
-        # Multi independent opportunities (not one-best only)
-        max_open_trades=5,
-        max_entries_per_cycle=5,
+        # Multi independent opportunities (not one-best only).
+        # SCALP class cap 10; HOLD class cap remains 5 in the planner.
+        max_open_trades=10,
+        max_entries_per_cycle=10,
         require_probability_improvement=False,
         min_confidence_delta_for_add=0,
         parallel_scan_enabled=True,
@@ -106,3 +107,21 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
 
 
 SCALPING_V1: AiScalpingConfig = build_scalping_v1_config()
+
+# Operator/control-plane leftovers from pre-10 scalping caps.
+_LEGACY_SCALP_CAPS = frozenset({1, 3, 5})
+
+
+def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> int:
+    """Lift stale 1/3/5 scalping caps to the live profile. Never exceed 10."""
+    profile = int(SCALPING_V1.max_open_trades)
+    try:
+        n = int(current)
+    except (TypeError, ValueError):
+        n = 1
+    mode = str(trading_mode or "scalping").strip().lower()
+    if mode != "scalping":
+        return max(1, n)
+    if n in _LEGACY_SCALP_CAPS:
+        return profile
+    return max(1, min(n, profile))

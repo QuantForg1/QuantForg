@@ -202,8 +202,8 @@ class AiScalpingConfig:
     optimizer_defer_below_quality: int = 40
 
     # Multi-trade - prefer quality, not stacking losers
-    # v7.1: up to 5 concurrent when portfolio exposure/risk still allow
-    max_open_trades: int = 5
+    # SCALPING_V1 live cap is 10; HOLD plans still clamp to 5.
+    max_open_trades: int = 10
     require_probability_improvement: bool = True
     min_confidence_delta_for_add: int = 5
 

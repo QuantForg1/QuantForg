@@ -39,7 +39,7 @@ def test_v71_config_preserves_quality_risk() -> None:
     assert cfg.risk_per_trade_pct == Decimal("0.50")
     assert cfg.max_daily_exposure_pct == Decimal("5.00")
     assert cfg.max_symbol_exposure_pct == Decimal("5.00")
-    assert cfg.max_open_trades == 5
+    assert cfg.max_open_trades == 10
     assert cfg.allow_martingale is False
     assert cfg.continuous_operation_enabled is True
     assert cfg.post_close_rescan_enabled is True
@@ -153,14 +153,14 @@ def test_broker_profile_preserves_password_on_metadata_update(tmp_path: Path) ->
 
 @pytest.mark.unit
 def test_max_open_still_gated_by_portfolio_exposure() -> None:
-    """Raising max_open to 5 does not raise risk — exposure ceiling still binds."""
+    """Raising max_open to 10 does not raise risk — exposure ceiling still binds."""
     account = AccountRiskState(
         equity=Decimal("10000"),
         daily_pnl=Decimal("0"),
         open_positions=4,
     )
     snap = aggregate_portfolio_risk(account, config=DEFAULT_AI_SCALPING_CONFIG)
-    assert snap.max_open_positions == 5
+    assert snap.max_open_positions == 10
     assert snap.max_exposure_pct == Decimal("5.00")
     # Synthetic account exposure below ceiling — still room under max_open
     assert snap.exposure_pct <= snap.max_exposure_pct
