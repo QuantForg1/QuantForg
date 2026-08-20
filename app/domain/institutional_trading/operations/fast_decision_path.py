@@ -1051,6 +1051,8 @@ def blocking_gate_fault_code(reason: str | None) -> str:
         return "VOLATILITY_INVALID"
     if "volatility too compressed" in hay:
         return "VOLATILITY_COMPRESSED"
+    if "below hard minimum" in hay or "dead tape floor" in hay:
+        return "VOLATILITY_HARD_MIN"
     if "portfolio" in hay:
         return "PORTFOLIO_RISK_LIMIT"
     if "no eligible" in hay:

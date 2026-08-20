@@ -9,6 +9,7 @@ import pytest
 from app.domain.institutional_trading.operations.fast_decision_path import (
     CandidateAction,
     DecisionState,
+    blocking_gate_fault_code,
     build_current_scan_decision,
     build_last_pipeline_snapshot,
     classify_candidate_outcome,
@@ -194,6 +195,61 @@ def test_scan_state_module_does_not_submit_orders() -> None:
     assert "order_send(" not in src
     assert "MetaTrader5" not in src
     assert "forces_trades" in src
+
+
+def test_atr_below_hard_minimum_normalizes_fault_code() -> None:
+    code = blocking_gate_fault_code(_VOL_REASON)
+    assert code == "VOLATILITY_HARD_MIN"
+    current = build_current_scan_decision(_zero_eligible_scan())
+    assert current["fault_code"] == "VOLATILITY_HARD_MIN"
+    assert current["fault_reason"] == _VOL_REASON
+    assert "0.021" in current["fault_reason"]
+    assert "0.03" in current["fault_reason"]
+    assert current["state"] == DecisionState.NO_ELIGIBLE_SETUP.value
+    assert current["next_action"] == CandidateAction.NO_EXECUTABLE_FOCUS.value
+
+
+def test_atr_at_or_above_hard_minimum_is_not_hard_min_code() -> None:
+    passed = "Volatility v2 PASS standard floor=0.03 ATR%=0.031"
+    compressed = (
+        "Volatility too compressed ATR%=0.04 < exceptional floor 0.05"
+    )
+    assert blocking_gate_fault_code(passed) != "VOLATILITY_HARD_MIN"
+    assert blocking_gate_fault_code(compressed) == "VOLATILITY_COMPRESSED"
+    eligible = {
+        "as_of": "2026-08-18T19:00:00Z",
+        "best_symbol": "XAUUSD_I",
+        "best_candidate": {
+            "symbol": "XAUUSD_I",
+            "eligible": True,
+            "blocking_gate": None,
+            "direction": "BUY",
+        },
+        "best_eligible_candidate": {"symbol": "XAUUSD_I", "eligible": True},
+        "eligible_count": 1,
+        "eligible_symbols": ["XAUUSD_I"],
+        "no_eligible_setup": False,
+        "first_blocking_gate": None,
+        "opportunity_ranked": [
+            {
+                "symbol": "XAUUSD_I",
+                "opportunity_eligible": True,
+                "reject": False,
+                "direction": "BUY",
+                "atr_pct": "0.12",
+                "volatility_decision": {
+                    "passed": True,
+                    "atr_pct": "0.12",
+                    "hard_min_pct": "0.03",
+                    "band": "normal",
+                    "reason": "Volatility v2 PASS standard floor=0.03 ATR%=0.12",
+                },
+            }
+        ],
+    }
+    current = build_current_scan_decision(eligible)
+    assert current["fault_code"] != "VOLATILITY_HARD_MIN"
+    assert current["eligible_count"] == 1
 
 
 def test_best_candidate_is_not_execution_ready() -> None:
