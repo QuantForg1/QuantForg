@@ -10,6 +10,11 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from app.domain.institutional_trading.decision_models import AccountRiskState
+from app.domain.institutional_trading.operations.quantforg_position_cap import (
+    QUANTFORG_MAGIC,
+    count_quantforg_positions,
+    filter_quantforg_positions,
+)
 from app.domain.trading.gold_only import GOLD_SYMBOL, is_gold_symbol
 from core.logging import get_logger
 
@@ -25,6 +30,8 @@ class PositionTruthSync:
     repaired: bool
     symbol: str
     tickets: tuple[int, ...] = ()
+    quantforg_positions: int = 0
+    quantforg_tickets: tuple[int, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -33,6 +40,9 @@ class PositionTruthSync:
             "repaired": self.repaired,
             "symbol": self.symbol,
             "tickets": list(self.tickets),
+            "quantforg_positions": self.quantforg_positions,
+            "quantforg_tickets": list(self.quantforg_tickets),
+            "account_positions": self.mt5_positions,
         }
 
 
@@ -187,13 +197,29 @@ def force_sync_positions(
 
     _invalidate_adapter_position_cache(mt5_adapter)
     rows = list(mt5_adapter.list_positions() or [])
-    # Account gate uses ALL open tickets. Symbol filter is only for PME repair
-    # scope — never report "MT5 positions: 0" while another symbol is live.
+    # Account ticket count is observability / PME repair context.
+    # QuantForg strategy cap uses identity + autonomous symbol only.
     mt5_count, tickets = _count_all_positions(rows)
     sym_count, sym_tickets = _count_symbol_positions(rows, symbol=sym)
+    qf_rows = filter_quantforg_positions(rows, symbol=sym, magic=QUANTFORG_MAGIC)
+    qf_count = count_quantforg_positions(
+        rows, symbol=sym, execution_identity=QUANTFORG_MAGIC
+    )
+    qf_tickets = tuple(
+        t
+        for t in (_ticket_of(p) for p in qf_rows)
+        if t > 0
+    )
 
     logger.warning("MT5 positions: %s", mt5_count)
     logger.warning("Internal positions: %s", prior_internal)
+    logger.warning(
+        "quantforg_position_cap",
+        symbol=sym,
+        quantforg_positions=qf_count,
+        account_positions=mt5_count,
+        magic=QUANTFORG_MAGIC,
+    )
     if sym_count != mt5_count:
         logger.warning(
             "MT5 positions symbol_scope",
@@ -231,6 +257,8 @@ def force_sync_positions(
         repaired=repaired,
         symbol=sym,
         tickets=tickets,
+        quantforg_positions=qf_count,
+        quantforg_tickets=qf_tickets,
     )
 
 
@@ -238,9 +266,12 @@ def apply_mt5_position_truth(
     account: AccountRiskState,
     sync: PositionTruthSync,
 ) -> AccountRiskState:
-    """Rewrite AccountRiskState open count from MT5 truth."""
+    """Rewrite strategy cap from QuantForg identity — not the account book."""
+    qf_n = int(getattr(sync, "quantforg_positions", 0) or 0)
+    acct_n = int(getattr(sync, "mt5_positions", 0) or 0)
     return replace(
         account,
-        open_positions=int(sync.mt5_positions),
-        already_in_trade=bool(sync.mt5_positions > 0),
+        open_positions=qf_n,
+        already_in_trade=bool(qf_n > 0),
+        account_open_positions=acct_n,
     )

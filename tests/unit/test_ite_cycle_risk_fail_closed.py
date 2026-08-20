@@ -203,6 +203,8 @@ async def test_book_facts_failure_with_open_positions_marks_incomplete(
         "app.application.services.mt5_position_truth.force_sync_positions",
         lambda *_a, **_k: SimpleNamespace(
             mt5_positions=2,
+            quantforg_positions=2,
+            quantforg_tickets=[1, 2],
             internal_positions=2,
             repaired=False,
             tickets=[1, 2],

@@ -165,6 +165,9 @@ class AccountRiskState:
     bid: Decimal | None = None
     ask: Decimal | None = None
     quote_age_seconds: float | None = None
+    # Account-wide MT5 ticket count — observability / margin context only.
+    # Never use this as the QuantForg strategy position cap.
+    account_open_positions: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -173,6 +176,7 @@ class AccountRiskState:
             "daily_pnl": str(self.daily_pnl),
             "weekly_pnl": str(self.weekly_pnl),
             "open_positions": self.open_positions,
+            "account_open_positions": self.account_open_positions,
             "already_in_trade": self.already_in_trade,
             "consecutive_losses": self.consecutive_losses,
             "cooldown_active": self.cooldown_active,

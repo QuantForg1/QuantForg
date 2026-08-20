@@ -493,6 +493,7 @@ async def build_ite_cycle_market_context(
     equity = Decimal("0")
     free_margin: Decimal | None = None
     open_positions = 0
+    account_positions = 0
     account_trading_enabled = False
     try:
         info = await _offload_sync(mt5_adapter.account_info)
@@ -572,12 +573,19 @@ async def build_ite_cycle_market_context(
             symbol=symbol,
             position_engine=position_engine,
         )
-        open_positions = int(sync.mt5_positions)
+        account_positions = int(getattr(sync, "mt5_positions", 0) or 0)
+        open_positions = int(getattr(sync, "quantforg_positions", 0) or 0)
         diag["positions"] = open_positions
-        diag["mt5_positions"] = sync.mt5_positions
-        diag["internal_positions"] = sync.internal_positions
-        diag["position_truth_repaired"] = sync.repaired
-        diag["position_tickets"] = list(sync.tickets)
+        diag["mt5_positions"] = account_positions
+        diag["account_positions"] = account_positions
+        diag["quantforg_positions"] = open_positions
+        diag["internal_positions"] = getattr(sync, "internal_positions", 0)
+        diag["position_truth_repaired"] = getattr(sync, "repaired", False)
+        qf_tickets = getattr(sync, "quantforg_tickets", None) or getattr(
+            sync, "tickets", ()
+        )
+        diag["position_tickets"] = list(qf_tickets or [])
+        diag["position_cap_identity"] = 260720
     except Exception as exc:
         logger.warning("ite_cycle_positions_failed", error=str(exc))
         diag["positions"] = f"ERROR: {exc}"
@@ -591,23 +599,24 @@ async def build_ite_cycle_market_context(
                 engine_n = 0
         open_positions = max(int(engine_n), 1)
         diag["positions_fail_closed_count"] = open_positions
+        account_positions = open_positions
+        diag["account_positions"] = account_positions
 
-    # Book facts for duplicate / add-on guards (all symbols on MT5)
+    # Book facts for duplicate / add-on guards — QuantForg gold identity only.
     open_directions: list[str] = []
     open_entries: list[Decimal] = []
     book_facts_ok = False
     try:
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            book_facts_from_positions,
+            filter_quantforg_positions,
+        )
+
         rows = await _offload_sync(mt5_adapter.list_positions)
-        for p in rows or []:
-            side = str(getattr(p, "side", "") or "").strip().upper()
-            if side in {"BUY", "SELL"}:
-                open_directions.append(side)
-            try:
-                entry_px = Decimal(str(getattr(p, "open_price", 0) or 0))
-            except Exception:
-                entry_px = Decimal("0")
-            if entry_px > 0:
-                open_entries.append(entry_px)
+        owned = filter_quantforg_positions(rows or [], symbol=symbol)
+        dirs, entries = book_facts_from_positions(owned)
+        open_directions = list(dirs)
+        open_entries = list(entries)
         diag["open_directions"] = list(open_directions)
         diag["open_entries"] = [str(e) for e in open_entries]
         book_facts_ok = True
@@ -732,6 +741,7 @@ async def build_ite_cycle_market_context(
         weekly_pnl=Decimal("0"),
         open_positions=open_n,
         already_in_trade=open_n > 0,
+        account_open_positions=int(diag.get("account_positions") or open_n),
         consecutive_losses=0,
         cooldown_active=False,
         cooldown_remaining_minutes=0,

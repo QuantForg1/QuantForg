@@ -144,6 +144,8 @@ def _resolve_live_positions(
                         open_price=Decimal(str(getattr(p, "open_price", 0) or 0)),
                         current_price=Decimal(str(getattr(p, "current_price", 0) or 0)),
                         profit=Decimal(str(getattr(p, "profit", 0) or 0)),
+                        magic=int(getattr(p, "magic", 0) or 0),
+                        comment=str(getattr(p, "comment", "") or ""),
                     )
                 )
             except Exception:
@@ -171,31 +173,6 @@ def _account_snapshot(
         currency="USD",
         server="ite",
     )
-
-
-def _synthetic_positions(
-    symbol: str,
-    count: int,
-    entry: Decimal,
-    *,
-    side: str = "buy",
-) -> list[MT5Position]:
-    side_l = (side or "buy").lower()
-    if side_l not in {"buy", "sell"}:
-        side_l = "buy"
-    out: list[MT5Position] = []
-    for i in range(max(0, count)):
-        out.append(
-            MT5Position(
-                ticket=i + 1,
-                symbol=symbol,
-                side=side_l,
-                volume=Decimal("0.01"),
-                open_price=entry,
-                current_price=entry,
-            )
-        )
-    return out
 
 
 @dataclass
@@ -450,21 +427,19 @@ class InstitutionalDecisionPipeline:
             session_name=snapshot.session.session.value,
         )
 
-        open_count = max(
-            account.open_positions,
-            1 if account.already_in_trade else 0,
-            len(positions or []),
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            filter_quantforg_positions,
         )
-        pos_list = list(positions or [])
-        if len(pos_list) < open_count:
-            pos_list = _synthetic_positions(
-                snapshot.symbol, open_count, entry, side=side
-            )
+
+        live_book = _resolve_live_positions(positions)
+        pos_list = filter_quantforg_positions(
+            live_book, symbol=str(getattr(snapshot, "symbol", "") or "")
+        )
+        live_positions = pos_list
 
         assert self.risk_engine is not None
         # Keep risk engine limits in sync with adaptive / scalping + live broker specs.
         live_min, live_step, live_max, live_cs = _live_broker_lot_specs(snapshot.symbol)
-        live_positions = _resolve_live_positions(positions)
         risk_engine_lots_cap = Decimal("0")
         self.risk_engine = RiskEngine(
             config=risk_config_from_ite(
