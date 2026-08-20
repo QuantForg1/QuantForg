@@ -248,7 +248,7 @@ export function AutoTradingWorkspace() {
   const maxDailyLossPct = num(policy.max_daily_loss_pct, 3);
   const riskPerTradePct = num(policy.risk_per_trade_pct, 1);
   const maxOpen = num(policy.max_open_positions, 1);
-  const tradingMode = str(policy.trading_mode, "swing").toLowerCase();
+  const tradingMode = str(policy.trading_mode, "scalping").toLowerCase();
   const compoundingEnabled = Boolean(policy.compounding_enabled);
   const aiScalping = asRecord(asRecord(opsPayload).ai_scalping);
   const aiScore = asRecord(aiScalping.ai_score);
@@ -989,6 +989,18 @@ export function AutoTradingWorkspace() {
       : "—";
 
   const decisionAction = str(last.decision_action, "").toUpperCase();
+  const liveDirectionRaw = str(
+    last.direction || currentScan.direction || aiScore.direction,
+    "NONE",
+  ).toUpperCase();
+  const liveDirection =
+    liveDirectionRaw === "BUY" || liveDirectionRaw === "SELL"
+      ? liveDirectionRaw
+      : "NONE";
+  const liveTradeClass = str(
+    last.trade_class || currentScan.trade_class,
+    "NO_TRADE",
+  ).toUpperCase();
   const bias: "BUY" | "SELL" | "WAIT" =
     decisionAction === "BUY" || decisionAction === "LONG"
       ? "BUY"
@@ -1765,8 +1777,10 @@ export function AutoTradingWorkspace() {
             {tradingMode === "alpha"
               ? " · Multi-symbol Alpha"
               : tradingMode === "scalping"
-                ? " · H1→M1 (no H4)"
+                ? " · SCALPING H1→M1 (no H4)"
                 : " · H4→M5"}
+            {" · DIRECTION "}
+            {liveDirection}
           </span>
         </div>
         {busyLabel ? (
@@ -1922,6 +1936,11 @@ export function AutoTradingWorkspace() {
             <MetricCard
               label="Decision"
               value={str(last.decision_action || last.cycle_outcome, "—")}
+            />
+            <MetricCard label="Direction" value={liveDirection} />
+            <MetricCard
+              label="Class"
+              value={liveTradeClass || "NO_TRADE"}
             />
           </div>
           <p className="mt-3 text-[12px] text-[var(--fg-muted)]">

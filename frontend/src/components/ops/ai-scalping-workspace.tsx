@@ -85,8 +85,10 @@ export function AiScalpingWorkspace() {
         <p className="text-sm text-[var(--fg-muted)]">{str(d.mission)}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           <Badge tone="success">risk={str(safeguards.risk_per_trade_pct)}%</Badge>
+          <Badge tone="success">buy_only=false</Badge>
           <Badge tone="success">
-            buy_only={String(safeguards.never_prefer_buy_only !== false)}
+            never_prefer_buy_only=
+            {String(safeguards.never_prefer_buy_only !== false)}
           </Badge>
           <Badge tone="success">
             martingale={String(safeguards.allow_martingale === true)}

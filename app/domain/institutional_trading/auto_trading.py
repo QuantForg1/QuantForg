@@ -92,7 +92,7 @@ class AutoTradePolicy:
     allowed_symbols: tuple[str, ...] = ("XAUUSD",)
     max_spread: Decimal = Decimal("2.00")
     news_filter_enabled: bool = False
-    trading_mode: str = "swing"  # swing | scalping | alpha
+    trading_mode: str = "scalping"  # scalping | swing | alpha
     compounding_enabled: bool = False
     alpha_engine_enabled: bool = False
 
@@ -105,9 +105,9 @@ class AutoTradePolicy:
         from app.domain.trading.xauusd_specs import coerce_max_spread
 
         object.__setattr__(self, "max_spread", coerce_max_spread(self.max_spread))
-        mode = (self.trading_mode or "swing").strip().lower()
+        mode = (self.trading_mode or "scalping").strip().lower()
         if mode not in {"swing", "scalping", "alpha"}:
-            mode = "swing"
+            mode = "scalping"
         object.__setattr__(self, "trading_mode", mode)
         if gold_only_enabled():
             object.__setattr__(

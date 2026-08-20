@@ -46,6 +46,18 @@ def may_add_scalping_trade(
     if open_positions <= 0:
         return AddTradeDecision(True, "No open positions — entry allowed")
 
+    dir_u = (new_direction or "").upper()
+    open_set = {str(d).upper() for d in open_directions if str(d).strip()}
+    # Opposite BUY/SELL is a new decision — never treat it as same-side pyramid.
+    if dir_u in {"BUY", "SELL"} and open_set and dir_u not in open_set:
+        return AddTradeDecision(
+            True,
+            (
+                f"Opposite direction {dir_u} vs open "
+                f"{','.join(sorted(open_set))} — new decision, not add-on"
+            ),
+        )
+
     # Never average into losers / only pyramid into winners
     if require_unrealized_profit:
         legs = same_direction_profits or open_profits
@@ -66,8 +78,7 @@ def may_add_scalping_trade(
                 )
 
     # Never duplicate identical direction + near-identical entry
-    dir_u = (new_direction or "").upper()
-    if dir_u and dir_u in {d.upper() for d in open_directions}:
+    if dir_u and dir_u in open_set:
         if entry is not None and open_entries and min_entry_distance is not None:
             for existing in open_entries:
                 if abs(existing - entry) < min_entry_distance:

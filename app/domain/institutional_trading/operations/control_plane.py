@@ -104,7 +104,7 @@ class OperationsControlPlane:
     allowed_symbols: tuple[str, ...] = (GOLD_SYMBOL,)
     max_spread: Decimal = Decimal("2.00")
     news_filter_enabled: bool = False
-    trading_mode: str = "swing"
+    trading_mode: str = "scalping"
     compounding_enabled: bool = False
     alpha_engine_enabled: bool = False
 

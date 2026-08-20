@@ -72,7 +72,7 @@ def apply_trading_mode_to_runtime(
     scalp: AiScalpingConfig | None = None,
 ) -> dict[str, Any]:
     """Switch ITE decision + PME knobs between swing, scalping, and alpha."""
-    mode_l = (mode or "swing").strip().lower()
+    mode_l = (mode or "scalping").strip().lower()
     if mode_l not in {"swing", "scalping", "alpha"}:
         raise ValueError("trading_mode must be 'swing', 'scalping', or 'alpha'")
 
