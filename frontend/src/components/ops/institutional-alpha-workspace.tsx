@@ -36,14 +36,14 @@ export function InstitutionalAlphaWorkspace() {
       iteOpsApi.updateAutoTrading({
         confirmed: true,
         reason: on ? "enable institutional alpha" : "disable institutional alpha",
-        trading_mode: on ? "alpha" : "swing",
+        trading_mode: on ? "alpha" : "scalping",
         alpha_engine_enabled: on,
         max_open_positions: on
           ? 3
           : num(asRecord(asRecord(autoQ.data).policy).max_open_positions, 1),
       }),
     onSuccess: (_d, on) => {
-      toast.success(on ? "Institutional Alpha enabled" : "Alpha disabled — Swing mode");
+      toast.success(on ? "Institutional Alpha enabled" : "Alpha disabled — Scalping mode");
       void qc.invalidateQueries({ queryKey: ["ite-ops-institutional-alpha"] });
       void qc.invalidateQueries({ queryKey: ["ite-ops-auto-trading"] });
     },

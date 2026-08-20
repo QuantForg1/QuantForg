@@ -170,7 +170,7 @@ def build_production_reliability_dashboard() -> dict[str, Any]:
         "ops": {
             "mode": plane.mode.value,
             "auto_trading_run_state": plane.auto_trading_run_state,
-            "trading_mode": getattr(plane, "trading_mode", "swing"),
+            "trading_mode": getattr(plane, "trading_mode", "scalping"),
             "execution_enabled": bool(getattr(settings, "execution_enabled", False)),
         },
     }

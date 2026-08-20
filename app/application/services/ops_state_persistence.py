@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -31,11 +32,51 @@ _TABLE = "ite_ops_runtime_state"
 _PG_CACHE_TTL_S = 15.0
 _pg_state_cache: tuple[float, dict[str, Any]] | None = None
 
+_VALID_TRADING_MODES = frozenset({"swing", "scalping", "alpha"})
+# Unlabeled persisted "swing" is the pre-scalping code default that Start/Pause
+# echoed into ops state. Only an explicit operator mode selection keeps swing.
+_LEGACY_DEFAULT_MODE = "swing"
+_AUTHORITATIVE_DEFAULT_MODE = "scalping"
+
+
+def _trading_mode_explicit(value: Any) -> bool:
+    if value is True or value == 1:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes"}
+    return False
+
 
 def reset_postgres_state_cache() -> None:
     """Test helper — drop the short Postgres ops-state GET cache."""
     global _pg_state_cache
     _pg_state_cache = None
+
+
+def resolve_persisted_trading_mode(
+    state: Mapping[str, Any] | None,
+) -> tuple[str, str]:
+    """Resolve AutoTradePolicy trading_mode from persisted ops state.
+
+    Returns ``(mode, source)`` where source is one of:
+    ``missing_default``, ``persisted``, ``explicit``, ``legacy_swing_migrated``.
+
+    Precedence:
+    1. Missing / empty / invalid → scalping (authoritative code default)
+    2. ``trading_mode_explicit=true`` → keep the persisted valid mode
+    3. Unlabeled persisted ``swing`` → stale legacy default → scalping
+    4. Other unlabeled valid modes (scalping, alpha) → keep
+    """
+    data = state if isinstance(state, Mapping) else {}
+    raw = str(data.get("trading_mode") or "").strip().lower()
+    explicit = _trading_mode_explicit(data.get("trading_mode_explicit"))
+    if raw not in _VALID_TRADING_MODES:
+        return _AUTHORITATIVE_DEFAULT_MODE, "missing_default"
+    if explicit:
+        return raw, "explicit"
+    if raw == _LEGACY_DEFAULT_MODE:
+        return _AUTHORITATIVE_DEFAULT_MODE, "legacy_swing_migrated"
+    return raw, "persisted"
 
 
 def ops_state_path() -> Path:
@@ -269,6 +310,7 @@ def ops_state_diagnostics() -> dict[str, Any]:
     pg_cfg = _supabase_rest_config() is not None
     postgres_has_state = state.get("_hydrate_source") == "postgres"
     durable = postgres_has_state or is_volume_backed()
+    resolved_mode, resolved_source = resolve_persisted_trading_mode(state)
     return {
         "durable": durable,
         "volume_backed": is_volume_backed(),
@@ -281,5 +323,10 @@ def ops_state_diagnostics() -> dict[str, Any]:
         "persisted_auto_trading_run_state": state.get("auto_trading_run_state"),
         "persisted_auto_trading_enabled": state.get("auto_trading_enabled"),
         "persisted_trading_mode": state.get("trading_mode"),
+        "persisted_trading_mode_explicit": _trading_mode_explicit(
+            state.get("trading_mode_explicit")
+        ),
+        "resolved_trading_mode": resolved_mode,
+        "resolved_trading_mode_source": resolved_source,
         "persisted_max_open_positions": state.get("max_open_positions"),
     }

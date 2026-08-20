@@ -343,7 +343,7 @@ class Container:
                 )
 
                 plane = self.ite_runtime.plane
-                mode = str(getattr(plane, "trading_mode", "swing") or "swing")
+                mode = str(getattr(plane, "trading_mode", "scalping") or "scalping")
                 if (
                     bool(getattr(plane, "alpha_engine_enabled", False))
                     and mode == "swing"
@@ -366,7 +366,9 @@ class Container:
                 kill_switch=self.ite_runtime.plane.kill_switch_armed,
                 execution_enabled=bool(self.settings.execution_enabled),
                 oms_orders_allowed=self.ite_runtime.plane.oms_orders_allowed(),
-                trading_mode=getattr(self.ite_runtime.plane, "trading_mode", "swing"),
+                trading_mode=getattr(
+                    self.ite_runtime.plane, "trading_mode", "scalping"
+                ),
             )
             # Production hardening v6 — restore open MT5 positions AFTER listen.
             # Never block web startup / Railway healthchecks on gateway I/O.

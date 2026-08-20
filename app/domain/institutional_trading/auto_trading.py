@@ -379,7 +379,7 @@ def evaluate_auto_trade_safety(
     )
     symbol_u = (facts.symbol or "").strip().upper()
     allowed_syms = {s.strip().upper() for s in policy.allowed_symbols if s.strip()}
-    mode = (policy.trading_mode or "swing").strip().lower()
+    mode = (policy.trading_mode or "scalping").strip().lower()
 
     # Scalping/alpha multi-asset: dynamic scan universe owns membership.
     # Stale ops plane allowed_symbols must not reject post-strategy handoff

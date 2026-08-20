@@ -642,17 +642,22 @@ class OperationsControlPlane:
         try:
             from app.application.services.ops_state_persistence import save_ops_state
 
-            save_ops_state(
-                {
-                    "auto_trading_enabled": self.auto_trading_enabled,
-                    "auto_trading_run_state": self.auto_trading_run_state,
-                    "trading_mode": self.trading_mode,
-                    "max_open_positions": self.max_open_trades,
-                    "alpha_engine_enabled": self.alpha_engine_enabled,
-                    "compounding_enabled": self.compounding_enabled,
-                    "allowed_symbols": list(self.allowed_symbols),
-                }
-            )
+            persist_patch: dict[str, Any] = {
+                "auto_trading_enabled": self.auto_trading_enabled,
+                "auto_trading_run_state": self.auto_trading_run_state,
+                "trading_mode": self.trading_mode,
+                "max_open_positions": self.max_open_trades,
+                "alpha_engine_enabled": self.alpha_engine_enabled,
+                "compounding_enabled": self.compounding_enabled,
+                "allowed_symbols": list(self.allowed_symbols),
+            }
+            # Start/Pause echo trading_mode in the request body; that is not an
+            # operator mode choice. Only the mode-select control is explicit.
+            if trading_mode is not None and "operator set trading_mode=" in (
+                reason or ""
+            ).lower():
+                persist_patch["trading_mode_explicit"] = True
+            save_ops_state(persist_patch)
         except Exception as exc:
             from core.logging import get_logger
 
@@ -1041,6 +1046,7 @@ def get_control_plane() -> OperationsControlPlane:
             from app.application.services.ops_state_persistence import (
                 load_ops_state,
                 ops_state_diagnostics,
+                resolve_persisted_trading_mode,
             )
             from app.domain.institutional_trading.auto_trading import (
                 normalize_run_state,
@@ -1075,17 +1081,46 @@ def get_control_plane() -> OperationsControlPlane:
                     str(raw_run),
                     enabled=plane.auto_trading_enabled,
                 )
-            raw_tm = str(state.get("trading_mode") or "").strip().lower()
-            if raw_tm in {"swing", "scalping", "alpha"}:
-                plane.trading_mode = raw_tm
+            resolved_tm, tm_source = resolve_persisted_trading_mode(state)
+            plane.trading_mode = resolved_tm
+            from core.logging import get_logger as _get_logger
+
+            _get_logger(__name__).info(
+                "trading_mode_hydrated",
+                mode=resolved_tm,
+                source=tm_source,
+                persisted=str(state.get("trading_mode") or "") or None,
+                explicit=bool(state.get("trading_mode_explicit")),
+            )
+            if tm_source == "legacy_swing_migrated":
+                # Stale pre-scalping default written by Start/Pause echo —
+                # not a proven operator Swing selection.
+                try:
+                    from app.application.services.ops_state_persistence import (
+                        save_ops_state,
+                    )
+
+                    save_ops_state(
+                        {
+                            "trading_mode": "scalping",
+                            "trading_mode_explicit": False,
+                            "trading_mode_migrated_from": "swing",
+                        }
+                    )
+                except Exception as tm_exc:
+                    from core.logging import get_logger as _get_logger
+
+                    _get_logger(__name__).warning(
+                        "trading_mode_legacy_migrate_persist_failed",
+                        error=str(tm_exc),
+                    )
             elif (
-                "trading_mode" not in state
+                tm_source == "missing_default"
                 and plane.mode in {OpsExecutionMode.LIVE, OpsExecutionMode.CANARY}
                 and plane.auto_trading_run_state in {"running", "paused"}
             ):
                 # Restart continuity: LIVE auto desk lost trading_mode on
                 # redeploy because it was never persisted — restore scalping.
-                plane.trading_mode = "scalping"
                 if plane.max_open_trades < 3:
                     plane.max_open_trades = 3
                 try:
@@ -1096,6 +1131,7 @@ def get_control_plane() -> OperationsControlPlane:
                     save_ops_state(
                         {
                             "trading_mode": "scalping",
+                            "trading_mode_explicit": False,
                             "max_open_positions": plane.max_open_trades,
                         }
                     )

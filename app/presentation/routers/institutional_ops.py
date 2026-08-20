@@ -925,7 +925,7 @@ def _institutional_alpha_payload() -> dict[str, Any]:
             "correlation_matrix": {},
         }
     dash["plane_enabled"] = bool(getattr(plane, "alpha_engine_enabled", False))
-    dash["trading_mode"] = getattr(plane, "trading_mode", "swing")
+    dash["trading_mode"] = getattr(plane, "trading_mode", "scalping")
     return dash
 
 
@@ -941,7 +941,7 @@ def _ai_scalping_payload() -> dict[str, Any]:
         snap = current_mode_snapshot(get_ite_runtime())
     except Exception:
         snap = {
-            "trading_mode": getattr(plane, "trading_mode", "swing"),
+            "trading_mode": getattr(plane, "trading_mode", "scalping"),
             "ite": {},
             "ai_score": None,
             "learning": None,
