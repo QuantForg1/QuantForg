@@ -101,33 +101,69 @@ class InstitutionalOmsAdapter:
         return result
 
 
+def pipeline_reach_flags(pipeline: PipelineResult) -> dict[str, bool]:
+    """Which broker APIs this pipeline actually invoked."""
+    order_check_reached = False
+    order_send_reached = False
+    for stage in pipeline.stages:
+        name = str(getattr(getattr(stage, "stage", None), "value", stage.stage) or "")
+        lower = name.lower()
+        meta = getattr(stage, "meta", None) or {}
+        if "validation" in lower and meta.get("order_check_retcode") is not None:
+            order_check_reached = True
+        if lower == "broker submission" or "broker submission" in lower:
+            order_send_reached = True
+    return {
+        "oms_reached": True,
+        "gateway_reached": order_check_reached or order_send_reached,
+        "order_check_reached": order_check_reached,
+        "order_send_reached": order_send_reached,
+    }
+
+
 def map_pipeline_to_oms_result(pipeline: PipelineResult) -> OmsSubmitResult:
     """Map OMS PipelineResult → bridge OmsSubmitResult (read-only mapping)."""
     exec_res = pipeline.execution_result
-    retcode = exec_res.retcode if exec_res else 0
+    reach = pipeline_reach_flags(pipeline)
     order_ticket = exec_res.order_ticket if exec_res else None
     deal_ticket = exec_res.deal_ticket if exec_res else None
     retryable = bool(exec_res.retryable) if exec_res else False
 
-    gateway_status = "unknown"
+    # order_check TRADE_RETCODE_DONE is 0. That is not an order_send result.
+    retcode: int | None
+    if exec_res is not None and reach["order_send_reached"]:
+        retcode = exec_res.retcode
+    else:
+        retcode = None
+
+    gateway_status = "not_called"
+    if reach["order_send_reached"]:
+        gateway_status = "order_send"
+    elif reach["order_check_reached"]:
+        gateway_status = "order_check_only"
     for stage in pipeline.stages:
         name = getattr(stage, "stage", None)
         stage_name = str(getattr(name, "value", name or ""))
-        if "broker" in stage_name.lower() or "gateway" in stage_name.lower():
-            gateway_status = getattr(stage, "status", gateway_status)
+        if "broker submission" in stage_name.lower():
+            gateway_status = str(
+                getattr(stage, "status", gateway_status) or gateway_status
+            )
 
     outcome = (pipeline.outcome or "").lower()
+    raw = pipeline.to_dict() if hasattr(pipeline, "to_dict") else {}
+    if isinstance(raw, dict):
+        raw = {**raw, **reach}
     return OmsSubmitResult(
         outcome=outcome,
         message=pipeline.message or "",
-        retcode=int(retcode or 0),
+        retcode=retcode,
         order_ticket=order_ticket,
         deal_ticket=deal_ticket,
         oms_status=outcome,
         gateway_status=str(gateway_status),
         latency_ms=float(pipeline.latency_ms or 0.0),
         retryable=retryable,
-        raw=pipeline.to_dict() if hasattr(pipeline, "to_dict") else {},
+        raw=raw if isinstance(raw, dict) else {},
     )
 
 

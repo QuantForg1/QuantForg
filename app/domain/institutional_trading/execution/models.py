@@ -67,7 +67,9 @@ class OmsSubmitResult:
 
     outcome: str  # success | failed | disabled | rejected | …
     message: str
-    retcode: int = 0
+    # None when order_send was never called. Never invent MT5 retcode 0
+    # (TRADE_RETCODE_DONE) for a policy reject.
+    retcode: int | None = None
     order_ticket: int | None = None
     deal_ticket: int | None = None
     oms_status: str = ""

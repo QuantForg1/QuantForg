@@ -67,6 +67,8 @@ _HARD_NEEDLES: tuple[str, ...] = (
     "cloudflare origin unreachable",
     "symbol catalogue resolution failed",
     "http 530",
+    "account leverage exceeds desk policy",
+    "exceeds max leverage",
 )
 
 _ADVISORY_NEEDLES: tuple[str, ...] = (
