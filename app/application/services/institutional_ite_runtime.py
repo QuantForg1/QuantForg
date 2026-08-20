@@ -1655,6 +1655,7 @@ class InstitutionalIteRuntime:
         )
         from app.domain.institutional_trading.operations.position_plan import (
             build_position_plan,
+            owned_count_from_rows,
         )
 
         ai = getattr(self.decision_pipeline, "_last_ai_score", None)
@@ -1670,6 +1671,21 @@ class InstitutionalIteRuntime:
             or getattr(getattr(decision, "direction", None), "value", None)
             or "NONE"
         )
+        qf_count = 0
+        try:
+            engine = getattr(getattr(self, "position_management", None), "engine", None)
+            raw_pos = getattr(engine, "_positions", None) or {}
+            qf_rows = (
+                list(raw_pos.values())
+                if isinstance(raw_pos, dict)
+                else list(raw_pos or ())
+            )
+            qf_count = owned_count_from_rows(
+                qf_rows,
+                symbol=str(getattr(snapshot, "symbol", "") or ""),
+            )
+        except Exception:
+            qf_count = 0
         snap = build_authoritative_snapshot(
             cycle_id=diagnostics.get("cycle_id")
             or getattr(contract, "cycle_id", None),
@@ -1685,7 +1701,7 @@ class InstitutionalIteRuntime:
                 "confidence": getattr(contract, "confidence", None),
                 "quality": getattr(contract, "quality", None),
             },
-            quantforg_count=int(getattr(account, "open_positions", 0) or 0),
+            quantforg_count=qf_count,
             broker_ready=True,
         )
         diagnostics["authoritative_snapshot"] = snap.to_dict()
@@ -1725,6 +1741,25 @@ class InstitutionalIteRuntime:
         except Exception:
             target = None
         free = getattr(account, "free_margin", None)
+        from app.domain.trading.xauusd_specs import (
+            VOLUME_MAX as _VMAX,
+            VOLUME_MIN as _VMIN,
+            VOLUME_STEP as _VSTEP,
+        )
+
+        def _diag_dec(key: str, fallback: _Dec) -> _Dec:
+            raw = diagnostics.get(key)
+            if raw is None or raw == "":
+                return fallback
+            try:
+                val = _Dec(str(raw))
+            except Exception:
+                return fallback
+            return val if val > 0 else fallback
+
+        min_lot = _diag_dec("broker_min_lot", _diag_dec("volume_min", _VMIN))
+        lot_step = _diag_dec("broker_lot_step", _diag_dec("volume_step", _VSTEP))
+        max_lot = _diag_dec("broker_max_lot", _diag_dec("volume_max", _VMAX))
         plan = build_position_plan(
             cycle_id=snap.cycle_id,
             snapshot_id=snap.snapshot_id,
@@ -1740,6 +1775,9 @@ class InstitutionalIteRuntime:
             tp=target,
             base_input_hash=str(decision.input_hash),
             free_margin=free,
+            min_lot=min_lot,
+            lot_step=lot_step,
+            max_lot=max_lot,
         )
         note_opportunity_change(
             score=score,
@@ -1754,10 +1792,11 @@ class InstitutionalIteRuntime:
                 DecisionAction as _DA_zero,
             )
 
+            hold = plan.min_lot_constraint_reason or "effective_position_count=0"
             blocked = _dc_replace2(
                 decision,
                 action=_DA_zero.NO_TRADE,
-                reasons=(*decision.reasons, "effective_position_count=0"),
+                reasons=(*decision.reasons, hold),
             )
             return (
                 self.execution.bridge.handle(blocked, ctx, trace_id=tid),

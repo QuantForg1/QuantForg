@@ -26,7 +26,7 @@ from app.domain.institutional_trading.operations.trade_classifier import (
     TradeClass,
 )
 from app.domain.trading.gold_only import CANONICAL_GOLD_BROKER_DISPLAY
-from app.domain.trading.xauusd_specs import VOLUME_MIN, VOLUME_STEP
+from app.domain.trading.xauusd_specs import VOLUME_MAX, VOLUME_MIN, VOLUME_STEP
 
 SCALP_MAX_OPEN_TRADES = 10
 
@@ -105,23 +105,43 @@ def _dec(value: Any, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
+def risk_allowed_count_from_lots(
+    *,
+    aggregate_lots: Decimal,
+    min_lot: Decimal = VOLUME_MIN,
+    cap: int = SCALP_MAX_OPEN_TRADES,
+) -> int:
+    """How many min-lot positions fit in approved aggregate. Never upsizes."""
+    if aggregate_lots <= 0 or min_lot <= 0 or cap <= 0:
+        return 0
+    return max(0, min(int(cap), int(aggregate_lots // min_lot)))
+
+
 def split_aggregate_lots(
     *,
     aggregate_lots: Decimal,
     count: int,
     min_lot: Decimal = VOLUME_MIN,
     lot_step: Decimal = VOLUME_STEP,
+    max_lot: Decimal = VOLUME_MAX,
 ) -> tuple[int, Decimal]:
-    """Keep total risk = aggregate. Reduce N until each leg >= min_lot."""
+    """Keep total risk <= aggregate. Reduce N until each leg is broker-legal.
+
+    Naive ``aggregate / requested_count`` below min_lot must reduce N, not
+    reject the thesis. MIN_LOT only when even one legal leg cannot fit.
+    """
     n = max(0, int(count))
     if n <= 0 or aggregate_lots <= 0:
         return 0, Decimal("0")
     step = lot_step if lot_step > 0 else VOLUME_STEP
     floor = min_lot if min_lot > 0 else VOLUME_MIN
+    ceiling = max_lot if max_lot > 0 else VOLUME_MAX
     while n > 0:
         raw = aggregate_lots / Decimal(n)
         per = raw.quantize(step, rounding=ROUND_DOWN)
-        if per >= floor:
+        if per > ceiling:
+            per = ceiling.quantize(step, rounding=ROUND_DOWN)
+        if per >= floor and (per * Decimal(n)) <= aggregate_lots:
             return n, per
         n -= 1
     return 0, Decimal("0")
@@ -190,6 +210,17 @@ class PositionPlan:
     rejected_count: int = 0
     unknown_count: int = 0
     state: str = "POSITION_PLAN_READY"
+    strategy_target_count: int = 0
+    risk_allowed_count: int = 0
+    portfolio_allowed_count: int | None = None
+    broker_allowed_count: int | None = None
+    remaining_capacity: int = 0
+    broker_min_lot: Decimal = VOLUME_MIN
+    broker_step: Decimal = VOLUME_STEP
+    broker_max_lot: Decimal = VOLUME_MAX
+    margin_required: str | None = None
+    margin_available: str | None = None
+    min_lot_constraint_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -204,7 +235,10 @@ class PositionPlan:
             "target_count": self.target_count,
             "effective_count": self.effective_count,
             "per_position_size": str(self.per_position_lots),
+            "per_position_lots": str(self.per_position_lots),
             "aggregate_risk": self.aggregate_risk,
+            "approved_risk": self.aggregate_risk,
+            "approved_lots": str(self.aggregate_lots),
             "sl": self.sl,
             "tp": self.tp,
             "entry_policy": self.entry_policy,
@@ -217,6 +251,17 @@ class PositionPlan:
             "rejected_count": self.rejected_count,
             "unknown_count": self.unknown_count,
             "state": self.state,
+            "strategy_target_count": self.strategy_target_count,
+            "risk_allowed_count": self.risk_allowed_count,
+            "portfolio_allowed_count": self.portfolio_allowed_count,
+            "broker_allowed_count": self.broker_allowed_count,
+            "remaining_capacity": self.remaining_capacity,
+            "broker_min_lot": str(self.broker_min_lot),
+            "broker_step": str(self.broker_step),
+            "broker_max_lot": str(self.broker_max_lot),
+            "margin_required": self.margin_required,
+            "margin_available": self.margin_available,
+            "min_lot_constraint_reason": self.min_lot_constraint_reason,
         }
 
 
@@ -244,6 +289,7 @@ def build_position_plan(
     margin_per_lot: Decimal | None = None,
     min_lot: Decimal = VOLUME_MIN,
     lot_step: Decimal = VOLUME_STEP,
+    max_lot: Decimal = VOLUME_MAX,
     sl: str | None = None,
     tp: str | None = None,
     base_input_hash: str = "",
@@ -271,52 +317,98 @@ def build_position_plan(
         configured_max=live_cap,
         class_cap=class_cap,
     )
+    aggregate = _dec(aggregate_lots)
+    floor = min_lot if min_lot > 0 else VOLUME_MIN
+    ceiling = max_lot if max_lot > 0 else VOLUME_MAX
+    implied_risk_n = risk_allowed_count_from_lots(
+        aggregate_lots=aggregate,
+        min_lot=floor,
+        cap=max(class_cap, target),
+    )
+    risk_n = implied_risk_n
+    if risk_allowed_count is not None:
+        risk_n = min(risk_n, max(0, int(risk_allowed_count)))
+    portfolio_n = (
+        max(0, int(portfolio_allowed_count))
+        if portfolio_allowed_count is not None
+        else None
+    )
+    broker_n = (
+        max(0, int(broker_allowed_count))
+        if broker_allowed_count is not None
+        else None
+    )
+
     if remaining < target:
         reductions.append(
             f"quantforg_capacity {remaining} < target {target}"
         )
     n = min(target, remaining)
-    if risk_allowed_count is not None and int(risk_allowed_count) < n:
-        reductions.append(
-            f"risk_allowed {int(risk_allowed_count)} < {n}"
-        )
-        n = int(risk_allowed_count)
-    if (
-        portfolio_allowed_count is not None
-        and int(portfolio_allowed_count) < n
-    ):
-        reductions.append(
-            f"portfolio_allowed {int(portfolio_allowed_count)} < {n}"
-        )
-        n = int(portfolio_allowed_count)
-    if broker_allowed_count is not None and int(broker_allowed_count) < n:
-        reductions.append(
-            f"broker_allowed {int(broker_allowed_count)} < {n}"
-        )
-        n = int(broker_allowed_count)
+    if risk_n < n:
+        reductions.append(f"risk_allowed {risk_n} < {n}")
+        n = risk_n
+    if portfolio_n is not None and portfolio_n < n:
+        reductions.append(f"portfolio_allowed {portfolio_n} < {n}")
+        n = portfolio_n
+    if broker_n is not None and broker_n < n:
+        reductions.append(f"broker_allowed {broker_n} < {n}")
+        n = broker_n
 
-    aggregate = _dec(aggregate_lots)
     n, per = split_aggregate_lots(
         aggregate_lots=aggregate,
         count=n,
-        min_lot=min_lot,
+        min_lot=floor,
         lot_step=lot_step,
+        max_lot=ceiling,
     )
     if n < target and aggregate > 0:
         reductions.append("sizing_split_reduced_count")
+    before_margin = n
     n = margin_allowed_count(
         free_margin=free_margin,
         per_position_lots=per,
         margin_per_lot=margin_per_lot,
         requested=n,
     )
-    if n > 0 and per < min_lot:
+    if n < before_margin:
+        reductions.append(f"margin_allowed {n} < {before_margin}")
+    # Keep per-leg size after margin reduction — do not re-concentrate
+    # leftover aggregate into fewer legs (that would raise per-leg risk).
+    if n > 0 and (per < floor or per > ceiling):
         n, per = split_aggregate_lots(
             aggregate_lots=aggregate,
             count=n,
-            min_lot=min_lot,
+            min_lot=floor,
             lot_step=lot_step,
+            max_lot=ceiling,
         )
+
+    min_lot_reason: str | None = None
+    skip_min_lot = (
+        cls is TradeClass.NO_TRADE
+        or str(direction or "").upper() == "NONE"
+        or (n <= 0 and remaining <= 0 and int(current_quantforg_count) > 0)
+    )
+    if skip_min_lot:
+        min_lot_reason = None
+    elif n <= 0:
+        if aggregate < floor:
+            min_lot_reason = (
+                "MIN_LOT_CONSTRAINT: even one broker-compliant position "
+                f"cannot fit approved_lots={aggregate} min_lot={floor}"
+            )
+        elif aggregate > 0:
+            min_lot_reason = (
+                "MIN_LOT_CONSTRAINT: no lot-step allocation within "
+                f"approved_lots={aggregate} min_lot={floor} step={lot_step}"
+            )
+
+    margin_need: str | None = None
+    margin_avail: str | None = None
+    if n > 0 and per > 0 and margin_per_lot is not None and margin_per_lot > 0:
+        margin_need = str((per * margin_per_lot * Decimal(n)).quantize(Decimal("0.01")))
+    if free_margin is not None:
+        margin_avail = str(_dec(free_margin))
 
     plan_id = f"plan-{uuid4().hex[:16]}"
     idem = hashlib.sha256(
@@ -353,8 +445,19 @@ def build_position_plan(
         idempotency_key=idem,
         reductions=tuple(reductions),
         legs=tuple(legs),
-        requested_count=int(n),
+        requested_count=int(target),
         state="POSITION_PLAN_READY" if n > 0 else "SOFT_REJECT",
+        strategy_target_count=int(target),
+        risk_allowed_count=int(risk_n),
+        portfolio_allowed_count=portfolio_n,
+        broker_allowed_count=broker_n,
+        remaining_capacity=int(remaining),
+        broker_min_lot=floor,
+        broker_step=lot_step if lot_step > 0 else VOLUME_STEP,
+        broker_max_lot=ceiling,
+        margin_required=margin_need,
+        margin_available=margin_avail,
+        min_lot_constraint_reason=min_lot_reason,
     )
 
 

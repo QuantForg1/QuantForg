@@ -342,11 +342,7 @@ def build_authoritative_snapshot(
         if mom is not None
         else opp.get("momentum") or diag.get("momentum")
     )
-    qf = (
-        int(quantforg_count)
-        if quantforg_count is not None
-        else int(getattr(account, "open_positions", 0) or 0)
-    )
+    qf = int(quantforg_count) if quantforg_count is not None else 0
     account_dict = account.to_dict() if hasattr(account, "to_dict") else {}
     direction = str(
         opp.get("direction")
