@@ -195,6 +195,7 @@ def test_momentum_fade_uses_config_threshold() -> None:
         opened_at=opened,
         state=PositionLifecycleState.OPEN,
         current_stop=Decimal("2290"),
+        trade_class="SCALP",
     )
     ctx = PositionManageContext(
         now=opened + timedelta(minutes=2),

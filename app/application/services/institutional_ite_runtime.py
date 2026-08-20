@@ -1600,6 +1600,14 @@ class InstitutionalIteRuntime:
                                     symbol=closed_sym,
                                     ticket=ticket,
                                 )
+                                try:
+                                    from app.domain.institutional_trading.operations.decision_cycle import (  # noqa: E501
+                                        note_cycle_event,
+                                    )
+
+                                    note_cycle_event("position_close")
+                                except Exception:
+                                    logger.exception("position_close_wakeup_failed")
                             except Exception:
                                 logger.exception(
                                     "post_close_cooldown_symbol_clear_failed"
@@ -1643,6 +1651,7 @@ class InstitutionalIteRuntime:
     ) -> tuple[Any, dict[str, Any]]:
         """One thesis → one plan → existing OMS handle per authorized leg."""
         import time as _time
+        from dataclasses import replace as _dc_replace
         from decimal import Decimal as _Dec
 
         from app.domain.institutional_trading.operations.batch_execution import (
@@ -1655,12 +1664,23 @@ class InstitutionalIteRuntime:
         )
         from app.domain.institutional_trading.operations.position_plan import (
             build_position_plan,
-            owned_count_from_rows,
         )
 
         ai = getattr(self.decision_pipeline, "_last_ai_score", None)
         ai = ai if isinstance(ai, dict) else {}
-        trade_class = str(getattr(contract, "trade_class", "") or "SCALP")
+        from app.domain.institutional_trading.management.class_policy import (
+            remember_fill_metadata,
+        )
+        from app.domain.institutional_trading.operations.trade_classifier import (
+            TradeClass,
+        )
+
+        raw_class = str(getattr(contract, "trade_class", "") or "").upper()
+        trade_class = (
+            raw_class
+            if raw_class in {TradeClass.SCALP.value, TradeClass.HOLD.value}
+            else str(TradeClass.NO_TRADE.value)
+        )
         score = int(
             getattr(contract, "opportunity_score", None)
             or ai.get("opportunity_score")
@@ -1671,21 +1691,27 @@ class InstitutionalIteRuntime:
             or getattr(getattr(decision, "direction", None), "value", None)
             or "NONE"
         )
-        qf_count = 0
+        qf_count = int(getattr(account, "open_positions", 0) or 0)
         try:
             engine = getattr(getattr(self, "position_management", None), "engine", None)
-            raw_pos = getattr(engine, "_positions", None) or {}
-            qf_rows = (
-                list(raw_pos.values())
-                if isinstance(raw_pos, dict)
-                else list(raw_pos or ())
-            )
-            qf_count = owned_count_from_rows(
-                qf_rows,
-                symbol=str(getattr(snapshot, "symbol", "") or ""),
-            )
+            if self.mt5_adapter is not None:
+                from app.application.services.mt5_position_truth import (
+                    apply_mt5_position_truth,
+                    force_sync_positions,
+                )
+                from app.domain.trading.gold_only import GOLD_SYMBOL
+
+                sync = force_sync_positions(
+                    self.mt5_adapter,
+                    symbol=str(getattr(snapshot, "symbol", "") or GOLD_SYMBOL),
+                    position_engine=engine,
+                )
+                account = apply_mt5_position_truth(account, sync)
+                qf_count = int(getattr(account, "open_positions", 0) or 0)
+                if hasattr(ctx, "__dataclass_fields__"):
+                    ctx = _dc_replace(ctx, account=account)
         except Exception:
-            qf_count = 0
+            qf_count = int(getattr(account, "open_positions", 0) or 0)
         snap = build_authoritative_snapshot(
             cycle_id=diagnostics.get("cycle_id")
             or getattr(contract, "cycle_id", None),
@@ -1714,7 +1740,6 @@ class InstitutionalIteRuntime:
                 snapshot_id=snap.snapshot_id,
             )
             diagnostics["stale_authorization"] = stale
-            from dataclasses import replace as _dc_replace
             from app.domain.institutional_trading.decision_models import (
                 DecisionAction as _DA_stale,
             )
@@ -1760,6 +1785,17 @@ class InstitutionalIteRuntime:
         min_lot = _diag_dec("broker_min_lot", _diag_dec("volume_min", _VMIN))
         lot_step = _diag_dec("broker_lot_step", _diag_dec("volume_step", _VSTEP))
         max_lot = _diag_dec("broker_max_lot", _diag_dec("volume_max", _VMAX))
+
+        def _diag_int(key: str) -> int | None:
+            raw = diagnostics.get(key)
+            if raw is None or raw == "":
+                return None
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                return None
+
+        margin_per_lot = _diag_dec("margin_per_lot", _Dec("0"))
         plan = build_position_plan(
             cycle_id=snap.cycle_id,
             snapshot_id=snap.snapshot_id,
@@ -1771,10 +1807,14 @@ class InstitutionalIteRuntime:
             aggregate_lots=lots,
             current_quantforg_count=snap.existing_quantforg_positions,
             ite_config=self.decision_pipeline.config,
+            risk_allowed_count=_diag_int("risk_allowed_count"),
+            portfolio_allowed_count=_diag_int("portfolio_allowed_count"),
+            broker_allowed_count=_diag_int("broker_allowed_count"),
             sl=stop,
             tp=target,
             base_input_hash=str(decision.input_hash),
             free_margin=free,
+            margin_per_lot=margin_per_lot if margin_per_lot > 0 else None,
             min_lot=min_lot,
             lot_step=lot_step,
             max_lot=max_lot,
@@ -1788,6 +1828,7 @@ class InstitutionalIteRuntime:
         diagnostics["trade_class"] = trade_class
         if plan.effective_count <= 0:
             from dataclasses import replace as _dc_replace2
+
             from app.domain.institutional_trading.decision_models import (
                 DecisionAction as _DA_zero,
             )
@@ -1819,6 +1860,17 @@ class InstitutionalIteRuntime:
         )
         diagnostics["position_plan"] = plan.to_dict()
         diagnostics["batch_tally"] = tally.to_dict()
+        remember_fill_metadata(
+            {
+                "trade_class": trade_class,
+                "cycle_id": plan.cycle_id,
+                "snapshot_id": plan.snapshot_id,
+                "position_plan_id": plan.position_plan_id,
+                "opportunity_score": score,
+                "comment_hash": str(getattr(decision, "input_hash", "") or "")[:12],
+                "management_profile": "scalp" if trade_class == "SCALP" else "hold",
+            }
+        )
         diagnostics["time_from_signal_to_first_order_send"] = round(
             (t_first - signal_t0) * 1000.0, 3
         )
@@ -1826,7 +1878,16 @@ class InstitutionalIteRuntime:
             (_time.perf_counter() - signal_t0) * 1000.0, 3
         )
         if last is None:
-            last = self.execution.bridge.handle(decision, ctx, trace_id=tid)
+            from app.domain.institutional_trading.decision_models import (
+                DecisionAction as _DA_dup,
+            )
+
+            blocked = _dc_replace(
+                decision,
+                action=_DA_dup.NO_TRADE,
+                reasons=(*decision.reasons, "duplicate_or_empty_batch"),
+            )
+            last = self.execution.bridge.handle(blocked, ctx, trace_id=tid)
         return last, diagnostics
 
     def _run_cycle(

@@ -106,6 +106,8 @@ class ManagedPosition:
     snapshot_id: str = ""
     position_plan_id: str = ""
     trade_class: str = ""
+    opportunity_score: int | None = None
+    management_profile: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -133,6 +135,8 @@ class ManagedPosition:
             "snapshot_id": self.snapshot_id,
             "position_plan_id": self.position_plan_id,
             "trade_class": self.trade_class,
+            "opportunity_score": self.opportunity_score,
+            "management_profile": self.management_profile,
         }
 
 
@@ -204,6 +208,9 @@ class PositionManageRecord:
     spread: str | None = None
     slippage: str | None = None
     pnl: str | None = None
+    trade_class: str = ""
+    cycle_id: str = ""
+    position_plan_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -231,6 +238,10 @@ class PositionManageRecord:
             "spread": self.spread,
             "slippage": self.slippage,
             "pnl": self.pnl,
+            "position_id": self.ticket,
+            "trade_class": self.trade_class,
+            "cycle_id": self.cycle_id,
+            "position_plan_id": self.position_plan_id,
         }
 
 

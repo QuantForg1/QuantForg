@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.domain.institutional_trading.management.class_policy import (
+    TRADE_CLASS_UNKNOWN,
+    resolve_class_management,
+)
 from app.domain.institutional_trading.management.config import PositionManagementConfig
 from app.domain.institutional_trading.management.models import (
     ManageActionKind,
@@ -215,22 +219,33 @@ def plan_action(
             pass
 
     hold_minutes = (context.now - position.opened_at).total_seconds() / 60.0
-    trade_class = str(getattr(position, "trade_class", "") or "").upper()
-    time_stop_minutes = int(config.time_stop_minutes)
-    abs_hold = int(config.absolute_max_hold_minutes or 0)
-    if trade_class == "HOLD":
-        time_stop_minutes = max(time_stop_minutes, 20)
-        abs_hold = max(abs_hold, 45)
-    elif trade_class == "SCALP" and abs_hold <= 0:
-        abs_hold = int(config.time_stop_minutes)
+    profile = resolve_class_management(getattr(position, "trade_class", ""))
+    trade_class = profile.trade_class
+    time_stop_minutes = int(profile.time_stop_minutes)
+    abs_hold = int(profile.absolute_max_hold_minutes or 0)
+    cfg_abs = int(config.absolute_max_hold_minutes or 0)
+    if trade_class != "HOLD" and cfg_abs > 0:
+        abs_hold = min(abs_hold, cfg_abs) if abs_hold > 0 else cfg_abs
+    if trade_class == TRADE_CLASS_UNKNOWN:
+        from core.logging import get_logger
 
-    # --- Absolute max hold — SCALP tighter, HOLD longer, same engine ---
+        get_logger(__name__).warning(
+            "pme_trade_class_unknown_fallback",
+            ticket=getattr(position, "ticket", None),
+            symbol=getattr(position, "symbol", None),
+            cycle_id=getattr(position, "cycle_id", None),
+            profile=profile.profile_name,
+            break_even_at_r=str(profile.break_even_at_r),
+            absolute_max_hold_minutes=abs_hold,
+        )
+
+    # --- Absolute max hold — SCALP tighter, HOLD longer, UNKNOWN safe ---
     if abs_hold > 0 and hold_minutes >= abs_hold:
         return PlannedAction(
             ManageActionKind.TIME_STOP,
             (
                 f"Absolute max hold {abs_hold}m reached "
-                f"(held {hold_minutes:.1f}m) — flatten {trade_class or 'scalp'}"
+                f"(held {hold_minutes:.1f}m) — flatten {trade_class}"
             ),
             volume=position.remaining_volume,
             target_state=PositionLifecycleState.EXITED,
@@ -245,7 +260,7 @@ def plan_action(
         return PlannedAction(
             ManageActionKind.TIME_STOP,
             (
-                f"Time stop {config.time_stop_minutes}m — "
+                f"Time stop {time_stop_minutes}m — "
                 f"max R {position.max_favorable_r} < {config.time_stop_min_r}"
             ),
             volume=position.remaining_volume,
@@ -255,7 +270,8 @@ def plan_action(
     # --- Momentum fade — exit quickly when edge disappears (scalping) ---
     fade_threshold = int(config.momentum_fade_threshold)
     if (
-        config.momentum_fade_exit
+        profile.momentum_fade_exit
+        and config.momentum_fade_exit
         and context.ai_momentum is not None
         and int(context.ai_momentum) < fade_threshold
         and r < Decimal("0.8")
@@ -274,7 +290,8 @@ def plan_action(
     # --- Volatility collapse — statistical edge disappears ---
     vol_threshold = int(getattr(config, "volatility_collapse_threshold", 25) or 25)
     if (
-        getattr(config, "volatility_collapse_exit", True)
+        profile.volatility_collapse_exit
+        and getattr(config, "volatility_collapse_exit", True)
         and context.ai_volatility is not None
         and int(context.ai_volatility) < vol_threshold
         and r < Decimal("0.5")
@@ -294,11 +311,14 @@ def plan_action(
     mid = context.mid_price or context.current_price
     regime = volatility_regime(context.atr, mid, config)
 
-    be_at = config.break_even_at_r
-    if getattr(config, "session_aware_management", False):
+    be_at = profile.break_even_at_r
+    if (
+        trade_class == "SCALP"
+        and getattr(config, "session_aware_management", False)
+    ):
         sess = str(getattr(context, "market_session", "") or "").lower()
         if sess in {"sydney", "tokyo", "asian"}:
-            # Earlier break-even timing in thin sessions (profit protection)
+            # Earlier break-even timing in thin sessions (SCALP only).
             protect = Decimal(
                 str(getattr(config, "session_profit_protect_at_r", "1.5") or "1.5")
             )
@@ -312,7 +332,15 @@ def plan_action(
         and not position.be_moved
         and r >= be_at
     ):
-        new_sl = break_even_stop(position, config)
+        from dataclasses import replace as _replace
+
+        be_cfg = _replace(
+            config,
+            break_even_at_r=profile.break_even_at_r,
+            break_even_offset_r=profile.break_even_offset_r,
+        )
+        new_sl = break_even_stop(position, be_cfg)
+        preserved_tp = position.current_tp if position.current_tp > 0 else None
         if not is_stop_improvement(position, new_sl):
             # Stop already at/better than BE — still advance so partial/trail run.
             return PlannedAction(
@@ -320,17 +348,21 @@ def plan_action(
                 (
                     f"Break-even already protected at {r}R "
                     f"(candidate {new_sl} does not improve "
-                    f"{position.current_stop}) — advance BE_MOVED"
+                    f"{position.current_stop}) — advance BE_MOVED "
+                    f"class={trade_class}"
                 ),
                 new_sl=None,
-                new_tp=position.current_tp if position.current_tp > 0 else None,
+                new_tp=preserved_tp,
                 target_state=PositionLifecycleState.BE_MOVED,
             )
         return PlannedAction(
             ManageActionKind.BREAK_EVEN,
-            f"Break-even at {r}R (+{config.break_even_offset_r}R offset)",
+            (
+                f"Break-even at {r}R (+{profile.break_even_offset_r}R offset) "
+                f"class={trade_class} trigger={be_at}R"
+            ),
             new_sl=new_sl,
-            new_tp=position.current_tp if position.current_tp > 0 else None,
+            new_tp=preserved_tp,
             target_state=PositionLifecycleState.BE_MOVED,
         )
 

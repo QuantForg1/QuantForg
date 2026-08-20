@@ -9,6 +9,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from app.domain.institutional_trading.management.class_policy import (
+    TRADE_CLASS_UNKNOWN,
+    merge_position_metadata,
+    proven_trade_class,
+    resolve_class_management,
+)
 from app.domain.institutional_trading.management.models import (
     ManagedPosition,
     PositionLifecycleState,
@@ -40,6 +46,14 @@ class PmeRecoverySnapshot:
     trailing_active: bool
     max_favorable_r: str
     ai_entry_confidence: int | None = None
+    magic: int = 260720
+    comment: str = ""
+    cycle_id: str = ""
+    snapshot_id: str = ""
+    position_plan_id: str = ""
+    trade_class: str = TRADE_CLASS_UNKNOWN
+    opportunity_score: int | None = None
+    management_profile: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -55,38 +69,61 @@ def _state_path() -> Path:
     return base / DEFAULT_HARDENING_CONFIG.pme_state_filename
 
 
+def _snapshot_from_position(pos: Any) -> PmeRecoverySnapshot:
+    profile = resolve_class_management(getattr(pos, "trade_class", ""))
+    score = getattr(pos, "opportunity_score", None)
+    try:
+        score_i = int(score) if score is not None and score != "" else None
+    except (TypeError, ValueError):
+        score_i = None
+    return PmeRecoverySnapshot(
+        ticket=int(pos.ticket),
+        symbol=str(pos.symbol),
+        side=str(pos.side),
+        entry_price=str(pos.entry_price),
+        initial_volume=str(pos.initial_volume),
+        remaining_volume=str(pos.remaining_volume),
+        initial_stop=str(pos.initial_stop),
+        risk_distance=str(pos.risk_distance),
+        opened_at=(
+            pos.opened_at.isoformat()
+            if hasattr(pos.opened_at, "isoformat")
+            else str(pos.opened_at)
+        ),
+        state=str(getattr(pos.state, "value", pos.state)),
+        current_stop=str(pos.current_stop),
+        current_tp=str(pos.current_tp),
+        be_moved=bool(pos.be_moved),
+        partial_done=bool(pos.partial_done),
+        trailing_active=bool(pos.trailing_active),
+        max_favorable_r=str(pos.max_favorable_r),
+        ai_entry_confidence=getattr(pos, "ai_entry_confidence", None),
+        magic=int(getattr(pos, "magic", 260720) or 260720),
+        comment=str(getattr(pos, "comment", "") or "")[:64],
+        cycle_id=str(getattr(pos, "cycle_id", "") or ""),
+        snapshot_id=str(getattr(pos, "snapshot_id", "") or ""),
+        position_plan_id=str(getattr(pos, "position_plan_id", "") or ""),
+        trade_class=proven_trade_class(getattr(pos, "trade_class", "")),
+        opportunity_score=score_i,
+        management_profile=str(
+            getattr(pos, "management_profile", "") or profile.profile_name
+        ),
+    )
+
+
 def persist_pme_state(engine: Any) -> None:
-    """Snapshot PME managed positions for cold restart."""
+    """Snapshot PME managed positions for cold restart.
+
+    Only currently registered engine tickets are written. Closed / missing
+    MT5 tickets must already have been dropped by force_sync before this
+    call so stale disk tickets cannot remain authoritative.
+    """
     path = _state_path()
     rows: list[dict[str, Any]] = []
     try:
         positions = getattr(engine, "_positions", {}) or {}
         for pos in positions.values():
-            rows.append(
-                PmeRecoverySnapshot(
-                    ticket=int(pos.ticket),
-                    symbol=str(pos.symbol),
-                    side=str(pos.side),
-                    entry_price=str(pos.entry_price),
-                    initial_volume=str(pos.initial_volume),
-                    remaining_volume=str(pos.remaining_volume),
-                    initial_stop=str(pos.initial_stop),
-                    risk_distance=str(pos.risk_distance),
-                    opened_at=(
-                        pos.opened_at.isoformat()
-                        if hasattr(pos.opened_at, "isoformat")
-                        else str(pos.opened_at)
-                    ),
-                    state=str(getattr(pos.state, "value", pos.state)),
-                    current_stop=str(pos.current_stop),
-                    current_tp=str(pos.current_tp),
-                    be_moved=bool(pos.be_moved),
-                    partial_done=bool(pos.partial_done),
-                    trailing_active=bool(pos.trailing_active),
-                    max_favorable_r=str(pos.max_favorable_r),
-                    ai_entry_confidence=getattr(pos, "ai_entry_confidence", None),
-                ).to_dict()
-            )
+            rows.append(_snapshot_from_position(pos).to_dict())
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(
@@ -95,8 +132,44 @@ def persist_pme_state(engine: Any) -> None:
             ),
             encoding="utf-8",
         )
+        logger.warning(
+            "pme_state_persisted",
+            tickets=[row.get("ticket") for row in rows],
+            count=len(rows),
+        )
     except Exception:
         logger.exception("pme_state_persist_failed")
+
+
+def _overlay_metadata(pos: Any, meta: dict[str, Any]) -> None:
+    cls = proven_trade_class(meta.get("trade_class"))
+    current = proven_trade_class(getattr(pos, "trade_class", ""))
+    if current == TRADE_CLASS_UNKNOWN and cls in {"SCALP", "HOLD"}:
+        pos.trade_class = cls
+    elif not str(getattr(pos, "trade_class", "") or "").strip():
+        pos.trade_class = cls
+    for field_name in ("cycle_id", "snapshot_id", "position_plan_id", "comment"):
+        current_val = str(getattr(pos, field_name, "") or "")
+        incoming = str(meta.get(field_name) or "")
+        if not current_val and incoming:
+            setattr(pos, field_name, incoming)
+    if getattr(pos, "opportunity_score", None) is None and meta.get(
+        "opportunity_score"
+    ) not in {None, ""}:
+        try:
+            pos.opportunity_score = int(meta["opportunity_score"])
+        except (TypeError, ValueError):
+            pass
+    if not str(getattr(pos, "management_profile", "") or ""):
+        pos.management_profile = str(
+            meta.get("management_profile")
+            or resolve_class_management(getattr(pos, "trade_class", "")).profile_name
+        )
+    if int(getattr(pos, "magic", 0) or 0) <= 0:
+        try:
+            pos.magic = int(meta.get("magic") or 260720)
+        except (TypeError, ValueError):
+            pos.magic = 260720
 
 
 def recover_positions_from_mt5(
@@ -108,6 +181,7 @@ def recover_positions_from_mt5(
     """Reload live MT5 positions into PME; restore trailing/partial state from snapshot.
 
     Never opens new trades. Skips tickets already registered (no duplicates).
+    Stale disk tickets that are absent from MT5 are not re-activated.
     """
     from app.application.services.mt5_position_truth import force_sync_positions
     from app.domain.trading.gold_only import GOLD_SYMBOL
@@ -150,18 +224,37 @@ def recover_positions_from_mt5(
             "registered": 0,
         }
 
+    live_tickets = {
+        int(getattr(row, "ticket", 0) or 0)
+        for row in live_rows
+        if int(getattr(row, "ticket", 0) or 0) > 0
+    }
+    stale_disk = [
+        ticket for ticket in snapshot_by_ticket if ticket not in live_tickets
+    ]
+    if stale_disk:
+        logger.warning(
+            "pme_stale_disk_tickets_ignored",
+            tickets=stale_disk,
+            reason="absent_from_mt5_broker_truth",
+        )
+
     existing = set(getattr(engine, "_positions", {}) or {})
     for row in live_rows:
         ticket = int(getattr(row, "ticket", 0) or 0)
         if ticket <= 0:
             continue
+        comment = str(getattr(row, "comment", "") or "")[:64]
+        meta = merge_position_metadata(
+            snapshot=snapshot_by_ticket.get(ticket, {}),
+            comment=comment,
+        )
         if ticket in existing:
-            # Restore flags from snapshot if present
             snap = snapshot_by_ticket.get(ticket)
-            if snap is not None:
-                pos = engine.get(ticket) if hasattr(engine, "get") else None
-                if pos is not None:
-                    try:
+            pos = engine.get(ticket) if hasattr(engine, "get") else None
+            if pos is not None:
+                try:
+                    if snap is not None:
                         pos.be_moved = bool(snap.get("be_moved", pos.be_moved))
                         pos.partial_done = bool(
                             snap.get("partial_done", pos.partial_done)
@@ -172,9 +265,10 @@ def recover_positions_from_mt5(
                         state_raw = str(snap.get("state") or "")
                         if state_raw in {s.value for s in PositionLifecycleState}:
                             pos.state = PositionLifecycleState(state_raw)
-                        restored += 1
-                    except Exception:
-                        logger.exception("pme_flag_restore_failed", ticket=ticket)
+                    _overlay_metadata(pos, meta)
+                    restored += 1
+                except Exception:
+                    logger.exception("pme_flag_restore_failed", ticket=ticket)
             continue
 
         snap = snapshot_by_ticket.get(ticket, {})
@@ -218,7 +312,8 @@ def recover_positions_from_mt5(
                 # Protective stop still on risk side — broker defines 1R.
                 initial_sl = (
                     snap_initial
-                    if snap_initial > 0 and abs(entry - snap_initial) >= abs(entry - broker_sl)
+                    if snap_initial > 0
+                    and abs(entry - snap_initial) >= abs(entry - broker_sl)
                     else broker_sl
                 )
                 risk = abs(entry - initial_sl) or Decimal("1")
@@ -259,6 +354,13 @@ def recover_positions_from_mt5(
             be_moved = bool(snap.get("be_moved", False)) or be_already
             if be_moved and state is PositionLifecycleState.OPEN:
                 state = PositionLifecycleState.BE_MOVED
+            score = meta.get("opportunity_score")
+            try:
+                score_i = int(score) if score not in {None, ""} else None
+            except (TypeError, ValueError):
+                score_i = None
+            trade_class = proven_trade_class(meta.get("trade_class"))
+            profile = resolve_class_management(trade_class)
             managed = ManagedPosition(
                 ticket=ticket,
                 symbol=str(getattr(row, "symbol", sym) or sym),
@@ -276,8 +378,16 @@ def recover_positions_from_mt5(
                 partial_done=bool(snap.get("partial_done", False)),
                 trailing_active=bool(snap.get("trailing_active", False)),
                 max_favorable_r=Decimal(str(snap.get("max_favorable_r") or 0)),
-                magic=int(getattr(row, "magic", 260720) or 260720),
-                comment=str(getattr(row, "comment", "") or "")[:64],
+                magic=int(getattr(row, "magic", meta.get("magic") or 260720) or 260720),
+                comment=comment,
+                cycle_id=str(meta.get("cycle_id") or ""),
+                snapshot_id=str(meta.get("snapshot_id") or ""),
+                position_plan_id=str(meta.get("position_plan_id") or ""),
+                trade_class=trade_class,
+                opportunity_score=score_i,
+                management_profile=str(
+                    meta.get("management_profile") or profile.profile_name
+                ),
             )
             if hasattr(engine, "register"):
                 engine.register(managed)
@@ -294,7 +404,20 @@ def recover_positions_from_mt5(
                 be_moved=be_moved,
                 be_already_on_broker=be_already,
                 state=state.value,
+                trade_class=trade_class,
+                cycle_id=managed.cycle_id,
+                snapshot_id=managed.snapshot_id,
+                position_plan_id=managed.position_plan_id,
+                management_profile=managed.management_profile,
             )
+            if trade_class == TRADE_CLASS_UNKNOWN:
+                logger.warning(
+                    "pme_trade_class_unknown_fallback",
+                    ticket=ticket,
+                    symbol=managed.symbol,
+                    comment=comment,
+                    detail="unproven class — safest management fallback",
+                )
             if be_already:
                 logger.warning(
                     "BREAK_EVEN",
@@ -304,6 +427,7 @@ def recover_positions_from_mt5(
                     broker_sl=str(broker_sl),
                     entry=str(entry),
                     risk_distance=str(risk),
+                    trade_class=trade_class,
                 )
         except Exception:
             logger.exception("pme_recovery_register_failed", ticket=ticket)
@@ -314,6 +438,7 @@ def recover_positions_from_mt5(
         mt5_positions=sync.mt5_positions,
         registered=registered,
         restored=restored,
+        stale_disk_ignored=stale_disk,
     )
     return {
         "ok": True,
@@ -321,4 +446,5 @@ def recover_positions_from_mt5(
         "registered": registered,
         "restored": restored,
         "tickets": list(sync.tickets),
+        "stale_disk_ignored": stale_disk,
     }

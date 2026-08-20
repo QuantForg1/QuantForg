@@ -90,7 +90,7 @@ class OperationsControlPlane:
     git_commit: str | None = None
     risk_per_trade_pct: Decimal = Decimal("1.0")
     max_daily_loss_pct: Decimal = Decimal("3.0")
-    max_open_trades: int = 1
+    max_open_trades: int = 10
     daily_loss_exceeded: bool = False
     auto_trading_enabled: bool = False
     auto_trading_run_state: AutoTradeRunState = "off"
@@ -160,12 +160,13 @@ class OperationsControlPlane:
             self.kill_switch_armed = True
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
-            from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+            from app.domain.institutional_trading.phase_a.kill_state import HaltKind, HaltMode
 
             get_phase_a_plane().set_halt(
                 HaltMode.HALT_ALL_TRADING,
                 actor=operator.display_name or operator.user_id,
                 reason=reason,
+                kind=HaltKind.OPERATOR_HALT,
             )
             get_phase_a_plane().sync_legacy_kill_flag(self)
         except Exception:
@@ -204,12 +205,13 @@ class OperationsControlPlane:
             self.kill_switch_armed = False
         try:
             from app.domain.institutional_trading.phase_a import get_phase_a_plane
-            from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+            from app.domain.institutional_trading.phase_a.kill_state import HaltKind, HaltMode
 
             get_phase_a_plane().set_halt(
                 HaltMode.ACTIVE,
                 actor=operator.display_name or operator.user_id,
                 reason=reason,
+                kind=HaltKind.NONE,
             )
             get_phase_a_plane().sync_legacy_kill_flag(self)
         except Exception:
@@ -234,7 +236,7 @@ class OperationsControlPlane:
     ) -> dict[str, Any]:
         """Phase A durable halt: ACTIVE | HALT_NEW_ENTRIES | HALT_ALL_TRADING."""
         from app.domain.institutional_trading.phase_a import get_phase_a_plane
-        from app.domain.institutional_trading.phase_a.kill_state import HaltMode
+        from app.domain.institutional_trading.phase_a.kill_state import HaltKind, HaltMode
 
         target = HaltMode(str(mode).strip().upper())
         if target is HaltMode.ACTIVE:
@@ -243,10 +245,12 @@ class OperationsControlPlane:
             self.require(operator, OpsPermission.CHANGE_MODE)
         if not confirmed:
             raise ValueError("operator confirmation required")
+        kind = HaltKind.NONE if target is HaltMode.ACTIVE else HaltKind.OPERATOR_HALT
         transition = get_phase_a_plane().set_halt(
             target,
             actor=operator.display_name or operator.user_id,
             reason=reason,
+            kind=kind,
         )
         get_phase_a_plane().sync_legacy_kill_flag(self)
         self.audit.record(
@@ -583,9 +587,14 @@ class OperationsControlPlane:
                         "trading_mode must be 'swing', 'scalping', or 'alpha'"
                     )
                 self.trading_mode = mode
-                if mode == "scalping" and max_open_positions is None:  # noqa: SIM102
-                    if self.max_open_trades < 3:
-                        self.max_open_trades = 3
+                if mode == "scalping" and max_open_positions is None:
+                    from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+                        align_live_scalp_cap,
+                    )
+
+                    self.max_open_trades = align_live_scalp_cap(
+                        self.max_open_trades, trading_mode="scalping"
+                    )
                 if mode == "scalping":
                     # Multi-symbol scalping must not inherit a stale XAUUSD-only
                     # allowlist from bootstrap / prior gold-only deploys.
@@ -1121,8 +1130,13 @@ def get_control_plane() -> OperationsControlPlane:
             ):
                 # Restart continuity: LIVE auto desk lost trading_mode on
                 # redeploy because it was never persisted — restore scalping.
-                if plane.max_open_trades < 3:
-                    plane.max_open_trades = 3
+                from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+                    align_live_scalp_cap,
+                )
+
+                plane.max_open_trades = align_live_scalp_cap(
+                    plane.max_open_trades, trading_mode="scalping"
+                )
                 try:
                     from app.application.services.ops_state_persistence import (
                         save_ops_state,
@@ -1150,6 +1164,24 @@ def get_control_plane() -> OperationsControlPlane:
                         plane.max_open_trades = mop
                 except (TypeError, ValueError):
                     pass
+            if str(plane.trading_mode or "").strip().lower() == "scalping":
+                from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+                    align_live_scalp_cap,
+                )
+
+                aligned = align_live_scalp_cap(
+                    plane.max_open_trades, trading_mode="scalping"
+                )
+                if aligned != plane.max_open_trades:
+                    plane.max_open_trades = aligned
+                    try:
+                        from app.application.services.ops_state_persistence import (
+                            save_ops_state,
+                        )
+
+                        save_ops_state({"max_open_positions": aligned})
+                    except Exception:
+                        pass
             if "alpha_engine_enabled" in state:
                 plane.alpha_engine_enabled = bool(state.get("alpha_engine_enabled"))
             if "compounding_enabled" in state:

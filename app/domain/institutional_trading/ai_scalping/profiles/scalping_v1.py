@@ -109,7 +109,7 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
 SCALPING_V1: AiScalpingConfig = build_scalping_v1_config()
 
 # Operator/control-plane leftovers from pre-10 scalping caps.
-_LEGACY_SCALP_CAPS = frozenset({1, 3, 5})
+_LEGACY_SCALP_CAPS = frozenset({1, 2, 3, 5})
 
 
 def align_live_scalp_cap(current: int, *, trading_mode: str | None = None) -> int:

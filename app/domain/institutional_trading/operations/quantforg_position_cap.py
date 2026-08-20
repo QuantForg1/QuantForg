@@ -118,6 +118,13 @@ def live_strategy_max_open(ite_config: Any | None) -> int:
         value = int(raw)
     except (TypeError, ValueError):
         value = 1
+    mode = str(getattr(ite_config, "trading_mode", "") or "").strip().lower()
+    if mode == "scalping":
+        from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
+            align_live_scalp_cap,
+        )
+
+        return align_live_scalp_cap(value, trading_mode="scalping")
     return max(1, value)
 
 

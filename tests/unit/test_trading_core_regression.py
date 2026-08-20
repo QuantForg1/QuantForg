@@ -288,6 +288,7 @@ def test_pme_break_even_partial_trail_close_loop() -> None:
     # Use scalping PME thresholds
     svc.engine.config = pme_config_for_scalping()
     pos = _pos()
+    pos.trade_class = "SCALP"
     svc.register(pos)
 
     # 0.5R → BE (entry 2300, risk 10 → price 2305)

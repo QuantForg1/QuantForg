@@ -1188,9 +1188,31 @@ class ExecutionBridge:
         from app.domain.institutional_trading.force_first_trade import (
             is_forced_test_decision,
         )
+        from app.domain.institutional_trading.management.class_policy import (
+            encode_execution_comment,
+            proven_trade_class,
+        )
 
         if is_forced_test_decision(decision):
             comment = f"FORCE:{decision.input_hash[:12]}"
+        else:
+            raw_class = ""
+            for reason in getattr(decision, "reasons", ()) or ():
+                text = str(reason)
+                if text.lower().startswith("trade_class="):
+                    raw_class = text.split("=", 1)[-1]
+                    break
+            if not raw_class:
+                duration = str(getattr(decision, "expected_duration", "") or "").lower()
+                if duration == "scalp":
+                    raw_class = "SCALP"
+                elif duration == "hold":
+                    raw_class = "HOLD"
+            comment = encode_execution_comment(
+                self.config.comment_prefix,
+                str(decision.input_hash),
+                proven_trade_class(raw_class) if raw_class else "",
+            )
         return parse_order_intent(
             symbol=decision.symbol or self.config.symbol,
             side=side,

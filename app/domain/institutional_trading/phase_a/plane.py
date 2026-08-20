@@ -76,6 +76,11 @@ class PhaseAControlPlane:
         # (in-memory kill logic remains; persisted fields are retained on disk).
         if self.config.kill_persistence_enabled:
             self.halt.hydrate(state)
+            if (
+                self.halt.mode is HaltMode.ACTIVE
+                and str(self.halt.last_reason or "") == "stale_pause_cleared"
+            ):
+                self.persist()
         self.ambiguity.hydrate(state)
 
     def sync_legacy_kill_flag(self, plane: Any) -> None:
@@ -94,9 +99,14 @@ class PhaseAControlPlane:
         actor: str,
         reason: str,
         correlation_id: str | None = None,
+        kind: Any | None = None,
     ) -> dict[str, Any]:
         tr = self.halt.set_mode(
-            mode, actor=actor, reason=reason, correlation_id=correlation_id
+            mode,
+            actor=actor,
+            reason=reason,
+            correlation_id=correlation_id,
+            kind=kind,
         )
         self.persist()
         return tr.to_dict()

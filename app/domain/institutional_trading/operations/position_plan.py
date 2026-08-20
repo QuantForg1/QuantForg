@@ -31,15 +31,22 @@ from app.domain.trading.xauusd_specs import VOLUME_MAX, VOLUME_MIN, VOLUME_STEP
 SCALP_MAX_OPEN_TRADES = 10
 
 
-def class_position_cap(trade_class: TradeClass | str) -> int:
-    raw = (
-        trade_class.value
-        if isinstance(trade_class, TradeClass)
-        else str(trade_class or "")
-    ).upper()
+def _coerce_trade_class(trade_class: TradeClass | str) -> TradeClass:
+    if isinstance(trade_class, TradeClass):
+        return trade_class
+    raw = str(trade_class or "").upper()
     if raw == TradeClass.HOLD.value:
-        return HOLD_MAX_OPEN_TRADES
+        return TradeClass.HOLD
     if raw == TradeClass.SCALP.value:
+        return TradeClass.SCALP
+    return TradeClass.NO_TRADE
+
+
+def class_position_cap(trade_class: TradeClass | str) -> int:
+    raw = _coerce_trade_class(trade_class)
+    if raw is TradeClass.HOLD:
+        return HOLD_MAX_OPEN_TRADES
+    if raw is TradeClass.SCALP:
         return SCALP_MAX_OPEN_TRADES
     return 0
 
@@ -51,11 +58,7 @@ def strategy_target_count(
     confidence: int | None = None,
 ) -> int:
     """Initial mapping from score band. Never the final authorized count."""
-    cls = (
-        trade_class
-        if isinstance(trade_class, TradeClass)
-        else TradeClass(str(trade_class).upper())
-    )
+    cls = _coerce_trade_class(trade_class)
     score = max(0, min(100, int(opportunity_score)))
     conf = int(confidence) if confidence is not None else score
     # Slight confidence tilt inside a band — never jumps a class cap.
@@ -221,6 +224,8 @@ class PositionPlan:
     margin_required: str | None = None
     margin_available: str | None = None
     min_lot_constraint_reason: str | None = None
+    margin_allowed_count: int | None = None
+    blocking_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -262,6 +267,8 @@ class PositionPlan:
             "margin_required": self.margin_required,
             "margin_available": self.margin_available,
             "min_lot_constraint_reason": self.min_lot_constraint_reason,
+            "margin_allowed_count": self.margin_allowed_count,
+            "blocking_reason": self.blocking_reason,
         }
 
 
@@ -295,11 +302,7 @@ def build_position_plan(
     base_input_hash: str = "",
     entry_policy: str = "same_thesis_market",
 ) -> PositionPlan:
-    cls = (
-        trade_class
-        if isinstance(trade_class, TradeClass)
-        else TradeClass(str(trade_class).upper())
-    )
+    cls = _coerce_trade_class(trade_class)
     target = strategy_target_count(
         trade_class=cls,
         opportunity_score=opportunity_score,
@@ -372,6 +375,7 @@ def build_position_plan(
     )
     if n < before_margin:
         reductions.append(f"margin_allowed {n} < {before_margin}")
+    margin_n = int(n)
     # Keep per-leg size after margin reduction — do not re-concentrate
     # leftover aggregate into fewer legs (that would raise per-leg risk).
     if n > 0 and (per < floor or per > ceiling):
@@ -402,6 +406,14 @@ def build_position_plan(
                 "MIN_LOT_CONSTRAINT: no lot-step allocation within "
                 f"approved_lots={aggregate} min_lot={floor} step={lot_step}"
             )
+
+    blocking: str | None = None
+    if min_lot_reason:
+        blocking = min_lot_reason
+    elif reductions:
+        blocking = "; ".join(reductions)
+    elif n <= 0:
+        blocking = "effective_position_count=0"
 
     margin_need: str | None = None
     margin_avail: str | None = None
@@ -458,6 +470,8 @@ def build_position_plan(
         margin_required=margin_need,
         margin_available=margin_avail,
         min_lot_constraint_reason=min_lot_reason,
+        margin_allowed_count=margin_n,
+        blocking_reason=blocking,
     )
 
 

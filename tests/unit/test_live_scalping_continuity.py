@@ -57,7 +57,7 @@ def test_trading_mode_persisted_and_hydrated(
     plane = cp.get_control_plane()
     assert plane.mode is OpsExecutionMode.LIVE
     assert plane.trading_mode == "scalping"
-    assert plane.max_open_trades == 3
+    assert plane.max_open_trades == 10
     cp._GLOBAL_PLANE = None
 
 

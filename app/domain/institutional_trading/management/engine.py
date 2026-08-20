@@ -36,6 +36,9 @@ from app.domain.institutional_trading.management.r_math import opposite_side, si
 from app.domain.institutional_trading.management.state_machine import (
     PositionStateMachine,
 )
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _fingerprint(
@@ -343,13 +346,28 @@ class PositionManagementEngine:
             old_sl=old_sl,
             new_sl=plan.new_sl if plan.new_sl is not None else position.current_stop,
             old_tp=old_tp,
-            new_tp=plan.new_tp,
+            new_tp=plan.new_tp if plan.new_tp is not None else position.current_tp,
             volume=plan.volume,
             r_multiple=r_now,
             retcode=oms_result.retcode,
             comment=oms_result.message or plan.reason,
             fingerprint=fp,
             symbol=position.symbol,
+            trade_class=str(getattr(position, "trade_class", "") or ""),
+            cycle_id=str(getattr(position, "cycle_id", "") or ""),
+            position_plan_id=str(getattr(position, "position_plan_id", "") or ""),
+        )
+        logger.warning(
+            "pme_sltp_modification",
+            position_id=position.ticket,
+            old_SL=str(old_sl),
+            new_SL=str(rec.new_sl),
+            old_TP=str(old_tp),
+            new_TP=str(rec.new_tp),
+            reason=plan.reason,
+            trade_class=rec.trade_class,
+            cycle_id=rec.cycle_id,
+            action=plan.kind.value,
         )
         self.journal.append(rec)
         return PositionManageResult(
@@ -364,6 +382,7 @@ class PositionManagementEngine:
         PositionStateMachine.assert_transition(position.state, plan.target_state)
         if plan.new_sl is not None:
             position.current_stop = plan.new_sl
+        # TP stays unless an authorized plan explicitly supplies a new TP.
         if plan.new_tp is not None:
             position.current_tp = plan.new_tp
         if plan.kind is ManageActionKind.BREAK_EVEN:
@@ -398,6 +417,9 @@ class PositionManagementEngine:
             or plan.kind is ManageActionKind.TRAIL
         ):
             assert plan.new_sl is not None
+            preserved_tp = (
+                plan.new_tp if plan.new_tp is not None else position.current_tp
+            )
             return self.oms.modify_sltp(
                 user_id=context.user_id,
                 request_id=rid,
@@ -405,7 +427,7 @@ class PositionManagementEngine:
                 side=position.side,
                 position=position.ticket,
                 stop_loss=plan.new_sl,
-                take_profit=plan.new_tp,
+                take_profit=preserved_tp if preserved_tp and preserved_tp > 0 else None,
                 comment=comment,
                 connected=context.connected,
                 login=context.login,
@@ -547,6 +569,9 @@ class PositionManagementEngine:
             comment=comment,
             fingerprint=fingerprint,
             symbol=position.symbol,
+            trade_class=str(getattr(position, "trade_class", "") or ""),
+            cycle_id=str(getattr(position, "cycle_id", "") or ""),
+            position_plan_id=str(getattr(position, "position_plan_id", "") or ""),
         )
         self.journal.append(rec)
         return rec

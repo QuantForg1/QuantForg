@@ -217,6 +217,7 @@ def test_volatility_collapse_exit() -> None:
         opened_at=datetime.now(UTC) - timedelta(minutes=3),
         state=PositionLifecycleState.OPEN,
         current_stop=Decimal("2295"),
+        trade_class="SCALP",
     )
     ctx = PositionManageContext(
         now=datetime.now(UTC),

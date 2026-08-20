@@ -851,6 +851,8 @@ def test_scalping_profile_cap_is_10() -> None:
     assert SCALPING_V1.max_open_trades == 10
     assert SCALPING_V1.max_entries_per_cycle == 10
     assert align_live_scalp_cap(5, trading_mode="scalping") == 10
+    assert align_live_scalp_cap(2, trading_mode="scalping") == 10
+    assert align_live_scalp_cap(1, trading_mode="scalping") == 10
     assert align_live_scalp_cap(8, trading_mode="scalping") == 8
 
 
