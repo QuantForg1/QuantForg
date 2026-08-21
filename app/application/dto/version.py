@@ -13,3 +13,5 @@ class VersionInfo:
     version: str
     environment: str
     api_prefix: str
+    git_commit: str = "unknown"
+    deployment_id: str = "unknown"

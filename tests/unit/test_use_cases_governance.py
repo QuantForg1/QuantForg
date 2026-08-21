@@ -178,3 +178,5 @@ class TestGetHealthAndVersionUseCases:
         assert info.version == "9.9.9"
         assert info.name == "QuantForg"
         assert info.environment == "testing"
+        assert info.git_commit
+        assert info.deployment_id

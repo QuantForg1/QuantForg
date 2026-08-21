@@ -83,6 +83,9 @@ def test_collect_skips_platform_probes_and_includes_timing() -> None:
     assert payload["timing"]["platform_probes"] is False
     assert payload["timing"]["cache_hit"] is False
     assert "gateway_ms" in payload["timing"]
+    assert payload["git_commit"] == "unknown" or len(payload["git_commit"]) >= 7
+    assert isinstance(payload["deployment_id"], str)
+    assert payload["all_ready_for_limited_pilot"] is True
 
 
 def test_collect_cache_hit_within_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -97,7 +100,7 @@ def test_collect_cache_hit_within_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
 
     calls: list[dict[str, object]] = []
 
-    def fake_collect(self, **kwargs):  # noqa: ANN001
+    def fake_collect(self, **kwargs):
         calls.append(kwargs)
         return ProbeInputs(
             gateway_latency_ms=50.0,

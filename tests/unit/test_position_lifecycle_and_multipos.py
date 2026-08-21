@@ -220,7 +220,7 @@ def test_unknown_class_is_explicit(pme_path: Path) -> None:
 
 def test_break_even_follows_class_policy() -> None:
     scalp = _pos(trade_class="SCALP")
-    # ~0.55R: SCALP BE at 0.35R (SCALPING_V1); HOLD/UNKNOWN must not inherit it
+    # ~0.55R: SCALP BE at 0.5R; HOLD BE at 1.0R; UNKNOWN must not inherit SCALP
     price = "4493.00"
     scalp_plan = plan_action(scalp, _ctx(price=price), DEFAULT_PME_CONFIG)
     assert scalp_plan.kind is ManageActionKind.BREAK_EVEN

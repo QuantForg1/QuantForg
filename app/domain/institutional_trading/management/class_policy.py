@@ -15,10 +15,14 @@ from typing import Any
 TRADE_CLASS_UNKNOWN = "TRADE_CLASS_UNKNOWN"
 PROVEN_TRADE_CLASSES = frozenset({"SCALP", "HOLD"})
 
-HOLD_BREAK_EVEN_AT_R = Decimal("1.5")
+HOLD_BREAK_EVEN_AT_R = Decimal("1.0")
 HOLD_BREAK_EVEN_OFFSET_R = Decimal("0.2")
-HOLD_ABSOLUTE_MAX_HOLD_MINUTES = 45
+HOLD_ABSOLUTE_MAX_HOLD_MINUTES = 0
 HOLD_TIME_STOP_MINUTES = 20
+
+SCALP_BREAK_EVEN_AT_R = Decimal("0.5")
+SCALP_BREAK_EVEN_OFFSET_R = Decimal("0.2")
+SCALP_ABSOLUTE_MAX_HOLD_MINUTES = 25
 
 UNKNOWN_BREAK_EVEN_AT_R = Decimal("1.0")
 UNKNOWN_BREAK_EVEN_OFFSET_R = Decimal("0.2")
@@ -152,15 +156,12 @@ def resolve_class_management(trade_class: Any) -> ClassManagementProfile:
         from app.domain.institutional_trading.ai_scalping.config import (
             DEFAULT_AI_SCALPING_CONFIG as scalp,
         )
-        from app.domain.institutional_trading.management.config import (
-            DEFAULT_PME_CONFIG,
-        )
 
         return ClassManagementProfile(
             trade_class="SCALP",
-            break_even_at_r=Decimal(str(scalp.break_even_at_r)),
-            break_even_offset_r=DEFAULT_PME_CONFIG.break_even_offset_r,
-            absolute_max_hold_minutes=int(scalp.absolute_max_hold_minutes),
+            break_even_at_r=SCALP_BREAK_EVEN_AT_R,
+            break_even_offset_r=SCALP_BREAK_EVEN_OFFSET_R,
+            absolute_max_hold_minutes=SCALP_ABSOLUTE_MAX_HOLD_MINUTES,
             time_stop_minutes=int(scalp.time_stop_minutes),
             momentum_fade_exit=bool(scalp.momentum_fade_exit),
             volatility_collapse_exit=bool(scalp.volatility_collapse_exit),

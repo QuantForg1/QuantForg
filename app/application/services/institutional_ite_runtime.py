@@ -4473,10 +4473,10 @@ class InstitutionalIteRuntime:
             resolve_executable_symbol,
         )
         from app.domain.trading.gold_only import (
-            GOLD_SYMBOL,
-            autonomous_execution_symbols,
+            canonical_gold_execution_symbol,
             filter_autonomous_symbols,
             gold_only_enabled,
+            is_bare_gold_symbol,
             is_gold_symbol,
         )
 
@@ -4492,8 +4492,9 @@ class InstitutionalIteRuntime:
                     next_action="NO_EXECUTABLE_FOCUS",
                 )
                 preferred = None
-            universe = autonomous_execution_symbols()
-            gold_desk = universe[0] if universe else GOLD_SYMBOL
+            gold_desk = canonical_gold_execution_symbol(preferred)
+            if is_bare_gold_symbol(preferred or ""):
+                preferred = gold_desk
             symbol, skipped = await self._offload_blocking_io(
                 resolve_executable_symbol,
                 self.mt5_adapter,
@@ -4507,11 +4508,14 @@ class InstitutionalIteRuntime:
                     skipped=skipped,
                     preferred=preferred or gold_desk,
                 )
-            if symbol is not None and not is_gold_symbol(symbol):
+            if symbol is not None and (
+                not is_gold_symbol(symbol) or is_bare_gold_symbol(symbol)
+            ):
                 logger.warning(
                     "GOLD_ONLY_SYMBOL_REJECTED",
                     symbol=symbol,
                     next_action="NO_EXECUTABLE_FOCUS",
+                    reason="SYMBOL_ROUTING_BLOCK",
                 )
                 return None
             with self._lock:
@@ -4600,21 +4604,25 @@ class InstitutionalIteRuntime:
         )
         from app.domain.trading.gold_only import (
             GOLD_SYMBOL,
-            autonomous_execution_symbols,
+            canonical_gold_execution_symbol,
             gold_only_enabled,
+            is_bare_gold_symbol,
             is_gold_symbol,
         )
 
         if gold_only_enabled():
-            universe = autonomous_execution_symbols()
-            preferred = universe[0] if universe else GOLD_SYMBOL
+            preferred = canonical_gold_execution_symbol()
             symbol, skipped = resolve_executable_symbol(
                 self.mt5_adapter,
                 preferred=preferred,
                 plane=self.plane,
                 alpha_ranking=None,
             )
-            if symbol is None or not is_gold_symbol(symbol):
+            if (
+                symbol is None
+                or not is_gold_symbol(symbol)
+                or is_bare_gold_symbol(symbol)
+            ):
                 return None
             return symbol
 

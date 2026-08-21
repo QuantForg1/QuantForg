@@ -15,6 +15,10 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from app.application.runtime_identity import (
+    runtime_deployment_id,
+    runtime_git_commit,
+)
 from app.application.services.institutional_live_probes import (
     TRADING_COMPONENTS_GATEWAY_TIMEOUT_S,
     LiveProbeCollector,
@@ -188,6 +192,8 @@ def _build_payload(
 
     components = [gateway, oms, mt5, ai]
     return {
+        "git_commit": runtime_git_commit(),
+        "deployment_id": runtime_deployment_id(),
         "gateway": gateway.to_dict(),
         "oms": oms.to_dict(),
         "mt5": mt5.to_dict(),

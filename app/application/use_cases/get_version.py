@@ -12,6 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.application.dto.version import VersionInfo
+from app.application.runtime_identity import (
+    runtime_deployment_id,
+    runtime_git_commit,
+)
 from app.domain.interfaces.app_info import AppInfoPort
 
 
@@ -28,4 +32,6 @@ class GetVersionUseCase:
             version=self.app_info.app_version,
             environment=self.app_info.environment,
             api_prefix=self.app_info.api_prefix,
+            git_commit=runtime_git_commit(),
+            deployment_id=runtime_deployment_id(),
         )

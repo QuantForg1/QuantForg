@@ -322,6 +322,29 @@ def classify_candidate_outcome(
         }
 
     if (
+        "gateway market data unavailable" in hay
+        or "trade mode lookup failed" in hay
+        or "trade mode unknown" in hay
+        or "symbol unavailable" in hay
+        or "no full mode gold symbol" in hay
+        or "gold only symbol rejected" in hay
+        or "unsuffixed gold" in hay
+        or abort.strip().upper().startswith("GATEWAY_MARKET_DATA_UNAVAILABLE")
+    ):
+        return {
+            "decision_state": DecisionState.HARD_BLOCK.value,
+            "fault_class": FaultClass.CANDIDATE_BLOCK.value,
+            "fault_code": "SYMBOL_ROUTING_BLOCK",
+            "fault_reason": abort or "; ".join(reasons) or "SYMBOL_ROUTING_BLOCK",
+            "retryable": False,
+            "candidate_action": CandidateAction.NO_EXECUTABLE_FOCUS.value,
+            "next_action": CandidateAction.NO_EXECUTABLE_FOCUS.value,
+            "blocking_stage": "MARKET",
+            "skip_idle_sleep": False,
+            "release_entry_budget": True,
+        }
+
+    if (
         abort.strip().upper() == "NO_MARKET_CONTEXT"
         or "no market context" in hay
         or "market data load failed" in hay

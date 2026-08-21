@@ -27,4 +27,6 @@ async def get_version(
         version=info.version,
         environment=info.environment,
         api_prefix=info.api_prefix,
+        git_commit=info.git_commit,
+        deployment_id=info.deployment_id,
     )

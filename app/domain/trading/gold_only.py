@@ -15,6 +15,7 @@ from typing import Any
 
 GOLD_SYMBOL = "XAUUSD"
 CANONICAL_GOLD_BROKER_DISPLAY = "XAUUSD_i"
+_BARE_GOLD_CODES = frozenset({"XAUUSD", "GOLD", "XAUUSDM"})
 
 
 def gold_only_enabled() -> bool:
@@ -46,6 +47,31 @@ def default_trading_symbol() -> str:
     return GOLD_SYMBOL
 
 
+def is_bare_gold_symbol(code: str) -> bool:
+    """True for unsuffixed gold aliases that Weltrade rejects (503)."""
+    u = (code or "").strip().upper()
+    if not u:
+        return False
+    if u in _BARE_GOLD_CODES:
+        return True
+    compact = "".join(ch for ch in u if ch.isalnum())
+    return compact in {"XAUUSD", "GOLD", "XAUUSDM"}
+
+
+def canonical_gold_execution_symbol(preferred: str | None = None) -> str:
+    """Gold-only executable form. Never unsuffixed XAUUSD."""
+    pref = (preferred or "").strip()
+    if pref and is_gold_symbol(pref) and not is_bare_gold_symbol(pref):
+        return display_autonomous_symbol(pref)
+    try:
+        for sym in autonomous_execution_symbols():
+            if is_gold_symbol(sym) and not is_bare_gold_symbol(sym):
+                return display_autonomous_symbol(sym)
+    except Exception:  # noqa: S110  # best-effort optional path
+        pass
+    return CANONICAL_GOLD_BROKER_DISPLAY
+
+
 def is_gold_symbol(code: str) -> bool:
     u = "".join(ch for ch in (code or "").strip().upper() if ch.isalnum() or ch == ".")
     if not u:
@@ -74,9 +100,8 @@ def autonomous_execution_symbols(
 ) -> tuple[str, ...]:
     """Authoritative autonomous execution universe.
 
-    Gold-only: catalogue-resolved gold broker form only. Does not invent ``_i``.
-    When the catalogue is absent, returns the logical desk; market-data loaders
-    resolve via ``resolve_canonical_market_data_symbol``.
+    Gold-only: catalogue-resolved gold broker form only. Never unsuffixed
+    ``XAUUSD`` — that form 503s on the live Weltrade catalogue.
     """
     if not gold_only_enabled():
         try:
@@ -96,9 +121,9 @@ def autonomous_execution_symbols(
         )
     except Exception:
         resolved = ""
-    if resolved and is_gold_symbol(resolved):
+    if resolved and is_gold_symbol(resolved) and not is_bare_gold_symbol(resolved):
         return (resolved,)
-    return (GOLD_SYMBOL,)
+    return (CANONICAL_GOLD_BROKER_DISPLAY,)
 
 
 def is_autonomous_execution_symbol(code: str | None) -> bool:
@@ -168,9 +193,9 @@ def resolve_trading_symbol(code: str | None = None) -> str:
     """
     raw = (code or "").strip().upper()
     if gold_only_enabled():
-        if raw and is_gold_symbol(raw):
+        if raw and is_gold_symbol(raw) and not is_bare_gold_symbol(raw):
             return raw
-        return GOLD_SYMBOL
+        return canonical_gold_execution_symbol(raw).upper()
     return raw or default_trading_symbol() or GOLD_SYMBOL
 
 
@@ -189,5 +214,7 @@ def require_xauusd(symbol: str) -> str:
         msg = f"QuantForg trades XAUUSD only — rejected symbol {symbol!r}"
         raise ValueError(msg)
     if gold_only_enabled():
-        return raw if raw else GOLD_SYMBOL
+        if raw and is_gold_symbol(raw) and not is_bare_gold_symbol(raw):
+            return raw
+        return canonical_gold_execution_symbol(raw).upper()
     return resolve_trading_symbol(symbol)

@@ -323,21 +323,22 @@ async def build_ite_cycle_market_context(
     logical_symbol = (symbol or "").strip()
     diag["logical_symbol"] = logical_symbol
     try:
-        from app.domain.trading.gold_only import (
-            GOLD_SYMBOL,
-            gold_only_enabled,
-            is_gold_symbol,
-        )
+        from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
         if gold_only_enabled():
+            from app.domain.trading.gold_only import (
+                canonical_gold_execution_symbol,
+                is_bare_gold_symbol,
+            )
+
             if logical_symbol and not is_gold_symbol(logical_symbol):
                 return _fail(
                     f"GOLD_ONLY_SYMBOL_REJECTED: autonomous universe is gold-only, "
                     f"rejected {logical_symbol}",
                     next_action="NO_EXECUTABLE_FOCUS",
                 )
-            if not logical_symbol:
-                logical_symbol = GOLD_SYMBOL
+            if not logical_symbol or is_bare_gold_symbol(logical_symbol):
+                logical_symbol = canonical_gold_execution_symbol(logical_symbol)
                 diag["logical_symbol"] = logical_symbol
                 diag["symbol"] = logical_symbol
     except Exception:

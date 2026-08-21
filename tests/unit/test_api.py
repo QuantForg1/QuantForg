@@ -106,6 +106,8 @@ class TestVersionEndpoint:
         assert body["version"] == "0.1.0"
         assert body["environment"] == "testing"
         assert body["api_prefix"] == "/api/v1"
+        assert "git_commit" in body
+        assert "deployment_id" in body
 
 
 @pytest.mark.unit

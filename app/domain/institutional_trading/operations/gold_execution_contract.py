@@ -381,7 +381,7 @@ def evaluate_gold_execution_contract(
     elif action != direction:
         decision_fail = _stage_fail(
             stage="DECISION",
-            code="DIRECTION_NONE",
+            code="ACTION_DIRECTION_MISMATCH",
             reason=f"action {action} does not match direction {direction}",
             fault_class=FaultClass.CANDIDATE_BLOCK.value,
             next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,

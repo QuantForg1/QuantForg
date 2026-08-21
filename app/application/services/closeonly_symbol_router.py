@@ -77,7 +77,7 @@ def build_opportunity_candidates(
 
     from app.domain.trading.gold_only import (
         GOLD_SYMBOL,
-        autonomous_execution_symbols,
+        canonical_gold_execution_symbol,
         gold_only_enabled,
         is_gold_symbol,
     )
@@ -94,11 +94,8 @@ def build_opportunity_candidates(
         ordered.append(code)
 
     if gold_only:
-        for sym in autonomous_execution_symbols():
-            _add(sym)
-        _add(preferred)
-        _add(GOLD_SYMBOL)
-        return ordered
+        # Preferred broker form first and only. Never unsuffixed XAUUSD.
+        return [canonical_gold_execution_symbol(preferred)]
 
     _add(preferred)
     for row in alpha_ranking or []:
@@ -143,19 +140,34 @@ def select_full_mode_symbol(
 
     skipped: list[str] = []
     side = (direction or "").strip().upper()
-    try:
-        from app.domain.trading.gold_only import (
-            filter_autonomous_symbols,
-            gold_only_enabled,
-        )
+    from app.domain.trading.gold_only import (
+        canonical_gold_execution_symbol,
+        display_autonomous_symbol,
+        gold_only_enabled,
+        is_bare_gold_symbol,
+        is_gold_symbol,
+    )
 
-        if gold_only_enabled():
-            kept = filter_autonomous_symbols(candidates)
-            skipped.extend(
-                str(s).strip().upper()
-                for s in candidates
-                if str(s).strip() and str(s).strip().upper() not in set(kept)
-            )
+    gold_only = gold_only_enabled()
+    try:
+        if gold_only:
+            kept: list[str] = []
+            seen: set[str] = set()
+            for raw in candidates:
+                code = str(raw or "").strip()
+                if not code or is_bare_gold_symbol(code) or not is_gold_symbol(code):
+                    if code:
+                        skipped.append(code.upper())
+                    continue
+                key = code.upper()
+                if key in seen:
+                    continue
+                seen.add(key)
+                kept.append(display_autonomous_symbol(code))
+            if not kept:
+                kept = [canonical_gold_execution_symbol(
+                    candidates[0] if candidates else None
+                )]
             candidates = list(kept)
     except Exception:
         logger.exception("gold_only_full_mode_filter_failed")
@@ -185,12 +197,22 @@ def select_full_mode_symbol(
             logger.warning("%s skipped (trade_mode=%s)", sym, mode)
             skipped.append(sym)
             continue
-        # unknown: try once (gateway may still accept); prefer known full
         if mode == "unknown":
+            if gold_only and is_bare_gold_symbol(sym):
+                logger.warning(
+                    "%s skipped (unsuffixed gold trade_mode unknown)",
+                    sym,
+                )
+                skipped.append(sym)
+                continue
             logger.warning(
                 "%s trade_mode unknown — probing as candidate",
                 sym,
             )
+        if gold_only and is_bare_gold_symbol(sym):
+            logger.warning("%s skipped (gold-only forbids unsuffixed XAUUSD)", sym)
+            skipped.append(sym)
+            continue
         logger.warning("Next opportunity: %s", sym)
         return sym, skipped
     return None, skipped

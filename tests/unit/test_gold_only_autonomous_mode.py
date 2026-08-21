@@ -169,12 +169,19 @@ def test_no_fallback_to_eurusd(gold_only: None) -> None:
 
 
 def test_closeonly_gold_does_not_select_fx(gold_only: None) -> None:
-    adapter = _Adapter({"XAUUSD": "closeonly", "EURUSD": "full", "GBPUSD": "full"})
+    adapter = _Adapter(
+        {
+            "XAUUSD": "closeonly",
+            "XAUUSD_I": "closeonly",
+            "EURUSD": "full",
+            "GBPUSD": "full",
+        }
+    )
     selected, skipped = select_full_mode_symbol(
         adapter, ["XAUUSD", "EURUSD", "GBPUSD"]
     )
     assert selected is None
-    assert "EURUSD" not in (skipped or []) or selected is None
+    assert selected != "EURUSD"
 
 
 def test_require_xauusd_preserves_broker_form(gold_only: None) -> None:

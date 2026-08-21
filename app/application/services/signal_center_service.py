@@ -71,6 +71,25 @@ def _factors(score: dict[str, Any]) -> dict[str, Any]:
     return f if isinstance(f, dict) else {}
 
 
+def _block_code_from_reason(reason: str | None) -> str:
+    low = str(reason or "").lower()
+    if _is_min_lot_constraint(reason):
+        return "MIN_LOT_CONSTRAINT"
+    if "risk" in low:
+        return "RISK_BLOCK"
+    if "safety" in low or "kill" in low:
+        return "SAFETY_BLOCK"
+    if "portfolio" in low:
+        return "PORTFOLIO_BLOCK"
+    if "oms" in low:
+        return "OMS_BLOCK"
+    if "gateway" in low or "trade_mode" in low or "symbol unavailable" in low:
+        return "SYMBOL_ROUTING_BLOCK"
+    if "reconcil" in low or "unknown" in low:
+        return "RECONCILIATION_REQUIRED"
+    return "SAFETY_BLOCK"
+
+
 def _is_min_lot_constraint(text: str | None) -> bool:
     low = str(text or "").lower()
     return any(
@@ -107,14 +126,27 @@ def _execution_classification(
             "signal_state": "VALID_SIGNAL",
             "execution_state": "EXECUTION_BLOCKED",
             "block_code": "MIN_LOT_CONSTRAINT",
-            "decision": "EXECUTION_BLOCKED",
+            "decision": direction if directional else "EXECUTION_BLOCKED",
             "status": "MIN_LOT_CONSTRAINT",
+        }
+    if directional and reject:
+        code = _block_code_from_reason(reason)
+        return {
+            "signal_state": "VALID_SIGNAL",
+            "execution_state": "EXECUTION_BLOCKED",
+            "block_code": code,
+            "decision": direction,
+            "status": code,
         }
     if reject or direction in {"", "NONE", "NO_TRADE"}:
         return {
             "signal_state": "NO_TRADE",
             "execution_state": None,
-            "block_code": None,
+            "block_code": (
+                "NO_DIRECTION"
+                if direction in {"", "NONE", "NO_TRADE"}
+                else None
+            ),
             "decision": "NO_TRADE",
             "status": "NO_TRADE",
         }
@@ -141,17 +173,15 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
     )
     # Min-lot blocks are execution constraints, not "missing signals".
     min_lot_block = _is_min_lot_constraint(str(reason_early or ""))
-    if reject and not min_lot_block:
-        direction_out = "NONE"
-    else:
-        direction_out = direction if direction in {"BUY", "SELL"} else "NONE"
+    # Keep BUY/SELL through later blockers. Relabel the block, not the direction.
+    direction_out = direction if direction in {"BUY", "SELL"} else "NONE"
     badge = _signal_badge(
-        direction=direction_out if not (reject and not min_lot_block) else "NONE",
+        direction=direction_out,
         quality=quality,
         confidence=confidence,
-        reject=reject and not min_lot_block,
+        reject=False if direction_out in {"BUY", "SELL"} else reject,
     )
-    if min_lot_block and direction_out in {"BUY", "SELL"}:
+    if (min_lot_block or reject) and direction_out in {"BUY", "SELL"}:
         badge = f"{direction_out} BLOCKED"
     momentum = int(
         score.get("momentum")
