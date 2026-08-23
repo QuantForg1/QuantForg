@@ -24,6 +24,9 @@ from app.domain.institutional_trading.management.models import (
     PositionLifecycleState,
 )
 from app.domain.institutional_trading.operations.models import OpsExecutionMode
+from app.domain.institutional_trading.operations.quantforg_position_cap import (
+    QUANTFORG_MAGIC,
+)
 from app.domain.institutional_trading.production_hardening.position_recovery import (
     recover_positions_from_mt5,
 )
@@ -160,6 +163,7 @@ def test_recover_registers_fill_with_broker_sl() -> None:
         current_price=Decimal("4001"),
         stop_loss=Decimal("3995"),
         take_profit=Decimal("4010"),
+        magic=QUANTFORG_MAGIC,
     )
     mt5 = SimpleNamespace(list_positions=lambda: [row])
     result = recover_positions_from_mt5(mt5_adapter=mt5, engine=engine, symbol="XAUUSD")

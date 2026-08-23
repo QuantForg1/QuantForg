@@ -2,10 +2,14 @@
 
 Does not submit orders, change OMS/Gateway, or weaken Risk/Safety.
 
-Strategy cap counts only positions owned by the existing QuantForg
-execution identity (MT5 magic 260720 / comment prefix ite:v1) on the
-autonomous gold symbol. Account-wide ticket counts remain observability
-and must not consume QuantForg capacity.
+Strategy cap, same-symbol duplicate, and PME management count only
+positions owned by the QuantForg execution identity:
+
+    magic == 260720 AND canonical gold (XAUUSD_i)
+
+magic=0 is always manual. Comment prefix (ite:v1) must not promote a
+manual ticket. Account-wide ticket counts remain observability and must
+not consume QuantForg strategy capacity.
 """
 
 from __future__ import annotations
@@ -22,6 +26,11 @@ from app.domain.trading.gold_only import (
 # Existing production identity — ExecutionBridgeConfig.magic / PME magic.
 QUANTFORG_MAGIC = 260720
 QUANTFORG_COMMENT_PREFIX = "ite:v1"
+
+OWNER_QUANTFORG = "QUANTFORG"
+OWNER_MANUAL = "MANUAL"
+OWNER_OTHER_EA = "OTHER_EA"
+OWNER_UNKNOWN = "UNKNOWN"
 
 
 def _row_get(row: Any, key: str, default: Any = None) -> Any:
@@ -50,11 +59,134 @@ def belongs_to_quantforg(
     *,
     magic: int = QUANTFORG_MAGIC,
 ) -> bool:
-    """True when the ticket was opened by the QuantForg execution identity."""
-    if position_magic(row) == int(magic):
+    """True when MT5 magic is the QuantForg execution identity.
+
+    magic=0 is always manual/unrelated — comment prefix must not promote it.
+    """
+    return position_magic(row) == int(magic)
+
+
+def classify_position_owner(
+    row: Any,
+    *,
+    magic: int = QUANTFORG_MAGIC,
+) -> str:
+    mid = position_magic(row)
+    if mid == int(magic):
+        if matches_autonomous_symbol(row):
+            return OWNER_QUANTFORG
+        return OWNER_UNKNOWN
+    if mid == 0:
+        return OWNER_MANUAL
+    return OWNER_OTHER_EA
+
+
+def is_quantforg_owned_position(
+    row: Any,
+    *,
+    magic: int = QUANTFORG_MAGIC,
+    symbol: str | None = None,
+) -> bool:
+    """Authoritative QuantForg strategy ownership for Gold autonomous execution."""
+    return belongs_to_quantforg(row, magic=magic) and matches_autonomous_symbol(
+        row, symbol=symbol
+    )
+
+
+def ownership_observability(
+    row: Any,
+    *,
+    magic: int = QUANTFORG_MAGIC,
+    symbol: str | None = None,
+) -> dict[str, Any]:
+    owner = classify_position_owner(row, magic=magic)
+    owned = is_quantforg_owned_position(row, magic=magic, symbol=symbol)
+    return {
+        "position_owner": owner,
+        "quantforg_owned": owned,
+        "is_manual": owner == OWNER_MANUAL,
+        "is_same_symbol": matches_autonomous_symbol(row, symbol=symbol),
+        "consumes_quantforg_capacity": owned,
+        "managed_by_pme": owned,
+        "magic": position_magic(row),
+        "symbol": position_symbol(row),
+    }
+
+
+def quantforg_open_symbols(
+    rows: list[Any] | tuple[Any, ...] | None,
+    *,
+    magic: int = QUANTFORG_MAGIC,
+    symbol: str | None = None,
+) -> set[str]:
+    out: set[str] = set()
+    for row in rows or ():
+        if not is_quantforg_owned_position(row, magic=magic, symbol=symbol):
+            continue
+        sym = position_symbol(row).upper()
+        if sym:
+            out.add(sym)
+    return out
+
+
+def is_quantforg_same_symbol_open(
+    candidate_symbol: str | None,
+    open_syms: set[str] | list[str] | tuple[str, ...],
+) -> bool:
+    """True when a QuantForg-owned ticket already occupies this symbol."""
+    cand = (candidate_symbol or "").strip().upper()
+    if not cand:
+        return False
+    owned = {str(s).strip().upper() for s in open_syms if str(s).strip()}
+    if cand in owned:
         return True
-    comment = position_comment(row)
-    return comment.startswith(QUANTFORG_COMMENT_PREFIX) or comment.startswith("FORCE:")
+    return is_gold_symbol(cand) and any(is_gold_symbol(s) for s in owned)
+
+
+def purge_non_quantforg_from_engine(
+    engine: Any | None,
+    *,
+    magic: int = QUANTFORG_MAGIC,
+    symbol: str | None = None,
+) -> int:
+    """Drop manual/other-EA tickets from PME. Never mutates broker tickets."""
+    if engine is None:
+        return 0
+    positions = getattr(engine, "_positions", None)
+    if not isinstance(positions, dict):
+        return 0
+    from core.logging import get_logger
+
+    logger = get_logger(__name__)
+    lock = getattr(engine, "_lock", None)
+    stale: list[int] = []
+    for ticket, pos in list(positions.items()):
+        if symbol is not None and not matches_autonomous_symbol(pos, symbol=symbol):
+            continue
+        if is_quantforg_owned_position(pos, magic=magic, symbol=symbol):
+            continue
+        stale.append(int(ticket))
+
+    def _drop() -> int:
+        n = 0
+        for ticket in stale:
+            pos = positions.pop(ticket, None)
+            if pos is None:
+                continue
+            n += 1
+            obs = ownership_observability(pos, magic=magic, symbol=symbol)
+            logger.warning(
+                "pme_dropped_non_owned",
+                ticket=ticket,
+                reason="NOT_QUANTFORG_OWNED",
+                **obs,
+            )
+        return n
+
+    if lock is not None:
+        with lock:
+            return _drop()
+    return _drop()
 
 
 def matches_autonomous_symbol(
@@ -76,13 +208,63 @@ def filter_quantforg_positions(
     symbol: str | None = None,
     magic: int = QUANTFORG_MAGIC,
 ) -> list[Any]:
-    out: list[Any] = []
+    return [
+        row
+        for row in rows or ()
+        if is_quantforg_owned_position(row, magic=magic, symbol=symbol)
+    ]
+
+
+def engine_position_rows(engine: Any | None) -> list[Any]:
+    if engine is None:
+        return []
+    positions = getattr(engine, "_positions", None)
+    if not isinstance(positions, dict):
+        return []
+    return list(positions.values())
+
+
+def same_symbol_ownership_facts(
+    rows: list[Any] | tuple[Any, ...] | None,
+    *,
+    candidate_symbol: str | None = None,
+    magic: int = QUANTFORG_MAGIC,
+) -> dict[str, Any]:
+    """Scanner/capacity observability — strategy vs account vs manual."""
+    cand = (candidate_symbol or CANONICAL_GOLD_BROKER_DISPLAY).strip().upper()
+    qf = 0
+    account = 0
+    manual_same = 0
     for row in rows or ():
-        if belongs_to_quantforg(row, magic=magic) and matches_autonomous_symbol(
-            row, symbol=symbol
-        ):
-            out.append(row)
-    return out
+        account += 1
+        owned = is_quantforg_owned_position(row, magic=magic, symbol=candidate_symbol)
+        same = matches_autonomous_symbol(row, symbol=candidate_symbol)
+        if owned:
+            qf += 1
+        elif classify_position_owner(row, magic=magic) == OWNER_MANUAL and same:
+            manual_same += 1
+    qf_syms = quantforg_open_symbols(rows, magic=magic, symbol=candidate_symbol)
+    already = is_quantforg_same_symbol_open(cand, qf_syms)
+    if already:
+        reason = "QUANTFORG_SAME_SYMBOL_OPEN"
+        capacity_reason = "QUANTFORG_OWNED_CONSUMES_CAPACITY"
+    elif manual_same > 0:
+        reason = "MANUAL_SAME_SYMBOL_PRESENT"
+        capacity_reason = "MANUAL_DOES_NOT_CONSUME_QUANTFORG_CAPACITY"
+    else:
+        reason = "NO_QUANTFORG_SAME_SYMBOL"
+        capacity_reason = "QUANTFORG_CAPACITY_AVAILABLE"
+    return {
+        "candidate_symbol": cand,
+        "quantforg_open_count": qf,
+        "account_open_count": account,
+        "manual_same_symbol_count": manual_same,
+        "already_open": already,
+        "already_open_reason": reason,
+        "capacity_reason": capacity_reason,
+        "candidate_allowed": not already,
+        "quantforg_open_symbols": sorted(qf_syms),
+    }
 
 
 def count_quantforg_positions(

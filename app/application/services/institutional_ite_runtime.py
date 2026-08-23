@@ -2454,10 +2454,16 @@ class InstitutionalIteRuntime:
                 get_opportunity_queue,
             )
 
-            open_syms = [
-                str(getattr(p, "symbol", "") or "")
-                for p in self.position_management.engine._positions.values()
-            ]
+            from app.domain.institutional_trading.operations.quantforg_position_cap import (
+                engine_position_rows,
+                quantforg_open_symbols,
+            )
+
+            open_syms = sorted(
+                quantforg_open_symbols(
+                    engine_position_rows(self.position_management.engine)
+                )
+            )
             st = build_portfolio_state(
                 equity=float(account.equity or 0),
                 free_margin=(
@@ -4513,15 +4519,21 @@ class InstitutionalIteRuntime:
 
         max_e = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_entries_per_cycle", 3) or 3))
         max_open = max(1, int(getattr(DEFAULT_AI_SCALPING_CONFIG, "max_open_trades", 5) or 5))
-        open_syms: set[str] = set()
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            count_quantforg_positions,
+            engine_position_rows,
+            is_quantforg_same_symbol_open,
+            quantforg_open_symbols,
+            same_symbol_ownership_facts,
+        )
+
+        rows: list[Any] = []
         try:
-            positions = getattr(self.position_management.engine, "_positions", {}) or {}
-            open_n = len(positions)
-            for p in positions.values():
-                s = str(getattr(p, "symbol", "") or "").upper()
-                if s:
-                    open_syms.add(s)
+            rows = engine_position_rows(self.position_management.engine)
+            open_syms = quantforg_open_symbols(rows)
+            open_n = count_quantforg_positions(rows)
         except Exception:
+            open_syms = set()
             open_n = 0
         if open_n >= max_open:
             logger.warning(
@@ -4547,13 +4559,15 @@ class InstitutionalIteRuntime:
                         continue
                 except Exception:
                     pass
-                # Never duplicate same-symbol via handoff (pyramid only via PRE).
-                if sym in open_syms:
+                # Never duplicate QuantForg-owned same-symbol via handoff.
+                if is_quantforg_same_symbol_open(sym, open_syms):
                     self._eligible_consumed.add(sym)
+                    facts = same_symbol_ownership_facts(rows, candidate_symbol=sym)
                     logger.warning(
                         "multi_asset_handoff_skip_already_open",
                         symbol=sym,
-                        reason="same_symbol_already_open",
+                        reason="QUANTFORG_SAME_SYMBOL_OPEN",
+                        **facts,
                     )
                     continue
                 self._eligible_consumed.add(sym)
@@ -4570,7 +4584,7 @@ class InstitutionalIteRuntime:
                         for s in self._eligible_handoff_queue
                         if s
                         and s not in self._eligible_consumed
-                        and s not in open_syms
+                        and not is_quantforg_same_symbol_open(s, open_syms)
                     ][:8],
                 )
                 return sym

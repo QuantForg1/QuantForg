@@ -98,7 +98,7 @@ def _snapshot_from_position(pos: Any) -> PmeRecoverySnapshot:
         trailing_active=bool(pos.trailing_active),
         max_favorable_r=str(pos.max_favorable_r),
         ai_entry_confidence=getattr(pos, "ai_entry_confidence", None),
-        magic=int(getattr(pos, "magic", 260720) or 260720),
+        magic=int(getattr(pos, "magic", 0) or 0),
         comment=str(getattr(pos, "comment", "") or "")[:64],
         cycle_id=str(getattr(pos, "cycle_id", "") or ""),
         snapshot_id=str(getattr(pos, "snapshot_id", "") or ""),
@@ -121,8 +121,14 @@ def persist_pme_state(engine: Any) -> None:
     path = _state_path()
     rows: list[dict[str, Any]] = []
     try:
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            is_quantforg_owned_position,
+        )
+
         positions = getattr(engine, "_positions", {}) or {}
         for pos in positions.values():
+            if not is_quantforg_owned_position(pos):
+                continue
             rows.append(_snapshot_from_position(pos).to_dict())
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
@@ -165,11 +171,6 @@ def _overlay_metadata(pos: Any, meta: dict[str, Any]) -> None:
             meta.get("management_profile")
             or resolve_class_management(getattr(pos, "trade_class", "")).profile_name
         )
-    if int(getattr(pos, "magic", 0) or 0) <= 0:
-        try:
-            pos.magic = int(meta.get("magic") or 260720)
-        except (TypeError, ValueError):
-            pos.magic = 260720
 
 
 def recover_positions_from_mt5(
@@ -184,10 +185,17 @@ def recover_positions_from_mt5(
     Stale disk tickets that are absent from MT5 are not re-activated.
     """
     from app.application.services.mt5_position_truth import force_sync_positions
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        is_quantforg_owned_position,
+        ownership_observability,
+        position_magic,
+        purge_non_quantforg_from_engine,
+    )
     from app.domain.trading.gold_only import GOLD_SYMBOL
 
     sym = (symbol or GOLD_SYMBOL).strip().upper() or GOLD_SYMBOL
     sync = force_sync_positions(mt5_adapter, symbol=sym, position_engine=engine)
+    purge_non_quantforg_from_engine(engine, symbol=sym)
     restored = 0
     registered = 0
     snapshot_by_ticket: dict[int, dict[str, Any]] = {}
@@ -240,9 +248,24 @@ def recover_positions_from_mt5(
         )
 
     existing = set(getattr(engine, "_positions", {}) or {})
+    skipped_non_owned = 0
     for row in live_rows:
         ticket = int(getattr(row, "ticket", 0) or 0)
         if ticket <= 0:
+            continue
+        if not is_quantforg_owned_position(row, symbol=sym):
+            skipped_non_owned += 1
+            obs = ownership_observability(row, symbol=sym)
+            logger.warning(
+                "pme_skip_non_owned",
+                ticket=ticket,
+                reason="NOT_QUANTFORG_OWNED",
+                **obs,
+            )
+            if ticket in existing:
+                positions = getattr(engine, "_positions", None)
+                if isinstance(positions, dict):
+                    positions.pop(ticket, None)
             continue
         comment = str(getattr(row, "comment", "") or "")[:64]
         meta = merge_position_metadata(
@@ -378,7 +401,7 @@ def recover_positions_from_mt5(
                 partial_done=bool(snap.get("partial_done", False)),
                 trailing_active=bool(snap.get("trailing_active", False)),
                 max_favorable_r=Decimal(str(snap.get("max_favorable_r") or 0)),
-                magic=int(getattr(row, "magic", meta.get("magic") or 260720) or 260720),
+                magic=position_magic(row),
                 comment=comment,
                 cycle_id=str(meta.get("cycle_id") or ""),
                 snapshot_id=str(meta.get("snapshot_id") or ""),
@@ -436,8 +459,10 @@ def recover_positions_from_mt5(
     logger.warning(
         "position_recovery_complete",
         mt5_positions=sync.mt5_positions,
+        quantforg_positions=getattr(sync, "quantforg_positions", 0),
         registered=registered,
         restored=restored,
+        skipped_non_owned=skipped_non_owned,
         stale_disk_ignored=stale_disk,
     )
     return {
@@ -445,6 +470,7 @@ def recover_positions_from_mt5(
         "mt5_positions": sync.mt5_positions,
         "registered": registered,
         "restored": restored,
-        "tickets": list(sync.tickets),
+        "skipped_non_owned": skipped_non_owned,
+        "tickets": list(getattr(sync, "quantforg_tickets", None) or sync.tickets),
         "stale_disk_ignored": stale_disk,
     }

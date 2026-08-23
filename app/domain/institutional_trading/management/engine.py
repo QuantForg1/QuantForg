@@ -66,6 +66,21 @@ class PositionManagementEngine:
 
     def register(self, position: ManagedPosition) -> ManagedPosition:
         """Track a newly filled ITE position (never opens — registration only)."""
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            QUANTFORG_MAGIC,
+            belongs_to_quantforg,
+            ownership_observability,
+        )
+
+        if not belongs_to_quantforg(position, magic=QUANTFORG_MAGIC):
+            logger.warning(
+                "pme_register_rejected_not_owned",
+                ticket=int(getattr(position, "ticket", 0) or 0),
+                management_action="NOOP",
+                reason="NOT_QUANTFORG_OWNED",
+                **ownership_observability(position),
+            )
+            return position
         if position.current_stop <= 0:
             position.current_stop = position.initial_stop
         with self._lock:
@@ -159,6 +174,22 @@ class PositionManagementEngine:
                 record=skip,
                 skipped=True,
             )
+
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            is_quantforg_owned_position,
+            ownership_observability,
+        )
+
+        if not is_quantforg_owned_position(position):
+            obs = ownership_observability(position)
+            logger.warning(
+                "pme_management_noop_not_owned",
+                ticket=ticket,
+                management_action="NOOP",
+                reason="NOT_QUANTFORG_OWNED",
+                **obs,
+            )
+            return self._skip(position, context, "NOT_QUANTFORG_OWNED")
 
         # Sync book volume if provided
         if context.book_volume is not None and context.book_volume >= 0:

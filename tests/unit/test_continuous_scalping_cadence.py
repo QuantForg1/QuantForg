@@ -64,7 +64,9 @@ def test_handoff_queue_drains_without_rescan() -> None:
 @pytest.mark.unit
 def test_handoff_skips_already_open_symbol() -> None:
     open_pos = {
-        "1": SimpleNamespace(symbol="XAUUSD", side="sell", volume=0.01),
+        "1": SimpleNamespace(
+            symbol="XAUUSD", side="sell", volume=0.01, magic=260720
+        ),
     }
     rt = InstitutionalIteRuntime(
         plane=MagicMock(),
@@ -81,6 +83,28 @@ def test_handoff_skips_already_open_symbol() -> None:
     assert rt._take_next_handoff_symbol() == "EURUSD"
     assert rt._take_next_handoff_symbol() == "BTCUSD"
     assert "XAUUSD" in rt._eligible_consumed
+
+
+@pytest.mark.unit
+def test_handoff_does_not_skip_manual_same_symbol() -> None:
+    open_pos = {
+        "1": SimpleNamespace(
+            symbol="XAUUSD", side="sell", volume=0.01, magic=0
+        ),
+    }
+    rt = InstitutionalIteRuntime(
+        plane=MagicMock(),
+        reliability=MagicMock(),
+        probes=MagicMock(),
+        guarded_submit=MagicMock(),
+        guarded_manage=MagicMock(),
+        execution=MagicMock(),
+        position_management=SimpleNamespace(engine=SimpleNamespace(_positions=open_pos)),
+    )
+    rt._eligible_handoff_queue = ["XAUUSD", "EURUSD"]
+    rt._eligible_consumed = set()
+    rt._entries_this_scan = 0
+    assert rt._take_next_handoff_symbol() == "XAUUSD"
 
 
 @pytest.mark.unit

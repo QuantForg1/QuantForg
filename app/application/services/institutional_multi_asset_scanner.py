@@ -43,6 +43,29 @@ def get_last_multi_asset_scan() -> dict[str, Any] | None:
         return dict(_LAST_SCAN) if isinstance(_LAST_SCAN, dict) else None
 
 
+def _quantforg_open_symbol_set(
+    *,
+    mt5_adapter: Any,
+    position_engine: Any | None,
+    candidate_symbol: str | None = None,
+) -> tuple[set[str], dict[str, Any]]:
+    """Strategy duplicate set — QuantForg-owned only, never raw broker presence."""
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        engine_position_rows,
+        same_symbol_ownership_facts,
+    )
+
+    live_rows: list[Any] = []
+    try:
+        if mt5_adapter is not None and hasattr(mt5_adapter, "list_positions"):
+            live_rows = list(mt5_adapter.list_positions() or [])
+    except Exception:
+        live_rows = []
+    rows = live_rows or engine_position_rows(position_engine)
+    facts = same_symbol_ownership_facts(rows, candidate_symbol=candidate_symbol)
+    return set(facts["quantforg_open_symbols"]), facts
+
+
 def _store_last_scan(payload: dict[str, Any]) -> None:
     global _LAST_SCAN
     with _LOCK:
@@ -357,8 +380,9 @@ async def run_institutional_multi_asset_scan(
     Downstream Risk / Dynamic Sizing / PRE / OMS / MT5 are intentionally not
     invoked here — every independent eligible is handed to the existing cycle
     (up to max_entries_per_cycle / max_open_trades) with unchanged gates.
-    Already-open symbols are excluded from new-entry handoff (no same-symbol
-    duplicate unless pyramid rules allow via PRE on a deliberate re-entry).
+    Already-open QuantForg-owned symbols are excluded from new-entry handoff
+    (no same-symbol duplicate unless pyramid rules allow via PRE). Manual or
+    other-EA same-symbol tickets do not consume this strategy duplicate set.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     # Prevent overlapping scanner cycles (shared gateway / MT5 terminal pressure).
@@ -714,18 +738,19 @@ async def _run_institutional_multi_asset_scan_body(
         queue_snap = {"candidates": [], "size": 0}
 
     open_n = open_positions
-    open_syms: set[str] = set()
-    if position_engine is not None:
-        try:
-            for p in (getattr(position_engine, "_positions", {}) or {}).values():
-                s = str(getattr(p, "symbol", "") or "").upper()
-                if s:
-                    open_syms.add(s)
-            if open_n is None:
-                open_n = len(open_syms)
-        except Exception:
-            if open_n is None:
-                open_n = None
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        is_quantforg_same_symbol_open,
+    )
+
+    open_syms, ownership_facts = _quantforg_open_symbol_set(
+        mt5_adapter=mt5_adapter,
+        position_engine=position_engine,
+    )
+    if open_n is None:
+        open_n = int(ownership_facts.get("quantforg_open_count") or 0)
+
+    def _already_open(sym: str | None) -> bool:
+        return is_quantforg_same_symbol_open(sym, open_syms)
 
     # CRITICAL: portfolio ranking must use the SAME resolved scan universe.
     # Scoring uses `universe` (dynamic, up to 36). Leaving cfg.universe at the
@@ -733,7 +758,9 @@ async def _run_institutional_multi_asset_scan_body(
     # portfolio_eligible → strategy winners with Q91/C84 get eligible_count=0.
     from dataclasses import replace as dc_replace
 
-    cfg_for_rank = dc_replace(cfg, universe=tuple(universe))
+    cfg_for_rank = dc_replace(
+        cfg, universe=tuple(str(s).strip().upper() for s in universe if str(s).strip())
+    )
     scan = run_multi_asset_scan(
         scored,
         account=account,
@@ -755,7 +782,7 @@ async def _run_institutional_multi_asset_scan_body(
             sym = str(row.get("symbol") or "").upper()
             if (
                 sym in portfolio_eligible
-                and sym not in open_syms
+                and not _already_open(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
             ):
@@ -768,7 +795,7 @@ async def _run_institutional_multi_asset_scan_body(
         if best and not bool(scan.get("blocked_by_portfolio"))
         else None
     )
-    if best_symbol and best_symbol in open_syms:
+    if best_symbol and _already_open(best_symbol):
         best_symbol = None
         best = None
     if best and bool(scan.get("blocked_by_portfolio")):
@@ -787,7 +814,7 @@ async def _run_institutional_multi_asset_scan_body(
             if (
                 sym
                 and sym in portfolio_eligible
-                and sym not in open_syms
+                and not _already_open(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
                 and sym not in seen_elig
@@ -799,10 +826,10 @@ async def _run_institutional_multi_asset_scan_body(
                 if not isinstance(r, dict) or r.get("reject"):
                     continue
                 sym = str(r.get("symbol") or "").upper()
-                if sym and sym not in seen_elig and sym not in open_syms:
+                if sym and sym not in seen_elig and not _already_open(sym):
                     eligible_symbols.append(sym)
                     seen_elig.add(sym)
-        if best_symbol and best_symbol in open_syms:
+        if best_symbol and _already_open(best_symbol):
             best_symbol = eligible_symbols[0] if eligible_symbols else None
             best = None
         if best_symbol and best_symbol not in seen_elig:
@@ -831,7 +858,7 @@ async def _run_institutional_multi_asset_scan_body(
                     excluded.add(cand_sym)
                     nxt = peek_next_eligible(exclude_symbols=excluded)
                     continue
-                if cand_sym in open_syms:
+                if _already_open(cand_sym):
                     excluded.add(cand_sym)
                     nxt = peek_next_eligible(exclude_symbols=excluded)
                     continue
@@ -859,7 +886,7 @@ async def _run_institutional_multi_asset_scan_body(
         strategy_global_best is not None
         and not bool(scan.get("blocked_by_portfolio"))
         and strategy_global_best.symbol in portfolio_eligible
-        and strategy_global_best.symbol not in open_syms
+        and not _already_open(strategy_global_best.symbol)
     ):
         best_symbol = strategy_global_best.symbol
         best = {
@@ -878,7 +905,23 @@ async def _run_institutional_multi_asset_scan_body(
             ]
         else:
             eligible_symbols.insert(0, best_symbol)
+        _, ownership_facts = _quantforg_open_symbol_set(
+            mt5_adapter=mt5_adapter,
+            position_engine=position_engine,
+            candidate_symbol=best_symbol,
+        )
+        logger.warning(
+            "scanner_ownership_boundary",
+            direction=strategy_global_best.direction,
+            **ownership_facts,
+        )
     elif strategy_global_best is not None:
+        _, ownership_facts = _quantforg_open_symbol_set(
+            mt5_adapter=mt5_adapter,
+            position_engine=position_engine,
+            candidate_symbol=strategy_global_best.symbol,
+        )
+        qf_already = _already_open(strategy_global_best.symbol)
         logger.warning(
             "multi_strategy_winner_blocked_final_gate",
             strategy_id=strategy_global_best.strategy_id,
@@ -888,7 +931,15 @@ async def _run_institutional_multi_asset_scan_body(
             direction=strategy_global_best.direction,
             blocked_by_portfolio=bool(scan.get("blocked_by_portfolio")),
             in_portfolio_eligible=strategy_global_best.symbol in portfolio_eligible,
-            already_open=strategy_global_best.symbol in open_syms,
+            already_open=qf_already,
+            already_open_reason=ownership_facts.get("already_open_reason"),
+            capacity_reason=ownership_facts.get("capacity_reason"),
+            quantforg_open_count=ownership_facts.get("quantforg_open_count"),
+            account_open_count=ownership_facts.get("account_open_count"),
+            manual_same_symbol_count=ownership_facts.get(
+                "manual_same_symbol_count"
+            ),
+            candidate_allowed=ownership_facts.get("candidate_allowed"),
             portfolio_eligible_count=len(portfolio_eligible),
             scan_universe_size=len(universe),
             cfg_universe_size=len(cfg_for_rank.universe),
@@ -896,13 +947,13 @@ async def _run_institutional_multi_asset_scan_body(
                 "strategy_global_best is not None "
                 "and not blocked_by_portfolio "
                 "and symbol in portfolio_eligible "
-                "and symbol not in open_syms"
+                "and not QuantForg-owned same-symbol open"
             ),
             runtime_values={
                 "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),
                 "in_portfolio_eligible": strategy_global_best.symbol
                 in portfolio_eligible,
-                "in_open_syms": strategy_global_best.symbol in open_syms,
+                "in_open_syms": qf_already,
             },
         )
 
@@ -1085,6 +1136,15 @@ async def _run_institutional_multi_asset_scan_body(
         "execute_only_best": False,
         "independent_multi_asset": True,
         "open_symbols_excluded": sorted(open_syms),
+        "quantforg_open_count": int(
+            ownership_facts.get("quantforg_open_count") or 0
+        ),
+        "account_open_count": int(ownership_facts.get("account_open_count") or 0),
+        "manual_same_symbol_count": int(
+            ownership_facts.get("manual_same_symbol_count") or 0
+        ),
+        "already_open_reason": ownership_facts.get("already_open_reason"),
+        "capacity_reason": ownership_facts.get("capacity_reason"),
         "max_entries_per_cycle": int(
             getattr(cfg, "max_entries_per_cycle", 3) or 3
         ),

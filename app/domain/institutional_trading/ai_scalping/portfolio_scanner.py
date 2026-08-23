@@ -272,7 +272,11 @@ def scan_multi_asset_portfolio(
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     book = state_book or get_symbol_state_book()
-    universe = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
+    universe = tuple(
+        str(s).strip().upper()
+        for s in (cfg.universe or DEFAULT_SCALPING_UNIVERSE)
+        if str(s).strip()
+    )
 
     agg: PortfolioRiskSnapshot | None = None
     if (

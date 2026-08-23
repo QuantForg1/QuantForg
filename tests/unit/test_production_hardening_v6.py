@@ -229,6 +229,7 @@ def test_position_recovery_skips_duplicate_tickets(tmp_path, monkeypatch) -> Non
         side = "buy"
         open_price = 2300
         volume = 0.1
+        magic = 260720
 
     mt5 = SimpleNamespace(list_positions=lambda: [Pos()])
 

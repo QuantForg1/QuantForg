@@ -14,6 +14,7 @@ from app.domain.institutional_trading.operations.quantforg_position_cap import (
     QUANTFORG_MAGIC,
     count_quantforg_positions,
     filter_quantforg_positions,
+    purge_non_quantforg_from_engine,
 )
 from app.domain.trading.gold_only import GOLD_SYMBOL, is_gold_symbol
 from core.logging import get_logger
@@ -105,16 +106,11 @@ def _internal_engine_count(position_engine: Any | None, *, symbol: str) -> int:
     positions = getattr(position_engine, "_positions", None)
     if not isinstance(positions, dict):
         return 0
-    target = (symbol or GOLD_SYMBOL).strip().upper()
-    n = 0
-    for pos in positions.values():
-        sym = str(getattr(pos, "symbol", "") or "").strip().upper()
-        if target == GOLD_SYMBOL:
-            if is_gold_symbol(sym) or not sym:
-                n += 1
-        elif sym == target or not sym:
-            n += 1
-    return n
+    return count_quantforg_positions(
+        list(positions.values()),
+        symbol=symbol,
+        execution_identity=QUANTFORG_MAGIC,
+    )
 
 
 def _repair_internal_engine(
@@ -211,6 +207,8 @@ def force_sync_positions(
         for t in (_ticket_of(p) for p in qf_rows)
         if t > 0
     )
+    purged = purge_non_quantforg_from_engine(position_engine, symbol=sym)
+    engine_count = _internal_engine_count(position_engine, symbol=sym)
 
     logger.warning("MT5 positions: %s", mt5_count)
     logger.warning("Internal positions: %s", prior_internal)
@@ -220,6 +218,7 @@ def force_sync_positions(
         quantforg_positions=qf_count,
         account_positions=mt5_count,
         magic=QUANTFORG_MAGIC,
+        pme_purged_non_owned=purged,
     )
     if sym_count != mt5_count:
         logger.warning(
@@ -231,24 +230,32 @@ def force_sync_positions(
         )
 
     repaired = False
-    if mt5_count != prior_internal or (
-        position_engine is not None and engine_count != sym_count
-    ):
+    removed = 0
+    if position_engine is not None:
         removed = _repair_internal_engine(
             position_engine,
-            live_tickets=set(sym_tickets),
+            live_tickets=set(qf_tickets),
             symbol=sym,
         )
+    if (
+        mt5_count != prior_internal
+        or purged > 0
+        or removed > 0
+        or (position_engine is not None and engine_count != qf_count)
+    ):
         repaired = True
         logger.warning(
             "position_truth_repaired",
             mt5_positions=mt5_count,
             symbol_positions=sym_count,
+            quantforg_positions=qf_count,
             internal_positions=prior_internal,
             engine_positions_before=engine_count,
             removed_stale=removed,
+            pme_purged_non_owned=purged,
             tickets=list(tickets),
             symbol_tickets=list(sym_tickets),
+            quantforg_tickets=list(qf_tickets),
             symbol=sym,
         )
 
