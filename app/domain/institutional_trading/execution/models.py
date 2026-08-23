@@ -115,6 +115,9 @@ class ExecutionBridgeContext:
     mt5_autotrading_enabled: bool | None = None
     symbol_tradable: bool | None = None
     no_broker_restrictions: bool | None = None
+    # Broker session truth — UTC off_hours must not override an open broker.
+    broker_session_open: bool | None = None
+    session_source: str = "utc_classifier"
 
     @property
     def session_valid(self) -> bool:

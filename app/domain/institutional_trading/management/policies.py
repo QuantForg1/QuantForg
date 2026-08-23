@@ -332,6 +332,22 @@ def plan_action(
         and not position.be_moved
         and r >= be_at
     ):
+        fade_floor = int(config.momentum_fade_threshold)
+        # SCALP profit extension: do not glue SL to entry while momentum is intact.
+        if (
+            trade_class == "SCALP"
+            and profile.momentum_fade_exit
+            and r < Decimal("1.0")
+            and context.ai_momentum is not None
+            and int(context.ai_momentum) >= fade_floor
+        ):
+            return PlannedAction(
+                ManageActionKind.SKIP,
+                (
+                    f"Profit extension — momentum {context.ai_momentum} intact "
+                    f"at {r}R class={trade_class} (BE deferred until 1.0R or fade)"
+                ),
+            )
         from dataclasses import replace as _replace
 
         be_cfg = _replace(

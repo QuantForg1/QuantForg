@@ -1271,6 +1271,8 @@ class ExecutionBridge:
             no_broker_restrictions=_flag(context.no_broker_restrictions),
             open_positions=context.account.open_positions,
             session=session_val,
+            broker_session_open=context.broker_session_open,
+            session_source=context.session_source,
             spread=context.spread,
             news_blocked=bool(news.blocked),
             news_reason=str(news.reason or ""),

@@ -89,8 +89,8 @@ def build_scalping_v1_config(base: AiScalpingConfig | None = None) -> AiScalping
         session_symbol_priority_enabled=True,
         live_symbol_learning_enabled=True,
         multi_strategy_enabled=True,
-        # PME — earlier BE / partial / trail (do not increase losses)
-        break_even_at_r=Decimal("0.35"),
+        # PME — class-aware BE (SCALP 0.5R). Do not use 0.35; that glued SL to entry.
+        break_even_at_r=Decimal("0.50"),
         partial_at_r=Decimal("0.70"),
         partial_close_pct=Decimal("50"),
         trail_after_r=Decimal("0.70"),

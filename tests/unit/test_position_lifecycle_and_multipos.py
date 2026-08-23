@@ -119,17 +119,19 @@ def _pos(
     )
 
 
-def _ctx(*, price: str, minutes: int = 5) -> PositionManageContext:
-    return PositionManageContext(
-        now=OPENED + timedelta(minutes=minutes),
-        current_price=Decimal(price),
-        atr=Decimal("5"),
-        mid_price=Decimal(price),
-        position_still_open=True,
-        user_id=uuid4(),
-        request_id="pme-test",
-        connected=True,
-    )
+def _ctx(*, price: str, minutes: int = 5, **kwargs: object) -> PositionManageContext:
+    payload = {
+        "now": OPENED + timedelta(minutes=minutes),
+        "current_price": Decimal(price),
+        "atr": Decimal("5"),
+        "mid_price": Decimal(price),
+        "position_still_open": True,
+        "user_id": uuid4(),
+        "request_id": "pme-test",
+        "connected": True,
+    }
+    payload.update(kwargs)
+    return PositionManageContext(**payload)  # type: ignore[arg-type]
 
 
 def _mt5_row(
@@ -234,6 +236,28 @@ def test_break_even_follows_class_policy() -> None:
     unk_plan = plan_action(unknown, _ctx(price=price), DEFAULT_PME_CONFIG)
     assert unk_plan.kind is not ManageActionKind.BREAK_EVEN
     assert proven_trade_class(unknown.trade_class) == TRADE_CLASS_UNKNOWN
+
+
+def test_scalp_profit_extension_defers_be_when_momentum_intact() -> None:
+    scalp = _pos(trade_class="SCALP")
+    plan = plan_action(
+        scalp,
+        _ctx(price="4493.00", ai_momentum=70),
+        DEFAULT_PME_CONFIG,
+    )
+    assert plan.kind is ManageActionKind.SKIP
+    assert "Profit extension" in plan.reason
+
+
+def test_scalp_be_fires_when_momentum_faded() -> None:
+    scalp = _pos(trade_class="SCALP")
+    plan = plan_action(
+        scalp,
+        _ctx(price="4493.00", minutes=0, ai_momentum=20),
+        DEFAULT_PME_CONFIG,
+    )
+    assert plan.kind is ManageActionKind.BREAK_EVEN
+    assert plan.new_tp == scalp.current_tp
 
 
 def test_tp_preserved_on_authorized_sl_modify() -> None:

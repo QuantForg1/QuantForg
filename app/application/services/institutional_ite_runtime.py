@@ -582,6 +582,39 @@ class InstitutionalIteRuntime:
         margin_ok = free is not None and free > 0
         session = getattr(snapshot.session, "session", None)
         session_val = str(getattr(session, "value", None) or session or "off_hours")
+        from app.application.services.market_closed_cooldown import (
+            is_market_closed_cooled,
+        )
+        from app.domain.institutional_trading.operations.broker_session_truth import (
+            apply_session_open_side_effects,
+            note_broker_session,
+            overlay_snapshot_session,
+            resolve_from_diagnostics,
+        )
+
+        diag_in = dict(market_context_diagnostics or {})
+        session_obs = resolve_from_diagnostics(
+            diag_in,
+            utc_session=session_val,
+            symbol_tradable=symbol_tradable,
+            market_data_live=bool(market_data_live),
+            cooled=is_market_closed_cooled(
+                str(getattr(snapshot, "symbol", "") or "")
+            ),
+        )
+        snapshot = overlay_snapshot_session(
+            snapshot, broker_open=session_obs.broker_session_open
+        )
+        open_event = note_broker_session(session_obs.broker_session_open)
+        apply_session_open_side_effects(
+            symbol=str(getattr(snapshot, "symbol", "") or ""),
+            event=open_event,
+        )
+        logger.warning(
+            "session_truth",
+            **session_obs.to_dict(),
+            event=open_event,
+        )
         news = snapshot.news
 
         # Force Sync Positions before max-open / safety evaluation.
@@ -625,6 +658,8 @@ class InstitutionalIteRuntime:
                 no_broker_restrictions=no_broker_restrictions,
                 open_positions=account.open_positions,
                 session=session_val,
+                broker_session_open=session_obs.broker_session_open,
+                session_source=session_obs.session_source,
                 spread=getattr(snapshot, "spread", None),
                 news_blocked=bool(news.blocked),
                 news_reason=str(news.reason or ""),
@@ -676,6 +711,8 @@ class InstitutionalIteRuntime:
                             no_broker_restrictions=no_broker_restrictions,
                             open_positions=account.open_positions,
                             session=session_val,
+                            broker_session_open=session_obs.broker_session_open,
+                            session_source=session_obs.session_source,
                             spread=getattr(snapshot, "spread", None),
                             news_blocked=bool(news.blocked),
                             news_reason=str(news.reason or ""),
@@ -2582,6 +2619,10 @@ class InstitutionalIteRuntime:
             mt5_autotrading_enabled=(True if force_shadow else mt5_autotrading_enabled),
             symbol_tradable=True if force_shadow else symbol_tradable,
             no_broker_restrictions=True if force_shadow else no_broker_restrictions,
+            broker_session_open=(
+                True if force_shadow else session_obs.broker_session_open
+            ),
+            session_source=session_obs.session_source,
         )
         if self._manual_execution:
             logger.warning(

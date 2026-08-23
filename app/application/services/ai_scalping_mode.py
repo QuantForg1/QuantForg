@@ -184,5 +184,21 @@ def current_mode_snapshot(runtime: Any) -> dict[str, Any]:
             if getattr(ite, "is_scalping", lambda: False)()
             else None
         ),
+        "pme": (
+            runtime.position_management.engine.config.to_dict()
+            if runtime is not None
+            and hasattr(getattr(runtime, "position_management", None), "engine")
+            and hasattr(runtime.position_management.engine, "config")
+            and hasattr(runtime.position_management.engine.config, "to_dict")
+            else None
+        ),
+        "ops_trading_mode": getattr(
+            getattr(runtime, "plane", None), "trading_mode", None
+        ),
+        "management_profile": (
+            "scalp"
+            if getattr(ite, "is_scalping", lambda: False)()
+            else "swing"
+        ),
         "learning": learning,
     }

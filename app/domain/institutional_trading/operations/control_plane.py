@@ -715,6 +715,8 @@ class OperationsControlPlane:
                 open_positions=facts.open_positions,
                 session=facts.session,
                 session_evaluated=facts.session_evaluated,
+                broker_session_open=facts.broker_session_open,
+                session_source=facts.session_source,
                 spread=facts.spread,
                 spread_evaluated=facts.spread_evaluated,
                 news_blocked=facts.news_blocked,

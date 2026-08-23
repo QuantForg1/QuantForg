@@ -44,7 +44,7 @@ def test_v71_config_preserves_quality_risk() -> None:
     assert cfg.continuous_operation_enabled is True
     assert cfg.post_close_rescan_enabled is True
     assert cfg.absolute_max_hold_minutes == 12
-    assert cfg.break_even_at_r == Decimal("0.35")
+    assert cfg.break_even_at_r == Decimal("0.50")
 
 
 @pytest.mark.unit

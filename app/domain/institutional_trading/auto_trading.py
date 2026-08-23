@@ -165,6 +165,9 @@ class AutoTradeLiveFacts:
     open_positions: int = 0
     session: str = "off_hours"
     session_evaluated: bool = True
+    # None = unknown (UTC classifier). True/False = broker symbol session truth.
+    broker_session_open: bool | None = None
+    session_source: str = "utc_classifier"
     spread: Decimal | None = None
     spread_evaluated: bool = True
     news_blocked: bool = False
@@ -478,10 +481,34 @@ def evaluate_auto_trade_safety(
         session_ok = True
         session_detail = "Trading session not evaluated — no pending auto-trade"
     else:
-        session_ok = session_key in allowed_sessions if allowed_sessions else False
-        session_detail = (
-            f"Session '{session_key or '—'}' not allowed" if not session_ok else ""
+        from app.domain.institutional_trading.operations.broker_session_truth import (
+            SESSION_STATE_INCONSISTENCY,
+            build_broker_session_snapshot,
         )
+
+        resolved = build_broker_session_snapshot(
+            utc_session=session_key,
+            broker_open=facts.broker_session_open,
+            trade_mode="",
+            trade_allowed=facts.symbol_tradable if facts.broker_session_open else None,
+        )
+        if facts.broker_session_open is True:
+            session_ok = True
+            session_detail = (
+                f"{SESSION_STATE_INCONSISTENCY}: UTC '{session_key}' vs broker OPEN"
+                if resolved.inconsistency
+                else ""
+            )
+        elif facts.broker_session_open is False:
+            session_ok = False
+            session_detail = (
+                f"BROKER_SESSION_CLOSED (utc='{session_key or '—'}')"
+            )
+        else:
+            session_ok = session_key in allowed_sessions if allowed_sessions else False
+            session_detail = (
+                f"Session '{session_key or '—'}' not allowed" if not session_ok else ""
+            )
     add(
         "trading_session",
         "Allowed trading session",

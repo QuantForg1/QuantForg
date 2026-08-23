@@ -330,6 +330,37 @@ class DailyOpportunityTargetTracker:
                 "next_opportunity_review_at": self.next_opportunity_review_at,
                 "performance": perf.to_dict(),
                 "day_utc": self._day.isoformat(),
+                "daily_realized_profit": perf.gross_profit,
+                "daily_unrealized_profit": None,
+                "daily_R": perf.average_r,
+                "win_rate": perf.win_rate,
+                "average_R": perf.average_r,
+                "profit_factor": perf.profit_factor,
+                "trade_count": perf.sample_size,
+                "opportunity_count": int(self.quality_setups_seen),
+                "candidate_count": int(self.quality_setups_seen),
+                "execution_ready_count": int(self.quality_setups_executed),
+                "missed_opportunity_count": int(self.quality_setups_rejected),
+                "risk_block_count": int(self.quality_setups_rejected),
+                "largest_win": (
+                    max((t.realized_pnl for t in self._closed if t.won), default=None)
+                ),
+                "largest_loss": (
+                    min(
+                        (t.realized_pnl for t in self._closed if not t.won),
+                        default=None,
+                    )
+                ),
+                "avg_hold_time": (
+                    (
+                        sum(t.holding_seconds for t in self._closed)
+                        / len(self._closed)
+                    )
+                    if self._closed
+                    else None
+                ),
+                "daily_profit_target_usd": None,
+                "daily_profit_is_execution_obligation": False,
             }
 
 

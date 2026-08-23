@@ -808,6 +808,14 @@ async def build_ite_cycle_market_context(
                 if cs > 0:
                     contract_size = cs
                 specs_source = "live_broker"
+                trade_mode = str(getattr(spec, "trade_mode", "") or "")
+                trade_allowed = getattr(spec, "trade_allowed", None)
+                spec_market_open = getattr(spec, "market_open", None)
+                diag["symbol_trade_mode"] = trade_mode
+                diag["symbol_trade_allowed"] = trade_allowed
+                diag["symbol_market_open"] = spec_market_open
+                diag["trade_mode"] = trade_mode
+                diag["trade_allowed"] = trade_allowed
     except Exception as exc:
         logger.debug("ite_cycle_live_lot_specs_failed", error=str(exc))
 
@@ -851,6 +859,28 @@ async def build_ite_cycle_market_context(
         diag["execution_state"] = "EXECUTION_BLOCKED"
     else:
         diag["rejection_reason"] = None
+
+    from app.application.services.market_closed_cooldown import is_market_closed_cooled
+    from app.domain.institutional_trading.operations.broker_session_truth import (
+        overlay_snapshot_session,
+        resolve_from_diagnostics,
+    )
+
+    utc_sess = str(diag.get("trading_session") or "off_hours")
+    session_obs = resolve_from_diagnostics(
+        diag,
+        utc_session=utc_sess,
+        symbol_tradable=bool(market_data_live),
+        market_data_live=bool(market_data_live),
+        cooled=is_market_closed_cooled(symbol),
+    )
+    snapshot = overlay_snapshot_session(
+        snapshot, broker_open=session_obs.broker_session_open
+    )
+    diag.update(session_obs.to_dict())
+    diag["broker_session_open"] = session_obs.broker_session_open
+    sess = getattr(snapshot, "session", None)
+    diag["session_allowed"] = bool(getattr(sess, "allowed", False))
 
     diag["reason"] = "market context ready"
     diag["snapshot"] = "OK"
