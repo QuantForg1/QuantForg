@@ -613,7 +613,7 @@ class InstitutionalIteRuntime:
         logger.warning(
             "session_truth",
             **session_obs.to_dict(),
-            event=open_event,
+            open_event=open_event,
         )
         news = snapshot.news
 

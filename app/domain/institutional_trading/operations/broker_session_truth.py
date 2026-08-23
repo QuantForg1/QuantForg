@@ -286,7 +286,7 @@ def apply_session_open_side_effects(*, symbol: str | None, event: str | None) ->
         logger.warning(
             SESSION_OPEN_DETECTED,
             symbol=symbol,
-            event=event,
+            transition=event,
         )
     except Exception:
         logger.exception("session_open_log_failed")
