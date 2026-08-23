@@ -26,6 +26,7 @@ SAFETY_SESSION_OPEN = "SAFETY_SESSION_OPEN"
 UNKNOWN = "UNKNOWN"
 SESSION_STATE_INCONSISTENCY = "SESSION_STATE_INCONSISTENCY"
 SESSION_OPEN_DETECTED = "SESSION_OPEN_DETECTED"
+SESSION_CLOSE_DETECTED = "SESSION_CLOSE_DETECTED"
 
 _CLOSE_ONLY = frozenset({"closeonly", "close_only", "3"})
 _DISABLED = frozenset({"disabled", "0"})
@@ -77,6 +78,9 @@ class BrokerSessionSnapshot:
             "session_age_ms": self.session_age_ms,
             "last_session_transition": self.last_session_transition,
             "last_refresh": self.local_time,
+            "last_session_check": self.local_time,
+            "session_transition_at": self.last_session_transition,
+            "next_expected_transition": self.next_expected_open,
             "trade_mode": self.trade_mode,
             "trade_allowed": self.trade_allowed,
         }
@@ -213,7 +217,7 @@ def build_broker_session_snapshot(
 
 
 def note_broker_session(broker_open: bool | None) -> str | None:
-    """Record transition. Returns SESSION_OPEN_DETECTED when closed→open."""
+    """Record transition. Named open/close events only — never invents OPEN."""
     global _LAST_BROKER, _LAST_TRANSITION, _LAST_TRANSITION_MONO
     if broker_open is True:
         state = BROKER_SESSION_OPEN
@@ -229,6 +233,10 @@ def note_broker_session(broker_open: bool | None) -> str | None:
             and state == BROKER_SESSION_OPEN
         ):
             event = SESSION_OPEN_DETECTED
+            _LAST_TRANSITION = event
+            _LAST_TRANSITION_MONO = time.monotonic()
+        elif prev == BROKER_SESSION_OPEN and state == BROKER_SESSION_CLOSED:
+            event = SESSION_CLOSE_DETECTED
             _LAST_TRANSITION = event
             _LAST_TRANSITION_MONO = time.monotonic()
         elif prev != state and state != UNKNOWN:
@@ -290,6 +298,30 @@ def apply_session_open_side_effects(*, symbol: str | None, event: str | None) ->
         )
     except Exception:
         logger.exception("session_open_log_failed")
+
+
+def apply_session_close_side_effects(*, symbol: str | None, event: str | None) -> None:
+    """Stop new entries via existing Safety; wake a manage-only cycle."""
+    if event != SESSION_CLOSE_DETECTED:
+        return
+    try:
+        from app.domain.institutional_trading.operations.decision_cycle import (
+            note_cycle_event,
+        )
+
+        note_cycle_event("session_close")
+    except Exception:
+        logger.exception("session_close_wakeup_failed")
+    try:
+        logger.warning(
+            SESSION_CLOSE_DETECTED,
+            symbol=symbol,
+            transition=event,
+            new_entries="blocked",
+            management="continue_if_broker_permits",
+        )
+    except Exception:
+        logger.exception("session_close_log_failed")
 
 
 def resolve_from_diagnostics(

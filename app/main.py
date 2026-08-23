@@ -443,6 +443,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
                 async def _ite_watchdog() -> None:
                     """Restart ITE loop if it exits unexpectedly (never leave AUTO dead)."""  # noqa: E501
+                    restarts = 0
                     while True:
                         try:
                             logger.warning(
@@ -452,6 +453,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                                     "auto_trading_run_state",
                                     None,
                                 ),
+                                restarts=restarts,
                             )
                             await runtime.run_forever()
                         except asyncio.CancelledError:
@@ -467,11 +469,24 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                         ):
                             logger.info("ite_watchdog_stop_requested")
                             break
+                        restarts += 1
+                        delay = min(30.0, 2.0 * (2 ** min(restarts - 1, 4)))
+                        try:
+                            note = getattr(runtime, "note_scheduler_stalled", None)
+                            if callable(note):
+                                note()
+                        except Exception:
+                            logger.exception("ite_watchdog_stall_heal_failed")
                         logger.error(
                             "ite_watchdog_restarting",
-                            detail="scheduler stopped unexpectedly — restarting in 2s",
+                            detail=(
+                                "scheduler stopped unexpectedly — "
+                                f"restarting in {delay:.0f}s (no order_send)"
+                            ),
+                            delay_seconds=delay,
+                            restarts=restarts,
                         )
-                        await asyncio.sleep(2.0)
+                        await asyncio.sleep(delay)
 
                 shadow_task = asyncio.create_task(
                     _ite_watchdog(), name="ite-orchestrator-watchdog"

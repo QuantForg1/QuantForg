@@ -15,6 +15,7 @@ from app.domain.institutional_trading.models import SessionFilterResult
 from app.domain.institutional_trading.operations.broker_session_truth import (
     BROKER_SESSION_CLOSED,
     BROKER_SESSION_OPEN,
+    SESSION_CLOSE_DETECTED,
     SESSION_OPEN_DETECTED,
     SESSION_STATE_INCONSISTENCY,
     classify_broker_session_open,
@@ -188,6 +189,18 @@ def test_utc_weekend_classifier_still_off_hours() -> None:
     )
     assert result.session is MarketSession.OFF_HOURS
     assert result.allowed is False
+
+
+def test_session_open_to_close_emits_close_detected() -> None:
+    from app.domain.institutional_trading.operations.broker_session_truth import (
+        apply_session_close_side_effects,
+    )
+
+    note_broker_session(True)
+    event = note_broker_session(False)
+    assert event == SESSION_CLOSE_DETECTED
+    apply_session_close_side_effects(symbol="XAUUSD_i", event=event)
+    assert consume_immediate_wakeup() == "session_close"
 
 
 def test_closeonly_diagnostics_remain_closed() -> None:

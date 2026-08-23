@@ -183,7 +183,69 @@ class InstitutionalIteRuntime:
     _entries_this_scan: int = field(default=0, repr=False)
     _manual_execution: bool = field(default=False, repr=False)
     _cycles: int = 0
+    _started_mono: float = field(default_factory=time.monotonic, repr=False)
+    _last_cycle_finished_mono: float = field(default=0.0, repr=False)
+    _last_successful_cycle_mono: float = field(default=0.0, repr=False)
+    _last_successful_cycle_at: str | None = field(default=None, repr=False)
+    _last_cycle_at: str | None = field(default=None, repr=False)
+    _last_session_obs: dict[str, Any] | None = field(default=None, repr=False)
+    _recovery_orders_blocked: bool = field(default=False, repr=False)
     user_id: UUID = field(default_factory=uuid4)
+
+    def _gold_exec_symbol(self, snapshot: Any) -> str:
+        from app.domain.trading.gold_only import canonical_gold_execution_symbol
+
+        raw = str(getattr(snapshot, "symbol", "") or "")
+        return canonical_gold_execution_symbol(raw or None)
+
+    def mark_cycle_finished(self, *, successful: bool) -> None:
+        """A finished tick (including WAITING_SESSION manage-only) is not a stall."""
+        now = time.monotonic()
+        wall = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self._lock:
+            self._last_cycle_finished_mono = now
+            self._last_cycle_at = wall
+            if successful:
+                self._last_successful_cycle_mono = now
+                self._last_successful_cycle_at = wall
+                self._recovery_orders_blocked = False
+
+    def note_scheduler_stalled(self) -> bool:
+        from app.domain.institutional_trading.operations.worker_runtime_state import (
+            SCHEDULER_STALLED,
+            scheduler_is_stalled,
+        )
+
+        with self._lock:
+            stalled = scheduler_is_stalled(
+                last_cycle_finished_mono=self._last_cycle_finished_mono,
+                now_mono=time.monotonic(),
+                interval_seconds=self.interval_seconds,
+                started_mono=self._started_mono,
+                running=not self._stop.is_set(),
+            )
+            if stalled:
+                self._recovery_orders_blocked = True
+        if stalled:
+            logger.error(
+                SCHEDULER_STALLED,
+                interval_seconds=self.interval_seconds,
+                cycles=self._cycles,
+            )
+            try:
+                from app.domain.institutional_trading.ai_scalping.continuous_operation import (  # noqa: E501
+                    get_continuous_operation_controller,
+                )
+
+                get_continuous_operation_controller().heal_dependencies(
+                    gateway_ok=False,
+                    mt5_ok=False,
+                    oms_ok=True,
+                    feed_ok=True,
+                )
+            except Exception:
+                logger.exception("scheduler_stalled_heal_failed")
+        return stalled
 
     def tick_health(self) -> dict[str, Any]:
         """Live probes → ReliabilityPlatform.tick (no POST body flags)."""
@@ -586,6 +648,8 @@ class InstitutionalIteRuntime:
             is_market_closed_cooled,
         )
         from app.domain.institutional_trading.operations.broker_session_truth import (
+            SESSION_CLOSE_DETECTED,
+            apply_session_close_side_effects,
             apply_session_open_side_effects,
             note_broker_session,
             overlay_snapshot_session,
@@ -607,13 +671,21 @@ class InstitutionalIteRuntime:
         )
         open_event = note_broker_session(session_obs.broker_session_open)
         apply_session_open_side_effects(
-            symbol=str(getattr(snapshot, "symbol", "") or ""),
+            symbol=self._gold_exec_symbol(snapshot),
             event=open_event,
         )
+        apply_session_close_side_effects(
+            symbol=self._gold_exec_symbol(snapshot),
+            event=open_event,
+        )
+        self._last_session_obs = session_obs.to_dict()
         logger.warning(
             "session_truth",
             **session_obs.to_dict(),
             open_event=open_event,
+            close_event=(
+                open_event if open_event == SESSION_CLOSE_DETECTED else None
+            ),
         )
         news = snapshot.news
 
@@ -628,7 +700,7 @@ class InstitutionalIteRuntime:
             prior_internal = int(account.open_positions)
             sync = force_sync_positions(
                 self.mt5_adapter,
-                symbol=str(getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD"),
+                symbol=self._gold_exec_symbol(snapshot),
                 internal_positions=prior_internal,
                 position_engine=self.position_management.engine,
             )
@@ -652,7 +724,7 @@ class InstitutionalIteRuntime:
                 risk_engine_reasons=risk_reasons,
                 account_trading_enabled=account_trading_enabled,
                 mt5_autotrading_enabled=mt5_autotrading_enabled,
-                symbol=getattr(snapshot, "symbol", "XAUUSD"),
+                symbol=self._gold_exec_symbol(snapshot),
                 symbol_tradable=symbol_tradable,
                 margin_available=margin_ok,
                 no_broker_restrictions=no_broker_restrictions,
@@ -685,7 +757,7 @@ class InstitutionalIteRuntime:
                     prior_internal = int(account.open_positions)
                     sync = force_sync_positions(
                         self.mt5_adapter,
-                        symbol=str(getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD"),
+                        symbol=self._gold_exec_symbol(snapshot),
                         internal_positions=prior_internal,
                         position_engine=self.position_management.engine,
                     )
@@ -705,7 +777,7 @@ class InstitutionalIteRuntime:
                             risk_engine_reasons=risk_reasons,
                             account_trading_enabled=account_trading_enabled,
                             mt5_autotrading_enabled=mt5_autotrading_enabled,
-                            symbol=getattr(snapshot, "symbol", "XAUUSD"),
+                            symbol=self._gold_exec_symbol(snapshot),
                             symbol_tradable=symbol_tradable,
                             margin_available=margin_ok,
                             no_broker_restrictions=no_broker_restrictions,
@@ -724,6 +796,34 @@ class InstitutionalIteRuntime:
                     )
                 except Exception:
                     logger.exception("force_sync_before_max_open_reject_failed")
+
+        if self._recovery_orders_blocked:
+            try:
+                self._sync_and_manage_open_positions(
+                    snapshot=snapshot,
+                    account=account,
+                    reason="scheduler_stalled_recovery_manage",
+                )
+            except Exception:
+                logger.exception("recovery_manage_failed")
+            result = ShadowCycleResult(
+                ok=True,
+                trace_id=None,
+                mode=self.plane.mode.value,
+                detail="SCHEDULER_STALLED recovery — new entries blocked, no order_send",
+                health=health.get("health") if isinstance(health, dict) else None,
+                cycle_outcome="recovering",
+                abort_reason="RECOVERING",
+                snapshot_present=True,
+            )
+            with self._lock:
+                self._last_cycle = result
+                self._cycles += 1
+            logger.warning(
+                "recovery_new_entries_blocked",
+                reason="SCHEDULER_STALLED recovery — no order mutation",
+            )
+            return result
 
         if not safety.allowed:
             from app.domain.institutional_trading.force_first_trade import (
@@ -925,7 +1025,7 @@ class InstitutionalIteRuntime:
         Never opens trades. Required for continuous scalping: without this,
         fills sit unmanaged, max-open never clears, and the loop stalls.
         """
-        symbol = str(getattr(snapshot, "symbol", "XAUUSD") or "XAUUSD")
+        symbol = self._gold_exec_symbol(snapshot)
         engine = self.position_management.engine
         try:
             from app.domain.institutional_trading.production_hardening.position_recovery import (  # noqa: E501
@@ -3871,6 +3971,11 @@ class InstitutionalIteRuntime:
         with self._lock:
             last = self._last_cycle
             cycles = self._cycles
+            last_finished = self._last_cycle_finished_mono
+            last_ok_at = self._last_successful_cycle_at
+            last_at = self._last_cycle_at
+            session_obs = dict(self._last_session_obs or {})
+            recovering = self._recovery_orders_blocked
         settings = get_settings()
         gold = {}
         try:
@@ -3880,6 +3985,51 @@ class InstitutionalIteRuntime:
         except Exception:
             gold = {"gold_only_mode": True, "execution_universe": ["XAUUSD_i"]}
         fd = self._fast_decision_snapshot()
+        from app.application.runtime_identity import (
+            runtime_deployment_id,
+            runtime_git_commit,
+        )
+        from app.domain.institutional_trading.operations.worker_runtime_state import (
+            derive_scheduler_state,
+            derive_worker_state,
+            last_blocker_from_cycle,
+            scheduler_is_stalled,
+        )
+        from app.domain.institutional_trading.phase_a import get_phase_a_plane
+        from app.domain.institutional_trading.phase_a.kill_state import HaltKind
+
+        stalled = scheduler_is_stalled(
+            last_cycle_finished_mono=last_finished,
+            now_mono=time.monotonic(),
+            interval_seconds=self.interval_seconds,
+            started_mono=self._started_mono,
+            running=not self._stop.is_set(),
+        )
+        halt_kind = HaltKind.NONE
+        try:
+            halt_kind = get_phase_a_plane().halt.kind
+        except Exception:
+            halt_kind = HaltKind.NONE
+        broker_open = session_obs.get("broker_session_open")
+        if broker_open is not True and broker_open is not False:
+            broker_open = None
+        worker_state = derive_worker_state(
+            running=not self._stop.is_set(),
+            cycles=cycles,
+            broker_session_open=broker_open,
+            operator_halt=halt_kind is HaltKind.OPERATOR_HALT,
+            risk_halt=halt_kind is HaltKind.RISK_HALT,
+            recovering=recovering,
+            degraded=stalled or bool(self.plane.kill_switch_armed),
+            last_outcome=getattr(last, "cycle_outcome", None) if last else None,
+            stalled=stalled,
+        )
+        scheduler_state = derive_scheduler_state(
+            running=not self._stop.is_set(),
+            stalled=stalled,
+            broker_session_open=broker_open,
+        )
+        blocker, blocker_stage = last_blocker_from_cycle(last)
         return {
             "mode": self.plane.mode.value,
             "kill_switch": self.plane.kill_switch_armed,
@@ -3908,6 +4058,23 @@ class InstitutionalIteRuntime:
                 fd.get("system_coherence") if isinstance(fd, dict) else None
             ),
             "gold_only": gold,
+            "worker_state": worker_state,
+            "scheduler_state": scheduler_state,
+            "session_state": session_obs.get("session_state"),
+            "session_source": session_obs.get("session_source"),
+            "broker_server_time": session_obs.get("broker_server_time"),
+            "last_session_check": session_obs.get("last_session_check"),
+            "session_transition_at": session_obs.get("session_transition_at"),
+            "next_expected_transition": session_obs.get("next_expected_transition"),
+            "trade_mode": session_obs.get("trade_mode"),
+            "trade_allowed": session_obs.get("trade_allowed"),
+            "last_cycle_at": last_at,
+            "last_successful_cycle_at": last_ok_at,
+            "last_blocker": blocker,
+            "last_blocker_stage": blocker_stage,
+            "runtime_git_sha": runtime_git_commit(),
+            "deployment_id": runtime_deployment_id(),
+            "scheduler_stalled": stalled,
         }
 
     def strategy_diagnostics(self, *, limit: int = 100) -> dict[str, Any]:
@@ -5061,6 +5228,7 @@ class InstitutionalIteRuntime:
             mode=self.plane.mode.value,
             run_state=self.plane.auto_trading_run_state,
         )
+        self._started_mono = time.monotonic()
         logger.info(
             "ite_orchestrator_started",
             interval_seconds=self.interval_seconds,
@@ -5519,10 +5687,20 @@ class InstitutionalIteRuntime:
                         _pvm_rec_end().unbind_context(_pvm_token)
                 except Exception:
                     logger.exception("pvm_unbind_orchestrator_cycle_failed")
+            last_out = None
+            last_ok = False
+            with self._lock:
+                last_out = getattr(self._last_cycle, "cycle_outcome", None)
+                last_ok = bool(getattr(self._last_cycle, "ok", False))
+            self.mark_cycle_finished(
+                successful=last_ok
+                or last_out in {"safety_blocked", "recovering"}
+            )
             logger.warning(
                 "Waiting Next Cycle",
                 interval_seconds=self.interval_seconds,
                 cycle_ms=round((time.perf_counter() - cycle_t0) * 1000.0, 1),
+                worker_state=(self.status() or {}).get("worker_state"),
             )
             # Continuous scalping cadence:
             # 1) More eligible symbols from last parallel scan → no idle sleep
