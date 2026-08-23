@@ -2592,6 +2592,29 @@ class InstitutionalIteRuntime:
             detail=";".join(decision.eligibility.rejection_reasons) or "ok",
         )
 
+        from app.application.services.market_closed_cooldown import (
+            is_market_closed_cooled,
+        )
+        from app.domain.institutional_trading.operations.broker_session_truth import (
+            overlay_snapshot_session,
+            resolve_from_diagnostics,
+        )
+
+        sess = getattr(getattr(snapshot, "session", None), "session", None)
+        utc_sess = str(getattr(sess, "value", None) or sess or "off_hours")
+        session_obs = resolve_from_diagnostics(
+            market_context_diagnostics,
+            utc_session=utc_sess,
+            symbol_tradable=symbol_tradable,
+            market_data_live=market_data_live,
+            cooled=is_market_closed_cooled(
+                str(getattr(snapshot, "symbol", "") or "")
+            ),
+        )
+        snapshot = overlay_snapshot_session(
+            snapshot, broker_open=session_obs.broker_session_open
+        )
+
         ctx = ExecutionBridgeContext(
             snapshot=snapshot,
             account=account,
