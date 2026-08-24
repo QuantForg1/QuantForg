@@ -56,6 +56,23 @@ def _as_int(value: Any) -> int | None:
             return None
 
 
+def _reasons_indicate_min_lot(reasons: tuple[str, ...] | list[str] | None) -> bool:
+    hay = " ".join(str(r).lower() for r in (reasons or ()) if str(r).strip())
+    return any(
+        token in hay
+        for token in (
+            "min_lot_constraint",
+            "min lot constraint",
+            "below_min_lot",
+            "below broker volume_min",
+            "below broker minimum",
+            "minimum lot",
+            "min lot",
+            "below broker min",
+        )
+    )
+
+
 def _as_decimal(value: Any) -> Decimal | None:
     if value is None or value == "":
         return None
@@ -357,8 +374,10 @@ def evaluate_gold_execution_contract(
         mark("STRATEGY", StageStatus.PASS.value)
 
     # --- DECISION ---
+    # DIRECTION_NONE only when the decision engine itself produced no side.
+    # action=NO_TRADE with a proven BUY/SELL is a downstream Risk/Safety hold.
     decision_fail: dict[str, Any] | None = None
-    if direction in {"", "NONE"} or action not in {"BUY", "SELL"}:
+    if direction not in {"BUY", "SELL"}:
         decision_fail = _stage_fail(
             stage="DECISION",
             code="DIRECTION_NONE",
@@ -368,17 +387,7 @@ def evaluate_gold_execution_contract(
             current=direction,
             required="BUY|SELL",
         )
-    elif direction not in {"BUY", "SELL"}:
-        decision_fail = _stage_fail(
-            stage="DECISION",
-            code="DIRECTION_NONE",
-            reason=f"direction {direction} is not BUY or SELL",
-            fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
-            current=direction,
-            required="BUY|SELL",
-        )
-    elif action != direction:
+    elif action in {"BUY", "SELL"} and action != direction:
         decision_fail = _stage_fail(
             stage="DECISION",
             code="ACTION_DIRECTION_MISMATCH",
@@ -453,13 +462,19 @@ def evaluate_gold_execution_contract(
 
     # --- RISK ---
     risk_fail: dict[str, Any] | None = None
-    if facts.min_lot_infeasible:
+    min_lot_blocked = bool(facts.min_lot_infeasible) or _reasons_indicate_min_lot(
+        facts.risk_reasons
+    )
+    if min_lot_blocked:
         risk_fail = _stage_fail(
             stage="RISK",
-            code="MIN_LOT_RISK_INFEASIBLE",
-            reason="minimum lot would violate risk — do not upsize",
+            code="MIN_LOT_CONSTRAINT",
+            reason=(
+                "; ".join(facts.risk_reasons)
+                or "minimum lot would violate hard max risk — do not upsize"
+            ),
             fault_class=FaultClass.CANDIDATE_BLOCK.value,
-            next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
+            next_action=CandidateAction.WAIT_SAME_FOCUS.value,
         )
         mark("RISK", StageStatus.BLOCK.value)
         mark("SIZING", StageStatus.BLOCK.value)
@@ -480,7 +495,7 @@ def evaluate_gold_execution_contract(
 
     # --- SIZING ---
     sizing_fail: dict[str, Any] | None = None
-    if not facts.min_lot_infeasible:
+    if not min_lot_blocked:
         lots = facts.approved_lots
         if lots is None or lots <= 0:
             sizing_fail = _stage_fail(
@@ -658,8 +673,11 @@ def evaluate_gold_execution_contract(
             decision_state = DecisionState.HARD_BLOCK.value
         if first and first["code"] == "LEVERAGE_POLICY_EXCEEDED":
             decision_state = DecisionState.HARD_BLOCK.value
-        if first and first["code"] == "MIN_LOT_RISK_INFEASIBLE":
-            decision_state = DecisionState.NO_EXECUTABLE_FOCUS.value
+        if first and first["code"] in {
+            "MIN_LOT_CONSTRAINT",
+            "MIN_LOT_RISK_INFEASIBLE",
+        }:
+            decision_state = DecisionState.CANDIDATE_BLOCK.value
         readiness = "NOT_READY"
         setup_state = decision_state
         fault_class = str(first["fault_class"] if first else FaultClass.WAIT.value)
@@ -774,8 +792,7 @@ def facts_from_cycle(
     elig = getattr(decision, "eligibility", None)
     reasons = tuple(getattr(decision, "risk_reasons", ()) or ())
     elig_reasons = tuple(getattr(elig, "rejection_reasons", ()) or ()) if elig else ()
-    hay = " ".join(str(r).lower() for r in elig_reasons + reasons)
-    min_lot = "min lot" in hay or "minimum lot" in hay
+    min_lot = _reasons_indicate_min_lot(elig_reasons + reasons)
     opt_state = "NOT_RUN"
     if isinstance(optimizer, dict):
         opt_state = str(
@@ -833,7 +850,7 @@ def facts_from_cycle(
         auto_running=bool(auto_running),
         account_leverage=_as_decimal(getattr(account, "leverage", None)),
         risk_eligible=bool(getattr(elig, "eligible", False)) if elig is not None else False,
-        risk_reasons=elig_reasons or reasons,
+        risk_reasons=tuple(dict.fromkeys((*reasons, *elig_reasons))),
         approved_lots=_as_decimal(getattr(decision, "approved_lots", None)),
         min_lot_infeasible=min_lot,
         portfolio_allow=bool(portfolio_allow),

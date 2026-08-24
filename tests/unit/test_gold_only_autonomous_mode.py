@@ -145,7 +145,8 @@ def test_no_rotation_to_other_symbols(gold_only: None) -> None:
     )
     assert out["next_action"] == CandidateAction.WAIT_SAME_FOCUS.value
     assert out["candidate_action"] != CandidateAction.ROTATE_FOCUS.value
-    assert out["fault_code"] == "MIN_LOT_RISK_INFEASIBLE"
+    assert out["fault_code"] == "MIN_LOT_CONSTRAINT"
+    assert out["blocking_stage"] == "RISK"
 
 
 def test_no_fallback_to_eurusd(gold_only: None) -> None:

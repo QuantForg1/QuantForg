@@ -193,10 +193,23 @@ def test_risk_failure_blocks() -> None:
 
 @pytest.mark.unit
 def test_min_lot_risk_infeasible_blocks() -> None:
-    out = evaluate_gold_execution_contract(_ready(min_lot_infeasible=True))
+    out = evaluate_gold_execution_contract(
+        _ready(
+            action="NO_TRADE",
+            risk_eligible=False,
+            approved_lots=Decimal("0"),
+            min_lot_infeasible=True,
+            risk_reasons=(
+                "MIN_LOT_CONSTRAINT: calculated volume below broker volume_min",
+            ),
+        )
+    )
     assert out.may_submit_oms is False
-    assert out.fault_code == "MIN_LOT_RISK_INFEASIBLE"
-    assert out.next_action == CandidateAction.NO_EXECUTABLE_FOCUS.value
+    assert out.direction == "BUY"
+    assert out.fault_code == "MIN_LOT_CONSTRAINT"
+    assert out.blocking_stage == "RISK"
+    assert out.decision_state == DecisionState.CANDIDATE_BLOCK.value
+    assert out.next_action == CandidateAction.WAIT_SAME_FOCUS.value
 
 
 @pytest.mark.unit

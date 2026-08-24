@@ -439,6 +439,7 @@ class TestEligibilityAndDecision:
             risk_score=10,
         )
         assert decision.action is DecisionAction.NO_TRADE
+        assert decision.direction is TradeDirection.BUY
         assert decision.confidence == 95
         assert decision.quality == 90
 

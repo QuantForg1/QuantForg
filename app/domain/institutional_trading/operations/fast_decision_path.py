@@ -99,6 +99,7 @@ def _norm(text: str) -> str:
 
 _ROTATE_NEEDLES: tuple[str, ...] = (
     "min lot",
+    "min_lot_constraint",
     "below min lot",
     "minimum lot causes risk",
     "min lot constraint",
@@ -385,8 +386,12 @@ def classify_candidate_outcome(
         and not system_wide
     ):
         code = "CANDIDATE_BLOCK"
-        if "min lot" in hay or "minimum lot" in hay:
-            code = "MIN_LOT_RISK_INFEASIBLE"
+        if (
+            "min_lot_constraint" in hay
+            or "min lot" in hay
+            or "minimum lot" in hay
+        ):
+            code = "MIN_LOT_CONSTRAINT"
         elif "tradable" in hay or "closeonly" in hay or "allowlist" in hay:
             code = "SYMBOL_NOT_TRADEABLE"
         elif "market closed" in hay:
@@ -410,8 +415,12 @@ def classify_candidate_outcome(
             "retryable": False,
             "candidate_action": rotate,
             "next_action": rotate,
-            "blocking_stage": "SIZING"
-            if ("min lot" in hay or "minimum lot" in hay)
+            "blocking_stage": "RISK"
+            if (
+                "min_lot_constraint" in hay
+                or "min lot" in hay
+                or "minimum lot" in hay
+            )
             else "ELIGIBILITY",
             "skip_idle_sleep": True,
             "release_entry_budget": True,

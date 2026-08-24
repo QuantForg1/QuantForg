@@ -61,7 +61,14 @@ class TradeDecisionEngine:
 
         # Decision ladder (institutional — no OMS call here)
         action = DecisionAction.NO_TRADE
-        direction = TradeDirection.NONE
+        # Downstream gates (Risk/Safety) must not erase a proven BUY/SELL.
+        # DIRECTION_NONE is only valid when confluence itself has no side.
+        signal_direction = (
+            confluence.direction
+            if confluence.direction in {TradeDirection.BUY, TradeDirection.SELL}
+            else TradeDirection.NONE
+        )
+        direction = signal_direction
 
         hard_fail = (
             not eligibility.eligible
@@ -75,6 +82,8 @@ class TradeDecisionEngine:
 
         if hard_fail:
             action = DecisionAction.NO_TRADE
+            if confluence.direction is TradeDirection.NONE:
+                direction = TradeDirection.NONE
             if not eligibility.eligible:
                 reasons.append("Eligibility failed — NO_TRADE")
             elif confluence.direction is TradeDirection.NONE:

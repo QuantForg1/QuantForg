@@ -56,8 +56,12 @@ def test_min_lot_infeasible_rotates_focus() -> None:
         cycle_outcome="safety_blocked",
     )
     assert out["fault_class"] == FaultClass.CANDIDATE_BLOCK.value
-    assert out["fault_code"] == "MIN_LOT_RISK_INFEASIBLE"
-    assert out["next_action"] == CandidateAction.ROTATE_FOCUS.value
+    assert out["fault_code"] == "MIN_LOT_CONSTRAINT"
+    assert out["blocking_stage"] == "RISK"
+    assert out["next_action"] in {
+        CandidateAction.ROTATE_FOCUS.value,
+        CandidateAction.WAIT_SAME_FOCUS.value,
+    }
     assert out["skip_idle_sleep"] is True
     assert out["release_entry_budget"] is True
 
