@@ -164,6 +164,14 @@ def build_signal_lifecycle_record(
         direction=d, quality=quality, confidence=confidence
     )
     submitted = bool(forwarded_to_oms)
+    blocker = str(fault_code or blocking_stage or "").strip()
+    bu = blocker.upper()
+    # Hold-path logs can omit abort/stage; never leave a MIN_LOT block unexplained.
+    if final_state == SIGNAL_BLOCKED_MIN_LOT and "MIN_LOT" not in bu:
+        blocker = "MIN_LOT_CONSTRAINT"
+    elif bu in {"", "NONE", "NO_TRADE"}:
+        why = str(reasons or "")
+        blocker = why.split(";")[0].strip()[:120] if why.strip() else ""
     stale_attempt = (not submitted) and ticket not in (None, "", "None", "0")
     now = datetime.now(UTC).isoformat()
     return {
@@ -191,7 +199,7 @@ def build_signal_lifecycle_record(
         "final_blocker": (
             None
             if submitted or final_state in {SIGNAL_ELIGIBLE, SIGNAL_FOUND}
-            else (str(fault_code or blocking_stage or "").strip() or None)
+            else (blocker or None)
         ),
         "high_quality": hq,
         "forwarded_to_oms": submitted,

@@ -215,6 +215,40 @@ def test_blocked_signal_records_exact_blocker() -> None:
     assert miss[0]["confidence"] == 82
     assert miss[0]["quality"] == 92
     assert miss[0]["final_blocker"] == "MIN_LOT_CONSTRAINT"
+    from app.domain.institutional_trading.operations.signal_lifecycle import (
+        build_signal_lifecycle_record,
+    )
+
+    inferred = build_signal_lifecycle_record(
+        trace_id="t",
+        cycle_id="c",
+        snapshot_id="s",
+        symbol="XAUUSD_i",
+        direction="BUY",
+        confidence=82,
+        quality=92,
+        forwarded_to_oms=False,
+        blocking_stage=None,
+        fault_code=None,
+        reasons="MIN_LOT_INFEASIBLE; MIN_LOT_CONSTRAINT: stop too wide",
+    )
+    assert inferred["final_state"] == SIGNAL_BLOCKED_MIN_LOT
+    assert inferred["final_blocker"] == "MIN_LOT_CONSTRAINT"
+    risk_stage = build_signal_lifecycle_record(
+        trace_id="t",
+        cycle_id="c2",
+        snapshot_id="s",
+        symbol="XAUUSD_i",
+        direction="SELL",
+        confidence=82,
+        quality=92,
+        forwarded_to_oms=False,
+        blocking_stage="RISK",
+        fault_code=None,
+        reasons="MIN_LOT_INFEASIBLE",
+    )
+    assert risk_stage["final_state"] == SIGNAL_BLOCKED_MIN_LOT
+    assert risk_stage["final_blocker"] == "MIN_LOT_CONSTRAINT"
 
 
 def test_stale_signal_is_not_reused() -> None:
