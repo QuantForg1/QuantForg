@@ -259,10 +259,10 @@ def test_leverage_reject_does_not_add_order_send_retry() -> None:
         REPO / "app/application/services/institutional_execution_engine.py"
     ).read_text(encoding="utf-8")
     assert "Never retry order_send" in client_src
-    assert "attempts = 2 if method.upper() == \"GET\"" in client_src or (
-        "attempts = 2 if method.upper() == 'GET'" in client_src
-        or 'attempts = 2 if method.upper() == "GET" else 1' in client_src
-    )
+    assert "request_attempts(" in client_src
+    assert "MUTATION_ATTEMPTS" in (
+        REPO / "app/infrastructure/brokers/mt5/gateway_budget.py"
+    ).read_text(encoding="utf-8")
     assert "self.gateway.submit" in engine_src
     # No extra polling/retry loop added for leverage.
     assert "while True:" not in (

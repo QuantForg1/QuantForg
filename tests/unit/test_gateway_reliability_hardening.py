@@ -73,13 +73,22 @@ def no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_read_only_calc_has_bounded_retries_mutations_do_not() -> None:
-    assert request_attempts("POST", "/trade/order_calc_profit") == READ_ONLY_POST_ATTEMPTS
-    assert request_attempts("POST", "/trade/order_calc_margin") == READ_ONLY_POST_ATTEMPTS
+    assert (
+        request_attempts("POST", "/trade/order_calc_profit")
+        == READ_ONLY_POST_ATTEMPTS
+    )
+    assert (
+        request_attempts("POST", "/trade/order_calc_margin")
+        == READ_ONLY_POST_ATTEMPTS
+    )
     assert request_attempts("POST", "/trade/order_check") == READ_ONLY_POST_ATTEMPTS
     assert request_attempts("POST", "/trade/order_send") == MUTATION_ATTEMPTS
     assert request_attempts("POST", "/trade/order_cancel") == MUTATION_ATTEMPTS
     assert is_mutation_path("POST", "/trade/order_send") is True
-    assert coalesce_key("POST", "/trade/order_send", {"symbol": "XAUUSD_i"}, None) is None
+    assert (
+        coalesce_key("POST", "/trade/order_send", {"symbol": "XAUUSD_i"}, None)
+        is None
+    )
     assert coalesce_key(
         "POST",
         "/trade/order_calc_profit",
@@ -113,7 +122,12 @@ def test_order_calc_profit_retries_errno11(no_backoff: None) -> None:
         data = client._request(
             "POST",
             "/trade/order_calc_profit",
-            json_body={"symbol": "XAUUSD_i", "action": "buy", "volume": 0.01, "price": 1},
+            json_body={
+                "symbol": "XAUUSD_i",
+                "action": "buy",
+                "volume": 0.01,
+                "price": 1,
+            },
         )
     finally:
         mod.httpx.Client = previous  # type: ignore[misc]
@@ -179,7 +193,7 @@ def test_identical_calc_requests_coalesce_inflight(no_backoff: None) -> None:
             results.append(
                 client._request("POST", "/trade/order_calc_profit", json_body=body)
             )
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             errors.append(exc)
 
     try:
@@ -227,7 +241,7 @@ def test_gateway_trading_read_concurrency_is_bounded(no_backoff: None) -> None:
     def worker(idx: int) -> None:
         try:
             client._request("GET", "/positions", params={"n": str(idx)})
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             errors.append(exc)
 
     try:

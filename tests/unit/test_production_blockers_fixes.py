@@ -72,7 +72,7 @@ class TestGatewayTransientRetries:
 
         mod.httpx.Client = PatchedClient  # type: ignore[misc]
         try:
-            data = client.gateway_health()
+            data = client._request("GET", "/account")
         finally:
             mod.httpx.Client = original  # type: ignore[misc]
 

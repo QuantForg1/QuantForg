@@ -321,10 +321,8 @@ class GatewayMT5Client:
             client = self._build_http_client()
             self._http = client
         else:
-            try:
+            with contextlib.suppress(Exception):
                 gateway_metrics.record_connection_reuse()
-            except Exception:  # noqa: S110
-                pass
         return cast("httpx.Client", client)
 
     def _replace_http_client(self) -> httpx.Client:
@@ -338,10 +336,8 @@ class GatewayMT5Client:
         """
         new_client = self._build_http_client()
         self._http = new_client
-        try:
+        with contextlib.suppress(Exception):
             gateway_metrics.record_pool_replace()
-        except Exception:  # noqa: S110  # telemetry must never halt trading
-            pass
         return new_client
 
     @property
@@ -442,10 +438,8 @@ class GatewayMT5Client:
             "trust_env": True,
             "limits": limits,
         }
-        try:
+        with contextlib.suppress(Exception):
             gateway_metrics.record_client_built()
-        except Exception:  # noqa: S110
-            pass
         try:
             return httpx.Client(http2=True, **common)
         except Exception as exc:
@@ -530,17 +524,13 @@ class GatewayMT5Client:
                 leader = Future()
                 self._coalesce[key] = leader
         if waiter is not None:
-            try:
+            with contextlib.suppress(Exception):
                 gateway_metrics.record_coalesce(hit=True)
-            except Exception:  # noqa: S110
-                pass
             return waiter.result()
         assert leader is not None
         try:
-            try:
+            with contextlib.suppress(Exception):
                 gateway_metrics.record_coalesce(hit=False)
-            except Exception:  # noqa: S110
-                pass
             out = self._request_leader(
                 method, path, json_body=json_body, params=params, auth=auth
             )
@@ -575,27 +565,21 @@ class GatewayMT5Client:
                 timeout=acquire_timeout_seconds(lane, mutation=mutation)
             )
             if not acquired:
-                try:
+                with contextlib.suppress(Exception):
                     gateway_metrics.record_retry(exhausted=True)
-                except Exception:  # noqa: S110
-                    pass
                 raise RuntimeError(
                     "Gateway concurrency budget exhausted calling "
                     f"{method} {path} (lane={lane})"
                 )
         try:
-            try:
+            with contextlib.suppress(Exception):
                 gateway_metrics.begin_inflight(mutation=mutation, calc=calc)
-            except Exception:  # noqa: S110
-                pass
             return self._request_http(
                 method, path, json_body=json_body, params=params, auth=auth
             )
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 gateway_metrics.end_inflight(mutation=mutation, calc=calc)
-            except Exception:  # noqa: S110
-                pass
             if sem is not None and acquired:
                 sem.release()
 
@@ -697,9 +681,9 @@ class GatewayMT5Client:
                     if attempt_i + 1 >= attempts:
                         raise
                     exc_text = f"{type(exc).__name__} {exc}".lower()
-                    try:
+                    with contextlib.suppress(Exception):
                         gateway_metrics.record_retry(
-                            exhausted=False,
+                            exhausted=attempt_i + 1 >= attempts,
                             errno11=(
                                 "errno 11" in exc_text
                                 or "eagain" in exc_text
@@ -707,8 +691,6 @@ class GatewayMT5Client:
                             ),
                             timeout="timeout" in exc_text,
                         )
-                    except Exception:  # noqa: S110
-                        pass
                     if (
                         "errno 11" in exc_text
                         or "eagain" in exc_text
@@ -1339,7 +1321,11 @@ class GatewayMT5Client:
                 digits=int(row.get("digits") or 0),
                 contract_size=Decimal(str(row.get("contract_size") or "100000")),
                 raw={
-                    "trade_mode": str(row.get("trade_mode") if row.get("trade_mode") is not None else ""),
+                    "trade_mode": str(
+                        row.get("trade_mode")
+                        if row.get("trade_mode") is not None
+                        else ""
+                    ),
                     "volume_min": str(row.get("volume_min") or ""),
                     "volume_max": str(row.get("volume_max") or ""),
                     "volume_step": str(row.get("volume_step") or ""),

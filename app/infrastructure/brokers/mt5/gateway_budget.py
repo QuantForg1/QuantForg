@@ -122,7 +122,7 @@ def coalesce_key(
 def backoff_seconds(attempt_i: int) -> float:
     """Exponential backoff + jitter. Caps so retries cannot become a storm."""
     base = min(1.6, 0.2 * (2 ** max(0, int(attempt_i))))
-    return base + random.uniform(0.0, 0.15)
+    return base + random.uniform(0.0, 0.15)  # noqa: S311
 
 
 def acquire_timeout_seconds(lane: str, *, mutation: bool) -> float:

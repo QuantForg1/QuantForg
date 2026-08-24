@@ -125,7 +125,7 @@ async def _deduped_calc(
             if _INFLIGHT.get(key) is fut:
                 _INFLIGHT.pop(key, None)
 
-    asyncio.create_task(_run())
+    asyncio.create_task(_run())  # noqa: RUF006
     return await asyncio.shield(fut)
 
 
@@ -163,7 +163,7 @@ async def _deduped_market(
             if _INFLIGHT.get(key) is fut:
                 _INFLIGHT.pop(key, None)
 
-    asyncio.create_task(_run())
+    asyncio.create_task(_run())  # noqa: RUF006
     return await asyncio.shield(fut)
 
 

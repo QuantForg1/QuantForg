@@ -219,7 +219,12 @@ class GatewayMetrics:
                 if mx >= slowest_latency_ms:
                     slowest_latency_ms = mx
                     slowest_endpoint = path
-            budget = TRADING_READ_LIMIT + UI_READ_LIMIT + OBS_READ_LIMIT + MUTATION_LIMIT
+            budget = (
+                TRADING_READ_LIMIT
+                + UI_READ_LIMIT
+                + OBS_READ_LIMIT
+                + MUTATION_LIMIT
+            )
             pressure = resource_pressure_state(
                 errno11_count=self._minute.errno11,
                 retry_exhausted_count=self._minute.retry_exhausted,
