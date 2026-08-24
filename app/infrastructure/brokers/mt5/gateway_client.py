@@ -249,6 +249,12 @@ class GatewayMT5Client:
     _health_snapshot_ttl_seconds: float = field(default=2.0, init=False)
     _gw_health_cache: dict[str, Any] | None = field(default=None, init=False)
     _gw_health_at: float = field(default=0.0, init=False)
+    _cycle_reads_active: bool = field(default=False, init=False)
+    _orders_cache: list[MT5PendingOrder] | None = field(default=None, init=False)
+    _orders_cache_at: float = field(default=0.0, init=False)
+    _symbol_info_cache: dict[str, MT5SymbolInfo] = field(
+        default_factory=dict, init=False
+    )
     _http: Any = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -534,7 +540,9 @@ class GatewayMT5Client:
             assert response is not None
         except httpx.TooManyRedirects as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-            gateway_metrics.record_request(latency_ms=latency_ms, error=True)
+            gateway_metrics.record_request(
+                latency_ms=latency_ms, error=True, path=path
+            )
             detail = f"Redirect loop calling {method} {url}: {exc}"
             label = classify_gateway_failure(
                 error=detail,
@@ -568,7 +576,9 @@ class GatewayMT5Client:
             raise RuntimeError(f"{label}: {detail}") from exc
         except httpx.TimeoutException as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-            gateway_metrics.record_request(latency_ms=latency_ms, error=True)
+            gateway_metrics.record_request(
+                latency_ms=latency_ms, error=True, path=path
+            )
             detail = (
                 f"Gateway timeout calling {method} {url} "
                 f"(timeout={self.timeout_seconds}s): {exc}"
@@ -606,7 +616,9 @@ class GatewayMT5Client:
             raise RuntimeError(f"{label}: {detail}") from exc
         except httpx.HTTPError as exc:
             latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-            gateway_metrics.record_request(latency_ms=latency_ms, error=True)
+            gateway_metrics.record_request(
+                latency_ms=latency_ms, error=True, path=path
+            )
             detail = f"Gateway unreachable calling {method} {url}: {exc}"
             label = classify_gateway_failure(
                 error=detail,
@@ -650,6 +662,7 @@ class GatewayMT5Client:
         gateway_metrics.record_request(
             latency_ms=latency_ms,
             error=response.status_code >= 400,
+            path=path,
         )
 
         upstream = {
@@ -771,9 +784,8 @@ class GatewayMT5Client:
     def gateway_health(self) -> dict[str, Any]:
         now = time.monotonic()
         cached = self._gw_health_cache
-        if (
-            cached is not None
-            and now - self._gw_health_at <= self._health_snapshot_ttl_seconds
+        if self._cycle_cache_valid(
+            cached, self._gw_health_at, ttl=self._health_snapshot_ttl_seconds
         ):
             return dict(cached)
         data = self._request("GET", "/health", auth=False)
@@ -946,6 +958,54 @@ class GatewayMT5Client:
         self._account_cache_at = 0.0
         self._positions_cache = None
         self._positions_cache_at = 0.0
+        self._orders_cache = None
+        self._orders_cache_at = 0.0
+        self._symbol_info_cache = {}
+        self._health_snapshot_cache = None
+        self._health_snapshot_at = 0.0
+        self._gw_health_cache = None
+        self._gw_health_at = 0.0
+
+    def _cycle_cache_valid(
+        self, cached: Any, cached_at: float, *, ttl: float | None = None
+    ) -> bool:
+        if cached is None:
+            return False
+        if self._cycle_reads_active:
+            return True
+        bound = self._snapshot_ttl_seconds if ttl is None else ttl
+        return time.monotonic() - cached_at <= bound
+
+    def begin_cycle_reads(self) -> None:
+        """Pin read-only snapshots for one autonomous cycle.
+
+        Does not reuse previous-cycle book/account. Does not send orders.
+        """
+        self._cycle_reads_active = True
+        self._account_cache = None
+        self._account_cache_at = 0.0
+        self._positions_cache = None
+        self._positions_cache_at = 0.0
+        self._orders_cache = None
+        self._orders_cache_at = 0.0
+        self._symbol_info_cache = {}
+        self._health_snapshot_cache = None
+        self._health_snapshot_at = 0.0
+        self._gw_health_cache = None
+        self._gw_health_at = 0.0
+
+    def end_cycle_reads(self) -> None:
+        self._cycle_reads_active = False
+
+    def require_fresh_execution_reads(self) -> None:
+        """Drop cycle reuse immediately before a real OMS submit."""
+        self._account_cache = None
+        self._account_cache_at = 0.0
+        self._positions_cache = None
+        self._positions_cache_at = 0.0
+        self._orders_cache = None
+        self._orders_cache_at = 0.0
+        self._symbol_info_cache = {}
         self._health_snapshot_cache = None
         self._health_snapshot_at = 0.0
         self._gw_health_cache = None
@@ -1027,10 +1087,7 @@ class GatewayMT5Client:
     def account_info(self) -> MT5AccountInfo:
         self._require_connected()
         now = time.monotonic()
-        if (
-            self._account_cache is not None
-            and now - self._account_cache_at <= self._snapshot_ttl_seconds
-        ):
+        if self._cycle_cache_valid(self._account_cache, self._account_cache_at):
             gateway_metrics.record_cache(hit=True)
             return self._account_cache
         gateway_metrics.record_cache(hit=False)
@@ -1125,9 +1182,8 @@ class GatewayMT5Client:
     def health(self) -> MT5HealthSnapshot:
         now = time.monotonic()
         cached = self._health_snapshot_cache
-        if (
-            cached is not None
-            and now - self._health_snapshot_at <= self._health_snapshot_ttl_seconds
+        if self._cycle_cache_valid(
+            cached, self._health_snapshot_at, ttl=self._health_snapshot_ttl_seconds
         ):
             return cached
         latency: float | None = None
@@ -1243,6 +1299,10 @@ class GatewayMT5Client:
     def symbol_info(self, symbol: str) -> MT5SymbolInfo:
         self._require_connected()
         code = symbol.strip().upper()
+        cached_spec = self._symbol_info_cache.get(code)
+        if cached_spec is not None and self._cycle_reads_active:
+            gateway_metrics.record_cache(hit=True)
+            return cached_spec
         # Prefer dedicated live specs endpoint (volume_step, stops, filling, …)
         try:
             specs = self._request("GET", f"/symbols/{code}")
@@ -1276,7 +1336,7 @@ class GatewayMT5Client:
         trade_mode = str(specs.get("trade_mode") or "full")
         trade_allowed = bool(specs.get("trade_allowed", trade_mode != "disabled"))
         market_open = bool(specs.get("market_open", True))
-        return MT5SymbolInfo(
+        info = MT5SymbolInfo(
             code=code,
             description=str(specs.get("description") or code),
             digits=int(specs.get("digits") or 5),
@@ -1300,6 +1360,8 @@ class GatewayMT5Client:
             market_open=market_open,
             trade_allowed=trade_allowed,
         )
+        self._symbol_info_cache[code] = info
+        return info
 
     def symbol_select(self, symbol: str, *, enable: bool = True) -> bool:
         _ = enable
@@ -1689,10 +1751,7 @@ class GatewayMT5Client:
     def list_positions(self) -> list[MT5Position]:
         self._require_connected()
         now = time.monotonic()
-        if (
-            self._positions_cache is not None
-            and now - self._positions_cache_at <= self._snapshot_ttl_seconds
-        ):
+        if self._cycle_cache_valid(self._positions_cache, self._positions_cache_at):
             gateway_metrics.record_cache(hit=True)
             return list(self._positions_cache)
         gateway_metrics.record_cache(hit=False)
@@ -1743,6 +1802,11 @@ class GatewayMT5Client:
 
     def list_orders(self) -> list[MT5PendingOrder]:
         self._require_connected()
+        now = time.monotonic()
+        if self._cycle_cache_valid(self._orders_cache, self._orders_cache_at):
+            gateway_metrics.record_cache(hit=True)
+            return list(self._orders_cache)
+        gateway_metrics.record_cache(hit=False)
         data = self._request("GET", "/orders")
         out: list[MT5PendingOrder] = []
         for row in data.get("items") or []:
@@ -1759,7 +1823,9 @@ class GatewayMT5Client:
                     take_profit=_dec(row.get("tp") or row.get("take_profit")),
                 )
             )
-        return out
+        self._orders_cache = out
+        self._orders_cache_at = now
+        return list(out)
 
     def order_by_ticket(self, ticket: int) -> MT5PendingOrder | None:
         for order in self.list_orders():

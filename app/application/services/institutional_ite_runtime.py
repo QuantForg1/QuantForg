@@ -704,6 +704,7 @@ class InstitutionalIteRuntime:
                 symbol=self._gold_exec_symbol(snapshot),
                 internal_positions=prior_internal,
                 position_engine=self.position_management.engine,
+                fresh=False,
             )
             account = apply_mt5_position_truth(account, sync)
             if sync.repaired or sync.mt5_positions != prior_internal:
@@ -2997,6 +2998,11 @@ class InstitutionalIteRuntime:
                 self._last_bridge_result = None
             return result
 
+        from app.application.services.ite_cycle_market_context import (
+            refresh_execution_gateway_reads,
+        )
+
+        refresh_execution_gateway_reads(self.mt5_adapter)
         bridge_result, market_context_diagnostics = self._submit_same_cycle_batch(
             decision=decision,
             ctx=ctx,
@@ -5459,8 +5465,11 @@ class InstitutionalIteRuntime:
                     _enrich_from_adapter,
                 )
                 from app.application.services.ite_cycle_market_context import (
+                    bind_cycle_gateway_reads,
                     build_ite_cycle_market_context,
                 )
+
+                bind_cycle_gateway_reads(self.mt5_adapter)
 
                 enrich = _enrich_from_adapter(self.probes)
                 from app.domain.trading.gold_only import GOLD_SYMBOL
@@ -5529,6 +5538,30 @@ class InstitutionalIteRuntime:
                             if isinstance(self._last_multi_asset_scan, dict)
                             else None
                         )
+                    gw_snap: dict[str, Any] = {}
+                    try:
+                        from app.infrastructure.brokers.mt5.metrics import (
+                            gateway_metrics as _gw_metrics,
+                        )
+
+                        gw_snap = _gw_metrics.snapshot()
+                    except Exception:
+                        gw_snap = {}
+                    slow_ep = str(gw_snap.get("slowest_endpoint") or "")
+                    slow_stats = (gw_snap.get("by_endpoint") or {}).get(slow_ep) or {}
+                    signal_age_ms = None
+                    built_at = getattr(ctx, "snapshot_built_at", None)
+                    if built_at:
+                        try:
+                            created = datetime.fromisoformat(
+                                str(built_at).replace("Z", "+00:00")
+                            )
+                            signal_age_ms = round(
+                                (datetime.now(UTC) - created).total_seconds() * 1000.0,
+                                1,
+                            )
+                        except Exception:
+                            signal_age_ms = None
                     logger.warning(
                         "ite_cycle_stage_timings",
                         scanner_duration_ms=(
@@ -5538,6 +5571,13 @@ class InstitutionalIteRuntime:
                         market_context_duration_ms=round(
                             float(getattr(ctx, "latency_ms", 0.0) or 0.0), 1
                         ),
+                        market_context_reused=bool(getattr(ctx, "reused", False)),
+                        cycle_signal_age_ms=signal_age_ms,
+                        gateway_p50=slow_stats.get("p50"),
+                        gateway_p95=slow_stats.get("p95"),
+                        gateway_p99=slow_stats.get("p99"),
+                        slowest_endpoint=gw_snap.get("slowest_endpoint"),
+                        slowest_latency_ms=gw_snap.get("slowest_latency_ms"),
                     )
                 except Exception:
                     logger.exception("ite_cycle_stage_timings_failed")
@@ -5873,6 +5913,14 @@ class InstitutionalIteRuntime:
                     run_state=self.plane.auto_trading_run_state,
                 )
             finally:
+                try:
+                    from app.application.services.ite_cycle_market_context import (
+                        unbind_cycle_gateway_reads as _unbind_cycle_reads,
+                    )
+
+                    _unbind_cycle_reads(self.mt5_adapter)
+                except Exception:
+                    logger.exception("cycle_gateway_reads_unbind_failed")
                 try:
                     if _pvm_token is not None:
                         from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501

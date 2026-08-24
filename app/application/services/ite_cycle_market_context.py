@@ -6,6 +6,7 @@ If market data cannot be loaded, returns an explicit failure reason.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -22,6 +23,73 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+
+_CYCLE_LOCK = threading.Lock()
+_CYCLE_ACTIVE = False
+_CYCLE_CTX: dict[str, IteCycleMarketContext] = {}
+
+
+def begin_cycle_market_snapshot() -> None:
+    """Start a same-cycle read window. Previous-cycle snapshots are dropped."""
+    global _CYCLE_ACTIVE, _CYCLE_CTX
+    with _CYCLE_LOCK:
+        _CYCLE_ACTIVE = True
+        _CYCLE_CTX = {}
+
+
+def end_cycle_market_snapshot() -> None:
+    """End the cycle window — never reuse market context across cycles."""
+    global _CYCLE_ACTIVE, _CYCLE_CTX
+    with _CYCLE_LOCK:
+        _CYCLE_ACTIVE = False
+        _CYCLE_CTX = {}
+
+
+def peek_cycle_market_context(symbol: str | None) -> IteCycleMarketContext | None:
+    key = str(symbol or "").strip().upper()
+    if not key:
+        return None
+    with _CYCLE_LOCK:
+        if not _CYCLE_ACTIVE:
+            return None
+        return _CYCLE_CTX.get(key)
+
+
+def _remember_cycle_market_context(
+    ctx: IteCycleMarketContext, *symbols: str | None
+) -> None:
+    if not ctx.ok:
+        return
+    with _CYCLE_LOCK:
+        if not _CYCLE_ACTIVE:
+            return
+        for raw in symbols:
+            key = str(raw or "").strip().upper()
+            if key:
+                _CYCLE_CTX[key] = ctx
+
+
+def unbind_cycle_gateway_reads(mt5_adapter: Any | None) -> None:
+    client = _client_of(mt5_adapter) if mt5_adapter is not None else None
+    end = getattr(client, "end_cycle_reads", None)
+    if callable(end):
+        end()
+    end_cycle_market_snapshot()
+
+
+def bind_cycle_gateway_reads(mt5_adapter: Any | None) -> None:
+    begin_cycle_market_snapshot()
+    client = _client_of(mt5_adapter) if mt5_adapter is not None else None
+    begin = getattr(client, "begin_cycle_reads", None)
+    if callable(begin):
+        begin()
+
+
+def refresh_execution_gateway_reads(mt5_adapter: Any | None) -> None:
+    client = _client_of(mt5_adapter) if mt5_adapter is not None else None
+    fn = getattr(client, "require_fresh_execution_reads", None)
+    if callable(fn):
+        fn()
 
 
 async def _offload_sync(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
@@ -62,6 +130,8 @@ class IteCycleMarketContext:
     latency_ms: float = 0.0
     bars_loaded: dict[str, int] | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
+    reused: bool = False
+    snapshot_built_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -83,6 +153,8 @@ class IteCycleMarketContext:
                 else None
             ),
             "diagnostics": dict(self.diagnostics),
+            "reused": bool(self.reused),
+            "snapshot_built_at": self.snapshot_built_at,
         }
 
 
@@ -259,9 +331,40 @@ async def build_ite_cycle_market_context(
     *,
     symbol: str = GOLD_SYMBOL,
     position_engine: Any | None = None,
+    reuse_cycle: bool = True,
 ) -> IteCycleMarketContext:
     """Load XAUUSD multi-TF bars + account for one auto/shadow cycle."""
     import time
+
+    if reuse_cycle:
+        cached = peek_cycle_market_context(symbol)
+        if cached is not None and cached.ok:
+            logger.warning(
+                "ite_cycle_market_context_reused",
+                symbol=symbol,
+                snapshot_built_at=cached.snapshot_built_at,
+                original_latency_ms=round(float(cached.latency_ms or 0.0), 1),
+            )
+            return IteCycleMarketContext(
+                ok=cached.ok,
+                snapshot=cached.snapshot,
+                account=cached.account,
+                reason=cached.reason,
+                market_data_live=cached.market_data_live,
+                account_trading_enabled=cached.account_trading_enabled,
+                mt5_autotrading_enabled=cached.mt5_autotrading_enabled,
+                symbol_tradable=cached.symbol_tradable,
+                no_broker_restrictions=cached.no_broker_restrictions,
+                spread=cached.spread,
+                latency_ms=cached.latency_ms,
+                bars_loaded=cached.bars_loaded,
+                diagnostics={
+                    **dict(cached.diagnostics or {}),
+                    "market_context_reused": True,
+                },
+                reused=True,
+                snapshot_built_at=cached.snapshot_built_at,
+            )
 
     t0 = time.perf_counter()
     diag: dict[str, Any] = {
@@ -502,13 +605,61 @@ async def build_ite_cycle_market_context(
             snapshot="ANALYZE_FAIL",
         )
 
+    import asyncio
+
+    from app.application.services.mt5_position_truth import force_sync_positions
+
+    client_for_reads = _client_of(mt5_adapter)
+    orders_fn = getattr(client_for_reads, "list_orders", None) or getattr(
+        mt5_adapter, "list_orders", None
+    )
+    specs_fn = (
+        getattr(client_for_reads, "symbol_info", None)
+        if client_for_reads is not None
+        else None
+    )
+    day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    health_diag_box: dict[str, Any] = {}
+    bundled = await asyncio.gather(
+        _offload_sync(mt5_adapter.account_info),
+        _offload_sync(
+            force_sync_positions,
+            mt5_adapter,
+            symbol=symbol,
+            position_engine=position_engine,
+            fresh=False,
+        ),
+        _offload_sync(
+            _load_history_deals,
+            mt5_adapter,
+            date_from=day_start,
+            date_to=datetime.now(UTC) + timedelta(days=1),
+        ),
+        (
+            _offload_sync(orders_fn)
+            if callable(orders_fn)
+            else _offload_sync(lambda: "N/A")
+        ),
+        _offload_sync(_read_mt5_autotrading_enabled, mt5_adapter, health_diag_box),
+        (
+            _offload_sync(specs_fn, symbol)
+            if callable(specs_fn)
+            else _offload_sync(lambda: None)
+        ),
+        return_exceptions=True,
+    )
+    pre_info, pre_sync, pre_deals, pre_orders, pre_health, pre_specs = bundled
+    diag["read_parallel"] = True
+
     equity = Decimal("0")
     free_margin: Decimal | None = None
     open_positions = 0
     account_positions = 0
     account_trading_enabled = False
     try:
-        info = await _offload_sync(mt5_adapter.account_info)
+        if isinstance(pre_info, Exception):
+            raise pre_info
+        info = pre_info
         equity = Decimal(str(getattr(info, "equity", 0) or 0))
         balance = Decimal(str(getattr(info, "balance", 0) or 0))
         margin = Decimal(str(getattr(info, "margin", 0) or 0))
@@ -577,15 +728,9 @@ async def build_ite_cycle_market_context(
 
     book_rows: list[Any] = []
     try:
-        from app.application.services.mt5_position_truth import force_sync_positions
-
-        # Force Sync Positions — never trust a cached open count alone.
-        sync = await _offload_sync(
-            force_sync_positions,
-            mt5_adapter,
-            symbol=symbol,
-            position_engine=position_engine,
-        )
+        if isinstance(pre_sync, Exception):
+            raise pre_sync
+        sync = pre_sync
         account_positions = int(getattr(sync, "mt5_positions", 0) or 0)
         open_positions = int(getattr(sync, "quantforg_positions", 0) or 0)
         diag["positions"] = open_positions
@@ -659,15 +804,9 @@ async def build_ite_cycle_market_context(
         deals: list[Any] | None = None
         deals_fetch_ok = False
         try:
-            day_start = datetime.now(UTC).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            deals_fetch_ok, deals, deals_note = await _offload_sync(
-                _load_history_deals,
-                mt5_adapter,
-                date_from=day_start,
-                date_to=datetime.now(UTC) + timedelta(days=1),
-            )
+            if isinstance(pre_deals, Exception):
+                raise pre_deals
+            deals_fetch_ok, deals, deals_note = pre_deals
             if deals_note:
                 diag["history_deals"] = deals_note
         except Exception as exc:
@@ -713,15 +852,12 @@ async def build_ite_cycle_market_context(
         daily_pnl_trusted = False
 
     try:
-        client = _client_of(mt5_adapter)
-        orders_fn = getattr(client, "list_orders", None) or getattr(
-            mt5_adapter, "list_orders", None
-        )
-        if callable(orders_fn):
-            orders = await _offload_sync(orders_fn)
-            diag["orders"] = len(orders or [])
-        else:
+        if isinstance(pre_orders, Exception):
+            raise pre_orders
+        if pre_orders == "N/A":
             diag["orders"] = "N/A"
+        else:
+            diag["orders"] = len(pre_orders or [])
     except Exception as exc:
         diag["orders"] = f"ERROR: {exc}"
 
@@ -792,30 +928,26 @@ async def build_ite_cycle_market_context(
     min_lot = VOLUME_MIN
     specs_source = "xauusd_specs_fallback"
     try:
-        client = getattr(mt5_adapter, "client", None) or getattr(
-            mt5_adapter, "_client", None
-        )
-        if client is not None and hasattr(client, "symbol_info"):
-            spec = client.symbol_info(symbol)
-            if spec is not None:
-                vmin = Decimal(str(getattr(spec, "volume_min", None) or VOLUME_MIN))
-                vstep = Decimal(str(getattr(spec, "volume_step", None) or VOLUME_STEP))
-                cs = Decimal(str(getattr(spec, "contract_size", None) or CONTRACT_SIZE))
-                if vmin > 0:
-                    min_lot = vmin
-                if vstep > 0:
-                    lot_step = vstep
-                if cs > 0:
-                    contract_size = cs
-                specs_source = "live_broker"
-                trade_mode = str(getattr(spec, "trade_mode", "") or "")
-                trade_allowed = getattr(spec, "trade_allowed", None)
-                spec_market_open = getattr(spec, "market_open", None)
-                diag["symbol_trade_mode"] = trade_mode
-                diag["symbol_trade_allowed"] = trade_allowed
-                diag["symbol_market_open"] = spec_market_open
-                diag["trade_mode"] = trade_mode
-                diag["trade_allowed"] = trade_allowed
+        spec = None if isinstance(pre_specs, Exception) else pre_specs
+        if spec is not None:
+            vmin = Decimal(str(getattr(spec, "volume_min", None) or VOLUME_MIN))
+            vstep = Decimal(str(getattr(spec, "volume_step", None) or VOLUME_STEP))
+            cs = Decimal(str(getattr(spec, "contract_size", None) or CONTRACT_SIZE))
+            if vmin > 0:
+                min_lot = vmin
+            if vstep > 0:
+                lot_step = vstep
+            if cs > 0:
+                contract_size = cs
+            specs_source = "live_broker"
+            trade_mode = str(getattr(spec, "trade_mode", "") or "")
+            trade_allowed = getattr(spec, "trade_allowed", None)
+            spec_market_open = getattr(spec, "market_open", None)
+            diag["symbol_trade_mode"] = trade_mode
+            diag["symbol_trade_allowed"] = trade_allowed
+            diag["symbol_market_open"] = spec_market_open
+            diag["trade_mode"] = trade_mode
+            diag["trade_allowed"] = trade_allowed
     except Exception as exc:
         logger.debug("ite_cycle_live_lot_specs_failed", error=str(exc))
 
@@ -884,14 +1016,19 @@ async def build_ite_cycle_market_context(
 
     diag["reason"] = "market context ready"
     diag["snapshot"] = "OK"
-    # Terminal AutoTrading — must not hardcode False when /health reports true.
-    mt5_at = await _offload_sync(_read_mt5_autotrading_enabled, mt5_adapter, diag)
+    diag.update(health_diag_box)
+    if isinstance(pre_health, Exception):
+        mt5_at = None
+        diag["autotrading_health_error"] = str(pre_health)
+    else:
+        mt5_at = pre_health
     if mt5_at is None:
         # Unknown → fail-closed for safety gate (same as orchestrator).
         diag["mt5_autotrading_enabled"] = False
         diag["mt5_autotrading_source"] = "unknown_fail_closed"
         mt5_at = False
-    return IteCycleMarketContext(
+    built_at = datetime.now(UTC).isoformat()
+    ctx = IteCycleMarketContext(
         ok=True,
         snapshot=snapshot,
         account=account,
@@ -906,4 +1043,15 @@ async def build_ite_cycle_market_context(
         latency_ms=(time.perf_counter() - t0) * 1000.0,
         bars_loaded=bars_loaded,
         diagnostics=diag,
+        reused=False,
+        snapshot_built_at=built_at,
     )
+    _remember_cycle_market_context(
+        ctx,
+        symbol,
+        logical_symbol,
+        canonical_symbol,
+        diag.get("canonical_broker_symbol"),
+        diag.get("logical_symbol"),
+    )
+    return ctx

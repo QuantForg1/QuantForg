@@ -180,11 +180,12 @@ def force_sync_positions(
     symbol: str = GOLD_SYMBOL,
     internal_positions: int | None = None,
     position_engine: Any | None = None,
+    fresh: bool = True,
 ) -> PositionTruthSync:
     """Force Sync Positions — MT5 is authoritative.
 
-    Clears adapter caches, re-queries live positions, logs both counts, and
-    repairs internal PME state when it disagrees with MT5.
+    Clears adapter caches when ``fresh=True`` (pre-OMS / max-open recheck).
+    Same-cycle decision reads pass ``fresh=False`` to reuse the cycle snapshot.
     """
     sym = (symbol or GOLD_SYMBOL).strip().upper() or GOLD_SYMBOL
     engine_count = _internal_engine_count(position_engine, symbol=sym)
@@ -192,7 +193,8 @@ def force_sync_positions(
         int(internal_positions) if internal_positions is not None else engine_count
     )
 
-    _invalidate_adapter_position_cache(mt5_adapter)
+    if fresh:
+        _invalidate_adapter_position_cache(mt5_adapter)
     rows = list(mt5_adapter.list_positions() or [])
     # Account ticket count is observability / PME repair context.
     # QuantForg strategy cap uses identity + autonomous symbol only.

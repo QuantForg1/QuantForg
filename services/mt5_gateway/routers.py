@@ -276,7 +276,7 @@ async def heartbeat(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
 
 @router.get("/account")
 async def account(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return await _call_async(runtime.account)
+    return await _deduped_market("account", runtime.account)
 
 
 @router.get("/symbols")
@@ -313,12 +313,12 @@ async def candles(
 
 @router.get("/positions")
 async def positions(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return await _call_async(runtime.positions)
+    return await _deduped_market("positions", runtime.positions)
 
 
 @router.get("/orders")
 async def orders(_: TokenDep, runtime: RuntimeDep) -> dict[str, Any]:
-    return await _call_async(runtime.orders)
+    return await _deduped_market("orders", runtime.orders)
 
 
 @router.get("/history/orders")
@@ -336,7 +336,9 @@ async def history_deals(
     runtime: RuntimeDep,
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict[str, Any]:
-    return await _call_async(lambda: runtime.history_deals(days=days))
+    return await _deduped_market(
+        f"history_deals:{days}", lambda: runtime.history_deals(days=days)
+    )
 
 
 @router.post("/trade/order_check")
