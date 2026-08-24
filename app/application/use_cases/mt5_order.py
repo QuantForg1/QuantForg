@@ -30,6 +30,7 @@ from app.domain.value_objects.mt5_order import (
     StopLoss,
     TakeProfit,
 )
+from app.infrastructure.brokers.mt5.gateway_budget import LANE_UI, use_gateway_lane
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -79,7 +80,8 @@ class ValidateMT5OrderUseCase:
         )
         intent = _parse_intent(command)
         try:
-            result = self.validation_service.validate_order(intent)
+            with use_gateway_lane(LANE_UI):
+                result = self.validation_service.validate_order(intent)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ValidationError(
                 humanize_reason(str(exc)),
@@ -176,7 +178,8 @@ class CalculateMT5OrderUseCase:
         intent = _parse_intent(command)
         logical_symbol = (command.symbol or intent.symbol or "").strip()
         try:
-            request, margin, profit = self.validation_service.calculate(intent)
+            with use_gateway_lane(LANE_UI):
+                request, margin, profit = self.validation_service.calculate(intent)
         except (OSError, RuntimeError, ValueError) as exc:
             details = {
                 "failure_class": _FAILURE_CLASS_CALCULATION,

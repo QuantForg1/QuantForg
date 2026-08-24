@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+import threading
 import time
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -44,6 +46,21 @@ from app.domain.interfaces.mt5_order import (
     MT5ProfitResult,
 )
 from app.domain.market_data.timeframe import Timeframe
+from app.infrastructure.brokers.mt5.gateway_budget import (
+    LANE_OBS,
+    LANE_UI,
+    MUTATION_LIMIT,
+    OBS_READ_LIMIT,
+    TRADING_READ_LIMIT,
+    UI_READ_LIMIT,
+    acquire_timeout_seconds,
+    backoff_seconds,
+    coalesce_key,
+    current_gateway_lane,
+    is_calc_path,
+    is_mutation_path,
+    request_attempts,
+)
 from app.infrastructure.brokers.mt5.metrics import gateway_metrics
 from core.logging import get_logger
 
@@ -256,6 +273,32 @@ class GatewayMT5Client:
         default_factory=dict, init=False
     )
     _http: Any = field(default=None, init=False, repr=False)
+    _coalesce: dict[str, Future[dict[str, Any]]] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _coalesce_lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
+    _trading_read_sem: threading.BoundedSemaphore = field(
+        default_factory=lambda: threading.BoundedSemaphore(TRADING_READ_LIMIT),
+        init=False,
+        repr=False,
+    )
+    _ui_read_sem: threading.BoundedSemaphore = field(
+        default_factory=lambda: threading.BoundedSemaphore(UI_READ_LIMIT),
+        init=False,
+        repr=False,
+    )
+    _obs_read_sem: threading.BoundedSemaphore = field(
+        default_factory=lambda: threading.BoundedSemaphore(OBS_READ_LIMIT),
+        init=False,
+        repr=False,
+    )
+    _mut_sem: threading.BoundedSemaphore = field(
+        default_factory=lambda: threading.BoundedSemaphore(MUTATION_LIMIT),
+        init=False,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         self.base_url = normalize_gateway_base_url(self.base_url)
@@ -277,6 +320,11 @@ class GatewayMT5Client:
         if client is None or getattr(client, "is_closed", False):
             client = self._build_http_client()
             self._http = client
+        else:
+            try:
+                gateway_metrics.record_connection_reuse()
+            except Exception:  # noqa: S110
+                pass
         return cast("httpx.Client", client)
 
     def _replace_http_client(self) -> httpx.Client:
@@ -290,6 +338,10 @@ class GatewayMT5Client:
         """
         new_client = self._build_http_client()
         self._http = new_client
+        try:
+            gateway_metrics.record_pool_replace()
+        except Exception:  # noqa: S110  # telemetry must never halt trading
+            pass
         return new_client
 
     @property
@@ -344,6 +396,16 @@ class GatewayMT5Client:
         # for the 15s frontend abort window.
         if self._is_light_gateway_path(path):
             return httpx.Timeout(3.5, connect=2.0, read=3.5, write=3.5, pool=2.0)
+        if is_calc_path(path):
+            from app.infrastructure.brokers.mt5.gateway_budget import (
+                CALC_READ_TIMEOUT_SECONDS,
+            )
+
+            read = min(float(self.timeout_seconds), CALC_READ_TIMEOUT_SECONDS)
+            connect = min(8.0, float(self.timeout_seconds))
+            return httpx.Timeout(
+                read, connect=connect, read=read, write=read, pool=connect
+            )
         connect = min(15.0, float(self.timeout_seconds))
         read = min(float(self.timeout_seconds), 30.0)
         return httpx.Timeout(
@@ -381,6 +443,10 @@ class GatewayMT5Client:
             "limits": limits,
         }
         try:
+            gateway_metrics.record_client_built()
+        except Exception:  # noqa: S110
+            pass
+        try:
             return httpx.Client(http2=True, **common)
         except Exception as exc:
             logger.warning(
@@ -416,6 +482,20 @@ class GatewayMT5Client:
             or "client has been closed" in text
         )
 
+    def _lane_semaphore(
+        self, *, mutation: bool, path: str
+    ) -> threading.BoundedSemaphore | None:
+        if self._is_light_gateway_path(path) and not mutation:
+            return None
+        if mutation:
+            return self._mut_sem
+        lane = current_gateway_lane()
+        if lane == LANE_UI:
+            return self._ui_read_sem
+        if lane == LANE_OBS:
+            return self._obs_read_sem
+        return self._trading_read_sem
+
     def _request(
         self,
         method: str,
@@ -435,7 +515,99 @@ class GatewayMT5Client:
                 "MT5_GATEWAY_CALLER_TOKEN is not configured on the API "
                 "(must match Windows MT5_GATEWAY_TOKEN)"
             )
+        key = coalesce_key(method, path, json_body, params)
+        if key is None:
+            return self._request_leader(
+                method, path, json_body=json_body, params=params, auth=auth
+            )
+        waiter: Future[dict[str, Any]] | None = None
+        leader: Future[dict[str, Any]] | None = None
+        with self._coalesce_lock:
+            existing = self._coalesce.get(key)
+            if existing is not None and not existing.done():
+                waiter = existing
+            else:
+                leader = Future()
+                self._coalesce[key] = leader
+        if waiter is not None:
+            try:
+                gateway_metrics.record_coalesce(hit=True)
+            except Exception:  # noqa: S110
+                pass
+            return waiter.result()
+        assert leader is not None
+        try:
+            try:
+                gateway_metrics.record_coalesce(hit=False)
+            except Exception:  # noqa: S110
+                pass
+            out = self._request_leader(
+                method, path, json_body=json_body, params=params, auth=auth
+            )
+            if not leader.done():
+                leader.set_result(out)
+            return out
+        except BaseException as exc:
+            if not leader.done():
+                leader.set_exception(exc)
+            raise
+        finally:
+            with self._coalesce_lock:
+                if self._coalesce.get(key) is leader:
+                    self._coalesce.pop(key, None)
 
+    def _request_leader(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        auth: bool = True,
+    ) -> dict[str, Any]:
+        mutation = is_mutation_path(method, path)
+        calc = is_calc_path(path)
+        lane = current_gateway_lane()
+        sem = self._lane_semaphore(mutation=mutation, path=path)
+        acquired = True
+        if sem is not None:
+            acquired = sem.acquire(
+                timeout=acquire_timeout_seconds(lane, mutation=mutation)
+            )
+            if not acquired:
+                try:
+                    gateway_metrics.record_retry(exhausted=True)
+                except Exception:  # noqa: S110
+                    pass
+                raise RuntimeError(
+                    "Gateway concurrency budget exhausted calling "
+                    f"{method} {path} (lane={lane})"
+                )
+        try:
+            try:
+                gateway_metrics.begin_inflight(mutation=mutation, calc=calc)
+            except Exception:  # noqa: S110
+                pass
+            return self._request_http(
+                method, path, json_body=json_body, params=params, auth=auth
+            )
+        finally:
+            try:
+                gateway_metrics.end_inflight(mutation=mutation, calc=calc)
+            except Exception:  # noqa: S110
+                pass
+            if sem is not None and acquired:
+                sem.release()
+
+    def _request_http(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        auth: bool = True,
+    ) -> dict[str, Any]:
         url = join_gateway_url(self.base_url, path)
         headers = self._headers(auth=auth)
         safe_headers = _redact_headers(headers)
@@ -482,11 +654,12 @@ class GatewayMT5Client:
 
         try:
             client = self._http_client()
-            # Safe retries: GET + transient transport only. Never retry order_send
-            # after the request may have reached the broker (duplicate risk).
-            attempts = 2 if method.upper() == "GET" else 1
-            if method.upper() == "GET" and not self._is_light_gateway_path(path):
-                attempts = 3
+            # Read-only GET/calc may retry transient transport. Never retry order_send
+            # / cancel / session connect after the request may have reached the broker
+            # (duplicate risk).
+            attempts = request_attempts(
+                method, path, light=self._is_light_gateway_path(path)
+            )
             last_exc: Exception | None = None
             response = None
             for attempt_i in range(attempts):
@@ -523,10 +696,19 @@ class GatewayMT5Client:
                         pass
                     if attempt_i + 1 >= attempts:
                         raise
-                    # After socket pressure / closed-client races, swap to a
-                    # fresh pool WITHOUT closing the previous client mid-flight
-                    # (parallel scan workers may still hold it).
-                    exc_text = str(exc).lower()
+                    exc_text = f"{type(exc).__name__} {exc}".lower()
+                    try:
+                        gateway_metrics.record_retry(
+                            exhausted=False,
+                            errno11=(
+                                "errno 11" in exc_text
+                                or "eagain" in exc_text
+                                or "resource temporarily unavailable" in exc_text
+                            ),
+                            timeout="timeout" in exc_text,
+                        )
+                    except Exception:  # noqa: S110
+                        pass
                     if (
                         "errno 11" in exc_text
                         or "eagain" in exc_text
@@ -534,7 +716,7 @@ class GatewayMT5Client:
                         or getattr(client, "is_closed", False)
                     ):
                         client = self._replace_http_client()
-                    time.sleep(0.2 * (2**attempt_i))
+                    time.sleep(backoff_seconds(attempt_i))
             if response is None and last_exc is not None:
                 raise last_exc
             assert response is not None

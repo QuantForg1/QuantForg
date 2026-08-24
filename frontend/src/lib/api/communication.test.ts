@@ -24,6 +24,7 @@ import {
   isTelemetryPath,
   shouldAttemptTokenRefresh,
   shouldDedupeGet,
+  shouldDedupeReadOnlyCalc,
   shouldHealSessionOnUnauthorized,
   shouldReplayAfterRefresh,
 } from "./request-policy.ts";
@@ -149,6 +150,8 @@ const CANONICAL = "XAUUSD_i";
   assert.equal(shouldDedupeGet("/orders"), true);
   assert.equal(shouldDedupeGet("/execution/journal?limit=80"), true);
   assert.equal(shouldDedupeGet("/institutional-observability/health"), true);
+  assert.equal(shouldDedupeReadOnlyCalc("/mt5/order/calculate"), true);
+  assert.equal(shouldDedupeReadOnlyCalc("/mt5/order/validate"), false);
 }
 
 // 9. Current snapshot reuse

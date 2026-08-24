@@ -149,6 +149,12 @@ export function shouldDedupeGet(path: string): boolean {
   );
 }
 
+/** Terminal pre-trade calculate is read-only — coalesce identical in-flight POSTs. */
+export function shouldDedupeReadOnlyCalc(path: string): boolean {
+  const p = requestPathname(path);
+  return p.includes("/mt5/order/calculate");
+}
+
 export function shouldHealSessionOnUnauthorized(args: {
   status: number;
   authEnabled: boolean;

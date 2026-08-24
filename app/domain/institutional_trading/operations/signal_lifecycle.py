@@ -18,6 +18,10 @@ SIGNAL_BLOCKED_SAME_SYMBOL = "SIGNAL_BLOCKED_SAME_SYMBOL"
 SIGNAL_BLOCKED_PORTFOLIO = "SIGNAL_BLOCKED_PORTFOLIO"
 SIGNAL_BLOCKED_MARGIN = "SIGNAL_BLOCKED_MARGIN"
 SIGNAL_BLOCKED_BROKER = "SIGNAL_BLOCKED_BROKER"
+SIGNAL_BLOCKED_GATEWAY = "SIGNAL_BLOCKED_GATEWAY"
+SIGNAL_BLOCKED_CALCULATION = "SIGNAL_BLOCKED_CALCULATION"
+SIGNAL_BLOCKED_OMS = "SIGNAL_BLOCKED_OMS"
+SIGNAL_BLOCKED_MT5 = "SIGNAL_BLOCKED_MT5"
 SIGNAL_EXECUTED = "SIGNAL_EXECUTED"
 SIGNAL_MANAGED = "SIGNAL_MANAGED"
 SIGNAL_CLOSED = "SIGNAL_CLOSED"
@@ -33,6 +37,10 @@ _BLOCKED = frozenset(
         SIGNAL_BLOCKED_PORTFOLIO,
         SIGNAL_BLOCKED_MARGIN,
         SIGNAL_BLOCKED_BROKER,
+        SIGNAL_BLOCKED_GATEWAY,
+        SIGNAL_BLOCKED_CALCULATION,
+        SIGNAL_BLOCKED_OMS,
+        SIGNAL_BLOCKED_MT5,
     }
 )
 
@@ -92,9 +100,28 @@ def classify_signal_final_state(
     if "MARGIN" in hay:
         return SIGNAL_BLOCKED_MARGIN
     if (
-        stage in {"BROKER", "GATEWAY", "MARKET"}
-        or "BROKER_SESSION" in hay
+        "ORDER_CALC" in hay
+        or "CALCULATION_FAILED" in hay
+        or "CALCULATION FAILED" in hay
+        or "A_CALCULATION" in hay
+    ):
+        return SIGNAL_BLOCKED_CALCULATION
+    if (
+        "GATEWAY_UNAVAILABLE" in hay
+        or "SOCKET PRESSURE" in hay
+        or "ERRNO 11" in hay
+        or "EAGAIN" in hay
+        or stage == "GATEWAY"
         or "GATEWAY" in hay
+    ):
+        return SIGNAL_BLOCKED_GATEWAY
+    if "OMS_FAILED" in hay or stage == "OMS":
+        return SIGNAL_BLOCKED_OMS
+    if "MT5_REJECTED" in hay or "BROKER_REJECTED" in hay:
+        return SIGNAL_BLOCKED_MT5
+    if (
+        stage in {"BROKER", "MARKET"}
+        or "BROKER_SESSION" in hay
         or "SYMBOL_UNAVAILABLE" in hay
     ):
         return SIGNAL_BLOCKED_BROKER
@@ -115,6 +142,10 @@ def blocked_bucket(final_state: str) -> str | None:
         SIGNAL_BLOCKED_PORTFOLIO: "portfolio",
         SIGNAL_BLOCKED_MARGIN: "margin",
         SIGNAL_BLOCKED_BROKER: "broker",
+        SIGNAL_BLOCKED_GATEWAY: "gateway",
+        SIGNAL_BLOCKED_CALCULATION: "calculation",
+        SIGNAL_BLOCKED_OMS: "oms",
+        SIGNAL_BLOCKED_MT5: "mt5",
     }
     return mapping.get(final_state)
 
@@ -169,6 +200,14 @@ def build_signal_lifecycle_record(
     # Hold-path logs can omit abort/stage; never leave a MIN_LOT block unexplained.
     if final_state == SIGNAL_BLOCKED_MIN_LOT and "MIN_LOT" not in bu:
         blocker = "MIN_LOT_CONSTRAINT"
+    elif final_state == SIGNAL_BLOCKED_CALCULATION and (
+        bu in {"", "NONE", "NO_TRADE"} or "CALC" not in bu
+    ):
+        blocker = "CALCULATION_FAILED"
+    elif final_state == SIGNAL_BLOCKED_GATEWAY and (
+        bu in {"", "NONE", "NO_TRADE"} or "GATEWAY" not in bu
+    ):
+        blocker = "GATEWAY_UNAVAILABLE"
     elif bu in {"", "NONE", "NO_TRADE"}:
         why = str(reasons or "")
         blocker = why.split(";")[0].strip()[:120] if why.strip() else ""

@@ -100,6 +100,10 @@ class StrategyPerformanceTelemetry:
     blocked_by_margin: int = 0
     blocked_by_portfolio: int = 0
     blocked_by_broker: int = 0
+    blocked_by_gateway: int = 0
+    blocked_by_calculation: int = 0
+    blocked_by_oms: int = 0
+    blocked_by_mt5: int = 0
     stale_signal_count: int = 0
     tp_exits: int = 0
     sl_exits: int = 0
@@ -241,6 +245,14 @@ class StrategyPerformanceTelemetry:
                     self.blocked_by_margin += 1
                 elif bucket == "broker":
                     self.blocked_by_broker += 1
+                elif bucket == "gateway":
+                    self.blocked_by_gateway += 1
+                elif bucket == "calculation":
+                    self.blocked_by_calculation += 1
+                elif bucket == "oms":
+                    self.blocked_by_oms += 1
+                elif bucket == "mt5":
+                    self.blocked_by_mt5 += 1
                 if bucket == "risk":
                     self.blocked_by_risk += 1
                 if life.get("high_quality"):
@@ -431,6 +443,10 @@ class StrategyPerformanceTelemetry:
                 "blocked_by_margin": self.blocked_by_margin,
                 "blocked_by_portfolio": self.blocked_by_portfolio,
                 "blocked_by_broker": self.blocked_by_broker,
+                "blocked_by_gateway": self.blocked_by_gateway,
+                "blocked_by_calculation": self.blocked_by_calculation,
+                "blocked_by_oms": self.blocked_by_oms,
+                "blocked_by_mt5": self.blocked_by_mt5,
                 "stale_signal_count": self.stale_signal_count,
                 "signal_to_execution_rate": (
                     (self.executed_signals / self.high_quality_signals)

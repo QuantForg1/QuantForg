@@ -24,6 +24,7 @@ router = APIRouter(tags=["mt5-gateway"])
 # Dedicated pool so market-data storms cannot starve /health.
 _HEALTH_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gw-health")
 _MD_SEM: asyncio.Semaphore | None = None
+_CALC_SEM: asyncio.Semaphore | None = None
 
 
 def _market_sem() -> asyncio.Semaphore:
@@ -32,6 +33,13 @@ def _market_sem() -> asyncio.Semaphore:
         n = int(get_gateway_settings().mt5_max_concurrent_market_requests or 4)
         _MD_SEM = asyncio.Semaphore(max(1, n))
     return _MD_SEM
+
+
+def _calc_sem() -> asyncio.Semaphore:
+    global _CALC_SEM
+    if _CALC_SEM is None:
+        _CALC_SEM = asyncio.Semaphore(2)
+    return _CALC_SEM
 
 
 def get_runtime(request: Request) -> MT5GatewayRuntime:
@@ -83,8 +91,52 @@ async def _call_trade_async(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     return await asyncio.to_thread(_call, fn)
 
 
-# In-flight dedupe for identical market-data GETs (scanner fan-out).
+# In-flight dedupe for identical market-data GETs and read-only calcs.
 _INFLIGHT: dict[str, asyncio.Future[dict[str, Any]]] = {}
+
+
+async def _call_calc_async(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    """Read-only broker calculations: bounded, never queued as unbounded threads."""
+    async with _calc_sem():
+        return await asyncio.to_thread(_call, fn)
+
+
+async def _deduped_calc(
+    key: str, fn: Callable[[], dict[str, Any]]
+) -> dict[str, Any]:
+    """Share one in-flight calc across identical concurrent requests."""
+    existing = _INFLIGHT.get(key)
+    if existing is not None and not existing.done():
+        return await asyncio.shield(existing)
+
+    loop = asyncio.get_running_loop()
+    fut: asyncio.Future[dict[str, Any]] = loop.create_future()
+    _INFLIGHT[key] = fut
+
+    async def _run() -> None:
+        try:
+            result = await _call_calc_async(fn)
+            if not fut.done():
+                fut.set_result(result)
+        except Exception as exc:
+            if not fut.done():
+                fut.set_exception(exc)
+        finally:
+            if _INFLIGHT.get(key) is fut:
+                _INFLIGHT.pop(key, None)
+
+    asyncio.create_task(_run())
+    return await asyncio.shield(fut)
+
+
+def _calc_key(kind: str, body: TradeRequestBody) -> str:
+    sl = body.stop_loss if body.stop_loss is not None else body.sl
+    tp = body.take_profit if body.take_profit is not None else body.tp
+    close = "" if body.close_price is None else body.close_price
+    return (
+        f"calc:{kind}:{body.symbol}:{body.action}:{body.volume}:"
+        f"{body.price}:{sl}:{tp}:{close}"
+    )
 
 
 async def _deduped_market(
@@ -352,8 +404,9 @@ async def trade_order_check(
 async def trade_order_calc_margin(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return await _call_trade_async(
-        lambda: runtime.order_calc_margin(body.as_runtime_dict())
+    return await _deduped_calc(
+        _calc_key("margin", body),
+        lambda: runtime.order_calc_margin(body.as_runtime_dict()),
     )
 
 
@@ -361,8 +414,9 @@ async def trade_order_calc_margin(
 async def trade_order_calc_profit(
     body: TradeRequestBody, _: TokenDep, runtime: RuntimeDep
 ) -> dict[str, Any]:
-    return await _call_trade_async(
-        lambda: runtime.order_calc_profit(body.as_runtime_dict())
+    return await _deduped_calc(
+        _calc_key("profit", body),
+        lambda: runtime.order_calc_profit(body.as_runtime_dict()),
     )
 
 

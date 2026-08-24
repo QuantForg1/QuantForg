@@ -222,7 +222,12 @@ export const ExecutionOrderTicket = forwardRef<
       setValidation(null);
       setCalc(null);
       if (e instanceof ApiError) {
-        toast.error(e.message);
+        const transient = /socket pressure|resource temporarily unavailable|errno 11|eagain|concurrency budget/i.test(
+          e.message || "",
+        );
+        if (!dense || !transient) {
+          toast.error(e.message);
+        }
       }
     }
   };
@@ -231,7 +236,7 @@ export const ExecutionOrderTicket = forwardRef<
     if (!connected || !symbol) return;
     const t = window.setTimeout(() => {
       void refreshEstimates();
-    }, dense ? 700 : 400);
+    }, dense ? 1600 : 1000);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, symbol, side, orderType, volume, price, stopLoss, takeProfit, dense]);

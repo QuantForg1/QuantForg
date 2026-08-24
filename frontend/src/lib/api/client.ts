@@ -28,6 +28,7 @@ import {
   defaultTimeoutForPath,
   isTelemetryPath,
   shouldDedupeGet,
+  shouldDedupeReadOnlyCalc,
   shouldHealSessionOnUnauthorized,
   shouldReplayAfterRefresh,
 } from "@/lib/api/request-policy";
@@ -221,6 +222,14 @@ export async function apiFetch<T>(
   const dedupe = method === "GET" && !options.signal && shouldDedupeGet(safePathEarly);
   if (dedupe) {
     const key = `${method}:${safePathEarly}:${options.auth === false ? "0" : "1"}`;
+    return dedupeInflight(key, () => apiFetchUndeduped<T>(path, options));
+  }
+  if (
+    method === "POST" &&
+    !options.signal &&
+    shouldDedupeReadOnlyCalc(safePathEarly)
+  ) {
+    const key = `${method}:${safePathEarly}:${JSON.stringify(options.body ?? {})}`;
     return dedupeInflight(key, () => apiFetchUndeduped<T>(path, options));
   }
   return apiFetchUndeduped<T>(path, options);
