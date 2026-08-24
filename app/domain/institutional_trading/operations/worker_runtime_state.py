@@ -116,7 +116,7 @@ def last_blocker_from_cycle(cycle: Any) -> tuple[str | None, str | None]:
         stage = outcome or "execution"
         if "SESSION" in abort or "BROKER_SESSION" in (detail or ""):
             stage = "session"
-        elif "RISK" in abort or "MIN_LOT" in (detail or ""):
+        elif "RISK" in abort or "MIN_LOT" in abort or "MIN_LOT" in (detail or ""):
             stage = "risk"
         elif "SAFETY" in abort:
             stage = "safety"

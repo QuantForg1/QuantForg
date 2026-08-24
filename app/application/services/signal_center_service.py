@@ -96,6 +96,7 @@ def _is_min_lot_constraint(text: str | None) -> bool:
         token in low
         for token in (
             "min_lot_constraint",
+            "min_lot_infeasible",
             "below_min_lot",
             "below broker volume_min",
             "below broker minimum",

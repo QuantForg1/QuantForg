@@ -3875,7 +3875,17 @@ class InstitutionalIteRuntime:
 
             ai = getattr(self.decision_pipeline, "_last_ai_score", None)
             ai_d = ai if isinstance(ai, dict) else {}
-            get_strategy_performance_telemetry().observe_cycle(
+            feas = (
+                self.decision_pipeline.last_min_lot_feasibility()
+                if hasattr(self.decision_pipeline, "last_min_lot_feasibility")
+                else None
+            ) or {}
+            sig_dir = str(
+                getattr(getattr(decision, "direction", None), "value", None)
+                or getattr(decision, "direction", None)
+                or ""
+            )
+            tel_row = get_strategy_performance_telemetry().observe_cycle(
                 cycle_key=str(
                     ai_d.get("cycle_id")
                     or getattr(decision, "id", "")
@@ -3888,25 +3898,39 @@ class InstitutionalIteRuntime:
                 fault_code=abort_val or None,
                 ticket=chain.get("ticket"),
                 this_cycle_forwarded=this_cycle_forwarded,
+                trace_id=str(getattr(decision, "id", "") or "") or None,
+                eligible=elig_ok,
+                reasons=risk_detail,
                 signal={
-                    "signal_quality": ai_d.get("trade_quality") or ai_d.get("quality"),
+                    "symbol": str(getattr(decision, "symbol", "") or "") or None,
+                    "signal_quality": ai_d.get("trade_quality")
+                    or ai_d.get("quality")
+                    or getattr(decision, "quality", None),
                     "confidence": getattr(decision, "confidence", None)
                     or ai_d.get("ai_confidence")
                     or ai_d.get("confidence"),
-                    "direction": action,
+                    "direction": sig_dir,
                     "strategy_id": ai_d.get("strategy") or ai_d.get("setup_family"),
+                    "trade_class": getattr(decision, "trade_class", None),
                     "approved_stop": ai_d.get("stop_distance")
-                    or (
-                        getattr(
-                            self.decision_pipeline,
-                            "last_min_lot_feasibility",
-                            lambda: None,
-                        )()
-                        or {}
-                    ).get("stop_distance"),
-                    "approved_lot": str(getattr(decision, "approved_lots", "") or "")
+                    or feas.get("stop_distance"),
+                    "approved_lot": str(
+                        getattr(decision, "approved_lots", "") or ""
+                    )
                     or None,
+                    "min_lot_feasibility": feas.get("classification"),
+                    "risk_result": "PASS" if risk_pass else "FAIL",
+                    "execution_allowed": bool(chain["forwarded_to_oms"]),
                 },
+            )
+            logger.warning(
+                "Signal Lifecycle",
+                final_state=tel_row.get("final_state"),
+                final_blocker=tel_row.get("final_blocker"),
+                direction=tel_row.get("direction") or sig_dir,
+                action=action,
+                high_quality=tel_row.get("high_quality"),
+                forwarded_to_oms=bool(chain["forwarded_to_oms"]),
             )
         except Exception:
             logger.exception("strategy_performance_cycle_observe_failed")

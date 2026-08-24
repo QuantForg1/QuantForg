@@ -77,6 +77,8 @@ class StrategyPerformanceTelemetry:
     _closed: deque[dict[str, Any]] = field(default_factory=deque, repr=False)
     _pending: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
     _rejected: deque[dict[str, Any]] = field(default_factory=deque, repr=False)
+    _lifecycle: deque[dict[str, Any]] = field(default_factory=deque, repr=False)
+    _near_miss: deque[dict[str, Any]] = field(default_factory=deque, repr=False)
     _last_cycle_key: str | None = None
     scanner_cycles: int = 0
     scanner_cycles_then_infeasible: int = 0
@@ -88,6 +90,17 @@ class StrategyPerformanceTelemetry:
     safety_block_count: int = 0
     executed_signals: int = 0
     rejected_signals: int = 0
+    high_quality_signals: int = 0
+    eligible_signals: int = 0
+    blocked_signals: int = 0
+    blocked_by_risk: int = 0
+    blocked_by_min_lot: int = 0
+    blocked_by_same_symbol: int = 0
+    blocked_by_safety: int = 0
+    blocked_by_margin: int = 0
+    blocked_by_portfolio: int = 0
+    blocked_by_broker: int = 0
+    stale_signal_count: int = 0
     tp_exits: int = 0
     sl_exits: int = 0
     be_activations: int = 0
@@ -96,6 +109,8 @@ class StrategyPerformanceTelemetry:
     def __post_init__(self) -> None:
         self._closed = deque(maxlen=_MAX_TRACES)
         self._rejected = deque(maxlen=_MAX_TRACES)
+        self._lifecycle = deque(maxlen=_MAX_TRACES)
+        self._near_miss = deque(maxlen=_MAX_TRACES)
 
     def note_feasibility(
         self,
@@ -125,38 +140,116 @@ class StrategyPerformanceTelemetry:
         ticket: Any = None,
         this_cycle_forwarded: bool | None = None,
         signal: dict[str, Any] | None = None,
+        trace_id: str | None = None,
+        snapshot_id: str | None = None,
+        eligible: bool = False,
+        reasons: str | None = None,
+        closed: bool = False,
+        managed: bool = False,
     ) -> dict[str, Any]:
         """Record executed vs rejected. Never attach a stale ticket."""
+        from app.domain.institutional_trading.operations.signal_lifecycle import (
+            SIGNAL_ELIGIBLE,
+            SIGNAL_EXECUTED,
+            blocked_bucket,
+            build_signal_lifecycle_record,
+        )
+
         submitted = bool(forwarded_to_oms) or bool(this_cycle_forwarded)
         key = str(cycle_key or "").strip() or None
-        stage = str(blocking_stage or "").strip().upper()
-        code = str(fault_code or "").strip().upper()
-        hay = f"{code} {stage}"
-        min_lot = "MIN_LOT" in hay
+        sig = dict(signal or {})
+        life = build_signal_lifecycle_record(
+            trace_id=trace_id,
+            cycle_id=key,
+            snapshot_id=snapshot_id,
+            symbol=sig.get("symbol"),
+            direction=sig.get("direction"),
+            confidence=sig.get("confidence"),
+            quality=sig.get("signal_quality") or sig.get("quality"),
+            strategy_id=sig.get("strategy_id"),
+            trade_class=sig.get("trade_class"),
+            approved_stop=sig.get("approved_stop"),
+            min_lot_feasibility=sig.get("min_lot_feasibility"),
+            risk_result=sig.get("risk_result"),
+            safety_result=sig.get("safety_result"),
+            portfolio_result=sig.get("portfolio_result"),
+            margin_result=sig.get("margin_result"),
+            broker_result=sig.get("broker_result"),
+            same_symbol_result=sig.get("same_symbol_result"),
+            execution_allowed=bool(sig.get("execution_allowed")),
+            forwarded_to_oms=submitted,
+            blocking_stage=blocking_stage,
+            fault_code=fault_code,
+            reasons=reasons,
+            eligible=eligible,
+            ticket=ticket,
+            closed=closed,
+            managed=managed,
+        )
         row = {
-            "recorded_at": datetime.now(UTC).isoformat(),
+            "recorded_at": life["timestamp"],
             "forwarded_to_oms": submitted,
-            "blocking_stage": stage or None,
-            "fault_code": code or None,
-            "ticket": str(ticket) if submitted and ticket not in (None, "") else None,
+            "blocking_stage": str(blocking_stage or "").strip().upper() or None,
+            "fault_code": str(fault_code or "").strip().upper() or None,
+            "ticket": life["ticket"],
             "stale_ticket_reused": False,
-            "signal": dict(signal or {}),
+            "signal": sig,
+            **{k: life[k] for k in (
+                "final_state",
+                "final_blocker",
+                "high_quality",
+                "direction",
+                "cycle_id",
+                "trace_id",
+                "freshness",
+            )},
         }
+        bucket = blocked_bucket(str(life["final_state"]))
         with self._lock:
-            if key and key == self._last_cycle_key:
+            if key and key == self._last_cycle_key and not closed and not managed:
                 return {"deduped": True, **row}
-            self._last_cycle_key = key
-            if submitted:
+            if closed or managed:
+                self._lifecycle.append(life)
+                return row
+            if not closed and not managed:
+                self._last_cycle_key = key
+            self._lifecycle.append(life)
+            if life.get("high_quality"):
+                self.high_quality_signals += 1
+            if life["final_state"] == SIGNAL_ELIGIBLE:
+                self.eligible_signals += 1
+            if submitted or life["final_state"] == SIGNAL_EXECUTED:
                 self.executed_signals += 1
-            else:
+            elif life.get("blocked"):
+                self.rejected_signals += 1
+                self.blocked_signals += 1
+                self._rejected.append(row)
+                if bucket == "risk":
+                    self.risk_block_count += 1
+                elif bucket == "safety":
+                    self.safety_block_count += 1
+                    self.blocked_by_safety += 1
+                elif bucket == "min_lot":
+                    self.min_lot_constraint_count += 1
+                    self.blocked_by_min_lot += 1
+                    self.risk_block_count += 1
+                elif bucket == "same_symbol":
+                    self.blocked_by_same_symbol += 1
+                elif bucket == "portfolio":
+                    self.blocked_by_portfolio += 1
+                elif bucket == "margin":
+                    self.blocked_by_margin += 1
+                elif bucket == "broker":
+                    self.blocked_by_broker += 1
+                if bucket == "risk":
+                    self.blocked_by_risk += 1
+                if life.get("high_quality"):
+                    self._near_miss.append(life)
+            elif not submitted:
                 self.rejected_signals += 1
                 self._rejected.append(row)
-                if stage == "RISK" or min_lot:
-                    self.risk_block_count += 1
-                if stage == "SAFETY":
-                    self.safety_block_count += 1
-                if min_lot:
-                    self.min_lot_constraint_count += 1
+            if life.get("stale_ticket_attempt"):
+                self.stale_signal_count += 1
         return row
 
     def observe_fill(
@@ -211,6 +304,7 @@ class StrategyPerformanceTelemetry:
         pnl = _f(realized_pnl) or 0.0
         rr = _f(realized_r)
         hold = _f(hold_seconds)
+        pending: dict[str, Any] = {}
         with self._lock:
             pending = dict(self._pending.pop(tid, {}) or {})
             trace = {
@@ -234,6 +328,23 @@ class StrategyPerformanceTelemetry:
                 self.be_activations += 1
             elif kind == "TRAILING":
                 self.trailing_exits += 1
+        self.observe_cycle(
+            cycle_key=f"close-{tid}",
+            forwarded_to_oms=False,
+            blocking_stage=None,
+            fault_code=None,
+            ticket=tid,
+            closed=True,
+            signal={
+                "symbol": pending.get("symbol"),
+                "direction": pending.get("direction"),
+                "confidence": pending.get("confidence"),
+                "signal_quality": pending.get("signal_quality"),
+                "strategy_id": pending.get("strategy_id"),
+                "trade_class": pending.get("trade_class"),
+                "approved_stop": pending.get("approved_stop"),
+            },
+        )
         return trace
 
     def snapshot(self) -> dict[str, Any]:
@@ -310,6 +421,26 @@ class StrategyPerformanceTelemetry:
                 "safety_block_count": self.safety_block_count,
                 "executed_signals": self.executed_signals,
                 "rejected_signals": self.rejected_signals,
+                "high_quality_signals": self.high_quality_signals,
+                "eligible_signals": self.eligible_signals,
+                "blocked_signals": self.blocked_signals,
+                "blocked_by_risk": self.blocked_by_risk,
+                "blocked_by_min_lot": self.blocked_by_min_lot,
+                "blocked_by_same_symbol": self.blocked_by_same_symbol,
+                "blocked_by_safety": self.blocked_by_safety,
+                "blocked_by_margin": self.blocked_by_margin,
+                "blocked_by_portfolio": self.blocked_by_portfolio,
+                "blocked_by_broker": self.blocked_by_broker,
+                "stale_signal_count": self.stale_signal_count,
+                "signal_to_execution_rate": (
+                    (self.executed_signals / self.high_quality_signals)
+                    if self.high_quality_signals
+                    else None
+                ),
+                "recent_lifecycle": list(reversed(list(self._lifecycle)[-50:])),
+                "high_quality_near_misses": list(
+                    reversed(list(self._near_miss)[-50:])
+                ),
                 "cycle_efficiency": {
                     "scanner_cycles": self.scanner_cycles,
                     "scanner_cycles_then_infeasible": (
