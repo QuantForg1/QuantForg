@@ -1079,6 +1079,20 @@ def get_strategy_performance_telemetry_ops(_user: OperatorUser) -> dict[str, Any
 
     payload = get_strategy_performance_telemetry().snapshot()
     payload["thresholds_changed"] = False
+    try:
+        from app.domain.institutional_trading.compounding.observe import (
+            get_compounding_shadow_store,
+        )
+
+        payload["aggressive_compounding_shadow"] = (
+            get_compounding_shadow_store().snapshot()
+        )
+    except Exception:
+        payload["aggressive_compounding_shadow"] = {
+            "advisory_only": True,
+            "mutates_engines": False,
+            "unavailable": True,
+        }
     return payload
 
 

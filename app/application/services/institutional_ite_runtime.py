@@ -3929,6 +3929,39 @@ class InstitutionalIteRuntime:
                     "execution_allowed": bool(chain["forwarded_to_oms"]),
                 },
             )
+            try:
+                from app.application.services.aggressive_compounding_observer import (
+                    observe_aggressive_compounding_shadow,
+                )
+
+                observe_aggressive_compounding_shadow(
+                    signal={
+                        "symbol": str(getattr(decision, "symbol", "") or "") or None,
+                        "signal_quality": ai_d.get("trade_quality")
+                        or ai_d.get("quality")
+                        or getattr(decision, "quality", None),
+                        "confidence": getattr(decision, "confidence", None)
+                        or ai_d.get("ai_confidence")
+                        or ai_d.get("confidence"),
+                        "direction": sig_dir,
+                        "trade_class": getattr(decision, "trade_class", None),
+                        "expected_rr": ai_d.get("expected_rr")
+                        or getattr(decision, "estimated_rr", None),
+                        "approved_lot": str(
+                            getattr(decision, "approved_lots", "") or ""
+                        )
+                        or None,
+                        "min_lot_feasibility": feas.get("classification"),
+                    },
+                    score=ai_d,
+                    forwarded_to_oms=bool(chain["forwarded_to_oms"]),
+                    blocking_stage=blocking_stage,
+                    fault_code=abort_val or None,
+                    risk_approved_volume=getattr(decision, "approved_lots", None),
+                    cycle_id=str(getattr(decision, "id", "") or "") or None,
+                )
+            except Exception:
+                logger.exception("aggressive_compounding_shadow_hook_failed")
             logger.warning(
                 "Signal Lifecycle",
                 final_state=tel_row.get("final_state"),
