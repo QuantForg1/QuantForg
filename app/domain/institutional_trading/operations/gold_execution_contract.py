@@ -62,6 +62,7 @@ def _reasons_indicate_min_lot(reasons: tuple[str, ...] | list[str] | None) -> bo
         token in hay
         for token in (
             "min_lot_constraint",
+            "min_lot_infeasible",
             "min lot constraint",
             "below_min_lot",
             "below broker volume_min",
@@ -675,6 +676,7 @@ def evaluate_gold_execution_contract(
             decision_state = DecisionState.HARD_BLOCK.value
         if first and first["code"] in {
             "MIN_LOT_CONSTRAINT",
+            "MIN_LOT_INFEASIBLE",
             "MIN_LOT_RISK_INFEASIBLE",
         }:
             decision_state = DecisionState.CANDIDATE_BLOCK.value

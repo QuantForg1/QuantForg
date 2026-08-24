@@ -1067,6 +1067,21 @@ def get_decision_v2_telemetry(
     }
 
 
+@router.get("/strategy-performance-telemetry")
+def get_strategy_performance_telemetry_ops(_user: OperatorUser) -> dict[str, Any]:
+    """Read-only strategy expectancy / min-lot cycle telemetry.
+
+    Never mutates Risk, Safety, stops, lots, OMS, or PME.
+    """
+    from app.application.services.strategy_performance_telemetry import (
+        get_strategy_performance_telemetry,
+    )
+
+    payload = get_strategy_performance_telemetry().snapshot()
+    payload["thresholds_changed"] = False
+    return payload
+
+
 @router.get("/m15-semantics-telemetry")
 def get_m15_semantics_telemetry(
     _user: OperatorUser,

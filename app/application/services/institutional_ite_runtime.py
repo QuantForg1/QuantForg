@@ -1726,6 +1726,26 @@ class InstitutionalIteRuntime:
                                             closed_at=datetime.now(UTC).isoformat(),
                                         )
                                     )
+                                    try:
+                                        from app.application.services.strategy_performance_telemetry import (  # noqa: E501
+                                            get_strategy_performance_telemetry,
+                                        )
+
+                                        _tel = get_strategy_performance_telemetry()
+                                        _tel.observe_close(
+                                            ticket=ticket,
+                                            exit_price=getattr(pos, "exit_price", None),
+                                            realized_pnl=pnl,
+                                            realized_r=r_mult,
+                                            exit_reason=str(
+                                                _close_reason or reason or "closed"
+                                            ),
+                                            hold_seconds=hold_m * 60.0,
+                                        )
+                                    except Exception:
+                                        logger.exception(
+                                            "strategy_performance_close_observe_failed"
+                                        )
                                 except Exception:
                                     logger.exception(
                                         "daily_opportunity_target_close_record_failed"
@@ -3415,6 +3435,54 @@ class InstitutionalIteRuntime:
                         ).note_trade_executed(
                             symbol=str(getattr(decision, "symbol", "") or "")
                         )
+                        try:
+                            from app.application.services.strategy_performance_telemetry import (  # noqa: E501
+                                get_strategy_performance_telemetry,
+                            )
+
+                            _ai_fill = getattr(
+                                self.decision_pipeline, "_last_ai_score", None
+                            )
+                            _ai_fd = _ai_fill if isinstance(_ai_fill, dict) else {}
+                            _feas = (
+                                self.decision_pipeline.last_min_lot_feasibility()
+                                if hasattr(
+                                    self.decision_pipeline,
+                                    "last_min_lot_feasibility",
+                                )
+                                else None
+                            ) or {}
+                            get_strategy_performance_telemetry().observe_fill(
+                                ticket=ticket,
+                                signal_quality=_ai_fd.get("trade_quality")
+                                or _ai_fd.get("quality")
+                                or getattr(decision, "quality", None),
+                                confidence=getattr(decision, "confidence", None)
+                                or _ai_fd.get("ai_confidence")
+                                or _ai_fd.get("confidence"),
+                                direction=str(
+                                    getattr(
+                                        getattr(decision, "direction", None),
+                                        "value",
+                                        None,
+                                    )
+                                    or getattr(decision, "direction", None)
+                                    or ""
+                                ),
+                                strategy_id=_ai_fd.get("strategy")
+                                or _ai_fd.get("setup_family")
+                                or getattr(self.plane, "trading_mode", None),
+                                approved_stop=_ai_fd.get("stop_distance")
+                                or _feas.get("stop_distance"),
+                                approved_lot=getattr(decision, "approved_lots", None),
+                                trade_class=getattr(decision, "trade_class", None),
+                                entry=_ai_fd.get("entry")
+                                or getattr(decision, "entry", None),
+                            )
+                        except Exception:
+                            logger.exception(
+                                "strategy_performance_fill_observe_failed"
+                            )
                         if getattr(_tgt_cfg, "post_event_rescan_enabled", True):
                             _tgt_co(_tgt_cfg).request_opportunity_rescan("position_opened")
                     except Exception:
@@ -3800,6 +3868,48 @@ class InstitutionalIteRuntime:
             eligible=elig_ok,
             detail=risk_detail[:500],
         )
+        try:
+            from app.application.services.strategy_performance_telemetry import (
+                get_strategy_performance_telemetry,
+            )
+
+            ai = getattr(self.decision_pipeline, "_last_ai_score", None)
+            ai_d = ai if isinstance(ai, dict) else {}
+            get_strategy_performance_telemetry().observe_cycle(
+                cycle_key=str(
+                    ai_d.get("cycle_id")
+                    or getattr(decision, "id", "")
+                    or abort_val
+                    or ""
+                )
+                or None,
+                forwarded_to_oms=bool(chain["forwarded_to_oms"]),
+                blocking_stage=blocking_stage,
+                fault_code=abort_val or None,
+                ticket=chain.get("ticket"),
+                this_cycle_forwarded=this_cycle_forwarded,
+                signal={
+                    "signal_quality": ai_d.get("trade_quality") or ai_d.get("quality"),
+                    "confidence": getattr(decision, "confidence", None)
+                    or ai_d.get("ai_confidence")
+                    or ai_d.get("confidence"),
+                    "direction": action,
+                    "strategy_id": ai_d.get("strategy") or ai_d.get("setup_family"),
+                    "approved_stop": ai_d.get("stop_distance")
+                    or (
+                        getattr(
+                            self.decision_pipeline,
+                            "last_min_lot_feasibility",
+                            lambda: None,
+                        )()
+                        or {}
+                    ).get("stop_distance"),
+                    "approved_lot": str(getattr(decision, "approved_lots", "") or "")
+                    or None,
+                },
+            )
+        except Exception:
+            logger.exception("strategy_performance_cycle_observe_failed")
 
         if not chain["forwarded_to_oms"]:
             hold_reason = abort_val or risk_detail or "OMS not attempted"

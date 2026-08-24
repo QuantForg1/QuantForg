@@ -183,6 +183,7 @@ class InstitutionalDecisionPipeline:
     risk_engine: RiskEngine | None = None
     user_id: UUID = field(default_factory=uuid4)
     _last_ai_score: dict[str, Any] | None = field(default=None, repr=False)
+    _last_feasibility: dict[str, Any] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.risk_engine is None:
@@ -190,6 +191,56 @@ class InstitutionalDecisionPipeline:
 
     def last_ai_score(self) -> dict[str, Any] | None:
         return dict(self._last_ai_score) if self._last_ai_score else None
+
+    def last_min_lot_feasibility(self) -> dict[str, Any] | None:
+        return dict(self._last_feasibility) if self._last_feasibility else None
+
+    def evaluate_min_lot_feasibility_gate(
+        self,
+        *,
+        stop_distance: Any,
+        equity: Any,
+        min_lot: Any,
+        contract_size: Any,
+    ) -> Any:
+        """Audit-only pre-Risk gate. Does not change stop / lot / 5% cap."""
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            evaluate_min_lot_feasibility,
+        )
+
+        result = evaluate_min_lot_feasibility(
+            stop_distance=stop_distance,
+            equity=equity,
+            min_lot=min_lot,
+            contract_size=contract_size,
+        )
+        payload = result.to_dict()
+        self._last_feasibility = payload
+        if isinstance(self._last_ai_score, dict):
+            self._last_ai_score["min_lot_feasibility"] = payload
+        try:
+            from app.application.services.strategy_performance_telemetry import (
+                get_strategy_performance_telemetry,
+            )
+
+            get_strategy_performance_telemetry().note_feasibility(
+                infeasible=result.infeasible,
+                skip_expensive_downstream=result.skip_expensive_downstream,
+            )
+        except Exception:
+            logger.exception("min_lot_feasibility_telemetry_failed")
+        if result.infeasible:
+            logger.warning(
+                "min_lot_infeasible_early",
+                classification=result.classification,
+                stop_distance=str(result.stop_distance),
+                max_allowed_stop=str(result.max_allowed_stop),
+                needed_pct=str(result.needed_pct),
+                equity=str(result.equity),
+                skip_expensive_downstream=True,
+                risk_engine_authoritative=True,
+            )
+        return result
 
     def _prepare_config(
         self,
@@ -409,6 +460,46 @@ class InstitutionalDecisionPipeline:
                 approved_lots=Decimal("0"),
             )
 
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            filter_quantforg_positions,
+        )
+
+        live_book = _resolve_live_positions(positions)
+        pos_list = filter_quantforg_positions(
+            live_book, symbol=str(getattr(snapshot, "symbol", "") or "")
+        )
+        live_positions = pos_list
+
+        assert self.risk_engine is not None
+        # Keep risk engine limits in sync with adaptive / scalping + live broker specs.
+        live_min, live_step, live_max, live_cs = _live_broker_lot_specs(snapshot.symbol)
+        feasibility = self.evaluate_min_lot_feasibility_gate(
+            stop_distance=stop_distance,
+            equity=account.equity,
+            min_lot=live_min,
+            contract_size=live_cs,
+        )
+        if feasibility.skip_expensive_downstream:
+            # Early reject only — stop / lot / 5% cap unchanged. Risk would
+            # also reject MIN_LOT_CONSTRAINT; skip overlay + Risk evaluate.
+            risk_reasons = list(feasibility.risk_reasons)
+            eligibility = PositionEligibilityEngine(config=cfg).evaluate(
+                snapshot=snapshot,
+                confluence=confluence,
+                account=account,
+                risk_allowed=False,
+                risk_reasons=tuple(risk_reasons),
+            )
+            return TradeDecisionEngine(config=cfg).decide(
+                snapshot=snapshot,
+                confluence=confluence,
+                eligibility=eligibility,
+                account=account,
+                risk_score=100,
+                risk_reasons=tuple(risk_reasons),
+                approved_lots=Decimal("0"),
+            )
+
         check = RiskCheckInput(
             user_id=self.user_id,
             request_id=rid,
@@ -426,20 +517,6 @@ class InstitutionalDecisionPipeline:
             session_allowed=snapshot.session.allowed,
             session_name=snapshot.session.session.value,
         )
-
-        from app.domain.institutional_trading.operations.quantforg_position_cap import (
-            filter_quantforg_positions,
-        )
-
-        live_book = _resolve_live_positions(positions)
-        pos_list = filter_quantforg_positions(
-            live_book, symbol=str(getattr(snapshot, "symbol", "") or "")
-        )
-        live_positions = pos_list
-
-        assert self.risk_engine is not None
-        # Keep risk engine limits in sync with adaptive / scalping + live broker specs.
-        live_min, live_step, live_max, live_cs = _live_broker_lot_specs(snapshot.symbol)
         risk_engine_lots_cap = Decimal("0")
         self.risk_engine = RiskEngine(
             config=risk_config_from_ite(
