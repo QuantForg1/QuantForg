@@ -606,6 +606,7 @@ class InstitutionalIteRuntime:
             with self._lock:
                 self._last_cycle = result
                 self._cycles += 1
+                self._last_bridge_result = None
             logger.info(
                 "ite_cycle_outcome",
                 outcome=result.cycle_outcome,
@@ -819,6 +820,7 @@ class InstitutionalIteRuntime:
             with self._lock:
                 self._last_cycle = result
                 self._cycles += 1
+                self._last_bridge_result = None
             logger.warning(
                 "recovery_new_entries_blocked",
                 reason="SCHEDULER_STALLED recovery — no order mutation",
@@ -864,6 +866,7 @@ class InstitutionalIteRuntime:
                 with self._lock:
                     self._last_cycle = result
                     self._cycles += 1
+                    self._last_bridge_result = None
                 primary = (
                     safety.failed_reasons[0] if safety.failed_reasons else "SAFETY_BLOCKED"
                 )
@@ -2060,6 +2063,7 @@ class InstitutionalIteRuntime:
             with self._lock:
                 self._last_cycle = result
                 self._cycles += 1
+                self._last_bridge_result = None
             try:
                 from app.application.services.strategy_diagnostics import (
                     get_strategy_diagnostics_store,
@@ -2904,6 +2908,7 @@ class InstitutionalIteRuntime:
                 self._last_cycle = result
                 self._last_decision = decision
                 self._cycles += 1
+                self._last_bridge_result = None
             return result
 
         from app.domain.institutional_trading.operations.gold_execution_contract import (
@@ -2969,6 +2974,7 @@ class InstitutionalIteRuntime:
                 self._last_cycle = result
                 self._last_decision = decision
                 self._cycles += 1
+                self._last_bridge_result = None
             return result
 
         bridge_result, market_context_diagnostics = self._submit_same_cycle_batch(
@@ -3089,6 +3095,9 @@ class InstitutionalIteRuntime:
             bridge_result=bridge_result,
             execution_enabled=bool(ctx.execution_enabled),
             force_shadow=force_shadow,
+            this_cycle_forwarded=bool(
+                getattr(bridge_result, "forwarded_to_oms", False)
+            ),
         )
 
         try:
@@ -3681,18 +3690,30 @@ class InstitutionalIteRuntime:
         bridge_result: Any,
         execution_enabled: bool,
         force_shadow: bool,
+        this_cycle_forwarded: bool | None = None,
+        may_submit_oms: bool | None = None,
+        blocking_stage: str | None = None,
     ) -> None:
-        """After AI Decision: Gate → Risk → OMS → MT5 → Broker. Always PASS/FAIL."""
+        """After AI Decision: Gate → Risk → OMS → MT5 → Broker.
+
+        A cycle that did not submit must log NOT_ATTEMPTED. It must never
+        reprint a prior ticket as if this cycle reached OMS.
+        """
+        from app.domain.institutional_trading.operations.execution_chain_log import (
+            classify_post_ai_execution_chain,
+        )
+
         action = str(getattr(getattr(decision, "action", None), "value", "") or "")
         elig = getattr(decision, "eligibility", None)
         elig_ok = bool(getattr(elig, "eligible", False))
         elig_reasons = list(getattr(elig, "rejection_reasons", ()) or ())
         risk_reasons = list(getattr(decision, "risk_reasons", ()) or ())
-        aborted = bool(getattr(bridge_result, "aborted", False))
-        abort = getattr(bridge_result, "abort_reason", None)
+        abort = getattr(bridge_result, "abort_reason", None) if bridge_result else None
         abort_val = str(getattr(abort, "value", abort) or "")
-        forwarded = bool(getattr(bridge_result, "forwarded_to_oms", False))
-        oms = getattr(bridge_result, "oms_result", None)
+        forwarded = False
+        if bridge_result is not None:
+            forwarded = bool(getattr(bridge_result, "forwarded_to_oms", False))
+        oms = getattr(bridge_result, "oms_result", None) if bridge_result else None
         oms_msg = str(getattr(oms, "message", "") or "") if oms is not None else ""
         oms_ret = getattr(oms, "retcode", None) if oms is not None else None
         ticket = None
@@ -3700,8 +3721,18 @@ class InstitutionalIteRuntime:
             ticket = getattr(oms, "order_ticket", None) or getattr(
                 oms, "deal_ticket", None
             )
-        journal = getattr(bridge_result, "journal_entry", None)
+        journal = None
+        if bridge_result is not None:
+            journal = getattr(bridge_result, "journal_entry", None)
         journal_comment = str(getattr(journal, "comment", "") or "")
+        chain = classify_post_ai_execution_chain(
+            forwarded_to_oms=forwarded,
+            may_submit_oms=may_submit_oms,
+            blocking_stage=blocking_stage,
+            ticket=ticket,
+            retcode=oms_ret,
+            this_cycle_forwarded=this_cycle_forwarded,
+        )
 
         logger.warning(
             "AI Decision",
@@ -3719,6 +3750,7 @@ class InstitutionalIteRuntime:
                 "BUY",
                 "SELL",
             }
+            and bool(chain["forwarded_to_oms"])
         )
         if abort_val in {
             "execution_disabled",
@@ -3747,14 +3779,19 @@ class InstitutionalIteRuntime:
             abort=abort_val or "none",
         )
 
-        # Prefer explicit eligibility for Risk Engine stage
-        risk_pass = elig_ok if not forwarded else True
+        risk_blocked = str(blocking_stage or "").upper() == "RISK" or (
+            this_cycle_forwarded is False and not elig_ok
+        )
+        risk_pass = bool(elig_ok) and not risk_blocked
         if abort_val == "eligibility_failed":
             risk_pass = False
+        if chain["forwarded_to_oms"]:
+            risk_pass = True
         risk_detail = (
             "; ".join(elig_reasons)
             or "; ".join(risk_reasons)
             or journal_comment
+            or abort_val
             or "eligible"
         )
         logger.warning(
@@ -3764,64 +3801,55 @@ class InstitutionalIteRuntime:
             detail=risk_detail[:500],
         )
 
-        if aborted and not forwarded:
+        if not chain["forwarded_to_oms"]:
+            hold_reason = abort_val or risk_detail or "OMS not attempted"
             logger.warning(
                 "OMS Submit",
-                result="FAIL",
-                detail="OMS not called — bridge aborted before submit",
-                abort=abort_val,
+                result=chain["oms_submit"],
+                forwarded_to_oms=False,
+                detail="OMS not attempted — cycle did not submit",
+                abort=abort_val or "none",
             )
             logger.warning(
                 "MT5 Gateway",
-                result="FAIL",
+                result=chain["mt5_gateway"],
                 detail="not reached",
+                retcode=None,
             )
             logger.warning(
                 "Broker",
-                result="FAIL",
+                result=chain["broker"],
+                ticket=None,
                 detail="not reached",
             )
-            logger.warning(
-                "Rejected because: %s",
-                journal_comment or abort_val or risk_detail or "unknown abort",
-            )
-            logger.warning(
-                "execution_stop_detail",
-                function="ExecutionBridge.handle",
-                file="app/domain/institutional_trading/execution/bridge.py",
-                condition=f"abort_reason == {abort_val or 'unknown'}",
-                reason=journal_comment or abort_val or risk_detail,
-            )
+            logger.warning("Rejected because: %s", hold_reason)
             return
 
         logger.warning(
             "OMS Submit",
-            result="PASS" if forwarded else "FAIL",
-            forwarded_to_oms=forwarded,
+            result=chain["oms_submit"],
+            forwarded_to_oms=True,
         )
-        if forwarded:
+        if chain["submitting_order"]:
             logger.warning("Submitting Order...")
 
-        broker_ok = ticket is not None
-        # Retcode 0 with rejection message is still a broker reply (FAIL accept)
-        gateway_reached = forwarded and (oms is not None or bool(oms_msg) or abort_val)
         logger.warning(
             "MT5 Gateway",
-            result="PASS" if gateway_reached else "FAIL",
-            retcode=oms_ret,
+            result=chain["mt5_gateway"],
+            retcode=chain["retcode"],
             message=(oms_msg or abort_val or "none")[:400],
         )
         logger.warning(
             "Broker",
-            result="PASS" if broker_ok else "FAIL",
-            ticket=ticket,
+            result=chain["broker"],
+            ticket=chain["ticket"],
             required="non-null ticket",
             message=(oms_msg or journal_comment or abort_val or "none")[:400],
         )
-        if broker_ok:
+        if chain["mt5_accepted"]:
             logger.warning(
                 "MT5 Accepted",
-                ticket=ticket,
+                ticket=chain["ticket"],
             )
         else:
             reject = (
@@ -3831,7 +3859,6 @@ class InstitutionalIteRuntime:
                 or "OMS forwarded but broker did not accept"
             )
             logger.warning("Rejected because: %s", reject)
-            # Exact stop for the known close-only path
             if "closeonly" in reject.lower() or "10044" in reject:
                 logger.warning(
                     "execution_stop_detail",
@@ -3885,6 +3912,9 @@ class InstitutionalIteRuntime:
             oms_ret = getattr(oms, "retcode", None)
         abort = str(result.abort_reason or "")
         forwarded = bool(result.forwarded_to_oms)
+        if not forwarded:
+            ticket = None
+            oms_ret = None
         forced = bool(
             getattr(decision, "reasons", None)
             and any("FORCED_TEST_TRADE" in str(r) for r in (decision.reasons or ()))
@@ -5622,15 +5652,32 @@ class InstitutionalIteRuntime:
                         result="PASS" if action in {"BUY", "SELL"} else "FAIL",
                     )
                     # Never jump AI Decision → Waiting Next Cycle without outcome.
+                    # Never replay a prior OMS ticket on a cycle that did not submit.
                     last_bridge = getattr(self, "_last_bridge_result", None)
-                    if last_bridge is not None and last_decision is not None:
+                    last_fwd = False
+                    if last is not None:
+                        last_fwd = bool(getattr(last, "forwarded_to_oms", False))
+                    contract = {}
+                    diag = (
+                        getattr(last, "market_context_diagnostics", None)
+                        if last is not None
+                        else None
+                    )
+                    if isinstance(diag, dict):
+                        raw_c = diag.get("execution_contract")
+                        if isinstance(raw_c, dict):
+                            contract = raw_c
+                    if last_decision is not None:
                         self._log_post_ai_execution_chain(
                             decision=last_decision,
-                            bridge_result=last_bridge,
+                            bridge_result=last_bridge if last_fwd else None,
                             execution_enabled=bool(
                                 getattr(_gs(), "execution_enabled", False)
                             ),
                             force_shadow=False,
+                            this_cycle_forwarded=last_fwd,
+                            may_submit_oms=contract.get("may_submit_oms"),
+                            blocking_stage=contract.get("blocking_stage"),
                         )
                     elif getattr(last, "abort_reason", None):
                         logger.warning(
