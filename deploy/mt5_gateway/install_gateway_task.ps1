@@ -72,6 +72,7 @@ Write-Host "RDP disconnect/logoff can stop the supervisor (LastTaskResult 0xC000
 Write-Host "For reboot-without-RDP, enable Windows auto-logon for this user (operator-owned)."
 Write-Host "This script does not store passwords, enable auto-logon, or use S4U"
 Write-Host "(S4U/session-0 would isolate Gateway from the interactive MT5 terminal)."
+Write-Host "Repository code cannot enable Windows Auto-Logon without credentials; use open_autologon_ui.ps1 -LaunchUi."
 
 if (-not $SkipStart) {
   Start-ScheduledTask -TaskName $TaskName

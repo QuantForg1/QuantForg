@@ -125,6 +125,8 @@ $scripts = @(
   "deploy\mt5_gateway\install_watchdog_task.ps1",
   "deploy\mt5_gateway\verify_reboot_readiness.ps1",
   "deploy\mt5_gateway\inspect_autologon.ps1",
+  "deploy\mt5_gateway\open_autologon_ui.ps1",
+  "deploy\mt5_gateway\confirm_provider_power_recovery.ps1",
   "deploy\mt5_gateway\harden_cloudflared_service.ps1"
 )
 foreach ($rel in $scripts) {
@@ -358,12 +360,21 @@ if ($listenerCount -ne 1 -or $independentRoots.Count -gt 1) {
 }
 
 $rebootReady = $false
+$provider = $null
+if (Get-Command Get-ProviderPowerReadiness -ErrorAction SilentlyContinue) {
+  $provider = Get-ProviderPowerReadiness
+  if ($provider.State -eq "READY") {
+    Add-Check "provider_power_recovery" "PASS" "READY (operator attestation)"
+  } else {
+    Add-Check "provider_power_recovery" "WARN" "UNKNOWN (Windows guest cannot read provider/BIOS power-on)"
+  }
+}
 $configReady = ($null -ne $wd -and $wdRepeatOk -and (Test-Path (Join-Path $RepoRoot "deploy\mt5_gateway\watchdog_vps.ps1")) -and ($null -ne $cfSvc) -and ($cfSvc.StartType -eq "Automatic") -and (Test-Path -LiteralPath $ExpectedTerminal))
-if ($null -ne $auto -and $auto.State -eq "READY" -and $configReady) { $rebootReady = $true }
+if ($null -ne $auto -and $auto.State -eq "READY" -and $null -ne $provider -and $provider.State -eq "READY" -and $configReady) { $rebootReady = $true }
 if ($rebootReady) {
   Add-Check "reboot_readiness" "PASS" "READY"
 } else {
-  Add-Check "reboot_readiness" "WARN" "ACTION_REQUIRED (auto-logon and/or provider power-loss remain operator-owned)"
+  Add-Check "reboot_readiness" "WARN" "ACTION_REQUIRED until AUTO_LOGON=READY and PROVIDER POWER RECOVERY=READY"
 }
 
 $softwareReady = ($null -ne $wd -and $wdRepeatOk -and (Test-Path (Join-Path $RepoRoot "deploy\mt5_gateway\watchdog_vps.ps1")))
@@ -385,16 +396,19 @@ Write-Host ""
 Write-Host "--- HOST HEALTH ---"
 Write-Host ("HOST HEALTHY: {0}" -f $(if ($hostHealthyClaim) { "YES" } else { "NO ($hostState)" }))
 Write-Host "--- SOFTWARE RECOVERY ---"
-Write-Host ("SOFTWARE RECOVERY READY: {0}" -f $(if ($softwareReady) { "YES (watchdog task + 2m repetition)" } else { "NO (install watchdog task)" }))
+Write-Host ("SOFTWARE RECOVERY READY: {0}" -f $(if ($softwareReady) { "YES" } else { "NO" }))
 Write-Host "--- REBOOT READINESS ---"
-Write-Host ("REBOOT READINESS: {0}" -f $(if ($rebootReady) { "READY" } else { "ACTION_REQUIRED" }))
 Write-Host ("AUTO_LOGON: {0}" -f $(if ($null -ne $auto) { $auto.State } else { "ACTION_REQUIRED" }))
+Write-Host ("PROVIDER POWER RECOVERY: {0}" -f $(if ($null -ne $provider) { $provider.State } else { "UNKNOWN" }))
+Write-Host ("REBOOT READINESS: {0}" -f $(if ($rebootReady) { "READY" } else { "ACTION_REQUIRED" }))
+Write-Host "REBOOT READINESS is READY only when AUTO_LOGON=READY and PROVIDER POWER RECOVERY=READY."
 Write-Host "--- PUBLIC TUNNEL ---"
-Write-Host ("PUBLIC TUNNEL HEALTHY: {0}" -f $(if ($publicHealthyClaim) { "YES" } else { "NO (local Gateway may still be healthy)" }))
+Write-Host ("PUBLIC TUNNEL HEALTHY: {0}" -f $(if ($publicHealthyClaim) { "YES" } else { "NO" }))
 Write-Host "--- PROCESS UNIQUENESS ---"
 Write-Host ("PROCESS UNIQUENESS: {0}" -f $uniqueness)
 Write-Host "--- MT5 SESSION ---"
 Write-Host ("MT5 attached/connected reported above as mt5_attached / health")
+Write-Host ("LIVE ORDER SENT: NO")
 Write-Host "QuantForg is hardened for unattended 24/7 operation and automatic recovery of supported software/process failures while Windows/VPS remains powered and available. Full unattended reboot recovery additionally requires operator/provider configuration such as Windows auto-logon and VPS provider auto-start/power-loss recovery."
 Write-Host "This does not claim never-stop, guaranteed 24/7, or recovery while the VPS is powered off."
 Write-Host "NO ORDER IS SENT."

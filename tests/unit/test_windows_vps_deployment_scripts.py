@@ -83,6 +83,8 @@ def test_verify_script_is_read_only() -> None:
     assert "VPS remains powered" in text or "VPS/Windows host remains available" in text
     assert "never-stop" in text or "never stops" in text.lower()
     assert "NO ORDER IS SENT" in text
+    assert "LIVE ORDER SENT: NO" in text
+    assert "PROVIDER POWER RECOVERY" in text
 
 
 def test_deploy_entrypoint_is_idempotent_and_secret_safe() -> None:
@@ -338,6 +340,8 @@ def test_no_secret_leakage_in_vps_scripts() -> None:
         "install_watchdog_task.ps1",
         "verify_production_vps.ps1",
         "inspect_autologon.ps1",
+        "open_autologon_ui.ps1",
+        "confirm_provider_power_recovery.ps1",
         "verify_reboot_readiness.ps1",
         "harden_cloudflared_service.ps1",
     ):
@@ -357,7 +361,8 @@ def test_interactive_rdp_and_reboot_documented() -> None:
     assert "auto-logon" in doc.lower()
     assert "Restart-Computer" in doc
     assert "BIOS" in doc or "BIOS" in doc
-    assert "S4U" in doc
+    assert "cannot enable Windows Auto-Logon" in doc
+    assert "PROVIDER POWER RECOVERY" in doc
     assert "authoritative" in doc.lower()
     assert "Ready is NOT health" in doc or "Ready is not health" in doc
     text = _read("install_gateway_task.ps1")
@@ -400,6 +405,8 @@ def test_watchdog_ps1_files_parse() -> None:
         "start_gateway.ps1",
         "start_mt5_terminal.ps1",
         "inspect_autologon.ps1",
+        "open_autologon_ui.ps1",
+        "confirm_provider_power_recovery.ps1",
         "verify_reboot_readiness.ps1",
         "harden_cloudflared_service.ps1",
         "install_mt5_terminal_task.ps1",
@@ -432,6 +439,7 @@ def test_autologon_detection_does_not_expose_password() -> None:
     assert "AUTO_LOGON" in inspect
     assert "ACTION_REQUIRED" in inspect
     assert "READY" in inspect
+    assert "cannot enable Auto-Logon" in inspect
     assert "GetValue(\"DefaultPassword\")" not in text
     assert "GetValue('DefaultPassword')" not in text
     assert "Restart-Computer" not in inspect
@@ -458,6 +466,34 @@ def test_reboot_readiness_script_never_reboots() -> None:
     assert "Get-AutoLogonReadiness" in text
     assert "QuantForgVpsWatchdog" in text
     assert "PT2M" in text
+    assert "SOFTWARE RECOVERY" in text
+    assert "PROVIDER POWER RECOVERY" in text
+    assert "LIVE ORDER SENT: NO" in text
+    assert "AUTO_LOGON=READY" in text
+
+
+def test_open_autologon_ui_never_takes_password() -> None:
+    text = _read("open_autologon_ui.ps1")
+    assert "LaunchUi" in text
+    assert "netplwiz" in text
+    assert "[string]$Password" not in text
+    assert "[SecureString]" not in text
+    assert "DefaultPassword" not in text
+    assert "cannot enable Windows Auto-Logon" in text
+    assert "param(" in text
+    assert "-Password" not in text
+
+
+def test_provider_power_attestation_is_not_bios_detection() -> None:
+    host = _read("_host_recovery.ps1")
+    conf = _read("confirm_provider_power_recovery.ps1")
+    assert "Get-ProviderPowerReadiness" in host
+    assert "ProgramData" in host
+    assert "IConfirmTheProviderIsConfigured" in conf
+    assert "[string]$Password" not in conf
+    assert "cannot be verified from inside Windows" in conf
+    assert "BIOS" in conf
+    assert "DefaultPassword" not in conf
 
 
 def test_cloudflared_scm_hardener_is_token_safe() -> None:

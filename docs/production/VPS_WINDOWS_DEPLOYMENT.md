@@ -197,25 +197,57 @@ This checkout cannot configure Raff/provider auto-reboot, BIOS power-on-after-po
 
 ## Auto-logon (operator-owned, no passwords in git)
 
-Interactive Scheduled Tasks require a logged-on desktop after reboot. This repo
-**never** writes `DefaultPassword` and **never** prints it.
+Interactive Scheduled Tasks require a logged-on desktop after reboot. **This
+repository cannot enable Windows Auto-Logon.** Doing so requires the operator's
+Windows password inside a Windows-supported UI (Autologon.exe or netplwiz).
+Scripts never accept that password as an argument, never write
+`DefaultPassword`, and never print it. Do not switch Gateway/MT5 to S4U/session-0.
 
-Inspect only:
+Inspect (read-only):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\inspect_autologon.ps1
 ```
 
-`AUTO_LOGON: READY` means `AutoAdminLogon=1` and a username is configured.
-`ACTION_REQUIRED` is a warning in `verify_production_vps.ps1`, not a production
-health FAIL.
+Open the Windows UI (still no password argument):
 
-Operator setup (pick one; do not paste the password into git or chat):
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\open_autologon_ui.ps1 -LaunchUi
+```
 
-1. **Preferred:** Sysinternals Autologon.exe (stores the secret in LSA).
-2. `netplwiz` / `control userpasswords2` — uncheck "Users must enter a user name and password to use this computer."
+Then, in the Windows dialog only:
 
-Do not switch Gateway/MT5 tasks to S4U/session-0.
+1. **Preferred:** Sysinternals Autologon.exe as Administrator (LSA-protected secret).
+2. Or `netplwiz` / `control userpasswords2` — uncheck "Users must enter a user name and password to use this computer."
+
+`AUTO_LOGON: READY` only after Windows AutoAdminLogon is actually enabled.
+`ACTION_REQUIRED` is a warning in production verify, not a software-health FAIL.
+
+## Provider power recovery (not visible from the guest)
+
+Windows inside the VPS **cannot** see hypervisor auto-start, power-on-after-power-loss,
+provider watchdog/auto-reboot, or BIOS/UEFI restore-after-power-loss. Confirm those
+in the VPS provider panel (and BIOS if exposed). Then attest locally (no secrets):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\confirm_provider_power_recovery.ps1 -IConfirmTheProviderIsConfigured
+```
+
+Until that attestation exists, `PROVIDER POWER RECOVERY: UNKNOWN`.
+`REBOOT READINESS: READY` only when **both** `AUTO_LOGON: READY` and
+`PROVIDER POWER RECOVERY: READY`.
+
+## Reboot readiness (does not reboot)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_reboot_readiness.ps1
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_production_vps.ps1
+```
+
+Expect `REBOOT READINESS: READY` only when auto-logon is configured **and**
+the operator has attested provider power recovery. Software recovery can be
+READY while reboot readiness remains ACTION_REQUIRED.
+`Restart-Computer` is **never** invoked by these scripts.
 
 ## Cloudflared SCM recovery
 
@@ -225,16 +257,6 @@ powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\harden_cloudflared_s
 
 Sets Automatic start and Windows service restart-on-failure. Token file contents
 are never read or logged. Do not use `cloudflared tunnel info --token-file`.
-
-## Reboot readiness (does not reboot)
-
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_reboot_readiness.ps1
-```
-
-Expect `REBOOT READINESS: READY` only when auto-logon is configured **and**
-Gateway/MT5/watchdog tasks plus Cloudflared Automatic are present.
-`Restart-Computer` is **never** invoked by these scripts.
 
 ## Controlled reboot checklist (human)
 

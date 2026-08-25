@@ -47,13 +47,20 @@ try {
 } catch {
   Add-Check "windows_last_boot" "WARN" "unreadable"
 }
-Add-Check "provider_power_loss" "WARN" "UNKNOWN (operator/provider-owned; software cannot recover a powered-off VPS)"
+Add-Check "provider_power_loss" "WARN" "UNKNOWN unless operator attested; Windows guest cannot read BIOS/hypervisor power-on"
 
 $auto = Get-AutoLogonReadiness
 if ($auto.State -eq "READY") {
   Add-Check "auto_logon" "PASS" ("READY user_configured={0} interactive={1}" -f $auto.UserConfigured, $auto.InteractiveUser)
 } else {
-  Add-Check "auto_logon" "WARN" "ACTION_REQUIRED (operator: Autologon.exe or netplwiz; password never stored in git)"
+  Add-Check "auto_logon" "WARN" "ACTION_REQUIRED (software cannot enable Auto-Logon; use open_autologon_ui.ps1 -LaunchUi)"
+}
+
+$provider = Get-ProviderPowerReadiness
+if ($provider.State -eq "READY") {
+  Add-Check "provider_power_recovery" "PASS" "READY (operator attestation; not a guest BIOS probe)"
+} else {
+  Add-Check "provider_power_recovery" "WARN" "UNKNOWN (confirm in VPS panel, then confirm_provider_power_recovery.ps1 -IConfirmTheProviderIsConfigured)"
 }
 
 function Test-NamedTask {
@@ -141,12 +148,19 @@ if ($cfPids.Count -eq 1) {
 }
 
 $configReady = ($gwTask -and $mt5Task -and $wdTask -and (Test-Path $supervise) -and (Test-Path $watch) -and (Test-Path -LiteralPath $mt5Exe) -and ($null -ne $cf) -and ($cf.StartType -eq "Automatic"))
-$rebootReady = ($configReady -and ($auto.State -eq "READY"))
+$softwareReady = $configReady
+$rebootReady = ($softwareReady -and ($auto.State -eq "READY") -and ($provider.State -eq "READY"))
 
 Write-Host ""
+Write-Host ("SOFTWARE RECOVERY: {0}" -f $(if ($softwareReady) { "READY" } else { "ACTION_REQUIRED" }))
 Write-Host ("AUTO_LOGON: {0}" -f $auto.State)
+Write-Host ("PROVIDER POWER-LOSS: {0}" -f $provider.State)
+Write-Host ("PROVIDER POWER RECOVERY: {0}" -f $provider.State)
 Write-Host ("REBOOT READINESS: {0}" -f $(if ($rebootReady) { "READY" } else { "ACTION_REQUIRED" }))
+Write-Host "REBOOT READINESS is READY only when AUTO_LOGON=READY and PROVIDER POWER RECOVERY=READY."
+Write-Host "Repository code cannot enable Auto-Logon or provider power-on. Interactive tasks need a logged-on desktop."
 Write-Host "This script does not reboot the host."
+Write-Host "LIVE ORDER SENT: NO"
 Write-Host "NO ORDER IS SENT."
 Write-Host ("PASS={0} WARN={1} FAIL={2}" -f $Pass, $Warn, $Fail)
 if ($Fail -gt 0) { exit 2 }

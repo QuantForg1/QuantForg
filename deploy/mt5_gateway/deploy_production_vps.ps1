@@ -108,6 +108,8 @@ $required = @(
   "deploy\mt5_gateway\install_watchdog_task.ps1",
   "deploy\mt5_gateway\verify_reboot_readiness.ps1",
   "deploy\mt5_gateway\inspect_autologon.ps1",
+  "deploy\mt5_gateway\open_autologon_ui.ps1",
+  "deploy\mt5_gateway\confirm_provider_power_recovery.ps1",
   "deploy\mt5_gateway\harden_cloudflared_service.ps1"
 )
 foreach ($rel in $required) {

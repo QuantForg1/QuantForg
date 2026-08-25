@@ -24,9 +24,10 @@ if ($info.State -eq "READY") {
   exit 0
 }
 Write-Host "AUTO_LOGON: ACTION_REQUIRED"
-Write-Host "Interactive Scheduled Tasks need an interactive session after reboot."
-Write-Host "Operator procedure (pick one; this repo never stores the password):"
-Write-Host "  1. Sysinternals Autologon.exe (encrypts the secret in LSA) — preferred."
-Write-Host "  2. netplwiz / control userpasswords2 — uncheck 'Users must enter a user name and password'."
+Write-Host "Repository scripts cannot enable Auto-Logon. That requires the operator's Windows password in a Windows UI."
+Write-Host "This helper never accepts, stores, or prints that password."
+Write-Host "Open the UI (no password argument):"
+Write-Host "  powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\open_autologon_ui.ps1 -LaunchUi"
+Write-Host "Then complete Autologon.exe (preferred, LSA) or netplwiz, and re-run this inspect script."
 Write-Host "Do not paste the password into git, chat, or these scripts."
 exit 0

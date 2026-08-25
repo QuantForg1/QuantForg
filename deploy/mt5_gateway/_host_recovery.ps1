@@ -209,3 +209,31 @@ function Get-WatchdogStartCounters {
   }
   return @{ Starts = $starts; WindowUtc = $window.ToUniversalTime() }
 }
+
+function Get-ProviderPowerMarkerPath {
+  return (Join-Path $env:ProgramData "QuantForg\provider_power_recovery.ready")
+}
+
+# Guest OS cannot read hypervisor/BIOS power-on policy. READY only after operator attestation.
+function Get-ProviderPowerReadiness {
+  $result = [ordered]@{
+    State = "UNKNOWN"
+    MarkerPath = (Get-ProviderPowerMarkerPath)
+    Attested = $false
+  }
+  $path = $result.MarkerPath
+  if (-not (Test-Path -LiteralPath $path)) {
+    return $result
+  }
+  $confirmed = $false
+  foreach ($line in @(Get-Content -LiteralPath $path -ErrorAction SilentlyContinue)) {
+    if ($line -match "^confirmed=true\s*$") { $confirmed = $true }
+  }
+  if ($confirmed) {
+    $result.Attested = $true
+    $result.State = "READY"
+  } else {
+    $result.State = "UNKNOWN"
+  }
+  return $result
+}
