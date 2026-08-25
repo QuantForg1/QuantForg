@@ -195,18 +195,84 @@ Do not kill a healthy Gateway because Cloudflare is reconnecting. Do not restart
 
 This checkout cannot configure Raff/provider auto-reboot, BIOS power-on-after-power-loss, or Windows `recovery` crash restart. Operator must enable those on the VPS. Software cannot run while the VM is powered off.
 
+## Auto-logon (operator-owned, no passwords in git)
+
+Interactive Scheduled Tasks require a logged-on desktop after reboot. This repo
+**never** writes `DefaultPassword` and **never** prints it.
+
+Inspect only:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\inspect_autologon.ps1
+```
+
+`AUTO_LOGON: READY` means `AutoAdminLogon=1` and a username is configured.
+`ACTION_REQUIRED` is a warning in `verify_production_vps.ps1`, not a production
+health FAIL.
+
+Operator setup (pick one; do not paste the password into git or chat):
+
+1. **Preferred:** Sysinternals Autologon.exe (stores the secret in LSA).
+2. `netplwiz` / `control userpasswords2` — uncheck "Users must enter a user name and password to use this computer."
+
+Do not switch Gateway/MT5 tasks to S4U/session-0.
+
+## Cloudflared SCM recovery
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\harden_cloudflared_service.ps1
+```
+
+Sets Automatic start and Windows service restart-on-failure. Token file contents
+are never read or logged. Do not use `cloudflared tunnel info --token-file`.
+
+## Reboot readiness (does not reboot)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_reboot_readiness.ps1
+```
+
+Expect `REBOOT READINESS: READY` only when auto-logon is configured **and**
+Gateway/MT5/watchdog tasks plus Cloudflared Automatic are present.
+`Restart-Computer` is **never** invoked by these scripts.
+
 ## Controlled reboot checklist (human)
 
-Do **not** reboot from these scripts. After auto-logon is confirmed:
+Do **not** reboot from these scripts. After auto-logon is confirmed READY and
+software recovery tests have passed:
 
-```
-Restart-Computer
-```
+1. Confirm no open manual trades you need to watch (NO ORDER IS SENT by this test).
+2. Reboot from the provider panel or an operator-typed `Restart-Computer` (human).
+3. After boot, RDP in only if auto-logon failed.
+4. Run:
 
-After boot, on the VPS:
-
-```
+```powershell
 powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_production_vps.ps1
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_reboot_readiness.ps1
 ```
 
-Expect FAIL=0, listener_count=1, Cloudflared Running, host_state HEALTHY or DEGRADED (attach lag only). No `order_send`.
+After-reboot checklist (no `order_send`):
+
+1. hostname
+2. logged-in user
+3. `terminal64.exe` (exactly one)
+4. `cloudflared.exe` (service-owned; do not kill extras blindly)
+5. Gateway process tree
+6. port 8765 LISTEN
+7. local `/health/live` (`status=ok`, `service=mt5-gateway`, `probe=live`)
+8. MT5 attached (`/health` `mt5.connected` / `session_mode=attached` — attach may lag)
+9. public `/health/live`
+10. listener count = 1
+11. watchdog task + 2-minute repetition
+12. Gateway task (Ready is acceptable if live is OK)
+13. MT5 task
+14. no duplicate Gateway listeners
+15. no order activity — **NO ORDER IS SENT**
+
+Expect FAIL=0, listener_count=1, Cloudflared Running, host_state HEALTHY or DEGRADED (attach lag only).
+
+QuantForg is hardened for unattended 24/7 operation and automatic recovery of
+supported software/process failures while Windows/VPS remains powered and
+available. Full unattended reboot recovery additionally requires
+operator/provider configuration such as Windows auto-logon and VPS provider
+auto-start/power-loss recovery.

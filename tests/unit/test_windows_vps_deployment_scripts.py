@@ -75,10 +75,14 @@ def test_verify_script_is_read_only() -> None:
     assert "HOST HEALTHY" in text
     assert "SOFTWARE RECOVERY READY" in text
     assert "PUBLIC TUNNEL HEALTHY" in text
+    assert "REBOOT READINESS" in text
+    assert "PROCESS UNIQUENESS" in text
+    assert "AUTO_LOGON" in text
     assert "watchdog_repetition" in text
     assert "mt5_attached" in text
-    assert "VPS/Windows host remains available" in text
+    assert "VPS remains powered" in text or "VPS/Windows host remains available" in text
     assert "never-stop" in text or "never stops" in text.lower()
+    assert "NO ORDER IS SENT" in text
 
 
 def test_deploy_entrypoint_is_idempotent_and_secret_safe() -> None:
@@ -333,11 +337,16 @@ def test_no_secret_leakage_in_vps_scripts() -> None:
         "supervise_gateway.ps1",
         "install_watchdog_task.ps1",
         "verify_production_vps.ps1",
+        "inspect_autologon.ps1",
+        "verify_reboot_readiness.ps1",
+        "harden_cloudflared_service.ps1",
     ):
         body = _read(name).lower()
         assert "eyj" not in body
         assert "bearer " not in body or "authorization" not in body
         assert "c:\\programdata\\cloudflared\\token" not in body or "not logged" in body or "never" in body
+        assert "getvalue(\"defaultpassword\")" not in body
+        assert "getvalue('defaultpassword')" not in body
 
 
 def test_interactive_rdp_and_reboot_documented() -> None:
@@ -390,6 +399,10 @@ def test_watchdog_ps1_files_parse() -> None:
         "_host_recovery.ps1",
         "start_gateway.ps1",
         "start_mt5_terminal.ps1",
+        "inspect_autologon.ps1",
+        "verify_reboot_readiness.ps1",
+        "harden_cloudflared_service.ps1",
+        "install_mt5_terminal_task.ps1",
     )
     for name in names:
         path = DEPLOY / name
@@ -407,3 +420,58 @@ def test_watchdog_ps1_files_parse() -> None:
             text=True,
         )
         assert completed.returncode == 0, f"{name}: {completed.stdout}\n{completed.stderr}"
+
+
+def test_autologon_detection_does_not_expose_password() -> None:
+    host = _read("_host_recovery.ps1")
+    inspect = _read("inspect_autologon.ps1")
+    verify = _read("verify_production_vps.ps1")
+    reboot = _read("verify_reboot_readiness.ps1")
+    text = host + inspect + verify + reboot
+    assert "Get-AutoLogonReadiness" in host
+    assert "AUTO_LOGON" in inspect
+    assert "ACTION_REQUIRED" in inspect
+    assert "READY" in inspect
+    assert "GetValue(\"DefaultPassword\")" not in text
+    assert "GetValue('DefaultPassword')" not in text
+    assert "Restart-Computer" not in inspect
+    assert "order_send" not in inspect.lower()
+
+
+def test_watchdog_does_not_trust_task_state_as_health() -> None:
+    text = _read("watchdog_vps.ps1")
+    assert "Task Scheduler Ready is NOT health" in text
+    assert "Start-WatchdogGateway" in text
+    assert "health is live" in text.lower() or "health_is_live" in text or "ignored_health_is_live" in text
+    assert "restart_storm_prevented" in text
+    assert "Test-WatchdogGatewayStartAllowed" in text
+    assert "duplicate_terminal" in text
+    assert "not_restarting_gateway" in text
+
+
+def test_reboot_readiness_script_never_reboots() -> None:
+    text = _read("verify_reboot_readiness.ps1")
+    assert "REBOOT READINESS" in text
+    assert "Restart-Computer" not in text
+    assert "NO ORDER IS SENT" in text
+    assert "does not reboot" in text.lower()
+    assert "Get-AutoLogonReadiness" in text
+    assert "QuantForgVpsWatchdog" in text
+    assert "PT2M" in text
+
+
+def test_cloudflared_scm_hardener_is_token_safe() -> None:
+    text = _read("harden_cloudflared_service.ps1")
+    assert "Set-CloudflaredScmRestartOnFailure" in text
+    assert "Start-Service" in text
+    assert "does not place trades" in text.lower() or "never" in text.lower()
+    assert "does not reboot" in text.lower()
+
+
+def test_mt5_path_candidates_and_duplicate_guard() -> None:
+    start = _read("start_mt5_terminal.ps1")
+    host = _read("_host_recovery.ps1")
+    assert "Meta Trader 5" in start
+    assert "duplicate start prevented" in start
+    assert "Resolve-Mt5TerminalPath" in host
+    assert "Meta Trader 5" in host

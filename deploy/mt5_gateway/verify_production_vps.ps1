@@ -33,6 +33,15 @@ function Add-Check {
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
   $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 }
+
+$ProcessHelpers = Join-Path $PSScriptRoot "_gateway_process.ps1"
+$HostHelpers = Join-Path $PSScriptRoot "_host_recovery.ps1"
+if (Test-Path $HostHelpers) { . $HostHelpers }
+if (Test-Path $ProcessHelpers) { . $ProcessHelpers }
+if (Get-Command Resolve-Mt5TerminalPath -ErrorAction SilentlyContinue) {
+  $resolvedMt5 = Resolve-Mt5TerminalPath -Preferred $ExpectedTerminal
+  if (Test-Path -LiteralPath $resolvedMt5) { $ExpectedTerminal = $resolvedMt5 }
+}
 if (-not (Test-Path (Join-Path $RepoRoot "pyproject.toml"))) {
   Add-Check "repository_root" "FAIL" "pyproject.toml not found at $RepoRoot"
 } else {
@@ -113,17 +122,15 @@ $scripts = @(
   "deploy\mt5_gateway\_gateway_process.ps1",
   "deploy\mt5_gateway\_host_recovery.ps1",
   "deploy\mt5_gateway\watchdog_vps.ps1",
-  "deploy\mt5_gateway\install_watchdog_task.ps1"
+  "deploy\mt5_gateway\install_watchdog_task.ps1",
+  "deploy\mt5_gateway\verify_reboot_readiness.ps1",
+  "deploy\mt5_gateway\inspect_autologon.ps1",
+  "deploy\mt5_gateway\harden_cloudflared_service.ps1"
 )
 foreach ($rel in $scripts) {
   $p = Join-Path $RepoRoot $rel
   if (Test-Path $p) { Add-Check "script:$rel" "PASS" $p }
   else { Add-Check "script:$rel" "FAIL" "missing" }
-}
-
-$ProcessHelpers = Join-Path $PSScriptRoot "_gateway_process.ps1"
-if (Test-Path $ProcessHelpers) {
-  . $ProcessHelpers
 }
 
 $listenPids = @()
@@ -145,12 +152,16 @@ if (Test-Path $ProcessHelpers) {
 
 $liveOk = $false
 $liveVersion = ""
+$liveProbe = ""
 try {
   $live = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 5
-  if ($live.status -eq "ok" -and $live.service -eq "mt5-gateway") {
-    $liveOk = $true
-    $liveVersion = [string]$live.gateway_version
+  if (Get-Command Test-GatewayLivePayload -ErrorAction SilentlyContinue) {
+    $liveOk = Test-GatewayLivePayload -Payload $live
+  } else {
+    $liveOk = ($live.status -eq "ok" -and $live.service -eq "mt5-gateway")
   }
+  $liveVersion = [string]$live.gateway_version
+  if ($null -ne $live.PSObject.Properties["probe"]) { $liveProbe = [string]$live.probe }
 } catch {}
 
 if ($listenerCount -eq 1 -and $independentRoots.Count -le 1 -and $liveOk) {
@@ -173,7 +184,7 @@ try {
 if ($listen) { Add-Check "port_8765" "PASS" "LISTEN" } else { Add-Check "port_8765" "FAIL" "not listening" }
 
 if ($liveOk) {
-  Add-Check "health_live" "PASS" ("version={0}" -f $liveVersion)
+  Add-Check "health_live" "PASS" ("version={0} probe={1}" -f $liveVersion, $liveProbe)
 } else {
   Add-Check "health_live" "FAIL" "http://127.0.0.1:8765/health/live not OK"
 }
@@ -262,6 +273,16 @@ if ($cfPids.Count -eq 1) {
 } else {
   Add-Check "cloudflared_process" "FAIL" "cloudflared.exe not running"
 }
+if (Get-Command Get-CloudflaredCommandSanitized -ErrorAction SilentlyContinue) {
+  Add-Check "cloudflared_command" "PASS" (Get-CloudflaredCommandSanitized)
+}
+if (Get-Command Test-CloudflaredScmRestartConfigured -ErrorAction SilentlyContinue) {
+  if (Test-CloudflaredScmRestartConfigured) {
+    Add-Check "cloudflared_scm_recovery" "PASS" "restart on failure configured"
+  } else {
+    Add-Check "cloudflared_scm_recovery" "WARN" "run harden_cloudflared_service.ps1 elevated"
+  }
+}
 
 $publicLive = $false
 try {
@@ -311,6 +332,40 @@ if (Test-Path $wdLog) {
   Add-Check "watchdog_log" "WARN" "no watchdog.log yet"
 }
 
+$auto = $null
+if (Get-Command Get-AutoLogonReadiness -ErrorAction SilentlyContinue) {
+  $auto = Get-AutoLogonReadiness
+  if ($auto.State -eq "READY") {
+    Add-Check "auto_logon" "PASS" ("READY user_configured={0}" -f $auto.UserConfigured)
+  } else {
+    Add-Check "auto_logon" "WARN" "ACTION_REQUIRED (operator-owned; password never printed)"
+  }
+}
+
+$uniqueness = "PASS"
+if ($listenerCount -ne 1 -or $independentRoots.Count -gt 1) {
+  $uniqueness = "FAIL"
+  Add-Check "process_uniqueness" "FAIL" ("listeners={0} roots={1}" -f $listenerCount, ($independentRoots -join ","))
+} else {
+  $extra = @()
+  if ($mt5.Count -gt 1) { $extra += "mt5" }
+  if ($cfPids.Count -gt 1) { $extra += "cloudflared" }
+  if ($extra.Count -gt 0) {
+    Add-Check "process_uniqueness" "WARN" ("gateway unique; extra=" + ($extra -join ","))
+  } else {
+    Add-Check "process_uniqueness" "PASS" "gateway=1 mt5<=1 cloudflared<=1"
+  }
+}
+
+$rebootReady = $false
+$configReady = ($null -ne $wd -and $wdRepeatOk -and (Test-Path (Join-Path $RepoRoot "deploy\mt5_gateway\watchdog_vps.ps1")) -and ($null -ne $cfSvc) -and ($cfSvc.StartType -eq "Automatic") -and (Test-Path -LiteralPath $ExpectedTerminal))
+if ($null -ne $auto -and $auto.State -eq "READY" -and $configReady) { $rebootReady = $true }
+if ($rebootReady) {
+  Add-Check "reboot_readiness" "PASS" "READY"
+} else {
+  Add-Check "reboot_readiness" "WARN" "ACTION_REQUIRED (auto-logon and/or provider power-loss remain operator-owned)"
+}
+
 $softwareReady = ($null -ne $wd -and $wdRepeatOk -and (Test-Path (Join-Path $RepoRoot "deploy\mt5_gateway\watchdog_vps.ps1")))
 $hostHealthyClaim = ($hostState -eq "HEALTHY")
 $publicHealthyClaim = $publicLive
@@ -327,11 +382,22 @@ foreach ($row in $Rows) {
   Write-Host ("[{0}] {1} - {2}" -f $row.status, $row.name, $row.detail)
 }
 Write-Host ""
+Write-Host "--- HOST HEALTH ---"
 Write-Host ("HOST HEALTHY: {0}" -f $(if ($hostHealthyClaim) { "YES" } else { "NO ($hostState)" }))
+Write-Host "--- SOFTWARE RECOVERY ---"
 Write-Host ("SOFTWARE RECOVERY READY: {0}" -f $(if ($softwareReady) { "YES (watchdog task + 2m repetition)" } else { "NO (install watchdog task)" }))
+Write-Host "--- REBOOT READINESS ---"
+Write-Host ("REBOOT READINESS: {0}" -f $(if ($rebootReady) { "READY" } else { "ACTION_REQUIRED" }))
+Write-Host ("AUTO_LOGON: {0}" -f $(if ($null -ne $auto) { $auto.State } else { "ACTION_REQUIRED" }))
+Write-Host "--- PUBLIC TUNNEL ---"
 Write-Host ("PUBLIC TUNNEL HEALTHY: {0}" -f $(if ($publicHealthyClaim) { "YES" } else { "NO (local Gateway may still be healthy)" }))
-Write-Host "Automatic recovery is configured for supported software/process failures while the VPS/Windows host remains available."
+Write-Host "--- PROCESS UNIQUENESS ---"
+Write-Host ("PROCESS UNIQUENESS: {0}" -f $uniqueness)
+Write-Host "--- MT5 SESSION ---"
+Write-Host ("MT5 attached/connected reported above as mt5_attached / health")
+Write-Host "QuantForg is hardened for unattended 24/7 operation and automatic recovery of supported software/process failures while Windows/VPS remains powered and available. Full unattended reboot recovery additionally requires operator/provider configuration such as Windows auto-logon and VPS provider auto-start/power-loss recovery."
 Write-Host "This does not claim never-stop, guaranteed 24/7, or recovery while the VPS is powered off."
+Write-Host "NO ORDER IS SENT."
 Write-Host ""
 Write-Host ("PASS={0} WARN={1} FAIL={2}" -f $Pass, $Warn, $Fail)
 if ($Fail -gt 0) { exit 2 }

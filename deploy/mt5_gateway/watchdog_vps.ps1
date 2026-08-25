@@ -69,12 +69,7 @@ try {
     Write-Wd "watchdog" "start" "scheduled_pass" "ok"
 
     function Test-LocalLive {
-      try {
-        $h = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 3
-        return ($h.status -eq "ok" -and $h.service -eq "mt5-gateway")
-      } catch {
-        return $false
-      }
+      return (Test-LocalGatewayLiveOk -TimeoutSec 3)
     }
 
     function Get-Listen {
@@ -82,6 +77,11 @@ try {
     }
 
     function Start-WatchdogGateway {
+      $counters = Get-WatchdogStartCounters -StateFile $StateFile
+      if (-not (Test-WatchdogGatewayStartAllowed -StateFile $StateFile -MaxPerHour 8)) {
+        Write-Wd "gateway" "start" "restart_storm_prevented" ("starts={0} max=8" -f $counters.Starts)
+        return $false
+      }
       $venvPy = Join-Path $RepoRoot ".venv\Scripts\python.exe"
       if (-not (Test-Path $venvPy)) {
         Write-Wd "gateway" "start" "venv_missing" "fail"
@@ -89,8 +89,9 @@ try {
       }
       Rotate-WdLog -Path $GwOut
       Rotate-WdLog -Path $GwErr
-      Write-Wd "gateway" "start" "local_unhealthy_or_missing" "starting"
-      # One start per watchdog pass; the 2-minute task interval is bounded backoff.
+      $oldListen = @(Get-Listen)
+      $t0 = Get-Date
+      Write-Wd "gateway" "start" "local_unhealthy_or_missing" ("old_listener={0}" -f ($(if ($oldListen.Count -gt 0) { $oldListen[0] } else { 0 })))
       $proc = Start-Process -FilePath $venvPy `
         -ArgumentList @("-m", "services.mt5_gateway.main") `
         -WorkingDirectory $RepoRoot `
@@ -98,6 +99,8 @@ try {
         -RedirectStandardOutput $GwOut `
         -RedirectStandardError $GwErr `
         -PassThru
+      $script:WatchdogStarts = $counters.Starts + 1
+      $script:WatchdogWindowUtc = $counters.WindowUtc
       Write-Wd "gateway" "start" "launcher" ("pid={0}" -f $proc.Id)
       $deadline = (Get-Date).AddSeconds(45)
       while ((Get-Date) -lt $deadline) {
@@ -106,7 +109,8 @@ try {
           if ($listenNow.Count -eq 1) {
             $root = Get-GatewayTreeRoot -ProcessId $listenNow[0]
             Write-GatewayPidFile -Path $PidFile -ListenerPid $listenNow[0] -TreeRootPid $root -Health "live_ok"
-            Write-Wd "gateway" "ready" "health_live" ("listener={0}" -f $listenNow[0])
+            $ms = [int]((Get-Date) - $t0).TotalMilliseconds
+            Write-Wd "gateway" "ready" "health_live" ("listener={0} duration_ms={1}" -f $listenNow[0], $ms)
             return $true
           }
         }
@@ -116,16 +120,30 @@ try {
       return $false
     }
 
+    $script:WatchdogStarts = 0
+    $script:WatchdogWindowUtc = [datetime]::UtcNow
+    $existingCounters = Get-WatchdogStartCounters -StateFile $StateFile
+    $script:WatchdogStarts = $existingCounters.Starts
+    $script:WatchdogWindowUtc = $existingCounters.WindowUtc
+
     # 1. MT5 — never duplicate terminal64; no broker login
+    $mt5Pids = @(Get-Mt5TerminalPids)
+    if ($mt5Pids.Count -gt 1) {
+      Write-Wd "mt5" "observe" "duplicate_terminal" ("count={0} not_killing" -f $mt5Pids.Count)
+    }
     if (Test-Mt5TerminalProcess) {
-      Write-Wd "mt5" "preserve" "terminal_running" ("pids={0}" -f ((Get-Mt5TerminalPids) -join ","))
+      Write-Wd "mt5" "preserve" "terminal_running" ("pids={0}" -f ($mt5Pids -join ","))
     } else {
       Write-Wd "mt5" "recover" "process_missing" "start_mt5_terminal"
       $starter = Join-Path $PSScriptRoot "start_mt5_terminal.ps1"
       if (Test-Path $starter) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $starter
       }
-      Start-Sleep -Seconds 3
+      $mt5Deadline = (Get-Date).AddSeconds(20)
+      while ((Get-Date) -lt $mt5Deadline) {
+        if (Test-Mt5TerminalProcess) { break }
+        Start-Sleep -Seconds 2
+      }
       if (Test-Mt5TerminalProcess) {
         Write-Wd "mt5" "recover" "started" "ok"
       } else {
@@ -225,7 +243,9 @@ try {
       ("live_ok=" + $liveOk),
       ("listener_count=" + $listen.Count),
       ("public_ok=" + $publicOk),
-      ("exit=" + $exitCode)
+      ("exit=" + $exitCode),
+      ("start_window_utc=" + $script:WatchdogWindowUtc.ToUniversalTime().ToString("o")),
+      ("starts_in_window=" + $script:WatchdogStarts)
     ) | Set-Content -Path $StateFile -Encoding ASCII
   }
 } catch {

@@ -105,7 +105,10 @@ $required = @(
   "deploy\mt5_gateway\_gateway_process.ps1",
   "deploy\mt5_gateway\_host_recovery.ps1",
   "deploy\mt5_gateway\watchdog_vps.ps1",
-  "deploy\mt5_gateway\install_watchdog_task.ps1"
+  "deploy\mt5_gateway\install_watchdog_task.ps1",
+  "deploy\mt5_gateway\verify_reboot_readiness.ps1",
+  "deploy\mt5_gateway\inspect_autologon.ps1",
+  "deploy\mt5_gateway\harden_cloudflared_service.ps1"
 )
 foreach ($rel in $required) {
   $p = Join-Path $RepoRoot $rel
@@ -132,6 +135,8 @@ if (-not $SkipInstallTask) {
   & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\install_gateway_task.ps1") -SkipStart
   Write-Step "install QuantForgVpsWatchdog (idempotent)"
   & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\install_watchdog_task.ps1") -SkipStart
+  Write-Step "harden Cloudflared SCM recovery (token not logged)"
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\harden_cloudflared_service.ps1")
   Write-Step "start scheduled tasks"
   Start-ScheduledTask -TaskName "QuantForgMT5Terminal" -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 5
@@ -151,7 +156,10 @@ Write-Step ("verify_exit={0}" -f $verifyCode)
 Write-Step "end deploy_production_vps"
 Write-Host ""
 Write-Host "Deployment report: $Report"
-Write-Host "This script does not configure Railway, Cloudflare, or auto-logon."
+Write-Host "This script does not configure Railway, Cloudflare tokens, or auto-logon passwords."
 Write-Host "It does not claim production health on any other host."
+Write-Host "NO ORDER IS SENT. This script does not call Restart-Computer."
+Write-Step "reboot readiness (no reboot)"
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\verify_reboot_readiness.ps1") -RepoRoot $RepoRoot
 if ($verifyCode -ne 0) { exit $verifyCode }
 exit 0

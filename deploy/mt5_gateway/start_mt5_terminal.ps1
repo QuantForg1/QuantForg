@@ -24,7 +24,17 @@ if ([string]::IsNullOrWhiteSpace($TerminalPath)) {
   if (-not [string]::IsNullOrWhiteSpace($envPath)) {
     $TerminalPath = $envPath.Trim()
   } else {
+    $candidates = @(
+      "C:\Program Files\MetaTrader 5\terminal64.exe",
+      "C:\Program Files\Meta Trader 5\terminal64.exe"
+    )
     $TerminalPath = $defaultPath
+    foreach ($candidate in $candidates) {
+      if (Test-Path -LiteralPath $candidate) {
+        $TerminalPath = $candidate
+        break
+      }
+    }
   }
 }
 

@@ -53,8 +53,159 @@ function Test-PublicGatewayLive {
   param([int]$TimeoutSec = 8)
   try {
     $h = Invoke-RestMethod -Uri $script:PublicLiveUri -TimeoutSec $TimeoutSec
-    return ($h.status -eq "ok" -and $h.service -eq "mt5-gateway")
+    return (Test-GatewayLivePayload -Payload $h)
   } catch {
     return $false
   }
+}
+
+function Test-GatewayLivePayload {
+  param($Payload)
+  if ($null -eq $Payload) { return $false }
+  if ($Payload.status -ne "ok") { return $false }
+  if ($Payload.service -ne "mt5-gateway") { return $false }
+  if ($null -ne $Payload.PSObject.Properties["probe"] -and [string]$Payload.probe -ne "" -and [string]$Payload.probe -ne "live") {
+    return $false
+  }
+  return $true
+}
+
+function Test-LocalGatewayLiveOk {
+  param([int]$TimeoutSec = 3)
+  try {
+    $h = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec $TimeoutSec
+    return (Test-GatewayLivePayload -Payload $h)
+  } catch {
+    return $false
+  }
+}
+
+function Get-Mt5TerminalCandidatePaths {
+  return @(
+    "C:\Program Files\MetaTrader 5\terminal64.exe",
+    "C:\Program Files\Meta Trader 5\terminal64.exe"
+  )
+}
+
+function Resolve-Mt5TerminalPath {
+  param([string]$Preferred = "")
+  if (-not [string]::IsNullOrWhiteSpace($Preferred) -and (Test-Path -LiteralPath $Preferred)) {
+    return $Preferred
+  }
+  $envPath = ($env:MT5_TERMINAL_PATH | ForEach-Object { "$_" })
+  if (-not [string]::IsNullOrWhiteSpace($envPath) -and (Test-Path -LiteralPath $envPath.Trim())) {
+    return $envPath.Trim()
+  }
+  foreach ($candidate in @(Get-Mt5TerminalCandidatePaths)) {
+    if (Test-Path -LiteralPath $candidate) { return $candidate }
+  }
+  if (-not [string]::IsNullOrWhiteSpace($Preferred)) { return $Preferred }
+  return "C:\Program Files\MetaTrader 5\terminal64.exe"
+}
+
+# Auto-logon inspection. NEVER reads or prints DefaultPassword.
+function Get-AutoLogonReadiness {
+  $interactive = [string]$env:USERNAME
+  $result = [ordered]@{
+    State = "ACTION_REQUIRED"
+    Enabled = $false
+    UserConfigured = $false
+    PasswordValuePresent = $false
+    DefaultUserName = ""
+    InteractiveUser = $interactive
+  }
+  try {
+    $key = Get-Item "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" -ErrorAction Stop
+    $auto = [string]$key.GetValue("AutoAdminLogon")
+    $user = [string]$key.GetValue("DefaultUserName")
+    $pwdPresent = $false
+    foreach ($name in @($key.GetValueNames())) {
+      if ($name -eq "DefaultPassword") { $pwdPresent = $true; break }
+    }
+    $result.Enabled = ($auto -eq "1")
+    $result.UserConfigured = -not [string]::IsNullOrWhiteSpace($user)
+    $result.PasswordValuePresent = $pwdPresent
+    $result.DefaultUserName = $user
+    if ($result.Enabled -and $result.UserConfigured) {
+      $result.State = "READY"
+    }
+  } catch {
+    $result.State = "ACTION_REQUIRED"
+  }
+  return $result
+}
+
+function Get-CloudflaredCommandSanitized {
+  try {
+    $svc = Get-CimInstance Win32_Service -Filter "Name='Cloudflared'" -ErrorAction SilentlyContinue
+    if ($null -eq $svc) { return "missing" }
+    $path = [string]$svc.PathName
+    if ($path -match "--token\s+\S+" -and $path -notmatch "token-file") {
+      return "inline_token_redacted"
+    }
+    if ($path -match "token-file") {
+      return "cloudflared tunnel run --token-file (contents not logged)"
+    }
+    if ($path -match "cloudflared") {
+      return "cloudflared (bin path present; token not logged)"
+    }
+    return "unexpected_command"
+  } catch {
+    return "unreadable"
+  }
+}
+
+function Test-CloudflaredScmRestartConfigured {
+  try {
+    $out = (& sc.exe qfailure Cloudflared 2>$null | Out-String)
+    if ([string]::IsNullOrWhiteSpace($out)) { return $false }
+    return ($out -match "Restart")
+  } catch {
+    return $false
+  }
+}
+
+function Set-CloudflaredScmRestartOnFailure {
+  # First/second/subsequent failure: restart after 60s. Reset fail count daily.
+  # Does not log the service binary command line (may include flags).
+  $null = & sc.exe failure Cloudflared reset= 86400 actions= restart/60000/restart/60000/restart/60000
+  return $LASTEXITCODE
+}
+
+function Test-WatchdogGatewayStartAllowed {
+  param(
+    [string]$StateFile,
+    [int]$MaxPerHour = 8
+  )
+  if (-not (Test-Path $StateFile)) { return $true }
+  $starts = 0
+  $window = $null
+  foreach ($line in @(Get-Content $StateFile -ErrorAction SilentlyContinue)) {
+    if ($line -match "^starts_in_window=(\d+)") { $starts = [int]$Matches[1] }
+    if ($line -match "^start_window_utc=(.+)$") {
+      try { $window = [datetime]$Matches[1] } catch { $window = $null }
+    }
+  }
+  if ($null -eq $window) { return $true }
+  if (([datetime]::UtcNow - $window.ToUniversalTime()).TotalHours -ge 1) { return $true }
+  return ($starts -lt $MaxPerHour)
+}
+
+function Get-WatchdogStartCounters {
+  param([string]$StateFile)
+  $starts = 0
+  $window = [datetime]::UtcNow
+  if (Test-Path $StateFile) {
+    foreach ($line in @(Get-Content $StateFile -ErrorAction SilentlyContinue)) {
+      if ($line -match "^starts_in_window=(\d+)") { $starts = [int]$Matches[1] }
+      if ($line -match "^start_window_utc=(.+)$") {
+        try { $window = [datetime]$Matches[1] } catch { $window = [datetime]::UtcNow }
+      }
+    }
+  }
+  if (([datetime]::UtcNow - $window.ToUniversalTime()).TotalHours -ge 1) {
+    $starts = 0
+    $window = [datetime]::UtcNow
+  }
+  return @{ Starts = $starts; WindowUtc = $window.ToUniversalTime() }
 }
