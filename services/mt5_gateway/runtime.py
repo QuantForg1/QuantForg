@@ -528,6 +528,8 @@ class MT5GatewayRuntime:
         self.diagnostics = GatewayDiagnostics()
         self._stop = threading.Event()
         self._hb_thread: threading.Thread | None = None
+        self._next_delayed_attach_mono: float = 0.0
+        self._delayed_attach_backoff: float = 2.0
 
     def _clear_selected_symbols(self) -> None:
         self._selected_symbols.clear()
@@ -749,6 +751,56 @@ class MT5GatewayRuntime:
                     "Password-based reconnect requires POST /session/connect."
                 ),
             }
+
+    def try_delayed_auto_attach(self) -> str:
+        """Retry AUTO_ATTACH after a late MT5 start. Never collects a password.
+
+        Unlike ``attach()``, a missing account does **not** call ``shutdown()``
+        — the terminal may still be logging in after reboot. Does not call
+        ``order_send`` and does not invent credentials.
+        """
+        if not self.settings.mt5_gateway_auto_attach:
+            return "disabled"
+        with self._lock:
+            if self._creds is not None:
+                return "already_attached"
+        term_path = self.settings.mt5_terminal_path
+        try:
+            if not self.bridge.initialize(term_path):
+                logger.info(
+                    "mt5_unavailable delayed_auto_attach waiting initialize"
+                )
+                return "waiting_initialize"
+            info = self.bridge.account_info()
+            if info is None:
+                logger.info(
+                    "mt5_unavailable delayed_auto_attach waiting account"
+                )
+                return "waiting_account"
+            login = _safe_int(info.login)
+            server = str(getattr(info, "server", "") or "")
+            with self._lock:
+                if self._creds is not None:
+                    return "already_attached"
+                self._mark_session(
+                    login=login,
+                    server=server,
+                    path=term_path,
+                    password="",
+                    mode="attached",
+                )
+            logger.info(
+                "mt5_recovered delayed_auto_attach_ok login=%s server=%s",
+                login,
+                server,
+            )
+            return "ok"
+        except Exception as exc:
+            logger.info(
+                "mt5_unavailable delayed_auto_attach error=%s",
+                type(exc).__name__,
+            )
+            return "error"
 
     def disconnect(self) -> dict[str, Any]:
         with self._lock:
@@ -1099,7 +1151,28 @@ class MT5GatewayRuntime:
                 has_creds = self._creds is not None
                 connected = self.diagnostics.connected
             if not has_creds:
-                # No retained session — do not invent reconnects.
+                # No retained session — do not invent password reconnects.
+                # AUTO_ATTACH may still adopt a terminal that started late.
+                if self.settings.mt5_gateway_auto_attach:
+                    now = time.monotonic()
+                    if now >= self._next_delayed_attach_mono:
+                        result = self.try_delayed_auto_attach()
+                        if result == "ok":
+                            self._delayed_attach_backoff = (
+                                self.settings.mt5_reconnect_backoff_seconds
+                            )
+                            self._next_delayed_attach_mono = 0.0
+                        else:
+                            self._delayed_attach_backoff = min(
+                                60.0,
+                                max(
+                                    self.settings.mt5_reconnect_backoff_seconds,
+                                    self._delayed_attach_backoff * 2.0,
+                                ),
+                            )
+                            self._next_delayed_attach_mono = (
+                                now + self._delayed_attach_backoff
+                            )
                 continue
 
             if connected:

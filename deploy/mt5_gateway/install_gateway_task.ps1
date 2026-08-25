@@ -1,14 +1,19 @@
 # Register QuantForg MT5 Gateway as a persistent Windows Scheduled Task.
-# Survives closing interactive PowerShell; restarts at user logon via supervise_gateway.ps1.
+# Idempotent: the same task name is replaced, never duplicated.
 #
-# Prefer an elevated PowerShell if Register-ScheduledTask returns Access Denied:
+# Triggers:
+#   AtStartup  - unattended VPS reboot (requires auto-logon OR "run whether logged on")
+#   AtLogOn    - recovery when the trading user session appears
+#
+# This script does NOT claim the task is already installed on any host.
+# Run it ON the Windows VPS (elevated PowerShell if Access Denied).
+#
 #   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\install_gateway_task.ps1
-#
-# Uninstall:
 #   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\install_gateway_task.ps1 -Uninstall
 
 param(
   [switch]$Uninstall,
+  [switch]$SkipStart,
   [string]$TaskName = "QuantForgMT5Gateway"
 )
 
@@ -32,25 +37,46 @@ if ($Uninstall) {
 $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Supervise`""
 $action = New-ScheduledTaskAction -Execute $ps -Argument $arg -WorkingDirectory $RepoRoot
-$trigger = New-ScheduledTaskTrigger -AtLogOn
+$triggers = @(
+  (New-ScheduledTaskTrigger -AtStartup),
+  (New-ScheduledTaskTrigger -AtLogOn)
+)
 $settings = New-ScheduledTaskSettingsSet `
+  -MultipleInstances IgnoreNew `
   -ExecutionTimeLimit ([TimeSpan]::Zero) `
   -RestartCount 3 `
   -RestartInterval (New-TimeSpan -Minutes 1) `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
-  -StartWhenAvailable
+  -StartWhenAvailable `
+  -DontStopOnIdleEnd
+$principal = New-ScheduledTaskPrincipal `
+  -UserId $env:USERNAME `
+  -LogonType Interactive `
+  -RunLevel Highest
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
-Write-Host "Scheduled task '$TaskName' registered (AtLogOn)."
-Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 8
+Register-ScheduledTask `
+  -TaskName $TaskName `
+  -Action $action `
+  -Trigger $triggers `
+  -Settings $settings `
+  -Principal $principal `
+  -Force | Out-Null
 
-try {
-  $live = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 5
-  Write-Host ("/health/live status={0} version={1}" -f $live.status, $live.gateway_version)
-} catch {
-  Write-Host "WARN: /health/live not ready yet. Check docs\production\reports\gateway_supervisor\supervisor.log"
+Write-Host "Scheduled task '$TaskName' registered (AtStartup + AtLogOn, IgnoreNew, no time limit)."
+Write-Host "WorkingDirectory=$RepoRoot"
+Write-Host "NOTE: Interactive logon type needs the trading user session (auto-logon on a VPS)."
+Write-Host "This script does not enable Windows auto-logon and does not store passwords."
+
+if (-not $SkipStart) {
+  Start-ScheduledTask -TaskName $TaskName
+  Start-Sleep -Seconds 8
+  try {
+    $live = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 5
+    Write-Host ("/health/live status={0} version={1}" -f $live.status, $live.gateway_version)
+  } catch {
+    Write-Host "WARN: /health/live not ready yet. Check docs\production\reports\gateway_supervisor\supervisor.log"
+  }
 }
 
 Write-Host ""
@@ -58,6 +84,3 @@ Write-Host "Manual controls:"
 Write-Host "  Start:  Start-ScheduledTask -TaskName $TaskName"
 Write-Host "  Stop:   create file docs\production\reports\gateway_supervisor\STOP"
 Write-Host "  Remove: powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\install_gateway_task.ps1 -Uninstall"
-Write-Host ""
-Write-Host "Without Task Scheduler (current session), run:"
-Write-Host "  powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1"

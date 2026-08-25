@@ -35,7 +35,7 @@ cd C:\QuantForg
 # create venv, install deps
 # Copy deploy\mt5_gateway\gateway.env.example values into .env or process env:
 $env:MT5_GATEWAY_TOKEN="<from registration>"
-$env:MT5_GATEWAY_HOST="0.0.0.0"
+$env:MT5_GATEWAY_HOST="127.0.0.1"
 $env:MT5_GATEWAY_PORT="8765"
 $env:MT5_TERMINAL_PATH="C:\Program Files\MetaTrader 5\terminal64.exe"
 # Optional local DX — reuse already logged-in XM terminal:
@@ -43,7 +43,10 @@ $env:MT5_GATEWAY_AUTO_ATTACH="true"
 quantforg-mt5-gateway
 ```
 
-Or install as a service — see `deploy/mt5_gateway/windows-service.ps1`.
+Or install as a Windows Scheduled Task — see `docs/production/VPS_WINDOWS_DEPLOYMENT.md`
+and `deploy/mt5_gateway/deploy_production_vps.ps1`. Do not expose `:8765` on the public
+internet; keep `MT5_GATEWAY_HOST=127.0.0.1` and reach it through the existing
+authenticated tunnel (`MT5_GATEWAY_BASE_URL` on Railway).
 
 ## 3. Bind broker session (on gateway)
 

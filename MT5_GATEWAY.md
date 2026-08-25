@@ -88,8 +88,13 @@ powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps
 # Persistent: supervise loop (auto-restart on crash / unresponsive /health/live)
 powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1
 
-# Register ONLOGON Scheduled Task (run elevated once)
+# Register persistent Task Scheduler jobs (AtStartup + AtLogOn, run elevated once ON the Windows host):
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\install_mt5_terminal_task.ps1
 powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\install_gateway_task.ps1
+
+# Full VPS orchestration (idempotent):
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\deploy_production_vps.ps1
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_production_vps.ps1
 ```
 
 Supervisor logs: `docs/production/reports/gateway_supervisor/`.  

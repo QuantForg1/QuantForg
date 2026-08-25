@@ -9,7 +9,10 @@
 # Compatible with Windows PowerShell 5.1 (ASCII-only source; no UTF-8 em-dashes).
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = "C:\Users\P7 PROVIDER\QuantForg"
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+if (-not (Test-Path (Join-Path $RepoRoot "pyproject.toml"))) {
+  $RepoRoot = (Get-Location).Path
+}
 # QuantForg requires Python 3.13 + Poetry project venv (.venv). Never use global Python 3.14.
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) {

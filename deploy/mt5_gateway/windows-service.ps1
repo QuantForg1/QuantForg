@@ -6,10 +6,12 @@
 # 2. Set AppDirectory to repo root (C:\QuantForg)
 # 3. Environment (NSSM → AppEnvironmentExtra):
 #      MT5_GATEWAY_TOKEN=<strong-token>
-#      MT5_GATEWAY_HOST=0.0.0.0
+#      MT5_GATEWAY_HOST=127.0.0.1
 #      MT5_GATEWAY_PORT=8765
 #      MT5_TERMINAL_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
 #      MT5_GATEWAY_AUTO_ATTACH=true
+# Prefer Task Scheduler (install_gateway_task.ps1) over NSSM on a Windows VPS.
+# Do NOT bind 0.0.0.0 unless a private firewall/tunnel already terminates TLS.
 # 4. Start:
 #    nssm start QuantForgMT5Gateway
 #

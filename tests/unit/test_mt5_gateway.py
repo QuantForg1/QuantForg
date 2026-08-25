@@ -949,3 +949,32 @@ class TestMT5GatewayReconnectLoop:
         assert runtime.diagnostics.connected is False
         assert runtime._creds is None
         assert runtime.diagnostics.reconnect_events == []
+
+
+@pytest.mark.unit
+class TestDelayedAutoAttach:
+    """Gateway may start before MT5 is logged in; retry attach without shutdown."""
+
+    def test_waiting_account_does_not_shutdown_or_trade(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        gateway_env.mt5_gateway_auto_attach = True
+        bridge = _FakeBridge(prelogged=False)
+        runtime = MT5GatewayRuntime(settings=gateway_env, bridge=bridge)
+        assert runtime.try_delayed_auto_attach() == "waiting_account"
+        assert runtime._creds is None
+        assert bridge._initialized is True
+        bridge._logged_in = True
+        assert runtime.try_delayed_auto_attach() == "ok"
+        assert runtime.diagnostics.session_mode == "attached"
+        assert runtime._creds is not None
+        assert runtime._creds.password == ""
+
+    def test_disabled_when_auto_attach_off(
+        self, gateway_env: MT5GatewaySettings
+    ) -> None:
+        gateway_env.mt5_gateway_auto_attach = False
+        runtime = MT5GatewayRuntime(
+            settings=gateway_env, bridge=_FakeBridge(prelogged=True)
+        )
+        assert runtime.try_delayed_auto_attach() == "disabled"

@@ -180,11 +180,67 @@ function Ensure-SingleHealthyInstance {
 }
 
 # --- main ---
-Write-SupLog "supervisor begin Once=$Once"
+$script:SupervisorMutex = New-Object System.Threading.Mutex(
+  $false,
+  "Global\QuantForgMT5GatewaySupervisor"
+)
+try {
+  $owned = $script:SupervisorMutex.WaitOne(0)
+} catch {
+  $owned = $false
+}
+if (-not $owned) {
+  Write-SupLog "duplicate supervisor prevented - mutex already held"
+  exit 0
+}
+
+Write-SupLog "supervisor start Once=$Once"
+Write-SupLog "task_scheduler_startup pid=$PID repo=$RepoRoot"
+
+function Test-Mt5Process {
+  $procs = @(Get-Process -Name "terminal64","terminal" -ErrorAction SilentlyContinue)
+  return ($procs.Count -gt 0)
+}
+
+function Wait-Mt5Process {
+  param([int]$TimeoutSec = 90)
+  if (Test-Mt5Process) {
+    Write-SupLog "mt5_detected"
+    return $true
+  }
+  Write-SupLog "mt5_unavailable waiting up to ${TimeoutSec}s (Gateway will still start)"
+  $deadline = (Get-Date).AddSeconds($TimeoutSec)
+  while ((Get-Date) -lt $deadline) {
+    if (Test-Path $StopFile) { return $false }
+    if (Test-Mt5Process) {
+      Write-SupLog "mt5_recovered"
+      return $true
+    }
+    Start-Sleep -Seconds 2
+  }
+  Write-SupLog "mt5_unavailable still missing after wait - starting Gateway anyway"
+  return $false
+}
+
+if (Test-Path $PidFile) {
+  $stale = 0
+  try { $stale = [int](Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1) } catch { $stale = 0 }
+  if ($stale -gt 0) {
+    $alive = Get-Process -Id $stale -ErrorAction SilentlyContinue
+    if ($null -eq $alive) {
+      Write-SupLog ("stale pid file removed pid={0}" -f $stale)
+      Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
+
+Write-SupLog "supervisor start Once=$Once"
+Write-SupLog "task_scheduler_startup pid=$PID repo=$RepoRoot"
 if (Test-Path $StopFile) { Remove-Item $StopFile -Force }
 
 $backoff = $RestartBackoffSec
 $failStreak = 0
+$mt5MissingLogged = $false
 
 while ($true) {
   if (Test-Path $StopFile) {
@@ -196,6 +252,7 @@ while ($true) {
 
   $healthy = Ensure-SingleHealthyInstance
   if (-not $healthy) {
+    Wait-Mt5Process -TimeoutSec 90
     try {
       $null = Start-GatewayProcess
       if (-not (Wait-GatewayReady -TimeoutSec 45)) {
@@ -231,15 +288,26 @@ while ($true) {
 
     $listen = Get-ListenPids
     if ($listen.Count -eq 0) {
-      Write-SupLog "gateway process gone (no LISTEN on :$Port) - restart"
+      Write-SupLog "gateway restart recovery_attempt (process gone)"
       break
+    }
+    if (Test-Mt5Process) {
+      if ($mt5MissingLogged) {
+        Write-SupLog "mt5_recovered"
+        $mt5MissingLogged = $false
+      }
+    } else {
+      if (-not $mt5MissingLogged) {
+        Write-SupLog "mt5_unavailable (terminal process missing) - Gateway stays up"
+        $mt5MissingLogged = $true
+      }
     }
 
     if (-not (Test-LiveOk)) {
       $failStreak++
-      Write-SupLog ("/health/live failed streak={0}/{1}" -f $failStreak, $UnresponsiveRestarts)
+      Write-SupLog ("/health/live failed streak={0}/{1} (process unresponsive, not a market/Risk block)" -f $failStreak, $UnresponsiveRestarts)
       if ($failStreak -ge $UnresponsiveRestarts) {
-        Write-SupLog "gateway unresponsive - restarting process"
+        Write-SupLog "gateway restart recovery_attempt (unresponsive /health/live)"
         Stop-GatewayPids -TargetPids $listen
         $failStreak = 0
         break

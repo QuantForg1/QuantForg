@@ -15,8 +15,8 @@ CLOUD_COMPONENTS = (
     "scheduler",
 )
 
-# Today these run on the operator Windows PC (local gateway + MT5 terminal),
-# typically reached from Railway via Cloudflare tunnel.
+# Today these MUST run on an always-on Windows trading host (intended: Windows VPS).
+# Cutover is operator-executed. This module does not inspect any VPS.
 USER_WINDOWS_COMPONENTS = (
     "mt5_terminal",
     "mt5_gateway",
@@ -28,6 +28,7 @@ BROKER_PATH_FOLLOWS_MT5_HOST = True
 
 USER_WINDOWS_PC_MAY_BE_OFF = False
 MT5_CLOUD_VPS_MIGRATION_REQUIRED = True
+VPS_DEPLOYMENT_AUTOMATION_IN_REPO = True
 
 RECOMMENDED_ALWAYS_ON_HOST = (
     "Dedicated Windows Server / Windows VPS (always-on) running "
@@ -50,4 +51,6 @@ def topology_snapshot() -> dict[str, Any]:
         "works_without_internet_on_mt5_host": False,
         "recommended_always_on_host": RECOMMENDED_ALWAYS_ON_HOST,
         "migration_executed": False,
+        "vps_deployment_automation_in_repo": VPS_DEPLOYMENT_AUTOMATION_IN_REPO,
+        "vps_cutover_requires_human": True,
     }
