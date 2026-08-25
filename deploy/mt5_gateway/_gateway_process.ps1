@@ -84,14 +84,18 @@ function Write-GatewayPidFile {
   param(
     [string]$Path,
     [int]$ListenerPid,
-    [int]$TreeRootPid
+    [int]$TreeRootPid,
+    [string]$Health = "unknown"
   )
   $tree = @(Get-GatewayTreePids -RootPid $TreeRootPid)
   $treeText = ($tree -join ",")
+  $stamp = (Get-Date).ToUniversalTime().ToString("o")
   @(
     "listener=$ListenerPid",
     "tree_root=$TreeRootPid",
-    "tree=$treeText"
+    "tree=$treeText",
+    "updated_utc=$stamp",
+    "health=$Health"
   ) | Set-Content -Path $Path -Encoding ASCII
 }
 

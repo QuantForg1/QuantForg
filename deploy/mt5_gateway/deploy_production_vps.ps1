@@ -102,7 +102,10 @@ $required = @(
   "deploy\mt5_gateway\start_mt5_terminal.ps1",
   "deploy\mt5_gateway\install_mt5_terminal_task.ps1",
   "deploy\mt5_gateway\verify_production_vps.ps1",
-  "deploy\mt5_gateway\_gateway_process.ps1"
+  "deploy\mt5_gateway\_gateway_process.ps1",
+  "deploy\mt5_gateway\_host_recovery.ps1",
+  "deploy\mt5_gateway\watchdog_vps.ps1",
+  "deploy\mt5_gateway\install_watchdog_task.ps1"
 )
 foreach ($rel in $required) {
   $p = Join-Path $RepoRoot $rel
@@ -127,11 +130,14 @@ if (-not $SkipInstallTask) {
   & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\install_mt5_terminal_task.ps1") -SkipStart
   Write-Step "install QuantForgMT5Gateway (idempotent)"
   & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\install_gateway_task.ps1") -SkipStart
+  Write-Step "install QuantForgVpsWatchdog (idempotent)"
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\install_watchdog_task.ps1") -SkipStart
   Write-Step "start scheduled tasks"
   Start-ScheduledTask -TaskName "QuantForgMT5Terminal" -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 5
   Start-ScheduledTask -TaskName "QuantForgMT5Gateway" -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 8
+  Start-ScheduledTask -TaskName "QuantForgVpsWatchdog" -ErrorAction SilentlyContinue
 } else {
   Write-Step "SkipInstallTask set - tasks not registered"
 }

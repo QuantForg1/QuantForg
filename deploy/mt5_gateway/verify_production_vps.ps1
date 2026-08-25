@@ -110,7 +110,10 @@ $scripts = @(
   "deploy\mt5_gateway\start_gateway.ps1",
   "deploy\mt5_gateway\install_gateway_task.ps1",
   "deploy\mt5_gateway\start_mt5_terminal.ps1",
-  "deploy\mt5_gateway\_gateway_process.ps1"
+  "deploy\mt5_gateway\_gateway_process.ps1",
+  "deploy\mt5_gateway\_host_recovery.ps1",
+  "deploy\mt5_gateway\watchdog_vps.ps1",
+  "deploy\mt5_gateway\install_watchdog_task.ps1"
 )
 foreach ($rel in $scripts) {
   $p = Join-Path $RepoRoot $rel
@@ -175,6 +178,7 @@ if ($liveOk) {
   Add-Check "health_live" "FAIL" "http://127.0.0.1:8765/health/live not OK"
 }
 
+$health = $null
 try {
   $health = Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec 8
   $mt5c = $false
@@ -204,6 +208,52 @@ function Test-Task {
 }
 Test-Task $GatewayTaskName
 Test-Task $TerminalTaskName
+$wd = Get-ScheduledTask -TaskName "QuantForgVpsWatchdog" -ErrorAction SilentlyContinue
+if ($null -eq $wd) {
+  Add-Check "task:QuantForgVpsWatchdog" "WARN" "not registered (run install_watchdog_task.ps1)"
+} else {
+  $wdInfo = Get-ScheduledTaskInfo -TaskName "QuantForgVpsWatchdog" -ErrorAction SilentlyContinue
+  Add-Check "task:QuantForgVpsWatchdog" "PASS" ("state={0} last={1}" -f $wd.State, $wdInfo.LastTaskResult)
+}
+
+$cfSvc = Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue
+if ($null -eq $cfSvc) {
+  Add-Check "cloudflared_service" "FAIL" "Cloudflared service not installed"
+} elseif ($cfSvc.Status -eq "Running") {
+  Add-Check "cloudflared_service" "PASS" ("status={0} start={1}" -f $cfSvc.Status, $cfSvc.StartType)
+} else {
+  Add-Check "cloudflared_service" "FAIL" ("status={0}" -f $cfSvc.Status)
+}
+$cfPids = @(Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue)
+if ($cfPids.Count -eq 1) {
+  Add-Check "cloudflared_process" "PASS" ("count=1 pid={0}" -f $cfPids[0].Id)
+} elseif ($cfPids.Count -gt 1) {
+  Add-Check "cloudflared_process" "WARN" ("duplicate cloudflared count={0}" -f $cfPids.Count)
+} else {
+  Add-Check "cloudflared_process" "FAIL" "cloudflared.exe not running"
+}
+
+$publicLive = $false
+try {
+  $pl = Invoke-RestMethod "https://gateway.quantforg.com/health/live" -TimeoutSec 8
+  if ($pl.status -eq "ok" -and $pl.service -eq "mt5-gateway") { $publicLive = $true }
+} catch {}
+if ($publicLive) {
+  Add-Check "tunnel_public_live" "PASS" "https://gateway.quantforg.com/health/live"
+} else {
+  Add-Check "tunnel_public_live" "WARN" "public /health/live not reachable (local Gateway may still be healthy)"
+}
+
+$mt5Connected = $false
+try {
+  if ($null -ne $health.mt5) { $mt5Connected = [bool]$health.mt5.connected }
+} catch {}
+$hostState = "CRITICAL"
+if ($listenerCount -eq 1 -and $liveOk -and $mt5.Count -ge 1 -and $cfSvc -and $cfSvc.Status -eq "Running") {
+  if ($mt5Connected -and $publicLive -and $cfPids.Count -eq 1) { $hostState = "HEALTHY" }
+  else { $hostState = "DEGRADED" }
+}
+Add-Check "host_state" $(if ($hostState -eq "CRITICAL") { "FAIL" } elseif ($hostState -eq "HEALTHY") { "PASS" } else { "WARN" }) $hostState
 
 $sup = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
   Where-Object { $_.CommandLine -match "supervise_gateway\.ps1" })
@@ -232,6 +282,7 @@ Write-Host ("supervisor PID={0}" -f $supPid)
 Write-Host ("listener PID={0}" -f $listenerPid)
 Write-Host ("Gateway process tree={0}" -f ($treePids -join ","))
 Write-Host ("listener count={0}" -f $listenerCount)
+Write-Host ("host_state={0}" -f $hostState)
 foreach ($row in $Rows) {
   Write-Host ("[{0}] {1} - {2}" -f $row.status, $row.name, $row.detail)
 }

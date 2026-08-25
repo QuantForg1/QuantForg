@@ -4,11 +4,15 @@
 # PowerShell window that launched it (child started with WindowStyle Hidden).
 #
 # Features:
-#   - single-instance lock (port 8765 + PID file)
+#   - single-instance lock (port 8765 + PID file + mutex)
 #   - automatic restart after process exit / crash
 #   - restart only when unresponsive (/health/live fails), NOT when quotes are slow
+#   - MT5 missing: start terminal64 via start_mt5_terminal.ps1 (no broker login)
+#   - Cloudflared service: start if Stopped; never restart Gateway for tunnel blips
+#   - restart-storm cap; backoff; PID file with tree + health + timestamp
 #   - clear rotating logs under docs/production/reports/gateway_supervisor/
 #   - graceful stop via stop file or Ctrl+C on the supervisor loop
+# Interactive Scheduled Task cannot survive Windows logoff. Auto-logon is required.
 #
 # Usage (foreground supervisor - safe for Task Scheduler "At log on"):
 #   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\supervise_gateway.ps1
@@ -24,7 +28,9 @@ param(
   [int]$HealthIntervalSec = 20,
   [int]$UnresponsiveRestarts = 3,
   [int]$RestartBackoffSec = 5,
-  [int]$MaxBackoffSec = 60
+  [int]$MaxBackoffSec = 60,
+  [int]$MaxGatewayStartsPerHour = 8,
+  [int]$Mt5StartCooldownSec = 120
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,6 +57,8 @@ if (-not (Test-Path $ProcessHelpers)) {
   throw "Missing $ProcessHelpers"
 }
 . $ProcessHelpers
+$HostHelpers = Join-Path $PSScriptRoot "_host_recovery.ps1"
+if (Test-Path $HostHelpers) { . $HostHelpers }
 
 function Write-SupLog([string]$msg) {
   $line = "[{0}] {1}" -f (Get-Date).ToUniversalTime().ToString("o"), $msg
@@ -88,8 +96,8 @@ function Save-GatewayPidState {
   if ($listen.Count -eq 0) { return }
   $listener = $listen[0]
   $root = Get-GatewayTreeRoot -ProcessId $listener
-  Write-GatewayPidFile -Path $PidFile -ListenerPid $listener -TreeRootPid $root
-  Write-SupLog ("gateway tree adopted listener={0} tree_root={1}" -f $listener, $root)
+  Write-GatewayPidFile -Path $PidFile -ListenerPid $listener -TreeRootPid $root -Health "live_ok"
+  Write-SupLog ("gateway tree adopted listener={0} tree_root={1} health=live_ok" -f $listener, $root)
 }
 
 function Stop-GatewayPids {
@@ -197,6 +205,9 @@ if (-not $owned) {
 }
 
 function Test-Mt5Process {
+  if (Get-Command Test-Mt5TerminalProcess -ErrorAction SilentlyContinue) {
+    return Test-Mt5TerminalProcess
+  }
   $procs = @(Get-Process -Name "terminal64","terminal" -ErrorAction SilentlyContinue)
   return ($procs.Count -gt 0)
 }
@@ -221,6 +232,70 @@ function Wait-Mt5Process {
   return $false
 }
 
+function Start-Mt5IfMissing {
+  if (Test-Mt5Process) { return $true }
+  $now = Get-Date
+  if ($script:Mt5CooldownUntil -and $now -lt $script:Mt5CooldownUntil) {
+    Write-SupLog "mt5_missing recovery_cooldown"
+    return (Wait-Mt5Process -TimeoutSec 30)
+  }
+  $starter = Join-Path $PSScriptRoot "start_mt5_terminal.ps1"
+  if (-not (Test-Path $starter)) {
+    Write-SupLog "mt5_missing starter script not found"
+    return $false
+  }
+  Write-SupLog "mt5_missing recovery_attempt starting terminal64 (no broker login, no order_send)"
+  try {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $starter
+  } catch {
+    Write-SupLog ("mt5_start failed: {0}" -f $_.Exception.Message)
+  }
+  $script:Mt5CooldownUntil = $now.AddSeconds($Mt5StartCooldownSec)
+  return (Wait-Mt5Process -TimeoutSec 90)
+}
+
+function Test-GatewayStartAllowed {
+  $now = [datetime]::UtcNow
+  if ($null -eq $script:StartWindowUtc) {
+    $script:StartWindowUtc = $now
+    $script:StartsInWindow = 0
+  }
+  if (($now - $script:StartWindowUtc).TotalHours -ge 1) {
+    $script:StartWindowUtc = $now
+    $script:StartsInWindow = 0
+  }
+  if ($script:StartsInWindow -ge $MaxGatewayStartsPerHour) {
+    Write-SupLog ("gateway restart storm prevented starts={0} window_max={1}" -f $script:StartsInWindow, $MaxGatewayStartsPerHour)
+    return $false
+  }
+  return $true
+}
+
+function Register-GatewayStart {
+  $script:StartsInWindow++
+}
+
+function Repair-CloudflaredIfStopped {
+  if (-not (Get-Command Test-CloudflaredServiceRunning -ErrorAction SilentlyContinue)) { return }
+  $pids = @(Get-CloudflaredPids)
+  if ($pids.Count -gt 1) {
+    Write-SupLog ("cloudflared_duplicate count={0} pids={1} - not killing (service-owned)" -f $pids.Count, ($pids -join ","))
+  }
+  if (Test-CloudflaredServiceRunning) { return }
+  Write-SupLog "cloudflared_service_stopped recovery_attempt Start-Service (not Gateway restart, token not logged)"
+  try {
+    Start-Service -Name "Cloudflared" -ErrorAction Stop
+    Start-Sleep -Seconds 3
+    if (Test-CloudflaredServiceRunning) {
+      Write-SupLog "cloudflared_recovered service running"
+    } else {
+      Write-SupLog "cloudflared_service still not running"
+    }
+  } catch {
+    Write-SupLog ("cloudflared_start failed: {0}" -f $_.Exception.Message)
+  }
+}
+
 if (Test-Path $PidFile) {
   $staleLine = @(Get-Content $PidFile -ErrorAction SilentlyContinue | Where-Object { $_ -match "^(listener|tree_root)=" } | Select-Object -First 1)
   $stale = 0
@@ -239,11 +314,20 @@ if (Test-Path $PidFile) {
 
 Write-SupLog "supervisor start Once=$Once"
 Write-SupLog "task_scheduler_startup pid=$PID repo=$RepoRoot"
+try {
+  $boot = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).LastBootUpTime
+  if ($boot) {
+    Write-SupLog ("windows_last_boot={0}" -f ([datetime]$boot).ToUniversalTime().ToString("o"))
+  }
+} catch {}
 if (Test-Path $StopFile) { Remove-Item $StopFile -Force }
 
 $backoff = $RestartBackoffSec
 $failStreak = 0
 $mt5MissingLogged = $false
+$script:Mt5CooldownUntil = $null
+$script:StartWindowUtc = $null
+$script:StartsInWindow = 0
 
 while ($true) {
   if (Test-Path $StopFile) {
@@ -255,8 +339,15 @@ while ($true) {
 
   $healthy = Ensure-SingleHealthyInstance
   if (-not $healthy) {
-    Wait-Mt5Process -TimeoutSec 90
+    if (-not (Test-GatewayStartAllowed)) {
+      Start-Sleep -Seconds $MaxBackoffSec
+      continue
+    }
+    Repair-CloudflaredIfStopped
+    $null = Start-Mt5IfMissing
     try {
+      Register-GatewayStart
+      Write-SupLog "gateway start recovery_attempt reason=listener_or_live_unhealthy"
       $null = Start-GatewayProcess
       if (-not (Wait-GatewayReady -TimeoutSec 45)) {
         Write-SupLog "gateway failed readiness (/health/live)"
@@ -310,7 +401,10 @@ while ($true) {
         Write-SupLog "mt5_unavailable (terminal process missing) - Gateway stays up"
         $mt5MissingLogged = $true
       }
+      $null = Start-Mt5IfMissing
     }
+
+    Repair-CloudflaredIfStopped
 
     if (-not (Test-LiveOk)) {
       $failStreak++

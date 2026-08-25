@@ -11,7 +11,7 @@
 # It does not reconnect the broker with a password and does not trade.
 
 param(
-  [ValidateSet("Status","RestartGateway","RestartSupervisor","RestartMt5","ReclaimPort")]
+  [ValidateSet("Status","RestartGateway","RestartSupervisor","RestartMt5","ReclaimPort","RestartCloudflared")]
   [string]$Action = "Status",
   [string]$RepoRoot = "",
   [string]$GatewayTaskName = "QuantForgMT5Gateway",
@@ -88,6 +88,15 @@ switch ($Action) {
   "ReclaimPort" {
     Write-Rec "reclaim hung :8765 then supervise -Once"
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\reclaim_gateway.ps1")
+  }
+  "RestartCloudflared" {
+    Write-Rec "cloudflared service restart only - no Gateway kill if healthy, token not logged"
+    $svc = Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue
+    if ($null -eq $svc) { throw "Cloudflared service not installed" }
+    Restart-Service -Name "Cloudflared" -ErrorAction Stop
+    Start-Sleep -Seconds 5
+    $svc2 = Get-Service -Name "Cloudflared"
+    Write-Rec ("cloudflared status={0}" -f $svc2.Status)
   }
 }
 

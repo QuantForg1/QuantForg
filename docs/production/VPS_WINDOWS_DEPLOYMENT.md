@@ -137,3 +137,68 @@ Do **not** reboot from code. If you test reboot recovery:
 - Delayed attach in Gateway logs: `delayed_auto_attach_ok` / `mt5_unavailable`
 
 Do not enable `MT5_GATEWAY_AUTH_DEBUG=true` except for a short local debug window.
+
+## 24/7 recovery map (software)
+
+```
+POWER/OS (provider/BIOS — operator)
+    ↓ Windows boot
+Cloudflared (LocalSystem service, Automatic)
+    ↓
+Interactive auto-logon (operator — required for MT5)
+    ↓
+QuantForgMT5Terminal (AtStartup + AtLogOn, IgnoreNew, Highest, Interactive)
+    ↓ terminal64.exe (exactly one)
+QuantForgMT5Gateway (AtStartup + AtLogOn, IgnoreNew, Highest, Interactive, no -Once)
+    ↓ supervise_gateway.ps1 (one mutex)
+    ↓ exactly one LISTENING 127.0.0.1:8765
+QuantForgVpsWatchdog (2-minute one-shot, IgnoreNew) — starts missing pieces only
+    ↓
+https://gateway.quantforg.com  →  Railway
+```
+
+Interactive Task Scheduler **cannot** keep MT5/Gateway running after logoff (`0xC000013A`). Do not switch those tasks to S4U/session-0 (MT5 IPC needs the interactive desktop). Enable Windows auto-logon for the trading user (operator-owned; this repo never stores that password).
+
+Cloudflared is a LocalSystem service and does not need the interactive session.
+
+## Health model
+
+- **CRITICAL:** no Gateway listener, `/health/live` fail, no MT5 process, Cloudflared service missing/stopped.
+- **DEGRADED:** Gateway live but MT5 attaching, Cloudflared duplicates, public tunnel not reachable, temporary network loss.
+- **HEALTHY:** one listener, live OK, MT5 attached, one Cloudflared, public `/health/live` OK.
+
+Do not kill a healthy Gateway because Cloudflare is reconnecting. Do not restart Gateway for Internet outage. Restart-storm cap: max 8 Gateway starts per hour.
+
+## Scenario notes (detection → recovery)
+
+| Event | Detection | Recovery | Verify |
+|---|---|---|---|
+| Gateway crash | no LISTEN or live fail | supervisor tree-kill + one start | `/health/live` |
+| MT5 crash | no terminal64 | `start_mt5_terminal.ps1` (dup prevented); Gateway stays | process + delayed AUTO_ATTACH |
+| Cloudflared crash | service not Running | `Start-Service Cloudflared` only | service + public live |
+| Supervisor crash | mutex free / task | Task restart + IgnoreNew | one supervisor |
+| Duplicate supervisor | mutex | second instance exits | mutex |
+| Duplicate listener | netstat LISTEN count | tree reclaim then one start | listener_count=1 |
+| RDP disconnect | task 0xC000013A | auto-logon + AtLogOn | verify after logon |
+| Reboot | LastBootUpTime | tasks AtStartup + auto-logon | verify |
+| Network outage | public live fail | wait; do not restart Gateway/MT5 | local live still OK |
+
+## Provider / BIOS (not automatable here)
+
+This checkout cannot configure Raff/provider auto-reboot, BIOS power-on-after-power-loss, or Windows `recovery` crash restart. Operator must enable those on the VPS. Software cannot run while the VM is powered off.
+
+## Controlled reboot checklist (human)
+
+Do **not** reboot from these scripts. After auto-logon is confirmed:
+
+```
+Restart-Computer
+```
+
+After boot, on the VPS:
+
+```
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\verify_production_vps.ps1
+```
+
+Expect FAIL=0, listener_count=1, Cloudflared Running, host_state HEALTHY or DEGRADED (attach lag only). No `order_send`.

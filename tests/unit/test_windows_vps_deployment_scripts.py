@@ -30,6 +30,7 @@ def test_install_gateway_task_is_unattended_and_idempotent() -> None:
     assert "supervise_gateway.ps1" in text
     assert "QuantForgMT5Gateway" in text
     assert "-Force" in text
+    assert "-RunLevel Highest" in text
     assert "order_send" not in text.lower()
 
 
@@ -40,6 +41,7 @@ def test_install_mt5_terminal_task_prevents_duplicates() -> None:
     assert "start_mt5_terminal.ps1" in text
     assert "QuantForgMT5Terminal" in text
     assert "-Force" in text
+    assert "-RunLevel Highest" in text
 
 
 def test_start_mt5_terminal_never_logs_in_or_trades() -> None:
@@ -213,3 +215,107 @@ def test_trading_logic_untouched_by_vps_process_fix() -> None:
         body = _read(name).lower()
         assert "order_send" not in body or "never" in body
 
+
+def test_pid_file_includes_timestamp_and_health() -> None:
+    helpers = _read("_gateway_process.ps1")
+    assert "updated_utc=" in helpers
+    assert "health=$Health" in helpers
+
+
+def test_gateway_unhealthy_recovery_and_storm_cap() -> None:
+    text = _read("supervise_gateway.ps1")
+    assert "MaxGatewayStartsPerHour" in text
+    assert "restart storm prevented" in text
+    assert "Start-Mt5IfMissing" in text
+    assert "Repair-CloudflaredIfStopped" in text
+    assert "recovery_attempt" in text
+
+
+def test_duplicate_supervisor_prevention() -> None:
+    text = _read("supervise_gateway.ps1")
+    assert "Global\\QuantForgMT5GatewaySupervisor" in text
+    assert "duplicate supervisor prevented" in text
+    assert text.count("WaitOne(0)") >= 1
+
+
+def test_mt5_missing_recovery_uses_starter_not_order() -> None:
+    text = _read("supervise_gateway.ps1") + _read("watchdog_vps.ps1")
+    assert "start_mt5_terminal.ps1" in text
+    assert "no broker login" in text or "no broker login" in text.lower()
+    assert "order_send" not in text.lower() or "never" in text.lower()
+
+
+def test_cloudflared_missing_and_duplicate_detection() -> None:
+    host = _read("_host_recovery.ps1")
+    wd = _read("watchdog_vps.ps1")
+    verify = _read("verify_production_vps.ps1")
+    assert "Cloudflared" in host
+    assert "Get-CloudflaredPids" in host
+    assert "cloudflared_duplicate" in wd
+    assert "Start-Service" in wd
+    assert "duplicate cloudflared" in verify
+    assert "gateway.quantforg.com/health/live" in host
+    assert "tunnel_public_live" in verify
+
+
+def test_watchdog_does_not_kill_healthy_gateway() -> None:
+    text = _read("watchdog_vps.ps1")
+    assert "adopted not restarted" in text
+    assert "QuantForgVpsWatchdog" in text
+    assert "taskkill" not in text.lower()
+    assert "never sends broker orders" in text.lower()
+
+
+def test_watchdog_task_scheduler_config() -> None:
+    text = _read("install_watchdog_task.ps1")
+    assert "AtStartup" in text
+    assert "AtLogOn" in text
+    assert "IgnoreNew" in text
+    assert "-RunLevel Highest" in text
+    assert "PT2M" in text
+    assert "watchdog_vps.ps1" in text
+    assert "supervise_gateway.ps1 -Once" not in text
+
+
+def test_no_secret_leakage_in_vps_scripts() -> None:
+    for name in (
+        "watchdog_vps.ps1",
+        "_host_recovery.ps1",
+        "supervise_gateway.ps1",
+        "install_watchdog_task.ps1",
+        "verify_production_vps.ps1",
+    ):
+        body = _read(name).lower()
+        assert "eyj" not in body
+        assert "bearer " not in body or "authorization" not in body
+        assert "c:\\programdata\\cloudflared\\token" not in body or "not logged" in body or "never" in body
+
+
+def test_interactive_rdp_and_reboot_documented() -> None:
+    doc = (REPO / "docs" / "production" / "VPS_WINDOWS_DEPLOYMENT.md").read_text(
+        encoding="utf-8"
+    )
+    assert "0xC000013A" in doc
+    assert "auto-logon" in doc.lower()
+    assert "Restart-Computer" in doc
+    assert "BIOS" in doc or "BIOS" in doc
+    assert "S4U" in doc
+    text = _read("install_gateway_task.ps1")
+    assert "Interactive is NOT sufficient" in text
+
+
+def test_host_health_model_states() -> None:
+    host = _read("_host_recovery.ps1")
+    verify = _read("verify_production_vps.ps1")
+    assert 'return "CRITICAL"' in host
+    assert 'return "HEALTHY"' in host
+    assert 'return "DEGRADED"' in host
+    assert "host_state" in verify
+
+
+def test_recovery_forbids_trading() -> None:
+    rec = _read("recover_production_vps.ps1")
+    assert "RestartCloudflared" in rec
+    assert "order_send" in rec.lower()
+    wd = _read("watchdog_vps.ps1")
+    assert "never sends broker orders" in wd.lower()
