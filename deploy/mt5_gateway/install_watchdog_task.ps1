@@ -66,7 +66,25 @@ Register-ScheduledTask `
   -Principal $principal `
   -Force | Out-Null
 
+$repeatOk = $false
+try {
+  $registered = Get-ScheduledTask -TaskName $TaskName
+  foreach ($tr in @($registered.Triggers)) {
+    if ($null -eq $tr.Repetition) { continue }
+    $iv = [string]$tr.Repetition.Interval
+    $dur = [string]$tr.Repetition.Duration
+    if ($iv -match "PT2M" -or $iv -match "^00:02:00") {
+      $repeatOk = $true
+      Write-Host ("Verified watchdog repetition Interval={0} Duration={1}" -f $iv, $dur)
+    }
+  }
+} catch {}
+if (-not $repeatOk) {
+  Write-Host "WARN: could not verify 2-minute repetition on registered triggers."
+}
+
 Write-Host "Scheduled task '$TaskName' registered (AtStartup + AtLogOn + 2m repeat, IgnoreNew, Highest)."
+Write-Host "Watchdog is short-lived/idempotent; Gateway task Ready is not treated as health."
 Write-Host "Interactive is NOT sufficient for unattended reboot; enable auto-logon (operator-owned)."
 Write-Host "This script does not store passwords or tunnel tokens."
 

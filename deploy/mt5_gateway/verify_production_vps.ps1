@@ -186,14 +186,23 @@ try {
   if ($health.status -eq "ok") {
     if ($mt5c) {
       Add-Check "health" "PASS" ("mt5.connected=true session={0}" -f $health.mt5.session_mode)
+      $sess = [string]$health.mt5.session_mode
+      if ($sess -eq "attached") {
+        Add-Check "mt5_attached" "PASS" ("session_mode={0}" -f $sess)
+      } else {
+        Add-Check "mt5_attached" "WARN" ("connected=true session_mode={0}" -f $sess)
+      }
     } else {
       Add-Check "health" "WARN" "gateway up but mt5.connected=false (normal if terminal still attaching)"
+      Add-Check "mt5_attached" "WARN" "mt5.connected=false (do not restart a healthy Gateway for attach lag)"
     }
   } else {
     Add-Check "health" "FAIL" ("status={0}" -f $health.status)
+    Add-Check "mt5_attached" "FAIL" "gateway /health status not ok"
   }
 } catch {
   Add-Check "health" "FAIL" $_.Exception.Message
+  Add-Check "mt5_attached" "FAIL" "/health not reachable"
 }
 
 function Test-Task {
@@ -209,11 +218,32 @@ function Test-Task {
 Test-Task $GatewayTaskName
 Test-Task $TerminalTaskName
 $wd = Get-ScheduledTask -TaskName "QuantForgVpsWatchdog" -ErrorAction SilentlyContinue
+$wdRepeatOk = $false
 if ($null -eq $wd) {
   Add-Check "task:QuantForgVpsWatchdog" "WARN" "not registered (run install_watchdog_task.ps1)"
+  Add-Check "watchdog_repetition" "WARN" "watchdog task missing"
 } else {
   $wdInfo = Get-ScheduledTaskInfo -TaskName "QuantForgVpsWatchdog" -ErrorAction SilentlyContinue
   Add-Check "task:QuantForgVpsWatchdog" "PASS" ("state={0} last={1}" -f $wd.State, $wdInfo.LastTaskResult)
+  foreach ($tr in @($wd.Triggers)) {
+    if ($null -eq $tr.Repetition) { continue }
+    $iv = [string]$tr.Repetition.Interval
+    if ($iv -match "PT2M" -or $iv -match "^00:02:00") { $wdRepeatOk = $true }
+  }
+  if ($wdRepeatOk) {
+    Add-Check "watchdog_repetition" "PASS" "2-minute Interval present"
+  } else {
+    Add-Check "watchdog_repetition" "FAIL" "expected PT2M / 00:02:00 repetition"
+  }
+}
+
+$gwTask = Get-ScheduledTask -TaskName $GatewayTaskName -ErrorAction SilentlyContinue
+if ($null -ne $gwTask -and [string]$gwTask.State -ne "Running" -and $liveOk) {
+  Add-Check "gateway_task_runtime" "WARN" "QuantForgMT5Gateway not Running but local /health/live OK (watchdog is authoritative; Ready is not health)"
+} elseif ($null -ne $gwTask -and [string]$gwTask.State -ne "Running" -and -not $liveOk) {
+  Add-Check "gateway_task_runtime" "FAIL" "QuantForgMT5Gateway not Running and local /health/live failed"
+} elseif ($null -ne $gwTask) {
+  Add-Check "gateway_task_runtime" "PASS" ("state={0}" -f $gwTask.State)
 }
 
 $cfSvc = Get-Service -Name "Cloudflared" -ErrorAction SilentlyContinue
@@ -274,6 +304,16 @@ if (Test-Path $supLog) {
 } else {
   Add-Check "supervisor_log" "WARN" "no supervisor.log yet"
 }
+$wdLog = Join-Path $logDir "watchdog.log"
+if (Test-Path $wdLog) {
+  Add-Check "watchdog_log" "PASS" $wdLog
+} else {
+  Add-Check "watchdog_log" "WARN" "no watchdog.log yet"
+}
+
+$softwareReady = ($null -ne $wd -and $wdRepeatOk -and (Test-Path (Join-Path $RepoRoot "deploy\mt5_gateway\watchdog_vps.ps1")))
+$hostHealthyClaim = ($hostState -eq "HEALTHY")
+$publicHealthyClaim = $publicLive
 
 Write-Host ""
 Write-Host "QuantForg VPS verification (local host only - not a Railway probe)"
@@ -286,6 +326,12 @@ Write-Host ("host_state={0}" -f $hostState)
 foreach ($row in $Rows) {
   Write-Host ("[{0}] {1} - {2}" -f $row.status, $row.name, $row.detail)
 }
+Write-Host ""
+Write-Host ("HOST HEALTHY: {0}" -f $(if ($hostHealthyClaim) { "YES" } else { "NO ($hostState)" }))
+Write-Host ("SOFTWARE RECOVERY READY: {0}" -f $(if ($softwareReady) { "YES (watchdog task + 2m repetition)" } else { "NO (install watchdog task)" }))
+Write-Host ("PUBLIC TUNNEL HEALTHY: {0}" -f $(if ($publicHealthyClaim) { "YES" } else { "NO (local Gateway may still be healthy)" }))
+Write-Host "Automatic recovery is configured for supported software/process failures while the VPS/Windows host remains available."
+Write-Host "This does not claim never-stop, guaranteed 24/7, or recovery while the VPS is powered off."
 Write-Host ""
 Write-Host ("PASS={0} WARN={1} FAIL={2}" -f $Pass, $Warn, $Fail)
 if ($Fail -gt 0) { exit 2 }

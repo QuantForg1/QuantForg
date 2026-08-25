@@ -133,7 +133,9 @@ Do **not** reboot from code. If you test reboot recovery:
 `docs/production/reports/gateway_supervisor/`
 
 - `supervisor.log` — supervisor start, Gateway start/restart, mutex, MT5 wait
-- `gateway.out.log` / `gateway.err.log` — Gateway process
+- `watchdog.log` / `watchdog.state` — watchdog pass, component, action, reason, result (no tokens)
+- `gateway.out.log` / `gateway.err.log` — Gateway process (supervisor)
+- `watchdog_gateway.out.log` / `watchdog_gateway.err.log` — Gateway process started by watchdog
 - Delayed attach in Gateway logs: `delayed_auto_attach_ok` / `mt5_unavailable`
 
 Do not enable `MT5_GATEWAY_AUTH_DEBUG=true` except for a short local debug window.
@@ -150,9 +152,14 @@ Interactive auto-logon (operator — required for MT5)
 QuantForgMT5Terminal (AtStartup + AtLogOn, IgnoreNew, Highest, Interactive)
     ↓ terminal64.exe (exactly one)
 QuantForgMT5Gateway (AtStartup + AtLogOn, IgnoreNew, Highest, Interactive, no -Once)
-    ↓ supervise_gateway.ps1 (one mutex)
+    ↓ supervise_gateway.ps1 (long-running; mutex Global\QuantForgMT5GatewaySupervisor)
     ↓ exactly one LISTENING 127.0.0.1:8765
-QuantForgVpsWatchdog (2-minute one-shot, IgnoreNew) — starts missing pieces only
+QuantForgVpsWatchdog (authoritative, 2-minute one-shot, IgnoreNew, mutex Global\QuantForgVpsWatchdog)
+    ↓ checks listener + /health/live (Task Scheduler Ready is NOT health)
+    ↓ if Gateway down: start python -m services.mt5_gateway.main (does not depend on Gateway task Running)
+    ↓ if MT5 down: start_mt5_terminal.ps1 (no broker login)
+    ↓ if Cloudflared Stopped: Start-Service Cloudflared
+    ↓ public live fail + local live OK: repair Cloudflared only; do not restart Gateway
     ↓
 https://gateway.quantforg.com  →  Railway
 ```
@@ -173,10 +180,11 @@ Do not kill a healthy Gateway because Cloudflare is reconnecting. Do not restart
 
 | Event | Detection | Recovery | Verify |
 |---|---|---|---|
-| Gateway crash | no LISTEN or live fail | supervisor tree-kill + one start | `/health/live` |
+| Gateway crash | no LISTEN or live fail | watchdog starts `python -m services.mt5_gateway.main`; supervisor adopts if running | `/health/live` |
+| Gateway task Ready | task State=Ready | watchdog still restores listener; Ready is not health | listener + live |
 | MT5 crash | no terminal64 | `start_mt5_terminal.ps1` (dup prevented); Gateway stays | process + delayed AUTO_ATTACH |
 | Cloudflared crash | service not Running | `Start-Service Cloudflared` only | service + public live |
-| Supervisor crash | mutex free / task | Task restart + IgnoreNew | one supervisor |
+| Supervisor crash | mutex free / no supervise process | watchdog starts Gateway process, then Start-ScheduledTask | one listener; supervisor optional |
 | Duplicate supervisor | mutex | second instance exits | mutex |
 | Duplicate listener | netstat LISTEN count | tree reclaim then one start | listener_count=1 |
 | RDP disconnect | task 0xC000013A | auto-logon + AtLogOn | verify after logon |

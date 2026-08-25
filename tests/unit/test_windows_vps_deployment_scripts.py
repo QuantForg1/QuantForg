@@ -72,6 +72,13 @@ def test_verify_script_is_read_only() -> None:
     assert "NEVER calls order_send" in text
     assert "Invoke-RestMethod" in text
     assert "order_send" in text  # mentioned only as forbidden
+    assert "HOST HEALTHY" in text
+    assert "SOFTWARE RECOVERY READY" in text
+    assert "PUBLIC TUNNEL HEALTHY" in text
+    assert "watchdog_repetition" in text
+    assert "mt5_attached" in text
+    assert "VPS/Windows host remains available" in text
+    assert "never-stop" in text or "never stops" in text.lower()
 
 
 def test_deploy_entrypoint_is_idempotent_and_secret_safe() -> None:
@@ -264,6 +271,41 @@ def test_watchdog_does_not_kill_healthy_gateway() -> None:
     assert "QuantForgVpsWatchdog" in text
     assert "taskkill" not in text.lower()
     assert "never sends broker orders" in text.lower()
+    assert "Stop-Process -Name python" not in text
+    assert "Stop-Process -Name terminal64" not in text
+    assert "Stop-Process -Name cloudflared" not in text
+    assert "while ($true)" not in text
+    assert "while($true)" not in text
+
+
+def test_watchdog_starts_gateway_process_not_only_task() -> None:
+    text = _read("watchdog_vps.ps1")
+    assert 'ArgumentList @("-m", "services.mt5_gateway.main")' in text
+    assert "Start-WatchdogGateway" in text
+    assert "Task Scheduler Ready is NOT health" in text
+    assert "Start-ScheduledTask" in text
+    assert "not_restarting_gateway" in text
+    assert "local_ok_public_fail" in text
+    assert "exit 0" in text
+    assert "exitCode = 1" in text or "$exitCode = 1" in text
+    assert "exitCode = 2" in text or "$exitCode = 2" in text
+    assert "Global\\QuantForgVpsWatchdog" in text
+    assert "order_send" not in text.lower()
+    assert "FORCE_FIRST_TRADE" not in text
+    assert "ALLOW_RISK_LOCK_OVERRIDE" not in text
+    assert "MT5_GATEWAY_TOKEN" not in text
+    assert "Authorization" not in text
+
+
+def test_watchdog_duplicate_and_unhealthy_listener_reclaim() -> None:
+    text = _read("watchdog_vps.ps1")
+    helpers = _read("_gateway_process.ps1")
+    assert "Stop-GatewayProcessTree" in text
+    assert "duplicate_listeners" in text
+    assert "listener_unhealthy" in text
+    assert "Get-IndependentGatewayTreeRoots" in helpers
+    assert "taskkill.exe /F /T" in helpers
+    assert "Stop-Process -Name python" not in helpers
 
 
 def test_watchdog_task_scheduler_config() -> None:
@@ -280,6 +322,8 @@ def test_watchdog_task_scheduler_config() -> None:
     assert "New-TimeSpan -Days 9999" in text
     assert ".Repetition.Interval =" not in text
     assert 'Interval = "PT2M"' not in text
+    assert "Verified watchdog repetition" in text
+    assert "Ready is not treated as health" in text
 
 
 def test_no_secret_leakage_in_vps_scripts() -> None:
@@ -305,6 +349,8 @@ def test_interactive_rdp_and_reboot_documented() -> None:
     assert "Restart-Computer" in doc
     assert "BIOS" in doc or "BIOS" in doc
     assert "S4U" in doc
+    assert "authoritative" in doc.lower()
+    assert "Ready is NOT health" in doc or "Ready is not health" in doc
     text = _read("install_gateway_task.ps1")
     assert "Interactive is NOT sufficient" in text
 
@@ -322,5 +368,42 @@ def test_recovery_forbids_trading() -> None:
     rec = _read("recover_production_vps.ps1")
     assert "RestartCloudflared" in rec
     assert "order_send" in rec.lower()
+    assert "watchdog_vps.ps1" in rec
     wd = _read("watchdog_vps.ps1")
     assert "never sends broker orders" in wd.lower()
+
+
+def test_watchdog_ps1_files_parse() -> None:
+    import subprocess
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("PowerShell parse is Windows-only")
+    names = (
+        "watchdog_vps.ps1",
+        "install_watchdog_task.ps1",
+        "verify_production_vps.ps1",
+        "recover_production_vps.ps1",
+        "supervise_gateway.ps1",
+        "install_gateway_task.ps1",
+        "_gateway_process.ps1",
+        "_host_recovery.ps1",
+        "start_gateway.ps1",
+        "start_mt5_terminal.ps1",
+    )
+    for name in names:
+        path = DEPLOY / name
+        cmd = (
+            "$errs = $null; "
+            "$null = [System.Management.Automation.Language.Parser]::ParseFile("
+            f"'{path}', [ref]$null, [ref]$errs); "
+            "if ($errs) { $errs | ForEach-Object { $_.ToString() }; exit 1 }; "
+            "exit 0"
+        )
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", cmd],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, f"{name}: {completed.stdout}\n{completed.stderr}"

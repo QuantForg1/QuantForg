@@ -1,7 +1,15 @@
-# Lightweight VPS watchdog — one pass per scheduled trigger.
-# Recovers missing MT5 / Cloudflared / Gateway supervisor only.
+# QuantForg VPS watchdog — one idempotent pass per Task Scheduler firing.
+# Authoritative recovery for Gateway/MT5/Cloudflared. Not a permanent daemon.
 # NEVER kills a healthy Gateway listener. NEVER sends broker orders.
 # NEVER reads or logs gateway/tunnel tokens.
+# NEVER blindly kill processes by image name (python, terminal64, cloudflared).
+#
+# Health is listener + /health/live, NOT QuantForgMT5Gateway Task Scheduler State=Ready/Running.
+# If the Gateway task is Ready but :8765 is down, this script starts the Gateway process itself.
+#
+# Exit 0 = healthy or recovery succeeded
+# Exit 1 = recovery attempted, Gateway still unhealthy
+# Exit 2 = missing scripts / configuration error
 #
 #   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\watchdog_vps.ps1
 
@@ -15,6 +23,11 @@ Set-Location $RepoRoot
 $ReportDir = Join-Path $RepoRoot "docs\production\reports\gateway_supervisor"
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 $Log = Join-Path $ReportDir "watchdog.log"
+$StateFile = Join-Path $ReportDir "watchdog.state"
+$GwOut = Join-Path $ReportDir "watchdog_gateway.out.log"
+$GwErr = Join-Path $ReportDir "watchdog_gateway.err.log"
+$PidFile = Join-Path $ReportDir "gateway.pid"
+$exitCode = 0
 
 $mutex = New-Object System.Threading.Mutex($false, "Global\QuantForgVpsWatchdog")
 try {
@@ -23,75 +36,204 @@ try {
   $owned = $false
 }
 if (-not $owned) {
+  try { $mutex.Dispose() } catch {}
   exit 0
 }
 
-function Write-Wd([string]$msg) {
-  $line = "[{0}] {1}" -f (Get-Date).ToUniversalTime().ToString("o"), $msg
+function Write-Wd([string]$component, [string]$action, [string]$reason, [string]$result) {
+  $line = "[{0}] component={1} action={2} reason={3} result={4}" -f `
+    (Get-Date).ToUniversalTime().ToString("o"), $component, $action, $reason, $result
   Add-Content -Path $Log -Value $line -Encoding UTF8
 }
 
-$ProcessHelpers = Join-Path $PSScriptRoot "_gateway_process.ps1"
-$HostHelpers = Join-Path $PSScriptRoot "_host_recovery.ps1"
-if (Test-Path $ProcessHelpers) { . $ProcessHelpers }
-if (Test-Path $HostHelpers) { . $HostHelpers }
-
-Write-Wd "watchdog pass start"
-
-# 1. MT5
-if (Get-Command Test-Mt5TerminalProcess -ErrorAction SilentlyContinue) {
-  if (-not (Test-Mt5TerminalProcess)) {
-    Write-Wd "mt5_missing recovery_attempt start_mt5_terminal (no broker login)"
-    $starter = Join-Path $PSScriptRoot "start_mt5_terminal.ps1"
-    if (Test-Path $starter) {
-      & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $starter
-    }
-  } else {
-    Write-Wd "mt5_detected"
-  }
+function Rotate-WdLog {
+  param([string]$Path, [int]$MaxBytes = 5MB)
+  if (-not (Test-Path $Path)) { return }
+  $item = Get-Item $Path -ErrorAction SilentlyContinue
+  if ($null -eq $item -or $item.Length -lt $MaxBytes) { return }
+  $bak = "{0}.{1}.bak" -f $Path, (Get-Date -Format "yyyyMMddHHmmss")
+  Move-Item -Path $Path -Destination $bak -Force
 }
 
-# 2. Cloudflared — never Gateway first
-if (Get-Command Test-CloudflaredServiceRunning -ErrorAction SilentlyContinue) {
-  $cfPids = @(Get-CloudflaredPids)
-  if ($cfPids.Count -gt 1) {
-    Write-Wd ("cloudflared_duplicate count={0} - not killing" -f $cfPids.Count)
-  }
-  if (-not (Test-CloudflaredServiceRunning)) {
-    Write-Wd "cloudflared_service_stopped recovery_attempt Start-Service"
-    try {
-      Start-Service -Name "Cloudflared" -ErrorAction Stop
-      Write-Wd "cloudflared_start requested"
-    } catch {
-      Write-Wd ("cloudflared_start failed: {0}" -f $_.Exception.Message)
-    }
-  } else {
-    Write-Wd "cloudflared_service running"
-  }
-}
-
-# 3. Gateway: adopt healthy listener; else start scheduled supervisor (IgnoreNew)
-$liveOk = $false
 try {
-  $h = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 3
-  $liveOk = ($h.status -eq "ok" -and $h.service -eq "mt5-gateway")
-} catch {}
-$listen = @()
-if (Get-Command Get-GatewayListenPids -ErrorAction SilentlyContinue) {
-  $listen = @(Get-GatewayListenPids)
-}
-if ($liveOk -and $listen.Count -eq 1) {
-  Write-Wd ("gateway_healthy listener={0} - adopted not restarted" -f $listen[0])
-} elseif ($listen.Count -gt 1) {
-  Write-Wd ("gateway_duplicate_listeners count={0} - supervisor must reclaim; watchdog does not kill" -f $listen.Count)
-} else {
-  Write-Wd "gateway_unhealthy_or_missing recovery_attempt Start-ScheduledTask QuantForgMT5Gateway"
-  try {
-    Start-ScheduledTask -TaskName "QuantForgMT5Gateway" -ErrorAction Stop
-  } catch {
-    Write-Wd ("gateway_task_start failed: {0}" -f $_.Exception.Message)
+  $ProcessHelpers = Join-Path $PSScriptRoot "_gateway_process.ps1"
+  $HostHelpers = Join-Path $PSScriptRoot "_host_recovery.ps1"
+  if (-not (Test-Path $ProcessHelpers) -or -not (Test-Path $HostHelpers)) {
+    Write-Wd "watchdog" "abort" "missing_helpers" "exit_2"
+    $exitCode = 2
+  } else {
+    . $ProcessHelpers
+    . $HostHelpers
+
+    Rotate-WdLog -Path $Log
+    Write-Wd "watchdog" "start" "scheduled_pass" "ok"
+
+    function Test-LocalLive {
+      try {
+        $h = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 3
+        return ($h.status -eq "ok" -and $h.service -eq "mt5-gateway")
+      } catch {
+        return $false
+      }
+    }
+
+    function Get-Listen {
+      return @(Get-GatewayListenPids)
+    }
+
+    function Start-WatchdogGateway {
+      $venvPy = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+      if (-not (Test-Path $venvPy)) {
+        Write-Wd "gateway" "start" "venv_missing" "fail"
+        return $false
+      }
+      Rotate-WdLog -Path $GwOut
+      Rotate-WdLog -Path $GwErr
+      Write-Wd "gateway" "start" "local_unhealthy_or_missing" "starting"
+      # One start per watchdog pass; the 2-minute task interval is bounded backoff.
+      $proc = Start-Process -FilePath $venvPy `
+        -ArgumentList @("-m", "services.mt5_gateway.main") `
+        -WorkingDirectory $RepoRoot `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $GwOut `
+        -RedirectStandardError $GwErr `
+        -PassThru
+      Write-Wd "gateway" "start" "launcher" ("pid={0}" -f $proc.Id)
+      $deadline = (Get-Date).AddSeconds(45)
+      while ((Get-Date) -lt $deadline) {
+        if (Test-LocalLive) {
+          $listenNow = Get-Listen
+          if ($listenNow.Count -eq 1) {
+            $root = Get-GatewayTreeRoot -ProcessId $listenNow[0]
+            Write-GatewayPidFile -Path $PidFile -ListenerPid $listenNow[0] -TreeRootPid $root -Health "live_ok"
+            Write-Wd "gateway" "ready" "health_live" ("listener={0}" -f $listenNow[0])
+            return $true
+          }
+        }
+        Start-Sleep -Seconds 1
+      }
+      Write-Wd "gateway" "start" "health_live_timeout" "fail"
+      return $false
+    }
+
+    # 1. MT5 — never duplicate terminal64; no broker login
+    if (Test-Mt5TerminalProcess) {
+      Write-Wd "mt5" "preserve" "terminal_running" ("pids={0}" -f ((Get-Mt5TerminalPids) -join ","))
+    } else {
+      Write-Wd "mt5" "recover" "process_missing" "start_mt5_terminal"
+      $starter = Join-Path $PSScriptRoot "start_mt5_terminal.ps1"
+      if (Test-Path $starter) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $starter
+      }
+      Start-Sleep -Seconds 3
+      if (Test-Mt5TerminalProcess) {
+        Write-Wd "mt5" "recover" "started" "ok"
+      } else {
+        Write-Wd "mt5" "recover" "still_missing" "degraded"
+      }
+    }
+
+    # 2. Local Gateway — Task Scheduler Ready is NOT health
+    $liveOk = Test-LocalLive
+    $listen = Get-Listen
+
+    if ($liveOk -and $listen.Count -eq 1) {
+      Write-Wd "gateway" "preserve" "live_ok_one_listener" "adopted not restarted"
+    } elseif ($listen.Count -gt 1) {
+      Write-Wd "gateway" "reclaim" "duplicate_listeners" ("count={0}" -f $listen.Count)
+      $keepRoot = Get-GatewayTreeRoot -ProcessId $listen[0]
+      $extraListen = @()
+      foreach ($lp in $listen) {
+        $r = Get-GatewayTreeRoot -ProcessId $lp
+        if ($r -ne $keepRoot) { $extraListen += $lp }
+      }
+      if ($extraListen.Count -gt 0) {
+        Stop-GatewayProcessTree -ListenPids $extraListen
+        Start-Sleep -Seconds 2
+      }
+      $liveOk = Test-LocalLive
+      $listen = Get-Listen
+      if ($liveOk -and $listen.Count -eq 1) {
+        Write-Wd "gateway" "reclaim" "kept_one_healthy" ("listener={0}" -f $listen[0])
+      } else {
+        Stop-GatewayProcessTree -ListenPids (Get-Listen)
+        if (-not (Start-WatchdogGateway)) { $exitCode = 1 }
+      }
+    } elseif ($listen.Count -eq 1 -and -not $liveOk) {
+      Write-Wd "gateway" "reclaim" "listener_unhealthy" ("listener={0}" -f $listen[0])
+      Stop-GatewayProcessTree -ListenPids $listen
+      if (-not (Start-WatchdogGateway)) { $exitCode = 1 }
+    } else {
+      Write-Wd "gateway" "recover" "no_listener_or_live_fail" "start_process"
+      if (-not (Start-WatchdogGateway)) { $exitCode = 1 }
+    }
+
+    # Re-arm long-running supervisor only if it is not already running.
+    # IgnoreNew + LastTaskResult=1 must not block process-level recovery above.
+    $sup = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Where-Object { $_.CommandLine -match "supervise_gateway\.ps1" })
+    if ($sup.Count -eq 0) {
+      try {
+        Start-ScheduledTask -TaskName "QuantForgMT5Gateway" -ErrorAction SilentlyContinue
+        Write-Wd "supervisor" "rearm" "task_not_running" "Start-ScheduledTask"
+      } catch {
+        Write-Wd "supervisor" "rearm" "task_start_failed" "ignored_health_is_live"
+      }
+    } else {
+      Write-Wd "supervisor" "preserve" "process_running" ("pid={0}" -f $sup[0].ProcessId)
+    }
+
+    # 3. Cloudflared — do not restart Gateway for public-only failure
+    $cfPids = @(Get-CloudflaredPids)
+    if ($cfPids.Count -gt 1) {
+      Write-Wd "cloudflared" "observe" "cloudflared_duplicate" ("count={0} not_killing" -f $cfPids.Count)
+    }
+    if (Test-CloudflaredServiceRunning) {
+      Write-Wd "cloudflared" "preserve" "service_running" "ok"
+    } else {
+      Write-Wd "cloudflared" "recover" "service_stopped" "Start-Service"
+      try {
+        Start-Service -Name "Cloudflared" -ErrorAction Stop
+        Write-Wd "cloudflared" "recover" "start_requested" "ok"
+      } catch {
+        Write-Wd "cloudflared" "recover" "start_failed" "fail"
+      }
+    }
+
+    $liveOk = Test-LocalLive
+    $listen = Get-Listen
+    $publicOk = Test-PublicGatewayLive
+    if ($liveOk -and $listen.Count -eq 1 -and -not $publicOk) {
+      Write-Wd "tunnel" "observe" "local_ok_public_fail" "not_restarting_gateway"
+      if (-not (Test-CloudflaredServiceRunning)) {
+        try { Start-Service -Name "Cloudflared" -ErrorAction Stop } catch {}
+      }
+    } elseif ($publicOk) {
+      Write-Wd "tunnel" "observe" "public_live_ok" "ok"
+    }
+
+    if (-not ($liveOk -and $listen.Count -eq 1)) {
+      $exitCode = 1
+      Write-Wd "watchdog" "end" "gateway_still_unhealthy" ("exit={0}" -f $exitCode)
+    } else {
+      $exitCode = 0
+      Write-Wd "watchdog" "end" "healthy_or_recovered" ("exit={0} listener={1}" -f $exitCode, $listen[0])
+    }
+
+    @(
+      ("utc=" + (Get-Date).ToUniversalTime().ToString("o")),
+      ("live_ok=" + $liveOk),
+      ("listener_count=" + $listen.Count),
+      ("public_ok=" + $publicOk),
+      ("exit=" + $exitCode)
+    ) | Set-Content -Path $StateFile -Encoding ASCII
   }
+} catch {
+  Write-Wd "watchdog" "error" "unhandled" $_.Exception.GetType().Name
+  $exitCode = 2
+} finally {
+  try { $mutex.ReleaseMutex() | Out-Null } catch {}
+  try { $mutex.Dispose() } catch {}
 }
 
-Write-Wd "watchdog pass end"
-exit 0
+exit $exitCode

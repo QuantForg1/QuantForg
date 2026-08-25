@@ -66,7 +66,17 @@ switch ($Action) {
     }
     Start-ScheduledTask -TaskName $GatewayTaskName
     Start-Sleep -Seconds 8
-    Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 8 | ConvertTo-Json -Compress
+    $liveOk = $false
+    try {
+      $h = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 8
+      $liveOk = ($h.status -eq "ok" -and $h.service -eq "mt5-gateway")
+      $h | ConvertTo-Json -Compress
+    } catch {
+      Write-Rec "scheduled task did not restore /health/live; invoking watchdog process start"
+    }
+    if (-not $liveOk) {
+      & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot "deploy\mt5_gateway\watchdog_vps.ps1")
+    }
   }
   "RestartSupervisor" {
     Write-Rec "supervisor restart via scheduled task (IgnoreNew prevents duplicates)"
