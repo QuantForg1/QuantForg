@@ -444,6 +444,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 async def _ite_watchdog() -> None:
                     """Restart ITE loop if it exits unexpectedly (never leave AUTO dead)."""  # noqa: E501
                     restarts = 0
+                    try:
+                        runtime._watchdog_state = "RUNNING"
+                    except Exception:
+                        pass
                     while True:
                         try:
                             logger.warning(
@@ -455,8 +459,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                                 ),
                                 restarts=restarts,
                             )
+                            try:
+                                runtime._watchdog_state = "RUNNING"
+                            except Exception:
+                                pass
                             await runtime.run_forever()
                         except asyncio.CancelledError:
+                            try:
+                                runtime._watchdog_state = "CANCELLED"
+                            except Exception:
+                                pass
                             raise
                         except Exception as exc:
                             logger.exception(
@@ -468,8 +480,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                             and runtime._stop.is_set()
                         ):
                             logger.info("ite_watchdog_stop_requested")
+                            try:
+                                runtime._watchdog_state = "STOPPED"
+                            except Exception:
+                                pass
                             break
                         restarts += 1
+                        try:
+                            runtime._watchdog_restarts = restarts
+                            runtime._watchdog_state = "BACKOFF"
+                        except Exception:
+                            pass
                         delay = min(30.0, 2.0 * (2 ** min(restarts - 1, 4)))
                         try:
                             note = getattr(runtime, "note_scheduler_stalled", None)

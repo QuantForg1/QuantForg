@@ -190,7 +190,16 @@ class InstitutionalIteRuntime:
     _last_cycle_at: str | None = field(default=None, repr=False)
     _last_session_obs: dict[str, Any] | None = field(default=None, repr=False)
     _recovery_orders_blocked: bool = field(default=False, repr=False)
+    _watchdog_restarts: int = field(default=0, repr=False)
+    _watchdog_state: str = field(default="IDLE", repr=False)
+    _cycle_started_at: str | None = field(default=None, repr=False)
+    _last_cycle_duration_ms: float | None = field(default=None, repr=False)
     user_id: UUID = field(default_factory=uuid4)
+
+    def _clear_ephemeral_cycle_state(self) -> None:
+        """Drop in-cycle tickets/bridge results. Never invents the next signal."""
+        with self._lock:
+            self._last_bridge_result = None
 
     def _gold_exec_symbol(self, snapshot: Any) -> str:
         from app.domain.trading.gold_only import canonical_gold_execution_symbol
@@ -4278,9 +4287,41 @@ class InstitutionalIteRuntime:
             "trade_mode": session_obs.get("trade_mode"),
             "trade_allowed": session_obs.get("trade_allowed"),
             "last_cycle_at": last_at,
+            "last_completed_cycle_at": last_at,
             "last_successful_cycle_at": last_ok_at,
             "last_blocker": blocker,
             "last_blocker_stage": blocker_stage,
+            "last_error": (
+                getattr(last, "detail", None)
+                if last is not None
+                and str(getattr(last, "cycle_outcome", "") or "") == "error"
+                else None
+            ),
+            "cycle_id": cycles,
+            "cycle_start": self._cycle_started_at,
+            "cycle_end": last_at,
+            "cycle_duration": self._last_cycle_duration_ms,
+            "gateway_state": (
+                "UNAVAILABLE"
+                if last is not None
+                and (
+                    "GATEWAY"
+                    in str(getattr(last, "abort_reason", "") or "").upper()
+                    or str(getattr(last, "abort_reason", "") or "")
+                    == "NO_MARKET_CONTEXT"
+                )
+                else ("UNKNOWN" if last is None else "READY")
+            ),
+            "mt5_state": (
+                "UNAVAILABLE"
+                if last is not None
+                and str(getattr(last, "abort_reason", "") or "")
+                in {"NO_MARKET_CONTEXT", "CYCLE_EXCEPTION"}
+                else ("UNKNOWN" if last is None else "READY")
+            ),
+            "next_cycle_at": last_at,
+            "watchdog_state": self._watchdog_state,
+            "watchdog_restarts": self._watchdog_restarts,
             "runtime_git_sha": runtime_git_commit(),
             "deployment_id": runtime_deployment_id(),
             "scheduler_stalled": stalled,
@@ -5479,6 +5520,7 @@ class InstitutionalIteRuntime:
             logger.exception("continuous_ops_startup_resume_failed")
         while not self._stop.is_set():
             cycle_t0 = time.perf_counter()
+            self._cycle_started_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             _pvm_vid = None
             _pvm_token = None
             try:
@@ -5700,10 +5742,21 @@ class InstitutionalIteRuntime:
                                 _pvm_token = None
                         except Exception:
                             logger.exception("pvm_unbind_manage_only_failed")
-                    await asyncio.sleep(self.interval_seconds)
-                    continue
+                    result = ShadowCycleResult(
+                        ok=True,
+                        trace_id=None,
+                        mode=self.plane.mode.value,
+                        detail="WAITING_NEXT_CYCLE — no executable symbol",
+                        cycle_outcome="waiting_next_cycle",
+                        abort_reason="NO_EXECUTABLE_SYMBOL",
+                        snapshot_present=True,
+                    )
+                    with self._lock:
+                        self._last_cycle = result
+                        self._cycles += 1
+                    self._clear_ephemeral_cycle_state()
 
-                if not ctx.ok or ctx.snapshot is None or ctx.account is None:
+                elif not ctx.ok or ctx.snapshot is None or ctx.account is None:
                     health = await self._offload_blocking_io(self.tick_health)
                     result = ShadowCycleResult(
                         ok=True,
@@ -5723,6 +5776,7 @@ class InstitutionalIteRuntime:
                     with self._lock:
                         self._last_cycle = result
                         self._cycles += 1
+                    self._clear_ephemeral_cycle_state()
                     try:
                         from app.application.services.strategy_diagnostics import (
                             get_strategy_diagnostics_store,
@@ -5910,6 +5964,7 @@ class InstitutionalIteRuntime:
                         abort_reason="CYCLE_EXCEPTION",
                     )
                     self._cycles += 1
+                self._clear_ephemeral_cycle_state()
                 try:
                     from app.application.services.cycle_evidence import (
                         record_cycle_evidence,
@@ -5965,19 +6020,31 @@ class InstitutionalIteRuntime:
                     logger.exception("pvm_unbind_orchestrator_cycle_failed")
             last_out = None
             last_ok = False
-            with self._lock:
-                last_out = getattr(self._last_cycle, "cycle_outcome", None)
-                last_ok = bool(getattr(self._last_cycle, "ok", False))
-            self.mark_cycle_finished(
-                successful=last_ok
-                or last_out in {"safety_blocked", "recovering"}
-            )
-            logger.warning(
-                "Waiting Next Cycle",
-                interval_seconds=self.interval_seconds,
-                cycle_ms=round((time.perf_counter() - cycle_t0) * 1000.0, 1),
-                worker_state=(self.status() or {}).get("worker_state"),
-            )
+            try:
+                with self._lock:
+                    last_out = getattr(self._last_cycle, "cycle_outcome", None)
+                    last_ok = bool(getattr(self._last_cycle, "ok", False))
+                cycle_ms = round((time.perf_counter() - cycle_t0) * 1000.0, 1)
+                self._last_cycle_duration_ms = cycle_ms
+                self.mark_cycle_finished(
+                    successful=last_ok
+                    or last_out
+                    in {
+                        "safety_blocked",
+                        "recovering",
+                        "waiting_next_cycle",
+                        "no_snapshot",
+                        "error",
+                    }
+                )
+                logger.warning(
+                    "Waiting Next Cycle",
+                    interval_seconds=self.interval_seconds,
+                    cycle_ms=cycle_ms,
+                    worker_state=(self.status() or {}).get("worker_state"),
+                )
+            except Exception:
+                logger.exception("cycle_completion_tail_failed")
             # Continuous scalping cadence:
             # 1) More eligible symbols from last parallel scan → no idle sleep
             # 2) PME just closed → immediate rescan (post_close_rescan)
