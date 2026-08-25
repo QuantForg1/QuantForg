@@ -272,9 +272,14 @@ def test_watchdog_task_scheduler_config() -> None:
     assert "AtLogOn" in text
     assert "IgnoreNew" in text
     assert "-RunLevel Highest" in text
-    assert "PT2M" in text
     assert "watchdog_vps.ps1" in text
     assert "supervise_gateway.ps1 -Once" not in text
+    assert r"System32\WindowsPowerShell\v1.0\powershell.exe" in text
+    assert "-RepetitionInterval" in text
+    assert "New-TimeSpan -Minutes 2" in text
+    assert "New-TimeSpan -Days 9999" in text
+    assert ".Repetition.Interval =" not in text
+    assert 'Interval = "PT2M"' not in text
 
 
 def test_no_secret_leakage_in_vps_scripts() -> None:

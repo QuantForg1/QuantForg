@@ -32,13 +32,17 @@ $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 # One pass per firing. Do NOT append supervise -Once.
 $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Watch`""
 $action = New-ScheduledTaskAction -Execute $ps -Argument $arg -WorkingDirectory $RepoRoot
-$once = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
-$once.Repetition.Interval = "PT2M"
-$once.Repetition.Duration = "P9999D"
+# Windows PowerShell 5.1: pass -RepetitionInterval to New-ScheduledTaskTrigger.
+# Do not assign Interval on the returned CIM trigger (not writable here).
+$repeat = New-ScheduledTaskTrigger `
+  -Once `
+  -At ((Get-Date).AddMinutes(1)) `
+  -RepetitionInterval (New-TimeSpan -Minutes 2) `
+  -RepetitionDuration (New-TimeSpan -Days 9999)
 $triggers = @(
   (New-ScheduledTaskTrigger -AtStartup),
   (New-ScheduledTaskTrigger -AtLogOn),
-  $once
+  $repeat
 )
 $settings = New-ScheduledTaskSettingsSet `
   -MultipleInstances IgnoreNew `
