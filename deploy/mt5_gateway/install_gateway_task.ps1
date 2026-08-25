@@ -35,6 +35,7 @@ if ($Uninstall) {
 }
 
 $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+# Production action is the long-running supervisor. Do NOT append -Once.
 $arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Supervise`""
 $action = New-ScheduledTaskAction -Execute $ps -Argument $arg -WorkingDirectory $RepoRoot
 $triggers = @(
@@ -65,8 +66,12 @@ Register-ScheduledTask `
 
 Write-Host "Scheduled task '$TaskName' registered (AtStartup + AtLogOn, IgnoreNew, no time limit)."
 Write-Host "WorkingDirectory=$RepoRoot"
-Write-Host "NOTE: Interactive logon type needs the trading user session (auto-logon on a VPS)."
-Write-Host "This script does not enable Windows auto-logon and does not store passwords."
+Write-Host "RunLevel=Highest LogonType=Interactive (same user as MT5)."
+Write-Host "Interactive is NOT sufficient for unattended reboot by itself."
+Write-Host "RDP disconnect/logoff can stop the supervisor (LastTaskResult 0xC000013A)."
+Write-Host "For reboot-without-RDP, enable Windows auto-logon for this user (operator-owned)."
+Write-Host "This script does not store passwords, enable auto-logon, or use S4U"
+Write-Host "(S4U/session-0 would isolate Gateway from the interactive MT5 terminal)."
 
 if (-not $SkipStart) {
   Start-ScheduledTask -TaskName $TaskName

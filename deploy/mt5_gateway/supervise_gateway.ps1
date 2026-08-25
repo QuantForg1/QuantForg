@@ -46,6 +46,12 @@ $HealthUri = "http://127.0.0.1:$Port/health"
 
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 
+$ProcessHelpers = Join-Path $PSScriptRoot "_gateway_process.ps1"
+if (-not (Test-Path $ProcessHelpers)) {
+  throw "Missing $ProcessHelpers"
+}
+. $ProcessHelpers
+
 function Write-SupLog([string]$msg) {
   $line = "[{0}] {1}" -f (Get-Date).ToUniversalTime().ToString("o"), $msg
   Add-Content -Path $SupLog -Value $line -Encoding UTF8
@@ -74,17 +80,22 @@ function Test-PortListening {
 }
 
 function Get-ListenPids {
-  # Avoid Get-NetTCPConnection — it can hang for tens of seconds on this host
-  # and block supervisor restart after a Gateway crash.
-  if (-not (Test-PortListening)) { return @() }
-  $pids = @()
-  $lines = & netstat -ano -p tcp 2>$null
-  foreach ($line in $lines) {
-    if ($line -match ":$Port\s+\S+\s+LISTENING\s+(\d+)\s*$") {
-      $pids += [int]$Matches[1]
-    }
-  }
-  return @($pids | Select-Object -Unique)
+  return @(Get-GatewayListenPids)
+}
+
+function Save-GatewayPidState {
+  $listen = @(Get-ListenPids)
+  if ($listen.Count -eq 0) { return }
+  $listener = $listen[0]
+  $root = Get-GatewayTreeRoot -ProcessId $listener
+  Write-GatewayPidFile -Path $PidFile -ListenerPid $listener -TreeRootPid $root
+  Write-SupLog ("gateway tree adopted listener={0} tree_root={1}" -f $listener, $root)
+}
+
+function Stop-GatewayPids {
+  param([int[]]$TargetPids)
+  Write-SupLog "reclaim gateway process tree"
+  Stop-GatewayProcessTree -ListenPids $TargetPids
 }
 
 function Test-LiveOk {
@@ -105,18 +116,6 @@ function Test-HealthReachable {
   } catch {
     return $false
   }
-}
-
-function Stop-GatewayPids {
-  param([int[]]$TargetPids)
-  foreach ($procId in $TargetPids) {
-    if ($procId -le 0) { continue }
-    Write-SupLog ("stopping gateway pid={0}" -f $procId)
-    try {
-      Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-    } catch {}
-  }
-  Start-Sleep -Seconds 2
 }
 
 function Rotate-LogIfLarge {
@@ -143,8 +142,8 @@ function Start-GatewayProcess {
     -RedirectStandardOutput $OutLog `
     -RedirectStandardError $ErrLog `
     -PassThru
-  Set-Content -Path $PidFile -Value $proc.Id -Encoding ASCII
-  Write-SupLog ("gateway started pid={0}" -f $proc.Id)
+  Set-Content -Path $PidFile -Value ("tree_root={0}" -f $proc.Id) -Encoding ASCII
+  Write-SupLog ("gateway started launcher={0}" -f $proc.Id)
   return $proc.Id
 }
 
@@ -162,10 +161,14 @@ function Ensure-SingleHealthyInstance {
   # HTTP first — connection-refused is immediate; do not wait on TCP table APIs.
   if (Test-LiveOk) {
     $listen = Get-ListenPids
-    $pidValue = if ($listen.Count -gt 0) { $listen[0] } else { 0 }
-    Write-SupLog ("gateway already live on :{0} pids={1}" -f $Port, ($listen -join ","))
-    if ($pidValue -gt 0) {
-      Set-Content -Path $PidFile -Value $pidValue -Encoding ASCII
+    Write-SupLog ("gateway already live on 127.0.0.1:{0} listener_count={1} pids={2}" -f $Port, $listen.Count, ($listen -join ","))
+    if ($listen.Count -gt 1) {
+      Write-SupLog "independent listeners detected - reclaiming extra trees"
+      Stop-GatewayPids -TargetPids $listen
+      return $false
+    }
+    if ($listen.Count -eq 1) {
+      Save-GatewayPidState
     }
     return $true
   }
@@ -173,8 +176,7 @@ function Ensure-SingleHealthyInstance {
   if ($listen.Count -eq 0) {
     return $false
   }
-  # Port occupied but process unresponsive - reclaim.
-  Write-SupLog ("port {0} occupied but /health/live failed - reclaiming" -f $Port)
+  Write-SupLog ("port {0} occupied but /health/live failed - reclaiming tree" -f $Port)
   Stop-GatewayPids -TargetPids $listen
   return $false
 }
@@ -193,9 +195,6 @@ if (-not $owned) {
   Write-SupLog "duplicate supervisor prevented - mutex already held"
   exit 0
 }
-
-Write-SupLog "supervisor start Once=$Once"
-Write-SupLog "task_scheduler_startup pid=$PID repo=$RepoRoot"
 
 function Test-Mt5Process {
   $procs = @(Get-Process -Name "terminal64","terminal" -ErrorAction SilentlyContinue)
@@ -223,8 +222,12 @@ function Wait-Mt5Process {
 }
 
 if (Test-Path $PidFile) {
+  $staleLine = @(Get-Content $PidFile -ErrorAction SilentlyContinue | Where-Object { $_ -match "^(listener|tree_root)=" } | Select-Object -First 1)
   $stale = 0
-  try { $stale = [int](Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1) } catch { $stale = 0 }
+  if ($staleLine -match "=(\d+)\s*$") { $stale = [int]$Matches[1] }
+  if ($stale -le 0) {
+    try { $stale = [int]((Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)) } catch { $stale = 0 }
+  }
   if ($stale -gt 0) {
     $alive = Get-Process -Id $stale -ErrorAction SilentlyContinue
     if ($null -eq $alive) {
@@ -266,6 +269,7 @@ while ($true) {
         continue
       }
       Write-SupLog "gateway ready"
+      Save-GatewayPidState
       $backoff = $RestartBackoffSec
       $failStreak = 0
     } catch {
@@ -289,6 +293,11 @@ while ($true) {
     $listen = Get-ListenPids
     if ($listen.Count -eq 0) {
       Write-SupLog "gateway restart recovery_attempt (process gone)"
+      break
+    }
+    if ($listen.Count -gt 1) {
+      Write-SupLog ("independent listeners={0} - reclaiming trees" -f ($listen -join ","))
+      Stop-GatewayPids -TargetPids $listen
       break
     }
     if (Test-Mt5Process) {

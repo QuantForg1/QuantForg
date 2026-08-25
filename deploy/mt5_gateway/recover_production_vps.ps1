@@ -34,7 +34,7 @@ function Get-ListenPids {
   $pids = @()
   $lines = & netstat -ano -p tcp 2>$null
   foreach ($line in $lines) {
-    if ($line -match ":8765\s+\S+\s+LISTENING\s+(\d+)\s*$") {
+    if ($line -match "127\.0\.0\.1:8765\s+\S+\s+LISTENING\s+(\d+)\s*$") {
       $pids += [int]$Matches[1]
     }
   }
@@ -49,14 +49,20 @@ switch ($Action) {
     exit $LASTEXITCODE
   }
   "RestartGateway" {
-    Write-Rec "gateway restart via STOP then scheduled task"
+    Write-Rec "gateway restart via STOP then tree reclaim then scheduled task"
     New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
     Set-Content -Path $StopFile -Value "stop" -Encoding ASCII
     Start-Sleep -Seconds 4
     if (Test-Path $StopFile) { Remove-Item $StopFile -Force }
-    foreach ($procId in (Get-ListenPids)) {
-      Write-Rec ("stopping listener pid={0}" -f $procId)
-      Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+    $helpers = Join-Path $PSScriptRoot "_gateway_process.ps1"
+    if (Test-Path $helpers) {
+      . $helpers
+      Stop-GatewayProcessTree -ListenPids (Get-GatewayListenPids)
+    } else {
+      foreach ($procId in (Get-ListenPids)) {
+        Write-Rec ("stopping listener pid={0}" -f $procId)
+        & taskkill.exe /F /T /PID $procId 2>$null | Out-Null
+      }
     }
     Start-ScheduledTask -TaskName $GatewayTaskName
     Start-Sleep -Seconds 8

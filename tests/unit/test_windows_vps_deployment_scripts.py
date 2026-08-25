@@ -109,3 +109,107 @@ def test_vps_doc_exists_without_secrets() -> None:
     lowered = doc.lower()
     assert "eyj" not in lowered
     assert "-----begin" not in lowered
+
+
+def _tree_root(processes: list[dict], pid: int) -> int:
+    by_id = {int(p["pid"]): p for p in processes}
+
+    def is_gw(proc: dict | None) -> bool:
+        if not proc:
+            return False
+        return "services.mt5_gateway.main" in str(proc.get("cmd") or "")
+
+    current = int(pid)
+    for _ in range(8):
+        proc = by_id.get(current)
+        if proc is None:
+            break
+        parent = by_id.get(int(proc["ppid"]))
+        if not is_gw(parent):
+            break
+        current = int(parent["pid"])
+    return current
+
+
+def test_parent_child_gateway_is_one_tree_not_duplicate() -> None:
+    processes = [
+        {"pid": 3168, "ppid": 1, "cmd": "powershell.exe -File supervise_gateway.ps1"},
+        {"pid": 7728, "ppid": 3168, "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main"},
+        {"pid": 7848, "ppid": 7728, "cmd": r"C:\QuantForg\.venv\Scripts\python.exe -m services.mt5_gateway.main"},
+    ]
+    listen = [7848]
+    roots = {_tree_root(processes, pid) for pid in listen}
+    assert roots == {7728}
+    assert len(roots) == 1
+
+
+def test_one_listener_is_pass_invariant() -> None:
+    text = _read("verify_production_vps.ps1")
+    helpers = _read("_gateway_process.ps1")
+    assert "Get-GatewayListenPids" in text
+    assert "127.0.0.1" in text
+    assert "listener_count=1" in text
+    assert "duplicate gateway processes count" not in text
+    assert "/health/live" in text
+    assert "Get-IndependentGatewayTreeRoots" in helpers
+    assert r"127\.0\.0\.1:$($script:GatewayPort)" in helpers
+
+
+def test_two_independent_listeners_are_fail() -> None:
+    processes = [
+        {"pid": 100, "ppid": 1, "cmd": "python.exe -m services.mt5_gateway.main"},
+        {"pid": 200, "ppid": 1, "cmd": "python.exe -m services.mt5_gateway.main"},
+    ]
+    roots = {_tree_root(processes, pid) for pid in (100, 200)}
+    assert roots == {100, 200}
+    text = _read("verify_production_vps.ps1")
+    assert "independent Gateway trees" in text
+
+
+def test_supervisor_adopts_healthy_listener() -> None:
+    text = _read("supervise_gateway.ps1")
+    assert "Ensure-SingleHealthyInstance" in text
+    assert "Test-LiveOk" in text
+    assert "Start-GatewayProcess" in text
+    assert "gateway already live" in text
+    # Start only when not healthy
+    assert "if (-not $healthy)" in text
+
+
+def test_process_tree_reclaim_handles_parent_and_child() -> None:
+    supervise = _read("supervise_gateway.ps1")
+    helpers = _read("_gateway_process.ps1")
+    text = supervise + helpers
+    assert "Stop-GatewayProcessTree" in text
+    assert "Get-GatewayTreeRoot" in text
+    assert "taskkill.exe /F /T" in text
+    assert "tree_root" in text
+    assert supervise.count("function Stop-GatewayPids") == 1
+    assert "Stop-Process -Id" not in supervise
+
+
+def test_production_task_not_once_and_startup_ignore_new() -> None:
+    text = _read("install_gateway_task.ps1")
+    assert "AtStartup" in text
+    assert "IgnoreNew" in text
+    assert "Do NOT append -Once" in text
+    assert (
+        '$arg = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Supervise`""'
+        in text
+    )
+    assert "-Once" not in text.split("Do NOT append -Once")[1].split("$arg =")[1].split("\n")[0]
+
+
+def test_trading_logic_untouched_by_vps_process_fix() -> None:
+    from app.domain.institutional_trading.compounding.models import LIVE_ACTIVATION
+
+    assert LIVE_ACTIVATION == "SHADOW_ONLY"
+    for name in (
+        "verify_production_vps.ps1",
+        "supervise_gateway.ps1",
+        "_gateway_process.ps1",
+        "install_gateway_task.ps1",
+    ):
+        body = _read(name).lower()
+        assert "order_send" not in body or "never" in body
+

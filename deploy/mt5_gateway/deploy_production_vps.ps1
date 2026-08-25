@@ -101,7 +101,8 @@ $required = @(
   "deploy\mt5_gateway\install_gateway_task.ps1",
   "deploy\mt5_gateway\start_mt5_terminal.ps1",
   "deploy\mt5_gateway\install_mt5_terminal_task.ps1",
-  "deploy\mt5_gateway\verify_production_vps.ps1"
+  "deploy\mt5_gateway\verify_production_vps.ps1",
+  "deploy\mt5_gateway\_gateway_process.ps1"
 )
 foreach ($rel in $required) {
   $p = Join-Path $RepoRoot $rel

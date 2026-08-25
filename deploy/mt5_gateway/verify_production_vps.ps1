@@ -16,6 +16,10 @@ $ErrorActionPreference = "Continue"
 $Fail = 0
 $Warn = 0
 $Pass = 0
+$supPid = 0
+$listenerPid = 0
+$listenerCount = 0
+$treePids = @()
 $Rows = New-Object System.Collections.Generic.List[object]
 
 function Add-Check {
@@ -105,7 +109,8 @@ $scripts = @(
   "deploy\mt5_gateway\supervise_gateway.ps1",
   "deploy\mt5_gateway\start_gateway.ps1",
   "deploy\mt5_gateway\install_gateway_task.ps1",
-  "deploy\mt5_gateway\start_mt5_terminal.ps1"
+  "deploy\mt5_gateway\start_mt5_terminal.ps1",
+  "deploy\mt5_gateway\_gateway_process.ps1"
 )
 foreach ($rel in $scripts) {
   $p = Join-Path $RepoRoot $rel
@@ -113,14 +118,46 @@ foreach ($rel in $scripts) {
   else { Add-Check "script:$rel" "FAIL" "missing" }
 }
 
-$gw = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-  Where-Object { $_.CommandLine -match "services\.mt5_gateway\.main" })
-if ($gw.Count -eq 1) {
-  Add-Check "gateway_process" "PASS" ("pid={0}" -f $gw[0].ProcessId)
-} elseif ($gw.Count -gt 1) {
-  Add-Check "gateway_process" "FAIL" ("duplicate gateway processes count={0}" -f $gw.Count)
+$ProcessHelpers = Join-Path $PSScriptRoot "_gateway_process.ps1"
+if (Test-Path $ProcessHelpers) {
+  . $ProcessHelpers
+}
+
+$listenPids = @()
+$listenerCount = 0
+$listenerPid = 0
+$treeRoot = 0
+$treePids = @()
+$independentRoots = @()
+if (Test-Path $ProcessHelpers) {
+  $listenPids = @(Get-GatewayListenPids)
+  $listenerCount = $listenPids.Count
+  if ($listenerCount -ge 1) {
+    $listenerPid = $listenPids[0]
+    $treeRoot = Get-GatewayTreeRoot -ProcessId $listenerPid
+    $treePids = @(Get-GatewayTreePids -RootPid $treeRoot)
+  }
+  $independentRoots = @(Get-IndependentGatewayTreeRoots -ListenPids $listenPids)
+}
+
+$liveOk = $false
+$liveVersion = ""
+try {
+  $live = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 5
+  if ($live.status -eq "ok" -and $live.service -eq "mt5-gateway") {
+    $liveOk = $true
+    $liveVersion = [string]$live.gateway_version
+  }
+} catch {}
+
+if ($listenerCount -eq 1 -and $independentRoots.Count -le 1 -and $liveOk) {
+  Add-Check "gateway_process" "PASS" ("listener_count=1 listener_pid={0} tree_root={1} tree={2}" -f $listenerPid, $treeRoot, ($treePids -join ","))
+} elseif ($listenerCount -gt 1 -or $independentRoots.Count -gt 1) {
+  Add-Check "gateway_process" "FAIL" ("independent Gateway trees listeners={0} roots={1}" -f ($listenPids -join ","), ($independentRoots -join ","))
+} elseif ($listenerCount -eq 1 -and -not $liveOk) {
+  Add-Check "gateway_process" "FAIL" ("listener_pid={0} but /health/live not OK" -f $listenerPid)
 } else {
-  Add-Check "gateway_process" "FAIL" "services.mt5_gateway.main not running"
+  Add-Check "gateway_process" "FAIL" "no LISTENING pid on 127.0.0.1:8765"
 }
 
 $listen = $false
@@ -132,15 +169,10 @@ try {
 } catch {}
 if ($listen) { Add-Check "port_8765" "PASS" "LISTEN" } else { Add-Check "port_8765" "FAIL" "not listening" }
 
-try {
-  $live = Invoke-RestMethod "http://127.0.0.1:8765/health/live" -TimeoutSec 5
-  if ($live.status -eq "ok" -and $live.service -eq "mt5-gateway") {
-    Add-Check "health_live" "PASS" ("version={0}" -f $live.gateway_version)
-  } else {
-    Add-Check "health_live" "FAIL" ($live | ConvertTo-Json -Compress)
-  }
-} catch {
-  Add-Check "health_live" "FAIL" $_.Exception.Message
+if ($liveOk) {
+  Add-Check "health_live" "PASS" ("version={0}" -f $liveVersion)
+} else {
+  Add-Check "health_live" "FAIL" "http://127.0.0.1:8765/health/live not OK"
 }
 
 try {
@@ -175,14 +207,14 @@ Test-Task $TerminalTaskName
 
 $sup = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
   Where-Object { $_.CommandLine -match "supervise_gateway\.ps1" })
-if ($sup.Count -ge 1) {
-  if ($sup.Count -eq 1) {
-    Add-Check "supervisor_process" "PASS" ("pid={0}" -f $sup[0].ProcessId)
-  } else {
-    Add-Check "supervisor_process" "WARN" ("multiple supervise_gateway.ps1 count={0}" -f $sup.Count)
-  }
+$supPid = 0
+if ($sup.Count -eq 1) {
+  $supPid = [int]$sup[0].ProcessId
+  Add-Check "supervisor_process" "PASS" ("count=1 pid={0}" -f $supPid)
+} elseif ($sup.Count -gt 1) {
+  Add-Check "supervisor_process" "FAIL" ("competing supervisors count={0}" -f $sup.Count)
 } else {
-  Add-Check "supervisor_process" "WARN" "supervisor loop not seen (Once mode or task delay is ok if gateway is live)"
+  Add-Check "supervisor_process" "WARN" "supervisor loop not seen (Once mode or Interactive session ended)"
 }
 
 $logDir = Join-Path $RepoRoot "docs\production\reports\gateway_supervisor"
@@ -196,6 +228,10 @@ if (Test-Path $supLog) {
 Write-Host ""
 Write-Host "QuantForg VPS verification (local host only - not a Railway probe)"
 Write-Host ("RepoRoot={0}" -f $RepoRoot)
+Write-Host ("supervisor PID={0}" -f $supPid)
+Write-Host ("listener PID={0}" -f $listenerPid)
+Write-Host ("Gateway process tree={0}" -f ($treePids -join ","))
+Write-Host ("listener count={0}" -f $listenerCount)
 foreach ($row in $Rows) {
   Write-Host ("[{0}] {1} - {2}" -f $row.status, $row.name, $row.detail)
 }

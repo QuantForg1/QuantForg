@@ -47,6 +47,17 @@ Human actions **on the VPS** (not performed by this documentation):
 
 This checkout does **not** know the VPS IP, tunnel hostname, or any secret.
 
+## Verification invariant
+
+`verify_production_vps.ps1` requires **exactly one LISTENING owner of `127.0.0.1:8765`**
+plus `/health/live` OK. A Windows venv launcher PID plus its child, both showing
+`-m services.mt5_gateway.main`, is **one Gateway tree**, not a duplicate server.
+
+Interactive Task Scheduler is **not** enough for unattended reboot. Enable
+auto-logon for the trading user if the supervisor must survive reboot without RDP.
+This repo does not store Windows passwords or switch Gateway to session-0/S4U
+(that would isolate it from the interactive MT5 terminal).
+
 ## Commands on the VPS
 
 From an elevated PowerShell:
