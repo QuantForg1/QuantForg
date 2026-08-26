@@ -84,6 +84,9 @@ class LatencyBudget:
     market_data_ms: float = 0.0
     signal_to_decision_ms: float = 0.0
     signal_to_execution_ready_ms: float = 0.0
+    decision_to_oms_ms: float = 0.0
+    oms_to_broker_ms: float = 0.0
+    total_execution_latency_ms: float = 0.0
 
     def finalize(self) -> None:
         named = {
@@ -123,6 +126,21 @@ class LatencyBudget:
                 + self.safety_to_plan_ms,
                 3,
             )
+        if self.decision_to_oms_ms <= 0:
+            self.decision_to_oms_ms = round(
+                self.decision_to_risk_ms
+                + self.risk_to_safety_ms
+                + self.safety_to_plan_ms
+                + self.plan_to_oms_ms,
+                3,
+            )
+        if self.oms_to_broker_ms <= 0:
+            self.oms_to_broker_ms = round(
+                self.oms_to_gateway_ms + self.gateway_to_broker_ms,
+                3,
+            )
+        if self.total_execution_latency_ms <= 0:
+            self.total_execution_latency_ms = round(self.total_cycle_ms, 3)
         if named:
             key = max(named, key=named.get)
             self.largest_stage = key
@@ -173,6 +191,9 @@ class LatencyBudget:
             "market_data_ms": round(self.market_data_ms, 3),
             "signal_to_decision_ms": round(self.signal_to_decision_ms, 3),
             "signal_to_execution_ready_ms": round(self.signal_to_execution_ready_ms, 3),
+            "decision_to_oms_ms": round(self.decision_to_oms_ms, 3),
+            "oms_to_broker_ms": round(self.oms_to_broker_ms, 3),
+            "total_execution_latency_ms": round(self.total_execution_latency_ms, 3),
             "measured": True,
         }
 

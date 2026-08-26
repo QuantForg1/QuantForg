@@ -232,7 +232,12 @@ class TestLatencyInstrumentation:
         assert payload["strategy_ms"] == 8.0
         assert payload["signal_to_decision_ms"] == 12.0
         assert payload["signal_to_execution_ready_ms"] == 18.0
+        assert payload["decision_to_oms_ms"] == 6.0
+        assert payload["oms_to_broker_ms"] == 0.0
+        assert payload["total_execution_latency_ms"] == payload["total_cycle_ms"]
         fields = communication_latency_fields(payload)
         assert fields["market_data_ms"] == 12.0
         assert fields["signal_to_decision_ms"] == 12.0
+        assert fields["decision_to_oms_ms"] == 6.0
+        assert fields["oms_to_broker_ms"] == 0.0
         assert fields["oms_ms"] == 0.0

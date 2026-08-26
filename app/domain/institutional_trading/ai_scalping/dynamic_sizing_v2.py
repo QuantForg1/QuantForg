@@ -270,6 +270,51 @@ def _dampen_lot_growth(
     return min(candidate, cap)
 
 
+def adaptive_protection_scale(
+    *,
+    daily_loss_pct: Decimal = Decimal("0"),
+    max_daily_loss_pct: Decimal = Decimal("3"),
+    current_drawdown_pct: Decimal = Decimal("0"),
+    consecutive_losses: int = 0,
+    consecutive_wins: int = 0,
+) -> tuple[Decimal, str | None, tuple[str, ...]]:
+    """Reduce-only XAUUSD protection. Never increases size after losses or wins.
+
+    Consecutive wins are ignored for sizing (quality/equity already allocate
+    within the configured risk cap). Daily-loss at the hard cap is a STOP.
+    """
+    notes: list[str] = []
+    scale = Decimal("1")
+    daily = max(Decimal("0"), daily_loss_pct or Decimal("0"))
+    cap = max(Decimal("0"), max_daily_loss_pct or Decimal("0"))
+    dd = max(Decimal("0"), current_drawdown_pct or Decimal("0"))
+    losses = max(0, int(consecutive_losses or 0))
+    _ = consecutive_wins  # never used to raise risk
+
+    if cap > 0 and daily >= cap:
+        notes.append(f"daily_loss_limit {daily}% >= {cap}%")
+        return Decimal("0"), "daily_loss_limit", tuple(notes)
+    if cap > 0 and daily >= cap * Decimal("0.50"):
+        scale *= Decimal("0.50")
+        notes.append("daily_loss_defensive")
+    elif cap > 0 and daily >= cap * Decimal("0.25"):
+        scale *= Decimal("0.75")
+        notes.append("daily_loss_caution")
+    if losses > 0:
+        cut = min(Decimal("0.75"), Decimal(losses) * Decimal("0.20"))
+        scale *= Decimal("1") - cut
+        notes.append(f"loss_streak_reduce n={losses}")
+    if dd > 0:
+        dd_cut = min(Decimal("0.50"), (dd * Decimal("0.10")))
+        scale *= Decimal("1") - dd_cut
+        notes.append(f"drawdown_reduce {dd}%")
+    if scale < 0:
+        scale = Decimal("0")
+    if scale > 1:
+        scale = Decimal("1")
+    return scale.quantize(Decimal("0.0001")), None, tuple(notes)
+
+
 def calculate_dynamic_lots_v2(
     *,
     equity: Decimal,
@@ -298,6 +343,11 @@ def calculate_dynamic_lots_v2(
     max_margin_usage_pct: Decimal = Decimal("30"),
     max_symbol_exposure_pct: Decimal | None = None,
     lot_growth_max_step_pct: Decimal | None = None,
+    daily_loss_pct: Decimal = Decimal("0"),
+    max_daily_loss_pct: Decimal | None = None,
+    current_drawdown_pct: Decimal = Decimal("0"),
+    consecutive_losses: int = 0,
+    consecutive_wins: int = 0,
     config: AiScalpingConfig | None = None,
     log: bool = True,
 ) -> DynamicSizingDecision:
@@ -498,6 +548,29 @@ def calculate_dynamic_lots_v2(
         if sess < 1:
             base_risk = (base_risk * sess).quantize(Decimal("0.0001"))
             method_suffix += "+session_risk_scale"
+
+    daily_cap = (
+        max_daily_loss_pct
+        if max_daily_loss_pct is not None and max_daily_loss_pct > 0
+        else Decimal("3")
+    )
+    adapt_scale, adapt_block, adapt_notes = adaptive_protection_scale(
+        daily_loss_pct=daily_loss_pct,
+        max_daily_loss_pct=daily_cap,
+        current_drawdown_pct=current_drawdown_pct,
+        consecutive_losses=consecutive_losses,
+        consecutive_wins=consecutive_wins,
+    )
+    if adapt_block:
+        return _reject(
+            adapt_block,
+            "; ".join(adapt_notes) or "Adaptive protection hard stop",
+            risk=base_risk,
+            dist=dist,
+        )
+    if adapt_scale < 1:
+        base_risk = (base_risk * adapt_scale).quantize(Decimal("0.0001"))
+        method_suffix += "+adaptive_protect"
 
     # Absolute ceiling — never exceed configured max
     if base_risk > configured_max:
@@ -713,6 +786,12 @@ def calculate_dynamic_lots_v2(
             "preferred_lot_hi": str(tier.preferred_lot_hi),
             "volume_min_default": str(VOLUME_MIN),
             "volume_step_default": str(VOLUME_STEP),
+            "adaptive_scale": str(adapt_scale),
+            "adaptive_notes": list(adapt_notes),
+            "daily_loss_pct": str(daily_loss_pct or Decimal("0")),
+            "current_drawdown_pct": str(current_drawdown_pct or Decimal("0")),
+            "consecutive_losses": int(consecutive_losses or 0),
+            "consecutive_wins": int(consecutive_wins or 0),
         },
     )
     if log:

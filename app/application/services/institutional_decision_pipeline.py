@@ -856,6 +856,11 @@ class InstitutionalDecisionPipeline:
                     if vols:
                         previous_lot = max(vols)
 
+                peak_dd = Decimal("0")
+                peak = account.peak_equity
+                if peak is not None and peak > 0 and account.equity < peak:
+                    peak_dd = (peak - account.equity) / peak * Decimal("100")
+
                 if scalp_cfg.dynamic_sizing_v2_enabled:
                     sized_v2 = calculate_dynamic_lots_v2(
                         equity=account.equity,
@@ -872,6 +877,10 @@ class InstitutionalDecisionPipeline:
                         daily_exposure_used_pct=portfolio_exp,
                         portfolio_exposure_pct=portfolio_exp,
                         symbol_open_risk_pct=symbol_exp,
+                        daily_loss_pct=daily_dd,
+                        max_daily_loss_pct=cfg.max_daily_loss_pct,
+                        current_drawdown_pct=peak_dd,
+                        consecutive_losses=int(account.consecutive_losses or 0),
                         quality_score=(
                             int(ai_score.trade_quality)
                             if ai_score is not None

@@ -156,6 +156,22 @@ def communication_latency_fields(
             + _ms("safety_to_plan_ms"),
             3,
         )
+    decision_to_oms = _ms("decision_to_oms_ms")
+    if decision_to_oms <= 0:
+        decision_to_oms = round(
+            _ms("decision_to_risk_ms")
+            + _ms("risk_to_safety_ms")
+            + _ms("safety_to_plan_ms")
+            + _ms("plan_to_oms_ms"),
+            3,
+        )
+    oms_to_broker = _ms("oms_to_broker_ms")
+    if oms_to_broker <= 0:
+        oms_to_broker = round(
+            _ms("oms_to_gateway_ms") + _ms("gateway_to_broker_ms"),
+            3,
+        )
+    total_exec = _ms("total_execution_latency_ms", "total_cycle_ms")
     return {
         "api_connectivity_ms": _ms("api_connectivity_ms"),
         "auth_ms": _ms("auth_ms"),
@@ -167,4 +183,7 @@ def communication_latency_fields(
         "oms_ms": oms,
         "signal_to_decision_ms": signal_to_decision,
         "signal_to_execution_ready_ms": signal_to_ready,
+        "decision_to_oms_ms": decision_to_oms,
+        "oms_to_broker_ms": oms_to_broker,
+        "total_execution_latency_ms": total_exec,
     }

@@ -43,9 +43,17 @@ def _trade_timeline(row: dict[str, Any]) -> dict[str, Any]:
     snap: dict[str, Any] = (
         request_snapshot if isinstance(request_snapshot, dict) else {}
     )
+    market_at = (
+        row.get("market_data_at")
+        or snap.get("market_data_at")
+        or snap.get("quote_at")
+    )
+    signal_at = row.get("signal_at") or snap.get("signal_at") or snap.get("signal_ts")
     decision_at = (
         row.get("decision_at") or snap.get("decision_at") or row.get("created_at")
     )
+    risk_at = row.get("risk_at") or snap.get("risk_at")
+    oms_at = row.get("oms_at") or snap.get("oms_at")
     submitted_at = row.get("submitted_at") or snap.get("submitted_at")
     ack_at = (
         row.get("broker_ack_at")
@@ -60,6 +68,20 @@ def _trade_timeline(row: dict[str, Any]) -> dict[str, Any]:
         total_ms = round((end - start).total_seconds() * 1000.0, 4)
     elif row.get("latency_ms") is not None:
         total_ms = round(_f(row.get("latency_ms")), 4)
+
+    def _span(a: Any, b: Any) -> float | None:
+        ta = _parse_ts(a)
+        tb = _parse_ts(b)
+        if ta is None or tb is None or tb < ta:
+            return None
+        return round((tb - ta).total_seconds() * 1000.0, 4)
+
+    signal_to_decision = _span(signal_at, decision_at)
+    decision_to_oms = _span(decision_at, oms_at or submitted_at)
+    oms_to_broker = _span(oms_at or submitted_at, ack_at)
+    if total_ms is None:
+        chain = _span(signal_at or market_at or decision_at, ack_at or filled_at)
+        total_ms = chain
     spread_entry = row.get("spread_at_entry") or row.get("spread") or snap.get("spread")
     spread_exit = row.get("spread_at_exit") or snap.get("spread_at_exit")
     slip = row.get("slippage")
@@ -67,10 +89,17 @@ def _trade_timeline(row: dict[str, Any]) -> dict[str, Any]:
         slip = abs(_f(row.get("price")) - _f(snap.get("price")))
     return {
         "request_id": row.get("request_id"),
+        "market_data_at": market_at,
+        "signal_at": signal_at,
         "decision_at": decision_at,
+        "risk_at": risk_at,
+        "oms_at": oms_at,
         "submitted_at": submitted_at,
         "broker_ack_at": ack_at,
         "filled_at": filled_at,
+        "signal_to_decision_ms": signal_to_decision,
+        "decision_to_oms_ms": decision_to_oms,
+        "oms_to_broker_ms": oms_to_broker,
         "total_execution_latency_ms": total_ms,
         "slippage": round(_f(slip), 6) if slip is not None else None,
         "spread_at_entry": str(spread_entry) if spread_entry is not None else None,
