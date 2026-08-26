@@ -147,18 +147,51 @@ if ($cfPids.Count -eq 1) {
   Add-Check "current_cloudflared" "WARN" "cloudflared.exe not running now"
 }
 
+$health = $null
+$mt5Attached = $false
+try {
+  $health = Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec 8
+  if ($null -ne $health.mt5) {
+    $mt5Attached = ([bool]$health.mt5.connected -and [string]$health.mt5.session_mode -eq "attached")
+  }
+} catch {}
+if ($mt5Attached) {
+  Add-Check "mt5_session" "PASS" "connected=true session_mode=attached"
+} elseif ($liveOk) {
+  Add-Check "mt5_session" "WARN" "Gateway live but MT5 not attached yet"
+} else {
+  Add-Check "mt5_session" "WARN" "Gateway /health not confirming attached session"
+}
+
+$publicOk = Test-PublicGatewayLive
+if ($publicOk) {
+  Add-Check "public_tunnel" "PASS" "https://gateway.quantforg.com/health/live"
+} else {
+  Add-Check "public_tunnel" "WARN" "public live not reachable (local Gateway may still be healthy)"
+}
+
+$hostHealthy = ($listen.Count -eq 1 -and $liveOk -and $mt5Procs.Count -ge 1 -and ($null -ne $cf) -and ($cf.Status -eq "Running"))
 $configReady = ($gwTask -and $mt5Task -and $wdTask -and (Test-Path $supervise) -and (Test-Path $watch) -and (Test-Path -LiteralPath $mt5Exe) -and ($null -ne $cf) -and ($cf.StartType -eq "Automatic"))
 $softwareReady = $configReady
-$rebootReady = ($softwareReady -and ($auto.State -eq "READY") -and ($provider.State -eq "READY"))
+$rebootReady = ($hostHealthy -and $softwareReady -and ($auto.State -eq "READY") -and ($provider.State -eq "READY") -and ($Fail -eq 0))
 
 Write-Host ""
+Write-Host "--- HOST HEALTH ---"
+Write-Host ("HOST HEALTH: {0}" -f $(if ($hostHealthy) { "YES" } else { "NO" }))
+Write-Host "--- SOFTWARE RECOVERY ---"
 Write-Host ("SOFTWARE RECOVERY: {0}" -f $(if ($softwareReady) { "READY" } else { "ACTION_REQUIRED" }))
+Write-Host "--- AUTO-LOGON ---"
 Write-Host ("AUTO_LOGON: {0}" -f $auto.State)
-Write-Host ("PROVIDER POWER-LOSS: {0}" -f $provider.State)
+Write-Host "--- PROVIDER POWER RECOVERY ---"
 Write-Host ("PROVIDER POWER RECOVERY: {0}" -f $provider.State)
+Write-Host "--- MT5 SESSION ---"
+Write-Host ("MT5 SESSION: {0}" -f $(if ($mt5Attached) { "ATTACHED" } else { "NOT_ATTACHED_OR_UNKNOWN" }))
+Write-Host "--- PUBLIC TUNNEL ---"
+Write-Host ("PUBLIC TUNNEL: {0}" -f $(if ($publicOk) { "HEALTHY" } else { "NOT_REACHABLE" }))
+Write-Host "--- REBOOT READINESS ---"
 Write-Host ("REBOOT READINESS: {0}" -f $(if ($rebootReady) { "READY" } else { "ACTION_REQUIRED" }))
-Write-Host "REBOOT READINESS is READY only when AUTO_LOGON=READY and PROVIDER POWER RECOVERY=READY."
-Write-Host "Repository code cannot enable Auto-Logon or provider power-on. Interactive tasks need a logged-on desktop."
+Write-Host "REBOOT READINESS is READY only when host health, software recovery, AUTO_LOGON=READY, and PROVIDER POWER RECOVERY=READY are all satisfied."
+Write-Host "A powered-off VPS cannot recover itself. Repository code cannot enable Auto-Logon without the Windows UI password dialog."
 Write-Host "This script does not reboot the host."
 Write-Host "LIVE ORDER SENT: NO"
 Write-Host "NO ORDER IS SENT."

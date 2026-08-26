@@ -342,6 +342,7 @@ def test_no_secret_leakage_in_vps_scripts() -> None:
         "inspect_autologon.ps1",
         "open_autologon_ui.ps1",
         "confirm_provider_power_recovery.ps1",
+        "finalize_unattended_reboot.ps1",
         "verify_reboot_readiness.ps1",
         "harden_cloudflared_service.ps1",
     ):
@@ -407,6 +408,7 @@ def test_watchdog_ps1_files_parse() -> None:
         "inspect_autologon.ps1",
         "open_autologon_ui.ps1",
         "confirm_provider_power_recovery.ps1",
+        "finalize_unattended_reboot.ps1",
         "verify_reboot_readiness.ps1",
         "harden_cloudflared_service.ps1",
         "install_mt5_terminal_task.ps1",
@@ -438,6 +440,8 @@ def test_autologon_detection_does_not_expose_password() -> None:
     assert "Get-AutoLogonReadiness" in host
     assert "AUTO_LOGON" in inspect
     assert "ACTION_REQUIRED" in inspect
+    assert "NOT_SUPPORTED" in inspect
+    assert "ERROR" in inspect
     assert "READY" in inspect
     assert "cannot enable Auto-Logon" in inspect
     assert "GetValue(\"DefaultPassword\")" not in text
@@ -469,6 +473,9 @@ def test_reboot_readiness_script_never_reboots() -> None:
     assert "SOFTWARE RECOVERY" in text
     assert "PROVIDER POWER RECOVERY" in text
     assert "LIVE ORDER SENT: NO" in text
+    assert "HOST HEALTH" in text
+    assert "MT5 SESSION" in text
+    assert "PUBLIC TUNNEL" in text
     assert "AUTO_LOGON=READY" in text
 
 
@@ -511,3 +518,27 @@ def test_mt5_path_candidates_and_duplicate_guard() -> None:
     assert "duplicate start prevented" in start
     assert "Resolve-Mt5TerminalPath" in host
     assert "Meta Trader 5" in host
+
+
+def test_autologon_lsa_case_is_ready_without_winlogon_secret_name() -> None:
+    host = _read("_host_recovery.ps1")
+    assert 'SecretStorage = "lsa_or_external"' in host
+    assert "NOT_SUPPORTED" in host
+    assert '$result.State = "ERROR"' in host
+    assert "GetValue(\"DefaultPassword\")" not in host
+    assert "New-LocalUser" not in host
+    assert "Get-LocalAdministratorState" in host
+
+
+def test_finalize_unattended_reboot_never_takes_password_or_creates_users() -> None:
+    text = _read("finalize_unattended_reboot.ps1")
+    assert "SkipUi" in text
+    assert "[string]$Password" not in text
+    assert "[SecureString]" not in text
+    assert "New-LocalUser" not in text
+    assert "Administrator" in text
+    assert "S4U" in text
+    assert "LIVE ORDER SENT: NO" in text
+    assert "open_autologon_ui.ps1" in text
+    assert "Restart-Computer" not in text
+    assert "-Password" not in text

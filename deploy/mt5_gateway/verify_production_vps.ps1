@@ -127,6 +127,7 @@ $scripts = @(
   "deploy\mt5_gateway\inspect_autologon.ps1",
   "deploy\mt5_gateway\open_autologon_ui.ps1",
   "deploy\mt5_gateway\confirm_provider_power_recovery.ps1",
+  "deploy\mt5_gateway\finalize_unattended_reboot.ps1",
   "deploy\mt5_gateway\harden_cloudflared_service.ps1"
 )
 foreach ($rel in $scripts) {

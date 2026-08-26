@@ -1,4 +1,5 @@
-# Read-only Windows auto-logon readiness. Operator-owned. NEVER prints DefaultPassword.
+# Read-only Windows auto-logon readiness. Operator-owned.
+# Possible AUTO_LOGON states: READY, ACTION_REQUIRED, NOT_SUPPORTED, ERROR.
 # NEVER writes registry. NEVER stores credentials. NEVER places trades.
 #
 #   powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\inspect_autologon.ps1
@@ -9,25 +10,46 @@ if (-not (Test-Path $HostHelpers)) { throw "Missing $HostHelpers" }
 . $HostHelpers
 
 $info = Get-AutoLogonReadiness
-Write-Host "AUTO_LOGON inspection (values only; password never read or printed)"
+$admin = Get-LocalAdministratorState
+Write-Host "AUTO_LOGON inspection (password contents never read or printed)"
 Write-Host ("State={0}" -f $info.State)
 Write-Host ("AutoAdminLogon_enabled={0}" -f $info.Enabled)
 Write-Host ("DefaultUserName_configured={0}" -f $info.UserConfigured)
+Write-Host ("DefaultDomainName_configured={0}" -f $info.DomainConfigured)
 if ($info.UserConfigured) {
   Write-Host ("DefaultUserName={0}" -f $info.DefaultUserName)
 }
-Write-Host ("DefaultPassword_value_present={0} (contents not read)" -f $info.PasswordValuePresent)
+if ($info.DomainConfigured) {
+  Write-Host ("DefaultDomainName={0}" -f $info.DefaultDomainName)
+}
+Write-Host ("Winlogon_secret_value_name_present={0} (contents not read)" -f $info.PasswordValuePresent)
+Write-Host ("SecretStorage={0}" -f $info.SecretStorage)
 Write-Host ("InteractiveUser={0}" -f $info.InteractiveUser)
+Write-Host ("Administrator_exists={0} enabled={1} password_configured={2}" -f $admin.Exists, $admin.Enabled, $admin.PasswordConfigured)
+if (-not [string]::IsNullOrWhiteSpace($info.AutologonBinary)) {
+  Write-Host ("AutologonBinary={0}" -f $info.AutologonBinary)
+} else {
+  Write-Host "AutologonBinary=not_found_in_common_paths"
+}
 Write-Host ""
+Write-Host ("AUTO_LOGON: {0}" -f $info.State)
 if ($info.State -eq "READY") {
-  Write-Host "AUTO_LOGON: READY"
+  if ($info.SecretStorage -eq "lsa_or_external") {
+    Write-Host "LSA-protected or external secret is assumed; plaintext Winlogon secret value name is absent. This is READY."
+  }
   exit 0
 }
-Write-Host "AUTO_LOGON: ACTION_REQUIRED"
-Write-Host "Repository scripts cannot enable Auto-Logon. That requires the operator's Windows password in a Windows UI."
-Write-Host "This helper never accepts, stores, or prints that password."
-Write-Host "Open the UI (no password argument):"
-Write-Host "  powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\open_autologon_ui.ps1 -LaunchUi"
-Write-Host "Then complete Autologon.exe (preferred, LSA) or netplwiz, and re-run this inspect script."
+if ($info.State -eq "NOT_SUPPORTED") {
+  Write-Host "Winlogon Auto-Logon is not available on this installation."
+  exit 0
+}
+if ($info.State -eq "ERROR") {
+  Write-Host "Winlogon could not be inspected (run elevated). Password was not read."
+  exit 2
+}
+Write-Host "Repository scripts cannot enable Auto-Logon. Enter the password only in Sysinternals Autologon or netplwiz."
+Write-Host "Operator action required: enter the Administrator password only in the Sysinternals Autologon Windows dialog."
+Write-Host "One-command workflow:"
+Write-Host "  powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\finalize_unattended_reboot.ps1"
 Write-Host "Do not paste the password into git, chat, or these scripts."
 exit 0

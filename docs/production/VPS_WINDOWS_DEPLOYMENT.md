@@ -209,7 +209,17 @@ Inspect (read-only):
 powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\inspect_autologon.ps1
 ```
 
-Open the Windows UI (still no password argument):
+One-command finalize (still no password argument):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\finalize_unattended_reboot.ps1
+```
+
+That script inspects health, tasks, Cloudflared, and Auto-Logon. If Auto-Logon is not READY, it launches Sysinternals Autologon (or netplwiz) **without a password argument**, waits for the dialog to close, then re-verifies.
+
+If the Autologon dialog appears, set Username=`Administrator`, Domain=`the VPS computer name`, and enter the password **only in that dialog**.
+
+UI-only helper:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\open_autologon_ui.ps1 -LaunchUi
@@ -220,7 +230,7 @@ Then, in the Windows dialog only:
 1. **Preferred:** Sysinternals Autologon.exe as Administrator (LSA-protected secret).
 2. Or `netplwiz` / `control userpasswords2` — uncheck "Users must enter a user name and password to use this computer."
 
-`AUTO_LOGON: READY` only after Windows AutoAdminLogon is actually enabled.
+`AUTO_LOGON: READY` only after Windows AutoAdminLogon is actually enabled, including LSA-protected Autologon where the Winlogon secret value name is absent.
 `ACTION_REQUIRED` is a warning in production verify, not a software-health FAIL.
 
 ## Provider power recovery (not visible from the guest)

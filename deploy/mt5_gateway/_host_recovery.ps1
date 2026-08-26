@@ -103,34 +103,93 @@ function Resolve-Mt5TerminalPath {
   return "C:\Program Files\MetaTrader 5\terminal64.exe"
 }
 
-# Auto-logon inspection. NEVER reads or prints DefaultPassword.
+function Get-SysinternalsAutologonPath {
+  $names = @("Autologon64.exe", "Autologon64a.exe", "Autologon.exe")
+  $dirs = @(
+    "C:\Sysinternals",
+    "C:\Tools",
+    "C:\Tools\Sysinternals",
+    "C:\Program Files\Sysinternals",
+    "C:\Program Files\Windows Sysinternals",
+    (Join-Path $env:SystemRoot "Sysinternals"),
+    "C:\QuantForg\tools",
+    (Join-Path $PSScriptRoot "tools")
+  )
+  foreach ($dir in $dirs) {
+    foreach ($name in $names) {
+      $p = Join-Path $dir $name
+      if (Test-Path -LiteralPath $p) { return $p }
+    }
+  }
+  return ""
+}
+
+function Get-LocalAdministratorState {
+  $result = [ordered]@{
+    Exists = $false
+    Enabled = $false
+    PasswordConfigured = $false
+    Name = "Administrator"
+  }
+  try {
+    $u = Get-LocalUser -Name "Administrator" -ErrorAction Stop
+    $result.Exists = $true
+    $result.Name = [string]$u.Name
+    $result.Enabled = [bool]$u.Enabled
+    $result.PasswordConfigured = ($null -ne $u.PasswordLastSet)
+  } catch {
+    $result.Exists = $false
+  }
+  return $result
+}
+
+# Auto-logon inspection. NEVER reads or prints DefaultPassword / LSA secret values.
+# READY when AutoAdminLogon=1 and DefaultUserName is set, including LSA-protected
+# Autologon where the Winlogon DefaultPassword value name is absent.
 function Get-AutoLogonReadiness {
   $interactive = [string]$env:USERNAME
   $result = [ordered]@{
     State = "ACTION_REQUIRED"
     Enabled = $false
     UserConfigured = $false
+    DomainConfigured = $false
     PasswordValuePresent = $false
+    SecretStorage = "none"
     DefaultUserName = ""
+    DefaultDomainName = ""
     InteractiveUser = $interactive
+    AutologonBinary = (Get-SysinternalsAutologonPath)
   }
   try {
-    $key = Get-Item "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" -ErrorAction Stop
+    $keyPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+    if (-not (Test-Path -LiteralPath $keyPath)) {
+      $result.State = "NOT_SUPPORTED"
+      return $result
+    }
+    $key = Get-Item $keyPath -ErrorAction Stop
     $auto = [string]$key.GetValue("AutoAdminLogon")
     $user = [string]$key.GetValue("DefaultUserName")
+    $domain = [string]$key.GetValue("DefaultDomainName")
     $pwdPresent = $false
     foreach ($name in @($key.GetValueNames())) {
       if ($name -eq "DefaultPassword") { $pwdPresent = $true; break }
     }
     $result.Enabled = ($auto -eq "1")
     $result.UserConfigured = -not [string]::IsNullOrWhiteSpace($user)
+    $result.DomainConfigured = -not [string]::IsNullOrWhiteSpace($domain)
     $result.PasswordValuePresent = $pwdPresent
     $result.DefaultUserName = $user
+    $result.DefaultDomainName = $domain
     if ($result.Enabled -and $result.UserConfigured) {
       $result.State = "READY"
+      if ($pwdPresent) { $result.SecretStorage = "winlogon_value_name_present" }
+      else { $result.SecretStorage = "lsa_or_external" }
+    } else {
+      $result.State = "ACTION_REQUIRED"
+      $result.SecretStorage = "none"
     }
   } catch {
-    $result.State = "ACTION_REQUIRED"
+    $result.State = "ERROR"
   }
   return $result
 }
