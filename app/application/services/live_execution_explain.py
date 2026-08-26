@@ -293,34 +293,51 @@ def build_execution_explain(cycle: dict[str, Any]) -> dict[str, Any]:
         primary_rejection = None
         primary_rejection_detail = None
     else:
-        verdict = "NO_TRADE"
-        headline = "❌ NO TRADE"
-        if first_block is not None:
-            primary_rejection = first_block["label"]
-            primary_rejection_detail = first_block["detail"]
-            # Prefer concise mission-style primary lines
-            if first_block["key"] == "mtf":
-                primary_rejection = "MTF Alignment FAILED"
-                primary_rejection_detail = "MTF Alignment FAILED"
-            elif first_block["key"] == "risk" or first_block["key"] in {
-                "quality",
-                "confluence",
-            }:
-                primary_rejection = first_block["detail"]
-                primary_rejection_detail = first_block["detail"]
-            else:
-                primary_rejection = first_block["detail"]
-                primary_rejection_detail = first_block["detail"]
-        else:
-            # Fall back to diagnostics primary label
+        if action == "WAIT":
+            verdict = "WAIT"
             rejection = _as_dict(cycle.get("rejection"))
-            primary_rejection = (
+            wait_reason = (
                 rejection.get("primary_label")
                 or rejection.get("primary")
-                or f"Action {action or 'NO_TRADE'}"
+                or "WAIT — setup not confirmed"
             )
-            primary_rejection_detail = primary_rejection
-        reasons = []
+            headline = (
+                str(wait_reason)
+                if str(wait_reason).upper().startswith("WAIT")
+                else f"WAIT — {wait_reason}"
+            )
+            primary_rejection = wait_reason
+            primary_rejection_detail = wait_reason
+            reasons = []
+        else:
+            verdict = "NO_TRADE"
+            headline = "❌ NO TRADE"
+            if first_block is not None:
+                primary_rejection = first_block["label"]
+                primary_rejection_detail = first_block["detail"]
+                # Prefer concise mission-style primary lines
+                if first_block["key"] == "mtf":
+                    primary_rejection = "MTF Alignment FAILED"
+                    primary_rejection_detail = "MTF Alignment FAILED"
+                elif first_block["key"] == "risk" or first_block["key"] in {
+                    "quality",
+                    "confluence",
+                }:
+                    primary_rejection = first_block["detail"]
+                    primary_rejection_detail = first_block["detail"]
+                else:
+                    primary_rejection = first_block["detail"]
+                    primary_rejection_detail = first_block["detail"]
+            else:
+                # Fall back to diagnostics primary label
+                rejection = _as_dict(cycle.get("rejection"))
+                primary_rejection = (
+                    rejection.get("primary_label")
+                    or rejection.get("primary")
+                    or f"Action {action or 'NO_TRADE'}"
+                )
+                primary_rejection_detail = primary_rejection
+            reasons = []
 
     return {
         "schema_version": "1.0.0",

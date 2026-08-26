@@ -71,7 +71,39 @@ def _factors(score: dict[str, Any]) -> dict[str, Any]:
     return f if isinstance(f, dict) else {}
 
 
+_WAIT_REASON_LABELS: dict[str, str] = {
+    "WAIT_NO_SNIPER_TRIGGER": "WAIT — no liquidity event or structure confirmation",
+    "WAIT_NO_LIQUIDITY": "WAIT — no liquidity event",
+    "NO_LIQUIDITY_EVENT": "WAIT — no liquidity event",
+    "WAIT_NO_STRUCTURE": "WAIT — no structure confirmation",
+    "NO_STRUCTURE_CONFIRMATION": "WAIT — no structure confirmation",
+    "WAIT_NO_DISPLACEMENT": "WAIT — no displacement",
+    "NO_DISPLACEMENT": "WAIT — no displacement",
+    "WAIT_NO_MOMENTUM": "WAIT — no momentum",
+    "NO_MOMENTUM": "WAIT — no momentum",
+    "WAIT_NO_INVALIDATION": "WAIT — invalidation invalid",
+    "INVALIDATION_INVALID": "WAIT — invalidation invalid",
+    "WAIT_INSUFFICIENT_RR": "WAIT — RR too low",
+    "RR_TOO_LOW": "WAIT — RR too low",
+    "WAIT_CHASE": "WAIT — chase detected",
+    "CHASE_DETECTED": "WAIT — chase detected",
+    "WAIT_ABNORMAL_SPREAD": "WAIT — abnormal spread",
+    "ABNORMAL_SPREAD": "WAIT — abnormal spread",
+    "WAIT_CONFLICT": "WAIT — BUY/SELL conflict",
+    "BUY_SELL_CONFLICT": "WAIT — BUY/SELL conflict",
+    "WAIT_NO_CLEAR_EDGE": "WAIT — no clear BUY/SELL edge",
+    "WAIT_STALE_DATA": "WAIT — stale data",
+    "STALE_DATA": "WAIT — stale data",
+    "WAIT_SNIPER_INCOMPLETE": "WAIT — sniper setup incomplete",
+    "SETUP_NOT_READY": "WAIT — opportunity score below threshold",
+    "OPPORTUNITY_SCORE_BELOW_THRESHOLD": "WAIT — opportunity score below threshold",
+}
+
+
 def _block_code_from_reason(reason: str | None) -> str:
+    wait_code = _wait_block_code(reason)
+    if wait_code:
+        return wait_code
     low = str(reason or "").lower()
     if _is_min_lot_constraint(reason):
         return "MIN_LOT_CONSTRAINT"
@@ -88,6 +120,98 @@ def _block_code_from_reason(reason: str | None) -> str:
     if "reconcil" in low or "unknown" in low:
         return "RECONCILIATION_REQUIRED"
     return "SAFETY_BLOCK"
+
+
+def _wait_block_code(reason: str | None) -> str | None:
+    upper = str(reason or "").upper()
+    if not upper:
+        return None
+    for code in _WAIT_REASON_LABELS:
+        if code in upper:
+            return code
+    if "OPPORTUNITY_SCORE" in upper and "THRESHOLD" in upper:
+        return "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
+    if upper.startswith("WAIT_") or " WAIT" in f" {upper}":
+        token = upper.split(";")[0].split(":")[0].strip()
+        return token or "WAIT"
+    return None
+
+
+def _is_strategy_wait(
+    *,
+    reason: str | None,
+    signal_action: str | None,
+    direction: str,
+    reject: bool,
+) -> bool:
+    if _is_min_lot_constraint(reason):
+        return False
+    action = str(signal_action or "").upper()
+    if action == "WAIT":
+        return True
+    if not reject:
+        return False
+    if _wait_block_code(reason):
+        return True
+    low = str(reason or "").lower()
+    if any(
+        token in low
+        for token in ("risk", "safety", "kill", "portfolio", "oms", "gateway")
+    ):
+        return False
+    return str(direction or "").upper() in {"BUY", "SELL"}
+
+
+def _operator_signal_reason(
+    *,
+    signal_action: str,
+    reason: str | None,
+    sniper: dict[str, Any] | None,
+) -> str:
+    action = str(signal_action or "").upper()
+    text = str(reason or "").strip()
+    upper = text.upper()
+    for code, label in _WAIT_REASON_LABELS.items():
+        if code in upper:
+            return label
+    if "OPPORTUNITY_SCORE" in upper and "THRESHOLD" in upper:
+        return "WAIT — opportunity score below threshold"
+    sniper_reasons = []
+    if isinstance(sniper, dict):
+        raw = sniper.get("reasons")
+        if isinstance(raw, (list, tuple)):
+            sniper_reasons = [str(r) for r in raw if str(r).strip()]
+    if action in {"BUY", "SELL"}:
+        last = sniper_reasons[-1] if sniper_reasons else None
+        if last:
+            return f"{action} — {last}"
+        return (
+            "BUY — sniper setup confirmed"
+            if action == "BUY"
+            else "SELL — bearish liquidity sweep + BOS"
+        )
+    if action == "WAIT":
+        if text:
+            return text if text.upper().startswith("WAIT") else f"WAIT — {text}"
+        if sniper_reasons:
+            return str(sniper_reasons[-1])
+        return "WAIT — setup not confirmed"
+    return text or action or "NO_TRADE"
+
+
+def _present(value: Any) -> bool:
+    if value is None or value == "":
+        return False
+    if isinstance(value, (list, dict, tuple)) and len(value) == 0:
+        return False
+    return True
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if _present(value):
+            return value
+    return None
 
 
 def _is_min_lot_constraint(text: str | None) -> bool:
@@ -113,11 +237,13 @@ def _execution_classification(
     reason: str | None,
     quality: int,
     confidence: int,
+    signal_action: str | None = None,
 ) -> dict[str, str | None]:
     """Map sizing blocks to Signal Center lifecycle labels.
 
     VALID_SIGNAL -> EXECUTION_BLOCKED -> MIN_LOT_CONSTRAINT when a real
     directional setup exists but broker min volume exceeds safe risk.
+    Strategy WAIT (sniper / opportunity) is not a Safety block.
     """
     min_lot = _is_min_lot_constraint(reason)
     directional = direction in {"BUY", "SELL"}
@@ -129,6 +255,20 @@ def _execution_classification(
             "block_code": "MIN_LOT_CONSTRAINT",
             "decision": direction if directional else "EXECUTION_BLOCKED",
             "status": "MIN_LOT_CONSTRAINT",
+        }
+    if _is_strategy_wait(
+        reason=reason,
+        signal_action=signal_action,
+        direction=direction,
+        reject=reject,
+    ):
+        code = _wait_block_code(reason) or "WAIT"
+        return {
+            "signal_state": "WAIT",
+            "execution_state": None,
+            "block_code": code,
+            "decision": "WAIT",
+            "status": code,
         }
     if directional and reject:
         code = _block_code_from_reason(reason)
@@ -174,16 +314,49 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
     )
     # Min-lot blocks are execution constraints, not "missing signals".
     min_lot_block = _is_min_lot_constraint(str(reason_early or ""))
-    # Keep BUY/SELL through later blockers. Relabel the block, not the direction.
-    direction_out = direction if direction in {"BUY", "SELL"} else "NONE"
+    sniper = score.get("sniper_entry") if isinstance(score.get("sniper_entry"), dict) else {}
+    signal_action = str(
+        score.get("signal_action")
+        or (sniper.get("action") if isinstance(sniper, dict) else "")
+        or ""
+    ).upper()
+    strategy_wait = _is_strategy_wait(
+        reason=str(reason_early or ""),
+        signal_action=signal_action,
+        direction=direction,
+        reject=reject,
+    )
+    if signal_action not in {"BUY", "SELL", "WAIT", "NO_TRADE"}:
+        if min_lot_block and direction in {"BUY", "SELL"}:
+            signal_action = direction
+        elif strategy_wait:
+            signal_action = "WAIT"
+        elif direction in {"BUY", "SELL"} and not reject:
+            signal_action = direction
+        elif reject:
+            signal_action = "NO_TRADE"
+        else:
+            signal_action = direction if direction in {"BUY", "SELL"} else "WAIT"
+    # Keep BUY/SELL through execution blockers. Strategy WAIT is the operator signal.
+    if min_lot_block and direction in {"BUY", "SELL"}:
+        direction_out = direction
+    elif strategy_wait:
+        direction_out = "WAIT"
+    else:
+        direction_out = direction if direction in {"BUY", "SELL"} else "NONE"
     badge = _signal_badge(
         direction=direction_out,
         quality=quality,
         confidence=confidence,
-        reject=False if direction_out in {"BUY", "SELL"} else reject,
+        reject=False if direction_out in {"BUY", "SELL", "WAIT"} else reject,
     )
-    if (min_lot_block or reject) and direction_out in {"BUY", "SELL"}:
+    if min_lot_block and direction in {"BUY", "SELL"}:
+        badge = f"{direction} BLOCKED"
+    elif strategy_wait:
+        badge = "WAIT"
+    elif reject and direction_out in {"BUY", "SELL"}:
         badge = f"{direction_out} BLOCKED"
+    indicators = score.get("indicators") if isinstance(score.get("indicators"), dict) else {}
     momentum = int(
         score.get("momentum")
         or factors.get("momentum")
@@ -192,6 +365,7 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
     )
     structure = int(
         score.get("structure")
+        or score.get("structure_score")
         or factors.get("structure")
         or factors.get("structure_score")
         or 0
@@ -203,22 +377,52 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         or score.get("mtf_alignment")
         or "—"
     )
-    atr = score.get("atr") or factors.get("atr")
-    spread = score.get("spread") or factors.get("spread")
-    liquidity = score.get("liquidity") or factors.get("liquidity") or factors.get(
-        "liquidity_sweep"
+    atr = _first_present(
+        score.get("atr"),
+        factors.get("atr"),
+        score.get("atr_pct"),
+        indicators.get("atr"),
+    )
+    spread = _first_present(
+        score.get("spread"),
+        factors.get("spread"),
+        score.get("spread_score"),
+        indicators.get("spread"),
+    )
+    liquidity = _first_present(
+        score.get("liquidity"),
+        factors.get("liquidity"),
+        factors.get("liquidity_sweep"),
     )
     risk = score.get("risk") or factors.get("risk") or score.get("risk_pct")
-    rr = score.get("rr") or score.get("reward_risk") or factors.get("rr")
-    hold = score.get("expected_hold") or score.get("hold_minutes") or factors.get(
-        "expected_hold"
+    rr = _first_present(
+        score.get("rr"),
+        score.get("expected_rr"),
+        score.get("reward_risk"),
+        factors.get("rr"),
     )
-    price = score.get("price") or score.get("mid") or score.get("bid") or score.get("ask")
+    hold = score.get("expected_hold") or score.get("expected_hold_time") or score.get(
+        "hold_minutes"
+    ) or factors.get("expected_hold")
+    price = _first_present(
+        score.get("price"),
+        score.get("mid"),
+        score.get("bid"),
+        score.get("ask"),
+        indicators.get("mid"),
+        indicators.get("bid"),
+    )
     reason = score.get("reject_reason") or score.get("reason") or score.get("summary")
+    operator_reason = _operator_signal_reason(
+        signal_action=direction_out if direction_out in {"BUY", "SELL", "WAIT"} else signal_action,
+        reason=str(reason or reason_early or ""),
+        sniper=sniper if isinstance(sniper, dict) else None,
+    )
     explanation = (
         score.get("ai_explanation")
         or score.get("explanation")
         or score.get("reasoning")
+        or operator_reason
         or reason
     )
     exec_cls = _execution_classification(
@@ -227,7 +431,12 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         reason=str(reason or reason_early or ""),
         quality=quality,
         confidence=confidence,
+        signal_action=signal_action,
     )
+    buy_score = int(score.get("buy_score") or score.get("bullish_score") or 0)
+    sell_score = int(score.get("sell_score") or score.get("bearish_score") or 0)
+    opportunity_score = score.get("opportunity_score")
+    confluence = score.get("confluence")
     detail = {
         "structure": structure,
         "bos": factors.get("bos") or score.get("bos"),
@@ -240,6 +449,18 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "atr": atr,
         "spread": spread,
         "risk": risk,
+        "bid": score.get("bid"),
+        "ask": score.get("ask"),
+        "tick_time": score.get("tick_time") or score.get("server_time"),
+        "quote_age_seconds": score.get("quote_age_seconds"),
+        "bullish_score": buy_score,
+        "bearish_score": sell_score,
+        "opportunity_score": opportunity_score,
+        "ai_confidence": confidence,
+        "confluence": confluence,
+        "bias": direction if direction in {"BUY", "SELL"} else None,
+        "signal_action": signal_action,
+        "sniper": sniper,
         "why_buy": score.get("why_buy") or factors.get("why_buy"),
         "why_sell": score.get("why_sell") or factors.get("why_sell"),
         "why_no_trade": reason if reject else score.get("why_no_trade"),
@@ -283,8 +504,9 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         or score.get("strategy")
         or "scalping",
         "probability": probability,
-        "reasoning": str(reason or explanation or "")[:500] or None,
-        "ai_explanation": str(explanation or reason or "")[:2000] or None,
+        "reasoning": str(operator_reason or reason or explanation or "")[:500] or None,
+        "ai_explanation": str(explanation or operator_reason or reason or "")[:2000]
+        or None,
         "reject": reject,
         "test_synthetic": test_synthetic,
         "signal_id": signal_id,
@@ -293,6 +515,10 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "block_code": exec_cls["block_code"],
         "decision": exec_cls["decision"],
         "status": exec_cls["status"],
+        "bullish_score": buy_score,
+        "bearish_score": sell_score,
+        "opportunity_score": opportunity_score,
+        "confluence": confluence,
         "detail": detail,
         "gauges": {
             "confidence": confidence,
@@ -303,24 +529,52 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
     }
 
 
+def _merge_score_row(prev: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(prev)
+    for key, value in incoming.items():
+        if not _present(value):
+            continue
+        if not _present(merged.get(key)):
+            merged[key] = value
+            continue
+        if key in {"trade_quality", "quality", "ai_confidence", "confidence"}:
+            try:
+                if int(value) >= int(merged.get(key) or 0):
+                    merged[key] = value
+            except (TypeError, ValueError):
+                merged[key] = value
+            continue
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            nested = dict(merged[key])
+            nested.update({k: v for k, v in value.items() if _present(v)})
+            merged[key] = nested
+            continue
+        if isinstance(value, list) and isinstance(merged.get(key), list):
+            if len(value) >= len(merged[key]):
+                merged[key] = value
+            continue
+        merged[key] = value
+    return merged
+
+
 def _scores_from_scan(scan: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for key in ("rows", "noc_rows", "ranked", "scores"):
+    # Slim NOC rows first; richer portfolio/score rows overlay missing fields.
+    for key in ("noc_rows", "ranked", "rows", "scores", "opportunity_ranked"):
         block = scan.get(key)
         if isinstance(block, list):
             for item in block:
                 if isinstance(item, dict) and item.get("symbol"):
                     rows.append(item)
-    # Dedupe by symbol keeping highest quality
     best: dict[str, dict[str, Any]] = {}
     for row in rows:
         sym = str(row.get("symbol") or "").upper()
         if not sym:
             continue
-        q = int(row.get("trade_quality") or row.get("quality") or 0)
+        incoming = dict(row)
+        incoming["symbol"] = sym
         prev = best.get(sym)
-        if prev is None or q >= int(prev.get("trade_quality") or prev.get("quality") or 0):
-            best[sym] = row
+        best[sym] = incoming if prev is None else _merge_score_row(prev, incoming)
     return list(best.values())
 
 
@@ -463,7 +717,11 @@ def list_live_signals(
 
     buy_n = sum(1 for s in signals if s["direction"] == "BUY")
     sell_n = sum(1 for s in signals if s["direction"] == "SELL")
-    wait_n = sum(1 for s in signals if s["badge"] == "WAIT")
+    wait_n = sum(
+        1
+        for s in signals
+        if s["direction"] == "WAIT" or str(s.get("badge") or "") == "WAIT"
+    )
     none_n = sum(1 for s in signals if s["badge"] == "No Trade")
     confs = [int(s["confidence"]) for s in signals if s.get("confidence") is not None]
     quals = [int(s["quality"]) for s in signals if s.get("quality") is not None]

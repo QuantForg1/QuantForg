@@ -17,6 +17,7 @@ import {
   isAllowedTradingSymbol,
   isAutonomousExecutionSymbol,
   resolveTradingSymbol,
+  displayTradingSymbol,
 } from "./gold-only.ts";
 
 assert.equal(MULTI_SYMBOL_ENABLED, false);
@@ -55,5 +56,9 @@ assert.deepEqual(
   filtered.map((r) => String(r.code ?? r.symbol)),
   ["XAUUSD_i"],
 );
+
+assert.equal(displayTradingSymbol("XAUUSD_i"), AUTONOMOUS_BADGE);
+assert.equal(displayTradingSymbol("XAUUSD_I"), AUTONOMOUS_BADGE);
+assert.equal(displayTradingSymbol("XAUUSD"), AUTONOMOUS_BADGE);
 
 console.log("gold-only.test.ts ok");

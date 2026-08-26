@@ -146,6 +146,14 @@ export function filterTradingSymbolRecords<T extends Record<string, unknown>>(
 
 export const DEFAULT_WATCHLIST_SYMBOLS = [TRADING_SYMBOL] as const;
 
+/** Operator-facing catalogue label. Wire/API symbol stays XAUUSD_i. */
+export function displayTradingSymbol(symbol: string): string {
+  const raw = (symbol || "").trim();
+  if (!raw) return "—";
+  if (isGoldSymbol(raw)) return AUTONOMOUS_BADGE;
+  return raw;
+}
+
 /** MT5 XAUUSD contract specs used by client-side sizing / display. */
 export const XAUUSD_SPECS = {
   symbol: WELTRADE_XAUUSD,

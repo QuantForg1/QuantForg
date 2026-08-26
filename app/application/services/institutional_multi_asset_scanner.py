@@ -72,6 +72,125 @@ def _store_last_scan(payload: dict[str, Any]) -> None:
         _LAST_SCAN = dict(payload)
 
 
+def _as_text(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    return str(value)
+
+
+def _quote_fields_from_context(ctx: Any, account: Any) -> dict[str, Any]:
+    """Attach live quote facts already fetched for scoring — never invented."""
+    diag = dict(getattr(ctx, "diagnostics", None) or {})
+    bid = getattr(account, "bid", None) or diag.get("bid")
+    ask = getattr(account, "ask", None) or diag.get("ask")
+    spread = getattr(ctx, "spread", None) or diag.get("spread")
+    atr = getattr(account, "atr", None)
+    mid = getattr(account, "mid_price", None)
+    return {
+        "bid": _as_text(bid),
+        "ask": _as_text(ask),
+        "spread": _as_text(spread),
+        "atr": _as_text(atr),
+        "mid": _as_text(mid),
+        "price": _as_text(mid or bid),
+        "quote_age_seconds": getattr(account, "quote_age_seconds", None)
+        or diag.get("quote_age_seconds"),
+        "tick_time": diag.get("server_time"),
+        "market_data_live": bool(getattr(ctx, "market_data_live", False)),
+    }
+
+
+def _publish_scan_observation(payload: dict[str, Any]) -> None:
+    """Persist WAIT/BUY/SELL observation without fabricating signals."""
+    try:
+        from app.application.services.signal_intelligence_service import (
+            observe_live_scan,
+        )
+
+        observe_live_scan()
+    except Exception:
+        logger.exception("scan_signal_history_observe_failed")
+    try:
+        from app.application.services.strategy_diagnostics import (
+            get_strategy_diagnostics_store,
+        )
+
+        scored = []
+        for key in ("rows", "ranked", "noc_rows", "opportunity_ranked"):
+            block = payload.get(key)
+            if isinstance(block, list):
+                scored.extend([r for r in block if isinstance(r, dict) and r.get("symbol")])
+        row = scored[0] if scored else {}
+        action = str(row.get("signal_action") or "").upper()
+        if action not in {"WAIT", "NO_TRADE"}:
+            # Eligible BUY/SELL is recorded by the ITE cycle, not the scanner.
+            if not row.get("reject"):
+                return
+            action = "WAIT"
+        reasons = row.get("reject_reasons")
+        if not isinstance(reasons, (list, tuple)):
+            reasons = [row.get("reject_reason")] if row.get("reject_reason") else []
+        get_strategy_diagnostics_store().record_from_artefacts(
+            snapshot=None,
+            decision=None,
+            cycle_outcome="wait" if action == "WAIT" else "no_trade",
+            decision_action=action,
+            abort_reason=str(
+                payload.get("first_blocking_gate")
+                or row.get("reject_reason")
+                or row.get("blocking_gate")
+                or action
+            ),
+            decision_reasons=tuple(str(r) for r in reasons if r),
+            market_context_diagnostics={
+                "symbol": row.get("symbol"),
+                "bid": row.get("bid"),
+                "ask": row.get("ask"),
+                "spread": row.get("spread"),
+                "atr": row.get("atr") or row.get("atr_pct"),
+                "bullish_score": row.get("buy_score") or row.get("bullish_score"),
+                "bearish_score": row.get("sell_score") or row.get("bearish_score"),
+                "opportunity_score": row.get("opportunity_score"),
+                "ai_confidence": row.get("ai_confidence") or row.get("confidence"),
+                "confluence": row.get("confluence"),
+                "decision": action,
+                "blocking_gate": payload.get("first_blocking_gate")
+                or row.get("reject_reason"),
+            },
+            forwarded_to_oms=False,
+        )
+    except Exception:
+        logger.exception("scan_signal_diagnostics_observe_failed")
+
+
+def _log_scan_signal_row(payload: dict[str, Any]) -> None:
+    rows = payload.get("rows") or payload.get("ranked") or payload.get("noc_rows") or []
+    row = next((r for r in rows if isinstance(r, dict) and r.get("symbol")), None)
+    if not isinstance(row, dict):
+        return
+    sniper = row.get("sniper_entry") if isinstance(row.get("sniper_entry"), dict) else {}
+    action = str(
+        row.get("signal_action") or sniper.get("action") or row.get("direction") or "WAIT"
+    ).upper()
+    logger.warning(
+        "xauusd_signal_scan",
+        timestamp=payload.get("as_of"),
+        symbol=row.get("symbol"),
+        bid=row.get("bid"),
+        ask=row.get("ask"),
+        spread=row.get("spread"),
+        atr=row.get("atr") or row.get("atr_pct"),
+        bullish_score=row.get("buy_score") or row.get("bullish_score"),
+        bearish_score=row.get("sell_score") or row.get("bearish_score"),
+        opportunity_score=row.get("opportunity_score"),
+        ai_confidence=row.get("ai_confidence") or row.get("confidence"),
+        confluence=row.get("confluence"),
+        decision=action,
+        blocking_gate=payload.get("first_blocking_gate") or row.get("reject_reason"),
+        reason=row.get("reject_reason") or sniper.get("primary_reason"),
+    )
+
+
 def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
     """Normalize a score dict into NOC multi-asset table columns."""
     factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
@@ -84,7 +203,15 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
     confidence = int(score.get("ai_confidence") or score.get("confidence") or 0)
     reject = bool(score.get("reject"))
     direction = str(score.get("direction") or "NONE").upper()
-    decision = "NO_TRADE" if reject or direction in {"", "NONE"} else direction
+    signal_action = str(score.get("signal_action") or "").upper()
+    if signal_action in {"BUY", "SELL", "WAIT"}:
+        decision = signal_action
+    elif reject and direction in {"BUY", "SELL"}:
+        decision = "WAIT"
+    elif reject or direction in {"", "NONE"}:
+        decision = "NO_TRADE"
+    else:
+        decision = direction
     mtf = score.get("mtf_alignment")
     if mtf is None:
         mtf = factors.get("mtf") or factors.get("h1_bias")
@@ -111,6 +238,7 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         "volatility": volatility,
         "decision": decision,
         "direction": direction,
+        "signal_action": signal_action if signal_action in {"BUY", "SELL", "WAIT"} else decision,
         "blocking_gate": blocker,
         "reject": reject,
         "reject_reason": score.get("reject_reason"),
@@ -120,7 +248,21 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         "setup_family": score.get("setup_family"),
         "market_regime": score.get("market_regime") or score.get("regime"),
         "atr_pct": score.get("atr_pct"),
+        "atr": score.get("atr"),
         "spread_score": score.get("spread_score"),
+        "spread": score.get("spread"),
+        "bid": score.get("bid"),
+        "ask": score.get("ask"),
+        "mid": score.get("mid"),
+        "buy_score": score.get("buy_score") or score.get("bullish_score"),
+        "sell_score": score.get("sell_score") or score.get("bearish_score"),
+        "bullish_score": score.get("bullish_score") or score.get("buy_score"),
+        "bearish_score": score.get("bearish_score") or score.get("sell_score"),
+        "opportunity_score": score.get("opportunity_score"),
+        "confluence": score.get("confluence"),
+        "sniper_entry": score.get("sniper_entry"),
+        "tick_time": score.get("tick_time"),
+        "quote_age_seconds": score.get("quote_age_seconds"),
     }
 
 
@@ -352,6 +494,7 @@ async def score_symbol_for_scan(
         payload["mtf_alignment"] = int(
             getattr(getattr(snapshot, "trend", None), "alignment_score", 0) or 0
         )
+        payload.update(_quote_fields_from_context(ctx, account))
         return payload
     except Exception as exc:
         logger.exception("multi_asset_score_failed", symbol=code)
@@ -1184,6 +1327,8 @@ async def _run_institutional_multi_asset_scan_body(
     except Exception:
         pass
     _store_last_scan(payload)
+    _log_scan_signal_row(payload)
+    _publish_scan_observation(payload)
     logger.warning(
         "multi_asset_scan_complete",
         universe=list(universe),

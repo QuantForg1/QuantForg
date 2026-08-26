@@ -42,6 +42,15 @@ _REASON_LABELS: dict[str, str] = {
     "SAFETY_BLOCKED": "Auto-trade safety gate blocked",
     "NO_SNAPSHOT": "No market snapshot",
     "NO_MARKET_CONTEXT": "No market context",
+    "WAIT_NO_SNIPER_TRIGGER": "WAIT — no liquidity event or structure confirmation",
+    "WAIT_INSUFFICIENT_RR": "WAIT — RR too low",
+    "WAIT_CHASE": "WAIT — chase detected",
+    "WAIT_NO_INVALIDATION": "WAIT — invalidation invalid",
+    "WAIT_CONFLICT": "WAIT — BUY/SELL conflict",
+    "WAIT_ABNORMAL_SPREAD": "WAIT — abnormal spread",
+    "WAIT_STALE_DATA": "WAIT — stale data",
+    "OPPORTUNITY_SCORE_BELOW_THRESHOLD": "WAIT — opportunity score below threshold",
+    "SETUP_NOT_READY": "WAIT — opportunity score below threshold",
 }
 
 _REASON_PRIORITY: tuple[str, ...] = (
@@ -66,6 +75,8 @@ _REASON_PRIORITY: tuple[str, ...] = (
     "drawdown_elevated",
     "NO_SNAPSHOT",
     "NO_MARKET_CONTEXT",
+    "WAIT_NO_SNIPER_TRIGGER",
+    "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
 )
 
 
@@ -284,8 +295,8 @@ def extract_cycle_diagnostics(
         "SELL",
     }
     rejected = (not executed) and (
-        str(decision_action or "").upper() in {"NO_TRADE", "WATCH", ""}
-        or cycle_outcome in {"no_trade", "no_snapshot", "aborted", "shadow"}
+        str(decision_action or "").upper() in {"NO_TRADE", "WATCH", "WAIT", ""}
+        or cycle_outcome in {"no_trade", "no_snapshot", "aborted", "shadow", "wait"}
     )
 
     primary = ranked[0] if ranked else None

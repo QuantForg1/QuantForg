@@ -94,6 +94,8 @@ class AiScalpingScore:
     score_breakdown: dict[str, int] | None = None
     opportunity_eligible: bool = False
     sniper_entry: dict[str, object] | None = None
+    # Operator-facing action. Bias stays on ``direction`` (BUY/SELL lean).
+    signal_action: str = "WAIT"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -110,6 +112,7 @@ class AiScalpingScore:
             "spread_score": self.spread_score,
             "atr_pct": str(self.atr_pct) if self.atr_pct is not None else None,
             "direction": self.direction,
+            "signal_action": self.signal_action,
             "buy_score": self.buy_score,
             "sell_score": self.sell_score,
             "bullish_score": self.buy_score,
@@ -577,6 +580,14 @@ def score_scalping_setup(
         hold_hi=exec_profile.target_hold_max_minutes,
     )
 
+    lean = direction_dec.direction.value
+    if not reject and lean in {"BUY", "SELL"}:
+        signal_action = lean
+    elif lean in {"BUY", "SELL"}:
+        signal_action = "WAIT"
+    else:
+        signal_action = "NO_TRADE" if reject else "WAIT"
+
     return AiScalpingScore(
         confidence=confidence,
         trade_quality=trade_quality,
@@ -617,4 +628,5 @@ def score_scalping_setup(
         score_breakdown=dict(verdict.score_breakdown),
         opportunity_eligible=bool(verdict.eligible) and not reject,
         sniper_entry=sniper.to_dict(),
+        signal_action=signal_action,
     )

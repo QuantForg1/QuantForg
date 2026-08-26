@@ -9,6 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signalCenterApi } from "@/lib/api/endpoints";
+import {
+  formatSignalHeadline,
+  signalDirectionGlyph,
+} from "@/lib/ops/signal-display";
+import { displayTradingSymbol } from "@/lib/trading/gold-only";
 import { cn } from "@/lib/utils";
 
 type SignalRow = {
@@ -218,8 +223,11 @@ export function SignalCenterWorkspace() {
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {signals.map((s) => {
-              const buyish = s.direction === "BUY";
-              const sellish = s.direction === "SELL";
+              const glyph = signalDirectionGlyph(s.direction);
+              const buyish = glyph === "BUY";
+              const sellish = glyph === "SELL";
+              const waitish = glyph === "WAIT";
+              const headline = formatSignalHeadline(s.direction, s.reasoning);
               return (
                 <button
                   key={s.symbol}
@@ -229,12 +237,13 @@ export function SignalCenterWorkspace() {
                     "border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition-colors duration-[var(--duration-os)] hover:border-[var(--accent)]/50",
                     buyish && "border-l-2 border-l-[var(--success)]",
                     sellish && "border-l-2 border-l-[var(--danger)]",
+                    waitish && "border-l-2 border-l-[var(--warning)]",
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-mono text-lg font-semibold text-[var(--fg)]">
-                        {s.symbol}
+                        {displayTradingSymbol(s.symbol)}
                       </p>
                       <p className="mt-0.5 text-[11px] text-[var(--fg-subtle)]">
                         {s.strategy} · {s.session}
@@ -248,11 +257,12 @@ export function SignalCenterWorkspace() {
                         "font-mono text-xs uppercase",
                         buyish && "text-[var(--success)]",
                         sellish && "text-[var(--danger)]",
-                        !buyish && !sellish && "text-[var(--fg-muted)]",
+                        waitish && "text-[var(--warning)]",
+                        !buyish && !sellish && !waitish && "text-[var(--fg-muted)]",
                       )}
                       aria-hidden
                     >
-                      {buyish ? "▲ BUY" : sellish ? "▼ SELL" : "◆ NONE"}
+                      {buyish ? "▲ BUY" : sellish ? "▼ SELL" : waitish ? "◆ WAIT" : "◆ NONE"}
                     </span>
                     <span className="font-mono text-sm text-[var(--fg)]">
                       {fmt(s.current_price)}
@@ -282,9 +292,9 @@ export function SignalCenterWorkspace() {
                       </div>
                     </div>
                   </div>
-                  {s.reasoning ? (
+                  {headline ? (
                     <p className="mt-3 line-clamp-2 text-[11px] text-[var(--fg-muted)]">
-                      {s.reasoning}
+                      {headline}
                     </p>
                   ) : null}
                 </button>
@@ -312,7 +322,7 @@ export function SignalCenterWorkspace() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="font-mono text-2xl font-semibold text-[var(--fg)]">
-                  {selected.symbol}
+                  {displayTradingSymbol(selected.symbol)}
                 </h2>
                 <Badge tone={badgeTone(selected.badge)} className="mt-2">
                   {selected.badge}
@@ -364,9 +374,10 @@ export function SignalCenterWorkspace() {
                 AI explanation
               </h3>
               <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--fg-muted)]">
-                {selected.ai_explanation ||
-                  selected.reasoning ||
-                  "No explanation attached to this LIVE score."}
+                {formatSignalHeadline(
+                  selected.direction,
+                  selected.ai_explanation || selected.reasoning,
+                )}
               </p>
             </section>
 
