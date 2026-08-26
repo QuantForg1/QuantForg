@@ -341,7 +341,7 @@ if (Get-Command Get-AutoLogonReadiness -ErrorAction SilentlyContinue) {
   if ($auto.State -eq "READY") {
     Add-Check "auto_logon" "PASS" ("READY user_configured={0}" -f $auto.UserConfigured)
   } else {
-    Add-Check "auto_logon" "WARN" "ACTION_REQUIRED (operator-owned; password never printed)"
+    Add-Check "auto_logon" "WARN" "ACTION_REQUIRED (local account Domain=. ; password never printed)"
   }
 }
 

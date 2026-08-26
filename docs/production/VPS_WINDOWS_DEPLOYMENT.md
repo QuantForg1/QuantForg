@@ -217,7 +217,7 @@ powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\finalize_unattended_
 
 That script inspects health, tasks, Cloudflared, and Auto-Logon. If Auto-Logon is not READY, it launches Sysinternals Autologon (or netplwiz) **without a password argument**, waits for the dialog to close, then re-verifies.
 
-If the Autologon dialog appears, set Username=`Administrator`, Domain=`the VPS computer name`, and enter the password **only in that dialog**.
+If the Autologon dialog appears, set Username=`Administrator` and Domain=`.` (dot — local SAM). Enter the password **only in that dialog**. Do **not** set Domain to the DNS hostname (for example `US-HOST-421124`). Sysinternals Autologon validates with `LogonUser`; a DNS hostname longer than the 15-character NetBIOS limit is reported as invalid credentials even when `runas /user:HOST\Administrator` succeeds. Username must be `Administrator`, not `HOST\Administrator`. `whoami` may still show `host\administrator`.
 
 UI-only helper:
 

@@ -19,8 +19,13 @@ Write-Host ("DefaultDomainName_configured={0}" -f $info.DomainConfigured)
 if ($info.UserConfigured) {
   Write-Host ("DefaultUserName={0}" -f $info.DefaultUserName)
 }
-if ($info.DomainConfigured) {
-  Write-Host ("DefaultDomainName={0}" -f $info.DefaultDomainName)
+if ($info.LocalDomainIsDot) {
+  Write-Host "DefaultDomainName=."
+} elseif ($info.IncorrectLocalAutologonDomain) {
+  Write-Host "IncorrectLocalAutologonDomain=True"
+  Write-Host "A hostname such as US-HOST-421124 is an invalid local-account Autologon domain. Use Domain=."
+} else {
+  Write-Host "DefaultDomainName_is_local_sam_dot=False"
 }
 Write-Host ("Winlogon_secret_value_name_present={0} (contents not read)" -f $info.PasswordValuePresent)
 Write-Host ("SecretStorage={0}" -f $info.SecretStorage)
@@ -31,6 +36,10 @@ if (-not [string]::IsNullOrWhiteSpace($info.AutologonBinary)) {
 } else {
   Write-Host "AutologonBinary=not_found_in_common_paths"
 }
+Write-Host ("AccountType={0} RecommendedUsername={1} RecommendedDomain={2}" -f $info.AccountType, $info.RecommendedUsername, $info.RecommendedDomain)
+Write-Host ("IncorrectLocalAutologonDomain={0}" -f $info.IncorrectLocalAutologonDomain)
+Write-Host ""
+Write-AutologonOperatorInstructions
 Write-Host ""
 Write-Host ("AUTO_LOGON: {0}" -f $info.State)
 if ($info.State -eq "READY") {
@@ -49,6 +58,9 @@ if ($info.State -eq "ERROR") {
 }
 Write-Host "Repository scripts cannot enable Auto-Logon. Enter the password only in Sysinternals Autologon or netplwiz."
 Write-Host "Operator action required: enter the Administrator password only in the Sysinternals Autologon Windows dialog."
+if ($info.IncorrectLocalAutologonDomain) {
+  Write-Host "Current Winlogon domain is not . ; Sysinternals Autologon LogonUser rejects a hostname (for example US-HOST-421124) as invalid credentials."
+}
 Write-Host "One-command workflow:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File deploy\mt5_gateway\finalize_unattended_reboot.ps1"
 Write-Host "Do not paste the password into git, chat, or these scripts."

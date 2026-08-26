@@ -489,6 +489,81 @@ def test_open_autologon_ui_never_takes_password() -> None:
     assert "cannot enable Windows Auto-Logon" in text
     assert "param(" in text
     assert "-Password" not in text
+    assert "Write-AutologonOperatorInstructions" in text
+    assert "Set-AutologonNonSecretIdentity" in text
+    assert 'Domain=. applied' in text or "Domain=." in text
+
+
+def test_local_autologon_uses_dot_domain_not_dns_hostname() -> None:
+    host = _read("_host_recovery.ps1")
+    inspect = _read("inspect_autologon.ps1")
+    open_ui = _read("open_autologon_ui.ps1")
+    finalize = _read("finalize_unattended_reboot.ps1")
+    reboot = _read("verify_reboot_readiness.ps1")
+    verify = _read("verify_production_vps.ps1")
+    doc = (REPO / "docs" / "production" / "VPS_WINDOWS_DEPLOYMENT.md").read_text(
+        encoding="utf-8"
+    )
+    identity = host + inspect + open_ui + finalize
+    assert "Get-LocalAutologonIdentity" in host
+    assert '$AutoLogonUser = "Administrator"' in host
+    assert '$AutoLogonDomain = "."' in host
+    assert "Test-IsIncorrectLocalAutologonDomain" in host
+    assert "US-HOST-421124" in host
+    assert "invalid Autologon domain" in host
+    assert "US-HOST-421124" in inspect
+    assert "invalid local-account Autologon domain" in inspect
+    assert "Password=dialog only" in host
+    assert "Password = enter only in that dialog, then Enable." in host
+    assert "Write-AutologonOperatorInstructions" in inspect
+    assert "Write-AutologonOperatorInstructions" in finalize
+    assert "Write-AutologonOperatorInstructions" in open_ui
+    assert "Set-AutologonNonSecretIdentity" in host
+    assert "Set-AutologonNonSecretIdentity" not in inspect
+    assert 'Name "AutoAdminLogon"' not in host
+    assert 'Name "DefaultPassword"' not in host
+    assert 'GetValue("DefaultPassword")' not in identity
+    assert "New-LocalUser" not in identity
+    assert "Restart-Computer" not in identity
+    assert "order_send" not in identity.lower()
+    assert 'Username=Administrator  Domain={0}' not in identity
+    assert '-f $computer' not in identity
+    assert 'Domain   = {0}' not in open_ui
+    assert "the VPS computer name" not in doc
+    assert '$result.Enabled -and $result.UserConfigured' in host
+    assert '$result.Enabled -and $result.UserConfigured -and $result.DomainConfigured' not in host
+    assert "ACTION_REQUIRED" in inspect
+    assert "ACTION_REQUIRED" in reboot
+    assert "cannot enable Auto-Logon" in inspect
+    assert "[string]$Password" not in identity
+    assert "-Password" not in identity
+    assert "DefaultDomainName={0}" not in inspect
+    assert "LIVE ORDER SENT: NO" in finalize
+    assert "LIVE ORDER SENT: NO" in reboot
+    assert "does not reboot" in reboot.lower()
+    assert "Domain=." in verify or "Domain=." in reboot
+
+
+def test_autologon_identity_never_uses_hostname_as_domain() -> None:
+    host = _read("_host_recovery.ps1")
+    start = host.index("function Get-LocalAutologonIdentity")
+    end = host.index("# True when Winlogon DefaultDomainName")
+    body = host[start:end]
+    assert "$env:COMPUTERNAME" not in body
+    assert "US-HOST-421124" not in body
+    assert '$AutoLogonDomain = "."' in body
+    assert "$env:USERDOMAIN" not in body
+    assert "whoami" not in body
+    assert "GetValue" not in body
+    checker = host[
+        host.index("function Test-IsIncorrectLocalAutologonDomain") : host.index(
+            "function Test-AutologonDomainLooksLikeRejectedDnsHostname"
+        )
+    ]
+    assert 'if ($Domain -eq ".") { return $false }' in checker
+    assert "return $true" in checker
+
+
 
 
 def test_provider_power_attestation_is_not_bios_detection() -> None:

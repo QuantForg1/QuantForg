@@ -101,7 +101,7 @@ Write-Host ("AUTO_LOGON: {0} SecretStorage={1}" -f $auto.State, $auto.SecretStor
 if ($auto.State -ne "READY" -and -not $SkipUi) {
   Write-Host ""
   Write-Host "Operator action required: enter the Administrator password only in the Sysinternals Autologon Windows dialog."
-  Write-Host ("Username=Administrator  Domain={0}  Password=dialog only" -f $env:COMPUTERNAME)
+  Write-AutologonOperatorInstructions
   $ui = Join-Path $PSScriptRoot "open_autologon_ui.ps1"
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ui -LaunchUi -Wait
   $auto = Get-AutoLogonReadiness
@@ -132,7 +132,7 @@ Write-Host ("REBOOT READINESS: {0}" -f $(if ($rebootReady) { "READY" } else { "A
 Write-Host ("PUBLIC TUNNEL HEALTHY: {0}" -f $(if ($publicOk) { "YES" } else { "NO" }))
 Write-Host ("LIVE ORDER SENT: NO")
 if ($auto.State -ne "READY") {
-  Write-Host "Remaining operator action: complete Autologon/netplwiz password entry in the Windows dialog only."
+  Write-Host "Remaining operator action: in Autologon set Username=Administrator Domain=. and enter the password only in that dialog."
 }
 if ($provider.State -ne "READY") {
   Write-Host "Remaining operator action: attest provider power recovery after confirming the VPS panel."

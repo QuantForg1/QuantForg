@@ -143,11 +143,66 @@ function Get-LocalAdministratorState {
   return $result
 }
 
+# Local SAM Autologon identity. Never returns a password.
+# Domain must be "." for local Administrator. DNS hostnames (example: US-HOST-421124)
+# are invalid Autologon domains and make Sysinternals Autologon report invalid credentials.
+function Get-LocalAutologonIdentity {
+  $AutoLogonUser = "Administrator"
+  $AutoLogonDomain = "."
+  return [ordered]@{
+    Username = $AutoLogonUser
+    Domain = $AutoLogonDomain
+    AccountType = "local"
+  }
+}
+
+# True when Winlogon DefaultDomainName is set to something other than local SAM ".".
+# US-HOST-421124 and any other hostname/NetBIOS/USERDOMAIN value is incorrect for local Administrator.
+function Test-IsIncorrectLocalAutologonDomain {
+  param([string]$Domain)
+  if ([string]::IsNullOrWhiteSpace($Domain)) { return $false }
+  if ($Domain -eq ".") { return $false }
+  return $true
+}
+
+function Test-AutologonDomainLooksLikeRejectedDnsHostname {
+  param([string]$Domain)
+  return (Test-IsIncorrectLocalAutologonDomain -Domain $Domain)
+}
+
+# Writes only non-secret Winlogon identity. Never writes AutoAdminLogon or DefaultPassword.
+function Set-AutologonNonSecretIdentity {
+  $AutoLogonUser = "Administrator"
+  $AutoLogonDomain = "."
+  $keyPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+  if (-not (Test-Path -LiteralPath $keyPath)) { return $false }
+  try {
+    Set-ItemProperty -LiteralPath $keyPath -Name "DefaultUserName" -Value $AutoLogonUser -Type String -ErrorAction Stop
+    Set-ItemProperty -LiteralPath $keyPath -Name "DefaultDomainName" -Value $AutoLogonDomain -Type String -ErrorAction Stop
+    return $true
+  } catch {
+    return $false
+  }
+}
+
+function Write-AutologonOperatorInstructions {
+  $AutoLogonUser = "Administrator"
+  $AutoLogonDomain = "."
+  Write-Host ("Username={0}" -f $AutoLogonUser)
+  Write-Host ("Domain={0}" -f $AutoLogonDomain)
+  Write-Host "Password=dialog only"
+  Write-Host ("Username = {0}" -f $AutoLogonUser)
+  Write-Host ("Domain   = {0}" -f $AutoLogonDomain)
+  Write-Host "Password = enter only in that dialog, then Enable."
+}
+
 # Auto-logon inspection. NEVER reads or prints DefaultPassword / LSA secret values.
 # READY when AutoAdminLogon=1 and DefaultUserName is set, including LSA-protected
 # Autologon where the Winlogon DefaultPassword value name is absent.
+# Domain="." is a valid local-account DefaultDomainName and is not ACTION_REQUIRED.
 function Get-AutoLogonReadiness {
   $interactive = [string]$env:USERNAME
+  $identity = Get-LocalAutologonIdentity
   $result = [ordered]@{
     State = "ACTION_REQUIRED"
     Enabled = $false
@@ -159,6 +214,11 @@ function Get-AutoLogonReadiness {
     DefaultDomainName = ""
     InteractiveUser = $interactive
     AutologonBinary = (Get-SysinternalsAutologonPath)
+    RecommendedUsername = $identity.Username
+    RecommendedDomain = $identity.Domain
+    AccountType = $identity.AccountType
+    IncorrectLocalAutologonDomain = $false
+    LocalDomainIsDot = $false
   }
   try {
     $keyPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
@@ -180,6 +240,8 @@ function Get-AutoLogonReadiness {
     $result.PasswordValuePresent = $pwdPresent
     $result.DefaultUserName = $user
     $result.DefaultDomainName = $domain
+    $result.LocalDomainIsDot = ($domain -eq ".")
+    $result.IncorrectLocalAutologonDomain = (Test-IsIncorrectLocalAutologonDomain -Domain $domain)
     if ($result.Enabled -and $result.UserConfigured) {
       $result.State = "READY"
       if ($pwdPresent) { $result.SecretStorage = "winlogon_value_name_present" }

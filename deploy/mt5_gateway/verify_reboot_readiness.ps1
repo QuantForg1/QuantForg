@@ -53,7 +53,7 @@ $auto = Get-AutoLogonReadiness
 if ($auto.State -eq "READY") {
   Add-Check "auto_logon" "PASS" ("READY user_configured={0} interactive={1}" -f $auto.UserConfigured, $auto.InteractiveUser)
 } else {
-  Add-Check "auto_logon" "WARN" "ACTION_REQUIRED (software cannot enable Auto-Logon; use open_autologon_ui.ps1 -LaunchUi)"
+  Add-Check "auto_logon" "WARN" "ACTION_REQUIRED (local account Domain=. not DNS hostname; use open_autologon_ui.ps1 -LaunchUi)"
 }
 
 $provider = Get-ProviderPowerReadiness
