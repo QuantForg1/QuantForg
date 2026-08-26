@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.config import (
@@ -31,6 +32,8 @@ class DirectionDecision:
             "reasons": list(self.reasons),
             "structure_score": self.structure_score,
             "factors": dict(self.factors),
+            "bullish_score": self.buy_score,
+            "bearish_score": self.sell_score,
             "never_prefer_buy_only": True,
         }
 
@@ -117,7 +120,8 @@ def decide_scalping_direction(
 
     # Liquidity sweeps — typically fade into opposite / continue with bias
     liq = snapshot.liquidity
-    sweeps = list(getattr(liq, "sweeps", ()) or ()) if liq else []
+    raw_sweeps = getattr(liq, "sweeps", None) if liq else None
+    sweeps = list(raw_sweeps) if isinstance(raw_sweeps, (list, tuple)) else []
     factors["liquidity_sweep"] = min(20, len(sweeps) * 8)
     for sw in sweeps[-2:]:
         side_raw = str(
@@ -131,10 +135,23 @@ def decide_scalping_direction(
             sell += 10
             reasons.append("Liquidity sweep of highs → SELL bias")
 
+    eq_highs = getattr(liq, "equal_highs", None) if liq else None
+    eq_lows = getattr(liq, "equal_lows", None) if liq else None
+    if isinstance(eq_highs, (list, tuple)) and eq_highs:
+        sell += 8
+        reasons.append("Equal highs — bearish liquidity")
+        factors["equal_highs"] = 8
+    if isinstance(eq_lows, (list, tuple)) and eq_lows:
+        buy += 8
+        reasons.append("Equal lows — bullish liquidity")
+        factors["equal_lows"] = 8
+
     # Order blocks
     ob = snapshot.order_blocks
-    if ob:
-        for b in list(getattr(ob, "order_blocks", ()) or ())[:5]:
+    raw_obs = getattr(ob, "order_blocks", None) if ob else None
+    obs = list(raw_obs) if isinstance(raw_obs, (list, tuple)) else []
+    if obs:
+        for b in obs[:5]:
             state = str(getattr(getattr(b, "state", None), "value", b.state)).lower()
             if state not in {"active", "validated"}:
                 continue
@@ -147,11 +164,25 @@ def decide_scalping_direction(
             elif "SELL" in bias or "BEAR" in bias:
                 sell += 8
                 reasons.append("Active bearish order block")
+            quality = getattr(b, "quality", None)
+            ratio = getattr(quality, "displacement_ratio", None) if quality else None
+            try:
+                disp = Decimal(str(getattr(ratio, "value", ratio)))
+            except (TypeError, ValueError, ArithmeticError):
+                disp = Decimal("0")
+            if ratio is not None and disp >= Decimal("1.5"):
+                if "BUY" in bias or "BULL" in bias:
+                    buy += 4
+                    reasons.append("Bullish displacement")
+                elif "SELL" in bias or "BEAR" in bias:
+                    sell += 4
+                    reasons.append("Bearish displacement")
     factors["order_block"] = 8 if buy != sell else 0
 
     # FVG
     fvg = snapshot.fair_value_gaps
-    gaps = list(getattr(fvg, "active_gaps", ()) or ()) if fvg else []
+    raw_gaps = getattr(fvg, "active_gaps", None) if fvg else None
+    gaps = list(raw_gaps) if isinstance(raw_gaps, (list, tuple)) else []
     for g in gaps[:3]:
         bias = str(
             getattr(getattr(g, "bias", None), "value", getattr(g, "direction", ""))

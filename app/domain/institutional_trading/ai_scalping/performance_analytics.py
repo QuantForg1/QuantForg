@@ -168,6 +168,54 @@ def build_performance_analytics() -> dict[str, Any]:
     best_regime, worst_regime = _best_worst(regime_map)
     best_vol, worst_vol = _best_worst(by_vol)
 
+    def _direction_bucket(side: str) -> dict[str, Any]:
+        subset = [
+            r
+            for r in learning_rows
+            if str(getattr(r, "direction", "") or "").strip().upper() == side
+        ]
+        n = len(subset)
+        wins_n = sum(1 for r in subset if getattr(r, "win", False))
+        pnls_s = [_safe_float(getattr(r, "pnl", None)) for r in subset]
+        pnls_sf = [p for p in pnls_s if p is not None]
+        rr_s = [
+            _safe_float(getattr(r, "r_multiple", None))
+            for r in subset
+            if getattr(r, "r_multiple", None) is not None
+        ]
+        rr_sf = [v for v in rr_s if v is not None]
+        wins_p = [p for p in pnls_sf if p > 0]
+        losses_p = [p for p in pnls_sf if p < 0]
+        dd = None
+        if pnls_sf:
+            equity = 0.0
+            peak = 0.0
+            worst = 0.0
+            for p in pnls_sf:
+                equity += p
+                peak = max(peak, equity)
+                worst = max(worst, peak - equity)
+            dd = round(worst, 4)
+        return {
+            "opportunities": n,
+            "executions": n,
+            "win_rate": round(wins_n / n, 4) if n else None,
+            "expectancy": (round(sum(pnls_sf) / n, 4) if n and pnls_sf else None),
+            "average_r": (round(sum(rr_sf) / len(rr_sf), 4) if rr_sf else None),
+            "drawdown": dd,
+            "average_win": (round(sum(wins_p) / len(wins_p), 4) if wins_p else None),
+            "average_loss": (
+                round(sum(losses_p) / len(losses_p), 4) if losses_p else None
+            ),
+            "note": "opportunities_are_closed_trade_sample",
+        }
+
+    by_direction = {
+        "BUY": _direction_bucket("BUY"),
+        "SELL": _direction_bucket("SELL"),
+    }
+    learning_by_direction = learning_summary.get("by_direction") or {}
+
     return {
         "trades": trades,
         "wins": wins,
@@ -205,6 +253,10 @@ def build_performance_analytics() -> dict[str, Any]:
         "by_session": sess_map,
         "by_regime": regime_map,
         "by_volatility_band": by_vol,
+        "by_direction": by_direction,
+        "learning_by_direction": (
+            learning_by_direction if isinstance(learning_by_direction, dict) else {}
+        ),
         "post_trade_summary": post_summary,
         "source": "real_completed_trades_only",
         "fabricated": False,

@@ -39,6 +39,9 @@ from app.domain.institutional_trading.ai_scalping.session_intelligence import (
 from app.domain.institutional_trading.ai_scalping.setup_scanner import (
     scan_setup_families,
 )
+from app.domain.institutional_trading.ai_scalping.sniper_entry import (
+    evaluate_sniper_entry,
+)
 from app.domain.institutional_trading.ai_scalping.spread_intelligence import (
     assess_spread,
 )
@@ -90,6 +93,7 @@ class AiScalpingScore:
     score_band: str = "SETUP_NOT_READY"
     score_breakdown: dict[str, int] | None = None
     opportunity_eligible: bool = False
+    sniper_entry: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -108,6 +112,8 @@ class AiScalpingScore:
             "direction": self.direction,
             "buy_score": self.buy_score,
             "sell_score": self.sell_score,
+            "bullish_score": self.buy_score,
+            "bearish_score": self.sell_score,
             "structure_score": self.structure_score,
             "entry": self.entry,
             "stop_loss": self.stop_loss,
@@ -131,6 +137,7 @@ class AiScalpingScore:
             "score_band": self.score_band,
             "score_breakdown": dict(self.score_breakdown or {}),
             "opportunity_eligible": self.opportunity_eligible,
+            "sniper_entry": dict(self.sniper_entry or {}),
             "never_prefer_buy_only": True,
         }
 
@@ -222,7 +229,10 @@ def score_scalping_setup(
     factors["fvg"] = 80 if open_fvg else 25
 
     resolved: ResolvedThresholds = resolve_adaptive_thresholds(
-        atr, mid, config=cfg, symbol=str(symbol or getattr(snapshot, "symbol", "") or "")
+        atr,
+        mid,
+        config=cfg,
+        symbol=str(symbol or getattr(snapshot, "symbol", "") or ""),
     )
     factors["atr_expansion"] = (
         85 if resolved.band == "high" else (70 if resolved.band == "normal" else 50)
@@ -272,7 +282,7 @@ def score_scalping_setup(
             )
 
             get_live_health_monitor().record_abnormal_spread(spread_a.reason)
-        except Exception:
+        except Exception:  # noqa: S110 - optional health monitor
             pass
 
     hist = int(historical_similarity) if historical_similarity is not None else 50
@@ -356,7 +366,7 @@ def score_scalping_setup(
     # Session / spread already enter the weighted composite via factors.
     # Subtracting confidence_penalty again double-counts soft weights and
     # permanently suppressed LIVE adaptive confidence floors (verified:
-    # quality≈84–89 with confidence stuck ≈54 after -10 session penalty).
+    # quality~84-89 with confidence stuck ~54 after -10 session penalty).
     if (
         setup_scan
         and setup_scan.best
@@ -424,7 +434,9 @@ def score_scalping_setup(
     )
     # Profile-aware RR fallback — never hardcode institutional 1.4.
     _rr_fallback = cfg.fixed_tp_r if cfg.fixed_tp_r is not None else cfg.min_expected_rr
-    expected_rr = targets.expected_rr if targets.expected_rr is not None else _rr_fallback
+    expected_rr = (
+        targets.expected_rr if targets.expected_rr is not None else _rr_fallback
+    )
     if targets.reason:
         reasons.append(targets.reason)
 
@@ -503,6 +515,30 @@ def score_scalping_setup(
         f"threshold={verdict.threshold} band={verdict.score_band}"
     )
 
+    setup_dir = None
+    if setup_scan is not None and setup_scan.best is not None:
+        setup_dir = str(setup_scan.best.direction or "") or None
+    sniper = evaluate_sniper_entry(
+        snapshot,
+        direction=direction_dec,
+        mid=mid,
+        atr=atr,
+        expected_rr=expected_rr,
+        min_expected_rr=effective_min_rr,
+        stop_loss=targets.stop_loss,
+        setup_family_direction=setup_dir,
+        spread_reject=bool(spread_a.reject),
+        pa_score=int(pa.score),
+        momentum=int(factors["momentum"]),
+        min_momentum=int(cfg.min_momentum_score),
+        config=cfg,
+    )
+    reasons.extend(sniper.reasons)
+    if not sniper.passed:
+        wait_code = sniper.primary_reason or "WAIT_SNIPER"
+        reject_list.append(wait_code)
+        reasons.append(f"WAIT: {wait_code}")
+
     reject_list = list(dict.fromkeys(reject_list))
     reject = bool(reject_list)
     reject_reason = "; ".join(reject_list) if reject_list else None
@@ -579,5 +615,6 @@ def score_scalping_setup(
         opportunity_threshold=verdict.threshold,
         score_band=verdict.score_band,
         score_breakdown=dict(verdict.score_breakdown),
-        opportunity_eligible=verdict.eligible,
+        opportunity_eligible=bool(verdict.eligible) and not reject,
+        sniper_entry=sniper.to_dict(),
     )
