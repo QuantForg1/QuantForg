@@ -30,6 +30,7 @@ import { asRecord, num, str } from "@/lib/desk";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
 import {
+  AUTONOMOUS_BADGE,
   MULTI_SYMBOL_ENABLED,
   resolveTradingSymbol,
 } from "@/lib/trading/gold-only";
@@ -722,7 +723,14 @@ export const ExecutionOrderTicket = forwardRef<
                 disabled={!connected}
               />
             </div>
-          ) : null}
+          ) : (
+            <div className="space-y-1 col-span-2">
+              <Label className="text-[11px]">Symbol</Label>
+              <p className="flex h-9 items-center rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2 font-mono text-sm text-[var(--fg)]">
+                {AUTONOMOUS_BADGE}
+              </p>
+            </div>
+          )}
           <div className="space-y-1">
             <Label htmlFor="exec-type" className="text-[11px]">Type</Label>
             <select

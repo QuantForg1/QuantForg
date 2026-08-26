@@ -213,7 +213,7 @@ export function SignalCenterWorkspace() {
         ) : signals.length === 0 ? (
           <div className="border border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center text-[var(--fg-muted)]">
             No LIVE signals in the current scan window. Signals appear when the
-            institutional multi-asset scanner publishes scores — never simulated.
+            XAUUSD (Gold) scanner publishes scores — never simulated.
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

@@ -436,7 +436,7 @@ async def build_ite_cycle_market_context(
 
             if logical_symbol and not is_gold_symbol(logical_symbol):
                 return _fail(
-                    f"GOLD_ONLY_SYMBOL_REJECTED: autonomous universe is gold-only, "
+                    f"DISABLED_AUTONOMOUS_SYMBOL: autonomous universe is gold-only, "
                     f"rejected {logical_symbol}",
                     next_action="NO_EXECUTABLE_FOCUS",
                 )

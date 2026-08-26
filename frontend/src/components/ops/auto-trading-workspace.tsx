@@ -39,7 +39,12 @@ import {
   type StrategyToggleState,
 } from "@/lib/auto-trading/strategy-modules";
 import { latestSuccessfulExecution } from "@/lib/execution/ops-metrics";
-import { isGoldSymbol, TRADING_SYMBOL, WELTRADE_XAUUSD } from "@/lib/trading/gold-only";
+import {
+  AUTONOMOUS_DISPLAY,
+  isGoldSymbol,
+  TRADING_SYMBOL,
+  WELTRADE_XAUUSD,
+} from "@/lib/trading/gold-only";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { cn, formatNumber } from "@/lib/utils";
 import { LaunchReadinessPanel } from "@/components/ops/launch-readiness-panel";
@@ -473,10 +478,7 @@ export function AutoTradingWorkspace() {
         risk_per_trade_pct: String(riskPerTradePct || 1),
         max_daily_loss_pct: String(maxDailyLossPct || 3),
         max_spread: str(policy.max_spread, "2.00"),
-        allowed_symbols:
-          mode === "alpha"
-            ? ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "NAS100", "US30", "BTCUSD"]
-            : ["XAUUSD"],
+        allowed_symbols: ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
           ? asList(policy.allowed_sessions).map(String)
           : ["sydney", "tokyo", "london", "new_york", "london_ny_overlap"],
@@ -1365,7 +1367,7 @@ export function AutoTradingWorkspace() {
         ) : null}
         {goldOnlyMode ? (
           <p className="mt-2 font-mono text-[11px] text-[var(--fg-muted)]">
-            TRADING MODE: GOLD ONLY · AUTONOMOUS SYMBOL: {autonomousSymbol} ·
+            TRADING MODE: GOLD ONLY · AUTONOMOUS SYMBOL: {AUTONOMOUS_DISPLAY} ({autonomousSymbol}) ·
             AUTONOMOUS = {runState === "running" ? "RUNNING" : String(runState || "off").toUpperCase()} ·
             OTHER PAIRS: DISABLED FOR AUTONOMOUS EXECUTION · CURRENT FOCUS:{" "}
             {(() => {

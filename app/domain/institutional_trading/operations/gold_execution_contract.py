@@ -34,7 +34,11 @@ from app.domain.institutional_trading.operations.probability_selector import (
 from app.domain.institutional_trading.phase_a.market_data_firewall import (
     evaluate_market_data_firewall,
 )
-from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
+from app.domain.trading.gold_only import (
+    DISABLED_AUTONOMOUS_SYMBOL,
+    gold_only_enabled,
+    is_gold_symbol,
+)
 from app.domain.trading.xauusd_specs import MAX_LEVERAGE, MAX_SPREAD
 
 CANONICAL_GOLD = "XAUUSD_i"
@@ -274,7 +278,7 @@ def evaluate_gold_execution_contract(
     if gold_only and symbol and not is_gold_symbol(symbol):
         market_fail = _stage_fail(
             stage="MARKET",
-            code="GOLD_ONLY_SYMBOL_REJECTED",
+            code=DISABLED_AUTONOMOUS_SYMBOL,
             reason=f"Autonomous universe is [{CANONICAL_GOLD}] — rejected {raw_symbol or symbol}",
             fault_class=FaultClass.HARD_BLOCK.value,
             next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,

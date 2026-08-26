@@ -304,7 +304,7 @@ function HistoryTable({ items }: { items: unknown[] }) {
   if (!rows.length) {
     return (
       <Empty>
-        No observed LIVE signals yet. History fills when the multi-asset scan
+        No observed LIVE signals yet. History fills when the XAUUSD (Gold) scan
         publishes scores.
       </Empty>
     );

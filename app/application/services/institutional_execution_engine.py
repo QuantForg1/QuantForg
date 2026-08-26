@@ -117,7 +117,11 @@ def parse_order_intent(
     order_ticket: int = 0,
     oms_kind: str = "",
 ) -> OrderIntent:
-    from app.domain.trading.gold_only import require_xauusd
+    from app.domain.trading.gold_only import (
+        DISABLED_AUTONOMOUS_SYMBOL,
+        DisabledAutonomousSymbolError,
+        require_xauusd,
+    )
 
     try:
         symbol_u = require_xauusd(symbol)
@@ -136,6 +140,17 @@ def parse_order_intent(
             order_ticket=int(order_ticket or 0),
             oms_kind=(oms_kind or "").strip().lower(),
         )
+    except DisabledAutonomousSymbolError as exc:
+        raise ValidationError(
+            humanize_reason(str(exc)) if str(exc) else "Invalid order intent",
+            code=DISABLED_AUTONOMOUS_SYMBOL,
+            details={
+                "error": str(exc),
+                "code": DISABLED_AUTONOMOUS_SYMBOL,
+                "component": "validation.intent",
+                "symbol": symbol,
+            },
+        ) from exc
     except (ValidationError, ValueError) as exc:
         raise ValidationError(
             humanize_reason(str(exc)) if str(exc) else "Invalid order intent",

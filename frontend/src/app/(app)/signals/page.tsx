@@ -10,7 +10,7 @@ export default function SignalsPage() {
     <div>
       <PageHeader
         title="Signal Center"
-        description="LIVE institutional signals from the existing AI multi-asset scan. Never fabricated. Auto-refreshes without page reload."
+        description="LIVE institutional signals from the XAUUSD (Gold) scan. Never fabricated. Auto-refreshes without page reload."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">

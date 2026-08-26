@@ -5,21 +5,30 @@ import { ChevronDown, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { resolveTradingSymbol } from "@/lib/trading/gold-only";
+import {
+  AUTONOMOUS_BADGE,
+  AUTONOMOUS_DISPLAY,
+  AUTONOMOUS_QUICK_SYMBOLS,
+  MULTI_SYMBOL_ENABLED,
+  isAllowedTradingSymbol,
+  resolveTradingSymbol,
+} from "@/lib/trading/gold-only";
 import { WORKSPACE_FAV_KEY } from "@/components/workspace/layout-store";
 
-const QUICK_SYMBOLS = [
-  "EURUSD",
-  "GBPUSD",
-  "USDJPY",
-  "XAUUSD",
-  "BTCUSD",
-  "ETHUSD",
-  "AUDUSD",
-  "USDCAD",
-  "USDCHF",
-  "NZDUSD",
-] as const;
+const QUICK_SYMBOLS = MULTI_SYMBOL_ENABLED
+  ? ([
+      "EURUSD",
+      "GBPUSD",
+      "USDJPY",
+      "XAUUSD",
+      "BTCUSD",
+      "ETHUSD",
+      "AUDUSD",
+      "USDCAD",
+      "USDCHF",
+      "NZDUSD",
+    ] as const)
+  : AUTONOMOUS_QUICK_SYMBOLS;
 
 const RECENT_KEY = "qf.terminal.recent.symbols.v1";
 const MAX_RECENT = 8;
@@ -73,6 +82,7 @@ export const TerminalSymbolSwitcher = memo(function TerminalSymbolSwitcher({
   }, [symbol, open]);
 
   const pick = (raw: string) => {
+    if (!isAllowedTradingSymbol(raw)) return;
     const code = resolveTradingSymbol(raw);
     pushRecent(code);
     setRecent(loadList(RECENT_KEY));
@@ -104,6 +114,22 @@ export const TerminalSymbolSwitcher = memo(function TerminalSymbolSwitcher({
     if (!needle) return pool;
     return pool.filter((s) => s.includes(needle));
   }, [pool, q]);
+
+  if (!MULTI_SYMBOL_ENABLED) {
+    return (
+      <div
+        className={cn("flex min-w-0 items-center gap-2", className)}
+        title={AUTONOMOUS_DISPLAY}
+      >
+        <span className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5 font-mono text-[11px] text-[var(--fg)]">
+          {AUTONOMOUS_BADGE}
+        </span>
+        <span className="hidden text-[10px] text-[var(--fg-muted)] sm:inline">
+          {AUTONOMOUS_DISPLAY}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative flex min-w-0 items-center gap-1", className)}>

@@ -93,6 +93,7 @@ def test_execution_universe_is_exactly_xauusd_i(gold_only: None) -> None:
     diag = gold_only_diagnostics(broker_symbol_rows=WELTRADE_ROWS)
     assert diag["execution_universe"] == ["XAUUSD_i"]
     assert diag["canonical_symbol"] == CANONICAL_GOLD_BROKER_DISPLAY
+    assert diag["display_name"] == "XAUUSD (Gold)"
     assert diag["logical_symbol"] == GOLD_SYMBOL
     desks = canonical_execution_desks()
     assert desks == frozenset({GOLD_SYMBOL})
@@ -186,10 +187,65 @@ def test_closeonly_gold_does_not_select_fx(gold_only: None) -> None:
 
 
 def test_require_xauusd_preserves_broker_form(gold_only: None) -> None:
+    from app.domain.trading.gold_only import (
+        DISABLED_AUTONOMOUS_SYMBOL,
+        DisabledAutonomousSymbolError,
+    )
+
     assert require_xauusd("XAUUSD_I") == "XAUUSD_I"
     assert require_xauusd("XAUUSD_i") == "XAUUSD_I"
-    with pytest.raises(ValueError, match="XAUUSD only"):
+    with pytest.raises(DisabledAutonomousSymbolError, match="XAUUSD only") as ei:
         require_xauusd("EURUSD")
+    assert ei.value.code == DISABLED_AUTONOMOUS_SYMBOL
+
+
+@pytest.mark.parametrize(
+    "symbol",
+    ("EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD", "NAS100", "AUDUSD"),
+)
+def test_disabled_autonomous_symbols_rejected(
+    gold_only: None, symbol: str
+) -> None:
+    from app.application.services.institutional_execution_engine import (
+        parse_order_intent,
+    )
+    from app.domain.exceptions.base import ValidationError
+    from app.domain.institutional_trading.operations.gold_execution_contract import (
+        GoldExecutionFacts,
+        evaluate_gold_execution_contract,
+    )
+    from app.domain.trading.gold_only import DISABLED_AUTONOMOUS_SYMBOL
+
+    with pytest.raises(ValidationError) as ei:
+        parse_order_intent(
+            symbol=symbol,
+            side="buy",
+            order_type="market",
+            volume="0.01",
+        )
+    assert ei.value.code == DISABLED_AUTONOMOUS_SYMBOL
+    out = evaluate_gold_execution_contract(
+        GoldExecutionFacts(symbol=symbol, gold_only=True)
+    )
+    assert out.may_submit_oms is False
+    assert out.fault_code == DISABLED_AUTONOMOUS_SYMBOL
+    assert is_gold_symbol(symbol) is False
+
+
+def test_xauusd_i_accepted_for_autonomous_policy(gold_only: None) -> None:
+    from app.domain.trading.gold_only import (
+        DISABLED_AUTONOMOUS_SYMBOL,
+        is_autonomous_execution_symbol,
+    )
+
+    assert is_autonomous_execution_symbol("XAUUSD_i") is True
+    assert is_autonomous_execution_symbol("XAUUSD_I") is True
+    assert require_xauusd("XAUUSD_i") == "XAUUSD_I"
+    assert DISABLED_AUTONOMOUS_SYMBOL == "DISABLED_AUTONOMOUS_SYMBOL"
+    from app.domain.trading.gold_only import resolve_trading_symbol
+
+    assert resolve_trading_symbol("EURUSD") == "EURUSD"
+    assert resolve_trading_symbol("XAUUSD") == "XAUUSD_I"
 
 
 def test_current_scan_never_exposes_fx(gold_only: None) -> None:

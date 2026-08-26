@@ -15,7 +15,22 @@ from typing import Any
 
 GOLD_SYMBOL = "XAUUSD"
 CANONICAL_GOLD_BROKER_DISPLAY = "XAUUSD_i"
+AUTONOMOUS_DISPLAY_NAME = "XAUUSD (Gold)"
+DISABLED_AUTONOMOUS_SYMBOL = "DISABLED_AUTONOMOUS_SYMBOL"
 _BARE_GOLD_CODES = frozenset({"XAUUSD", "GOLD", "XAUUSDM"})
+
+
+class DisabledAutonomousSymbolError(ValueError):
+    """Auditable reject — never converts another desk into XAUUSD_i."""
+
+    code = DISABLED_AUTONOMOUS_SYMBOL
+
+    def __init__(self, symbol: str) -> None:
+        self.symbol = symbol
+        super().__init__(
+            f"{DISABLED_AUTONOMOUS_SYMBOL}: QuantForg trades XAUUSD only — "
+            f"rejected symbol {symbol!r}"
+        )
 
 
 def gold_only_enabled() -> bool:
@@ -178,10 +193,12 @@ def gold_only_diagnostics(
         "execution_universe_gateway": universe,
         "logical_symbol": GOLD_SYMBOL,
         "canonical_symbol": canonical,
+        "display_name": AUTONOMOUS_DISPLAY_NAME,
         "other_pairs_autonomous": "DISABLED" if enabled else "ENABLED",
         "trading_mode": "GOLD_ONLY" if enabled else "MULTI_SYMBOL",
         "rotate_focus_allowed": not enabled,
         "desk_max_leverage": desk_max,
+        "disabled_autonomous_code": DISABLED_AUTONOMOUS_SYMBOL,
     }
 
 
@@ -193,9 +210,14 @@ def resolve_trading_symbol(code: str | None = None) -> str:
     """
     raw = (code or "").strip().upper()
     if gold_only_enabled():
-        if raw and is_gold_symbol(raw) and not is_bare_gold_symbol(raw):
+        if not raw:
+            return canonical_gold_execution_symbol().upper()
+        if is_gold_symbol(raw) and not is_bare_gold_symbol(raw):
             return raw
-        return canonical_gold_execution_symbol(raw).upper()
+        if is_gold_symbol(raw):
+            return canonical_gold_execution_symbol(raw).upper()
+        # Never silently convert EURUSD/etc into XAUUSD_i (read-only pass-through).
+        return raw
     return raw or default_trading_symbol() or GOLD_SYMBOL
 
 
@@ -211,8 +233,7 @@ def require_xauusd(symbol: str) -> str:
     """
     raw = (symbol or "").strip().upper()
     if gold_only_enabled() and not is_gold_symbol(raw):
-        msg = f"QuantForg trades XAUUSD only — rejected symbol {symbol!r}"
-        raise ValueError(msg)
+        raise DisabledAutonomousSymbolError(symbol)
     if gold_only_enabled():
         if raw and is_gold_symbol(raw) and not is_bare_gold_symbol(raw):
             return raw

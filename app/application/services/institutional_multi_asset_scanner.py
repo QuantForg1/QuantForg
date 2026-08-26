@@ -282,7 +282,7 @@ async def score_symbol_for_scan(
             return {
                 "symbol": code,
                 "reject": True,
-                "reject_reason": "GOLD_ONLY_SYMBOL_REJECTED",
+                "reject_reason": "DISABLED_AUTONOMOUS_SYMBOL",
                 "direction": "NONE",
                 "ai_confidence": 0,
                 "trade_quality": 0,
@@ -506,7 +506,7 @@ async def _run_institutional_multi_asset_scan_body(
                     cleaned.append(code)
                     continue
                 logger.warning(
-                    "GOLD_ONLY_SYMBOL_REJECTED",
+                    "DISABLED_AUTONOMOUS_SYMBOL",
                     symbol=code,
                     next_action="NO_EXECUTABLE_FOCUS",
                 )

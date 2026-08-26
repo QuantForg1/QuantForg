@@ -1,8 +1,11 @@
 """Trading domain helpers — XAUUSD-only platform."""
 
 from app.domain.trading.gold_only import (
+    AUTONOMOUS_DISPLAY_NAME,
     CANONICAL_GOLD_BROKER_DISPLAY,
+    DISABLED_AUTONOMOUS_SYMBOL,
     GOLD_SYMBOL,
+    DisabledAutonomousSymbolError,
     autonomous_execution_symbols,
     default_trading_symbol,
     filter_gold_symbols,
@@ -26,7 +29,10 @@ from app.domain.trading.xauusd_specs import (
 )
 
 __all__ = [
+    "AUTONOMOUS_DISPLAY_NAME",
     "CANONICAL_GOLD_BROKER_DISPLAY",
+    "DISABLED_AUTONOMOUS_SYMBOL",
+    "DisabledAutonomousSymbolError",
     "CONTRACT_SIZE",
     "GOLD_SYMBOL",
     "MAX_LEVERAGE",

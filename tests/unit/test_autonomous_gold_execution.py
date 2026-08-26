@@ -127,7 +127,7 @@ def test_gold_only_universe_is_xauusd_i(monkeypatch: pytest.MonkeyPatch) -> None
     assert diag["execution_universe"] == ["XAUUSD_i"]
     rejected = evaluate_gold_execution_contract(_ready(symbol="EURUSD_I"))
     assert rejected.may_submit_oms is False
-    assert rejected.fault_code == "GOLD_ONLY_SYMBOL_REJECTED"
+    assert rejected.fault_code == "DISABLED_AUTONOMOUS_SYMBOL"
 
 
 @pytest.mark.unit

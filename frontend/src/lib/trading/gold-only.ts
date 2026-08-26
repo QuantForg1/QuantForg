@@ -1,11 +1,11 @@
 /**
  * Trading symbol policy for the QuantForg frontend.
  *
- * Terminal watchlist/charts may list broker symbols for manual viewing.
  * Autonomous execution is GOLD ONLY (backend ``gold_only_mode`` is
- * authoritative). Default focus remains Weltrade gold CFD ``XAUUSD_i``.
- * Order routing still goes through existing backend Risk/OMS gates — this file
- * only controls client display / API path encoding.
+ * authoritative). Canonical broker form is Weltrade ``XAUUSD_i``.
+ * Display: ``XAUUSD (Gold)``. Other desks stay DISABLED for autonomous
+ * execution. This file never silently converts EURUSD/etc into gold.
+ * Order routing still goes through existing backend Risk/OMS gates.
  */
 
 export const GOLD_SYMBOL = "XAUUSD";
@@ -13,11 +13,27 @@ export const GOLD_SYMBOL = "XAUUSD";
 /** Weltrade / institutional gold CFD — exact broker catalogue spelling. */
 export const WELTRADE_XAUUSD = "XAUUSD_i";
 
-/** Multi-asset Terminal watchlist, charts, and tickets are enabled. */
-export const MULTI_SYMBOL_ENABLED = true;
+/** Canonical autonomous execution symbol. */
+export const AUTONOMOUS_SYMBOL = WELTRADE_XAUUSD;
 
-/** Default desk focus when no symbol is selected. */
-export const TRADING_SYMBOL = MULTI_SYMBOL_ENABLED ? WELTRADE_XAUUSD : GOLD_SYMBOL;
+/** Operator-facing display. */
+export const AUTONOMOUS_DISPLAY = "XAUUSD (Gold)";
+
+/** Compact non-editable badge. */
+export const AUTONOMOUS_BADGE = "XAUUSD · GOLD";
+
+/**
+ * Multi-pair Terminal/watchlist trading is off. Read-only historical
+ * analytics may still mention other symbols; autonomous UI must not.
+ */
+export const MULTI_SYMBOL_ENABLED = false;
+
+/** Default desk focus when no symbol is selected — never unsuffixed XAUUSD. */
+export const TRADING_SYMBOL = WELTRADE_XAUUSD;
+
+export const AUTONOMOUS_QUICK_SYMBOLS = [WELTRADE_XAUUSD] as const;
+
+export const DISABLED_AUTONOMOUS_SYMBOL = "DISABLED_AUTONOMOUS_SYMBOL";
 
 const GOLD_ALIASES = new Set([
   "XAUUSD",
@@ -56,25 +72,33 @@ export function isAllowedTradingSymbol(code: string): boolean {
   return isGoldSymbol(u);
 }
 
+export function isAutonomousExecutionSymbol(code: string): boolean {
+  return isAllowedTradingSymbol(code);
+}
+
 /**
  * Resolve a user/URL symbol for API paths and Terminal state.
- * ``XAUUSD`` → ``XAUUSD_i``; never send uppercase ``XAUUSD_I`` to the gateway.
+ * Gold aliases → ``XAUUSD_i``. Never converts another desk into gold.
  */
 export function resolveTradingSymbol(code?: string | null): string {
   const raw = (code || "").trim();
   if (!raw) return TRADING_SYMBOL;
 
-  // Preserve institutional suffix as broker lowercase ``_i``.
   const inst = raw.match(/^([A-Za-z0-9.]+)[_ ]([iI])$/);
   if (inst) {
     const base = inst[1].toUpperCase().replace(/[^A-Z0-9.]/g, "");
-    return `${base}_i`;
+    const broker = `${base}_i`;
+    if (isGoldSymbol(base) || isGoldSymbol(broker)) return WELTRADE_XAUUSD;
+    return broker;
   }
 
   const n = normalizeSymbolCode(raw);
-  if (!MULTI_SYMBOL_ENABLED) return GOLD_SYMBOL;
-  if (DESK_TO_BROKER[n]) return DESK_TO_BROKER[n];
-  // Generic Weltrade institutional uppercase form → catalogue ``_i``.
+  if (DESK_TO_BROKER[n] || isGoldSymbol(raw) || isGoldSymbol(n)) {
+    return DESK_TO_BROKER[n] || WELTRADE_XAUUSD;
+  }
+  if (!MULTI_SYMBOL_ENABLED) {
+    return n || raw;
+  }
   if (n.endsWith("_I") && n.length > 2) {
     return `${n.slice(0, -2)}_i`;
   }
@@ -83,14 +107,12 @@ export function resolveTradingSymbol(code?: string | null): string {
 
 /**
  * Map a user search string to an MT5 `q` param.
- * Multi-asset: empty string lists the broker catalogue.
  * Gold-only: non-gold queries return null → empty result set.
  */
 export function goldOnlySearchQuery(q?: string): string | null {
   const raw = (q || "").trim().toUpperCase();
   if (MULTI_SYMBOL_ENABLED) {
     if (!raw) return "";
-    // Prefer broker spelling for gold searches so catalogue match succeeds.
     if (
       GOLD_SYMBOL.includes(raw) ||
       raw.includes("XAU") ||
@@ -101,14 +123,14 @@ export function goldOnlySearchQuery(q?: string): string | null {
     }
     return raw;
   }
-  if (!raw) return GOLD_SYMBOL;
+  if (!raw) return WELTRADE_XAUUSD;
   if (
     GOLD_SYMBOL.includes(raw) ||
     raw.includes("XAU") ||
     raw.includes("GOLD") ||
     isGoldSymbol(raw)
   ) {
-    return GOLD_SYMBOL;
+    return WELTRADE_XAUUSD;
   }
   return null;
 }
