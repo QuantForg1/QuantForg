@@ -174,6 +174,8 @@ class MarketAnalysisSnapshot:
     trade_quality: TradeQualityScore
     spread: Decimal | None = None
     atr: Decimal | None = None
+    # M5 scalp ATR for stop distance. ``atr`` remains the analysis/volatility ATR.
+    entry_atr: Decimal | None = None
     # Entry-TF OHLC for EMA/RSI/candle PA — empty when unavailable (never invent).
     entry_opens: tuple[float, ...] = ()
     entry_highs: tuple[float, ...] = ()
@@ -218,4 +220,5 @@ class MarketAnalysisSnapshot:
             "trade_quality": self.trade_quality.to_dict(),
             "spread": str(self.spread) if self.spread is not None else None,
             "atr": str(self.atr) if self.atr is not None else None,
+            "entry_atr": str(self.entry_atr) if self.entry_atr is not None else None,
         }

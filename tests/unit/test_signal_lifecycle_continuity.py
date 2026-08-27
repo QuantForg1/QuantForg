@@ -336,7 +336,8 @@ def test_telemetry_counts_blocked_signals() -> None:
         confidence=82,
     )
     assert cls["signal_state"] == "VALID_SIGNAL"
-    assert cls["block_code"] == "MIN_LOT_CONSTRAINT"
+    assert cls["block_code"] == "MIN_LOT_INFEASIBLE"
+    assert cls["execution_state"] == "EXECUTION_BLOCKED"
 
 
 def test_closed_lifecycle_does_not_count_as_block() -> None:

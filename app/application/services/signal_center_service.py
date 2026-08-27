@@ -218,6 +218,9 @@ def _block_code_from_reason(reason: str | None) -> str:
         return wait_code
     low = str(reason or "").lower()
     if _is_min_lot_constraint(reason):
+        upper = str(reason or "").upper()
+        if "MIN_LOT_INFEASIBLE" in upper:
+            return "MIN_LOT_INFEASIBLE"
         return "MIN_LOT_CONSTRAINT"
     if "risk" in low:
         return "RISK_BLOCK"
@@ -363,12 +366,18 @@ def _execution_classification(
     directional = direction in {"BUY", "SELL"}
     strong_enough = quality >= 70 and confidence >= 70
     if min_lot and (directional or strong_enough or reject):
+        upper = str(reason or "").upper()
+        lot_code = (
+            "MIN_LOT_INFEASIBLE"
+            if "MIN_LOT_INFEASIBLE" in upper
+            else "MIN_LOT_CONSTRAINT"
+        )
         return {
             "signal_state": "VALID_SIGNAL",
             "execution_state": "EXECUTION_BLOCKED",
-            "block_code": "MIN_LOT_CONSTRAINT",
+            "block_code": lot_code,
             "decision": direction if directional else "EXECUTION_BLOCKED",
-            "status": "MIN_LOT_CONSTRAINT",
+            "status": lot_code,
         }
     if _is_strategy_wait(
         reason=reason,
@@ -732,6 +741,7 @@ def _pipeline_snapshot(
         "SAFETY_BLOCK",
         "OMS_BLOCK",
         "MIN_LOT_CONSTRAINT",
+        "MIN_LOT_INFEASIBLE",
         "SYMBOL_ROUTING_BLOCK",
         "PORTFOLIO_BLOCK",
     }
@@ -761,13 +771,17 @@ def _pipeline_snapshot(
     safety_state = not_reached
     oms_state = not_reached
     if reached_risk:
-        if code == "RISK_BLOCK":
+        if code in {"RISK_BLOCK", "MIN_LOT_CONSTRAINT", "MIN_LOT_INFEASIBLE"}:
             risk_state = "BLOCK"
         else:
             risk_state = "READY"
         if code == "SAFETY_BLOCK":
             safety_state = "BLOCK"
-        elif code not in {"RISK_BLOCK", "MIN_LOT_CONSTRAINT"}:
+        elif code not in {
+            "RISK_BLOCK",
+            "MIN_LOT_CONSTRAINT",
+            "MIN_LOT_INFEASIBLE",
+        }:
             safety_state = "READY"
         if code == "OMS_BLOCK":
             oms_state = "BLOCK"

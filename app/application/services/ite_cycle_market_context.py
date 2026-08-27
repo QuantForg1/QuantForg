@@ -871,7 +871,7 @@ async def build_ite_cycle_market_context(
 
     atr = None
     try:
-        atr = getattr(snapshot, "atr", None)
+        atr = getattr(snapshot, "entry_atr", None) or getattr(snapshot, "atr", None)
     except Exception:
         atr = None
     atr_dec = Decimal(str(atr)) if atr is not None else None
@@ -917,10 +917,15 @@ async def build_ite_cycle_market_context(
     from decimal import ROUND_DOWN
 
     from app.domain.institutional_trading.atr import stop_distance_from_atr
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_AI_SCALPING_CONFIG,
+    )
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
     from app.domain.trading.xauusd_specs import CONTRACT_SIZE, VOLUME_MIN, VOLUME_STEP
 
-    stop_dist = stop_distance_from_atr(atr_dec)
+    stop_dist = stop_distance_from_atr(
+        atr_dec, multiplier=DEFAULT_AI_SCALPING_CONFIG.stop_atr_mult
+    )
     risk_pct = DEFAULT_ITE_CONFIG.risk_per_trade_pct
     risk_budget = (equity * (risk_pct / Decimal("100"))).quantize(Decimal("0.01"))
     contract_size = CONTRACT_SIZE

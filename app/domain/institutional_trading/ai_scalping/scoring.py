@@ -468,11 +468,12 @@ def score_scalping_setup(
             + (f" symbol={sym_key}" if sym_key else "")
         )
 
+    stop_atr = getattr(snapshot, "entry_atr", None) or atr
     targets = compute_structure_targets(
         snapshot,
         direction=direction,
         entry=mid,
-        atr=atr,
+        atr=stop_atr,
         config=cfg,
     )
     # Profile-aware RR fallback — never hardcode institutional 1.4.
@@ -659,7 +660,14 @@ def score_scalping_setup(
         ),
         quality_checks=gates.checks,
         reject_reasons=tuple(reject_list),
-        indicators=pa.indicators,
+        indicators={
+            **dict(pa.indicators or {}),
+            "stop_distance": (
+                str(targets.stop_distance) if targets.stop_distance is not None else None
+            ),
+            "stop_source": targets.stop_source,
+            "stop_atr": str(targets.stop_atr) if targets.stop_atr is not None else None,
+        },
         entry_reason=entry_reason,
         regime_execution=exec_profile.to_dict(),
         setup_family=setup_family,

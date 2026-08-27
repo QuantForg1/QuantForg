@@ -218,9 +218,13 @@ class InstitutionalAnalysisPipeline:
             spread=str(spread) if spread is not None else None,
         )
 
-        # ATR on entry confirmation TF (M15) — sizing input only; not a strategy gate.
+        # Volatility ATR on entry confirmation TF. Scalp stops prefer M5 ATR.
         entry_bars = list(self.bars.as_mapping().get(cfg.entry_confirmation_tf, []))
         atr = compute_atr(entry_bars)
+        m5_bars = list(self.bars.as_mapping().get(Timeframe.M5, []))
+        entry_atr = compute_atr(m5_bars) if cfg.is_scalping() else atr
+        if entry_atr is None:
+            entry_atr = atr
         entry_opens = tuple(float(c.open.value) for c in entry_bars)
         entry_highs = tuple(float(c.high.value) for c in entry_bars)
         entry_lows = tuple(float(c.low.value) for c in entry_bars)
@@ -242,6 +246,7 @@ class InstitutionalAnalysisPipeline:
             trade_quality=quality,
             spread=spread,
             atr=atr,
+            entry_atr=entry_atr,
             entry_opens=entry_opens,
             entry_highs=entry_highs,
             entry_lows=entry_lows,

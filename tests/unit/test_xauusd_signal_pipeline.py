@@ -357,6 +357,34 @@ def test_risk_and_min_lot_blocks_keep_buy_direction() -> None:
     )
     assert lot["direction"] == "BUY"
     assert lot["block_code"] == "MIN_LOT_CONSTRAINT"
+    assert lot["pipeline"]["risk"] == "BLOCK"
+    assert lot["pipeline"]["safety"] == "NOT_REACHED"
+    assert lot["pipeline"]["oms"] == "NOT_REACHED"
+
+    infeas = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "SELL",
+            "signal_action": "WAIT",
+            "trade_quality": 66,
+            "ai_confidence": 56,
+            "reject": True,
+            "reject_reason": (
+                "MIN_LOT_INFEASIBLE; MIN_LOT_CONSTRAINT: strategy-approved stop "
+                "11.90825 exceeds max_allowed_stop_at_min_lot 6.995"
+            ),
+            "opportunity_score": 72,
+            "opportunity_threshold": 70,
+            "sniper_entry": {"passed": True, "action": "SELL", "setup_state": "TAKE"},
+        }
+    )
+    assert infeas["block_code"] == "MIN_LOT_INFEASIBLE"
+    assert infeas["first_blocker"] == "MIN_LOT_INFEASIBLE"
+    assert infeas["pipeline"]["opportunity_gate"] == "PASS"
+    assert infeas["pipeline"]["sniper"] == "READY"
+    assert infeas["pipeline"]["risk"] == "BLOCK"
+    assert infeas["pipeline"]["safety"] == "NOT_REACHED"
+    assert infeas["pipeline"]["oms"] == "NOT_REACHED"
 
 
 def test_valid_buy_and_sell_rows_render_as_signals() -> None:

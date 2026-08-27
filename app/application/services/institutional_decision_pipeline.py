@@ -384,12 +384,13 @@ class InstitutionalDecisionPipeline:
             side = "none"
 
         stop_mult = Decimal("1.10") if cfg.is_scalping() else Decimal("1.5")
-        atr_stop = account.atr * stop_mult if account.atr else None
+        stop_atr = getattr(snapshot, "entry_atr", None) or account.atr
+        if stop_atr is None or stop_atr <= 0:
+            stop_atr = account.atr
+        atr_stop = stop_atr * stop_mult if stop_atr else None
         stop_distance = atr_stop
-        # Structure-based stop distance when AI computed one — but never let a
-        # farthest-swing SL (tens of points) replace ATR stop on micro equity:
-        # that path made RiskEngine reject min_lot via hard_max while diagnostics
-        # still showed the ATR stop (~7–8 pts). Cap at 2.5×ATR for sizing.
+        # Prefer a tighter legitimate invalidation. Never replace ATR with a
+        # wider M15/H1 swing that blows micro min-lot (live: 11.91 vs 6.995).
         if ai_score is not None and self._last_ai_score:
             raw_sd = self._last_ai_score.get("stop_loss")
             entry_s = self._last_ai_score.get("entry")
@@ -397,29 +398,33 @@ class InstitutionalDecisionPipeline:
                 if raw_sd and entry_s and account.mid_price:
                     from decimal import Decimal as _D
 
-                    sd = abs(_D(str(entry_s)) - _D(str(raw_sd)))
-                    max_sd = (
-                        (account.atr * Decimal("2.5"))
-                        if account.atr and account.atr > 0
-                        else None
+                    from app.domain.institutional_trading.ai_scalping.structure_targets import (
+                        select_scalp_stop_distance,
                     )
-                    if sd > 0 and (max_sd is None or sd <= max_sd):
-                        stop_distance = sd
-                    elif sd > 0 and max_sd is not None and atr_stop is not None:
-                        logger.warning(
-                            "ai_structure_stop_capped_to_atr",
-                            file=(
-                                "app/application/services/"
-                                "institutional_decision_pipeline.py"
-                            ),
-                            function="InstitutionalDecisionPipeline.decide",
-                            symbol=str(snapshot.symbol),
-                            ai_stop_distance=str(sd),
-                            atr_stop=str(atr_stop),
-                            max_structure_stop=str(max_sd),
-                            condition="ai_stop_distance > atr * 2.5",
-                        )
-                        stop_distance = atr_stop
+
+                    sd = abs(_D(str(entry_s)) - _D(str(raw_sd)))
+                    chosen, source = select_scalp_stop_distance(
+                        structure_distance=sd if sd > 0 else None,
+                        atr=stop_atr,
+                        stop_atr_mult=stop_mult,
+                    )
+                    if chosen is not None and chosen > 0:
+                        if source == "atr_cap":
+                            logger.warning(
+                                "ai_structure_stop_capped_to_atr",
+                                file=(
+                                    "app/application/services/"
+                                    "institutional_decision_pipeline.py"
+                                ),
+                                function="InstitutionalDecisionPipeline.decide",
+                                symbol=str(snapshot.symbol),
+                                ai_stop_distance=str(sd),
+                                atr_stop=str(atr_stop),
+                                chosen_stop=str(chosen),
+                                stop_source=source,
+                                condition="ai_stop_distance > atr * stop_mult",
+                            )
+                        stop_distance = chosen
             except Exception:  # noqa: S110  # best-effort optional path
                 pass
         logger.info(
@@ -428,6 +433,7 @@ class InstitutionalDecisionPipeline:
             side=side,
             stop_distance=str(stop_distance) if stop_distance is not None else None,
             atr=str(account.atr) if account.atr is not None else None,
+            stop_atr=str(stop_atr) if stop_atr is not None else None,
             atr_stop=str(atr_stop) if atr_stop is not None else None,
         )
         entry = account.mid_price

@@ -304,6 +304,105 @@ def test_structure_sl_caps_wide_stop_to_atr() -> None:
 
 
 @pytest.mark.unit
+def test_scalp_stop_caps_live_min_lot_width_to_entry_atr() -> None:
+    """Live blocker: 11.91 stop vs max 6.995 at 0.01 lot / 5% hard max.
+
+    M15 swing invalidation must not replace M5 ATR×1.10 when it blows min-lot.
+    """
+    from types import SimpleNamespace
+
+    from app.domain.institutional_trading.ai_scalping.structure_targets import (
+        select_scalp_stop_distance,
+    )
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        evaluate_min_lot_feasibility,
+    )
+
+    snap = _snap()
+    snap.primary_structure = SimpleNamespace(
+        last_swing_low=None,
+        last_swing_high=Decimal("4605.74"),
+        swings=(),
+    )
+    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.20"), stop_atr_mult=Decimal("1.10"))
+    entry = Decimal("4593.83")
+    atr = Decimal("5.61")
+    targets = compute_structure_targets(
+        snap,
+        direction=TradeDirection.SELL,
+        entry=entry,
+        atr=atr,
+        config=cfg,
+    )
+    cap = (atr * Decimal("1.10")).quantize(Decimal("0.0001"))
+    assert targets.stop_distance is not None
+    assert targets.stop_distance <= atr * Decimal("1.10")
+    assert targets.stop_source == "atr_cap"
+    feasible = evaluate_min_lot_feasibility(
+        stop_distance=targets.stop_distance,
+        equity=Decimal("139.90"),
+        min_lot=Decimal("0.01"),
+        contract_size=Decimal("100"),
+        hard_max_risk_pct=Decimal("5.0"),
+    )
+    assert feasible.infeasible is False
+
+    wide = select_scalp_stop_distance(
+        structure_distance=Decimal("11.90825"),
+        atr=atr,
+        stop_atr_mult=Decimal("1.10"),
+    )
+    assert wide[0] == atr * Decimal("1.10")
+    assert wide[1] == "atr_cap"
+    assert cap == atr * Decimal("1.10")
+
+
+@pytest.mark.unit
+def test_fvg_zone_is_preferred_invalidation_when_tighter_than_swing() -> None:
+    from types import SimpleNamespace
+
+    snap = _snap()
+    snap.primary_structure = SimpleNamespace(
+        last_swing_low=None,
+        last_swing_high=Decimal("4648"),
+        swings=(),
+    )
+    zone = SimpleNamespace(high_price=Decimal("4621.20"), low_price=Decimal("4618.80"))
+    gap = SimpleNamespace(side="BEARISH", bias=None, direction=None, zone=zone)
+    snap.fair_value_gaps = SimpleNamespace(active_gaps=[gap])
+    cfg = AiScalpingConfig(fixed_tp_r=Decimal("1.20"), stop_atr_mult=Decimal("1.10"))
+    targets = compute_structure_targets(
+        snap,
+        direction=TradeDirection.SELL,
+        entry=Decimal("4618.00"),
+        atr=Decimal("5.61"),
+        config=cfg,
+    )
+    assert targets.stop_distance is not None
+    assert targets.stop_distance < Decimal("8")
+    assert targets.stop_source == "structure"
+
+
+@pytest.mark.unit
+def test_genuinely_wide_atr_still_min_lot_infeasible() -> None:
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        evaluate_min_lot_feasibility,
+    )
+
+    atr = Decimal("20")
+    dist = atr * Decimal("1.10")
+    result = evaluate_min_lot_feasibility(
+        stop_distance=dist,
+        equity=Decimal("139.90"),
+        min_lot=Decimal("0.01"),
+        contract_size=Decimal("100"),
+        hard_max_risk_pct=Decimal("5.0"),
+    )
+    assert result.infeasible is True
+    assert result.classification == "MIN_LOT_INFEASIBLE"
+
+
+@pytest.mark.unit
 def test_news_fail_closed_optional(tmp_path: Path) -> None:
     cfg = DEFAULT_ITE_CONFIG
     open_prot = NewsProtection(config=cfg, fail_closed_without_feed=False)
