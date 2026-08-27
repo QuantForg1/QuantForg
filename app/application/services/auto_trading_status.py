@@ -47,7 +47,7 @@ _REASON_GROUPS: dict[str, str] = {
     "market_data_live": "connectivity",
     "risk_engine": "risk",
     "account_trading": "broker",
-    "mt5_autotrading": "broker",
+    "mt5_autotrading": "safety",
     "symbol_allowed": "risk",
     "symbol_tradable": "broker",
     "margin_available": "risk",

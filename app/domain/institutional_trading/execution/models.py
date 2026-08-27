@@ -46,6 +46,7 @@ class BridgeAbortReason(StrEnum):
     GATEWAY_FAILURE = "gateway_failure"
     MT5_REJECTION = "mt5_rejection"
     AUTO_TRADING_BLOCKED = "auto_trading_blocked"
+    DAILY_LOSS_BLOCK = "daily_loss_block"
     SLIPPAGE_EXCESSIVE = "slippage_excessive"
     HEALTH_DEGRADED = "health_degraded"
     SELF_PROTECTION = "self_protection"

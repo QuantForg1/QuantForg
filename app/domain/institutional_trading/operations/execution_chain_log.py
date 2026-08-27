@@ -67,6 +67,50 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
     return "OMS"
 
 
+def build_execution_handoff(
+    *,
+    take: bool,
+    abort_reason: str | None = None,
+    blocking_stage: str | None = None,
+    forwarded_to_oms: bool = False,
+    mt5_ticket: Any = None,
+) -> dict[str, Any]:
+    """Stage stamps for one cycle. TAKE is not a fill. Ticket required for EXECUTED."""
+    abort = str(abort_reason or "").upper()
+    stage = str(blocking_stage or bridge_abort_stage(abort_reason) or "").upper()
+    ticket_ok = mt5_ticket is not None and str(mt5_ticket).strip() not in {
+        "",
+        "None",
+        "0",
+    }
+    forwarded = bool(forwarded_to_oms)
+    risk_block = stage == "RISK" or "DAILY_LOSS" in abort or "RISK" in abort
+    safety_block = stage == "SAFETY" or (
+        "SAFETY" in abort or "KILL" in abort or "AUTOTRADING" in abort
+    )
+    oms_block = stage == "OMS" and not forwarded
+    risk_entered = bool(take) or risk_block or safety_block or forwarded
+    safety_entered = (bool(take) and not risk_block) or safety_block or forwarded
+    optimizer_entered = safety_entered and not safety_block
+    oms_entered = forwarded or oms_block
+    return {
+        "decision_take": bool(take),
+        "risk_entered": risk_entered,
+        "risk_passed": bool(take) and not risk_block and (safety_entered or forwarded),
+        "safety_entered": safety_entered,
+        "safety_passed": safety_entered and not safety_block,
+        "optimizer_entered": optimizer_entered,
+        "optimizer_passed": optimizer_entered and (oms_entered or forwarded),
+        "oms_entered": oms_entered,
+        "oms_forwarded": forwarded,
+        "broker_received": forwarded,
+        "mt5_ticket": int(mt5_ticket) if ticket_ok else None,
+        "execution_confirmed": bool(forwarded and ticket_ok),
+        "terminal_reason": abort or ("EXECUTED" if forwarded and ticket_ok else None),
+        "blocking_stage": stage or None,
+    }
+
+
 def execution_blocked_event(
     *,
     stage: str,

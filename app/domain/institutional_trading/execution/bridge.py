@@ -510,13 +510,37 @@ class ExecutionBridge:
                         "; ".join(safety.failed_reasons) or "Auto Trading blocked",
                     )
                 else:
+                    from app.domain.institutional_trading.auto_trading import (
+                        daily_loss_is_blocking,
+                        safety_blocks_decision,
+                    )
+
+                    abort_reason = BridgeAbortReason.AUTO_TRADING_BLOCKED
+                    comment = (
+                        "; ".join(safety.failed_reasons)
+                        or "Auto Trading safety gate blocked"
+                    )
+                    if daily_loss_is_blocking(safety) and not safety_blocks_decision(
+                        safety
+                    ):
+                        abort_reason = BridgeAbortReason.DAILY_LOSS_BLOCK
+                        comment = (
+                            next(
+                                (
+                                    r
+                                    for r in safety.failed_reasons
+                                    if "daily loss" in r.lower()
+                                ),
+                                None,
+                            )
+                            or "Maximum daily loss exceeded"
+                        )
                     return self._abort(
                         decision=decision,
                         context=context,
                         decision_hash=d_hash,
-                        reason=BridgeAbortReason.AUTO_TRADING_BLOCKED,
-                        comment="; ".join(safety.failed_reasons)
-                        or "Auto Trading safety gate blocked",
+                        reason=abort_reason,
+                        comment=comment,
                         t0=t0,
                     )
 
@@ -1298,10 +1322,16 @@ class ExecutionBridge:
         )
         account_daily = False
         if context.account.equity > 0 and context.account.daily_pnl < 0:
-            loss_pct = (
-                abs(context.account.daily_pnl) / context.account.equity * Decimal("100")
+            from app.domain.institutional_trading.operations.daily_loss_lock import (
+                utc_daily_loss_exceeded,
             )
-            account_daily = loss_pct >= Decimal(str(self.ite_config.max_daily_loss_pct))
+
+            account_daily = utc_daily_loss_exceeded(
+                daily_pnl=context.account.daily_pnl,
+                equity=context.account.equity,
+                balance=context.account.balance,
+                max_daily_loss_pct=Decimal(str(self.ite_config.max_daily_loss_pct)),
+            )
         try:
             from app.domain.institutional_trading.operations.daily_loss_lock import (
                 sync_utc_daily_loss_lock,
@@ -1314,6 +1344,7 @@ class ExecutionBridge:
                 balance=context.account.balance,
                 max_daily_loss_pct=Decimal(str(self.ite_config.max_daily_loss_pct)),
                 trusted=True,
+                floating_pnl=getattr(context.account, "floating_pnl", None),
             )
             account_daily = bool(lock.get("daily_loss_exceeded"))
             plane_daily = bool(

@@ -566,3 +566,33 @@ def evaluate_auto_trade_safety(
         failed_reasons=failed_reasons,
         policy=policy,
     )
+
+
+# Risk-category conditions must not abort BUY/SELL/sniper/TAKE recording.
+# They still block OMS. Kill switch, MT5 AutoTrading, connectivity remain Safety.
+_SCAN_CONTINUE_CONDITION_KEYS = frozenset(
+    {
+        "daily_loss",
+        "max_open_positions",
+        "risk_engine",
+        "margin_available",
+    }
+)
+
+
+def safety_blocks_decision(result: AutoTradeSafetyResult) -> bool:
+    """True when Safety/operator/connectivity should abort before Decision.
+
+    Daily-loss / max-positions / risk-engine failures keep scanning and can
+    still produce TAKE; OMS remains blocked at Risk.
+    """
+    if result.allowed:
+        return False
+    failed = [c for c in result.conditions if not c.passed]
+    if not failed:
+        return True
+    return any(c.key not in _SCAN_CONTINUE_CONDITION_KEYS for c in failed)
+
+
+def daily_loss_is_blocking(result: AutoTradeSafetyResult) -> bool:
+    return any(c.key == "daily_loss" and not c.passed for c in result.conditions)

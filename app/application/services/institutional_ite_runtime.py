@@ -172,6 +172,14 @@ class ShadowCycleResult:
             "execution_blocked": dict(self.execution_blocked)
             if self.execution_blocked
             else None,
+            "execution_handoff": (
+                dict((self.market_context_diagnostics or {}).get("execution_handoff"))
+                if isinstance(
+                    (self.market_context_diagnostics or {}).get("execution_handoff"),
+                    dict,
+                )
+                else None
+            ),
         }
 
 
@@ -871,8 +879,7 @@ class InstitutionalIteRuntime:
                 and not account.already_in_trade
             )
             if not can_force:
-                # Entry blocked (max-open / paused / session / etc.) — still manage
-                # open MT5 positions so exits free the slot for continuous scalping.
+                # Entry blocked — still manage open MT5 positions.
                 try:
                     self._sync_and_manage_open_positions(
                         snapshot=snapshot,
@@ -881,136 +888,155 @@ class InstitutionalIteRuntime:
                     )
                 except Exception:
                     logger.exception("safety_blocked_manage_failed")
-                result = ShadowCycleResult(
-                    ok=True,
-                    trace_id=None,
-                    mode=self.plane.mode.value,
-                    detail="; ".join(safety.failed_reasons) or "Auto Trading Disabled",
-                    health=health.get("health") if isinstance(health, dict) else None,
-                    cycle_outcome="safety_blocked",
-                    abort_reason="SAFETY_BLOCKED",
-                    safety_failed_reasons=tuple(safety.failed_reasons),
-                    snapshot_present=True,
+                from app.domain.institutional_trading.auto_trading import (
+                    safety_blocks_decision,
                 )
-                with self._lock:
-                    self._last_cycle = result
-                    self._cycles += 1
-                    self._last_bridge_result = None
-                primary = (
-                    safety.failed_reasons[0] if safety.failed_reasons else "SAFETY_BLOCKED"
-                )
-                logger.warning(
-                    "execution_path_step",
-                    step="Safety",
-                    result="FAIL",
-                    abort_reason="SAFETY_BLOCKED",
-                    primary_blocker=primary,
-                    reasons=list(result.safety_failed_reasons),
-                    gateway=gw,
-                    broker=mt5,
-                    execution_enabled=execution_on,
-                    mt5_autotrading_enabled=mt5_autotrading_enabled,
-                    forwarded_to_oms=False,
-                )
-                logger.warning(
-                    "execution_first_blocking_gate",
-                    gate="SAFETY",
-                    reason=primary,
-                    symbol=getattr(account, "symbol", None)
-                    or getattr(snapshot, "symbol", None),
-                    forwarded_to_oms=False,
-                )
-                try:
-                    from app.domain.institutional_trading.production_hardening.lifecycle import (
-                        get_lifecycle_store,
-                    )
 
-                    get_lifecycle_store().record(
-                        stage="FIRST_BLOCKING_GATE",
-                        status="failed",
-                        detail=f"SAFETY: {primary}",
-                        symbol=str(
-                            getattr(account, "symbol", None)
-                            or getattr(snapshot, "symbol", None)
-                            or ""
-                        )
-                        or None,
+                if not safety_blocks_decision(safety):
+                    logger.warning(
+                        "risk_lock_scan_continues",
+                        reasons=list(safety.failed_reasons),
+                        daily_loss=bool(self.plane.daily_loss_exceeded),
                     )
-                except Exception:
-                    logger.exception("first_blocking_gate_lifecycle_failed")
-                logger.info(
-                    "ite_cycle_outcome",
-                    outcome=result.cycle_outcome,
-                    reasons=list(result.safety_failed_reasons),
-                    mode=result.mode,
-                    pme_positions=len(
-                        getattr(self.position_management.engine, "_positions", {}) or {}
-                    ),
-                )
-                try:
-                    from app.application.services.strategy_diagnostics import (
-                        get_strategy_diagnostics_store,
-                    )
-
-                    get_strategy_diagnostics_store().record_from_artefacts(
-                        snapshot=snapshot,
-                        decision=None,
-                        cycle_outcome="safety_blocked",
-                        decision_action="NO_TRADE",
-                        abort_reason="SAFETY_BLOCKED",
-                        decision_reasons=tuple(safety.failed_reasons),
-                        market_context_diagnostics=None,
-                        signal_id=None,
-                        forwarded_to_oms=False,
+                else:
+                    result = ShadowCycleResult(
+                        ok=True,
                         trace_id=None,
+                        mode=self.plane.mode.value,
+                        detail="; ".join(safety.failed_reasons)
+                        or "Auto Trading Disabled",
+                        health=health.get("health")
+                        if isinstance(health, dict)
+                        else None,
+                        cycle_outcome="safety_blocked",
+                        abort_reason="SAFETY_BLOCKED",
+                        safety_failed_reasons=tuple(safety.failed_reasons),
+                        snapshot_present=True,
                     )
-                except Exception:
-                    logger.exception("strategy_diagnostics_safety_blocked_failed")
-                try:
-                    from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                        ValidationStage,
-                        capture_signal as pvm_capture,
-                        finalize as pvm_finalize,
-                        stage as pvm_stage,
-                    )
-                    from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
-                        get_production_validation_recorder as _pvm_get,
-                    )
-
-                    pvm_capture(
-                        snapshot=snapshot,
-                        execution_mode=self.plane.mode.value,
-                        validation_id=_pvm_vid,
-                    )
-                    blocker = (
+                    with self._lock:
+                        self._last_cycle = result
+                        self._cycles += 1
+                        self._last_bridge_result = None
+                    primary = (
                         safety.failed_reasons[0]
                         if safety.failed_reasons
                         else "SAFETY_BLOCKED"
                     )
-                    pvm_stage(
-                        ValidationStage.ELIGIBILITY,
-                        ok=False,
-                        reason=str(blocker),
-                        validation_id=_pvm_vid,
+                    logger.warning(
+                        "execution_path_step",
+                        step="Safety",
+                        result="FAIL",
+                        abort_reason="SAFETY_BLOCKED",
+                        primary_blocker=primary,
+                        reasons=list(result.safety_failed_reasons),
+                        gateway=gw,
+                        broker=mt5,
+                        execution_enabled=execution_on,
+                        mt5_autotrading_enabled=mt5_autotrading_enabled,
+                        forwarded_to_oms=False,
                     )
-                    _pvm_get().record_no_trade_reasons(
-                        list(safety.failed_reasons),
-                        validation_id=_pvm_vid,
+                    logger.warning(
+                        "execution_first_blocking_gate",
+                        gate="SAFETY",
+                        reason=primary,
+                        symbol=getattr(account, "symbol", None)
+                        or getattr(snapshot, "symbol", None),
+                        forwarded_to_oms=False,
                     )
-                    pvm_finalize(validation_id=_pvm_vid)
-                except Exception:
-                    logger.exception("pvm_safety_blocked_finalize_failed")
-                finally:
                     try:
-                        if _pvm_token is not None:
-                            from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
-                                get_production_validation_recorder as _pvm_rec3,
-                            )
+                        from app.domain.institutional_trading.production_hardening.lifecycle import (
+                            get_lifecycle_store,
+                        )
 
-                            _pvm_rec3().unbind_context(_pvm_token)
+                        get_lifecycle_store().record(
+                            stage="FIRST_BLOCKING_GATE",
+                            status="failed",
+                            detail=f"SAFETY: {primary}",
+                            symbol=str(
+                                getattr(account, "symbol", None)
+                                or getattr(snapshot, "symbol", None)
+                                or ""
+                            )
+                            or None,
+                        )
                     except Exception:
-                        logger.exception("pvm_unbind_safety_blocked_failed")
-                return result
+                        logger.exception("first_blocking_gate_lifecycle_failed")
+                    logger.info(
+                        "ite_cycle_outcome",
+                        outcome=result.cycle_outcome,
+                        reasons=list(result.safety_failed_reasons),
+                        mode=result.mode,
+                        pme_positions=len(
+                            getattr(
+                                self.position_management.engine, "_positions", {}
+                            )
+                            or {}
+                        ),
+                    )
+                    try:
+                        from app.application.services.strategy_diagnostics import (
+                            get_strategy_diagnostics_store,
+                        )
+
+                        get_strategy_diagnostics_store().record_from_artefacts(
+                            snapshot=snapshot,
+                            decision=None,
+                            cycle_outcome="safety_blocked",
+                            decision_action="NO_TRADE",
+                            abort_reason="SAFETY_BLOCKED",
+                            decision_reasons=tuple(safety.failed_reasons),
+                            market_context_diagnostics=None,
+                            signal_id=None,
+                            forwarded_to_oms=False,
+                            trace_id=None,
+                        )
+                    except Exception:
+                        logger.exception("strategy_diagnostics_safety_blocked_failed")
+                    try:
+                        from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
+                            ValidationStage,
+                            capture_signal as pvm_capture,
+                            finalize as pvm_finalize,
+                            stage as pvm_stage,
+                        )
+                        from app.domain.institutional_trading.production_validation_mode.recorder import (  # noqa: E501
+                            get_production_validation_recorder as _pvm_get,
+                        )
+
+                        pvm_capture(
+                            snapshot=snapshot,
+                            execution_mode=self.plane.mode.value,
+                            validation_id=_pvm_vid,
+                        )
+                        blocker = (
+                            safety.failed_reasons[0]
+                            if safety.failed_reasons
+                            else "SAFETY_BLOCKED"
+                        )
+                        pvm_stage(
+                            ValidationStage.ELIGIBILITY,
+                            ok=False,
+                            reason=str(blocker),
+                            validation_id=_pvm_vid,
+                        )
+                        _pvm_get().record_no_trade_reasons(
+                            list(safety.failed_reasons),
+                            validation_id=_pvm_vid,
+                        )
+                        pvm_finalize(validation_id=_pvm_vid)
+                    except Exception:
+                        logger.exception("pvm_safety_blocked_finalize_failed")
+                    finally:
+                        try:
+                            if _pvm_token is not None:
+                                from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
+                                    get_production_validation_recorder as _pvm_rec3,
+                                )
+
+                                _pvm_rec3().unbind_context(_pvm_token)
+                        except Exception:
+                            logger.exception("pvm_unbind_safety_blocked_failed")
+                    return result
             logger.warning(
                 "FORCE_FIRST_TRADE proceeding despite safety blockers: %s",
                 "; ".join(safety.failed_reasons) or "unknown",
@@ -3094,6 +3120,18 @@ class InstitutionalIteRuntime:
                 signal_id=str(tid or ""),
             )
             market_context_diagnostics["execution_blocked"] = blocked_ev
+            from app.domain.institutional_trading.operations.execution_chain_log import (
+                build_execution_handoff,
+            )
+
+            market_context_diagnostics["execution_handoff"] = build_execution_handoff(
+                take=str(getattr(decision.action, "value", decision.action) or "")
+                .upper()
+                in {"BUY", "SELL"},
+                abort_reason=str(contract.fault_code or ""),
+                blocking_stage=str(contract.blocking_stage or ""),
+                forwarded_to_oms=False,
+            )
             logger.warning(
                 "EXECUTION_BLOCKED",
                 stage=blocked_ev["stage"],

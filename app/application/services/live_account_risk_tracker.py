@@ -158,25 +158,54 @@ class LiveAccountRiskTracker:
             return rec.peak_equity if rec is not None else None
 
     @staticmethod
+    def _is_trade_deal(deal: Any) -> bool:
+        """True for market buy/sell fills. Balance/credit/deposit never count."""
+        dtype = str(getattr(deal, "deal_type", "") or getattr(deal, "type", "") or "")
+        low = dtype.lower()
+        if any(
+            tok in low
+            for tok in (
+                "balance",
+                "credit",
+                "charge",
+                "correction",
+                "bonus",
+                "deposit",
+                "withdraw",
+            )
+        ):
+            return False
+        vol = _dec(getattr(deal, "volume", None), "0")
+        return vol > 0
+
+    @staticmethod
     def daily_pnl_from_deals(
         deals: list[Any],
         *,
         now: datetime | None = None,
     ) -> Decimal:
-        """Sum deal profits for the current UTC session day.
+        """Sum realized trade P/L for the current UTC session day.
 
-        Skips zero-volume / non-trade rows. Does not invent values when empty.
+        Deduplicates by ticket. Skips balance/credit/deposit. Includes
+        commission and swap on trade deals. Does not invent values when empty.
         """
         day = utc_session_day(now)
         total = Decimal("0")
+        seen: set[int] = set()
         for deal in deals:
+            if not LiveAccountRiskTracker._is_trade_deal(deal):
+                continue
+            try:
+                ticket = int(getattr(deal, "ticket", 0) or 0)
+            except (TypeError, ValueError):
+                ticket = 0
+            if ticket > 0:
+                if ticket in seen:
+                    continue
+                seen.add(ticket)
             profit = _dec(getattr(deal, "profit", None))
-            # Include commission/swap when present on deal objects.
             profit += _dec(getattr(deal, "commission", None))
             profit += _dec(getattr(deal, "swap", None))
-            vol = _dec(getattr(deal, "volume", None), "0")
-            if vol <= 0 and profit == 0:
-                continue
             raw_t = getattr(deal, "time", None)
             if raw_t is None:
                 continue

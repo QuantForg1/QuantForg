@@ -927,6 +927,7 @@ async def build_ite_cycle_market_context(
             balance=Decimal(str(diag.get("balance") or 0)),
             max_daily_loss_pct=Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct)),
             trusted=bool(daily_pnl_trusted),
+            floating_pnl=Decimal(str(diag.get("floating_pnl") or 0)),
         )
         diag.update(lock)
     except Exception as exc:

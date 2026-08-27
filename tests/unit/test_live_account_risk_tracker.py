@@ -22,10 +22,12 @@ def _deal(
     volume: str = "0.01",
     commission: str = "0",
     swap: str = "0",
+    ticket: int = 1,
+    deal_type: str = "entry_out",
 ) -> MT5Deal:
     return MT5Deal(
-        ticket=1,
-        order_ticket=1,
+        ticket=ticket,
+        order_ticket=ticket,
         symbol="XAUUSD",
         side="buy",
         volume=Decimal(volume),
@@ -33,7 +35,7 @@ def _deal(
         profit=Decimal(profit),
         commission=Decimal(commission),
         swap=Decimal(swap),
-        deal_type="entry_out",
+        deal_type=deal_type,
         time=when,
     )
 
@@ -44,6 +46,7 @@ def _reset_tracker() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.trading_core
 class TestLiveAccountRiskTracker:
     def test_peak_equity_persists_and_rises(self, tmp_path: Path) -> None:
         path = tmp_path / "peak.json"
@@ -64,9 +67,9 @@ class TestLiveAccountRiskTracker:
         today = datetime(2026, 7, 22, 10, 0, tzinfo=UTC)
         yesterday = datetime(2026, 7, 21, 10, 0, tzinfo=UTC)
         deals = [
-            _deal(profit="-50", when=today),
-            _deal(profit="20", when=today, commission="-2"),
-            _deal(profit="-999", when=yesterday),
+            _deal(profit="-50", when=today, ticket=11),
+            _deal(profit="20", when=today, commission="-2", ticket=12),
+            _deal(profit="-999", when=yesterday, ticket=13),
         ]
         pnl = LiveAccountRiskTracker.daily_pnl_from_deals(deals, now=now)
         assert pnl == Decimal("-32")
@@ -84,3 +87,27 @@ class TestLiveAccountRiskTracker:
         )
         assert peak == Decimal("10000")  # lifted by balance observe
         assert daily == Decimal("-75")
+
+    def test_duplicate_ticket_is_not_double_counted(self) -> None:
+        now = datetime(2026, 8, 27, 15, 0, tzinfo=UTC)
+        deals = [
+            _deal(profit="-25.11", when=now, ticket=88),
+            _deal(profit="-25.11", when=now, ticket=88),
+        ]
+        pnl = LiveAccountRiskTracker.daily_pnl_from_deals(deals, now=now)
+        assert pnl == Decimal("-25.11")
+
+    def test_balance_and_zero_volume_deposits_are_excluded(self) -> None:
+        now = datetime(2026, 8, 27, 15, 0, tzinfo=UTC)
+        deals = [
+            _deal(profit="-25.11", when=now, ticket=1),
+            _deal(
+                profit="-100",
+                when=now,
+                ticket=2,
+                volume="0",
+                deal_type="balance",
+            ),
+        ]
+        pnl = LiveAccountRiskTracker.daily_pnl_from_deals(deals, now=now)
+        assert pnl == Decimal("-25.11")

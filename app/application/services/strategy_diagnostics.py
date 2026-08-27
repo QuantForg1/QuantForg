@@ -309,6 +309,26 @@ def extract_cycle_diagnostics(
         else None
     )
 
+    from app.domain.institutional_trading.operations.execution_chain_log import (
+        build_execution_handoff,
+    )
+
+    blocked_ev = diag.get("execution_blocked")
+    blocked_stage = (
+        str(blocked_ev.get("stage") or "")
+        if isinstance(blocked_ev, dict)
+        else ""
+    )
+    handoff = diag.get("execution_handoff")
+    if not isinstance(handoff, dict):
+        handoff = build_execution_handoff(
+            take=take,
+            abort_reason=abort_reason or primary,
+            blocking_stage=blocked_stage or None,
+            forwarded_to_oms=bool(forwarded_to_oms),
+            mt5_ticket=diag.get("mt5_ticket"),
+        )
+
     return {
         "recorded_at": now.isoformat(),
         "trace_id": trace_id,
@@ -377,6 +397,7 @@ def extract_cycle_diagnostics(
         "opportunity_threshold": diag.get("opportunity_threshold") or 70,
         "setup_state": diag.get("setup_state"),
         "sniper_state": diag.get("sniper_state") or diag.get("sniper"),
+        "execution_handoff": dict(handoff),
         "advisory_only": True,
     }
 
@@ -411,6 +432,9 @@ def hourly_scan_rates(
     buy_n = sell_n = wait_n = take_n = exec_n = cand_n = ready_n = 0
     chase_n = conflict_n = spread_n = rr_n = min_lot_n = 0
     risk_n = safety_n = oms_n = 0
+    buy_cand_n = sell_cand_n = opp_n = sniper_ready_n = sniper_take_n = 0
+    risk_pass_n = safety_pass_n = oms_fwd_n = broker_n = fill_n = reject_n = 0
+    edge_n = stale_n = daily_n = 0
     for row in subset:
         action = str(row.get("decision_action") or row.get("action") or "").upper()
         if action == "BUY":
@@ -423,19 +447,39 @@ def hourly_scan_rates(
             take_n += 1
         if bool(row.get("forwarded_to_oms")):
             exec_n += 1
+            oms_fwd_n += 1
+        if bool(row.get("executed")) or (
+            row.get("mt5_ticket") not in (None, "", 0, "0")
+            and bool(row.get("forwarded_to_oms"))
+        ):
+            fill_n += 1
+            broker_n += 1
         opp = row.get("opportunity_score")
         try:
             if opp is not None and int(opp) >= int(
                 row.get("opportunity_threshold") or 70
             ):
                 cand_n += 1
+                opp_n += 1
+                if action == "BUY" or str(row.get("candidate") or "").upper() == "BUY":
+                    buy_cand_n += 1
+                elif action == "SELL" or str(row.get("candidate") or "").upper() == "SELL":
+                    sell_cand_n += 1
         except (TypeError, ValueError):
             pass
         setup = str(row.get("setup_state") or "").upper()
-        if setup in {"SETUP_READY", "TAKE"}:
+        sniper = str(row.get("sniper_state") or row.get("sniper") or "").upper()
+        if setup in {"SETUP_READY", "TAKE"} or sniper in {"READY", "TAKE"}:
             ready_n += 1
+            sniper_ready_n += 1
+        if setup == "TAKE" or sniper == "TAKE" or bool(row.get("take")):
+            sniper_take_n += 1
         rej = row.get("rejection") if isinstance(row.get("rejection"), dict) else {}
         code = str(rej.get("primary") or row.get("abort_reason") or "").upper()
+        if bool(row.get("rejected")) or (
+            code and not bool(row.get("forwarded_to_oms"))
+        ):
+            reject_n += 1
         if code:
             wait_reasons[code] += 1
             if "CHASE" in code:
@@ -448,21 +492,40 @@ def hourly_scan_rates(
                 rr_n += 1
             if "MIN_LOT" in code:
                 min_lot_n += 1
-            if "DAILY_LOSS" in code or code.startswith("RISK"):
+            if "DAILY_LOSS" in code:
+                daily_n += 1
                 risk_n += 1
-            if "SAFETY" in code or "KILL" in code:
+            elif code.startswith("RISK"):
+                risk_n += 1
+            if "SAFETY" in code or "KILL" in code or "AUTOTRADING" in code:
                 safety_n += 1
             if "OMS" in code or "DUPLICATE" in code:
                 oms_n += 1
+            if "NO_DIRECTIONAL" in code or "NO_EDGE" in code:
+                edge_n += 1
+            if "STALE" in code:
+                stale_n += 1
+        handoff = row.get("execution_handoff")
+        if isinstance(handoff, dict):
+            if handoff.get("risk_passed"):
+                risk_pass_n += 1
+            if handoff.get("safety_passed"):
+                safety_pass_n += 1
     scans = len(subset)
     return {
         "window_seconds": span_seconds,
         "sample_limited": True,
         "scans": scans,
+        "unique_cycles": scans,
         "scans_per_hour": _rate(scans),
         "candidate_setups": cand_n,
         "candidate_setups_per_hour": _rate(cand_n),
+        "buy_candidates": buy_cand_n,
+        "sell_candidates": sell_cand_n,
+        "opportunity_pass": opp_n,
         "setup_ready_count": ready_n,
+        "sniper_ready": sniper_ready_n,
+        "sniper_take": sniper_take_n,
         "take_count": take_n,
         "take_per_hour": _rate(take_n),
         "executed_count": exec_n,
@@ -474,10 +537,21 @@ def hourly_scan_rates(
         "WAIT_CONFLICT_count": conflict_n,
         "WAIT_SPREAD_count": spread_n,
         "WAIT_RR_count": rr_n,
+        "WAIT_NO_DIRECTIONAL_EDGE_count": edge_n,
+        "WAIT_STALE_DATA_count": stale_n,
         "MIN_LOT_INFEASIBLE_count": min_lot_n,
         "risk_reject_count": risk_n,
+        "risk_pass": risk_pass_n,
+        "risk_block": risk_n,
+        "safety_pass": safety_pass_n,
+        "safety_block": safety_n,
         "safety_reject_count": safety_n,
+        "oms_forward": oms_fwd_n,
         "oms_reject_count": oms_n,
+        "broker_accept": broker_n,
+        "mt5_fills": fill_n,
+        "rejections": reject_n,
+        "DAILY_LOSS_BLOCK": daily_n,
         "wait_reasons": dict(wait_reasons.most_common(8)),
         "note": (
             "Rates are from the in-memory diagnostics ring. Empty buckets mean "

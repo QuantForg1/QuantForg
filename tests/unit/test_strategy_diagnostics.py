@@ -216,6 +216,9 @@ class TestStrategyDiagnostics:
         assert rates["WAIT_CHASE_count"] == 1
         assert rates["SELL_count"] == 1
         assert rates["executions_per_hour"] == 0.0
+        assert rates["DAILY_LOSS_BLOCK"] == 1
+        assert rates["take_count"] == 1
+        assert rates["mt5_fills"] == 0
 
     def test_statistics_and_insights(self) -> None:
         snap = _snapshot(quality=58)

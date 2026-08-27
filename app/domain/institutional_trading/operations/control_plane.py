@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from threading import RLock
 from typing import Any
@@ -92,6 +92,7 @@ class OperationsControlPlane:
     max_daily_loss_pct: Decimal = Decimal("3.0")
     max_open_trades: int = 10
     daily_loss_exceeded: bool = False
+    daily_loss_armed_at: datetime | None = None
     auto_trading_enabled: bool = False
     auto_trading_run_state: AutoTradeRunState = "off"
     allowed_sessions: tuple[str, ...] = (
@@ -824,6 +825,9 @@ class OperationsControlPlane:
     def flag_daily_loss(self, *, now: datetime | None = None) -> None:
         with self._lock:
             self.daily_loss_exceeded = True
+            if self.daily_loss_armed_at is None:
+                moment = now or datetime.now(UTC)
+                self.daily_loss_armed_at = moment
         self.alerts.raise_alert(
             kind=AlertKind.DAILY_LOSS,
             severity=AlertSeverity.CRITICAL,
@@ -841,6 +845,7 @@ class OperationsControlPlane:
         with self._lock:
             was = bool(self.daily_loss_exceeded)
             self.daily_loss_exceeded = False
+            self.daily_loss_armed_at = None
         if was:
             from core.logging import get_logger
 

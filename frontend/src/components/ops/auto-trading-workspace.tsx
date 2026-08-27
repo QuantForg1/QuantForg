@@ -2144,6 +2144,27 @@ export function AutoTradingWorkspace() {
             />
             <MetricCard label="Resets" value={dailyLossReset.replace("T00:00:00Z", " UTC")} />
             <MetricCard
+              label="Loss base"
+              value={str(diag.daily_loss_base, "balance").toUpperCase()}
+            />
+            <MetricCard
+              label="Realized P/L"
+              value={str(diag.daily_realized_pnl || diag.daily_pnl, "—")}
+            />
+            <MetricCard
+              label="UTC session"
+              value={str(diag.utc_session_date || diag.daily_loss_session_day, "—")}
+            />
+            <MetricCard
+              label="History"
+              value={str(diag.history_confidence, "—")}
+            />
+            <MetricCard
+              label="Rearm"
+              value={str(diag.rearm_state, dailyLossLocked ? "LOCKED" : "CLEAR")}
+              tone={str(diag.rearm_state, "") === "REARMED" ? "ok" : dailyLossLocked ? "bad" : "ok"}
+            />
+            <MetricCard
               label="Risk Status"
               value={riskStatusLabel}
               tone={riskStatusLabel === "BLOCK" ? "bad" : "ok"}

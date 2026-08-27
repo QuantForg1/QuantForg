@@ -496,3 +496,118 @@ def test_decision_to_mt5_handoff_does_not_require_execute_now() -> None:
     assert out.fault_code == "NONE"
     assert out.stages["OMS"] == StageStatus.PASS.value
     assert out.stages["BROKER"] == StageStatus.PASS.value
+
+
+def _live_safety_facts(**overrides: object) -> AutoTradeLiveFacts:
+    from app.domain.institutional_trading.auto_trading import AutoTradeLiveFacts
+
+    payload: dict[str, object] = {
+        "gateway_connected": True,
+        "broker_connected": True,
+        "market_data_live": True,
+        "risk_engine_pass": True,
+        "account_trading_enabled": True,
+        "mt5_autotrading_enabled": True,
+        "symbol": "XAUUSD_I",
+        "symbol_tradable": True,
+        "margin_available": True,
+        "no_broker_restrictions": True,
+        "open_positions": 0,
+        "session": "london",
+        "broker_session_open": True,
+        "spread": Decimal("0.20"),
+        "news_blocked": False,
+        "daily_loss_exceeded": False,
+        "emergency_stop": False,
+        "ops_mode": "LIVE",
+        "execution_enabled": True,
+    }
+    payload.update(overrides)
+    return AutoTradeLiveFacts(**payload)  # type: ignore[arg-type]
+
+
+def test_daily_loss_keeps_scanning_mt5_autotrading_is_safety() -> None:
+    from app.domain.institutional_trading.auto_trading import (
+        AutoTradePolicy,
+        evaluate_auto_trade_safety,
+        safety_blocks_decision,
+    )
+
+    policy = AutoTradePolicy(enabled=True, run_state="running")
+    daily = evaluate_auto_trade_safety(
+        policy, _live_safety_facts(daily_loss_exceeded=True)
+    )
+    assert daily.allowed is False
+    assert safety_blocks_decision(daily) is False
+    assert any("daily loss" in r.lower() for r in daily.failed_reasons)
+
+    still_over = sync_utc_daily_loss_lock(
+        SimpleNamespace(
+            daily_loss_exceeded=True,
+            flag_daily_loss=lambda now=None: None,
+            clear_daily_loss=lambda **k: False,
+        ),
+        daily_pnl=Decimal("-25.11"),
+        equity=Decimal("165.13"),
+        balance=Decimal("165.13"),
+        max_daily_loss_pct=Decimal("3.0"),
+        trusted=True,
+        floating_pnl=Decimal("0"),
+    )
+    assert still_over["daily_loss_exceeded"] is True
+    assert still_over["daily_loss_lock"] == "EXCEEDED"
+    assert still_over["daily_loss_base"] == "balance"
+    assert still_over["rearm_state"] == "LOCKED"
+    assert still_over["history_confidence"] == "trusted"
+
+    at = evaluate_auto_trade_safety(
+        policy, _live_safety_facts(mt5_autotrading_enabled=False)
+    )
+    assert at.allowed is False
+    assert safety_blocks_decision(at) is True
+    assert any("AutoTrading is disabled" in r for r in at.failed_reasons)
+
+
+def test_take_handoff_is_not_executed_without_ticket() -> None:
+    from app.domain.institutional_trading.operations.execution_chain_log import (
+        build_execution_handoff,
+        bridge_abort_stage,
+    )
+
+    handoff = build_execution_handoff(
+        take=True,
+        abort_reason="DAILY_LOSS_BLOCK",
+        blocking_stage="RISK",
+        forwarded_to_oms=False,
+        mt5_ticket=None,
+    )
+    assert handoff["decision_take"] is True
+    assert handoff["risk_entered"] is True
+    assert handoff["risk_passed"] is False
+    assert handoff["execution_confirmed"] is False
+    assert handoff["mt5_ticket"] is None
+    assert handoff["terminal_reason"] == "DAILY_LOSS_BLOCK"
+    assert bridge_abort_stage("DAILY_LOSS_BLOCK") == "RISK"
+
+    filled = build_execution_handoff(
+        take=True,
+        forwarded_to_oms=True,
+        mt5_ticket=123456,
+    )
+    assert filled["oms_forwarded"] is True
+    assert filled["execution_confirmed"] is True
+
+
+def test_kill_switch_blocks_decision_ahead_of_daily_loss() -> None:
+    from app.domain.institutional_trading.auto_trading import (
+        AutoTradePolicy,
+        evaluate_auto_trade_safety,
+        safety_blocks_decision,
+    )
+
+    mixed = evaluate_auto_trade_safety(
+        AutoTradePolicy(enabled=True, run_state="running"),
+        _live_safety_facts(daily_loss_exceeded=True, emergency_stop=True),
+    )
+    assert safety_blocks_decision(mixed) is True
+    assert mixed.allowed is False
