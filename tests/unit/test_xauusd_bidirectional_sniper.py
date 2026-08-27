@@ -423,7 +423,7 @@ class TestSniperBuySellWait:
         out = _sniper(
             snap,
             _dir(TradeDirection.BUY),
-            mid=Decimal("2662"),
+            mid=Decimal("2680"),
             atr=Decimal("4.00"),
         )
         assert out.passed is False

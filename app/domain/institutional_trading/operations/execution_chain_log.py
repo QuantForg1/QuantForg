@@ -24,6 +24,8 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
         return "OMS"
     if "MAX_POSITION" in abort or "POSITIONS PER SYMBOL" in abort:
         return "RISK"
+    if "DAILY_LOSS" in abort or "DAILY LOSS" in abort:
+        return "RISK"
     if any(
         tok in abort
         for tok in ("ELIGIBILITY", "CONFLUENCE", "QUALITY", "IGNORED_ACTION", "MISSING_ZONES")

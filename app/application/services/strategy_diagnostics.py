@@ -290,12 +290,11 @@ def extract_cycle_diagnostics(
                 rejected_codes.append(code)
 
     ranked = _rank_rejection_codes(rejected_codes)
-    executed = bool(forwarded_to_oms) or str(decision_action or "").upper() in {
-        "BUY",
-        "SELL",
-    }
-    rejected = (not executed) and (
-        str(decision_action or "").upper() in {"NO_TRADE", "WATCH", "WAIT", ""}
+    action_u = str(decision_action or "").upper()
+    take = action_u in {"BUY", "SELL"}
+    executed = bool(forwarded_to_oms)
+    rejected = (not take) and (
+        action_u in {"NO_TRADE", "WATCH", "WAIT", ""}
         or cycle_outcome in {"no_trade", "no_snapshot", "aborted", "shadow", "wait"}
     )
 
@@ -319,6 +318,7 @@ def extract_cycle_diagnostics(
         "cycle_outcome": cycle_outcome,
         "decision_action": decision_action,
         "forwarded_to_oms": bool(forwarded_to_oms),
+        "take": take,
         "executed": executed,
         "rejected": rejected,
         "trend": trend,
@@ -373,7 +373,117 @@ def extract_cycle_diagnostics(
         "stop_distance": diag.get("stop_distance"),
         "risk_budget": diag.get("risk_budget"),
         "calculated_lots": diag.get("calculated_lots"),
+        "opportunity_score": diag.get("opportunity_score"),
+        "opportunity_threshold": diag.get("opportunity_threshold") or 70,
+        "setup_state": diag.get("setup_state"),
+        "sniper_state": diag.get("sniper_state") or diag.get("sniper"),
         "advisory_only": True,
+    }
+
+
+def hourly_scan_rates(
+    cycles: list[dict[str, Any]],
+    *,
+    span_seconds: float = 3600.0,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Hourly discovery vs execution rates. Observation only — never forces trades."""
+    moment = now or datetime.now(UTC)
+    subset: list[dict[str, Any]] = []
+    for row in cycles:
+        raw = row.get("recorded_at")
+        ts: datetime | None = None
+        if isinstance(raw, datetime):
+            ts = raw if raw.tzinfo else raw.replace(tzinfo=UTC)
+        elif raw:
+            try:
+                ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            except ValueError:
+                ts = None
+        if ts is None or (moment - ts.astimezone(UTC)).total_seconds() <= span_seconds:
+            subset.append(row)
+    hours = span_seconds / 3600.0 if span_seconds else 1.0
+
+    def _rate(n: int) -> float:
+        return round(n / hours, 2) if hours else 0.0
+
+    wait_reasons: Counter[str] = Counter()
+    buy_n = sell_n = wait_n = take_n = exec_n = cand_n = ready_n = 0
+    chase_n = conflict_n = spread_n = rr_n = min_lot_n = 0
+    risk_n = safety_n = oms_n = 0
+    for row in subset:
+        action = str(row.get("decision_action") or row.get("action") or "").upper()
+        if action == "BUY":
+            buy_n += 1
+        elif action == "SELL":
+            sell_n += 1
+        elif action in {"WAIT", "NO_TRADE", "WATCH", ""}:
+            wait_n += 1
+        if bool(row.get("take")) or action in {"BUY", "SELL"}:
+            take_n += 1
+        if bool(row.get("forwarded_to_oms")):
+            exec_n += 1
+        opp = row.get("opportunity_score")
+        try:
+            if opp is not None and int(opp) >= int(
+                row.get("opportunity_threshold") or 70
+            ):
+                cand_n += 1
+        except (TypeError, ValueError):
+            pass
+        setup = str(row.get("setup_state") or "").upper()
+        if setup in {"SETUP_READY", "TAKE"}:
+            ready_n += 1
+        rej = row.get("rejection") if isinstance(row.get("rejection"), dict) else {}
+        code = str(rej.get("primary") or row.get("abort_reason") or "").upper()
+        if code:
+            wait_reasons[code] += 1
+            if "CHASE" in code:
+                chase_n += 1
+            if "CONFLICT" in code:
+                conflict_n += 1
+            if "SPREAD" in code:
+                spread_n += 1
+            if "RR" in code or "INSUFFICIENT_RR" in code:
+                rr_n += 1
+            if "MIN_LOT" in code:
+                min_lot_n += 1
+            if "DAILY_LOSS" in code or code.startswith("RISK"):
+                risk_n += 1
+            if "SAFETY" in code or "KILL" in code:
+                safety_n += 1
+            if "OMS" in code or "DUPLICATE" in code:
+                oms_n += 1
+    scans = len(subset)
+    return {
+        "window_seconds": span_seconds,
+        "sample_limited": True,
+        "scans": scans,
+        "scans_per_hour": _rate(scans),
+        "candidate_setups": cand_n,
+        "candidate_setups_per_hour": _rate(cand_n),
+        "setup_ready_count": ready_n,
+        "take_count": take_n,
+        "take_per_hour": _rate(take_n),
+        "executed_count": exec_n,
+        "executions_per_hour": _rate(exec_n),
+        "BUY_count": buy_n,
+        "SELL_count": sell_n,
+        "WAIT_count": wait_n,
+        "WAIT_CHASE_count": chase_n,
+        "WAIT_CONFLICT_count": conflict_n,
+        "WAIT_SPREAD_count": spread_n,
+        "WAIT_RR_count": rr_n,
+        "MIN_LOT_INFEASIBLE_count": min_lot_n,
+        "risk_reject_count": risk_n,
+        "safety_reject_count": safety_n,
+        "oms_reject_count": oms_n,
+        "wait_reasons": dict(wait_reasons.most_common(8)),
+        "note": (
+            "Rates are from the in-memory diagnostics ring. Empty buckets mean "
+            "history is not in the ring — not zero opportunity. TAKE is not an "
+            "MT5 fill; executed_count requires OMS forward."
+        ),
     }
 
 
@@ -747,6 +857,7 @@ class StrategyDiagnosticsStore:
         recent = cycles[-window:]
         latest = recent[-1] if recent else None
         stats = compute_diagnostics_statistics(recent, window=window)
+        hourly = hourly_scan_rates(recent)
         insights = generate_smart_insights(stats, latest)
         from app.application.services.live_execution_explain import (
             enrich_cycles_with_explain,
@@ -761,6 +872,7 @@ class StrategyDiagnosticsStore:
             "latest": explained[0] if explained else None,
             "cycles": explained,
             "statistics": stats,
+            "hourly": hourly,
             "smart_insights": insights,
             "thresholds": {
                 "required_quality": int(self._config.min_trade_quality_score),

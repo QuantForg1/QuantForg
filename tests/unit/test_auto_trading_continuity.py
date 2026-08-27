@@ -66,3 +66,20 @@ def test_ensure_does_not_resume_when_kill_armed() -> None:
     )
     assert result["resumed"] is False
     assert plane.auto_trading_run_state == "paused"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_ensure_does_not_resume_when_daily_loss_exceeded() -> None:
+    plane = OperationsControlPlane()
+    plane.mode = OpsExecutionMode.LIVE
+    plane.auto_trading_run_state = "paused"
+    plane.kill_switch_armed = False
+    plane.daily_loss_exceeded = True
+    result = ensure_auto_trading_running(
+        plane,
+        settings=SimpleNamespace(execution_enabled=True),
+    )
+    assert result["resumed"] is False
+    assert plane.auto_trading_run_state == "paused"
+    assert plane.daily_loss_exceeded is True

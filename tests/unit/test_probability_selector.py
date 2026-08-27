@@ -138,7 +138,7 @@ def test_score_80_risk_fail_is_hard_block() -> None:
         _ready(risk_eligible=False, risk_reasons=("daily loss limit exceeded",))
     )
     assert out.may_submit_oms is False
-    assert out.fault_code == "RISK_REJECTED"
+    assert out.fault_code == "DAILY_LOSS_BLOCK"
     assert out.fault_class == FaultClass.HARD_BLOCK.value
 
 

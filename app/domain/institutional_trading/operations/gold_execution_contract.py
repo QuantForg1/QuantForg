@@ -60,6 +60,21 @@ def _as_int(value: Any) -> int | None:
             return None
 
 
+def _reasons_indicate_daily_loss(
+    reasons: tuple[str, ...] | list[str] | None,
+) -> bool:
+    hay = " ".join(str(r).lower() for r in (reasons or ()) if str(r).strip())
+    return any(
+        token in hay
+        for token in (
+            "daily_loss_block",
+            "daily_loss_exceeded",
+            "daily loss",
+            "max_daily_loss",
+        )
+    )
+
+
 def _reasons_indicate_max_positions(
     reasons: tuple[str, ...] | list[str] | None,
 ) -> bool:
@@ -163,6 +178,7 @@ class GoldExecutionFacts:
     mtf_alignment: int | None = None
     cycle_id: str | None = None
     snapshot_id: str | None = None
+    daily_loss_exceeded: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -486,6 +502,9 @@ def evaluate_gold_execution_contract(
         facts.risk_reasons
     )
     max_pos_blocked = _reasons_indicate_max_positions(facts.risk_reasons)
+    daily_loss_blocked = _reasons_indicate_daily_loss(
+        facts.risk_reasons
+    ) or bool(facts.daily_loss_exceeded)
     if min_lot_blocked:
         risk_fail = _stage_fail(
             stage="RISK",
@@ -513,6 +532,19 @@ def evaluate_gold_execution_contract(
         )
         mark("RISK", StageStatus.BLOCK.value)
         failures.append(risk_fail)
+    elif daily_loss_blocked:
+        risk_fail = _stage_fail(
+            stage="RISK",
+            code="DAILY_LOSS_BLOCK",
+            reason=(
+                "; ".join(facts.risk_reasons)
+                or "UTC daily loss exceeds hard circuit-breaker — wait for session reset"
+            ),
+            fault_class=FaultClass.HARD_BLOCK.value,
+            next_action=CandidateAction.WAIT_SAME_FOCUS.value,
+        )
+        mark("RISK", StageStatus.BLOCK.value)
+        failures.append(risk_fail)
     elif not facts.risk_eligible:
         risk_fail = _stage_fail(
             stage="RISK",
@@ -529,7 +561,7 @@ def evaluate_gold_execution_contract(
 
     # --- SIZING ---
     sizing_fail: dict[str, Any] | None = None
-    if not min_lot_blocked and not max_pos_blocked:
+    if not min_lot_blocked and not max_pos_blocked and not daily_loss_blocked:
         lots = facts.approved_lots
         if lots is None or lots <= 0:
             sizing_fail = _stage_fail(
@@ -667,6 +699,24 @@ def evaluate_gold_execution_contract(
         mark("BROKER", StageStatus.PASS.value)
 
     first = failures[0] if failures else None
+    if failures:
+        kill = next(
+            (
+                f
+                for f in failures
+                if str(f.get("code") or "") == "SAFETY_BLOCKED"
+                and "kill" in str(f.get("reason") or "").lower()
+            ),
+            None,
+        )
+        daily = next(
+            (f for f in failures if str(f.get("code") or "") == "DAILY_LOSS_BLOCK"),
+            None,
+        )
+        if kill is not None:
+            first = kill
+        elif daily is not None and not facts.kill_switch:
+            first = daily
     all_pass = first is None
     may_submit = all_pass and not facts.force_shadow
     if may_submit:
@@ -818,6 +868,7 @@ def facts_from_cycle(
     portfolio_allow: bool = True,
     portfolio_reasons: tuple[str, ...] = (),
     last_ai_score: dict[str, Any] | None = None,
+    daily_loss_exceeded: bool = False,
 ) -> GoldExecutionFacts:
     """Map existing ITE artefacts into the contract facts object."""
     factors = {}
@@ -916,4 +967,5 @@ def facts_from_cycle(
         snapshot_id=(
             str(ai.get("snapshot_id") or "") or None
         ),
+        daily_loss_exceeded=bool(daily_loss_exceeded),
     )

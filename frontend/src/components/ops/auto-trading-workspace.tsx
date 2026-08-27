@@ -817,6 +817,15 @@ export function AutoTradingWorkspace() {
   const orch = asRecord(asRecord(opsPayload).orchestrator);
   const last = asRecord(orch.last_cycle);
   const diag = asRecord(last.market_context_diagnostics);
+  const utcDailyLossPct = Number.isFinite(num(diag.daily_loss_pct))
+    ? num(diag.daily_loss_pct)
+    : dailyLossPct;
+  const utcDailyLimit = Number.isFinite(num(diag.daily_loss_limit_pct))
+    ? num(diag.daily_loss_limit_pct)
+    : maxDailyLossPct;
+  const dailyLossLocked =
+    diag.daily_loss_exceeded === true || utcDailyLossPct > utcDailyLimit;
+  const dailyLossReset = str(diag.daily_loss_resets_at, "UTC 00:00");
   const capUsed = Number.isFinite(num(diag.capacity_used))
     ? num(diag.capacity_used)
     : goldPositions.length;
@@ -845,6 +854,7 @@ export function AutoTradingWorkspace() {
     diag.scale_in_block_reason,
     capAvail <= 0 ? "MAX_POSITIONS_REACHED" : "—",
   );
+  const scanRates = asRecord(asRecord(opsPayload).scan_rates);
   const scanSnap = asRecord(aiScalping.scan);
   const coherence = asRecord(
     orch.system_coherence ??
@@ -1060,7 +1070,9 @@ export function AutoTradingWorkspace() {
     cycleBlockStage === "RISK" ||
     cycleAbort.includes("RISK") ||
     cycleAbort.includes("MIN_LOT") ||
-    cycleAbort.includes("SIZING");
+    cycleAbort.includes("SIZING") ||
+    cycleAbort.includes("DAILY_LOSS") ||
+    dailyLossLocked;
   const eligibilityBlocked =
     cycleBlockStage === "ELIGIBILITY" ||
     cycleBlockStage === "DECISION" ||
@@ -1309,11 +1321,12 @@ export function AutoTradingWorkspace() {
     : failedReasons[0] ||
       "Ops safety poll — cycle Safety is on Last completed ITE cycle";
 
-  const riskStatusLabel = riskReasons.length
-    ? "BLOCK"
-    : cycleOutcome.includes("risk")
+  const riskStatusLabel =
+    riskReasons.length || riskBlocked || dailyLossLocked
       ? "BLOCK"
-      : "PASS";
+      : cycleOutcome.includes("risk")
+        ? "BLOCK"
+        : "PASS";
 
   const signalsToday = todayWins + todayFails || todayJournal.length;
   const rejectedToday = todayFails;
@@ -2026,11 +2039,24 @@ export function AutoTradingWorkspace() {
             />
             <MetricCard
               label="Why TAKE blocked"
+              value={
+                dailyLossLocked
+                  ? "DAILY_LOSS_BLOCK"
+                  : str(
+                      asRecord(last.execution_blocked).reason_code ||
+                        last.abort_reason ||
+                        scaleInWhy,
+                      "NONE",
+                    )
+              }
+            />
+            <MetricCard
+              label="Sniper"
               value={str(
-                asRecord(last.execution_blocked).reason_code ||
-                  last.abort_reason ||
-                  scaleInWhy,
-                "NONE",
+                diag.sniper_state ||
+                  last.sniper_state ||
+                  asRecord(last.execution_contract).setup_state,
+                "NOT_RUN",
               )}
             />
             <MetricCard
@@ -2041,6 +2067,15 @@ export function AutoTradingWorkspace() {
             <MetricCard
               label="Class"
               value={liveTradeClass || "NO_TRADE"}
+            />
+            <MetricCard
+              label="Cycle latency"
+              value={lastLatency}
+            />
+            <MetricCard
+              label="MT5 ticket"
+              value={hasTicket ? str(last.mt5_ticket) : "NONE"}
+              tone={hasTicket ? "ok" : "neutral"}
             />
           </div>
           <p className="mt-3 text-[12px] text-[var(--fg-muted)]">
@@ -2099,9 +2134,15 @@ export function AutoTradingWorkspace() {
             />
             <MetricCard
               label="Daily Loss"
-              value={`${formatNumber(dailyLossPct, 2)}%`}
-              tone={dailyLossPct > 0 ? "warn" : "neutral"}
+              value={`${formatNumber(utcDailyLossPct, 2)}% / ${formatNumber(utcDailyLimit, 1)}%`}
+              tone={dailyLossLocked ? "bad" : utcDailyLossPct > 0 ? "warn" : "neutral"}
             />
+            <MetricCard
+              label="Daily loss lock"
+              value={dailyLossLocked ? "EXCEEDED" : "CLEAR"}
+              tone={dailyLossLocked ? "bad" : "ok"}
+            />
+            <MetricCard label="Resets" value={dailyLossReset.replace("T00:00:00Z", " UTC")} />
             <MetricCard
               label="Risk Status"
               value={riskStatusLabel}
@@ -2169,6 +2210,47 @@ export function AutoTradingWorkspace() {
             tone={pnlToday >= 0 ? "ok" : "bad"}
           />
           <MetricCard label="Avg Latency" value={latencyMs} />
+          <MetricCard
+            label="Scans / hour"
+            value={
+              Number.isFinite(num(scanRates.scans_per_hour))
+                ? formatNumber(num(scanRates.scans_per_hour), 1)
+                : "—"
+            }
+          />
+          <MetricCard
+            label="Candidates / hour"
+            value={
+              Number.isFinite(num(scanRates.candidate_setups_per_hour))
+                ? formatNumber(num(scanRates.candidate_setups_per_hour), 1)
+                : "—"
+            }
+          />
+          <MetricCard
+            label="Takes / hour"
+            value={
+              Number.isFinite(num(scanRates.take_per_hour))
+                ? formatNumber(num(scanRates.take_per_hour), 1)
+                : "—"
+            }
+          />
+          <MetricCard
+            label="Executions / hour"
+            value={
+              Number.isFinite(num(scanRates.executions_per_hour))
+                ? formatNumber(num(scanRates.executions_per_hour), 1)
+                : "—"
+            }
+          />
+          <MetricCard
+            label="Last TAKE"
+            value={str(last.decision_action, "NONE")}
+          />
+          <MetricCard
+            label="Last fill"
+            value={hasTicket ? str(last.mt5_ticket) : "NONE"}
+            tone={hasTicket ? "ok" : "neutral"}
+          />
           <MetricCard
             label="Fill Rate"
             value={

@@ -72,68 +72,25 @@ def _rolling_signal_metrics() -> dict[str, Any]:
             "windows": {},
         }
     cycles = [c for c in (snap.get("cycles") or []) if isinstance(c, dict)]
+    from app.application.services.strategy_diagnostics import hourly_scan_rates
+
+    hourly = hourly_scan_rates(cycles)
+    windows: dict[str, Any] = {"1h": hourly}
     now = datetime.now(UTC)
-    windows_s = {"1h": 3600, "4h": 14400, "24h": 86400, "7d": 604800}
-    windows: dict[str, Any] = {}
+    windows_s = {"4h": 14400, "24h": 86400, "7d": 604800}
     for name, span in windows_s.items():
-        subset: list[dict[str, Any]] = []
-        for row in cycles:
-            ts = _parse_cycle_ts(row)
-            if ts is None:
-                continue
-            if (now - ts).total_seconds() <= span:
-                subset.append(row)
-        wait_reasons: dict[str, int] = {}
-        buy_n = 0
-        sell_n = 0
-        wait_n = 0
-        take_n = 0
-        exec_n = 0
-        for row in subset:
-            action = str(
-                row.get("decision_action") or row.get("action") or ""
-            ).upper()
-            if action == "BUY":
-                buy_n += 1
-            elif action == "SELL":
-                sell_n += 1
-            elif action in {"WAIT", "NO_TRADE", "WATCH", ""}:
-                wait_n += 1
-            rej = row.get("rejection") if isinstance(row.get("rejection"), dict) else {}
-            code = str(rej.get("primary") or "")
-            if code:
-                wait_reasons[code] = wait_reasons.get(code, 0) + 1
-            if row.get("forwarded_to_oms") or row.get("executed"):
-                exec_n += 1
-            if action in {"BUY", "SELL"} and (
-                row.get("forwarded_to_oms") or row.get("executed")
-            ):
-                take_n += 1
-        hours = span / 3600.0
-        windows[name] = {
-            "cycles": len(subset),
-            "signals": len(subset),
-            "signals_per_hour": round(len(subset) / hours, 2) if hours else None,
-            "take": take_n,
-            "take_per_hour": round(take_n / hours, 2) if hours else None,
-            "wait": wait_n,
-            "buy": buy_n,
-            "sell": sell_n,
-            "executions": exec_n,
-            "wait_reasons": dict(
-                sorted(wait_reasons.items(), key=lambda kv: kv[1], reverse=True)[:8]
-            ),
-            "sample_limited": True,
-        }
+        windows[name] = hourly_scan_rates(cycles, span_seconds=float(span), now=now)
     return {
         "source": "strategy_diagnostics_ring",
         "max_cycles": 100,
         "note": (
             "Ring is the last 100 ITE cycles. Empty 4h/24h/7d buckets mean "
-            "that history is not in the in-memory ring — not zero opportunity."
+            "that history is not in the in-memory ring — not zero opportunity. "
+            "Opportunity PASS is not execution. TAKE is not an MT5 fill."
         ),
         "windows": windows,
         "statistics": snap.get("statistics") if isinstance(snap, dict) else None,
+        "hourly": hourly,
     }
 
 
@@ -914,7 +871,6 @@ def _overlay_last_ite_cycle(
     hay = f"{abort} {human}".upper()
     if "MAX_POSITION" in hay or "POSITIONS PER SYMBOL" in hay:
         abort = "MAX_POSITIONS_REACHED"
-    ticket = last.get("mt5_ticket")
     pipe = dict(row.get("pipeline") or {})
     if str(pipe.get("execution_lifecycle") or "").upper() == "FILLED":
         return row
@@ -923,6 +879,16 @@ def _overlay_last_ite_cycle(
         "SELL",
         "TAKE",
     }
+    mcd_early = last.get("market_context_diagnostics")
+    if not isinstance(mcd_early, dict):
+        mcd_early = {}
+    if take and (
+        "DAILY LOSS" in hay
+        or "DAILY_LOSS" in hay
+        or mcd_early.get("daily_loss_exceeded") is True
+    ):
+        abort = "DAILY_LOSS_BLOCK"
+    ticket = last.get("mt5_ticket")
     if forwarded and ticket:
         pipe["oms"] = "READY"
         pipe["broker"] = "SUBMITTED"
@@ -946,7 +912,9 @@ def _overlay_last_ite_cycle(
     )
 
     stage = str(blocked.get("stage") or "").upper()
-    if not stage:
+    if abort == "DAILY_LOSS_BLOCK":
+        stage = "RISK"
+    elif not stage:
         stage = bridge_abort_stage(abort)
     not_reached = "NOT_REACHED"
     pipe["first_blocker"] = abort
@@ -1000,6 +968,15 @@ def _overlay_last_ite_cycle(
             pipe["final_decision"] = "TAKE"
             pipe["setup_state"] = "TAKE"
             row["status"] = "MAX_POSITIONS_REACHED"
+    if abort == "DAILY_LOSS_BLOCK":
+        if str(pipe.get("decision") or row.get("direction") or "").upper() in {
+            "BUY",
+            "SELL",
+            "TAKE",
+        }:
+            pipe["final_decision"] = "TAKE"
+            pipe["setup_state"] = "TAKE"
+            row["status"] = "DAILY_LOSS_BLOCK"
     mcd = last.get("market_context_diagnostics")
     if isinstance(mcd, dict):
         for key in (
@@ -1013,6 +990,12 @@ def _overlay_last_ite_cycle(
             "quantforg_positions",
             "mt5_positions",
             "position_tickets",
+            "daily_loss_pct",
+            "daily_loss_limit_pct",
+            "daily_loss_exceeded",
+            "daily_loss_session_day",
+            "daily_loss_resets_at",
+            "daily_pnl",
         ):
             if mcd.get(key) is not None:
                 row[key] = mcd[key]
@@ -1235,6 +1218,25 @@ def list_live_signals(
     test_synthetic = bool(scan.get("test_synthetic")) or str(
         scan.get("source") or ""
     ).upper() == "TEST_SYNTHETIC"
+    rolling = _rolling_signal_metrics()
+    hourly = rolling.get("hourly") if isinstance(rolling.get("hourly"), dict) else {}
+    last_take = None
+    last_fill = None
+    for item in signals:
+        pipe = item.get("pipeline") if isinstance(item.get("pipeline"), dict) else {}
+        if last_take is None and str(pipe.get("final_decision") or "").upper() == "TAKE":
+            last_take = {
+                "symbol": item.get("symbol"),
+                "direction": item.get("direction"),
+                "setup_state": pipe.get("setup_state"),
+                "blocker": item.get("first_blocker"),
+            }
+        if last_fill is None and str(pipe.get("mt5") or "").upper() == "FILLED":
+            last_fill = {
+                "symbol": item.get("symbol"),
+                "direction": item.get("direction"),
+                "ticket": pipe.get("ticket") or item.get("ticket"),
+            }
     return {
         "as_of": as_of,
         "session": _session(),
@@ -1256,8 +1258,18 @@ def list_live_signals(
             "average_confidence": round(sum(confs) / len(confs), 1) if confs else None,
             "average_quality": round(sum(quals) / len(quals), 1) if quals else None,
             "managed_prefs": len(all_prefs),
+            "universe": "XAUUSD_i",
+            "scans_per_hour": hourly.get("scans_per_hour"),
+            "candidates_per_hour": hourly.get("candidate_setups_per_hour"),
+            "takes_per_hour": hourly.get("take_per_hour"),
+            "executions_per_hour": hourly.get("executions_per_hour"),
+            "setup_ready_count": hourly.get("setup_ready_count"),
+            "take_count": hourly.get("take_count"),
+            "WAIT_CHASE_count": hourly.get("WAIT_CHASE_count"),
+            "last_valid_take": last_take,
+            "last_executed_trade": last_fill,
         },
-        "rolling": _rolling_signal_metrics(),
+        "rolling": rolling,
         "count": len(signals),
         "items": signals,
     }

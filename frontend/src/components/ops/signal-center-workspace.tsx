@@ -149,11 +149,15 @@ export function SignalCenterWorkspace() {
           {(
             [
               ["Total", dash.total_symbols],
-              ["Enabled", dash.enabled_symbols],
+              ["XAUUSD only", dash.universe ?? "XAUUSD_i"],
               ["BUY", dash.buy_signals],
               ["SELL", dash.sell_signals],
               ["WAIT", dash.wait],
-              ["No Trade", dash.no_trade],
+              ["Scans/h", dash.scans_per_hour],
+              ["Candidates/h", dash.candidates_per_hour],
+              ["Takes/h", dash.takes_per_hour],
+              ["Executions/h", dash.executions_per_hour],
+              ["WAIT_CHASE", dash.WAIT_CHASE_count],
               ["Avg Conf", dash.average_confidence],
               ["Avg Qual", dash.average_quality],
             ] as Array<[string, unknown]>

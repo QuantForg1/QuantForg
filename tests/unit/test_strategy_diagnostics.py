@@ -164,6 +164,59 @@ class TestStrategyDiagnostics:
         assert row["executed"] is False
         assert row["advisory_only"] is True
 
+    @pytest.mark.trading_core
+    def test_buy_take_is_not_executed_without_oms_forward(self) -> None:
+        snap = _snapshot(quality=80)
+        decision = _decision(snap, quality=80, confidence=80)
+        row = extract_cycle_diagnostics(
+            snapshot=snap,
+            decision=decision,
+            cycle_outcome="aborted",
+            decision_action="BUY",
+            abort_reason="DAILY_LOSS_BLOCK",
+            forwarded_to_oms=False,
+        )
+        assert row["take"] is True
+        assert row["executed"] is False
+        assert row["forwarded_to_oms"] is False
+
+    @pytest.mark.trading_core
+    def test_hourly_scan_rates_separate_take_from_fill(self) -> None:
+        from app.application.services.strategy_diagnostics import hourly_scan_rates
+
+        cycles = [
+            {
+                "recorded_at": "2026-08-27T14:00:00+00:00",
+                "decision_action": "SELL",
+                "take": True,
+                "forwarded_to_oms": False,
+                "executed": False,
+                "opportunity_score": 71,
+                "opportunity_threshold": 70,
+                "setup_state": "TAKE",
+                "rejection": {"primary": "DAILY_LOSS_BLOCK"},
+            },
+            {
+                "recorded_at": "2026-08-27T14:01:00+00:00",
+                "decision_action": "WAIT",
+                "take": False,
+                "forwarded_to_oms": False,
+                "opportunity_score": 44,
+                "setup_state": "WAIT",
+                "rejection": {"primary": "WAIT_CHASE"},
+            },
+        ]
+        rates = hourly_scan_rates(
+            cycles, now=datetime(2026, 8, 27, 14, 30, tzinfo=UTC)
+        )
+        assert rates["scans"] == 2
+        assert rates["candidate_setups"] == 1
+        assert rates["take_count"] == 1
+        assert rates["executed_count"] == 0
+        assert rates["WAIT_CHASE_count"] == 1
+        assert rates["SELL_count"] == 1
+        assert rates["executions_per_hour"] == 0.0
+
     def test_statistics_and_insights(self) -> None:
         snap = _snapshot(quality=58)
         decision = _decision(snap)

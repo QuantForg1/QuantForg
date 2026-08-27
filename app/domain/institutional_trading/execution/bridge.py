@@ -153,8 +153,24 @@ class ExecutionBridge:
         cfg = self.ite_config
         if cfg.is_scalping():
             return cfg
-        checks = getattr(getattr(decision, "eligibility", None), "checks", None) or {}
-        if checks.get("quality_ok") is not True:
+        elig = getattr(decision, "eligibility", None)
+        checks = getattr(elig, "checks", None) or {}
+        already_eligible = bool(getattr(elig, "eligible", False))
+        action = str(
+            getattr(getattr(decision, "action", None), "value", None)
+            or getattr(decision, "action", "")
+            or ""
+        ).upper()
+        reasons = " ".join(
+            str(r).lower() for r in (getattr(decision, "reasons", ()) or ())
+        )
+        scalp_take = action in {"BUY", "SELL"} and (
+            already_eligible
+            or checks.get("quality_ok") is True
+            or "scalp" in reasons
+            or "sniper" in reasons
+        )
+        if not scalp_take:
             return cfg
         quality_total = getattr(
             getattr(context.snapshot, "trade_quality", None), "total", None
@@ -1286,13 +1302,33 @@ class ExecutionBridge:
                 abs(context.account.daily_pnl) / context.account.equity * Decimal("100")
             )
             account_daily = loss_pct >= Decimal(str(self.ite_config.max_daily_loss_pct))
+        try:
+            from app.domain.institutional_trading.operations.daily_loss_lock import (
+                sync_utc_daily_loss_lock,
+            )
+
+            lock = sync_utc_daily_loss_lock(
+                self.ops_plane,
+                daily_pnl=context.account.daily_pnl,
+                equity=context.account.equity,
+                balance=context.account.balance,
+                max_daily_loss_pct=Decimal(str(self.ite_config.max_daily_loss_pct)),
+                trusted=True,
+            )
+            account_daily = bool(lock.get("daily_loss_exceeded"))
+            plane_daily = bool(
+                self.ops_plane.daily_loss_exceeded
+                if self.ops_plane is not None
+                else account_daily
+            )
+        except Exception:
+            if (
+                account_daily
+                and self.ops_plane is not None
+                and not self.ops_plane.daily_loss_exceeded
+            ):
+                self.ops_plane.flag_daily_loss()
         daily_loss_exceeded = plane_daily or account_daily
-        if (
-            account_daily
-            and self.ops_plane is not None
-            and not self.ops_plane.daily_loss_exceeded
-        ):
-            self.ops_plane.flag_daily_loss()
 
         return AutoTradeLiveFacts(
             gateway_connected=_flag(context.gateway_connected),

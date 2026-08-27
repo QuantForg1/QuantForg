@@ -154,4 +154,39 @@ assert.equal(capacityFull.broker, "NOT_REACHED");
 assert.equal(capacityFull.mt5, "NOT_REACHED");
 assert.equal(capacityFull.first_blocker, "MAX_POSITIONS_REACHED");
 
+const dailyLoss = parseSignalPipeline({
+  market: "OPEN",
+  data: "LIVE",
+  buy_score: 6,
+  sell_score: 48,
+  decision: "SELL",
+  first_blocker: "DAILY_LOSS_BLOCK",
+  sniper: "READY",
+  risk: "BLOCK",
+  safety: "NOT_REACHED",
+  optimizer: "NOT_REACHED",
+  oms: "NOT_REACHED",
+  broker: "NOT_REACHED",
+  mt5: "NOT_REACHED",
+  opportunity_score: 71,
+  opportunity_threshold: 70,
+  opportunity_gate: "PASS",
+  setup_state: "TAKE",
+  final_decision: "TAKE",
+  execution_lifecycle: "EXECUTION_BLOCKED",
+});
+assert.ok(dailyLoss);
+assert.equal(dailyLoss.final_decision, "TAKE");
+assert.equal(dailyLoss.sniper, "READY");
+assert.equal(dailyLoss.risk, "BLOCK");
+assert.equal(dailyLoss.safety, "NOT_REACHED");
+assert.equal(dailyLoss.oms, "NOT_REACHED");
+assert.equal(dailyLoss.broker, "NOT_REACHED");
+assert.equal(dailyLoss.mt5, "NOT_REACHED");
+assert.equal(dailyLoss.first_blocker, "DAILY_LOSS_BLOCK");
+assert.equal(
+  formatFirstBlocker("DAILY_LOSS_BLOCK"),
+  "First blocker: DAILY_LOSS_BLOCK",
+);
+
 console.log("signal-display.test.ts: ok");

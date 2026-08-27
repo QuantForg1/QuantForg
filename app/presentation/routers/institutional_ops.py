@@ -803,6 +803,7 @@ def get_auto_trading(_user: OperatorUser) -> dict[str, Any]:
         "institutional_alpha": _institutional_alpha_payload(),
         "daily_opportunity_target": _daily_opportunity_target_payload(),
         "gold_only": _gold_only_payload(),
+        "scan_rates": _scan_rates_payload(),
         "execution_context": _autonomous_execution_context_payload(
             orchestrator=orchestrator,
             recent_attempts=recent_attempts,
@@ -817,6 +818,25 @@ def _gold_only_payload() -> dict[str, Any]:
     from app.domain.trading.gold_only import gold_only_diagnostics
 
     return gold_only_diagnostics()
+
+
+def _scan_rates_payload() -> dict[str, Any]:
+    try:
+        from app.application.services.strategy_diagnostics import (
+            get_strategy_diagnostics_store,
+            hourly_scan_rates,
+        )
+
+        snap = get_strategy_diagnostics_store().snapshot(limit=100)
+        hourly = snap.get("hourly")
+        if isinstance(hourly, dict) and hourly:
+            return hourly
+        cycles = snap.get("cycles") if isinstance(snap.get("cycles"), list) else []
+        return hourly_scan_rates(
+            [c for c in cycles if isinstance(c, dict)]
+        )
+    except Exception:
+        return {"sample_limited": True, "scans_per_hour": None}
 
 
 def _autonomous_execution_context_payload(

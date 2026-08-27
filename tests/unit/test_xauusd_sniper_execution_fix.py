@@ -797,6 +797,56 @@ def test_ob_retest_uses_originating_timeframe() -> None:
     assert chase.get("zone_timeframe") in {"H1", Timeframe.H1.value}
 
 
+def test_ob_missing_timeframe_scales_m5_atr_to_m15_not_false_chase() -> None:
+    """M15 OB without TF metadata must not use raw M5 1.5×ATR as chase."""
+    from app.domain.institutional_trading.ai_scalping.sniper_entry import _atr_for_zone
+
+    m5 = Decimal("5.61")
+    scaled = _atr_for_zone(
+        m5, atr_timeframe="M5", zone_timeframe=None, source="ob"
+    )
+    assert scaled > m5
+    snap = _snap(
+        order_blocks=[_ob(bias="BUY", high="2612", low="2608", timeframe=None)],
+        bos=[_bos("UP")],
+        sweeps=[MagicMock(side="LOW")],
+    )
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.BUY, buy=82, sell=18),
+        mid=Decimal("2622"),
+        bid=Decimal("2621.90"),
+        ask=Decimal("2622.10"),
+        stop_loss=Decimal("2604"),
+        atr=m5,
+        atr_timeframe="M5",
+    )
+    assert out.primary_reason != "WAIT_CHASE"
+    chase = out.diagnostics.get("chase") or {}
+    assert Decimal(str(chase.get("atr_value") or "0")) == scaled
+
+
+def test_genuine_ob_chase_still_rejects() -> None:
+    snap = _snap(
+        order_blocks=[_ob(bias="BUY", high="2612", low="2608", timeframe=None)],
+        bos=[_bos("UP")],
+        sweeps=[MagicMock(side="LOW")],
+    )
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.BUY, buy=82, sell=18),
+        mid=Decimal("2645"),
+        bid=Decimal("2644.90"),
+        ask=Decimal("2645.10"),
+        stop_loss=Decimal("2604"),
+        atr=Decimal("5.61"),
+        atr_timeframe="M5",
+    )
+    assert out.passed is False
+    assert out.primary_reason == "WAIT_CHASE"
+    assert out.diagnostics["entry_state"] == "EXTENDED"
+
+
 def test_setup_forming_never_executes() -> None:
     snap = _snap(fvgs=[_fvg(side="BEARISH", high="4628", low="4624")])
     out = _sniper(

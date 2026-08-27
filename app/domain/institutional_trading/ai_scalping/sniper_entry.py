@@ -94,12 +94,13 @@ def _atr_for_zone(
 ) -> Decimal:
     """Scale ATR to the FVG/OB timeframe so M5 ATR is not used as M15 chase.
 
-    Production FVG is detected on structure TF (M15). Entry ATR is M5.
-    Missing FVG timeframe still scales M5→M15. Unknown OB stays on entry ATR.
+    Production FVG/OB are detected on structure TF (M15). Entry ATR is M5.
+    Missing FVG or OB timeframe still scales M5→M15. Never compare an
+    M15 structure zone against unscaled M5 distance.
     """
     src = _tf_minutes(atr_timeframe) or _tf_minutes("M5")
     dst = _tf_minutes(zone_timeframe)
-    if dst is None and source == "fvg":
+    if dst is None and source in {"fvg", "ob", "order_block"}:
         dst = _tf_minutes("M15")
     if dst is None:
         dst = src
@@ -546,8 +547,9 @@ def evaluate_sniper_entry(
         ref = mid
     diagnostics["ref_price"] = str(ref) if ref is not None else None
 
-    fvg_fresh = [z for z in fresh_zones if z.source == "fvg"]
-    chase_zones = fvg_fresh or fresh_zones or stale_zones
+    # Measure chase against the nearest fresh zone (FVG or OB). Preferring
+    # only FVG can false-chase a closer demand/supply OB.
+    chase_zones = fresh_zones or stale_zones
     used_stale_only = bool(stale_zones) and not fresh_zones
     if used_stale_only:
         pillars["fresh_zone"] = False

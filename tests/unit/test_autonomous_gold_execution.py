@@ -183,12 +183,17 @@ def test_leverage_2000_passes_and_2001_blocks() -> None:
 
 @pytest.mark.unit
 def test_risk_failure_blocks() -> None:
-    out = evaluate_gold_execution_contract(
+    daily = evaluate_gold_execution_contract(
         _ready(risk_eligible=False, risk_reasons=("daily loss limit exceeded",))
     )
-    assert out.may_submit_oms is False
-    assert out.fault_code == "RISK_REJECTED"
-    assert "daily loss" in out.fault_reason.lower()
+    assert daily.may_submit_oms is False
+    assert daily.fault_code == "DAILY_LOSS_BLOCK"
+    assert "daily loss" in daily.fault_reason.lower()
+    generic = evaluate_gold_execution_contract(
+        _ready(risk_eligible=False, risk_reasons=("margin insufficient",))
+    )
+    assert generic.may_submit_oms is False
+    assert generic.fault_code == "RISK_REJECTED"
 
 
 @pytest.mark.unit

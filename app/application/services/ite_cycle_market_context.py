@@ -908,6 +908,29 @@ async def build_ite_cycle_market_context(
         max_dd = Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct))
         daily_pnl = -(equity * max_dd / Decimal("100"))
         daily_pnl_trusted = False
+        diag["daily_pnl"] = str(daily_pnl)
+        diag["daily_pnl_trusted"] = False
+
+    try:
+        from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+        from app.domain.institutional_trading.operations.control_plane import (
+            get_control_plane,
+        )
+        from app.domain.institutional_trading.operations.daily_loss_lock import (
+            sync_utc_daily_loss_lock,
+        )
+
+        lock = sync_utc_daily_loss_lock(
+            get_control_plane(),
+            daily_pnl=daily_pnl,
+            equity=equity,
+            balance=Decimal(str(diag.get("balance") or 0)),
+            max_daily_loss_pct=Decimal(str(DEFAULT_ITE_CONFIG.max_daily_loss_pct)),
+            trusted=bool(daily_pnl_trusted),
+        )
+        diag.update(lock)
+    except Exception as exc:
+        logger.warning("ite_cycle_daily_loss_lock_sync_failed", error=str(exc))
 
     try:
         if isinstance(pre_orders, Exception):

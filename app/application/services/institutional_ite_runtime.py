@@ -3061,6 +3061,7 @@ class InstitutionalIteRuntime:
                     )
                     else None
                 ),
+                daily_loss_exceeded=bool(self.plane.daily_loss_exceeded),
             )
         )
         if market_context_diagnostics is None:

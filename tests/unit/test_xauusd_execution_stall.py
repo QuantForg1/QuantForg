@@ -425,3 +425,86 @@ def test_apply_trading_mode_syncs_bridge_ite_config() -> None:
     assert runtime.decision_pipeline.config.is_scalping() is True
     assert runtime.execution.bridge.ite_config.is_scalping() is True
     assert runtime.execution.bridge.ite_config is runtime.decision_pipeline.config
+
+
+def test_scalping_take_reaches_oms_without_quality_ok_check() -> None:
+    """Residual stall: eligible BUY/SELL with empty checks must not hit swing 80."""
+    from dataclasses import replace
+
+    from app.application.services.institutional_execution_integration import (
+        InstitutionalExecutionIntegration,
+    )
+    from app.application.services.institutional_oms_adapter import RecordingOmsPort
+    from app.domain.institutional_trading.ai_scalping.live_health import (
+        get_live_health_monitor,
+    )
+    from app.domain.institutional_trading.config import ITEConfig
+    from app.domain.institutional_trading.decision_models import (
+        ConfluenceResult,
+        EligibilityResult,
+        TradeDirection,
+    )
+    from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
+    from app.domain.institutional_trading.execution.config import ExecutionBridgeConfig
+    from app.domain.institutional_trading.execution.models import (
+        BridgeAbortReason,
+        ExecutionMode,
+    )
+    from app.domain.institutional_trading.phase_a.plane import (
+        reset_phase_a_plane_for_tests,
+    )
+    from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
+    from app.domain.market_structure.enums import TrendDirection
+    from tests.unit.test_institutional_trading_phase_c import (
+        _account,
+        _ctx,
+        _snapshot,
+    )
+
+    snap = _snapshot(direction=TrendDirection.UP, quality=66)
+    conf = ConfluenceResult(
+        confidence=65,
+        direction=TradeDirection.BUY,
+        reasons=("scalp",),
+        rejected_rules=(),
+        input_hash="scalp-no-qok",
+        band="tradable",
+        passed=True,
+        factors={},
+    )
+    acct = _account()
+    scalp = ITEConfig(trading_mode="scalping")
+    elig = PositionEligibilityEngine(config=scalp).evaluate(
+        snapshot=snap,
+        confluence=conf,
+        account=acct,
+        risk_allowed=True,
+    )
+    decision = TradeDecisionEngine(config=scalp).decide(
+        snapshot=snap,
+        confluence=conf,
+        eligibility=elig,
+        account=acct,
+        risk_score=20,
+        approved_lots=Decimal("0.01"),
+    )
+    decision = replace(
+        decision,
+        eligibility=EligibilityResult(
+            eligible=True, checks={}, rejection_reasons=()
+        ),
+        reasons=("scalp take",),
+    )
+    oms = RecordingOmsPort()
+    get_live_health_monitor().reset()
+    reset_phase_a_plane_for_tests()
+    integ = InstitutionalExecutionIntegration.create(
+        oms,
+        config=ExecutionBridgeConfig(mode=ExecutionMode.LIVE, decision_ttl_seconds=30),
+    )
+    assert integ.bridge.ite_config.is_scalping() is False
+    result = integ.execute(decision, _ctx(decision, snap, acct))
+    comment = str(getattr(getattr(result, "journal_entry", None), "comment", "") or "")
+    assert result.abort_reason is not BridgeAbortReason.ELIGIBILITY_FAILED
+    assert "below 80" not in comment
+    assert oms.calls, f"expected OMS submit, abort={result.abort_reason} {comment}"

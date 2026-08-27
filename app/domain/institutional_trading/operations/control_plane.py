@@ -831,6 +831,25 @@ class OperationsControlPlane:
             now=now,
         )
 
+    def clear_daily_loss(
+        self, *, now: datetime | None = None, reason: str = "utc_session_under_cap"
+    ) -> bool:
+        """Release the daily-loss latch when the current UTC day is under the cap.
+
+        Does not change max_daily_loss_pct. Does not disarm the kill switch.
+        """
+        with self._lock:
+            was = bool(self.daily_loss_exceeded)
+            self.daily_loss_exceeded = False
+        if was:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "daily_loss_lock_cleared",
+                reason=reason,
+            )
+        return was
+
     def flag_canary_failure(self, message: str, *, now: datetime | None = None) -> None:
         self.alerts.raise_alert(
             kind=AlertKind.CANARY_FAILURE,
