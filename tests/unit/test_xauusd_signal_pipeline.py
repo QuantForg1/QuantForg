@@ -629,3 +629,145 @@ def test_risk_block_reaches_risk_not_fake_wait() -> None:
     assert row["pipeline"]["risk"] == "BLOCK"
     assert row["pipeline"]["safety"] == "NOT_REACHED"
     assert row["pipeline"]["oms"] == "NOT_REACHED"
+
+
+def test_aligned_fvg_counts_as_liquidity_not_trend_alone() -> None:
+    snap = _trend_snap(macro=TrendDirection.DOWN, primary=TrendDirection.RANGE)
+    gap = MagicMock()
+    gap.side = "BEARISH"
+    gap.bias = None
+    gap.direction = None
+    gap.zone = MagicMock(high_price=Decimal("2652"), low_price=Decimal("2649"))
+    snap.fair_value_gaps.active_gaps = [gap]
+    out = evaluate_sniper_entry(
+        snap,
+        direction=_dir(TradeDirection.SELL, buy=18, sell=82),
+        mid=Decimal("2650"),
+        atr=Decimal("4.00"),
+        expected_rr=Decimal("1.40"),
+        min_expected_rr=Decimal("1.20"),
+        stop_loss=Decimal("2654"),
+        pa_score=70,
+        momentum=70,
+        min_momentum=55,
+        config=DEFAULT_AI_SCALPING_CONFIG,
+    )
+    assert out.pillars["liquidity_event"] is True
+    assert out.passed is True
+    assert out.action == "SELL"
+    assert out.primary_reason is None
+
+
+def test_fvg_without_momentum_is_incomplete_not_silent() -> None:
+    snap = _trend_snap(macro=TrendDirection.DOWN, primary=TrendDirection.RANGE)
+    gap = MagicMock()
+    gap.side = "BEARISH"
+    gap.bias = None
+    gap.direction = None
+    gap.zone = MagicMock(high_price=Decimal("2652"), low_price=Decimal("2649"))
+    snap.fair_value_gaps.active_gaps = [gap]
+    out = evaluate_sniper_entry(
+        snap,
+        direction=_dir(TradeDirection.SELL, buy=18, sell=82),
+        mid=Decimal("2650"),
+        atr=Decimal("4.00"),
+        expected_rr=Decimal("1.40"),
+        min_expected_rr=Decimal("1.20"),
+        stop_loss=Decimal("2654"),
+        pa_score=20,
+        momentum=0,
+        min_momentum=65,
+        config=DEFAULT_AI_SCALPING_CONFIG,
+    )
+    assert out.passed is False
+    assert out.action == "WAIT"
+    assert out.pillars["liquidity_event"] is True
+    assert out.primary_reason == "WAIT_SNIPER_INCOMPLETE"
+
+
+def test_scale_in_blocks_losing_leg_and_missing_pnl() -> None:
+    from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
+        may_add_scalping_trade,
+    )
+    from app.domain.institutional_trading.ai_scalping.dynamic_sizing_v2 import (
+        adaptive_protection_scale,
+    )
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_AI_SCALPING_CONFIG,
+    )
+
+    loser = may_add_scalping_trade(
+        open_positions=1,
+        max_open=5,
+        new_confidence=90,
+        best_open_confidence=80,
+        new_direction="SELL",
+        open_directions=("SELL",),
+        open_profits=(Decimal("-8"),),
+        require_unrealized_profit=True,
+        require_improvement=True,
+        min_confidence_delta=3,
+    )
+    assert loser.allow is False
+
+    missing = may_add_scalping_trade(
+        open_positions=1,
+        max_open=5,
+        new_confidence=90,
+        best_open_confidence=80,
+        new_direction="SELL",
+        open_directions=("SELL",),
+        require_unrealized_profit=True,
+        require_improvement=True,
+        min_confidence_delta=3,
+    )
+    assert missing.allow is False
+    assert "fail closed" in missing.reason.lower() or "missing" in missing.reason.lower()
+
+    winner = may_add_scalping_trade(
+        open_positions=1,
+        max_open=5,
+        new_confidence=90,
+        best_open_confidence=80,
+        new_direction="SELL",
+        open_directions=("SELL",),
+        open_profits=(Decimal("12"),),
+        same_direction_profits=(Decimal("12"),),
+        require_unrealized_profit=True,
+        require_improvement=True,
+        min_confidence_delta=3,
+    )
+    assert winner.allow is True
+
+    assert DEFAULT_AI_SCALPING_CONFIG.allow_martingale is False
+    scale, _halt, _notes = adaptive_protection_scale(consecutive_losses=3)
+    assert scale <= Decimal("1")
+
+
+def test_execution_ready_is_not_filled() -> None:
+    ready = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "BUY",
+            "signal_action": "BUY",
+            "trade_quality": 88,
+            "ai_confidence": 81,
+            "reject": False,
+            "sniper_entry": {"passed": True, "action": "BUY"},
+        }
+    )
+    assert ready["pipeline"]["execution_lifecycle"] == "EXECUTION_READY"
+    filled = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "BUY",
+            "signal_action": "BUY",
+            "trade_quality": 88,
+            "ai_confidence": 81,
+            "reject": False,
+            "sniper_entry": {"passed": True, "action": "BUY"},
+            "order_status": "FILLED",
+            "order_ticket": 12345,
+        }
+    )
+    assert filled["pipeline"]["execution_lifecycle"] == "FILLED"

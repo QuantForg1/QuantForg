@@ -305,9 +305,15 @@ export function SignalCenterWorkspace() {
                   ) : null}
                   {s.pipeline ? (
                     <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
-                      Market {s.pipeline.market} · Data {s.pipeline.data} ·
-                      Sniper {s.pipeline.sniper} · Risk {s.pipeline.risk} ·
-                      Safety {s.pipeline.safety} · OMS {s.pipeline.oms}
+                      Opportunity {s.pipeline.opportunity_score}/
+                      {s.pipeline.opportunity_threshold} · Market{" "}
+                      {s.pipeline.market} · Data {s.pipeline.data} · Sniper{" "}
+                      {s.pipeline.sniper} · Risk {s.pipeline.risk} · Safety{" "}
+                      {s.pipeline.safety} · Optimizer {s.pipeline.optimizer} ·
+                      OMS {s.pipeline.oms}
+                      {s.pipeline.execution_lifecycle
+                        ? ` · ${s.pipeline.execution_lifecycle.replaceAll("_", " ")}`
+                        : ""}
                     </p>
                   ) : null}
                   <div className="mt-3 space-y-2">
@@ -394,6 +400,17 @@ export function SignalCenterWorkspace() {
                 ["Risk", selected.pipeline?.risk ?? "—"],
                 ["Safety", selected.pipeline?.safety ?? "—"],
                 ["OMS", selected.pipeline?.oms ?? "—"],
+                ["Optimizer", selected.pipeline?.optimizer ?? "—"],
+                [
+                  "Opportunity",
+                  selected.pipeline
+                    ? `${selected.pipeline.opportunity_score}/${selected.pipeline.opportunity_threshold}`
+                    : "—",
+                ],
+                [
+                  "Execution",
+                  selected.pipeline?.execution_lifecycle || "—",
+                ],
                 ["Market", selected.pipeline?.market ?? "—"],
                 ["Data", selected.pipeline?.data ?? "—"],
                 ["Price", fmt(selected.current_price)],

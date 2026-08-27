@@ -538,6 +538,8 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             sell_score=sell_score,
             opportunity_score=opportunity_score,
             opportunity_threshold=score.get("opportunity_threshold") or 70,
+            order_status=score.get("order_status") or score.get("fill_status"),
+            order_ticket=score.get("order_ticket") or score.get("ticket"),
         ),
         "detail": detail,
         "gauges": {
@@ -561,6 +563,8 @@ def _pipeline_snapshot(
     sell_score: int,
     opportunity_score: Any,
     opportunity_threshold: Any,
+    order_status: Any = None,
+    order_ticket: Any = None,
 ) -> dict[str, Any]:
     """Observe-only gate strip. Never invents Risk/Safety/OMS PASS on WAIT."""
     code = str(block_code or "").upper()
@@ -611,6 +615,17 @@ def _pipeline_snapshot(
             oms_state = "BLOCK"
         elif action in {"BUY", "SELL"} and code not in execution_codes:
             oms_state = "READY"
+    optimizer_state = not_reached
+    if reached_risk and risk_state == "READY" and safety_state != "BLOCK":
+        optimizer_state = "READY"
+    fill = str(order_status or "").upper()
+    execution_lifecycle = None
+    if fill in {"FILLED", "PARTIAL", "PARTIALLY_FILLED"}:
+        execution_lifecycle = "FILLED"
+    elif order_ticket:
+        execution_lifecycle = "ORDER_SENT"
+    elif action in {"BUY", "SELL"} and sniper_passed and code not in execution_codes:
+        execution_lifecycle = "EXECUTION_READY"
     return {
         "market": "OPEN" if market_data_live is not False else "UNKNOWN",
         "data": data,
@@ -625,7 +640,9 @@ def _pipeline_snapshot(
         "sniper": sniper_state,
         "risk": risk_state,
         "safety": safety_state,
+        "optimizer": optimizer_state,
         "oms": oms_state,
+        "execution_lifecycle": execution_lifecycle,
     }
 
 

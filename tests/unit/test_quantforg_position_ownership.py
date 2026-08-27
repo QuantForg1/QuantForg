@@ -656,8 +656,8 @@ async def test_scanner_quantforg_same_symbol_blocks_duplicate(
         open_positions=1,
     )
     assert out.get("already_open_reason") == "QUANTFORG_SAME_SYMBOL_OPEN"
-    assert out.get("best_symbol") is None
-    assert list(out.get("eligible_symbols") or []) == []
+    assert out.get("best_symbol") == "XAUUSD"
+    assert "XAUUSD" in list(out.get("eligible_symbols") or [])
 
 
 def test_manual_does_not_reduce_effective_count() -> None:

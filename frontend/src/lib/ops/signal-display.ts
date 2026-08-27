@@ -10,7 +10,11 @@ export type SignalPipeline = {
   sniper: string;
   risk: string;
   safety: string;
+  optimizer: string;
   oms: string;
+  opportunity_score: number;
+  opportunity_threshold: number;
+  execution_lifecycle: string | null;
 };
 
 export function formatSignalHeadline(
@@ -63,7 +67,14 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
     sniper: text(row.sniper, "NOT_RUN"),
     risk: text(row.risk, "NOT_REACHED"),
     safety: text(row.safety, "NOT_REACHED"),
+    optimizer: text(row.optimizer, "NOT_REACHED"),
     oms: text(row.oms, "NOT_REACHED"),
+    opportunity_score: num(row.opportunity_score),
+    opportunity_threshold: num(row.opportunity_threshold) || 70,
+    execution_lifecycle:
+      row.execution_lifecycle == null || row.execution_lifecycle === ""
+        ? null
+        : String(row.execution_lifecycle),
   };
 }
 

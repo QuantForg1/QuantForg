@@ -161,14 +161,18 @@ def decide_scalping_direction(
     sweeps = list(raw_sweeps) if isinstance(raw_sweeps, (list, tuple)) else []
     factors["liquidity_sweep"] = min(20, len(sweeps) * 8)
     for sw in sweeps[-2:]:
+        kind_raw = str(
+            getattr(getattr(sw, "kind", None), "value", getattr(sw, "kind", "")) or ""
+        ).upper()
         side_raw = str(
             getattr(getattr(sw, "side", None), "value", getattr(sw, "side", "")) or ""
         ).upper()
+        token = f"{kind_raw} {side_raw}"
         # Sweep of lows → often BUY; sweep of highs → often SELL
-        if any(t in side_raw for t in ("LOW", "BID", "BUY", "BULL")):
+        if any(t in token for t in ("LOW", "BID", "BUY", "BULL")):
             buy += 10
             reasons.append("Liquidity sweep of lows → BUY bias")
-        elif any(t in side_raw for t in ("HIGH", "ASK", "SELL", "BEAR")):
+        elif any(t in token for t in ("HIGH", "ASK", "SELL", "BEAR")):
             sell += 10
             reasons.append("Liquidity sweep of highs → SELL bias")
 

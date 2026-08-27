@@ -96,6 +96,8 @@ class AiScalpingScore:
     sniper_entry: dict[str, object] | None = None
     # Operator-facing action. Bias stays on ``direction`` (BUY/SELL lean).
     signal_action: str = "WAIT"
+    why_buy: tuple[str, ...] = ()
+    why_sell: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -141,6 +143,8 @@ class AiScalpingScore:
             "score_breakdown": dict(self.score_breakdown or {}),
             "opportunity_eligible": self.opportunity_eligible,
             "sniper_entry": dict(self.sniper_entry or {}),
+            "why_buy": list(self.why_buy),
+            "why_sell": list(self.why_sell),
             "never_prefer_buy_only": True,
         }
 
@@ -629,4 +633,32 @@ def score_scalping_setup(
         opportunity_eligible=bool(verdict.eligible) and not reject,
         sniper_entry=sniper.to_dict(),
         signal_action=signal_action,
+        why_buy=tuple(
+            r
+            for r in direction_dec.reasons
+            if any(
+                t in r.upper()
+                for t in (
+                    "SUPPORTS BUY",
+                    "BUY BIAS",
+                    "BULLISH",
+                    "EQUAL LOWS",
+                    "HIGHEST PROBABILITY BUY",
+                )
+            )
+        ),
+        why_sell=tuple(
+            r
+            for r in direction_dec.reasons
+            if any(
+                t in r.upper()
+                for t in (
+                    "SUPPORTS SELL",
+                    "SELL BIAS",
+                    "BEARISH",
+                    "EQUAL HIGHS",
+                    "HIGHEST PROBABILITY SELL",
+                )
+            )
+        ),
     )

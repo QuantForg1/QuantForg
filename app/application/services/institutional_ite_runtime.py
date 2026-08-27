@@ -4803,17 +4803,20 @@ class InstitutionalIteRuntime:
                         continue
                 except Exception:
                     pass
-                # Never duplicate QuantForg-owned same-symbol via handoff.
+                # Never drop a NEW independent continuation on an open
+                # QuantForg gold ticket — Risk/PRE enforce winner-only
+                # scale-in and reject averaging down.
                 if is_quantforg_same_symbol_open(sym, open_syms):
                     self._eligible_consumed.add(sym)
+                    self._entries_this_scan += 1
                     facts = same_symbol_ownership_facts(rows, candidate_symbol=sym)
                     logger.warning(
-                        "multi_asset_handoff_skip_already_open",
+                        "multi_asset_handoff_scale_in_candidate",
                         symbol=sym,
-                        reason="QUANTFORG_SAME_SYMBOL_OPEN",
+                        reason="QUANTFORG_SAME_SYMBOL_OPEN_SCALE_IN",
                         **facts,
                     )
-                    continue
+                    return sym
                 self._eligible_consumed.add(sym)
                 self._entries_this_scan += 1
                 logger.warning(

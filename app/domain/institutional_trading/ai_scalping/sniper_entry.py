@@ -54,6 +54,11 @@ def _side_of_break(break_dir: Any) -> TradeDirection | None:
 
 
 def _sweep_side(sweep: Any) -> TradeDirection | None:
+    kind = _upper(getattr(sweep, "kind", None))
+    if "LOW" in kind:
+        return TradeDirection.BUY
+    if "HIGH" in kind:
+        return TradeDirection.SELL
     raw = _upper(getattr(sweep, "side", None) or getattr(sweep, "bias", None))
     if any(t in raw for t in ("LOW", "BID", "BUY", "BULL")):
         return TradeDirection.BUY
@@ -239,6 +244,12 @@ def evaluate_sniper_entry(
             zone_lows.append(lo)
         reasons.append(f"Aligned FVG zone for {side.value}")
 
+    if pillars["entry_zone"] and not pillars["liquidity_event"]:
+        pillars["liquidity_event"] = True
+        reasons.append(
+            f"Aligned FVG/OB imbalance is a {side.value} liquidity event"
+        )
+
     mom_floor = (
         int(min_momentum) if min_momentum is not None else int(cfg.min_momentum_score)
     )
@@ -273,7 +284,9 @@ def evaluate_sniper_entry(
                 reasons.append("WAIT — chasing SELL after excessive displacement")
 
     if not pillars["liquidity_event"] and not pillars["structure_confirmation"]:
-        reasons.append("WAIT — trend alone is not a sniper trigger")
+        reasons.append(
+            "WAIT — no BOS/CHOCH/sweep/FVG/OB trigger (trend alone is not enough)"
+        )
         return SniperEntryDecision(
             passed=False,
             action="WAIT",

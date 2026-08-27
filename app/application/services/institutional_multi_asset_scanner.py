@@ -188,6 +188,9 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
         decision=action,
         blocking_gate=payload.get("first_blocking_gate") or row.get("reject_reason"),
         reason=row.get("reject_reason") or sniper.get("primary_reason"),
+        sniper_passed=sniper.get("passed"),
+        sniper_reason=sniper.get("primary_reason"),
+        scan_id=payload.get("as_of"),
     )
 
 
@@ -523,9 +526,11 @@ async def run_institutional_multi_asset_scan(
     Downstream Risk / Dynamic Sizing / PRE / OMS / MT5 are intentionally not
     invoked here — every independent eligible is handed to the existing cycle
     (up to max_entries_per_cycle / max_open_trades) with unchanged gates.
-    Already-open QuantForg-owned symbols are excluded from new-entry handoff
-    (no same-symbol duplicate unless pyramid rules allow via PRE). Manual or
-    other-EA same-symbol tickets do not consume this strategy duplicate set.
+    Already-open QuantForg-owned symbols stay in the handoff queue so a
+    *new independent* continuation can be evaluated by Risk/PRE (winner-only
+    scale-in). Same-symbol duplicates without a new qualified signal are
+    still rejected downstream. Manual or other-EA same-symbol tickets do
+    not consume this strategy duplicate set.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     # Prevent overlapping scanner cycles (shared gateway / MT5 terminal pressure).
@@ -925,7 +930,6 @@ async def _run_institutional_multi_asset_scan_body(
             sym = str(row.get("symbol") or "").upper()
             if (
                 sym in portfolio_eligible
-                and not _already_open(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
             ):
@@ -938,15 +942,13 @@ async def _run_institutional_multi_asset_scan_body(
         if best and not bool(scan.get("blocked_by_portfolio"))
         else None
     )
-    if best_symbol and _already_open(best_symbol):
-        best_symbol = None
-        best = None
     if best and bool(scan.get("blocked_by_portfolio")):
         best_symbol = None
 
     # Ranked eligible handoff list — independent symbols may all enter
     # (max_entries_per_cycle / max_open) without lowering quality.
-    # Skip symbols already open — never duplicate same-symbol via handoff.
+    # Already-open QuantForg gold is still handed off when a NEW independent
+    # opportunity qualifies; Risk/PRE enforce winner-only scale-in.
     eligible_symbols: list[str] = []
     if not bool(scan.get("blocked_by_portfolio")):
         seen_elig: set[str] = set()
@@ -957,7 +959,6 @@ async def _run_institutional_multi_asset_scan_body(
             if (
                 sym
                 and sym in portfolio_eligible
-                and not _already_open(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
                 and sym not in seen_elig
@@ -972,9 +973,6 @@ async def _run_institutional_multi_asset_scan_body(
                 if sym and sym not in seen_elig and not _already_open(sym):
                     eligible_symbols.append(sym)
                     seen_elig.add(sym)
-        if best_symbol and _already_open(best_symbol):
-            best_symbol = eligible_symbols[0] if eligible_symbols else None
-            best = None
         if best_symbol and best_symbol not in seen_elig:
             eligible_symbols.insert(0, best_symbol)
             seen_elig.add(best_symbol)
@@ -1029,7 +1027,6 @@ async def _run_institutional_multi_asset_scan_body(
         strategy_global_best is not None
         and not bool(scan.get("blocked_by_portfolio"))
         and strategy_global_best.symbol in portfolio_eligible
-        and not _already_open(strategy_global_best.symbol)
     ):
         best_symbol = strategy_global_best.symbol
         best = {
@@ -1089,8 +1086,7 @@ async def _run_institutional_multi_asset_scan_body(
             boolean=(
                 "strategy_global_best is not None "
                 "and not blocked_by_portfolio "
-                "and symbol in portfolio_eligible "
-                "and not QuantForg-owned same-symbol open"
+                "and symbol in portfolio_eligible"
             ),
             runtime_values={
                 "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),

@@ -61,21 +61,25 @@ def may_add_scalping_trade(
     # Never average into losers / only pyramid into winners
     if require_unrealized_profit:
         legs = same_direction_profits or open_profits
-        if legs:
-            net = sum(legs, Decimal("0"))
-            if net <= 0:
-                return AddTradeDecision(
-                    False,
-                    (
-                        f"Pyramiding blocked — unrealized P/L {net} ≤ 0 "
-                        "(never average into losers)"
-                    ),
-                )
-            if any(p <= 0 for p in legs):
-                return AddTradeDecision(
-                    False,
-                    "Pyramiding blocked — losing leg present (scale winners only)",
-                )
+        if not legs:
+            return AddTradeDecision(
+                False,
+                "Pyramiding blocked — missing unrealized P/L facts (fail closed)",
+            )
+        net = sum(legs, Decimal("0"))
+        if net <= 0:
+            return AddTradeDecision(
+                False,
+                (
+                    f"Pyramiding blocked — unrealized P/L {net} ≤ 0 "
+                    "(never average into losers)"
+                ),
+            )
+        if any(p <= 0 for p in legs):
+            return AddTradeDecision(
+                False,
+                "Pyramiding blocked — losing leg present (scale winners only)",
+            )
 
     # Never duplicate identical direction + near-identical entry
     if dir_u and dir_u in open_set:

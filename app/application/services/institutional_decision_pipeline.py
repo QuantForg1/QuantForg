@@ -963,6 +963,9 @@ class InstitutionalDecisionPipeline:
                             logger.exception("below_min_lot_reject_log_failed")
                     approved_lots = Decimal("0")
 
+                profits: tuple = ()
+                if account.floating_pnl is not None:
+                    profits = (account.floating_pnl,)
                 add = may_add_scalping_trade(
                     open_positions=account.open_positions,
                     max_open=cfg.max_open_trades,
@@ -978,7 +981,9 @@ class InstitutionalDecisionPipeline:
                         and account.open_positions > 0
                     ),
                     min_confidence_delta=scalp_cfg.min_confidence_delta_for_add,
-                    require_unrealized_profit=False,
+                    require_unrealized_profit=account.open_positions > 0,
+                    open_profits=profits,
+                    same_direction_profits=profits,
                 )
                 if not add.allow:
                     risk_allowed = False
