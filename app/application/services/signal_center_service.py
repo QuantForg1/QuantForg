@@ -1142,11 +1142,12 @@ def _overlay_last_ite_cycle(
     abort = str(blocked.get("reason_code") or last.get("abort_reason") or "").upper()
     human = str(
         blocked.get("human_reason")
+        or last.get("oms_message")
         or last.get("detail")
         or last.get("abort_reason")
         or ""
     )
-    hay = f"{abort} {human}".upper()
+    hay = f"{abort} {human} {last.get('oms_message') or ''}".upper()
     if "MAX_POSITION" in hay or "POSITIONS PER SYMBOL" in hay:
         abort = "MAX_POSITIONS_REACHED"
     if "EXECUTION_REJECT_BURST" in hay or (

@@ -221,7 +221,7 @@ def execution_observability(
         oms_reached = False
     broker_reached = bool(order_check or order_send)
     mt5_reached = bool(order_send)
-    execution_attempted = bool(order_send or forwarded_to_oms)
+    execution_attempted = bool(order_send)
     retcode = getattr(oms_result, "retcode", None) if oms_result is not None else None
     mt5_retcode = None
     broker_retcode = None

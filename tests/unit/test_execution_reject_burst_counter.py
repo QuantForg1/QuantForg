@@ -471,6 +471,43 @@ def test_17_executed_requires_forwarded_to_oms_and_real_mt5_ticket() -> None:
     assert take_only["forwarded_to_oms"] is False
 
 
+def test_oms_daily_loss_message_is_risk_not_broker_or_burst() -> None:
+    _reset()
+    row = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "SELL",
+            "signal_action": "SELL",
+            "reject": False,
+            "sniper_entry": {"passed": True, "action": "SELL", "setup_state": "TAKE"},
+        }
+    )
+    over = _overlay_last_ite_cycle(
+        row,
+        {
+            "forwarded_to_oms": False,
+            "abort_reason": "OMS_FAILURE",
+            "detail": "auto cycle forwarded",
+            "oms_message": "daily loss 15.21% exceeds 5%",
+            "mt5_ticket": None,
+            "market_context_diagnostics": {
+                "execution_observability": execution_observability(
+                    oms_result=_daily_loss_oms(),
+                    abort_reason=BridgeAbortReason.OMS_FAILURE,
+                    oms_submit_called=True,
+                )
+            },
+        },
+    )
+    assert over["first_blocker"] == "DAILY_LOSS_BLOCK"
+    assert over["pipeline"]["risk"] == "BLOCK"
+    assert over["pipeline"]["oms"] == "NOT_REACHED"
+    assert over["pipeline"]["mt5"] == "NOT_REACHED"
+    assert over["pipeline"].get("execution_attempted") is False
+    assert over["pipeline"].get("counted_toward_reject_burst") is False
+    assert _count("XAUUSD_I") == 0
+
+
 def test_live_health_snapshot_reports_symbol_pause() -> None:
     _reset()
     mon = get_live_health_monitor()
