@@ -92,5 +92,33 @@ assert.equal(liveChase.opportunity_gate, "PASS");
 assert.equal(liveChase.sniper, "WAIT");
 assert.equal(liveChase.first_blocker, "WAIT_CHASE");
 assert.equal(liveChase.risk, "NOT_REACHED");
+assert.equal(liveChase.sniper_tier, null);
+
+const readyTier = parseSignalPipeline({
+  market: "OPEN",
+  data: "LIVE",
+  buy_score: 72,
+  sell_score: 31,
+  decision: "BUY",
+  first_blocker: null,
+  sniper: "READY",
+  risk: "NOT_REACHED",
+  safety: "NOT_REACHED",
+  optimizer: "NOT_REACHED",
+  oms: "NOT_REACHED",
+  opportunity_score: 81,
+  opportunity_threshold: 70,
+  opportunity_gate: "PASS",
+  setup_state: "SETUP_READY",
+  sniper_tier: "A",
+  market_regime: "TREND_UP",
+  entry_state: "RETEST",
+  execution_lifecycle: null,
+});
+assert.ok(readyTier);
+assert.equal(readyTier.sniper_tier, "A");
+assert.equal(readyTier.market_regime, "TREND_UP");
+assert.equal(readyTier.entry_state, "RETEST");
+assert.equal(readyTier.setup_state, "SETUP_READY");
 
 console.log("signal-display.test.ts: ok");

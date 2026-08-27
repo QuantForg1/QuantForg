@@ -20,6 +20,11 @@ export type SignalPipeline = {
   opportunity_threshold: number;
   opportunity_gate: string;
   setup_state: string;
+  sniper_tier: string | null;
+  market_regime: string | null;
+  entry_state: string | null;
+  zone_timeframe: string | null;
+  atr_timeframe: string | null;
   execution_lifecycle: string | null;
   chase_distance: string | null;
 };
@@ -87,6 +92,26 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
     opportunity_threshold: num(row.opportunity_threshold) || 70,
     opportunity_gate: text(row.opportunity_gate, "WAIT"),
     setup_state: text(row.setup_state, "WAIT"),
+    sniper_tier:
+      row.sniper_tier == null || row.sniper_tier === ""
+        ? null
+        : String(row.sniper_tier),
+    market_regime:
+      row.market_regime == null || row.market_regime === ""
+        ? null
+        : String(row.market_regime),
+    entry_state:
+      row.entry_state == null || row.entry_state === ""
+        ? null
+        : String(row.entry_state),
+    zone_timeframe:
+      row.zone_timeframe == null || row.zone_timeframe === ""
+        ? null
+        : String(row.zone_timeframe),
+    atr_timeframe:
+      row.atr_timeframe == null || row.atr_timeframe === ""
+        ? null
+        : String(row.atr_timeframe),
     execution_lifecycle:
       row.execution_lifecycle == null || row.execution_lifecycle === ""
         ? null

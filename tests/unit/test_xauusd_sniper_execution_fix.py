@@ -601,3 +601,275 @@ def test_m1_m5_m15_exist_m3_is_not_a_broker_bar() -> None:
     assert DEFAULT_AI_SCALPING_CONFIG.entry_tf is Timeframe.M5
     assert DEFAULT_AI_SCALPING_CONFIG.structure_tf is Timeframe.M15
     assert DEFAULT_AI_SCALPING_CONFIG.direction_tf is Timeframe.H1
+
+
+def _bos(direction: str) -> MagicMock:
+    br = MagicMock()
+    br.direction = direction
+    br.trend_direction = direction
+    br.bias = direction
+    return br
+
+
+def _ob(
+    *,
+    bias: str,
+    high: str = "2612",
+    low: str = "2608",
+    timeframe: Timeframe | None = Timeframe.M15,
+) -> MagicMock:
+    zone = MagicMock()
+    zone.high_price = Price.of(high)
+    zone.low_price = Price.of(low)
+    zone.timeframe = timeframe
+    zone.formed_at = datetime.now(UTC)
+    quality = MagicMock()
+    quality.displacement_ratio = Decimal("1.8")
+    quality.freshness_bars = 2
+    block = MagicMock()
+    block.state = "ACTIVE"
+    block.bias = bias
+    block.side = bias
+    block.quality = quality
+    block.zone = zone
+    block.timeframe = timeframe
+    return block
+
+
+def test_tier_a_full_sniper_is_take() -> None:
+    snap = _snap(
+        fvgs=[_fvg(side="BULLISH", high="2612", low="2608")],
+        bos=[_bos("UP")],
+        sweeps=[MagicMock(side="LOW")],
+    )
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.BUY, buy=82, sell=18),
+        mid=Decimal("2610"),
+        bid=Decimal("2609.90"),
+        ask=Decimal("2610.10"),
+        stop_loss=Decimal("2604"),
+    )
+    assert out.passed is True
+    assert out.action == "BUY"
+    assert out.diagnostics["sniper_tier"] == "A"
+    assert out.diagnostics["setup_state"] == "SETUP_READY"
+    assert out.diagnostics["entry_state"] == "RETEST"
+
+
+def test_tier_b_confirmed_scalp_without_momentum() -> None:
+    """Liquidity + structure without momentum is Tier B, not a forced trade."""
+    snap = _snap(
+        fvgs=[_fvg(side="BEARISH", high="4628", low="4624")],
+        bos=[_bos("DOWN")],
+    )
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.SELL),
+        pa_score=20,
+        momentum=0,
+        min_momentum=65,
+    )
+    assert out.passed is True
+    assert out.action == "SELL"
+    assert out.diagnostics["sniper_tier"] == "B"
+    assert out.pillars["displacement_or_momentum"] is False
+    assert out.pillars["not_chasing"] is True
+
+
+def test_tier_c_micro_scalp_requires_tight_spread() -> None:
+    snap = _snap(bos=[_bos("UP")], sweeps=[MagicMock(side="LOW")])
+    tight = _sniper(
+        snap,
+        _dir(TradeDirection.BUY, buy=82, sell=18),
+        mid=Decimal("2610"),
+        bid=Decimal("2609.95"),
+        ask=Decimal("2610.05"),
+        stop_loss=Decimal("2604"),
+        spread_score=90,
+        momentum=75,
+        pa_score=70,
+    )
+    wide = _sniper(
+        snap,
+        _dir(TradeDirection.BUY, buy=82, sell=18),
+        mid=Decimal("2610"),
+        bid=Decimal("2609.95"),
+        ask=Decimal("2610.05"),
+        stop_loss=Decimal("2604"),
+        spread_score=40,
+        momentum=75,
+        pa_score=70,
+    )
+    assert tight.passed is True
+    assert tight.diagnostics["sniper_tier"] == "C"
+    assert wide.passed is True
+    assert wide.diagnostics["sniper_tier"] == "B"
+
+
+def test_inside_fvg_is_retest_not_chase() -> None:
+    snap = _snap(fvgs=[_fvg(side="BEARISH", high="4628.00", low="4624.00")])
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.SELL),
+        bid=Decimal("4626.00"),
+        ask=Decimal("4626.20"),
+        mid=Decimal("4626.10"),
+        atr=Decimal("5.61"),
+        atr_timeframe="M5",
+    )
+    assert out.passed is True
+    assert out.diagnostics["entry_state"] == "RETEST"
+    assert out.primary_reason != "WAIT_CHASE"
+    chase = out.diagnostics.get("chase") or {}
+    assert chase.get("zone_timeframe") in {"M15", Timeframe.M15.value}
+    assert chase.get("atr_timeframe") == "M5"
+    assert chase.get("entry_state") == "RETEST"
+
+
+def test_m5_execution_fvg_uses_m5_atr_not_m15() -> None:
+    """Originating M5 zone must use M5 ATR — a 10-point extension is a chase."""
+    snap = _snap(
+        fvgs=[
+            _fvg(
+                side="BEARISH",
+                high="4628.00",
+                low="4624.00",
+                timeframe=Timeframe.M5,
+            )
+        ]
+    )
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.SELL),
+        bid=Decimal("4614.00"),
+        ask=Decimal("4614.20"),
+        mid=Decimal("4614.10"),
+        atr=Decimal("5.61"),
+        atr_timeframe="M5",
+    )
+    assert out.passed is False
+    assert out.primary_reason == "WAIT_CHASE"
+    assert out.diagnostics["entry_state"] == "EXTENDED"
+    chase = out.diagnostics.get("chase") or {}
+    assert chase.get("zone_timeframe") in {"M5", Timeframe.M5.value}
+    assert chase.get("atr_timeframe") == "M5"
+    assert Decimal(str(chase.get("normalized_extension") or "0")) > Decimal("1.5")
+
+
+def test_genuine_chase_documents_zone_and_atr() -> None:
+    out = _sniper(
+        _snap(fvgs=[_fvg(side="BEARISH", high="4648", low="4644")]),
+        _dir(TradeDirection.SELL),
+    )
+    assert out.primary_reason == "WAIT_CHASE"
+    chase = out.diagnostics.get("chase") or {}
+    assert chase.get("zone_timeframe") in {"M15", Timeframe.M15.value}
+    assert chase.get("atr_timeframe") == "M5"
+    assert chase.get("atr_value")
+    assert chase.get("zone_distance")
+    assert chase.get("normalized_extension")
+    assert chase.get("entry_state") == "EXTENDED"
+
+
+def test_ob_retest_uses_originating_timeframe() -> None:
+    snap = _snap(
+        order_blocks=[
+            _ob(bias="BUY", high="2612", low="2608", timeframe=Timeframe.H1)
+        ],
+        bos=[_bos("UP")],
+        sweeps=[MagicMock(side="LOW")],
+    )
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.BUY, buy=82, sell=18),
+        mid=Decimal("2610"),
+        bid=Decimal("2609.90"),
+        ask=Decimal("2610.10"),
+        stop_loss=Decimal("2604"),
+        atr=Decimal("5.61"),
+        atr_timeframe="M5",
+    )
+    assert out.passed is True
+    assert out.diagnostics["zone_source"] == "ob"
+    assert out.diagnostics["entry_state"] == "RETEST"
+    chase = out.diagnostics.get("chase") or {}
+    assert chase.get("zone_timeframe") in {"H1", Timeframe.H1.value}
+
+
+def test_setup_forming_never_executes() -> None:
+    snap = _snap(fvgs=[_fvg(side="BEARISH", high="4628", low="4624")])
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.SELL),
+        pa_score=20,
+        momentum=0,
+        min_momentum=65,
+        expected_rr=Decimal("0.40"),
+        min_expected_rr=MIN_RR,
+    )
+    assert out.passed is False
+    assert out.action == "WAIT"
+    assert out.diagnostics["setup_state"] in {"SETUP_FORMING", "WAIT"}
+    assert out.diagnostics.get("sniper_tier") is None
+
+
+def test_operator_regime_labels_are_display_only() -> None:
+    from app.domain.institutional_trading.ai_scalping.regime import (
+        operator_regime_label,
+    )
+
+    assert operator_regime_label("strong_trend", direction="BUY") == "TREND_UP"
+    assert operator_regime_label("strong_trend", direction="SELL") == "TREND_DOWN"
+    assert operator_regime_label("range") == "RANGE"
+    assert operator_regime_label("breakout") == "BREAKOUT"
+    assert operator_regime_label("expansion") == "HIGH_VOLATILITY"
+    assert operator_regime_label("compression") == "LOW_LIQUIDITY"
+    assert (
+        operator_regime_label("range", setup_family="fvg_retest") == "RETEST"
+    )
+    assert operator_regime_label("range", no_trade=True) == "NO_TRADE"
+
+
+def test_opportunity_threshold_stays_at_seventy() -> None:
+    assert OPPORTUNITY_SCORE_THRESHOLD == 70
+
+
+def test_signal_center_exposes_tier_and_keeps_risk_not_reached() -> None:
+    from app.application.services.signal_center_service import _row_from_score
+
+    row = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "BUY",
+            "signal_action": "WAIT",
+            "opportunity_score": 81,
+            "opportunity_threshold": 70,
+            "buy_score": 72,
+            "sell_score": 31,
+            "reject": True,
+            "reject_reason": "WAIT_CHASE",
+            "operator_regime": "TREND_DOWN",
+            "sniper_entry": {
+                "passed": False,
+                "action": "WAIT",
+                "setup_state": "INVALIDATED",
+                "primary_reason": "WAIT_CHASE",
+                "sniper_tier": None,
+                "entry_state": "EXTENDED",
+                "zone_timeframe": "M15",
+                "atr_timeframe": "M5",
+                "zone_atr": "9.72",
+                "normalized_extension": "2.40",
+            },
+            "quote_age_seconds": 0.4,
+            "market_data_live": True,
+        }
+    )
+    assert row["pipeline"]["opportunity_gate"] == "PASS"
+    assert row["pipeline"]["sniper"] == "WAIT"
+    assert row["pipeline"]["entry_state"] == "EXTENDED"
+    assert row["pipeline"]["market_regime"] == "TREND_DOWN"
+    assert row["pipeline"]["risk"] == "NOT_REACHED"
+    assert row["pipeline"]["safety"] == "NOT_REACHED"
+    assert row["pipeline"]["oms"] == "NOT_REACHED"

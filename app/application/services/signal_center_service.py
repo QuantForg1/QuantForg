@@ -41,6 +41,102 @@ def _session() -> str:
         return "unknown"
 
 
+def _parse_cycle_ts(row: dict[str, Any]) -> datetime | None:
+    raw = (
+        row.get("recorded_at")
+        or row.get("as_of")
+        or row.get("ts")
+        or row.get("time")
+    )
+    if raw is None:
+        return None
+    text = str(raw).strip().replace("Z", "+00:00")
+    try:
+        ts = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    return ts.astimezone(UTC)
+
+
+def _rolling_signal_metrics() -> dict[str, Any]:
+    """Observe last diagnostic cycles. Never invents trades or 7d history."""
+    try:
+        snap = get_strategy_diagnostics_store().snapshot(limit=100)
+    except Exception:
+        return {
+            "source": "strategy_diagnostics_ring",
+            "max_cycles": 100,
+            "note": "diagnostics unavailable",
+            "windows": {},
+        }
+    cycles = [c for c in (snap.get("cycles") or []) if isinstance(c, dict)]
+    now = datetime.now(UTC)
+    windows_s = {"1h": 3600, "4h": 14400, "24h": 86400, "7d": 604800}
+    windows: dict[str, Any] = {}
+    for name, span in windows_s.items():
+        subset: list[dict[str, Any]] = []
+        for row in cycles:
+            ts = _parse_cycle_ts(row)
+            if ts is None:
+                continue
+            if (now - ts).total_seconds() <= span:
+                subset.append(row)
+        wait_reasons: dict[str, int] = {}
+        buy_n = 0
+        sell_n = 0
+        wait_n = 0
+        take_n = 0
+        exec_n = 0
+        for row in subset:
+            action = str(
+                row.get("decision_action") or row.get("action") or ""
+            ).upper()
+            if action == "BUY":
+                buy_n += 1
+            elif action == "SELL":
+                sell_n += 1
+            elif action in {"WAIT", "NO_TRADE", "WATCH", ""}:
+                wait_n += 1
+            rej = row.get("rejection") if isinstance(row.get("rejection"), dict) else {}
+            code = str(rej.get("primary") or "")
+            if code:
+                wait_reasons[code] = wait_reasons.get(code, 0) + 1
+            if row.get("forwarded_to_oms") or row.get("executed"):
+                exec_n += 1
+            if action in {"BUY", "SELL"} and (
+                row.get("forwarded_to_oms") or row.get("executed")
+            ):
+                take_n += 1
+        hours = span / 3600.0
+        windows[name] = {
+            "cycles": len(subset),
+            "signals": len(subset),
+            "signals_per_hour": round(len(subset) / hours, 2) if hours else None,
+            "take": take_n,
+            "take_per_hour": round(take_n / hours, 2) if hours else None,
+            "wait": wait_n,
+            "buy": buy_n,
+            "sell": sell_n,
+            "executions": exec_n,
+            "wait_reasons": dict(
+                sorted(wait_reasons.items(), key=lambda kv: kv[1], reverse=True)[:8]
+            ),
+            "sample_limited": True,
+        }
+    return {
+        "source": "strategy_diagnostics_ring",
+        "max_cycles": 100,
+        "note": (
+            "Ring is the last 100 ITE cycles. Empty 4h/24h/7d buckets mean "
+            "that history is not in the in-memory ring — not zero opportunity."
+        ),
+        "windows": windows,
+        "statistics": snap.get("statistics") if isinstance(snap, dict) else None,
+    }
+
+
 def _signal_badge(
     *,
     direction: str,
@@ -110,6 +206,9 @@ _WAIT_REASON_LABELS: dict[str, str] = {
     "WAIT_SNIPER_INCOMPLETE": "WAIT — sniper setup incomplete",
     "SETUP_NOT_READY": "WAIT — opportunity score below threshold",
     "OPPORTUNITY_SCORE_BELOW_THRESHOLD": "WAIT — opportunity score below threshold",
+    "WAIT_LOW_CONFIDENCE": "WAIT — confidence below gate",
+    "WAIT_RR": "WAIT — RR too low",
+    "WAIT_INVALIDATION": "WAIT — invalidation invalid",
 }
 
 
@@ -562,8 +661,25 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             or (sniper.get("setup_state") if isinstance(sniper, dict) else None),
             opportunity_gate=score.get("opportunity_gate"),
             entry=score.get("entry"),
-            stop_loss=score.get("stop_loss"),
+            stop_loss=score.get("stop_loss") or score.get("original_stop"),
             take_profit=score.get("take_profit"),
+            sniper_tier=(sniper.get("sniper_tier") if isinstance(sniper, dict) else None)
+            or score.get("sniper_tier"),
+            entry_state=(sniper.get("entry_state") if isinstance(sniper, dict) else None)
+            or score.get("entry_state"),
+            operator_regime=score.get("operator_regime"),
+            zone_timeframe=(sniper.get("zone_timeframe") if isinstance(sniper, dict) else None),
+            atr_timeframe=(sniper.get("atr_timeframe") if isinstance(sniper, dict) else None),
+            zone_atr=(sniper.get("zone_atr") if isinstance(sniper, dict) else None)
+            or (sniper.get("atr_used") if isinstance(sniper, dict) else None),
+            entry_state_chase=(
+                (sniper.get("chase") or {}).get("entry_state")
+                if isinstance(sniper, dict) and isinstance(sniper.get("chase"), dict)
+                else None
+            ),
+            normalized_extension=(
+                sniper.get("normalized_extension") if isinstance(sniper, dict) else None
+            ),
         ),
         "detail": detail,
         "gauges": {
@@ -599,6 +715,14 @@ def _pipeline_snapshot(
     entry: Any = None,
     stop_loss: Any = None,
     take_profit: Any = None,
+    sniper_tier: Any = None,
+    entry_state: Any = None,
+    operator_regime: Any = None,
+    zone_timeframe: Any = None,
+    atr_timeframe: Any = None,
+    zone_atr: Any = None,
+    entry_state_chase: Any = None,
+    normalized_extension: Any = None,
 ) -> dict[str, Any]:
     """Observe-only gate strip. Never invents Risk/Safety/OMS PASS on WAIT."""
     code = str(block_code or "").upper()
@@ -721,6 +845,15 @@ def _pipeline_snapshot(
         "spread": spread,
         "atr": atr,
         "volatility_regime": market_regime,
+        "market_regime": str(operator_regime or market_regime or "") or None,
+        "sniper_tier": str(sniper_tier).upper() if sniper_tier else None,
+        "entry_state": str(entry_state or entry_state_chase or "") or None,
+        "zone_timeframe": zone_timeframe,
+        "atr_timeframe": atr_timeframe,
+        "zone_atr": zone_atr,
+        "normalized_extension": normalized_extension,
+        "original_stop": stop_loss,
+        "original_invalidation": stop_loss,
         "chase_distance": (sniper or {}).get("chase_distance") if sniper else None,
         "fvg_age_bars": (sniper or {}).get("fvg_age_bars") if sniper else None,
         "bos": (
@@ -962,6 +1095,7 @@ def list_live_signals(
             "average_quality": round(sum(quals) / len(quals), 1) if quals else None,
             "managed_prefs": len(all_prefs),
         },
+        "rolling": _rolling_signal_metrics(),
         "count": len(signals),
         "items": signals,
     }

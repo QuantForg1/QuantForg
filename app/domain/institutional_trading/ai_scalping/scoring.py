@@ -30,6 +30,7 @@ from app.domain.institutional_trading.ai_scalping.quality_gates import (
 )
 from app.domain.institutional_trading.ai_scalping.regime import (
     classify_scalping_regime,
+    operator_regime_label,
 )
 from app.domain.institutional_trading.ai_scalping.regime_execution import (
     build_regime_execution_profile,
@@ -165,6 +166,16 @@ class AiScalpingScore:
             ),
             "signal_id": (self.sniper_entry or {}).get("signal_id"),
             "canonical_blocker": (self.sniper_entry or {}).get("canonical_blocker"),
+            "sniper_tier": (self.sniper_entry or {}).get("sniper_tier"),
+            "entry_state": (self.sniper_entry or {}).get("entry_state"),
+            "operator_regime": operator_regime_label(
+                self.market_regime,
+                direction=self.direction,
+                setup_family=self.setup_family,
+                no_trade=self.signal_action == "NO_TRADE",
+            ),
+            "original_stop": self.stop_loss,
+            "original_invalidation": self.stop_loss,
             "sniper_entry": dict(self.sniper_entry or {}),
             "why_buy": list(self.why_buy),
             "why_sell": list(self.why_sell),
@@ -567,6 +578,7 @@ def score_scalping_setup(
         bid=bid,
         ask=ask,
         atr_timeframe=str(getattr(cfg.entry_tf, "value", cfg.entry_tf) or "M5"),
+        spread_score=int(spread_a.score),
     )
     reasons.extend(sniper.reasons)
     if not sniper.passed:

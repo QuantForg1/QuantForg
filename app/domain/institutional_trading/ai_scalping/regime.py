@@ -91,6 +91,44 @@ def classify_scalping_regime(
     return RegimeAssessment("weak_trend", max(50, alignment_score), tuple(reasons))
 
 
+def operator_regime_label(
+    regime: str | None,
+    *,
+    direction: str = "",
+    setup_family: str | None = None,
+    no_trade: bool = False,
+) -> str:
+    """Map internal scalping labels to operator TREND_UP/RANGE/… codes.
+
+    Display only. Does not change classification, gates, or execution.
+    """
+    if no_trade and str(direction or "").upper() not in {"BUY", "SELL", "WAIT"}:
+        return "NO_TRADE"
+    fam = str(setup_family or "").upper()
+    if "RETEST" in fam:
+        return "RETEST"
+    raw = str(regime or "").strip().lower()
+    lean = str(direction or "").strip().upper()
+    if raw in {"breakout"}:
+        return "BREAKOUT"
+    if raw in {"expansion"}:
+        return "HIGH_VOLATILITY"
+    if raw in {"compression"}:
+        return "LOW_LIQUIDITY"
+    if raw in {"range"}:
+        return "RANGE"
+    if raw in {"strong_trend", "weak_trend"}:
+        if lean == "SELL":
+            return "TREND_DOWN"
+        if lean == "BUY":
+            return "TREND_UP"
+        return "TREND_UP" if "UP" in fam or "BULL" in fam else "TREND_DOWN"
+    if raw in {"retest"}:
+        return "RETEST"
+    token = raw.replace(" ", "_").upper()
+    return token or "NO_TRADE"
+
+
 def regime_from_snapshot_factors(factors: dict[str, Any]) -> RegimeAssessment:
     """Convenience wrapper from confluence / diagnostic factor maps."""
     return classify_scalping_regime(

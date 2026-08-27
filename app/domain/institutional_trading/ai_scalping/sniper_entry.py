@@ -275,8 +275,12 @@ def _chase_distance(
     zone: _AlignedZone,
     atr: Decimal,
     atr_timeframe: str | None,
-) -> tuple[Decimal, Decimal, bool]:
-    """Return (distance beyond zone, extension, is_chase). Inside/pending = 0."""
+) -> tuple[Decimal, Decimal, bool, str]:
+    """Return (distance, extension, is_chase, entry_state).
+
+    INSIDE / RETEST / EARLY are never chase. EXTENDED is chase only beyond
+    1.5× zone-timeframe ATR.
+    """
     zone_atr = _atr_for_zone(
         atr,
         atr_timeframe=atr_timeframe,
@@ -285,14 +289,22 @@ def _chase_distance(
     )
     extension = zone_atr * _CHASE_ATR_MULT
     if side is TradeDirection.BUY:
-        if ref <= zone.high:
-            return Decimal("0"), extension, False
+        if zone.low <= ref <= zone.high:
+            return Decimal("0"), extension, False, "RETEST"
+        if ref < zone.low:
+            return Decimal("0"), extension, False, "EARLY"
         distance = ref - zone.high
-        return distance, extension, distance > extension
-    if ref >= zone.low:
-        return Decimal("0"), extension, False
+        if distance > extension:
+            return distance, extension, True, "EXTENDED"
+        return distance, extension, False, "CONTROLLED"
+    if zone.low <= ref <= zone.high:
+        return Decimal("0"), extension, False, "RETEST"
+    if ref > zone.high:
+        return Decimal("0"), extension, False, "EARLY"
     distance = zone.low - ref
-    return distance, extension, distance > extension
+    if distance > extension:
+        return distance, extension, True, "EXTENDED"
+    return distance, extension, False, "CONTROLLED"
 
 
 def _nearest_zone(
@@ -358,6 +370,7 @@ def evaluate_sniper_entry(
     bid: Decimal | None = None,
     ask: Decimal | None = None,
     atr_timeframe: str | None = None,
+    spread_score: int = 0,
     now: datetime | None = None,
 ) -> SniperEntryDecision:
     """Require a high-quality XAUUSD trigger — trend alone is not enough."""
@@ -389,6 +402,9 @@ def evaluate_sniper_entry(
         "fvg_age_bars": None,
         "zone_timeframe": None,
         "zone_source": None,
+        "entry_state": None,
+        "normalized_extension": None,
+        "sniper_tier": None,
         "market_mid": str(mid) if mid is not None else None,
         "bid": str(bid) if bid is not None else None,
         "ask": str(ask) if ask is not None else None,
@@ -545,22 +561,27 @@ def evaluate_sniper_entry(
     ):
         nearest = _nearest_zone(chase_zones, side=side, ref=ref)
         if nearest is not None:
-            distance, extension, chasing = _chase_distance(
+            distance, extension, chasing, entry_state = _chase_distance(
                 side=side,
                 ref=ref,
                 zone=nearest,
                 atr=atr,
                 atr_timeframe=atr_timeframe,
             )
+            zone_atr = _atr_for_zone(
+                atr,
+                atr_timeframe=atr_timeframe,
+                zone_timeframe=nearest.timeframe,
+                source=nearest.source,
+            )
             diagnostics["chase_distance"] = str(distance)
             diagnostics["chase_extension"] = str(extension)
-            diagnostics["atr_used"] = str(
-                _atr_for_zone(
-                    atr,
-                    atr_timeframe=atr_timeframe,
-                    zone_timeframe=nearest.timeframe,
-                    source=nearest.source,
-                )
+            diagnostics["atr_used"] = str(zone_atr)
+            diagnostics["entry_state"] = entry_state
+            diagnostics["normalized_extension"] = (
+                str((distance / zone_atr).quantize(Decimal("0.01")))
+                if zone_atr > 0
+                else None
             )
             diagnostics["zone_bound"] = (
                 str(nearest.high) if side is TradeDirection.BUY else str(nearest.low)
@@ -570,11 +591,22 @@ def evaluate_sniper_entry(
                 getattr(nearest.timeframe, "value", nearest.timeframe) or ""
             ) or None
             diagnostics["zone_source"] = nearest.source
+            diagnostics["zone_atr"] = str(zone_atr)
+            diagnostics["chase"] = {
+                "zone_timeframe": diagnostics["zone_timeframe"],
+                "atr_timeframe": atr_timeframe,
+                "atr_value": str(zone_atr),
+                "zone_distance": str(distance),
+                "normalized_extension": diagnostics["normalized_extension"],
+                "entry_state": entry_state,
+            }
             if chasing:
                 pillars["not_chasing"] = False
                 reasons.append(
                     f"WAIT — chasing {side.value} after excessive displacement "
-                    f"(distance={distance} > 1.5 ATR={extension})"
+                    f"(distance={distance} > 1.5 ATR={extension} "
+                    f"tf={diagnostics['zone_timeframe'] or 'M15'} "
+                    f"state={entry_state})"
                 )
 
     if not pillars["liquidity_event"] and not pillars["structure_confirmation"]:
@@ -583,39 +615,71 @@ def evaluate_sniper_entry(
         )
         return _wait("WAIT_NO_SNIPER_TRIGGER")
 
-    required = (
-        pillars["clear_direction"],
-        pillars["not_conflicting"],
-        pillars["spread_ok"],
-        pillars["not_chasing"],
-        pillars["invalidation"],
-        pillars["risk_reward"],
-        pillars["displacement_or_momentum"],
-        pillars["liquidity_event"] or pillars["structure_confirmation"],
-        pillars["fresh_zone"],
+    core_ok = (
+        pillars["clear_direction"]
+        and pillars["not_conflicting"]
+        and pillars["spread_ok"]
+        and pillars["not_chasing"]
+        and pillars["invalidation"]
+        and pillars["risk_reward"]
+        and pillars["fresh_zone"]
     )
-    if not all(required):
-        missing = [k for k, ok in pillars.items() if not ok]
-        primary = "WAIT_SNIPER_INCOMPLETE"
-        if not pillars["fresh_zone"] and pillars["not_chasing"]:
-            primary = "WAIT_STALE_FVG"
-        elif not pillars["not_chasing"]:
-            primary = "WAIT_CHASE"
-        elif not pillars["invalidation"]:
-            primary = "WAIT_NO_INVALIDATION"
-        elif not pillars["risk_reward"]:
-            primary = "WAIT_INSUFFICIENT_RR"
-        reasons.append(f"WAIT — incomplete sniper pillars {missing}")
-        return _wait(primary)
+    mom_ok = pillars["displacement_or_momentum"]
+    has_trigger = pillars["liquidity_event"] or pillars["structure_confirmation"]
+    tight_spread = int(spread_score) >= 85
+    # TIER A: previous full sniper contract (unchanged pass/fail).
+    old_pass = core_ok and mom_ok and has_trigger
+    # TIER B: liquidity + structure, momentum/displacement absent (one pillar).
+    tier_b_gap = (
+        core_ok
+        and pillars["liquidity_event"]
+        and pillars["structure_confirmation"]
+        and not mom_ok
+    )
+    if old_pass:
+        if pillars["entry_zone"] and mom_ok:
+            diagnostics["sniper_tier"] = "A"
+            label = f"SNIPER {side.value} — Tier A"
+        elif tight_spread and int(momentum) >= 70:
+            diagnostics["sniper_tier"] = "C"
+            label = f"MICRO SCALP {side.value} — Tier C"
+        else:
+            diagnostics["sniper_tier"] = "B"
+            label = f"CONFIRMED SCALP {side.value} — Tier B"
+        diagnostics["setup_state"] = "SETUP_READY"
+        diagnostics["canonical_blocker"] = None
+        reasons.append(label)
+        return SniperEntryDecision(
+            passed=True,
+            action=side.value,
+            reasons=tuple(reasons),
+            pillars=pillars,
+            primary_reason=None,
+            diagnostics=diagnostics,
+        )
+    if tier_b_gap:
+        diagnostics["sniper_tier"] = "B"
+        diagnostics["setup_state"] = "SETUP_READY"
+        diagnostics["canonical_blocker"] = None
+        reasons.append(f"CONFIRMED SCALP {side.value} — Tier B without momentum")
+        return SniperEntryDecision(
+            passed=True,
+            action=side.value,
+            reasons=tuple(reasons),
+            pillars=pillars,
+            primary_reason=None,
+            diagnostics=diagnostics,
+        )
 
-    diagnostics["setup_state"] = "SETUP_READY"
-    diagnostics["canonical_blocker"] = None
-    reasons.append(f"SNIPER {side.value} — liquidity/structure/confirmation aligned")
-    return SniperEntryDecision(
-        passed=True,
-        action=side.value,
-        reasons=tuple(reasons),
-        pillars=pillars,
-        primary_reason=None,
-        diagnostics=diagnostics,
-    )
+    missing = [k for k, ok in pillars.items() if not ok]
+    primary = "WAIT_SNIPER_INCOMPLETE"
+    if not pillars["fresh_zone"] and pillars["not_chasing"]:
+        primary = "WAIT_STALE_FVG"
+    elif not pillars["not_chasing"]:
+        primary = "WAIT_CHASE"
+    elif not pillars["invalidation"]:
+        primary = "WAIT_NO_INVALIDATION"
+    elif not pillars["risk_reward"]:
+        primary = "WAIT_INSUFFICIENT_RR"
+    reasons.append(f"WAIT — incomplete sniper pillars {missing}")
+    return _wait(primary)

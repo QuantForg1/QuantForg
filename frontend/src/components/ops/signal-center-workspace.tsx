@@ -309,7 +309,11 @@ export function SignalCenterWorkspace() {
                       {s.pipeline.setup_state} · Opportunity{" "}
                       {s.pipeline.opportunity_gate}{" "}
                       {s.pipeline.opportunity_score}/
-                      {s.pipeline.opportunity_threshold} · Sniper{" "}
+                      {s.pipeline.opportunity_threshold}
+                      {s.pipeline.sniper_tier
+                        ? ` · Tier ${s.pipeline.sniper_tier}`
+                        : ""}{" "}
+                      · Sniper{" "}
                       {s.pipeline.sniper} · Market {s.pipeline.market} · Data{" "}
                       {s.pipeline.data} · Risk {s.pipeline.risk} · Safety{" "}
                       {s.pipeline.safety} · Optimizer {s.pipeline.optimizer} ·
@@ -401,6 +405,9 @@ export function SignalCenterWorkspace() {
                 ["SELL score", String(selected.bearish_score ?? 0)],
                 ["Candidate", selected.pipeline?.candidate ?? "NONE"],
                 ["Setup", selected.pipeline?.setup_state ?? "WAIT"],
+                ["Tier", selected.pipeline?.sniper_tier ?? "—"],
+                ["Regime", selected.pipeline?.market_regime ?? "—"],
+                ["Entry state", selected.pipeline?.entry_state ?? "—"],
                 ["Decision", selected.pipeline?.final_decision ?? "WAIT"],
                 [
                   "Opportunity",
