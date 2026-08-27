@@ -380,33 +380,44 @@ class ExecutionBridge:
                         else context.connected
                     ),
                 )
-                # Drawdown pause from account equity vs peak
-                peak = context.account.peak_equity
-                equity = context.account.equity
-                if (
-                    peak is not None
-                    and peak > 0
-                    and equity is not None
-                    and equity < peak
-                ):
-                    dd = ((peak - equity) / peak * Decimal("100")).quantize(
-                        Decimal("0.01")
-                    )
-                    health.max_drawdown_pct = scalp_cfg.pause_drawdown_pct
-                    health.record_drawdown(dd)
+                # Lifetime HWM drawdown is telemetry. Daily-loss 40% is Risk.
+                try:
+                    peak = context.account.peak_equity
+                    equity = context.account.equity
+                    if (
+                        peak is not None
+                        and peak > 0
+                        and equity is not None
+                        and equity < peak
+                    ):
+                        dd = ((peak - equity) / peak * Decimal("100")).quantize(
+                            Decimal("0.01")
+                        )
+                        health.max_drawdown_pct = scalp_cfg.pause_drawdown_pct
+                        health.record_drawdown(dd)
+                except Exception:
+                    logger.exception("scalping_live_health_drawdown_telemetry_failed")
                 allowed, why = health.allow_new_entries(
                     symbol=str(decision.symbol or "")
                 )
                 if not allowed:
+                    why_u = (why or "").upper()
+                    if any(
+                        tok in why_u
+                        for tok in ("LATENCY", "MARKET_DATA", "OMS")
+                    ) and not any(
+                        tok in why_u for tok in ("GATEWAY", "MT5", "BROKER")
+                    ):
+                        halt_reason = BridgeAbortReason.HEALTH_DEGRADED
+                    elif "DEPENDENCY" in why_u:
+                        halt_reason = BridgeAbortReason.HEALTH_DEGRADED
+                    else:
+                        halt_reason = BridgeAbortReason.SELF_PROTECTION
                     return self._abort(
                         decision=decision,
                         context=context,
                         decision_hash=d_hash,
-                        reason=(
-                            BridgeAbortReason.SELF_PROTECTION
-                            if "Dependency" not in why
-                            else BridgeAbortReason.HEALTH_DEGRADED
-                        ),
+                        reason=halt_reason,
                         comment=f"New entries paused: {why}",
                         t0=t0,
                     )

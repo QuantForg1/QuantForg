@@ -89,6 +89,7 @@ class LiveHealthMonitor:
     slippage_window_seconds: int = 300
     gateway_fail_threshold: int = 3
     high_latency_ms: float = 2000.0
+    emergency_window_seconds: int = 120
 
     _health: DependencyHealth = field(default_factory=DependencyHealth)
     _protection: SelfProtectionState = field(default_factory=SelfProtectionState)
@@ -99,6 +100,7 @@ class LiveHealthMonitor:
         default_factory=dict, repr=False
     )
     _symbol_reject_reasons: dict[str, str] = field(default_factory=dict, repr=False)
+    _emergencies: deque[tuple[datetime, str]] = field(default_factory=deque, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def update_dependencies(
@@ -164,8 +166,8 @@ class LiveHealthMonitor:
                 self._trim(q, self.reject_window_seconds)
                 if len(q) >= self.reject_burst_threshold:
                     reason = (
-                        f"Excessive rejects on {key} ({len(q)} in "
-                        f"{self.reject_window_seconds}s)"
+                        f"EXECUTION_REJECT_BURST: Excessive rejects on {key} "
+                        f"({len(q)} in {self.reject_window_seconds}s)"
                     )
                     self._symbol_reject_reasons[key] = reason
                 # Track aggregate count for observability only (no global pause)
@@ -180,7 +182,7 @@ class LiveHealthMonitor:
             self._protection.reject_burst = len(self._rejects)
             if len(self._rejects) >= self.reject_burst_threshold:
                 self._pause(
-                    f"Excessive rejects ({len(self._rejects)} in "
+                    f"EXECUTION_REJECT_BURST: Excessive rejects ({len(self._rejects)} in "
                     f"{self.reject_window_seconds}s)"
                 )
 
@@ -197,18 +199,34 @@ class LiveHealthMonitor:
                 )
 
     def record_abnormal_spread(self, detail: str | None = None) -> None:
-        """Pause new entries on abnormal spread — manage open positions continues."""
+        """Observability only. Hard spread reject is the bridge SPREAD_UNACCEPTABLE gate.
+
+        A scoring-cycle spread event must not become a sticky Safety latch that
+        blocks a later valid TAKE after spread has already passed the bridge.
+        """
         with self._lock:
-            self._pause(detail or "Abnormal spread protection")
+            if detail and detail not in self._protection.reasons:
+                # Keep last reason for dashboards; do not pause new entries.
+                self._protection.reasons = [
+                    r for r in self._protection.reasons if "spread" not in r.lower()
+                ]
+                self._protection.reasons.append(detail)
+                self._protection.reasons = self._protection.reasons[-10:]
 
     def record_flash_move(self, detail: str | None = None) -> None:
-        """Pause new entries on flash-crash style moves."""
+        """Time-bounded pause on flash-crash style moves."""
         with self._lock:
+            self._emergencies.append(
+                (datetime.now(UTC), detail or "Flash crash protection")
+            )
+            self._trim_emergencies()
             self._pause(detail or "Flash crash protection")
 
     def record_margin_danger(self, detail: str | None = None) -> None:
-        """Pause new entries when free margin / margin level is critical."""
+        """Time-bounded pause when free margin / margin level is critical."""
         with self._lock:
+            self._emergencies.append((datetime.now(UTC), detail or "Margin danger"))
+            self._trim_emergencies()
             self._pause(detail or "Margin danger")
 
     def record_gateway_instability(self) -> None:
@@ -221,22 +239,42 @@ class LiveHealthMonitor:
                 self._pause(f"Gateway instability ({len(self._gateway_fails)} events)")
 
     def record_drawdown(self, drawdown_pct: Decimal) -> None:
+        """Telemetry only. Lifetime HWM drawdown must not Safety-latch new entries.
+
+        Daily-loss 40% is the Risk circuit breaker. A 3% peak-equity pause cannot
+        recover without a fill when the book is flat, so it is not a live gate.
+        """
         with self._lock:
             self._protection.drawdown_pct = drawdown_pct
-            if drawdown_pct >= self.max_drawdown_pct:
-                self._pause(f"Drawdown {drawdown_pct}% ≥ {self.max_drawdown_pct}%")
-            elif self._protection.new_entries_paused:
-                self._maybe_resume_health()
 
     def allow_new_entries(self, symbol: str | None = None) -> tuple[bool, str]:
-        """Global deps always apply. Reject bursts are symbol-scoped when keyed."""
+        """Evaluate current windows. Unset/None health defaults to allow.
+
+        Sticky ``new_entries_paused`` is not authoritative — recovered deps,
+        expired bursts, and expired emergencies re-arm without a fill.
+        """
         key = (symbol or "").strip().upper()
         with self._lock:
+            self._trim_windows()
             if not self._health.all_ok:
+                # Exact failed deps. Bridge maps gateway/MT5/broker → Safety.
                 return False, self._health.detail
-            if self._protection.new_entries_paused:
-                reason = "; ".join(self._protection.reasons) or "self-protection pause"
-                return False, reason
+            if self._emergencies:
+                return False, self._emergencies[-1][1]
+            if len(self._rejects) >= self.reject_burst_threshold:
+                return False, (
+                    "EXECUTION_REJECT_BURST: Excessive rejects "
+                    f"({len(self._rejects)} in {self.reject_window_seconds}s)"
+                )
+            if len(self._slips) >= self.slippage_burst_threshold:
+                return False, (
+                    f"Abnormal slippage burst ({len(self._slips)} in "
+                    f"{self.slippage_window_seconds}s)"
+                )
+            if len(self._gateway_fails) >= self.gateway_fail_threshold:
+                return False, (
+                    f"Gateway instability ({len(self._gateway_fails)} events)"
+                )
             if key:
                 q = self._symbol_rejects.get(key)
                 if q is not None:
@@ -245,13 +283,17 @@ class LiveHealthMonitor:
                         why = self._symbol_reject_reasons.get(key) or (
                             f"Excessive rejects on {key}"
                         )
+                        if "EXECUTION_REJECT_BURST" not in why.upper():
+                            why = f"EXECUTION_REJECT_BURST: {why}"
                         return False, why
-                    if len(q) < self.reject_burst_threshold:
-                        self._symbol_reject_reasons.pop(key, None)
+                    self._symbol_reject_reasons.pop(key, None)
+            self._protection.new_entries_paused = False
             return True, "ok"
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
+            allowed, why = self.allow_new_entries()
+            self._protection.new_entries_paused = not allowed
             per_sym = {
                 sym: {
                     "reject_burst": len(q),
@@ -263,6 +305,8 @@ class LiveHealthMonitor:
             return {
                 "health": self._health.to_dict(),
                 "self_protection": self._protection.to_dict(),
+                "allow_new_entries": allowed,
+                "block_reason": None if allowed else why,
                 "symbol_rejects": per_sym,
             }
 
@@ -274,6 +318,7 @@ class LiveHealthMonitor:
             self._rejects.clear()
             self._slips.clear()
             self._gateway_fails.clear()
+            self._emergencies.clear()
             self._symbol_rejects.clear()
             self._symbol_reject_reasons.clear()
 
@@ -286,33 +331,38 @@ class LiveHealthMonitor:
             self._protection.paused_at = datetime.now(UTC).isoformat()
 
     def _maybe_resume_health(self) -> None:
-        """Resume only when health is clear and global burst counters recovered."""
-        if not self._health.all_ok:
-            return
+        """Recompute pause from current windows. Fill is not required."""
+        allowed, why = self.allow_new_entries()
+        if allowed:
+            self._protection.new_entries_paused = False
+            self._protection.paused_at = None
+            self._protection.reasons = [
+                r
+                for r in self._protection.reasons
+                if "Excessive rejects" not in r and "Drawdown" not in r
+            ]
+        else:
+            self._protection.new_entries_paused = True
+            if why and why not in self._protection.reasons:
+                self._protection.reasons.append(why)
+                self._protection.reasons = self._protection.reasons[-10:]
+
+    def _trim_emergencies(self) -> None:
         now = datetime.now(UTC)
+        window = timedelta(seconds=self.emergency_window_seconds)
+        while self._emergencies and (now - self._emergencies[0][0]) > window:
+            self._emergencies.popleft()
+
+    def _trim_windows(self) -> None:
         self._trim(self._rejects, self.reject_window_seconds)
         self._trim(self._slips, self.slippage_window_seconds)
         self._trim(self._gateway_fails, 180)
-        dd_ok = (
-            self._protection.drawdown_pct is None
-            or self._protection.drawdown_pct < self.max_drawdown_pct
+        self._trim_emergencies()
+        self._protection.reject_burst = len(self._rejects) + sum(
+            len(v) for v in self._symbol_rejects.values()
         )
-        bursts_ok = (
-            len(self._rejects) < self.reject_burst_threshold
-            and len(self._slips) < self.slippage_burst_threshold
-            and len(self._gateway_fails) < self.gateway_fail_threshold
-        )
-        if dd_ok and bursts_ok and self._protection.new_entries_paused:
-            # Keep dependency/slippage/drawdown/gateway pauses only — strip reject noise
-            self._protection.new_entries_paused = False
-            self._protection.reasons = [
-                r for r in self._protection.reasons if "Excessive rejects" not in r
-            ]
-            self._protection.paused_at = None
-            if self._protection.reasons:
-                # Still have global reasons (should not happen if bursts_ok)
-                pass
-        _ = now
+        self._protection.slippage_events = len(self._slips)
+        self._protection.gateway_instability = len(self._gateway_fails)
 
     @staticmethod
     def _trim(q: deque[datetime], window_s: int) -> None:
