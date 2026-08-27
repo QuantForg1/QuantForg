@@ -1118,6 +1118,10 @@ def _overlay_last_ite_cycle(
     stage = str(blocked.get("stage") or "").upper()
     if abort == "DAILY_LOSS_BLOCK":
         stage = "RISK"
+    elif abort == "EXECUTION_REJECT_BURST":
+        stage = "EXECUTION_REJECT_BURST"
+    elif abort in {"EXECUTION_HEALTH_DEGRADED", "HEALTH_DEGRADED"}:
+        stage = "EXECUTION_HEALTH"
     elif not stage:
         stage = bridge_abort_stage(abort)
     not_reached = "NOT_REACHED"

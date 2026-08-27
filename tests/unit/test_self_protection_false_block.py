@@ -194,6 +194,11 @@ def test_reject_burst_is_not_infrastructure_health() -> None:
             "abort_reason": "SELF_PROTECTION",
             "detail": why,
             "mt5_ticket": None,
+            "execution_blocked": {
+                "stage": "SAFETY",
+                "reason_code": "SELF_PROTECTION",
+                "human_reason": why,
+            },
         },
     )
     assert over["first_blocker"] == "EXECUTION_REJECT_BURST"
