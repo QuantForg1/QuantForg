@@ -13,6 +13,9 @@ from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
+from app.domain.institutional_trading.ai_scalping.direction import (
+    iter_scalp_structures,
+)
 from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG, ITEConfig
 from app.domain.institutional_trading.decision_models import TradeDecision
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
@@ -114,10 +117,16 @@ def _volume_score(volume: Any) -> int | None:
 def _structure_component_scores(
     snapshot: MarketAnalysisSnapshot,
 ) -> tuple[int, int, int]:
-    """Derive BOS / CHOCH / SMC display scores from snapshot (read-only)."""
-    structure = snapshot.primary_structure
-    bos_n = len(structure.breaks_of_structure) if structure else 0
-    choch_n = len(structure.changes_of_character) if structure else 0
+    """Derive BOS / CHOCH / SMC display scores from M1/M5/M15 (read-only)."""
+    bos_n = 0
+    choch_n = 0
+    for struct in iter_scalp_structures(snapshot):
+        raw_bos = getattr(struct, "breaks_of_structure", None)
+        raw_choch = getattr(struct, "changes_of_character", None)
+        if isinstance(raw_bos, (list, tuple)):
+            bos_n += len(raw_bos)
+        if isinstance(raw_choch, (list, tuple)):
+            choch_n += len(raw_choch)
     bos = 90 if bos_n else 0
     choch = 90 if choch_n else 0
 
@@ -554,20 +563,33 @@ def hourly_scan_rates(
         "BUY_count": buy_n,
         "SELL_count": sell_n,
         "WAIT_count": wait_n,
+        "WAIT_per_hour": _rate(wait_n),
         "WAIT_CHASE_count": chase_n,
+        "CHASING_count": chase_n,
+        "CHASING_per_hour": _rate(chase_n),
         "WAIT_CONFLICT_count": conflict_n,
+        "CONFLICT_count": conflict_n,
+        "CONFLICT_per_hour": _rate(conflict_n),
         "WAIT_SPREAD_count": spread_n,
         "WAIT_RR_count": rr_n,
         "WAIT_NO_DIRECTIONAL_EDGE_count": edge_n,
         "WAIT_STALE_DATA_count": stale_n,
+        "STALE_count": stale_n,
+        "STALE_per_hour": _rate(stale_n),
         "MIN_LOT_INFEASIBLE_count": min_lot_n,
         "risk_reject_count": risk_n,
         "risk_pass": risk_pass_n,
         "risk_block": risk_n,
+        "Risk_blocks_per_hour": _rate(risk_n),
         "safety_pass": safety_pass_n,
         "safety_block": safety_n,
+        "Safety_blocks_per_hour": _rate(safety_n),
         "safety_reject_count": safety_n,
         "oms_forward": oms_fwd_n,
+        "OMS_submissions_per_hour": _rate(oms_fwd_n),
+        "Broker_submissions_per_hour": _rate(broker_n),
+        "MT5_ticket_count": fill_n,
+        "MT5_tickets_per_hour": _rate(fill_n),
         "oms_reject_count": oms_n,
         "broker_accept": broker_n,
         "mt5_fills": fill_n,

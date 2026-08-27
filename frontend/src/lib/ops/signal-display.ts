@@ -29,6 +29,17 @@ export type SignalPipeline = {
   chase_distance: string | null;
   buy_components: Record<string, number>;
   sell_components: Record<string, number>;
+  independent_evidence: string[];
+  confluence_class: string | null;
+  directional_edge: number | null;
+  edge_margin: number | null;
+  ltf_buy_score: number | null;
+  ltf_sell_score: number | null;
+  structure_timeframe: string | null;
+  entry_timeframe: string | null;
+  signal_age_ms: number | null;
+  zone_age_ms: number | null;
+  bars_since_structure_event: number | null;
 };
 
 export function formatSignalHeadline(
@@ -134,6 +145,44 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
         : String(row.chase_distance),
     buy_components: asScoreMap(row.buy_components),
     sell_components: asScoreMap(row.sell_components),
+    independent_evidence: Array.isArray(row.independent_evidence)
+      ? (row.independent_evidence as unknown[]).map((v) => String(v))
+      : [],
+    confluence_class:
+      row.confluence_class == null || row.confluence_class === ""
+        ? null
+        : String(row.confluence_class),
+    directional_edge: Number.isFinite(Number(row.directional_edge))
+      ? Number(row.directional_edge)
+      : null,
+    edge_margin: Number.isFinite(Number(row.edge_margin))
+      ? Number(row.edge_margin)
+      : null,
+    ltf_buy_score: Number.isFinite(Number(row.ltf_buy_score))
+      ? Number(row.ltf_buy_score)
+      : null,
+    ltf_sell_score: Number.isFinite(Number(row.ltf_sell_score))
+      ? Number(row.ltf_sell_score)
+      : null,
+    structure_timeframe:
+      row.structure_timeframe == null || row.structure_timeframe === ""
+        ? null
+        : String(row.structure_timeframe),
+    entry_timeframe:
+      row.entry_timeframe == null || row.entry_timeframe === ""
+        ? null
+        : String(row.entry_timeframe),
+    signal_age_ms: Number.isFinite(Number(row.signal_age_ms))
+      ? Number(row.signal_age_ms)
+      : null,
+    zone_age_ms: Number.isFinite(Number(row.zone_age_ms))
+      ? Number(row.zone_age_ms)
+      : null,
+    bars_since_structure_event: Number.isFinite(
+      Number(row.bars_since_structure_event),
+    )
+      ? Number(row.bars_since_structure_event)
+      : null,
   };
 }
 

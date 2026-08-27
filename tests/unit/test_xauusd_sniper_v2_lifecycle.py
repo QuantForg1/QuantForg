@@ -37,6 +37,7 @@ from app.domain.institutional_trading.operations.daily_loss_lock import (
     utc_daily_loss_exceeded,
 )
 from app.domain.institutional_trading.operations.execution_chain_log import (
+    bridge_abort_stage,
     build_execution_handoff,
 )
 from app.domain.institutional_trading.operations.gold_execution_contract import (
@@ -91,6 +92,33 @@ def _fvg(*, side: str, high: str, low: str, freshness: int = 3) -> MagicMock:
     gap.quality = MagicMock(freshness_bars=freshness)
     gap.lifecycle = MagicMock(detected_at=zone.formed_at)
     return gap
+
+
+def _ob(
+    *,
+    bias: str,
+    high: str = "2612",
+    low: str = "2608",
+    disp: str = "1.8",
+    freshness: int = 3,
+) -> MagicMock:
+    zone = MagicMock()
+    zone.high_price = Decimal(high)
+    zone.low_price = Decimal(low)
+    zone.timeframe = Timeframe.M5
+    zone.formed_at = datetime.now(UTC)
+    quality = MagicMock()
+    quality.displacement_ratio = Decimal(disp)
+    quality.freshness_bars = freshness
+    block = MagicMock()
+    block.state = "ACTIVE"
+    block.bias = bias
+    block.side = bias
+    block.quality = quality
+    block.zone = zone
+    block.timeframe = Timeframe.M5
+    block.formed_at = zone.formed_at
+    return block
 
 
 def _snap(
@@ -646,3 +674,185 @@ def test_hourly_rates_expose_forming_incomplete_and_opportunity_wait() -> None:
     assert rates["WAIT_SNIPER_INCOMPLETE_count"] == 2
     assert rates["WAIT_OPPORTUNITY_count"] == 1
     assert rates["take_count"] == 0
+    assert rates["CHASING_count"] == 0
+    assert rates["OMS_submissions_per_hour"] == 0.0
+
+
+def test_ltf_edge_wins_when_display_totals_tie() -> None:
+    """H1 BUY + M15 BUY can tie display scores without inventing a BUY scalp."""
+    snap = _snap(
+        macro=TrendDirection.UP,
+        primary=TrendDirection.UP,
+        entry=TrendDirection.DOWN,
+        m5=_struct(bos=[_bos("DOWN")]),
+        fvgs=[_fvg(side="BEARISH", high="2612", low="2608")],
+    )
+    dec = decide_scalping_direction(snap)
+    assert dec.direction is TradeDirection.SELL
+    assert dec.ltf_sell_score > dec.ltf_buy_score + dec.edge_margin
+    assert dec.factors.get("h1_bias") == 10
+
+
+def test_h1_opposite_does_not_veto_valid_m5_buy() -> None:
+    snap = _snap(
+        macro=TrendDirection.DOWN,
+        primary=TrendDirection.DOWN,
+        entry=TrendDirection.UP,
+        m5=_struct(bos=[_bos("UP")]),
+        fvgs=[_fvg(side="BULLISH", high="2612", low="2608")],
+    )
+    dec = decide_scalping_direction(snap)
+    assert dec.direction is TradeDirection.BUY
+    assert dec.ltf_buy_score > dec.ltf_sell_score
+
+
+def test_h1_neutral_does_not_veto_valid_m5_sell() -> None:
+    snap = _snap(
+        macro=TrendDirection.UNKNOWN,
+        primary=TrendDirection.UNKNOWN,
+        entry=TrendDirection.DOWN,
+        m5=_struct(bos=[_bos("DOWN")]),
+        fvgs=[_fvg(side="BEARISH", high="2612", low="2608")],
+    )
+    dec = decide_scalping_direction(snap)
+    assert dec.direction is TradeDirection.SELL
+
+
+def test_no_ltf_evidence_does_not_invent_direction_from_close_totals() -> None:
+    snap = _snap(macro=TrendDirection.UP, primary=TrendDirection.DOWN)
+    dec = decide_scalping_direction(snap)
+    assert dec.direction is TradeDirection.NONE
+    assert dec.ltf_buy_score == 0
+    assert dec.ltf_sell_score == 0
+
+
+def test_m1_bos_is_counted_in_opportunity_bos_factor() -> None:
+    snap = _snap(m1=_struct(bos=[_bos("UP")]), m15=_struct())
+    dec = decide_scalping_direction(snap)
+    assert dec.factors.get("bos") == 85
+    with_bos = evaluate_from_score_dict(
+        {
+            "direction": "BUY",
+            "trade_quality": 63,
+            "ai_confidence": 47,
+            "structure_score": dec.structure_score,
+            "momentum": 52,
+            "liquidity": 40,
+            "spread_score": 80,
+            "expected_rr": Decimal("1.20"),
+            "market_regime": "range",
+            "mtf_alignment": 52,
+            "pa_confluence": 41,
+            "factors": dec.factors,
+        }
+    )
+    without_bos = evaluate_from_score_dict(
+        {
+            "direction": "NONE",
+            "trade_quality": 63,
+            "ai_confidence": 47,
+            "structure_score": 52,
+            "momentum": 52,
+            "liquidity": 40,
+            "spread_score": 80,
+            "expected_rr": Decimal("1.20"),
+            "market_regime": "range",
+            "mtf_alignment": 52,
+            "pa_confluence": 41,
+            "factors": {"bos": 20, "choch": 20, "fvg": 25, "order_block": 20},
+        }
+    )
+    assert with_bos.opportunity_score > without_bos.opportunity_score
+    assert without_bos.opportunity_score < OPPORTUNITY_SCORE_THRESHOLD
+
+
+def test_m5_bos_plus_m1_confirmation_is_one_structure_family() -> None:
+    snap = _snap(
+        m1=_struct(bos=[_bos("UP")]),
+        m5=_struct(bos=[_bos("UP")]),
+        fvgs=[_fvg(side="BULLISH", high="2612", low="2608")],
+    )
+    out = _sniper(snap, _dir(TradeDirection.BUY))
+    assert out.passed is True
+    assert out.diagnostics["independent_evidence"].count("structure") == 1
+    assert "zone" in out.diagnostics["independent_evidence"]
+    assert out.diagnostics["confluence_class"] in {"STANDARD", "HIGH_CONFLUENCE"}
+    assert out.diagnostics.get("structure_timeframe") in {"M1", "M5"}
+    assert out.diagnostics.get("signal_created_at")
+    assert out.diagnostics.get("zone_age_ms") is not None
+
+
+def test_ob_retest_is_valid_with_independent_structure() -> None:
+    snap = _snap(
+        m5=_struct(bos=[_bos("UP")]),
+        obs=[_ob(bias="BUY")],
+    )
+    out = _sniper(snap, _dir(TradeDirection.BUY), momentum=0, pa_score=20, min_momentum=65)
+    assert out.passed is True
+    assert out.action == "BUY"
+    assert "zone" in out.diagnostics["independent_evidence"]
+    assert out.diagnostics.get("entry_state") in {"RETEST", "INSIDE", "CONTROLLED"}
+
+
+def test_none_direction_with_m5_evidence_is_forming_not_take() -> None:
+    snap = _snap(m5=_struct(bos=[_bos("UP")]))
+    out = _sniper(snap, _dir(TradeDirection.NONE, buy=46, sell=48))
+    assert out.passed is False
+    assert out.action == "WAIT"
+    assert out.diagnostics["setup_state"] == "SETUP_FORMING"
+    assert out.primary_reason == "WAIT_NO_DIRECTIONAL_EDGE"
+
+
+def test_wait_no_edge_handoff_is_strategy_not_oms() -> None:
+    abort = "NO CLEAR BUY/SELL EDGE (BALANCED SCORES → REJECT)"
+    assert bridge_abort_stage(abort) == "STRATEGY"
+    assert bridge_abort_stage(None) == "STRATEGY"
+    handoff = build_execution_handoff(
+        take=False,
+        forwarded_to_oms=False,
+        abort_reason=abort,
+    )
+    assert handoff["oms_entered"] is False
+    assert handoff["blocking_stage"] == "STRATEGY"
+    assert handoff["execution_confirmed"] is False
+    empty = build_execution_handoff(take=False, forwarded_to_oms=False)
+    assert empty["oms_entered"] is False
+
+
+def test_wait_overlay_does_not_paint_oms_block() -> None:
+    over = _overlay_last_ite_cycle(
+        _row_from_score(
+            {
+                "symbol": "XAUUSD_I",
+                "direction": "WAIT",
+                "signal_action": "WAIT",
+                "opportunity_score": 65,
+                "opportunity_threshold": 70,
+                "buy_score": 46,
+                "sell_score": 48,
+                "reject": True,
+                "reject_reason": "WAIT_NO_DIRECTIONAL_EDGE",
+                "sniper_entry": {
+                    "passed": False,
+                    "action": "WAIT",
+                    "setup_state": "NO_SETUP",
+                    "primary_reason": "WAIT_NO_DIRECTIONAL_EDGE",
+                },
+            }
+        ),
+        {
+            "forwarded_to_oms": False,
+            "take": False,
+            "abort_reason": "NO CLEAR BUY/SELL EDGE (BALANCED SCORES → REJECT)",
+            "cycle_outcome": "waiting_next_cycle",
+            "mt5_ticket": None,
+            "execution_handoff": build_execution_handoff(
+                take=False,
+                forwarded_to_oms=False,
+                abort_reason="NO CLEAR BUY/SELL EDGE (BALANCED SCORES → REJECT)",
+            ),
+        },
+    )
+    assert over["pipeline"]["oms"] == "NOT_REACHED"
+    assert over["pipeline"]["final_decision"] == "WAIT"
+    assert over.get("execution_state") != "EXECUTED"

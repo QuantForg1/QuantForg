@@ -162,8 +162,11 @@ export function SignalCenterWorkspace() {
               ["WAIT", dash.wait],
               ["Scans/h", dash.scans_per_hour],
               ["Candidates/h", dash.candidates_per_hour],
+              ["Forming/h", dash.SETUP_FORMING_per_hour],
               ["Takes/h", dash.takes_per_hour],
               ["Executions/h", dash.executions_per_hour],
+              ["CHASING/h", dash.CHASING_per_hour],
+              ["OMS/h", dash.OMS_submissions_per_hour],
               ["WAIT_CHASE", dash.WAIT_CHASE_count],
               ["Avg Conf", dash.average_confidence],
               ["Avg Qual", dash.average_quality],
@@ -414,6 +417,45 @@ export function SignalCenterWorkspace() {
                 ["Direction", selected.direction],
                 ["BUY score", String(selected.bullish_score ?? 0)],
                 ["SELL score", String(selected.bearish_score ?? 0)],
+                [
+                  "Directional edge",
+                  selected.pipeline?.directional_edge == null
+                    ? "—"
+                    : String(selected.pipeline.directional_edge),
+                ],
+                [
+                  "LTF BUY/SELL",
+                  `${selected.pipeline?.ltf_buy_score ?? "—"} / ${selected.pipeline?.ltf_sell_score ?? "—"}`,
+                ],
+                [
+                  "Families",
+                  (selected.pipeline?.independent_evidence ?? []).join(", ") ||
+                    "—",
+                ],
+                [
+                  "Confluence class",
+                  selected.pipeline?.confluence_class ?? "—",
+                ],
+                [
+                  "Structure TF",
+                  selected.pipeline?.structure_timeframe ?? "—",
+                ],
+                [
+                  "Entry TF",
+                  selected.pipeline?.entry_timeframe ?? "—",
+                ],
+                [
+                  "Signal age ms",
+                  selected.pipeline?.signal_age_ms == null
+                    ? "—"
+                    : String(selected.pipeline.signal_age_ms),
+                ],
+                [
+                  "Zone age ms",
+                  selected.pipeline?.zone_age_ms == null
+                    ? "—"
+                    : String(selected.pipeline.zone_age_ms),
+                ],
                 [
                   "BUY components",
                   fmtComponents(selected.pipeline?.buy_components),

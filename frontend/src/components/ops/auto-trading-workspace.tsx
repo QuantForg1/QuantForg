@@ -2060,6 +2060,22 @@ export function AutoTradingWorkspace() {
               )}
             />
             <MetricCard
+              label="Directional edge"
+              value={str(
+                asRecord(last.sniper_entry).directional_edge ??
+                  asRecord(diag).directional_edge,
+                "—",
+              )}
+            />
+            <MetricCard
+              label="Confluence class"
+              value={str(
+                asRecord(last.sniper_entry).confluence_class ??
+                  asRecord(diag).confluence_class,
+                "—",
+              )}
+            />
+            <MetricCard
               label="Decision"
               value={str(last.decision_action || last.cycle_outcome, "—")}
             />
@@ -2260,6 +2276,30 @@ export function AutoTradingWorkspace() {
             value={
               Number.isFinite(num(scanRates.executions_per_hour))
                 ? formatNumber(num(scanRates.executions_per_hour), 1)
+                : "—"
+            }
+          />
+          <MetricCard
+            label="Forming / hour"
+            value={
+              Number.isFinite(num(scanRates.SETUP_FORMING_per_hour))
+                ? formatNumber(num(scanRates.SETUP_FORMING_per_hour), 1)
+                : "—"
+            }
+          />
+          <MetricCard
+            label="CHASING / hour"
+            value={
+              Number.isFinite(num(scanRates.CHASING_per_hour))
+                ? formatNumber(num(scanRates.CHASING_per_hour), 1)
+                : "—"
+            }
+          />
+          <MetricCard
+            label="OMS / hour"
+            value={
+              Number.isFinite(num(scanRates.OMS_submissions_per_hour))
+                ? formatNumber(num(scanRates.OMS_submissions_per_hour), 1)
                 : "—"
             }
           />

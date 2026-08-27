@@ -21,6 +21,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.ai_scalping.direction import (
     decide_scalping_direction,
+    iter_scalp_structures,
 )
 from app.domain.institutional_trading.ai_scalping.pa_confluence import (
     evaluate_pa_confluence,
@@ -245,12 +246,21 @@ def score_scalping_setup(
     direction_dec = decide_scalping_direction(snapshot, config=cfg)
     reasons.extend(direction_dec.reasons)
     factors.update(direction_dec.factors)
+    factors["directional_edge"] = int(direction_dec.directional_edge)
+    factors["edge_margin"] = int(direction_dec.edge_margin)
     direction = direction_dec.direction
 
-    bos = len(structure.breaks_of_structure) if structure else 0
-    choch = len(structure.changes_of_character) if structure else 0
+    bos = 0
+    choch = 0
+    for struct in iter_scalp_structures(snapshot):
+        raw_bos = getattr(struct, "breaks_of_structure", None)
+        raw_choch = getattr(struct, "changes_of_character", None)
+        if isinstance(raw_bos, (list, tuple)):
+            bos += len(raw_bos)
+        if isinstance(raw_choch, (list, tuple)):
+            choch += len(raw_choch)
     if bos or choch:
-        reasons.append(f"Structure bos={bos} choch={choch}")
+        reasons.append(f"Structure bos={bos} choch={choch} (M1/M5/M15)")
 
     from app.domain.institutional_trading.quality_components import (
         quality_components,
@@ -309,7 +319,11 @@ def score_scalping_setup(
     factors["momentum"] = max(0, min(100, mom_score))
     factors["trend_strength"] = int(trend.alignment_score)
     factors["volatility"] = factors["atr_expansion"]
-    factors["mtf"] = factors.get("h1_bias", 0) + factors.get("m15_structure", 0)
+    factors["mtf"] = (
+        int(factors.get("m5_entry") or 0)
+        + int(factors.get("m1_execution") or 0)
+        + int(factors.get("m15_structure") or 0)
+    )
     factors["bos"] = 85 if bos else 20
     factors["choch"] = 80 if choch else 20
 
@@ -558,7 +572,10 @@ def score_scalping_setup(
             "spread_score": spread_a.score,
             "expected_rr": expected_rr,
             "market_regime": regime.regime,
-            "mtf_alignment": int(trend.alignment_score),
+            "mtf_alignment": max(
+                int(trend.alignment_score),
+                int(factors.get("mtf") or 0),
+            ),
             "pa_confluence": pa.score,
             "factors": factors,
             "volatility_decision": gates.volatility_decision,

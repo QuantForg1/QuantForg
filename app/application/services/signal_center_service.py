@@ -848,6 +848,36 @@ def _pipeline_snapshot(
             if isinstance(sniper, dict)
             else []
         ),
+        "confluence_class": (
+            str(sniper.get("confluence_class") or "") or None
+            if isinstance(sniper, dict)
+            else None
+        ),
+        "directional_edge": (
+            sniper.get("directional_edge") if isinstance(sniper, dict) else None
+        ),
+        "edge_margin": sniper.get("edge_margin") if isinstance(sniper, dict) else None,
+        "ltf_buy_score": (
+            sniper.get("ltf_buy_score") if isinstance(sniper, dict) else None
+        ),
+        "ltf_sell_score": (
+            sniper.get("ltf_sell_score") if isinstance(sniper, dict) else None
+        ),
+        "structure_timeframe": (
+            sniper.get("structure_timeframe") if isinstance(sniper, dict) else None
+        ),
+        "entry_timeframe": (
+            sniper.get("entry_timeframe") if isinstance(sniper, dict) else None
+        ),
+        "signal_age_ms": (
+            sniper.get("signal_age_ms") if isinstance(sniper, dict) else None
+        ),
+        "zone_age_ms": sniper.get("zone_age_ms") if isinstance(sniper, dict) else None,
+        "bars_since_structure_event": (
+            sniper.get("bars_since_structure_event")
+            if isinstance(sniper, dict)
+            else None
+        ),
         "bos": (
             bool(pillars.get("structure_confirmation"))
             if isinstance(pillars, dict)
@@ -1293,6 +1323,17 @@ def list_live_signals(
             "candidates_per_hour": hourly.get("candidate_setups_per_hour"),
             "takes_per_hour": hourly.get("take_per_hour"),
             "executions_per_hour": hourly.get("executions_per_hour"),
+            "SETUP_FORMING_per_hour": hourly.get("SETUP_FORMING_per_hour"),
+            "SETUP_READY_per_hour": hourly.get("SETUP_READY_per_hour"),
+            "CHASING_per_hour": hourly.get("CHASING_per_hour"),
+            "STALE_per_hour": hourly.get("STALE_per_hour"),
+            "CONFLICT_per_hour": hourly.get("CONFLICT_per_hour"),
+            "WAIT_per_hour": hourly.get("WAIT_per_hour"),
+            "Risk_blocks_per_hour": hourly.get("Risk_blocks_per_hour"),
+            "Safety_blocks_per_hour": hourly.get("Safety_blocks_per_hour"),
+            "OMS_submissions_per_hour": hourly.get("OMS_submissions_per_hour"),
+            "Broker_submissions_per_hour": hourly.get("Broker_submissions_per_hour"),
+            "MT5_tickets_per_hour": hourly.get("MT5_tickets_per_hour"),
             "setup_ready_count": hourly.get("setup_ready_count"),
             "take_count": hourly.get("take_count"),
             "WAIT_CHASE_count": hourly.get("WAIT_CHASE_count"),

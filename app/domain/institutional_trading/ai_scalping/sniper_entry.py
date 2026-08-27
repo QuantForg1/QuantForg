@@ -17,6 +17,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.ai_scalping.direction import (
     DirectionDecision,
+    iter_scalp_structure_entries,
     iter_scalp_structures,
     structure_event_side,
 )
@@ -332,6 +333,59 @@ def _nearest_zone(
     return min(zones, key=_key)
 
 
+def _evidence_families(
+    snapshot: MarketAnalysisSnapshot,
+    side: TradeDirection,
+    *,
+    now: datetime,
+) -> list[str]:
+    """Independent families present for one side. Discovery only — not TAKE."""
+    families: list[str] = []
+    for structure in iter_scalp_structures(snapshot):
+        found = False
+        for br in _seq(structure, "breaks_of_structure")[-3:]:
+            mapped = structure_event_side(br) or _side_of_break(
+                getattr(br, "direction", None)
+            )
+            if mapped is side:
+                families.append("structure")
+                found = True
+                break
+        if found:
+            break
+        for ch in _seq(structure, "changes_of_character")[-2:]:
+            mapped = structure_event_side(ch)
+            if mapped is side:
+                families.append("structure")
+                found = True
+                break
+        if found:
+            break
+    liq = snapshot.liquidity
+    for sw in _seq(liq, "sweeps")[-3:]:
+        if _sweep_side(sw) is side:
+            families.append("liquidity")
+            break
+    if "liquidity" not in families:
+        eqh = _seq(liq, "equal_highs")
+        eql = _seq(liq, "equal_lows")
+        if side is TradeDirection.SELL and eqh:
+            families.append("liquidity")
+        elif side is TradeDirection.BUY and eql:
+            families.append("liquidity")
+    if _collect_aligned_zones(snapshot, side, now=now):
+        families.append("zone")
+    return families
+
+
+def _confluence_class(*, take: bool, independent: list[str], setup_state: str) -> str:
+    if take:
+        return "HIGH_CONFLUENCE" if len(independent) >= 3 else "STANDARD"
+    if setup_state in {"SETUP_FORMING", "SETUP_READY"}:
+        return "WEAK"
+    return "INVALID"
+
+
 @dataclass(frozen=True, slots=True)
 class SniperEntryDecision:
     passed: bool
@@ -410,6 +464,12 @@ def evaluate_sniper_entry(
         "market_mid": str(mid) if mid is not None else None,
         "bid": str(bid) if bid is not None else None,
         "ask": str(ask) if ask is not None else None,
+        "directional_edge": int(getattr(direction, "directional_edge", 0) or 0),
+        "edge_margin": int(getattr(direction, "edge_margin", 5) or 5),
+        "ltf_buy_score": int(getattr(direction, "ltf_buy_score", 0) or 0),
+        "ltf_sell_score": int(getattr(direction, "ltf_sell_score", 0) or 0),
+        "signal_created_at": moment.isoformat(),
+        "confluence_class": "INVALID",
     }
 
     def _wait(primary: str, *, setup_state: str | None = None) -> SniperEntryDecision:
@@ -444,10 +504,27 @@ def evaluate_sniper_entry(
 
     side = direction.direction
     if side not in {TradeDirection.BUY, TradeDirection.SELL}:
+        buy_fams = _evidence_families(snapshot, TradeDirection.BUY, now=moment)
+        sell_fams = _evidence_families(snapshot, TradeDirection.SELL, now=moment)
+        diagnostics["buy_families"] = buy_fams
+        diagnostics["sell_families"] = sell_fams
         reasons.append(
             f"WAIT — no directional edge "
-            f"(bullish={direction.buy_score} bearish={direction.sell_score})"
+            f"(bullish={direction.buy_score} bearish={direction.sell_score} "
+            f"ltf={diagnostics['ltf_buy_score']}/{diagnostics['ltf_sell_score']} "
+            f"margin={diagnostics['edge_margin']})"
         )
+        if buy_fams and sell_fams:
+            diagnostics["confluence_class"] = _confluence_class(
+                take=False, independent=[], setup_state="CONFLICT"
+            )
+            return _wait("WAIT_CONFLICTING_BUY_SELL", setup_state="CONFLICT")
+        if buy_fams or sell_fams:
+            diagnostics["confluence_class"] = _confluence_class(
+                take=False, independent=buy_fams or sell_fams, setup_state="SETUP_FORMING"
+            )
+            return _wait("WAIT_NO_DIRECTIONAL_EDGE", setup_state="SETUP_FORMING")
+        diagnostics["confluence_class"] = "INVALID"
         return _wait("WAIT_NO_DIRECTIONAL_EDGE")
     pillars["clear_direction"] = True
 
@@ -463,7 +540,9 @@ def evaluate_sniper_entry(
         reasons.append("WAIT — abnormal spread")
         return _wait("WAIT_ABNORMAL_SPREAD")
 
-    for structure in iter_scalp_structures(snapshot):
+    structure_tf: str | None = None
+    structure_event_at: datetime | None = None
+    for tf, structure in iter_scalp_structure_entries(snapshot):
         if pillars["structure_confirmation"]:
             break
         for br in _seq(structure, "breaks_of_structure")[-3:]:
@@ -472,7 +551,13 @@ def evaluate_sniper_entry(
             )
             if mapped is side:
                 pillars["structure_confirmation"] = True
-                reasons.append(f"BOS confirms {side.value}")
+                structure_tf = tf
+                structure_event_at = _as_utc(
+                    getattr(br, "detected_at", None)
+                    or getattr(br, "formed_at", None)
+                    or getattr(br, "timestamp", None)
+                )
+                reasons.append(f"BOS confirms {side.value} ({tf})")
                 break
         if pillars["structure_confirmation"]:
             break
@@ -480,8 +565,16 @@ def evaluate_sniper_entry(
             mapped = structure_event_side(ch)
             if mapped is side:
                 pillars["structure_confirmation"] = True
-                reasons.append(f"CHOCH confirms {side.value}")
+                structure_tf = tf
+                structure_event_at = _as_utc(
+                    getattr(ch, "detected_at", None)
+                    or getattr(ch, "formed_at", None)
+                    or getattr(ch, "timestamp", None)
+                )
+                reasons.append(f"CHOCH confirms {side.value} ({tf})")
                 break
+    diagnostics["structure_timeframe"] = structure_tf
+    diagnostics["entry_timeframe"] = structure_tf or "M5"
 
     liq = snapshot.liquidity
     for sw in _seq(liq, "sweeps")[-3:]:
@@ -603,6 +696,15 @@ def evaluate_sniper_entry(
             ) or None
             diagnostics["zone_source"] = nearest.source
             diagnostics["zone_atr"] = str(zone_atr)
+            diagnostics["zone_created_at"] = (
+                nearest.formed_at.isoformat() if nearest.formed_at else None
+            )
+            diagnostics["zone_age_ms"] = (
+                int((moment - nearest.formed_at).total_seconds() * 1000)
+                if nearest.formed_at is not None
+                else None
+            )
+            diagnostics["bars_since_structure_event"] = nearest.freshness_bars
             diagnostics["chase"] = {
                 "zone_timeframe": diagnostics["zone_timeframe"],
                 "atr_timeframe": atr_timeframe,
@@ -646,6 +748,20 @@ def evaluate_sniper_entry(
     diagnostics["independent_evidence"] = independent
     diagnostics["independent_count"] = len(independent)
     diagnostics["structural_families"] = structural
+    origin = structure_event_at
+    zone_created = diagnostics.get("zone_created_at")
+    if origin is None and isinstance(zone_created, str):
+        origin = _as_utc(datetime.fromisoformat(zone_created.replace("Z", "+00:00")))
+    diagnostics["structure_event_at"] = (
+        structure_event_at.isoformat() if structure_event_at else None
+    )
+    diagnostics["confirmation_at"] = moment.isoformat()
+    if origin is not None:
+        diagnostics["signal_age_ms"] = max(
+            0, int((moment - origin).total_seconds() * 1000)
+        )
+    else:
+        diagnostics["signal_age_ms"] = 0
 
     buy_components = dict(getattr(direction, "buy_components", {}) or {})
     sell_components = dict(getattr(direction, "sell_components", {}) or {})
@@ -686,6 +802,9 @@ def evaluate_sniper_entry(
             label = f"CONFIRMED SCALP {side.value} — Tier B"
         diagnostics["setup_state"] = "TAKE"
         diagnostics["canonical_blocker"] = None
+        diagnostics["confluence_class"] = _confluence_class(
+            take=True, independent=independent, setup_state="TAKE"
+        )
         reasons.append(label)
         return SniperEntryDecision(
             passed=True,
@@ -718,4 +837,7 @@ def evaluate_sniper_entry(
             "SETUP_READY — waiting independent confirmation or M1/M5 trigger"
         )
     reasons.append(f"WAIT — incomplete sniper pillars {missing}")
+    diagnostics["confluence_class"] = _confluence_class(
+        take=False, independent=independent, setup_state=setup_state or "WAIT"
+    )
     return _wait(primary, setup_state=setup_state)

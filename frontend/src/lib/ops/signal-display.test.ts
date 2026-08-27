@@ -95,6 +95,8 @@ assert.equal(liveChase.sniper, "WAIT");
 assert.equal(liveChase.first_blocker, "WAIT_CHASE");
 assert.equal(liveChase.risk, "NOT_REACHED");
 assert.equal(liveChase.sniper_tier, null);
+assert.equal(liveChase.directional_edge, null);
+assert.equal(liveChase.confluence_class, null);
 
 const readyTier = parseSignalPipeline({
   market: "OPEN",

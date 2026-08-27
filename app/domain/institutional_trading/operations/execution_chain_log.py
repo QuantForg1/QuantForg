@@ -21,7 +21,7 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
     """
     abort = str(abort_reason or "").strip().upper()
     if not abort or abort in {"NONE", "NULL"}:
-        return "OMS"
+        return "STRATEGY"
     if "MAX_POSITION" in abort or "POSITIONS PER SYMBOL" in abort:
         return "RISK"
     if "DAILY_LOSS" in abort or "DAILY LOSS" in abort:
@@ -48,6 +48,15 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
             "SETUP_NOT_READY",
             "DIRECTION_NONE",
             "WAITING_NEXT_CYCLE",
+            "WAIT_NO_DIRECTIONAL",
+            "NO CLEAR BUY/SELL",
+            "NO EDGE",
+            "BALANCED SCORES",
+            "WAIT_SNIPER",
+            "WAIT_CHASE",
+            "WAIT_STALE",
+            "WAIT_CONFLICT",
+            "WAIT_NO_SNIPER",
         )
     ):
         return "STRATEGY"
@@ -76,7 +85,7 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
         )
     ):
         return "OMS"
-    return "OMS"
+    return "STRATEGY"
 
 
 def build_execution_handoff(
@@ -100,7 +109,7 @@ def build_execution_handoff(
     safety_block = stage == "SAFETY" or (
         "SAFETY" in abort or "KILL" in abort or "AUTOTRADING" in abort
     )
-    oms_block = stage == "OMS" and not forwarded
+    oms_block = bool(take) and stage == "OMS" and not forwarded
     risk_entered = bool(take) or risk_block or safety_block or forwarded
     safety_entered = (bool(take) and not risk_block) or safety_block or forwarded
     optimizer_entered = safety_entered and not safety_block
