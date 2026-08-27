@@ -27,6 +27,13 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _session() -> str:
     try:
         return classify_session_utc(datetime.now(UTC)).value
@@ -89,10 +96,13 @@ _WAIT_REASON_LABELS: dict[str, str] = {
     "WAIT_CHASE": "WAIT — chase detected",
     "CHASE_DETECTED": "WAIT — chase detected",
     "WAIT_STALE_FVG": "WAIT — stale FVG",
+    "WAIT_STALE": "WAIT — stale setup",
     "WAIT_ABNORMAL_SPREAD": "WAIT — abnormal spread",
+    "WAIT_SPREAD": "WAIT — abnormal spread",
     "ABNORMAL_SPREAD": "WAIT — abnormal spread",
     "WAIT_CONFLICTING_BUY_SELL": "WAIT — BUY/SELL conflict",
     "WAIT_CONFLICT": "WAIT — BUY/SELL conflict",
+    "WAIT_CONFIRMATION": "WAIT — insufficient confirmation",
     "BUY_SELL_CONFLICT": "WAIT — BUY/SELL conflict",
     "WAIT_NO_CLEAR_EDGE": "WAIT — no clear BUY/SELL edge",
     "WAIT_STALE_DATA": "WAIT — stale data",
@@ -548,6 +558,12 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             spread=spread,
             atr=atr,
             market_regime=score.get("market_regime") or factors.get("volatility"),
+            setup_state=score.get("setup_state")
+            or (sniper.get("setup_state") if isinstance(sniper, dict) else None),
+            opportunity_gate=score.get("opportunity_gate"),
+            entry=score.get("entry"),
+            stop_loss=score.get("stop_loss"),
+            take_profit=score.get("take_profit"),
         ),
         "detail": detail,
         "gauges": {
@@ -578,6 +594,11 @@ def _pipeline_snapshot(
     spread: Any = None,
     atr: Any = None,
     market_regime: Any = None,
+    setup_state: Any = None,
+    opportunity_gate: Any = None,
+    entry: Any = None,
+    stop_loss: Any = None,
+    take_profit: Any = None,
 ) -> dict[str, Any]:
     """Observe-only gate strip. Never invents Risk/Safety/OMS PASS on WAIT."""
     code = str(block_code or "").upper()
@@ -663,6 +684,28 @@ def _pipeline_snapshot(
         "candidate": cand,
         "opportunity_score": opportunity_score,
         "opportunity_threshold": opportunity_threshold,
+        "opportunity_gate": (
+            "PASS"
+            if opportunity_gate == "PASS"
+            or (
+                opportunity_score is not None
+                and opportunity_threshold is not None
+                and _safe_int(opportunity_score) >= _safe_int(opportunity_threshold)
+            )
+            else "WAIT"
+        ),
+        "setup_state": str(
+            setup_state
+            or (
+                "TAKE"
+                if take
+                else ((sniper or {}).get("setup_state") if sniper else None)
+                or "WAIT"
+            )
+        ),
+        "entry": entry,
+        "stop": stop_loss,
+        "target": take_profit,
         "score_breakdown": dict(score_breakdown or {}),
         "decision": action,
         "final_decision": "TAKE" if take else "WAIT",

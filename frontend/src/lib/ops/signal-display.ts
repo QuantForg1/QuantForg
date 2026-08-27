@@ -18,6 +18,8 @@ export type SignalPipeline = {
   mt5: string;
   opportunity_score: number;
   opportunity_threshold: number;
+  opportunity_gate: string;
+  setup_state: string;
   execution_lifecycle: string | null;
   chase_distance: string | null;
 };
@@ -83,6 +85,8 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
     mt5: text(row.mt5, "NOT_REACHED"),
     opportunity_score: num(row.opportunity_score),
     opportunity_threshold: num(row.opportunity_threshold) || 70,
+    opportunity_gate: text(row.opportunity_gate, "WAIT"),
+    setup_state: text(row.setup_state, "WAIT"),
     execution_lifecycle:
       row.execution_lifecycle == null || row.execution_lifecycle === ""
         ? null

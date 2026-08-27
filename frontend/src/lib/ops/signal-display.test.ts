@@ -48,6 +48,8 @@ const pipeline = parseSignalPipeline({
   oms: "NOT_REACHED",
   opportunity_score: 44,
   opportunity_threshold: 70,
+  opportunity_gate: "WAIT",
+  setup_state: "WAIT",
   execution_lifecycle: null,
 });
 assert.ok(pipeline);
@@ -63,6 +65,32 @@ assert.equal(pipeline.mt5, "NOT_REACHED");
 assert.equal(pipeline.candidate, "NONE");
 assert.equal(pipeline.final_decision, "WAIT");
 assert.equal(pipeline.opportunity_threshold, 70);
+assert.equal(pipeline.opportunity_gate, "WAIT");
+assert.equal(pipeline.setup_state, "WAIT");
 assert.equal(pipeline.execution_lifecycle, null);
+
+const liveChase = parseSignalPipeline({
+  market: "OPEN",
+  data: "LIVE",
+  buy_score: 6,
+  sell_score: 48,
+  decision: "WAIT",
+  first_blocker: "WAIT_CHASE",
+  sniper: "WAIT",
+  risk: "NOT_REACHED",
+  safety: "NOT_REACHED",
+  optimizer: "NOT_REACHED",
+  oms: "NOT_REACHED",
+  opportunity_score: 73,
+  opportunity_threshold: 70,
+  opportunity_gate: "PASS",
+  setup_state: "INVALIDATED",
+  execution_lifecycle: null,
+});
+assert.ok(liveChase);
+assert.equal(liveChase.opportunity_gate, "PASS");
+assert.equal(liveChase.sniper, "WAIT");
+assert.equal(liveChase.first_blocker, "WAIT_CHASE");
+assert.equal(liveChase.risk, "NOT_REACHED");
 
 console.log("signal-display.test.ts: ok");

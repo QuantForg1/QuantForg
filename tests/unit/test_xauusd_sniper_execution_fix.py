@@ -504,3 +504,100 @@ def test_buy_sell_field_mapping_from_production_fvg_price() -> None:
     assert out.pillars["liquidity_event"] is True
     assert out.diagnostics["ref_price"] == "4617.90"
     assert out.diagnostics["zone_source"] == "fvg"
+
+
+def test_missing_zone_timeframe_defaults_to_m15_structure_atr() -> None:
+    """If FVG timeframe is blank, still scale M5 ATR to M15 — do not false-chase."""
+    gap = _fvg(side="BEARISH", high="4628.00", low="4624.00")
+    gap.zone.timeframe = None
+    gap.timeframe = None
+    snap = _snap(fvgs=[gap])
+    out = _sniper(snap, _dir(TradeDirection.SELL), atr_timeframe="M5")
+    assert out.primary_reason != "WAIT_CHASE"
+    assert out.passed is True
+    assert out.diagnostics.get("setup_state") == "SETUP_READY"
+
+
+def test_chase_uses_bid_for_sell_not_ask() -> None:
+    snap = _snap(fvgs=[_fvg(side="BEARISH", high="4628", low="4624")])
+    out = _sniper(
+        snap,
+        _dir(TradeDirection.SELL),
+        bid=Decimal("4617.90"),
+        ask=Decimal("4700.00"),
+        mid=Decimal("4658.95"),
+    )
+    assert out.diagnostics["ref_price"] == "4617.90"
+    assert out.passed is True
+
+
+def test_fresh_buy_and_sell_are_setup_ready() -> None:
+    buy = _sniper(
+        _snap(fvgs=[_fvg(side="BULLISH", high="2612", low="2608")]),
+        _dir(TradeDirection.BUY, buy=82, sell=18),
+        mid=Decimal("2610"),
+        bid=Decimal("2609.90"),
+        ask=Decimal("2610.10"),
+        stop_loss=Decimal("2604"),
+    )
+    sell = _sniper(
+        _snap(fvgs=[_fvg(side="BEARISH")]),
+        _dir(TradeDirection.SELL),
+    )
+    assert buy.diagnostics["setup_state"] == "SETUP_READY"
+    assert buy.passed is True
+    assert sell.diagnostics["setup_state"] == "SETUP_READY"
+    assert sell.passed is True
+
+
+def test_extended_setup_is_invalidated_wait_chase() -> None:
+    out = _sniper(
+        _snap(fvgs=[_fvg(side="BEARISH", high="4648", low="4644")]),
+        _dir(TradeDirection.SELL),
+    )
+    assert out.primary_reason == "WAIT_CHASE"
+    assert out.diagnostics["setup_state"] == "INVALIDATED"
+    assert out.diagnostics["canonical_blocker"] == "WAIT_CHASE"
+
+
+def test_opportunity_pass_does_not_fake_sniper_or_risk() -> None:
+    from app.application.services.signal_center_service import _row_from_score
+
+    row = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "SELL",
+            "signal_action": "WAIT",
+            "opportunity_score": 73,
+            "opportunity_threshold": 70,
+            "buy_score": 6,
+            "sell_score": 48,
+            "reject": True,
+            "reject_reason": "WAIT_CHASE",
+            "sniper_entry": {
+                "passed": False,
+                "action": "WAIT",
+                "setup_state": "INVALIDATED",
+                "primary_reason": "WAIT_CHASE",
+            },
+            "quote_age_seconds": 0.4,
+            "market_data_live": True,
+        }
+    )
+    assert row["pipeline"]["opportunity_gate"] == "PASS"
+    assert row["pipeline"]["sniper"] == "WAIT"
+    assert row["first_blocker"] == "WAIT_CHASE"
+    assert row["pipeline"]["risk"] == "NOT_REACHED"
+    assert row["pipeline"]["safety"] == "NOT_REACHED"
+    assert row["pipeline"]["oms"] == "NOT_REACHED"
+
+
+def test_m1_m5_m15_exist_m3_is_not_a_broker_bar() -> None:
+    assert Timeframe.M1.value == "M1"
+    assert Timeframe.M5.value == "M5"
+    assert Timeframe.M15.value == "M15"
+    assert not hasattr(Timeframe, "M3")
+    assert DEFAULT_AI_SCALPING_CONFIG.execution_tf is Timeframe.M1
+    assert DEFAULT_AI_SCALPING_CONFIG.entry_tf is Timeframe.M5
+    assert DEFAULT_AI_SCALPING_CONFIG.structure_tf is Timeframe.M15
+    assert DEFAULT_AI_SCALPING_CONFIG.direction_tf is Timeframe.H1

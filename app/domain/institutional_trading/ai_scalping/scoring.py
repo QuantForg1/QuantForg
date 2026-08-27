@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace as dc_replace
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from app.domain.institutional_trading.ai_scalping.adaptive_cooldown import (
     resolve_adaptive_cooldown_seconds,
@@ -53,6 +54,12 @@ from app.domain.institutional_trading.ai_scalping.symbol_state import (
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
+
+
+def _sniper_payload(sniper: Any) -> dict[str, Any]:
+    payload = sniper.to_dict() if hasattr(sniper, "to_dict") else dict(sniper or {})
+    payload.setdefault("signal_id", uuid4().hex)
+    return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +149,22 @@ class AiScalpingScore:
             "score_band": self.score_band,
             "score_breakdown": dict(self.score_breakdown or {}),
             "opportunity_eligible": self.opportunity_eligible,
+            "opportunity_gate": (
+                "PASS"
+                if int(self.opportunity_score) >= int(self.opportunity_threshold)
+                else "WAIT"
+            ),
+            "setup_state": (
+                "TAKE"
+                if (
+                    not self.reject
+                    and self.signal_action in {"BUY", "SELL"}
+                    and (self.sniper_entry or {}).get("passed")
+                )
+                else str((self.sniper_entry or {}).get("setup_state") or "WAIT")
+            ),
+            "signal_id": (self.sniper_entry or {}).get("signal_id"),
+            "canonical_blocker": (self.sniper_entry or {}).get("canonical_blocker"),
             "sniper_entry": dict(self.sniper_entry or {}),
             "why_buy": list(self.why_buy),
             "why_sell": list(self.why_sell),
@@ -636,7 +659,7 @@ def score_scalping_setup(
         score_band=verdict.score_band,
         score_breakdown=dict(verdict.score_breakdown),
         opportunity_eligible=bool(verdict.eligible) and not reject,
-        sniper_entry=sniper.to_dict(),
+        sniper_entry=_sniper_payload(sniper),
         signal_action=signal_action,
         why_buy=tuple(
             r

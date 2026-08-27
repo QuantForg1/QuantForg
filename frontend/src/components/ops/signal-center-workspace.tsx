@@ -305,12 +305,13 @@ export function SignalCenterWorkspace() {
                   ) : null}
                   {s.pipeline ? (
                     <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
-                      Candidate {s.pipeline.candidate} · Decision{" "}
-                      {s.pipeline.final_decision} · Opportunity{" "}
+                      Candidate {s.pipeline.candidate} · Setup{" "}
+                      {s.pipeline.setup_state} · Opportunity{" "}
+                      {s.pipeline.opportunity_gate}{" "}
                       {s.pipeline.opportunity_score}/
-                      {s.pipeline.opportunity_threshold} · Market{" "}
-                      {s.pipeline.market} · Data {s.pipeline.data} · Sniper{" "}
-                      {s.pipeline.sniper} · Risk {s.pipeline.risk} · Safety{" "}
+                      {s.pipeline.opportunity_threshold} · Sniper{" "}
+                      {s.pipeline.sniper} · Market {s.pipeline.market} · Data{" "}
+                      {s.pipeline.data} · Risk {s.pipeline.risk} · Safety{" "}
                       {s.pipeline.safety} · Optimizer {s.pipeline.optimizer} ·
                       OMS {s.pipeline.oms} · Broker {s.pipeline.broker} · MT5{" "}
                       {s.pipeline.mt5}
@@ -399,7 +400,14 @@ export function SignalCenterWorkspace() {
                 ["BUY score", String(selected.bullish_score ?? 0)],
                 ["SELL score", String(selected.bearish_score ?? 0)],
                 ["Candidate", selected.pipeline?.candidate ?? "NONE"],
+                ["Setup", selected.pipeline?.setup_state ?? "WAIT"],
                 ["Decision", selected.pipeline?.final_decision ?? "WAIT"],
+                [
+                  "Opportunity",
+                  selected.pipeline
+                    ? `${selected.pipeline.opportunity_gate} ${selected.pipeline.opportunity_score}/${selected.pipeline.opportunity_threshold}`
+                    : "—",
+                ],
                 ["First blocker", selected.first_blocker || "—"],
                 ["Sniper", selected.pipeline?.sniper ?? "—"],
                 ["Risk", selected.pipeline?.risk ?? "—"],
@@ -408,12 +416,6 @@ export function SignalCenterWorkspace() {
                 ["OMS", selected.pipeline?.oms ?? "—"],
                 ["Broker", selected.pipeline?.broker ?? "NOT_REACHED"],
                 ["MT5", selected.pipeline?.mt5 ?? "NOT_REACHED"],
-                [
-                  "Opportunity",
-                  selected.pipeline
-                    ? `${selected.pipeline.opportunity_score}/${selected.pipeline.opportunity_threshold}`
-                    : "—",
-                ],
                 [
                   "Execution",
                   selected.pipeline?.execution_lifecycle || "—",

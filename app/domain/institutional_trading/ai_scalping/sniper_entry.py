@@ -90,15 +90,41 @@ def _atr_for_zone(
     *,
     atr_timeframe: str | None,
     zone_timeframe: Any,
+    source: str | None = None,
 ) -> Decimal:
-    """Scale ATR to the FVG/OB timeframe so M5 ATR is not used as M15 chase."""
-    src = _tf_minutes(atr_timeframe)
+    """Scale ATR to the FVG/OB timeframe so M5 ATR is not used as M15 chase.
+
+    Production FVG is detected on structure TF (M15). Entry ATR is M5.
+    Missing FVG timeframe still scales M5→M15. Unknown OB stays on entry ATR.
+    """
+    src = _tf_minutes(atr_timeframe) or _tf_minutes("M5")
     dst = _tf_minutes(zone_timeframe)
+    if dst is None and source == "fvg":
+        dst = _tf_minutes("M15")
+    if dst is None:
+        dst = src
     if src is None or dst is None or dst <= src or atr <= 0:
         return atr
     ratio = (Decimal(dst) / Decimal(src)).sqrt()
     scaled = atr * ratio
     return scaled if scaled.is_finite() and scaled > 0 else atr
+
+
+_CANONICAL_BLOCKER = {
+    "WAIT_ABNORMAL_SPREAD": "WAIT_SPREAD",
+    "WAIT_STALE_FVG": "WAIT_STALE",
+    "WAIT_STALE_DATA": "WAIT_STALE",
+    "WAIT_CONFLICTING_BUY_SELL": "WAIT_CONFLICT",
+    "WAIT_SNIPER_INCOMPLETE": "WAIT_CONFIRMATION",
+    "WAIT_NO_SNIPER_TRIGGER": "WAIT_CONFIRMATION",
+    "WAIT_NO_DIRECTIONAL_EDGE": "WAIT_CONFIRMATION",
+}
+
+
+def canonical_sniper_blocker(primary: str | None) -> str | None:
+    if not primary:
+        return None
+    return _CANONICAL_BLOCKER.get(primary, primary)
 
 
 def _side_of_break(break_dir: Any) -> TradeDirection | None:
@@ -252,7 +278,10 @@ def _chase_distance(
 ) -> tuple[Decimal, Decimal, bool]:
     """Return (distance beyond zone, extension, is_chase). Inside/pending = 0."""
     zone_atr = _atr_for_zone(
-        atr, atr_timeframe=atr_timeframe, zone_timeframe=zone.timeframe
+        atr,
+        atr_timeframe=atr_timeframe,
+        zone_timeframe=zone.timeframe,
+        source=zone.source,
     )
     extension = zone_atr * _CHASE_ATR_MULT
     if side is TradeDirection.BUY:
@@ -366,6 +395,18 @@ def evaluate_sniper_entry(
     }
 
     def _wait(primary: str) -> SniperEntryDecision:
+        canon = canonical_sniper_blocker(primary)
+        diagnostics["canonical_blocker"] = canon
+        if primary in {"WAIT_CHASE", "WAIT_STALE_FVG"}:
+            diagnostics["setup_state"] = "INVALIDATED"
+        elif pillars.get("clear_direction") and (
+            pillars.get("liquidity_event")
+            or pillars.get("structure_confirmation")
+            or pillars.get("entry_zone")
+        ):
+            diagnostics["setup_state"] = "SETUP_FORMING"
+        else:
+            diagnostics["setup_state"] = "WAIT"
         return SniperEntryDecision(
             passed=False,
             action="WAIT",
@@ -489,7 +530,8 @@ def evaluate_sniper_entry(
         ref = mid
     diagnostics["ref_price"] = str(ref) if ref is not None else None
 
-    chase_zones = fresh_zones if fresh_zones else stale_zones
+    fvg_fresh = [z for z in fresh_zones if z.source == "fvg"]
+    chase_zones = fvg_fresh or fresh_zones or stale_zones
     used_stale_only = bool(stale_zones) and not fresh_zones
     if used_stale_only:
         pillars["fresh_zone"] = False
@@ -517,6 +559,7 @@ def evaluate_sniper_entry(
                     atr,
                     atr_timeframe=atr_timeframe,
                     zone_timeframe=nearest.timeframe,
+                    source=nearest.source,
                 )
             )
             diagnostics["zone_bound"] = (
@@ -565,6 +608,8 @@ def evaluate_sniper_entry(
         reasons.append(f"WAIT — incomplete sniper pillars {missing}")
         return _wait(primary)
 
+    diagnostics["setup_state"] = "SETUP_READY"
+    diagnostics["canonical_blocker"] = None
     reasons.append(f"SNIPER {side.value} — liquidity/structure/confirmation aligned")
     return SniperEntryDecision(
         passed=True,
