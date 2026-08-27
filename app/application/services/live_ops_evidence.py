@@ -116,5 +116,25 @@ def build_live_ops_evidence(
         },
         "verification": readiness.verification,
     }
+    try:
+        from app.domain.institutional_trading.ai_scalping.live_health import (
+            get_live_health_monitor,
+        )
+
+        live_health = get_live_health_monitor().snapshot()
+        payload["live_health"] = {
+            "allow_new_entries": live_health.get("allow_new_entries"),
+            "block_reason": live_health.get("block_reason"),
+            "symbol_rejects": live_health.get("symbol_rejects"),
+            "reject_burst": live_health.get("reject_burst"),
+            "reject_burst_count": live_health.get("reject_burst_count"),
+            "reject_burst_window_seconds": live_health.get(
+                "reject_burst_window_seconds"
+            ),
+            "last_execution_reject": live_health.get("last_execution_reject"),
+            "health": live_health.get("health"),
+        }
+    except Exception:
+        payload["live_health"] = {"unavailable": True}
     cleaned = _scrub(payload)
     return cleaned if isinstance(cleaned, dict) else payload

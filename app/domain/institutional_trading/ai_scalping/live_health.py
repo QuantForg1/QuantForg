@@ -101,6 +101,7 @@ class LiveHealthMonitor:
     )
     _symbol_reject_reasons: dict[str, str] = field(default_factory=dict, repr=False)
     _emergencies: deque[tuple[datetime, str]] = field(default_factory=deque, repr=False)
+    _last_execution_reject: dict[str, Any] | None = field(default=None, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def update_dependencies(
@@ -155,21 +156,42 @@ class LiveHealthMonitor:
                 detail=self._health.detail,
             )
 
-    def record_reject(self, symbol: str | None = None) -> None:
-        """Record a reject. With symbol → pause that symbol only."""
+    def record_reject(
+        self,
+        symbol: str | None = None,
+        *,
+        source: str | None = None,
+        reason: str | None = None,
+        broker_retcode: int | None = None,
+        mt5_retcode: int | None = None,
+    ) -> None:
+        """Record a genuine execution-layer reject. With symbol → pause that symbol only.
+
+        Callers must not invoke this for WAIT, Risk/Safety holds, or OMS
+        application rejects that never reached order_send / MT5.
+        """
         now = datetime.now(UTC)
         key = (symbol or "").strip().upper()
+        event = {
+            "at": now.isoformat(),
+            "symbol": key or None,
+            "reject_source": source,
+            "reject_reason": reason,
+            "broker_retcode": broker_retcode,
+            "mt5_retcode": mt5_retcode,
+        }
         with self._lock:
+            self._last_execution_reject = event
             if key:
                 q = self._symbol_rejects.setdefault(key, deque())
                 q.append(now)
                 self._trim(q, self.reject_window_seconds)
                 if len(q) >= self.reject_burst_threshold:
-                    reason = (
+                    burst_reason = (
                         f"EXECUTION_REJECT_BURST: Excessive rejects on {key} "
                         f"({len(q)} in {self.reject_window_seconds}s)"
                     )
-                    self._symbol_reject_reasons[key] = reason
+                    self._symbol_reject_reasons[key] = burst_reason
                 # Track aggregate count for observability only (no global pause)
                 self._protection.reject_burst = sum(
                     len(v) for v in self._symbol_rejects.values()
@@ -290,10 +312,55 @@ class LiveHealthMonitor:
             self._protection.new_entries_paused = False
             return True, "ok"
 
+    def reject_burst_observability(self, symbol: str | None = None) -> dict[str, Any]:
+        """Windowed live-health burst (5/120s). Fill is not required to clear."""
+        key = (symbol or "").strip().upper()
+        with self._lock:
+            self._trim_windows()
+            q: deque[datetime]
+            if key:
+                q = self._symbol_rejects.get(key) or deque()
+                self._trim(q, self.reject_window_seconds)
+            elif self._symbol_rejects:
+                q = max(self._symbol_rejects.values(), key=len)
+            else:
+                q = self._rejects
+            count = len(q)
+            active = count >= self.reject_burst_threshold
+            remaining = 0.0
+            oldest_iso = None
+            newest_iso = None
+            if q:
+                oldest_iso = q[0].isoformat()
+                newest_iso = q[-1].isoformat()
+                if active:
+                    elapsed = (datetime.now(UTC) - q[0]).total_seconds()
+                    remaining = max(0.0, float(self.reject_window_seconds) - elapsed)
+            last = (
+                dict(self._last_execution_reject)
+                if self._last_execution_reject
+                else None
+            )
+            return {
+                "active": active,
+                "count": count,
+                "window": float(self.reject_window_seconds),
+                "reject_burst_count": count,
+                "reject_burst_window_seconds": int(self.reject_window_seconds),
+                "last_event": newest_iso,
+                "oldest_event": oldest_iso,
+                "last_execution_reject": last,
+                "clear_condition": (
+                    f"windowed rejects expire after {self.reject_window_seconds}s "
+                    "(fill not required; not a permanent latch)"
+                ),
+                "remaining_cooldown": round(remaining, 3),
+                "threshold": int(self.reject_burst_threshold),
+            }
+
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             allowed, why = self.allow_new_entries()
-            self._protection.new_entries_paused = not allowed
             per_sym = {
                 sym: {
                     "reject_burst": len(q),
@@ -302,12 +369,24 @@ class LiveHealthMonitor:
                 }
                 for sym, q in self._symbol_rejects.items()
             }
+            paused_syms = [s for s, v in per_sym.items() if v.get("paused")]
+            if paused_syms and allowed:
+                allowed = False
+                why = str(per_sym[paused_syms[0]].get("reason") or why)
+            self._protection.new_entries_paused = not allowed
+            burst = self.reject_burst_observability(
+                paused_syms[0] if paused_syms else None
+            )
             return {
                 "health": self._health.to_dict(),
                 "self_protection": self._protection.to_dict(),
                 "allow_new_entries": allowed,
                 "block_reason": None if allowed else why,
                 "symbol_rejects": per_sym,
+                "reject_burst": burst,
+                "reject_burst_count": burst["reject_burst_count"],
+                "reject_burst_window_seconds": burst["reject_burst_window_seconds"],
+                "last_execution_reject": burst.get("last_execution_reject"),
             }
 
     def reset(self) -> None:
@@ -321,6 +400,7 @@ class LiveHealthMonitor:
             self._emergencies.clear()
             self._symbol_rejects.clear()
             self._symbol_reject_reasons.clear()
+            self._last_execution_reject = None
 
     def _pause(self, reason: str) -> None:
         if reason not in self._protection.reasons:

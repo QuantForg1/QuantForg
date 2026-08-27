@@ -1035,6 +1035,93 @@ def _pipeline_snapshot(
     }
 
 
+def _attach_execution_observability(
+    pipe: dict[str, Any],
+    last: dict[str, Any],
+    *,
+    symbol: str | None = None,
+) -> None:
+    """Expose genuine-execution flags. Never paints WAIT as a broker reject."""
+    mcd = last.get("market_context_diagnostics")
+    obs: dict[str, Any] = {}
+    if isinstance(mcd, dict) and isinstance(mcd.get("execution_observability"), dict):
+        obs = dict(mcd["execution_observability"])
+    else:
+        from app.domain.institutional_trading.phase_a.execution_reject import (
+            execution_observability,
+        )
+
+        obs = execution_observability(
+            abort_reason=last.get("abort_reason") or pipe.get("first_blocker"),
+            forwarded_to_oms=bool(last.get("forwarded_to_oms")),
+            oms_submit_called=bool(
+                last.get("oms_message") or last.get("broker_retcode") is not None
+            ),
+            reject_reason=str(last.get("oms_message") or last.get("detail") or "")
+            or None,
+        )
+    for key in (
+        "execution_attempted",
+        "oms_reached",
+        "broker_reached",
+        "mt5_reached",
+        "broker_retcode",
+        "mt5_retcode",
+        "reject_source",
+        "reject_reason",
+        "reject_timestamp",
+        "counted_toward_reject_burst",
+    ):
+        if key in {"broker_retcode", "mt5_retcode"}:
+            val = obs.get(key)
+            if val is None:
+                val = last.get(key)
+            if val is None:
+                val = pipe.get(key)
+            if val is not None:
+                pipe[key] = val
+            continue
+        if key in obs:
+            pipe[key] = obs.get(key)
+        elif key in last and last.get(key) is not None:
+            pipe[key] = last.get(key)
+    live_burst = None
+    try:
+        from app.domain.institutional_trading.ai_scalping.live_health import (
+            get_live_health_monitor,
+        )
+
+        live_burst = get_live_health_monitor().reject_burst_observability(symbol)
+    except Exception:
+        live_burst = None
+    phase_a_burst = pipe.get("reject_burst") if isinstance(pipe.get("reject_burst"), dict) else None
+    if not isinstance(phase_a_burst, dict):
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+            phase_a_burst = get_phase_a_plane().burst.snapshot().get("reject_burst")
+        except Exception:
+            phase_a_burst = None
+    if isinstance(live_burst, dict):
+        merged = dict(live_burst)
+        if isinstance(phase_a_burst, dict):
+            merged["phase_a"] = phase_a_burst
+        pipe["reject_burst"] = merged
+        pipe["reject_burst_count"] = live_burst.get("reject_burst_count")
+        pipe["reject_burst_window_seconds"] = live_burst.get(
+            "reject_burst_window_seconds"
+        )
+        last_ev = live_burst.get("last_execution_reject") or {}
+        if isinstance(last_ev, dict) and last_ev.get("at") and not pipe.get(
+            "reject_timestamp"
+        ):
+            pipe["reject_timestamp"] = last_ev.get("at")
+    elif isinstance(phase_a_burst, dict):
+        pipe["reject_burst"] = phase_a_burst
+        pipe["reject_burst_count"] = phase_a_burst.get("count")
+        pipe["reject_burst_window_seconds"] = phase_a_burst.get("window")
+
+
 def _overlay_last_ite_cycle(
     row: dict[str, Any],
     last: dict[str, Any] | None,
@@ -1095,6 +1182,11 @@ def _overlay_last_ite_cycle(
         pipe["execution_lifecycle"] = "ORDER_SENT"
         pipe["forwarded_to_oms"] = True
         pipe["ticket"] = ticket
+        _attach_execution_observability(
+            pipe,
+            last,
+            symbol=str(row.get("symbol") or "") or None,
+        )
         row["pipeline"] = pipe
         row["execution_state"] = "ORDER_SENT"
         return row
@@ -1106,6 +1198,11 @@ def _overlay_last_ite_cycle(
         pipe["oms"] = "READY"
         pipe["execution_lifecycle"] = "EXECUTING"
         pipe["forwarded_to_oms"] = True
+        _attach_execution_observability(
+            pipe,
+            last,
+            symbol=str(row.get("symbol") or "") or None,
+        )
         row["pipeline"] = pipe
         return row
     if not abort:
@@ -1262,6 +1359,11 @@ def _overlay_last_ite_cycle(
             if mcd.get(key) is not None:
                 row[key] = mcd[key]
                 pipe[key] = mcd[key]
+    _attach_execution_observability(
+        pipe,
+        last,
+        symbol=str(row.get("symbol") or pipe.get("symbol") or "") or None,
+    )
     row["pipeline"] = pipe
     return row
 

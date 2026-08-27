@@ -174,6 +174,98 @@ def classify_downstream_execution_reject(
     return None
 
 
+def should_count_execution_reject(
+    oms_result: Any | None,
+    *,
+    abort_reason: Any = None,
+    oms_submit_called: bool = False,
+) -> bool:
+    """True only after OMS submit and a genuine downstream execution failure."""
+    if not oms_submit_called and oms_result is None:
+        return False
+    return classify_downstream_execution_reject(
+        oms_result, abort_reason=abort_reason
+    ) is not None
+
+
+def execution_observability(
+    *,
+    oms_result: Any | None = None,
+    abort_reason: Any = None,
+    forwarded_to_oms: bool = False,
+    oms_submit_called: bool = False,
+    gateway_status: str | None = None,
+    reject_reason: str | None = None,
+    reject_timestamp: str | None = None,
+) -> dict[str, Any]:
+    """Operator flags. Never labels Risk/Safety/WAIT as a broker reject."""
+    abort = _abort_token(abort_reason)
+    raw: dict[str, Any] = {}
+    if oms_result is not None:
+        maybe = getattr(oms_result, "raw", None)
+        if isinstance(maybe, dict):
+            raw = maybe
+    gw = str(
+        gateway_status
+        or (getattr(oms_result, "gateway_status", "") if oms_result is not None else "")
+        or ""
+    ).lower()
+    order_send = bool(raw.get("order_send_reached")) or "order_send" in gw
+    order_check = bool(raw.get("order_check_reached")) or "order_check" in gw
+    oms_reached = bool(
+        oms_submit_called
+        or oms_result is not None
+        or raw.get("oms_reached")
+    )
+    if abort in _PRE_OMS_ABORTS and not oms_submit_called and oms_result is None:
+        oms_reached = False
+    broker_reached = bool(order_check or order_send)
+    mt5_reached = bool(order_send)
+    execution_attempted = bool(order_send or forwarded_to_oms)
+    retcode = getattr(oms_result, "retcode", None) if oms_result is not None else None
+    mt5_retcode = None
+    broker_retcode = None
+    if retcode is not None and (mt5_reached or order_send):
+        try:
+            rc = int(retcode)
+        except (TypeError, ValueError):
+            rc = None
+        else:
+            broker_retcode = rc
+            if 10000 <= rc < 20000:
+                mt5_retcode = rc
+    stage = None
+    if oms_result is not None or oms_submit_called:
+        stage = classify_downstream_execution_reject(
+            oms_result, abort_reason=abort
+        )
+    if stage:
+        reject_source = stage
+    elif oms_reached and not execution_attempted:
+        reject_source = "OMS_APPLICATION"
+    elif abort in {EXECUTION_REJECT_BURST, "SELF_PROTECTION"} or "REJECT_BURST" in abort:
+        reject_source = EXECUTION_REJECT_BURST
+    elif abort:
+        reject_source = abort
+    else:
+        reject_source = None
+    message = reject_reason
+    if not message and oms_result is not None:
+        message = str(getattr(oms_result, "message", "") or "") or None
+    return {
+        "execution_attempted": bool(execution_attempted),
+        "oms_reached": bool(oms_reached),
+        "broker_reached": bool(broker_reached),
+        "mt5_reached": bool(mt5_reached),
+        "broker_retcode": broker_retcode,
+        "mt5_retcode": mt5_retcode,
+        "reject_source": reject_source,
+        "reject_reason": message,
+        "reject_timestamp": reject_timestamp,
+        "counted_toward_reject_burst": stage is not None,
+    }
+
+
 def apply_oms_outcome_to_burst(
     burst: Any,
     *,

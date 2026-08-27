@@ -257,6 +257,13 @@ const burstBlocked = parseSignalPipeline({
     last_event_stage: "MT5_REJECTED",
     remaining_cooldown: 240,
   },
+  execution_attempted: false,
+  oms_reached: false,
+  broker_reached: false,
+  mt5_reached: false,
+  reject_source: "EXECUTION_REJECT_BURST",
+  reject_burst_count: 5,
+  reject_burst_window_seconds: 120,
 });
 assert.ok(burstBlocked);
 assert.equal(burstBlocked.first_blocker, "EXECUTION_REJECT_BURST");
@@ -266,6 +273,12 @@ assert.equal(burstBlocked.broker, "NOT_REACHED");
 assert.equal(burstBlocked.mt5, "NOT_REACHED");
 assert.equal(burstBlocked.ticket, null);
 assert.equal(burstBlocked.reject_burst?.active, true);
+assert.equal(burstBlocked.execution_attempted, false);
+assert.equal(burstBlocked.oms_reached, false);
+assert.equal(burstBlocked.mt5_reached, false);
+assert.equal(burstBlocked.reject_source, "EXECUTION_REJECT_BURST");
+assert.equal(burstBlocked.reject_burst_count, 5);
+assert.equal(burstBlocked.reject_burst_window_seconds, 120);
 assert.equal(
   classifyExecutionBlocker("phase_a:REJECT_BURST"),
   "EXECUTION_REJECT_BURST",

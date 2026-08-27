@@ -1020,17 +1020,47 @@ class ExecutionBridge:
                     requote=requote,
                     rejection_reason=oms_result.message,
                 )
-                health.record_reject(symbol=str(decision.symbol or "") or None)
-                try:
-                    from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
-                        get_symbol_state_book,
-                    )
+                from app.domain.institutional_trading.phase_a.execution_reject import (
+                    classify_downstream_execution_reject,
+                    should_count_execution_reject,
+                )
 
-                    sym = str(decision.symbol or "").upper()
-                    if sym:
-                        get_symbol_state_book().note_reject(sym)
-                except Exception:
-                    logger.exception("symbol_state_note_reject_failed")
+                genuine_stage = classify_downstream_execution_reject(
+                    oms_result, abort_reason=abort_reason
+                )
+                # Live-health 5/120s must match Phase A: genuine order_send /
+                # MT5 retcode / gateway failure only. OMS Risk/Safety/daily-loss
+                # application rejects must not arm EXECUTION_REJECT_BURST.
+                mt5_rc = None
+                try:
+                    if oms_result.retcode is not None:
+                        parsed_rc = int(oms_result.retcode)
+                        if 10000 <= parsed_rc < 20000:
+                            mt5_rc = parsed_rc
+                except (TypeError, ValueError):
+                    mt5_rc = None
+                if should_count_execution_reject(
+                    oms_result,
+                    abort_reason=abort_reason,
+                    oms_submit_called=True,
+                ):
+                    health.record_reject(
+                        symbol=str(decision.symbol or "") or None,
+                        source=genuine_stage,
+                        reason=str(oms_result.message or abort_reason.value),
+                        broker_retcode=oms_result.retcode,
+                        mt5_retcode=mt5_rc,
+                    )
+                    try:
+                        from app.domain.institutional_trading.ai_scalping.symbol_state import (  # noqa: E501
+                            get_symbol_state_book,
+                        )
+
+                        sym = str(decision.symbol or "").upper()
+                        if sym:
+                            get_symbol_state_book().note_reject(sym)
+                    except Exception:
+                        logger.exception("symbol_state_note_reject_failed")
                 if abort_reason is BridgeAbortReason.GATEWAY_FAILURE:
                     health.record_gateway_instability()
         except Exception:

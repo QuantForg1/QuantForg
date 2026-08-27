@@ -61,6 +61,17 @@ export type SignalPipeline = {
   mt5_status: string | null;
   ticket: string | number | null;
   reject_burst: Record<string, unknown> | null;
+  execution_attempted?: boolean | null;
+  oms_reached?: boolean | null;
+  broker_reached?: boolean | null;
+  mt5_reached?: boolean | null;
+  broker_retcode?: number | null;
+  mt5_retcode?: number | null;
+  reject_source?: string | null;
+  reject_reason?: string | null;
+  reject_timestamp?: string | null;
+  reject_burst_count?: number | null;
+  reject_burst_window_seconds?: number | null;
 };
 
 export function formatSignalHeadline(
@@ -296,6 +307,48 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
       row.reject_burst && typeof row.reject_burst === "object"
         ? (row.reject_burst as Record<string, unknown>)
         : null,
+    execution_attempted:
+      row.execution_attempted == null || row.execution_attempted === ""
+        ? null
+        : Boolean(row.execution_attempted),
+    oms_reached:
+      row.oms_reached == null || row.oms_reached === ""
+        ? null
+        : Boolean(row.oms_reached),
+    broker_reached:
+      row.broker_reached == null || row.broker_reached === ""
+        ? null
+        : Boolean(row.broker_reached),
+    mt5_reached:
+      row.mt5_reached == null || row.mt5_reached === ""
+        ? null
+        : Boolean(row.mt5_reached),
+    broker_retcode: Number.isFinite(Number(row.broker_retcode))
+      ? Number(row.broker_retcode)
+      : null,
+    mt5_retcode: Number.isFinite(Number(row.mt5_retcode))
+      ? Number(row.mt5_retcode)
+      : null,
+    reject_source:
+      row.reject_source == null || row.reject_source === ""
+        ? null
+        : String(row.reject_source),
+    reject_reason:
+      row.reject_reason == null || row.reject_reason === ""
+        ? null
+        : String(row.reject_reason),
+    reject_timestamp:
+      row.reject_timestamp == null || row.reject_timestamp === ""
+        ? null
+        : String(row.reject_timestamp),
+    reject_burst_count: Number.isFinite(Number(row.reject_burst_count))
+      ? Number(row.reject_burst_count)
+      : null,
+    reject_burst_window_seconds: Number.isFinite(
+      Number(row.reject_burst_window_seconds),
+    )
+      ? Number(row.reject_burst_window_seconds)
+      : null,
   };
 }
 

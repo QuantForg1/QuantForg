@@ -3858,6 +3858,38 @@ class InstitutionalIteRuntime:
                 if isinstance(market_context_diagnostics, dict):
                     market_context_diagnostics["execution_blocked"] = blocked_ev
 
+        try:
+            from app.domain.institutional_trading.phase_a.execution_reject import (
+                execution_observability as _exec_obs,
+            )
+
+            oms_for_obs = getattr(bridge_result, "oms_result", None)
+            entry_for_obs = getattr(bridge_result, "journal_entry", None)
+            obs = _exec_obs(
+                oms_result=oms_for_obs,
+                abort_reason=getattr(bridge_result, "abort_reason", None),
+                forwarded_to_oms=bool(
+                    getattr(bridge_result, "forwarded_to_oms", False)
+                ),
+                oms_submit_called=oms_for_obs is not None,
+                gateway_status=(
+                    getattr(entry_for_obs, "gateway_status", None)
+                    if entry_for_obs is not None
+                    else None
+                ),
+                reject_reason=str(detail or "") or None,
+                reject_timestamp=(
+                    getattr(entry_for_obs, "timestamp", None).isoformat()
+                    if entry_for_obs is not None
+                    and getattr(entry_for_obs, "timestamp", None) is not None
+                    else None
+                ),
+            )
+            if isinstance(market_context_diagnostics, dict):
+                market_context_diagnostics["execution_observability"] = obs
+        except Exception:
+            logger.exception("execution_observability_attach_failed")
+
         result = ShadowCycleResult(
             ok=(not bridge_result.forwarded_to_oms) if force_shadow else True,
             trace_id=tid,
