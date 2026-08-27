@@ -40,6 +40,21 @@ from app.domain.trading.gold_only import (
     resolve_trading_symbol,
 )
 from app.domain.value_objects.identity import SymbolCode
+from core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+def scalp_ltf_zone_timeframes(cfg: ITEConfig) -> tuple[Timeframe, ...]:
+    """M5/M1 zone TFs for scalping. Primary M15 stays the HTF snapshot."""
+    if not cfg.is_scalping():
+        return ()
+    primary = cfg.primary_structure_tf
+    out: list[Timeframe] = []
+    for tf in (cfg.entry_confirmation_tf, cfg.execution_management_tf):
+        if tf != primary and tf not in out:
+            out.append(tf)
+    return tuple(out)
 
 
 def build_default_context_engine() -> MarketContextEngine:
@@ -168,6 +183,31 @@ class InstitutionalAnalysisPipeline:
         )
         fvg_result = await fvg_engine.analyze(code, primary_tf, as_of=moment)
 
+        ltf_obs: list = []
+        ltf_fvgs: list = []
+        bars_by_tf = self.bars.as_mapping()
+        for tf in scalp_ltf_zone_timeframes(cfg):
+            if not bars_by_tf.get(tf):
+                continue
+            try:
+                ob_ltf = await ob_engine.analyze(code, tf, as_of=moment)
+                fvg_ltf_engine = FairValueGapEngine(
+                    prices=self.bars,
+                    structure=structure_port,
+                    order_blocks=SnapshotOrderBlockPort(snapshot=ob_ltf.snapshot),
+                    candle_limit=cfg.candle_limit,
+                )
+                fvg_ltf = await fvg_ltf_engine.analyze(code, tf, as_of=moment)
+                ltf_obs.append(ob_ltf.snapshot)
+                ltf_fvgs.append(fvg_ltf.snapshot)
+            except Exception:
+                logger.warning(
+                    "scalp LTF zone analysis failed symbol=%s tf=%s",
+                    code_str,
+                    getattr(tf, "value", tf),
+                    exc_info=True,
+                )
+
         typed_structure = dict(structure_by_tf.items())
         trend = TrendEngine(config=cfg).analyze(
             typed_structure,  # type: ignore[arg-type]
@@ -251,4 +291,6 @@ class InstitutionalAnalysisPipeline:
             entry_highs=entry_highs,
             entry_lows=entry_lows,
             entry_closes=entry_closes,
+            ltf_order_blocks=tuple(ltf_obs),
+            ltf_fair_value_gaps=tuple(ltf_fvgs),
         )

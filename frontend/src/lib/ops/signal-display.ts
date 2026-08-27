@@ -31,6 +31,7 @@ export type SignalPipeline = {
   sell_components: Record<string, number>;
   independent_evidence: string[];
   confluence_class: string | null;
+  setup_family: string | null;
   directional_edge: number | null;
   edge_margin: number | null;
   ltf_buy_score: number | null;
@@ -172,6 +173,10 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
       row.confluence_class == null || row.confluence_class === ""
         ? null
         : String(row.confluence_class),
+    setup_family:
+      row.setup_family == null || row.setup_family === ""
+        ? null
+        : String(row.setup_family),
     directional_edge: Number.isFinite(Number(row.directional_edge))
       ? Number(row.directional_edge)
       : null,

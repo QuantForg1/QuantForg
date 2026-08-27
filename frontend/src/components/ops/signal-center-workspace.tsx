@@ -428,6 +428,10 @@ export function SignalCenterWorkspace() {
                   `${selected.pipeline?.ltf_buy_score ?? "—"} / ${selected.pipeline?.ltf_sell_score ?? "—"}`,
                 ],
                 [
+                  "Setup family",
+                  selected.pipeline?.setup_family ?? "—",
+                ],
+                [
                   "Families",
                   (selected.pipeline?.independent_evidence ?? []).join(", ") ||
                     "—",

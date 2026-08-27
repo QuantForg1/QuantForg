@@ -181,6 +181,9 @@ class MarketAnalysisSnapshot:
     entry_highs: tuple[float, ...] = ()
     entry_lows: tuple[float, ...] = ()
     entry_closes: tuple[float, ...] = ()
+    # Scalping LTF (M5/M1) zone snapshots. Never merged into the M15 primary.
+    ltf_order_blocks: tuple[OrderBlockSnapshot, ...] = ()
+    ltf_fair_value_gaps: tuple[FairValueGapSnapshot, ...] = ()
     id: UUID = field(default_factory=uuid4)
     schema_version: str = "1.0.0"
 
@@ -221,4 +224,6 @@ class MarketAnalysisSnapshot:
             "spread": str(self.spread) if self.spread is not None else None,
             "atr": str(self.atr) if self.atr is not None else None,
             "entry_atr": str(self.entry_atr) if self.entry_atr is not None else None,
+            "ltf_order_blocks": [s.to_dict() for s in self.ltf_order_blocks],
+            "ltf_fair_value_gaps": [s.to_dict() for s in self.ltf_fair_value_gaps],
         }

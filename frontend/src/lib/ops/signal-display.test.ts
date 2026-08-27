@@ -104,7 +104,35 @@ assert.equal(liveChase.risk, "NOT_REACHED");
 assert.equal(liveChase.sniper_tier, null);
 assert.equal(liveChase.directional_edge, null);
 assert.equal(liveChase.confluence_class, null);
+assert.equal(liveChase.setup_family, null);
 assert.equal(liveChase.h1_context, "context-only");
+
+const staleFamily = parseSignalPipeline({
+  market: "OPEN",
+  data: "LIVE",
+  buy_score: 16,
+  sell_score: 42,
+  decision: "WAIT",
+  first_blocker: "WAIT_STALE_FVG",
+  sniper: "WAIT",
+  risk: "NOT_REACHED",
+  safety: "NOT_REACHED",
+  optimizer: "NOT_REACHED",
+  oms: "NOT_REACHED",
+  opportunity_score: 70,
+  opportunity_threshold: 70,
+  opportunity_gate: "PASS",
+  setup_state: "STALE",
+  setup_family: "stale_fvg",
+  confluence_class: "INVALID",
+  execution_lifecycle: null,
+});
+assert.ok(staleFamily);
+assert.equal(staleFamily.first_blocker, "WAIT_STALE_FVG");
+assert.equal(staleFamily.setup_family, "stale_fvg");
+assert.equal(staleFamily.opportunity_gate, "PASS");
+assert.equal(staleFamily.risk, "NOT_REACHED");
+assert.equal(staleFamily.oms, "NOT_REACHED");
 
 const readyTier = parseSignalPipeline({
   market: "OPEN",

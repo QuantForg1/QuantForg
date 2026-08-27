@@ -200,14 +200,25 @@ def _zone_is_stale(
     return (now - ts) > _STALE_MAX_AGE
 
 
-def _collect_aligned_zones(
-    snapshot: MarketAnalysisSnapshot,
+def _iter_zone_snapshots(snapshot: Any, primary_attr: str, extra_attr: str) -> list[Any]:
+    """Primary M15 snapshot plus optional LTF (M1/M5) snapshots."""
+    snaps: list[Any] = []
+    primary = getattr(snapshot, primary_attr, None)
+    if primary is not None:
+        snaps.append(primary)
+    extra = getattr(snapshot, extra_attr, None)
+    if isinstance(extra, (list, tuple)):
+        snaps.extend(s for s in extra if s is not None and s is not primary)
+    return snaps
+
+
+def _append_ob_zones(
+    out: list[_AlignedZone],
+    ob_snap: Any,
     side: TradeDirection,
     *,
     now: datetime,
-) -> list[_AlignedZone]:
-    out: list[_AlignedZone] = []
-    ob_snap = snapshot.order_blocks
+) -> None:
     for block in _seq(ob_snap, "order_blocks")[:24]:
         state = _upper(getattr(block, "state", None))
         if state and state not in {"ACTIVE", "VALIDATED", ""}:
@@ -238,7 +249,14 @@ def _collect_aligned_zones(
             )
         )
 
-    fvg_snap = snapshot.fair_value_gaps
+
+def _append_fvg_zones(
+    out: list[_AlignedZone],
+    fvg_snap: Any,
+    side: TradeDirection,
+    *,
+    now: datetime,
+) -> None:
     for gap in _seq(fvg_snap, "active_gaps")[:24]:
         if _bias_side(gap) is not side:
             continue
@@ -248,7 +266,9 @@ def _collect_aligned_zones(
         if hi is None or lo is None:
             continue
         quality = getattr(gap, "quality", None)
-        freshness = _intish(getattr(quality, "freshness_bars", None) if quality else None)
+        freshness = _intish(
+            getattr(quality, "freshness_bars", None) if quality else None
+        )
         formed = (
             getattr(zone, "formed_at", None)
             or getattr(gap, "formed_at", None)
@@ -268,6 +288,23 @@ def _collect_aligned_zones(
                 ),
             )
         )
+
+
+def _collect_aligned_zones(
+    snapshot: MarketAnalysisSnapshot,
+    side: TradeDirection,
+    *,
+    now: datetime,
+) -> list[_AlignedZone]:
+    out: list[_AlignedZone] = []
+    for ob_snap in _iter_zone_snapshots(
+        snapshot, "order_blocks", "ltf_order_blocks"
+    ):
+        _append_ob_zones(out, ob_snap, side, now=now)
+    for fvg_snap in _iter_zone_snapshots(
+        snapshot, "fair_value_gaps", "ltf_fair_value_gaps"
+    ):
+        _append_fvg_zones(out, fvg_snap, side, now=now)
     return out
 
 
@@ -373,7 +410,7 @@ def _evidence_families(
             families.append("liquidity")
         elif side is TradeDirection.BUY and eql:
             families.append("liquidity")
-    if _collect_aligned_zones(snapshot, side, now=now):
+    if any(not z.stale for z in _collect_aligned_zones(snapshot, side, now=now)):
         families.append("zone")
     return families
 
@@ -594,28 +631,42 @@ def evaluate_sniper_entry(
             reasons.append("Equal lows — bullish liquidity")
 
     displacement_ok = False
-    ob_snap = snapshot.order_blocks
-    for block in _seq(ob_snap, "order_blocks")[:24]:
-        state = _upper(getattr(block, "state", None))
-        if state and state not in {"ACTIVE", "VALIDATED", ""}:
-            continue
-        if _bias_side(block) is not side:
-            continue
-        quality = getattr(block, "quality", None)
-        ratio = _dec(getattr(quality, "displacement_ratio", None) if quality else None)
-        if ratio is not None and ratio >= Decimal("1.5"):
-            displacement_ok = True
-            reasons.append("Displacement-qualified order block")
+    for ob_snap in _iter_zone_snapshots(
+        snapshot, "order_blocks", "ltf_order_blocks"
+    ):
+        for block in _seq(ob_snap, "order_blocks")[:24]:
+            state = _upper(getattr(block, "state", None))
+            if state and state not in {"ACTIVE", "VALIDATED", ""}:
+                continue
+            if _bias_side(block) is not side:
+                continue
+            quality = getattr(block, "quality", None)
+            ratio = _dec(
+                getattr(quality, "displacement_ratio", None) if quality else None
+            )
+            if ratio is not None and ratio >= Decimal("1.5"):
+                displacement_ok = True
+                reasons.append("Displacement-qualified order block")
+                break
+        if displacement_ok:
+            break
 
     aligned = _collect_aligned_zones(snapshot, side, now=moment)
     fresh_zones = [z for z in aligned if not z.stale]
     stale_zones = [z for z in aligned if z.stale]
-    if aligned:
+    used_stale_only = bool(stale_zones) and not fresh_zones
+    diagnostics["stale_zone_count"] = len(stale_zones)
+    diagnostics["fresh_zone_count"] = len(fresh_zones)
+    diagnostics["stale_zone_ignored"] = False
+    if fresh_zones:
         pillars["entry_zone"] = True
-        if any(z.source == "fvg" for z in aligned):
+        if any(z.source == "fvg" for z in fresh_zones):
             reasons.append(f"Aligned FVG zone for {side.value}")
-        elif any(z.source == "ob" for z in aligned):
+        elif any(z.source == "ob" for z in fresh_zones):
             reasons.append(f"Aligned order-block zone for {side.value}")
+        diagnostics["stale_zone_ignored"] = bool(stale_zones)
+    elif used_stale_only:
+        diagnostics["stale_zone_ignored"] = True
 
     # FVG/OB is an independent zone family. Do not auto-count it as liquidity —
     # that double-counted the same evidence and then still AND-gated momentum.
@@ -649,13 +700,11 @@ def evaluate_sniper_entry(
         ref = mid
     diagnostics["ref_price"] = str(ref) if ref is not None else None
 
-    # Measure chase against the nearest fresh zone (FVG or OB). Preferring
-    # only FVG can false-chase a closer demand/supply OB.
-    chase_zones = fresh_zones or stale_zones
-    used_stale_only = bool(stale_zones) and not fresh_zones
+    # Measure chase only against a FRESH zone. A stale FVG must not be used
+    # for TAKE and must not set a global chase/veto for other families.
+    chase_zones = fresh_zones
     if used_stale_only:
-        pillars["fresh_zone"] = False
-        reasons.append("WAIT — FVG/OB zone is stale (freshness/formed_at)")
+        diagnostics["stale_fvg_present"] = True
 
     if (
         ref is not None
@@ -727,6 +776,12 @@ def evaluate_sniper_entry(
         and not pillars["structure_confirmation"]
         and not pillars["entry_zone"]
     ):
+        if used_stale_only:
+            pillars["fresh_zone"] = False
+            diagnostics["stale_zone_ignored"] = False
+            reasons.append("WAIT — stale FVG")
+            diagnostics["setup_family"] = "stale_fvg"
+            return _wait("WAIT_STALE_FVG", setup_state="STALE")
         reasons.append(
             "WAIT — no BOS/CHOCH/sweep/FVG/OB trigger (trend alone is not enough)"
         )
@@ -748,6 +803,13 @@ def evaluate_sniper_entry(
     diagnostics["independent_evidence"] = independent
     diagnostics["independent_count"] = len(independent)
     diagnostics["structural_families"] = structural
+    zone_src = diagnostics.get("zone_source")
+    if pillars["entry_zone"] and zone_src in {"fvg", "ob"}:
+        diagnostics["setup_family"] = str(zone_src)
+    elif independent:
+        diagnostics["setup_family"] = "+".join(independent)
+    else:
+        diagnostics["setup_family"] = None
     origin = structure_event_at
     zone_created = diagnostics.get("zone_created_at")
     if origin is None and isinstance(zone_created, str):
@@ -786,7 +848,6 @@ def evaluate_sniper_entry(
         and pillars["not_chasing"]
         and pillars["invalidation"]
         and pillars["risk_reward"]
-        and pillars["fresh_zone"]
     )
     take_ok = core_ok and len(independent) >= 2 and bool(structural)
     tight_spread = int(spread_score) >= 85
@@ -818,12 +879,15 @@ def evaluate_sniper_entry(
     missing = [k for k, ok in pillars.items() if not ok]
     primary = "WAIT_SNIPER_INCOMPLETE"
     setup_state: str | None = None
-    if not pillars["fresh_zone"] and pillars["not_chasing"]:
-        primary = "WAIT_STALE_FVG"
-        setup_state = "STALE"
-    elif not pillars["not_chasing"]:
+    if not pillars["not_chasing"]:
         primary = "WAIT_CHASE"
         setup_state = "CHASING"
+    elif used_stale_only and (len(independent) < 2 or not structural):
+        primary = "WAIT_STALE_FVG"
+        setup_state = "STALE"
+        pillars["fresh_zone"] = False
+        diagnostics["stale_zone_ignored"] = False
+        reasons.append("WAIT — stale FVG")
     elif not pillars["invalidation"]:
         primary = "WAIT_NO_INVALIDATION"
         setup_state = "SETUP_FORMING"

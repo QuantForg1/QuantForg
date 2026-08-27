@@ -983,6 +983,16 @@ def _pipeline_snapshot(
             if isinstance(sniper, dict)
             else None
         ),
+        "setup_family": (
+            str(sniper.get("setup_family") or "") or None
+            if isinstance(sniper, dict)
+            else None
+        ),
+        "stale_zone_ignored": (
+            bool(sniper.get("stale_zone_ignored"))
+            if isinstance(sniper, dict) and sniper.get("stale_zone_ignored") is not None
+            else None
+        ),
         "directional_edge": (
             sniper.get("directional_edge") if isinstance(sniper, dict) else None
         ),
