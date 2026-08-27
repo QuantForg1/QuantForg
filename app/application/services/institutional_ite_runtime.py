@@ -2322,7 +2322,6 @@ class InstitutionalIteRuntime:
             from app.domain.institutional_trading.decision_models import (
                 DecisionAction as _DA,
                 EligibilityResult as _Elig,
-                TradeDirection as _TD,
             )
 
             if _scalp_cfg.continuous_operation_enabled:
@@ -2446,10 +2445,11 @@ class InstitutionalIteRuntime:
                     _DA.SELL,
                 }:
                     why = tuple(str(r) for r in (pause.get("reasons") or ()))
+                    # Keep BUY/SELL. Wiping to NO_TRADE/NONE mislabels DIRECTION_NONE
+                    # and hides EXECUTION_REJECT_BURST. OMS is still blocked via
+                    # eligibility + zero lots + the execution contract.
                     decision = _dc_replace(
                         decision,
-                        action=_DA.NO_TRADE,
-                        direction=_TD.NONE,
                         reasons=(
                             *decision.reasons,
                             "continuous_ops_pause_new_entries",
@@ -2484,14 +2484,11 @@ class InstitutionalIteRuntime:
                 from app.domain.institutional_trading.decision_models import (
                     DecisionAction as _DA_fc,
                     EligibilityResult as _Elig_fc,
-                    TradeDirection as _TD_fc,
                 )
 
                 if decision.action in {_DA_fc.BUY, _DA_fc.SELL}:
                     decision = _dc_replace_fc(
                         decision,
-                        action=_DA_fc.NO_TRADE,
-                        direction=_TD_fc.NONE,
                         reasons=(*decision.reasons, "continuous_ops_pause_eval_failed"),
                         eligibility=_Elig_fc(
                             eligible=False,
@@ -2698,16 +2695,24 @@ class InstitutionalIteRuntime:
                     ";".join(decision.eligibility.rejection_reasons)
                     or "risk_ineligible"
                 )
+                from app.domain.institutional_trading.phase_a.execution_reject import (
+                    first_blocking_gate_from_reasons as _pause_gate,
+                )
+
+                gate = _pause_gate(
+                    decision.eligibility.rejection_reasons,
+                    default="RISK_REJECTED",
+                )
                 record_lifecycle(
                     stage="FIRST_BLOCKING_GATE",
                     status="failed",
-                    detail=f"RISK: {reason}",
+                    detail=f"{gate}: {reason}",
                     trace_id=tid,
                     symbol=str(getattr(decision, "symbol", "") or ""),
                 )
                 logger.warning(
                     "execution_first_blocking_gate",
-                    gate="RISK",
+                    gate=gate,
                     reason=reason,
                     symbol=str(getattr(decision, "symbol", "") or ""),
                     forwarded_to_oms=False,

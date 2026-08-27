@@ -552,13 +552,29 @@ def evaluate_gold_execution_contract(
         mark("SIZING", StageStatus.BLOCK.value)
         failures.append(risk_fail)
     elif not facts.risk_eligible:
-        risk_fail = _stage_fail(
-            stage="RISK",
-            code="RISK_REJECTED",
-            reason="; ".join(facts.risk_reasons) or "Risk must PASS",
-            fault_class=FaultClass.HARD_BLOCK.value,
-            next_action=CandidateAction.FAIL_CLOSED.value,
+        from app.domain.institutional_trading.phase_a.execution_reject import (
+            reasons_indicate_execution_reject_burst,
         )
+
+        if reasons_indicate_execution_reject_burst(facts.risk_reasons):
+            risk_fail = _stage_fail(
+                stage="EXECUTION_REJECT_BURST",
+                code="EXECUTION_REJECT_BURST",
+                reason=(
+                    "; ".join(facts.risk_reasons)
+                    or "execution reject-burst latch is active"
+                ),
+                fault_class=FaultClass.HARD_BLOCK.value,
+                next_action=CandidateAction.FAIL_CLOSED.value,
+            )
+        else:
+            risk_fail = _stage_fail(
+                stage="RISK",
+                code="RISK_REJECTED",
+                reason="; ".join(facts.risk_reasons) or "Risk must PASS",
+                fault_class=FaultClass.HARD_BLOCK.value,
+                next_action=CandidateAction.FAIL_CLOSED.value,
+            )
         mark("RISK", StageStatus.BLOCK.value)
         failures.append(risk_fail)
     elif not any((market_fail, strategy_fail, decision_fail, safety_fail)):
@@ -719,8 +735,23 @@ def evaluate_gold_execution_contract(
             (f for f in failures if str(f.get("code") or "") == "DAILY_LOSS_BLOCK"),
             None,
         )
+        burst = next(
+            (
+                f
+                for f in failures
+                if str(f.get("code") or "") in {
+                    "EXECUTION_REJECT_BURST",
+                    "REJECT_BURST",
+                }
+            ),
+            None,
+        )
         if kill is not None:
             first = kill
+        elif burst is not None:
+            # Burst is the execution circuit breaker. Do not hide it behind
+            # DIRECTION_NONE from a pause demotion.
+            first = burst
         elif daily is not None and not facts.kill_switch:
             # Daily loss is authoritative for TAKE → Risk. It must not steal
             # WAIT / opportunity-below-threshold / DIRECTION_NONE, and must not

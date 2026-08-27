@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import {
+  classifyExecutionBlocker,
   formatFirstBlocker,
   formatSignalHeadline,
   parseSignalPipeline,
@@ -199,5 +200,53 @@ assert.equal(
   formatFirstBlocker("DAILY_LOSS_BLOCK"),
   "First blocker: DAILY_LOSS_BLOCK",
 );
+
+const burstBlocked = parseSignalPipeline({
+  market: "OPEN",
+  data: "LIVE",
+  buy_score: 6,
+  sell_score: 48,
+  decision: "SELL",
+  first_blocker: "EXECUTION_REJECT_BURST",
+  sniper: "READY",
+  risk: "READY",
+  safety: "READY",
+  optimizer: "NOT_REACHED",
+  oms: "NOT_REACHED",
+  broker: "NOT_REACHED",
+  mt5: "NOT_REACHED",
+  opportunity_score: 77,
+  opportunity_threshold: 70,
+  opportunity_gate: "PASS",
+  setup_state: "TAKE",
+  final_decision: "TAKE",
+  execution_lifecycle: "EXECUTION_BLOCKED",
+  blocker_category: "EXECUTION_REJECT_BURST",
+  reject_burst: {
+    active: true,
+    count: 5,
+    window: 120,
+    last_event_stage: "MT5_REJECTED",
+    remaining_cooldown: 240,
+  },
+});
+assert.ok(burstBlocked);
+assert.equal(burstBlocked.first_blocker, "EXECUTION_REJECT_BURST");
+assert.equal(burstBlocked.risk, "READY");
+assert.equal(burstBlocked.oms, "NOT_REACHED");
+assert.equal(burstBlocked.broker, "NOT_REACHED");
+assert.equal(burstBlocked.mt5, "NOT_REACHED");
+assert.equal(burstBlocked.ticket, null);
+assert.equal(burstBlocked.reject_burst?.active, true);
+assert.equal(
+  classifyExecutionBlocker("phase_a:REJECT_BURST"),
+  "EXECUTION_REJECT_BURST",
+);
+assert.equal(classifyExecutionBlocker("RISK_REJECTED"), "RISK_REJECTED");
+assert.equal(classifyExecutionBlocker("SAFETY_BLOCKED"), "SAFETY_BLOCKED");
+assert.equal(classifyExecutionBlocker("OMS_REJECTED"), "OMS_REJECTED");
+assert.equal(classifyExecutionBlocker("BROKER_REJECTED"), "BROKER_REJECTED");
+assert.equal(classifyExecutionBlocker("MT5_REJECTED"), "MT5_REJECTED");
+assert.equal(classifyExecutionBlocker("WAIT_NO_SNIPER_TRIGGER"), null);
 
 console.log("signal-display.test.ts: ok");

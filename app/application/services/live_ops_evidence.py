@@ -107,6 +107,11 @@ def build_live_ops_evidence(
         "phase_a": {
             "kill_switch": phase_a.get("kill_switch"),
             "burst_latch": phase_a.get("burst_latch"),
+            "reject_burst": (
+                (phase_a.get("burst_latch") or {}).get("reject_burst")
+                if isinstance(phase_a.get("burst_latch"), dict)
+                else None
+            ),
             "reconciliation": phase_a.get("reconciliation"),
         },
         "verification": readiness.verification,

@@ -22,6 +22,17 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
     abort = str(abort_reason or "").strip().upper()
     if not abort or abort in {"NONE", "NULL"}:
         return "STRATEGY"
+    if any(
+        tok in abort
+        for tok in (
+            "EXECUTION_REJECT_BURST",
+            "REJECT_BURST",
+            "ENTRY_BURST",
+            "AMBIGUOUS_ORDER_BURST",
+            "EXECUTION_FAILURE_BURST",
+        )
+    ):
+        return "EXECUTION_REJECT_BURST"
     if "MAX_POSITION" in abort or "POSITIONS PER SYMBOL" in abort:
         return "RISK"
     if "DAILY_LOSS" in abort or "DAILY LOSS" in abort:
@@ -110,20 +121,38 @@ def build_execution_handoff(
         "0",
     }
     forwarded = bool(forwarded_to_oms)
-    risk_block = stage == "RISK" or "DAILY_LOSS" in abort or "RISK" in abort
+    risk_block = stage == "RISK" or "DAILY_LOSS" in abort or (
+        "RISK" in abort and "REJECT_BURST" not in abort
+    )
     safety_block = stage == "SAFETY" or (
         "SAFETY" in abort or "KILL" in abort or "AUTOTRADING" in abort
     )
     health_block = stage == "EXECUTION_HEALTH" or (
         "EXECUTION_HEALTH" in abort or "HEALTH_DEGRADED" in abort
     )
+    burst_block = stage == "EXECUTION_REJECT_BURST" or "REJECT_BURST" in abort
     oms_block = bool(take) and stage == "OMS" and not forwarded
-    risk_entered = bool(take) or risk_block or safety_block or health_block or forwarded
+    risk_entered = (
+        bool(take)
+        or risk_block
+        or safety_block
+        or health_block
+        or burst_block
+        or forwarded
+    )
     safety_entered = (
-        (bool(take) and not risk_block) or safety_block or health_block or forwarded
+        (bool(take) and not risk_block)
+        or safety_block
+        or health_block
+        or burst_block
+        or forwarded
     )
     optimizer_entered = (
-        safety_entered and not safety_block and not health_block
+        safety_entered
+        and not safety_block
+        and not health_block
+        and not burst_block
+        and not risk_block
     )
     oms_entered = forwarded or oms_block
     return {
@@ -188,6 +217,9 @@ def classify_post_ai_execution_chain(
         not forwarded
         or may_submit_oms is False
         or stage == "RISK"
+        or stage == "EXECUTION_REJECT_BURST"
+        or stage == "EXECUTION_HEALTH"
+        or stage == "SAFETY"
     )
     if blocked:
         return {

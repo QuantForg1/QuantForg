@@ -28,7 +28,7 @@ def map_to_final_control_state(
     if hm in {"HALT_NEW_ENTRIES", "HALT_ALL_TRADING"}:
         return FinalControlState.HALT, first_blocking_gate or f"KILL_SWITCH:{hm}"
     if burst_latched:
-        return FinalControlState.HALT, first_blocking_gate or "REJECT_BURST"
+        return FinalControlState.HALT, first_blocking_gate or "EXECUTION_REJECT_BURST"
     if recon_blocking:
         return (
             FinalControlState.BLOCK,

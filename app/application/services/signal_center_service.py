@@ -806,7 +806,19 @@ def _pipeline_snapshot(
     if reached_risk and risk_state == "READY" and safety_state != "BLOCK":
         optimizer_state = "READY"
     health_code = code in {"EXECUTION_HEALTH_DEGRADED", "HEALTH_DEGRADED"}
+    burst_code = code in {
+        "EXECUTION_REJECT_BURST",
+        "REJECT_BURST",
+        "ENTRY_BURST",
+        "AMBIGUOUS_ORDER_BURST",
+        "EXECUTION_FAILURE_BURST",
+    }
     if health_code and action in {"BUY", "SELL"}:
+        risk_state = "READY"
+        safety_state = "READY"
+        optimizer_state = not_reached
+        oms_state = not_reached
+    if burst_code and action in {"BUY", "SELL"}:
         risk_state = "READY"
         safety_state = "READY"
         optimizer_state = not_reached
@@ -834,6 +846,9 @@ def _pipeline_snapshot(
     if health_code and action in {"BUY", "SELL"}:
         blocker_category = "EXECUTION_HEALTH"
         execution_stage = "EXECUTION_HEALTH"
+    elif burst_code and action in {"BUY", "SELL"}:
+        blocker_category = "EXECUTION_REJECT_BURST"
+        execution_stage = "EXECUTION_REJECT_BURST"
     elif not take and not reached_risk:
         blocker_category = "STRATEGY"
         execution_stage = "DECISION"
@@ -1037,6 +1052,10 @@ def _overlay_last_ite_cycle(
     hay = f"{abort} {human}".upper()
     if "MAX_POSITION" in hay or "POSITIONS PER SYMBOL" in hay:
         abort = "MAX_POSITIONS_REACHED"
+    if "EXECUTION_REJECT_BURST" in hay or (
+        "REJECT_BURST" in hay and "RISK_REJECT" not in hay
+    ):
+        abort = "EXECUTION_REJECT_BURST"
     pipe = dict(row.get("pipeline") or {})
     if str(pipe.get("execution_lifecycle") or "").upper() == "FILLED":
         return row
@@ -1054,6 +1073,10 @@ def _overlay_last_ite_cycle(
         or mcd_early.get("daily_loss_exceeded") is True
     ):
         abort = "DAILY_LOSS_BLOCK"
+    if "EXECUTION_REJECT_BURST" in hay or (
+        "REJECT_BURST" in hay and "RISK_REJECT" not in hay
+    ):
+        abort = "EXECUTION_REJECT_BURST"
     ticket = last.get("mt5_ticket")
     if forwarded and ticket:
         pipe["oms"] = "READY"
@@ -1127,6 +1150,31 @@ def _overlay_last_ite_cycle(
         pipe["mt5"] = not_reached
         pipe["blocker_category"] = "EXECUTION_HEALTH"
         pipe["execution_stage"] = "EXECUTION_HEALTH"
+    elif stage == "EXECUTION_REJECT_BURST" or abort in {
+        "EXECUTION_REJECT_BURST",
+        "REJECT_BURST",
+        "ENTRY_BURST",
+        "AMBIGUOUS_ORDER_BURST",
+        "EXECUTION_FAILURE_BURST",
+    }:
+        pipe["risk"] = "READY"
+        pipe["safety"] = "READY"
+        pipe["optimizer"] = not_reached
+        pipe["oms"] = not_reached
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
+        pipe["blocker_category"] = "EXECUTION_REJECT_BURST"
+        pipe["execution_stage"] = "EXECUTION_REJECT_BURST"
+        pipe["oms_status"] = not_reached
+        pipe["broker_status"] = not_reached
+        pipe["mt5_status"] = not_reached
+        try:
+            from app.domain.institutional_trading.phase_a import get_phase_a_plane
+
+            burst_snap = get_phase_a_plane().burst.snapshot()
+            pipe["reject_burst"] = burst_snap.get("reject_burst")
+        except Exception:
+            pipe["reject_burst"] = None
     elif stage in {"ELIGIBILITY", "DECISION", "STRATEGY", "MARKET", "SCANNER"}:
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached

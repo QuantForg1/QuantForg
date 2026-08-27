@@ -144,7 +144,7 @@ class PhaseAControlPlane:
         burst_blocks = False
         if cfg.burst_latch_enabled and self.burst.is_latched():
             burst_blocks = True
-            first_gate = first_gate or "REJECT_BURST"
+            first_gate = first_gate or self.burst.blocking_gate_name()
 
         # Recon / UNKNOWN
         recon_blocks = False

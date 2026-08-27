@@ -830,17 +830,30 @@ class ExecutionBridge:
                             "retcode": oms_result.retcode,
                         },
                     )
-                    if pa.config.burst_latch_enabled:
-                        pa.burst.record_ambiguous()
-                        pa.burst.record_execution_failure()
+                    from app.domain.institutional_trading.phase_a.execution_reject import (
+                        apply_oms_outcome_to_burst,
+                    )
+
+                    apply_oms_outcome_to_burst(
+                        pa.burst,
+                        abort_reason=abort_reason,
+                        status=status,
+                        oms_result=oms_result,
+                        enabled=pa.config.burst_latch_enabled,
+                    )
                     pa.persist()
-                elif status is ExecutionAttemptStatus.OMS_SUCCESS:
-                    if pa.config.burst_latch_enabled:
-                        pa.burst.record_entry_attempt()
-                elif status is not ExecutionAttemptStatus.OMS_SUCCESS:
-                    if pa.config.burst_latch_enabled:
-                        pa.burst.record_broker_reject()
-                        pa.burst.record_execution_failure()
+                elif pa.config.burst_latch_enabled:
+                    from app.domain.institutional_trading.phase_a.execution_reject import (
+                        apply_oms_outcome_to_burst,
+                    )
+
+                    apply_oms_outcome_to_burst(
+                        pa.burst,
+                        abort_reason=abort_reason,
+                        status=status,
+                        oms_result=oms_result,
+                        enabled=True,
+                    )
         except Exception:
             logger.exception("phase_a_oms_outcome_hook_failed")
 

@@ -59,6 +59,7 @@ export type SignalPipeline = {
   broker_status: string | null;
   mt5_status: string | null;
   ticket: string | number | null;
+  reject_burst: Record<string, unknown> | null;
 };
 
 export function formatSignalHeadline(
@@ -286,10 +287,53 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
       row.ticket == null || row.ticket === ""
         ? null
         : (row.ticket as string | number),
+    reject_burst:
+      row.reject_burst && typeof row.reject_burst === "object"
+        ? (row.reject_burst as Record<string, unknown>)
+        : null,
   };
 }
 
 export function formatFirstBlocker(code: string | null | undefined): string {
   const token = String(code || "").trim();
   return token ? `First blocker: ${token}` : "";
+}
+
+const BLOCKER_CATEGORIES = [
+  "RISK_REJECTED",
+  "EXECUTION_REJECT_BURST",
+  "SAFETY_BLOCKED",
+  "OMS_REJECTED",
+  "BROKER_REJECTED",
+  "MT5_REJECTED",
+] as const;
+
+export type ExecutionBlockerCategory = (typeof BLOCKER_CATEGORIES)[number];
+
+export function classifyExecutionBlocker(
+  code: string | null | undefined,
+): ExecutionBlockerCategory | null {
+  const token = String(code || "").trim().toUpperCase();
+  if (!token) return null;
+  if (
+    token.includes("EXECUTION_REJECT_BURST") ||
+    token.includes("REJECT_BURST") ||
+    token === "ENTRY_BURST" ||
+    token === "AMBIGUOUS_ORDER_BURST" ||
+    token === "EXECUTION_FAILURE_BURST"
+  ) {
+    return "EXECUTION_REJECT_BURST";
+  }
+  if (token.includes("SAFETY") || token.includes("KILL_SWITCH")) {
+    return "SAFETY_BLOCKED";
+  }
+  if (token.includes("MT5") && token.includes("REJECT")) return "MT5_REJECTED";
+  if (token.includes("BROKER") && token.includes("REJECT")) {
+    return "BROKER_REJECTED";
+  }
+  if (token.includes("OMS") && token.includes("REJECT")) return "OMS_REJECTED";
+  if (token.includes("RISK_REJECT") || token === "RISK_BLOCK") {
+    return "RISK_REJECTED";
+  }
+  return null;
 }
