@@ -749,7 +749,6 @@ def _pipeline_snapshot(
         "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
         "DIRECTION_NONE",
         "SYMBOL_COOLDOWN_ACTIVE",
-        "EXECUTION_HEALTH_DEGRADED",
         "SYMBOL_UNIVERSE_MISMATCH",
         "PORTFOLIO_EXTRA_REJECT",
         "WAITING_NEXT_CYCLE",
@@ -806,6 +805,12 @@ def _pipeline_snapshot(
     optimizer_state = not_reached
     if reached_risk and risk_state == "READY" and safety_state != "BLOCK":
         optimizer_state = "READY"
+    health_code = code in {"EXECUTION_HEALTH_DEGRADED", "HEALTH_DEGRADED"}
+    if health_code and action in {"BUY", "SELL"}:
+        risk_state = "READY"
+        safety_state = "READY"
+        optimizer_state = not_reached
+        oms_state = not_reached
     fill = str(order_status or "").upper()
     execution_lifecycle = None
     if fill in {"FILLED", "PARTIAL", "PARTIALLY_FILLED"}:
@@ -826,6 +831,27 @@ def _pipeline_snapshot(
     if cand not in {"BUY", "SELL"}:
         cand = "NONE"
     take = action in {"BUY", "SELL"} and sniper_passed and code not in execution_codes
+    if health_code and action in {"BUY", "SELL"}:
+        blocker_category = "EXECUTION_HEALTH"
+        execution_stage = "EXECUTION_HEALTH"
+    elif not take and not reached_risk:
+        blocker_category = "STRATEGY"
+        execution_stage = "DECISION"
+    elif code in eligibility_abort_codes:
+        blocker_category = "ELIGIBILITY"
+        execution_stage = "SCANNER"
+    elif risk_state == "BLOCK":
+        blocker_category = "RISK"
+        execution_stage = "RISK"
+    elif safety_state == "BLOCK":
+        blocker_category = "SAFETY"
+        execution_stage = "SAFETY"
+    elif oms_state == "BLOCK":
+        blocker_category = "OMS"
+        execution_stage = "OMS"
+    else:
+        blocker_category = None
+        execution_stage = None
     pillars = sniper.get("pillars") if isinstance(sniper, dict) else None
     return {
         "market": "OPEN" if market_data_live is not False else "UNKNOWN",
@@ -879,6 +905,14 @@ def _pipeline_snapshot(
         "risk": risk_state,
         "safety": safety_state,
         "optimizer": optimizer_state,
+        "optimizer_status": optimizer_state,
+        "oms_status": oms_state,
+        "blocker_category": blocker_category,
+        "execution_stage": execution_stage,
+        "blocker_reason": code or None,
+        "forwarded_to_oms": bool(order_ticket) or execution_lifecycle
+        in {"ORDER_SENT", "FILLED"},
+        "ticket": order_ticket,
         "eligibility_status": (
             str((eligibility_trace or {}).get("eligibility_status") or "") or None
         ),
@@ -1081,6 +1115,18 @@ def _overlay_last_ite_cycle(
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
         pipe["mt5"] = not_reached
+    elif stage == "EXECUTION_HEALTH" or abort in {
+        "EXECUTION_HEALTH_DEGRADED",
+        "HEALTH_DEGRADED",
+    }:
+        pipe["risk"] = "READY"
+        pipe["safety"] = "READY"
+        pipe["optimizer"] = not_reached
+        pipe["oms"] = not_reached
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
+        pipe["blocker_category"] = "EXECUTION_HEALTH"
+        pipe["execution_stage"] = "EXECUTION_HEALTH"
     elif stage in {"ELIGIBILITY", "DECISION", "STRATEGY", "MARKET", "SCANNER"}:
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
@@ -1091,7 +1137,6 @@ def _overlay_last_ite_cycle(
             "NO_EXECUTABLE_FOCUS",
             "WAITING_NEXT_CYCLE",
             "SYMBOL_COOLDOWN_ACTIVE",
-            "EXECUTION_HEALTH_DEGRADED",
             "SYMBOL_UNIVERSE_MISMATCH",
             "PORTFOLIO_EXTRA_REJECT",
         } or stage == "SCANNER"

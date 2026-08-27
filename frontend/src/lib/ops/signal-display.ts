@@ -50,6 +50,15 @@ export type SignalPipeline = {
   h1_context: string | null;
   eligibility_status: string | null;
   eligibility_reason: string | null;
+  blocker_category: string | null;
+  blocker_reason: string | null;
+  execution_stage: string | null;
+  optimizer_status: string | null;
+  oms_status: string | null;
+  forwarded_to_oms: boolean | null;
+  broker_status: string | null;
+  mt5_status: string | null;
+  ticket: string | number | null;
 };
 
 export function formatSignalHeadline(
@@ -233,6 +242,50 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
       row.eligibility_reason == null || row.eligibility_reason === ""
         ? null
         : String(row.eligibility_reason),
+    blocker_category:
+      row.blocker_category == null || row.blocker_category === ""
+        ? null
+        : String(row.blocker_category),
+    blocker_reason:
+      row.blocker_reason == null || row.blocker_reason === ""
+        ? null
+        : String(row.blocker_reason),
+    execution_stage:
+      row.execution_stage == null || row.execution_stage === ""
+        ? null
+        : String(row.execution_stage),
+    optimizer_status:
+      row.optimizer_status == null || row.optimizer_status === ""
+        ? row.optimizer == null || row.optimizer === ""
+          ? null
+          : String(row.optimizer)
+        : String(row.optimizer_status),
+    oms_status:
+      row.oms_status == null || row.oms_status === ""
+        ? row.oms == null || row.oms === ""
+          ? null
+          : String(row.oms)
+        : String(row.oms_status),
+    forwarded_to_oms:
+      row.forwarded_to_oms == null || row.forwarded_to_oms === ""
+        ? null
+        : Boolean(row.forwarded_to_oms),
+    broker_status:
+      row.broker_status == null || row.broker_status === ""
+        ? row.broker == null || row.broker === ""
+          ? null
+          : String(row.broker)
+        : String(row.broker_status),
+    mt5_status:
+      row.mt5_status == null || row.mt5_status === ""
+        ? row.mt5 == null || row.mt5 === ""
+          ? null
+          : String(row.mt5)
+        : String(row.mt5_status),
+    ticket:
+      row.ticket == null || row.ticket === ""
+        ? null
+        : (row.ticket as string | number),
   };
 }
 

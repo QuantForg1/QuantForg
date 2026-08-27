@@ -1687,6 +1687,24 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         ),
         "optimizer_status": payload.get("optimizer_status") or optimizer_state,
         "optimizer_reason": payload.get("optimizer_reason"),
+        "oms_status": payload.get("oms_status") or "NOT_REACHED",
+        "blocker_category": (
+            payload.get("blocker_category")
+            or blocking_stage
+            or classified.get("blocking_stage")
+            or "SCANNER"
+        ),
+        "blocker_reason": gate,
+        "execution_stage": (
+            payload.get("execution_stage")
+            or blocking_stage
+            or classified.get("blocking_stage")
+            or "SCANNER"
+        ),
+        "forwarded_to_oms": False,
+        "broker_status": "NOT_REACHED",
+        "mt5_status": "NOT_REACHED",
+        "ticket": None,
         "config_profile": payload.get("config_profile") or "SCALPING_V1",
     }
 

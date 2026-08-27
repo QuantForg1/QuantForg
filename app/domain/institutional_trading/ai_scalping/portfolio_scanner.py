@@ -28,6 +28,7 @@ from app.domain.institutional_trading.ai_scalping.portfolio_risk import (
     aggregate_portfolio_risk,
 )
 from app.domain.institutional_trading.ai_scalping.symbol_state import (
+    SymbolExecutionState,
     SymbolStateBook,
     get_symbol_state_book,
 )
@@ -138,6 +139,26 @@ def _as_decimal(value: Any, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
+def _resolve_execution_health_ok(
+    score: dict[str, Any],
+    prior: SymbolExecutionState,
+) -> bool:
+    """Cooldown latch only. Missing/None is unset — never bool(None)→False.
+
+    Scoring does not populate execution_health_ok. The process latch defaults
+    True and goes False after five OMS rejects (note_reject). That is not
+    gateway / MT5 / OMS infrastructure health.
+    """
+    if "execution_health_ok" not in score:
+        return bool(prior.execution_health_ok)
+    raw = score.get("execution_health_ok")
+    if raw is None:
+        return bool(prior.execution_health_ok)
+    if isinstance(raw, str) and not raw.strip():
+        return bool(prior.execution_health_ok)
+    return bool(raw)
+
+
 def _row_from_score(
     score: dict[str, Any],
     *,
@@ -157,7 +178,7 @@ def _row_from_score(
     atr_d = _as_decimal(atr_pct) if atr_pct is not None else None
 
     prior = book.get(symbol)
-    health_ok = bool(score.get("execution_health_ok", prior.execution_health_ok))
+    health_ok = _resolve_execution_health_ok(score, prior)
     book.update_scan(
         symbol,
         quality=quality,
@@ -194,8 +215,11 @@ def _row_from_score(
 
     reasons = tuple(score.get("reasons") or ())
     extra_reject: list[str] = []
-    if not health_ok:
-        extra_reject.append("Symbol execution health degraded")
+    # Reject-streak latch (recent_rejects >= 5) is NOT gateway/OMS/MT5 health.
+    # Hard infra pause lives in the execution bridge (live_health.allow_new_entries)
+    # after Risk / Safety. Using the latch as a scanner extra-reject blocked TAKE
+    # before those engines and could not recover without a fill.
+    # Keep it for cooldown spacing only.
     if config.adaptive_cooldown_enabled and not cd_eval.allow_new_entry:
         extra_reject.append(
             f"Symbol cooldown active ({cd_eval.remaining_seconds:.0f}s)"

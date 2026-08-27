@@ -465,3 +465,131 @@ def test_scalping_eligibility_engine_does_not_use_quality_80() -> None:
         risk_allowed=True,
     )
     assert swing.eligible is False
+
+
+def test_live_like_take_not_scanner_extra_rejected_on_fresh_health_latch() -> None:
+    """Live 26d2c94 payload: Opportunity 76 + sniper TAKE, no execution_health_ok key."""
+    from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
+        _row_from_score as scan_row_from_score,
+        scan_multi_asset_portfolio,
+    )
+    from app.domain.institutional_trading.ai_scalping.symbol_state import (
+        SymbolStateBook,
+    )
+    from app.domain.institutional_trading.operations.execution_chain_log import (
+        bridge_abort_stage,
+        build_execution_handoff,
+    )
+
+    book = SymbolStateBook()
+    live = _take_score(
+        opportunity_score=76,
+        ai_confidence=58,
+        trade_quality=69,
+        spread="0.224",
+        spread_score=80,
+        score_breakdown={
+            "structure": 85,
+            "momentum": 78,
+            "consensus": 62,
+            "regime_fit": 70,
+            "price_action": 80,
+            "liquidity": 80,
+            "volatility": 74,
+            "execution_quality": 100,
+            "mtf_alignment": 78,
+            "rr_quality": 48,
+        },
+    )
+    assert "execution_health_ok" not in live
+    row = scan_row_from_score(
+        live, book=book, config=DEFAULT_AI_SCALPING_CONFIG
+    )
+    assert row.execution_health_ok is True
+    assert "execution health" not in str(row.reject_reason or "").lower()
+    assert row.reject is False
+
+    result = scan_multi_asset_portfolio(
+        [live],
+        open_positions=0,
+        config=replace(DEFAULT_AI_SCALPING_CONFIG, universe=(_GOLD, "XAUUSD")),
+        state_book=book,
+    )
+    assert result.blocked_by_portfolio is False
+    assert result.best is not None
+    assert str(result.best.get("symbol") or "").upper() == _GOLD
+    assert result.best.get("reject") is not True
+
+    none_key = dict(live)
+    none_key["execution_health_ok"] = None
+    none_row = scan_row_from_score(
+        none_key, book=SymbolStateBook(), config=DEFAULT_AI_SCALPING_CONFIG
+    )
+    assert none_row.execution_health_ok is True
+    assert "execution health" not in str(none_row.reject_reason or "").lower()
+
+    poisoned = SymbolStateBook()
+    for _ in range(5):
+        poisoned.note_reject(_GOLD)
+    assert poisoned.get(_GOLD).execution_health_ok is False
+    latch_row = scan_row_from_score(
+        live, book=poisoned, config=DEFAULT_AI_SCALPING_CONFIG
+    )
+    assert latch_row.execution_health_ok is False
+    assert "execution health" not in str(latch_row.reject_reason or "").lower()
+    assert latch_row.reject is False
+
+    trace = explain_scalp_handoff(
+        live,
+        portfolio_row=latch_row.to_dict(),
+        universe=(_GOLD,),
+        in_portfolio_eligible=True,
+    )
+    assert trace.should_hand_off is True
+    assert trace.first_failed_code != "EXECUTION_HEALTH_DEGRADED"
+    assert trace.optimizer_status == "NOT_REACHED"
+
+    handoff = build_execution_handoff(
+        take=True,
+        abort_reason="health_degraded",
+        forwarded_to_oms=False,
+        mt5_ticket=None,
+    )
+    assert bridge_abort_stage("health_degraded") == "EXECUTION_HEALTH"
+    assert handoff["blocking_stage"] == "EXECUTION_HEALTH"
+    assert handoff["risk_passed"] is True
+    assert handoff["safety_passed"] is True
+    assert handoff["optimizer_entered"] is False
+    assert handoff["oms_entered"] is False
+    assert handoff["oms_forwarded"] is False
+    assert handoff["execution_confirmed"] is False
+    assert handoff["mt5_ticket"] is None
+
+
+def test_execution_health_overlay_is_not_oms_and_not_ticket() -> None:
+    over = _overlay_last_ite_cycle(
+        _row_from_score(_take_score()),
+        {
+            "forwarded_to_oms": False,
+            "abort_reason": "EXECUTION_HEALTH_DEGRADED",
+            "execution_blocked": {
+                "reason_code": "EXECUTION_HEALTH_DEGRADED",
+                "human_reason": "New entries paused: critical:gateway",
+                "stage": "EXECUTION_HEALTH",
+            },
+            "mt5_ticket": None,
+        },
+    )
+    pipe = over["pipeline"]
+    assert pipe["first_blocker"] == "EXECUTION_HEALTH_DEGRADED"
+    assert pipe["blocker_category"] == "EXECUTION_HEALTH"
+    assert pipe["risk"] == "READY"
+    assert pipe["safety"] == "READY"
+    assert pipe["optimizer"] == "NOT_REACHED"
+    assert pipe["oms"] == "NOT_REACHED"
+    assert pipe["broker"] == "NOT_REACHED"
+    assert pipe["mt5"] == "NOT_REACHED"
+    assert pipe["forwarded_to_oms"] is False
+    assert pipe["ticket"] is None
+    assert over.get("execution_state") != "EXECUTED"
+    assert over.get("execution_state") != "ORDER_SENT"

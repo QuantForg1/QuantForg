@@ -35,8 +35,13 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
         return "DECISION"
     if any(tok in abort for tok in ("RISK", "MIN_LOT", "SIZING", "MISSING_LOTS")):
         return "RISK"
-    if any(tok in abort for tok in ("KILL", "SAFETY", "HEALTH", "SELF_PROTECTION")):
+    if any(tok in abort for tok in ("KILL", "SAFETY", "SELF_PROTECTION")):
         return "SAFETY"
+    if any(
+        tok in abort
+        for tok in ("EXECUTION_HEALTH", "HEALTH_DEGRADED", "HEALTH")
+    ):
+        return "EXECUTION_HEALTH"
     if any(tok in abort for tok in ("OPTIMIZER", "DEFER")):
         return "OPTIMIZER"
     if any(
@@ -109,10 +114,17 @@ def build_execution_handoff(
     safety_block = stage == "SAFETY" or (
         "SAFETY" in abort or "KILL" in abort or "AUTOTRADING" in abort
     )
+    health_block = stage == "EXECUTION_HEALTH" or (
+        "EXECUTION_HEALTH" in abort or "HEALTH_DEGRADED" in abort
+    )
     oms_block = bool(take) and stage == "OMS" and not forwarded
-    risk_entered = bool(take) or risk_block or safety_block or forwarded
-    safety_entered = (bool(take) and not risk_block) or safety_block or forwarded
-    optimizer_entered = safety_entered and not safety_block
+    risk_entered = bool(take) or risk_block or safety_block or health_block or forwarded
+    safety_entered = (
+        (bool(take) and not risk_block) or safety_block or health_block or forwarded
+    )
+    optimizer_entered = (
+        safety_entered and not safety_block and not health_block
+    )
     oms_entered = forwarded or oms_block
     return {
         "decision_take": bool(take),

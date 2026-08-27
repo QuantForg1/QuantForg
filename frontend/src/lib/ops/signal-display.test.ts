@@ -72,6 +72,10 @@ assert.deepEqual(pipeline.buy_components, {});
 assert.deepEqual(pipeline.sell_components, {});
 assert.equal(pipeline.eligibility_status, null);
 assert.equal(pipeline.eligibility_reason, null);
+assert.equal(pipeline.blocker_category, null);
+assert.equal(pipeline.execution_stage, null);
+assert.equal(pipeline.forwarded_to_oms, null);
+assert.equal(pipeline.ticket, null);
 
 const liveChase = parseSignalPipeline({
   market: "OPEN",
