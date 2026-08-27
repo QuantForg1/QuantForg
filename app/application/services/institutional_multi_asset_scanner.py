@@ -617,6 +617,15 @@ async def _run_institutional_multi_asset_scan_body(
 
     t_scan = _time.perf_counter()
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    if ite_config is None:
+        try:
+            from app.domain.institutional_trading.ai_scalping.config import (
+                scalping_ite_config,
+            )
+
+            ite_config = scalping_ite_config()
+        except Exception:
+            logger.exception("scanner_scalping_ite_config_failed")
     # LIVE broker catalogue → dynamic liquid universe (quality gates unchanged).
     broker_rows: tuple[dict[str, Any], ...] = ()
     session_name: str | None = None
@@ -927,18 +936,34 @@ async def _run_institutional_multi_asset_scan_body(
     )
     ranked = scan.get("ranked") if isinstance(scan.get("ranked"), list) else []
     best = scan.get("best") if isinstance(scan.get("best"), dict) else None
-    # Portfolio-ranked eligible set — never promote a portfolio-rejected symbol
+    from app.domain.institutional_trading.operations.scalp_eligibility import (
+        explain_scalp_handoff,
+        match_portfolio_row,
+    )
+    from app.domain.trading.gold_only import same_gold_identity
+
+    # Portfolio-ranked eligible set — never promote a true extra-reject.
+    # Gold identity (XAUUSD vs XAUUSD_i) must not drop a scored scalp.
     portfolio_eligible = {
         str(r.get("symbol") or "").upper()
         for r in ranked
         if isinstance(r, dict) and not r.get("reject")
     }
+    portfolio_rows = [
+        r for r in (scan.get("rows") or []) if isinstance(r, dict)
+    ]
+
+    def _portfolio_has(sym: str) -> bool:
+        if sym in portfolio_eligible:
+            return True
+        return any(same_gold_identity(sym, other) for other in portfolio_eligible)
+
     # Prefer opportunity-ranked winner among portfolio-eligible only
     if not bool(scan.get("blocked_by_portfolio")) and portfolio_eligible:
         for row in opportunity_ranked:
             sym = str(row.get("symbol") or "").upper()
             if (
-                sym in portfolio_eligible
+                _portfolio_has(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
             ):
@@ -967,7 +992,7 @@ async def _run_institutional_multi_asset_scan_body(
             sym = str(row.get("symbol") or "").upper()
             if (
                 sym
-                and sym in portfolio_eligible
+                and _portfolio_has(sym)
                 and row.get("opportunity_eligible")
                 and not row.get("reject")
                 and sym not in seen_elig
@@ -990,6 +1015,43 @@ async def _run_institutional_multi_asset_scan_body(
                 s for s in eligible_symbols if s != best_symbol
             ]
 
+    scalp_traces: list[dict[str, Any]] = []
+    ite_mode = str(getattr(ite_config, "trading_mode", "") or "scalping")
+    if ite_config is not None and hasattr(ite_config, "is_scalping"):
+        if not bool(ite_config.is_scalping()):
+            logger.warning(
+                "scanner_ite_config_not_scalping",
+                trading_mode=ite_mode,
+                note="SCALPING_V1 handoff predicates — swing 80/80 must not re-enter",
+            )
+            ite_mode = "scalping"
+    for row in opportunity_ranked:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get("symbol") or "").upper()
+        trace = explain_scalp_handoff(
+            row,
+            portfolio_row=match_portfolio_row(sym, portfolio_rows),
+            universe=tuple(universe),
+            blocked_by_portfolio=bool(scan.get("blocked_by_portfolio")),
+            portfolio_block_reason=str(scan.get("portfolio_block_reason") or "")
+            or None,
+            in_portfolio_eligible=_portfolio_has(sym),
+            ite_trading_mode=ite_mode,
+        )
+        scalp_traces.append(trace.to_dict())
+        if (
+            trace.should_hand_off
+            and trace.candidate_symbol
+            and not bool(scan.get("blocked_by_portfolio"))
+        ):
+            hand = str(trace.candidate_symbol).upper()
+            if hand not in {s.upper() for s in eligible_symbols}:
+                eligible_symbols.insert(0, hand)
+            if best_symbol is None:
+                best_symbol = hand
+                best = {**(best or {}), **row, "symbol": hand}
+
     # If current best disappears, evaluate next ranked eligible from queue
     if best_symbol is None and not bool(scan.get("blocked_by_portfolio")):
         try:
@@ -1004,7 +1066,7 @@ async def _run_institutional_multi_asset_scan_body(
                 cand_sym = str(nxt.get("symbol") or "").upper()
                 # Empty portfolio_eligible must still block — never promote a
                 # symbol the portfolio ranker dropped (universe/cooldown/reject).
-                if cand_sym not in portfolio_eligible:
+                if cand_sym and not _portfolio_has(cand_sym):
                     excluded.add(cand_sym)
                     nxt = peek_next_eligible(exclude_symbols=excluded)
                     continue
@@ -1171,35 +1233,42 @@ async def _run_institutional_multi_asset_scan_body(
         enriched_noc.append(enriched)
 
     first_blocking_gate = None
+    eligibility_trace = scalp_traces[0] if scalp_traces else None
     if bool(scan.get("blocked_by_portfolio")):
         first_blocking_gate = str(
             scan.get("portfolio_block_reason") or "PORTFOLIO_RISK_LIMIT"
         )
     elif not best_symbol:
-        try:
-            from app.domain.institutional_trading.operations.fast_decision_path import (
-                named_reject_reasons,
-            )
-        except Exception:
-            named_reject_reasons = None  # type: ignore[assignment]
-        for row in opportunity_ranked:
-            if not isinstance(row, dict):
-                continue
-            if row.get("reject") or not row.get("opportunity_eligible"):
-                named = (
-                    named_reject_reasons(row)
-                    if named_reject_reasons is not None
-                    else []
+        named_from_trace = str(
+            (eligibility_trace or {}).get("first_failed_code") or ""
+        ).strip()
+        if named_from_trace:
+            first_blocking_gate = named_from_trace
+        else:
+            try:
+                from app.domain.institutional_trading.operations.fast_decision_path import (
+                    named_reject_reasons,
                 )
-                first_blocking_gate = str(
-                    (named[0] if named else None)
-                    or row.get("reject_reason")
-                    or row.get("blocking_gate")
-                    or "NO_ELIGIBLE_SETUP"
-                )
-                break
-        if not first_blocking_gate:
-            first_blocking_gate = "NO_ELIGIBLE_SETUP"
+            except Exception:
+                named_reject_reasons = None  # type: ignore[assignment]
+            for row in opportunity_ranked:
+                if not isinstance(row, dict):
+                    continue
+                if row.get("reject") or not row.get("opportunity_eligible"):
+                    named = (
+                        named_reject_reasons(row)
+                        if named_reject_reasons is not None
+                        else []
+                    )
+                    first_blocking_gate = str(
+                        (named[0] if named else None)
+                        or row.get("reject_reason")
+                        or row.get("blocking_gate")
+                        or "NO_ELIGIBLE_SETUP"
+                    )
+                    break
+            if not first_blocking_gate:
+                first_blocking_gate = "NO_ELIGIBLE_SETUP"
 
     def _candidate_view(row: Any) -> dict[str, Any] | None:
         if not isinstance(row, dict):
@@ -1259,6 +1328,17 @@ async def _run_institutional_multi_asset_scan_body(
                 "atr_pct": r.get("atr_pct"),
                 "volatility_decision": r.get("volatility_decision"),
                 "thresholds": r.get("thresholds"),
+                "opportunity_eligible": r.get("opportunity_eligible"),
+                "sniper_entry": r.get("sniper_entry"),
+                "signal_action": r.get("signal_action"),
+                "setup_state": r.get("setup_state"),
+                "signal_id": r.get("signal_id")
+                or (
+                    (r.get("sniper_entry") or {}).get("signal_id")
+                    if isinstance(r.get("sniper_entry"), dict)
+                    else None
+                ),
+                "expected_rr": r.get("expected_rr"),
             }
             for r in opportunity_ranked[:20]
         ],
@@ -1269,6 +1349,21 @@ async def _run_institutional_multi_asset_scan_body(
         "best_eligible_candidate": best_eligible_candidate,
         "no_eligible_setup": best_symbol is None,
         "first_blocking_gate": first_blocking_gate,
+        "eligibility_trace": eligibility_trace,
+        "eligibility_traces": list(scalp_traces),
+        "eligibility_status": (
+            (eligibility_trace or {}).get("eligibility_status")
+            if eligibility_trace
+            else ("FAIL" if best_symbol is None else "PASS")
+        ),
+        "eligibility_reason": (
+            (eligibility_trace or {}).get("eligibility_reason")
+            if eligibility_trace
+            else (None if best_symbol else "NO_ELIGIBLE_SETUP")
+        ),
+        "optimizer_status": "NOT_REACHED",
+        "optimizer_reason": "SCANNER — optimizer runs only after eligibility PASS",
+        "config_profile": "SCALPING_V1",
         "eligible_count": len(ranked) if not eligible_symbols else len(eligible_symbols),
         "eligible_symbols": list(eligible_symbols),
         "blocked_by_portfolio": bool(scan.get("blocked_by_portfolio")),

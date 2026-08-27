@@ -4821,6 +4821,7 @@ class InstitutionalIteRuntime:
             )
             from app.domain.institutional_trading.ai_scalping.config import (
                 DEFAULT_AI_SCALPING_CONFIG,
+                scalping_ite_config,
             )
 
             scan_on = bool(
@@ -4844,12 +4845,16 @@ class InstitutionalIteRuntime:
             except Exception:
                 open_n = 0
             t_scan = time.perf_counter()
+            ite = getattr(self.decision_pipeline, "config", None)
+            if ite is None or not bool(getattr(ite, "is_scalping", lambda: False)()):
+                ite = scalping_ite_config()
             scan = await run_institutional_multi_asset_scan(
                 self.mt5_adapter,
                 position_engine=getattr(self.position_management, "engine", None),
                 open_positions=open_n,
                 plane=self.plane,
                 config=DEFAULT_AI_SCALPING_CONFIG,
+                ite_config=ite,
             )
             scan_ms = round((time.perf_counter() - t_scan) * 1000.0, 1)
             if isinstance(scan, dict) and scan.get("scanner_duration_ms") is None:

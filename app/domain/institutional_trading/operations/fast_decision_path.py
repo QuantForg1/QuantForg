@@ -1111,6 +1111,11 @@ def scan_ineligible_abort_reason(scan: dict[str, Any] | None) -> str:
     """
     if not isinstance(scan, dict):
         return "NO_ELIGIBLE_SETUP"
+    trace = scan.get("eligibility_trace") if isinstance(scan.get("eligibility_trace"), dict) else None
+    if trace:
+        code = str(trace.get("first_failed_code") or trace.get("eligibility_reason") or "")
+        if code and code not in {NO_CURRENT_BLOCK, "NONE", "SCALP_ELIGIBLE", "PASS"}:
+            return str(code)
     current = scan.get("current_scan")
     nested = current if isinstance(current, dict) else {}
     gate = str(
@@ -1390,8 +1395,14 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         payload.get("reject_reason"),
     )
     gate = named[0] if named else None
+    trace = (
+        payload.get("eligibility_trace")
+        if isinstance(payload.get("eligibility_trace"), dict)
+        else None
+    )
     if not eligible:
-        gate = gate or "NO_ELIGIBLE_SETUP"
+        named_elig = str((trace or {}).get("first_failed_code") or "").strip()
+        gate = named_elig or gate or "NO_ELIGIBLE_SETUP"
     vol = _volatility_fields(payload, scan_symbol, best_row)
     as_of = payload.get("as_of")
     scores = {
@@ -1550,11 +1561,13 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
                 blocking_stage = "DECISION"
                 fault_code = "DIRECTION_NONE"
                 gate = "DIRECTION_NONE"
-        elif row_eligible:
+        elif row_eligible and eligible:
             next_action = CandidateAction.RISK_ASSESSMENT.value
             blocking_stage = None
             fault_code = None
             gate = None
+            state = "ELIGIBLE_PRESENT"
+            decision_state = DecisionState.FOCUS_FORMING.value
     trade_class = "NO_TRADE"
     trade_class_reason = "No classified opportunity on this scan."
     try:
@@ -1653,6 +1666,28 @@ def build_current_scan_decision(scan: dict[str, Any] | None) -> dict[str, Any]:
         "scanner_duration_ms": payload.get("scanner_duration_ms"),
         "forces_trades": False,
         "execution_ready": bool(eligible) and bool(payload.get("best_symbol")),
+        "eligibility_trace": dict(trace) if trace else payload.get("eligibility_trace"),
+        "eligibility_status": (
+            (trace or {}).get("eligibility_status")
+            or payload.get("eligibility_status")
+        ),
+        "eligibility_reason": (
+            (trace or {}).get("eligibility_reason")
+            or payload.get("eligibility_reason")
+        ),
+        "failed_predicates": list(
+            (trace or {}).get("failed_predicates")
+            or payload.get("failed_predicates")
+            or []
+        ),
+        "passed_predicates": list(
+            (trace or {}).get("passed_predicates")
+            or payload.get("passed_predicates")
+            or []
+        ),
+        "optimizer_status": payload.get("optimizer_status") or optimizer_state,
+        "optimizer_reason": payload.get("optimizer_reason"),
+        "config_profile": payload.get("config_profile") or "SCALPING_V1",
     }
 
 

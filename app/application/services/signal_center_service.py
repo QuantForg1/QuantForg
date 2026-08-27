@@ -525,6 +525,23 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         confidence=confidence,
         signal_action=signal_action,
     )
+    eligibility_trace = (
+        score.get("eligibility_trace")
+        if isinstance(score.get("eligibility_trace"), dict)
+        else None
+    )
+    if (
+        eligibility_trace
+        and str(eligibility_trace.get("eligibility_status") or "").upper() == "FAIL"
+        and not exec_cls.get("block_code")
+    ):
+        exec_cls = dict(exec_cls)
+        exec_cls["block_code"] = str(
+            eligibility_trace.get("first_failed_code")
+            or eligibility_trace.get("eligibility_reason")
+            or "NO_ELIGIBLE_SETUP"
+        )
+        exec_cls["execution_state"] = "NOT_ELIGIBLE"
     buy_score = int(score.get("buy_score") or score.get("bullish_score") or 0)
     sell_score = int(score.get("sell_score") or score.get("bearish_score") or 0)
     opportunity_score = score.get("opportunity_score")
@@ -665,6 +682,7 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             normalized_extension=(
                 sniper.get("normalized_extension") if isinstance(sniper, dict) else None
             ),
+            eligibility_trace=eligibility_trace,
         ),
         "detail": detail,
         "gauges": {
@@ -709,6 +727,7 @@ def _pipeline_snapshot(
     zone_atr: Any = None,
     entry_state_chase: Any = None,
     normalized_extension: Any = None,
+    eligibility_trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Observe-only gate strip. Never invents Risk/Safety/OMS PASS on WAIT."""
     code = str(block_code or "").upper()
@@ -722,7 +741,27 @@ def _pipeline_snapshot(
         "SYMBOL_ROUTING_BLOCK",
         "PORTFOLIO_BLOCK",
     }
-    reached_risk = action in {"BUY", "SELL"} or code in execution_codes
+    eligibility_abort_codes = {
+        "NO_ELIGIBLE_SETUP",
+        "NO_EXECUTABLE_FOCUS",
+        "NO_EXECUTABLE_SYMBOL",
+        "SETUP_NOT_READY",
+        "OPPORTUNITY_SCORE_BELOW_THRESHOLD",
+        "DIRECTION_NONE",
+        "SYMBOL_COOLDOWN_ACTIVE",
+        "EXECUTION_HEALTH_DEGRADED",
+        "SYMBOL_UNIVERSE_MISMATCH",
+        "PORTFOLIO_EXTRA_REJECT",
+        "WAITING_NEXT_CYCLE",
+    }
+    reached_risk = (
+        code in execution_codes
+        or (
+            action in {"BUY", "SELL"}
+            and code not in eligibility_abort_codes
+            and not code.startswith("WAIT_")
+        )
+    )
     age: float | None
     try:
         age = float(quote_age_seconds) if quote_age_seconds is not None else None
@@ -840,6 +879,21 @@ def _pipeline_snapshot(
         "risk": risk_state,
         "safety": safety_state,
         "optimizer": optimizer_state,
+        "eligibility_status": (
+            str((eligibility_trace or {}).get("eligibility_status") or "") or None
+        ),
+        "eligibility_reason": (
+            str((eligibility_trace or {}).get("eligibility_reason") or "") or None
+        ),
+        "failed_predicates": list(
+            (eligibility_trace or {}).get("failed_predicates") or []
+        ),
+        "passed_predicates": list(
+            (eligibility_trace or {}).get("passed_predicates") or []
+        ),
+        "candidate_signal_id": (eligibility_trace or {}).get("candidate_signal_id"),
+        "candidate_setup_id": (eligibility_trace or {}).get("candidate_setup_id"),
+        "optimizer_reason": (eligibility_trace or {}).get("optimizer_reason"),
         "oms": oms_state,
         "broker": broker_state,
         "mt5": mt5_state,
@@ -1027,10 +1081,24 @@ def _overlay_last_ite_cycle(
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
         pipe["mt5"] = not_reached
-    elif stage in {"ELIGIBILITY", "DECISION", "STRATEGY", "MARKET"}:
+    elif stage in {"ELIGIBILITY", "DECISION", "STRATEGY", "MARKET", "SCANNER"}:
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
         pipe["mt5"] = not_reached
+        scanner_abort = abort in {
+            "NO_ELIGIBLE_SETUP",
+            "NO_EXECUTABLE_SYMBOL",
+            "NO_EXECUTABLE_FOCUS",
+            "WAITING_NEXT_CYCLE",
+            "SYMBOL_COOLDOWN_ACTIVE",
+            "EXECUTION_HEALTH_DEGRADED",
+            "SYMBOL_UNIVERSE_MISMATCH",
+            "PORTFOLIO_EXTRA_REJECT",
+        } or stage == "SCANNER"
+        if scanner_abort:
+            pipe["risk"] = not_reached
+            pipe["safety"] = not_reached
+            pipe["optimizer"] = not_reached
     elif stage == "BROKER":
         pipe["oms"] = "READY"
         pipe["broker"] = "BLOCK"
@@ -1156,6 +1224,20 @@ def list_live_signals(
     manage_active = bool(prefs)
 
     scores = _scores_from_scan(scan)
+    scan_trace = (
+        scan.get("eligibility_trace")
+        if isinstance(scan.get("eligibility_trace"), dict)
+        else None
+    )
+    if scan_trace:
+        for score in scores:
+            score.setdefault("eligibility_trace", scan_trace)
+            score.setdefault(
+                "eligibility_status", scan_trace.get("eligibility_status")
+            )
+            score.setdefault(
+                "eligibility_reason", scan_trace.get("eligibility_reason")
+            )
     as_of = str(scan.get("as_of") or _now_iso())
     strategy = None
     try:

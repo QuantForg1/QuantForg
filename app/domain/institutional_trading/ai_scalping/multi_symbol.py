@@ -22,12 +22,14 @@ def rank_scalping_opportunities(
 ) -> dict[str, Any]:
     """Rank non-rejected BUY/SELL opportunities across the universe."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
-    universe = set(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
+    from app.domain.trading.gold_only import symbol_in_scan_universe
+
+    universe = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
     eligible: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     for row in scored:
         sym = str(row.get("symbol") or "").upper()
-        if universe and sym and sym not in universe:
+        if universe and sym and not symbol_in_scan_universe(sym, universe):
             continue
         if row.get("reject"):
             rejected.append(row)

@@ -339,10 +339,12 @@ def scan_multi_asset_portfolio(
             else cfg.max_daily_exposure_pct
         )
 
+    from app.domain.trading.gold_only import symbol_in_scan_universe
+
     rows: list[SymbolScanRow] = []
     for raw in scored:
         sym = str(raw.get("symbol") or "").upper()
-        if universe and sym and sym not in universe:
+        if universe and sym and not symbol_in_scan_universe(sym, universe):
             continue
         payload = {**raw, "symbol": sym}
         rows.append(_row_from_score(payload, book=book, config=cfg))

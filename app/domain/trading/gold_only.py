@@ -169,6 +169,39 @@ def filter_autonomous_symbols(codes: list[str] | tuple[str, ...]) -> tuple[str, 
     return tuple(out)
 
 
+def same_gold_identity(left: str | None, right: str | None) -> bool:
+    """True when both codes are the same desk, including XAUUSD vs XAUUSD_i."""
+    a = str(left or "").strip().upper()
+    b = str(right or "").strip().upper()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    return is_gold_symbol(a) and is_gold_symbol(b)
+
+
+def symbol_in_scan_universe(
+    symbol: str | None,
+    universe: tuple[str, ...] | list[str] | set[str] | None,
+) -> bool:
+    """Membership with gold-identity — XAUUSD_i is not dropped vs XAUUSD."""
+    code = str(symbol or "").strip().upper()
+    if not code:
+        return False
+    pool = {
+        str(item or "").strip().upper()
+        for item in (universe or ())
+        if str(item or "").strip()
+    }
+    if not pool:
+        return True
+    if code in pool:
+        return True
+    if is_gold_symbol(code) and any(is_gold_symbol(item) for item in pool):
+        return True
+    return False
+
+
 def gold_only_diagnostics(
     *,
     broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,

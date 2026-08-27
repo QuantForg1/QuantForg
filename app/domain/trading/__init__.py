@@ -15,6 +15,8 @@ from app.domain.trading.gold_only import (
     is_gold_symbol,
     require_xauusd,
     resolve_trading_symbol,
+    same_gold_identity,
+    symbol_in_scan_universe,
 )
 from app.domain.trading.xauusd_specs import (
     CONTRACT_SIZE,
@@ -51,5 +53,7 @@ __all__ = [
     "notional_value",
     "require_xauusd",
     "resolve_trading_symbol",
+    "same_gold_identity",
+    "symbol_in_scan_universe",
     "specs_dict",
 ]

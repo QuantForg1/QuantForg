@@ -48,6 +48,8 @@ export type SignalPipeline = {
   rr_score_xy: string | null;
   freshness: string | null;
   h1_context: string | null;
+  eligibility_status: string | null;
+  eligibility_reason: string | null;
 };
 
 export function formatSignalHeadline(
@@ -223,6 +225,14 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
       row.h1_context == null || row.h1_context === ""
         ? "context-only"
         : String(row.h1_context),
+    eligibility_status:
+      row.eligibility_status == null || row.eligibility_status === ""
+        ? null
+        : String(row.eligibility_status),
+    eligibility_reason:
+      row.eligibility_reason == null || row.eligibility_reason === ""
+        ? null
+        : String(row.eligibility_reason),
   };
 }
 
