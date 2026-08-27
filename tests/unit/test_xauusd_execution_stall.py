@@ -186,3 +186,241 @@ def test_quality_reject_still_zeros_lots() -> None:
     )
     assert d.valid is False
     assert d.final_lot == Decimal("0")
+
+
+def test_bridge_abort_stage_eligibility_is_not_broker() -> None:
+    from app.domain.institutional_trading.operations.execution_chain_log import (
+        bridge_abort_stage,
+    )
+
+    assert bridge_abort_stage("eligibility_failed") == "ELIGIBILITY"
+    assert bridge_abort_stage("ELIGIBILITY_FAILED") == "ELIGIBILITY"
+    assert bridge_abort_stage("mt5_rejection") == "BROKER"
+    assert bridge_abort_stage("RISK_REJECTED") == "RISK"
+    assert bridge_abort_stage("kill_switch") == "SAFETY"
+
+
+def test_signal_center_overlays_eligibility_failed_not_broker() -> None:
+    row = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "SELL",
+            "signal_action": "SELL",
+            "trade_quality": 66,
+            "ai_confidence": 65,
+            "opportunity_score": 71,
+            "opportunity_threshold": 70,
+            "reject": False,
+            "sniper_entry": {"passed": True, "action": "SELL", "setup_state": "TAKE"},
+        }
+    )
+    over = _overlay_last_ite_cycle(
+        row,
+        {
+            "forwarded_to_oms": False,
+            "abort_reason": "eligibility_failed",
+            "decision_action": "SELL",
+            "mt5_ticket": None,
+            "detail": "Confluence 65 (SELL) below institutional gate; Trade quality 66 below 80",
+        },
+    )
+    assert over["first_blocker"] == "ELIGIBILITY_FAILED"
+    assert over["pipeline"]["execution_lifecycle"] == "EXECUTION_BLOCKED"
+    assert over["pipeline"]["oms"] == "NOT_REACHED"
+    assert over["pipeline"]["broker"] != "BLOCK"
+    assert over["pipeline"]["mt5"] == "NOT_REACHED"
+
+
+@pytest.mark.parametrize("side", ["BUY", "SELL"])
+def test_scalping_take_below_swing_quality_80_still_reaches_oms(side: str) -> None:
+    """Live stall: Opportunity PASS + sniper TAKE, then swing quality 80 at the bridge."""
+    from app.application.services.institutional_execution_integration import (
+        InstitutionalExecutionIntegration,
+    )
+    from app.application.services.institutional_oms_adapter import RecordingOmsPort
+    from app.domain.institutional_trading.ai_scalping.live_health import (
+        get_live_health_monitor,
+    )
+    from app.domain.institutional_trading.config import ITEConfig
+    from app.domain.institutional_trading.decision_models import (
+        ConfluenceResult,
+        TradeDirection,
+    )
+    from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
+    from app.domain.institutional_trading.execution.config import ExecutionBridgeConfig
+    from app.domain.institutional_trading.execution.models import (
+        BridgeAbortReason,
+        ExecutionMode,
+    )
+    from app.domain.institutional_trading.phase_a.plane import (
+        reset_phase_a_plane_for_tests,
+    )
+    from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
+    from app.domain.market_structure.enums import TrendDirection
+    from tests.unit.test_institutional_trading_phase_c import (
+        _account,
+        _ctx,
+        _snapshot,
+    )
+
+    trend = TrendDirection.UP if side == "BUY" else TrendDirection.DOWN
+    direction = TradeDirection.BUY if side == "BUY" else TradeDirection.SELL
+    snap = _snapshot(direction=trend, quality=66)
+    conf = ConfluenceResult(
+        confidence=65,
+        direction=direction,
+        reasons=("scalp",),
+        rejected_rules=(),
+        input_hash="scalp-elig",
+        band="tradable",
+        passed=True,
+        factors={},
+    )
+    acct = _account()
+    scalp = ITEConfig(trading_mode="scalping")
+    elig = PositionEligibilityEngine(config=scalp).evaluate(
+        snapshot=snap,
+        confluence=conf,
+        account=acct,
+        risk_allowed=True,
+    )
+    assert elig.eligible is True
+    assert elig.checks.get("quality_ok") is True
+    swing = PositionEligibilityEngine(config=ITEConfig()).evaluate(
+        snapshot=snap,
+        confluence=conf,
+        account=acct,
+        risk_allowed=True,
+    )
+    assert swing.eligible is False
+    decision = TradeDecisionEngine(config=scalp).decide(
+        snapshot=snap,
+        confluence=conf,
+        eligibility=elig,
+        account=acct,
+        risk_score=20,
+        approved_lots=Decimal("0.01"),
+    )
+    assert decision.action.value == side
+    oms = RecordingOmsPort()
+    get_live_health_monitor().reset()
+    reset_phase_a_plane_for_tests()
+    integ = InstitutionalExecutionIntegration.create(
+        oms,
+        config=ExecutionBridgeConfig(mode=ExecutionMode.LIVE, decision_ttl_seconds=30),
+    )
+    assert integ.bridge.ite_config.is_scalping() is False
+    result = integ.execute(decision, _ctx(decision, snap, acct))
+    comment = str(getattr(getattr(result, "journal_entry", None), "comment", "") or "")
+    assert result.abort_reason is not BridgeAbortReason.ELIGIBILITY_FAILED
+    assert "below 80" not in comment
+    assert "institutional gate" not in comment.lower()
+    assert oms.calls, f"expected OMS submit, abort={result.abort_reason} {comment}"
+
+
+def test_scalping_eligibility_still_blocks_already_in_trade() -> None:
+    from uuid import uuid4
+
+    from app.application.services.institutional_execution_integration import (
+        InstitutionalExecutionIntegration,
+    )
+    from app.application.services.institutional_oms_adapter import RecordingOmsPort
+    from app.domain.institutional_trading.ai_scalping.live_health import (
+        get_live_health_monitor,
+    )
+    from app.domain.institutional_trading.config import ITEConfig
+    from app.domain.institutional_trading.decision_models import (
+        ConfluenceResult,
+        TradeDirection,
+    )
+    from app.domain.institutional_trading.eligibility import PositionEligibilityEngine
+    from app.domain.institutional_trading.execution.config import ExecutionBridgeConfig
+    from app.domain.institutional_trading.execution.models import (
+        BridgeAbortReason,
+        ExecutionBridgeContext,
+        ExecutionMode,
+    )
+    from app.domain.institutional_trading.trade_decision import TradeDecisionEngine
+    from tests.unit.test_institutional_trading_phase_c import (
+        AS_OF,
+        _account,
+        _snapshot,
+    )
+
+    snap = _snapshot(quality=66)
+    conf = ConfluenceResult(
+        confidence=65,
+        direction=TradeDirection.BUY,
+        reasons=("scalp",),
+        rejected_rules=(),
+        input_hash="scalp-book",
+        band="tradable",
+        passed=True,
+        factors={},
+    )
+    scalp = ITEConfig(trading_mode="scalping", max_open_trades=1)
+    acct = _account()
+    elig = PositionEligibilityEngine(config=scalp).evaluate(
+        snapshot=snap,
+        confluence=conf,
+        account=acct,
+        risk_allowed=True,
+    )
+    decision = TradeDecisionEngine(config=scalp).decide(
+        snapshot=snap,
+        confluence=conf,
+        eligibility=elig,
+        account=acct,
+        risk_score=20,
+        approved_lots=Decimal("0.01"),
+    )
+    oms = RecordingOmsPort()
+    get_live_health_monitor().reset()
+    integ = InstitutionalExecutionIntegration.create(
+        oms,
+        config=ExecutionBridgeConfig(mode=ExecutionMode.LIVE, decision_ttl_seconds=30),
+        ite_config=scalp,
+    )
+    bad = _account(already_in_trade=True, open_positions=1)
+    result = integ.execute(
+        decision,
+        ExecutionBridgeContext(
+            expected_input_hash=decision.input_hash,
+            now=AS_OF,
+            snapshot=snap,
+            account=bad,
+            risk_allowed=True,
+            execution_enabled=True,
+            connected=True,
+            login=12345,
+            user_id=uuid4(),
+            request_id="ite-test-book",
+        ),
+    )
+    assert result.abort_reason is BridgeAbortReason.ELIGIBILITY_FAILED
+    assert oms.calls == []
+
+
+def test_apply_trading_mode_syncs_bridge_ite_config() -> None:
+    from types import SimpleNamespace
+
+    from app.application.services.ai_scalping_mode import apply_trading_mode_to_runtime
+    from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+
+    runtime = SimpleNamespace(
+        decision_pipeline=SimpleNamespace(
+            config=DEFAULT_ITE_CONFIG,
+            risk_engine=None,
+        ),
+        position_management=SimpleNamespace(
+            engine=SimpleNamespace(config=None),
+        ),
+        plane=SimpleNamespace(max_open_trades=1, trading_mode="swing"),
+        execution=SimpleNamespace(
+            bridge=SimpleNamespace(ite_config=DEFAULT_ITE_CONFIG),
+        ),
+    )
+    apply_trading_mode_to_runtime(runtime, mode="scalping")
+    assert runtime.decision_pipeline.config.is_scalping() is True
+    assert runtime.execution.bridge.ite_config.is_scalping() is True
+    assert runtime.execution.bridge.ite_config is runtime.decision_pipeline.config

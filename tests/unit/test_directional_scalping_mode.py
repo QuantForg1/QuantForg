@@ -246,10 +246,14 @@ def test_empty_trading_mode_applies_scalping() -> None:
         ),
         plane=SimpleNamespace(max_open_trades=1, trading_mode="swing"),
     )
+    runtime.execution = SimpleNamespace(
+        bridge=SimpleNamespace(ite_config=DEFAULT_ITE_CONFIG),
+    )
     out = apply_trading_mode_to_runtime(runtime, mode="")
     assert out["trading_mode"] == "scalping"
     assert runtime.decision_pipeline.config.is_scalping() is True
     assert runtime.plane.trading_mode == "scalping"
+    assert runtime.execution.bridge.ite_config.is_scalping() is True
 
 
 def test_hard_risk_safety_and_leverage_unchanged() -> None:

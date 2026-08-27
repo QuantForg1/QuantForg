@@ -938,20 +938,13 @@ def _overlay_last_ite_cycle(
     if not abort:
         abort = "UNKNOWN_EXECUTION_ERROR"
         human = human or "TAKE reached Risk/Safety/OMS with no MT5 ticket"
+    from app.domain.institutional_trading.operations.execution_chain_log import (
+        bridge_abort_stage,
+    )
+
     stage = str(blocked.get("stage") or "").upper()
     if not stage:
-        if any(tok in abort for tok in ("RISK", "MIN_LOT", "SIZING", "WEAK")):
-            stage = "RISK"
-        elif "SAFETY" in abort or "KILL" in abort:
-            stage = "SAFETY"
-        elif "OPTIMIZER" in abort or "DEFER" in abort:
-            stage = "OPTIMIZER"
-        elif any(tok in abort for tok in ("OMS", "DUPLICATE", "POSITION")):
-            stage = "OMS"
-        elif any(tok in abort for tok in ("BROKER", "GATEWAY", "MT5")):
-            stage = "BROKER"
-        else:
-            stage = "OMS"
+        stage = bridge_abort_stage(abort)
     not_reached = "NOT_REACHED"
     pipe["first_blocker"] = abort
     pipe["execution_lifecycle"] = "EXECUTION_BLOCKED"
@@ -966,11 +959,19 @@ def _overlay_last_ite_cycle(
         pipe["safety"] = "BLOCK"
         pipe["optimizer"] = not_reached
         pipe["oms"] = not_reached
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
     elif stage == "OPTIMIZER":
         pipe["risk"] = "READY"
         pipe["safety"] = "READY"
         pipe["optimizer"] = "WAIT"
         pipe["oms"] = not_reached
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
+    elif stage in {"ELIGIBILITY", "DECISION"}:
+        pipe["oms"] = not_reached
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
     elif stage == "BROKER":
         pipe["oms"] = "READY"
         pipe["broker"] = "BLOCK"

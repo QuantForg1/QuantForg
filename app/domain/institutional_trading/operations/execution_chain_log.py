@@ -14,6 +14,55 @@ CHAIN_PASS = "PASS"  # noqa: S105 — log label, not a secret
 CHAIN_FAIL = "FAIL"
 
 
+def bridge_abort_stage(abort_reason: str | None) -> str:
+    """Map a bridge abort onto the pipeline stage that actually stopped.
+
+    Eligibility / confluence / quality are Decision-layer — never Broker.
+    """
+    abort = str(abort_reason or "").strip().upper()
+    if not abort or abort in {"NONE", "NULL"}:
+        return "OMS"
+    if any(
+        tok in abort
+        for tok in ("ELIGIBILITY", "CONFLUENCE", "QUALITY", "IGNORED_ACTION", "MISSING_ZONES")
+    ):
+        return "ELIGIBILITY"
+    if any(tok in abort for tok in ("EXPIRED", "STALE", "INPUT_HASH")):
+        return "DECISION"
+    if any(tok in abort for tok in ("RISK", "MIN_LOT", "SIZING", "MISSING_LOTS")):
+        return "RISK"
+    if any(tok in abort for tok in ("KILL", "SAFETY", "HEALTH", "SELF_PROTECTION")):
+        return "SAFETY"
+    if any(tok in abort for tok in ("OPTIMIZER", "DEFER")):
+        return "OPTIMIZER"
+    if any(
+        tok in abort
+        for tok in (
+            "MT5",
+            "GATEWAY",
+            "BROKER",
+            "MARKET_CLOSED",
+            "SPREAD",
+            "SLIPPAGE",
+            "SESSION_INVALID",
+        )
+    ):
+        return "BROKER"
+    if any(
+        tok in abort
+        for tok in (
+            "OMS",
+            "DUPLICATE",
+            "POSITION",
+            "CANARY",
+            "EXECUTION_DISABLED",
+            "AUTO_TRADING",
+        )
+    ):
+        return "OMS"
+    return "OMS"
+
+
 def execution_blocked_event(
     *,
     stage: str,

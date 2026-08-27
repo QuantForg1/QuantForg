@@ -1026,6 +1026,10 @@ export function AutoTradingWorkspace() {
     cycleAbort.includes("RISK") ||
     cycleAbort.includes("MIN_LOT") ||
     cycleAbort.includes("SIZING");
+  const eligibilityBlocked =
+    cycleBlockStage === "ELIGIBILITY" ||
+    cycleBlockStage === "DECISION" ||
+    cycleAbort.includes("ELIGIBILITY");
   const hasTicket = last.mt5_ticket != null && str(last.mt5_ticket) !== "";
   const latencyMs =
     last.latency_ms != null && Number.isFinite(num(last.latency_ms))
@@ -1078,12 +1082,22 @@ export function AutoTradingWorkspace() {
         Boolean(last.decision_action) ||
           cycleOutcome.includes("no_trade") ||
           noEligibleSetup,
-        cycleOutcome.includes("decision") && cycleOutcome.includes("fail"),
+        (cycleOutcome.includes("decision") && cycleOutcome.includes("fail")) ||
+          eligibilityBlocked,
       ),
-      statusLabel: noEligibleSetup ? "NO_ELIGIBLE" : undefined,
-      detail: noEligibleSetup
-        ? str(currentScan.state, "NO_ELIGIBLE_SETUP")
-        : str(last.decision_action || last.cycle_outcome, ""),
+      statusLabel: eligibilityBlocked
+        ? "BLOCK"
+        : noEligibleSetup
+          ? "NO_ELIGIBLE"
+          : undefined,
+      detail: eligibilityBlocked
+        ? str(
+            asRecord(last.execution_blocked).human_reason || last.abort_reason,
+            cycleAbort,
+          )
+        : noEligibleSetup
+          ? str(currentScan.state, "NO_ELIGIBLE_SETUP")
+          : str(last.decision_action || last.cycle_outcome, ""),
     },
     {
       id: "risk",
@@ -1126,14 +1140,14 @@ export function AutoTradingWorkspace() {
     {
       id: "oms",
       label: "OMS",
-      state: noEligibleSetup
+      state: noEligibleSetup || eligibilityBlocked
         ? "waiting"
         : stageOf(
             forwarded,
             Boolean(str(last.oms_message)) && !forwarded && cycleOutcome.includes("oms"),
           ),
-      statusLabel: noEligibleSetup ? "NOT_REACHED" : undefined,
-      detail: noEligibleSetup
+      statusLabel: noEligibleSetup || eligibilityBlocked ? "NOT_REACHED" : undefined,
+      detail: noEligibleSetup || eligibilityBlocked
         ? "Current scan did not reach OMS"
         : cycleOutcome === "execution_deferred"
           ? `WAIT_BOUNDED remaining=${optimizerRemaining}ms`

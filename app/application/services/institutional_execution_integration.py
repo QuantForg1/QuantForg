@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.decision_models import TradeDecision
 from app.domain.institutional_trading.execution.bridge import ExecutionBridge
 from app.domain.institutional_trading.execution.config import (
@@ -32,12 +33,20 @@ class InstitutionalExecutionIntegration:
         oms: OmsSubmitPort,
         *,
         config: ExecutionBridgeConfig | None = None,
+        ite_config: ITEConfig | None = None,
         hydrate_hashes: bool = False,
     ) -> InstitutionalExecutionIntegration:
-        bridge = ExecutionBridge(
-            oms=oms,
-            config=config or DEFAULT_EXECUTION_BRIDGE_CONFIG,
-        )
+        if ite_config is not None:
+            bridge = ExecutionBridge(
+                oms=oms,
+                config=config or DEFAULT_EXECUTION_BRIDGE_CONFIG,
+                ite_config=ite_config,
+            )
+        else:
+            bridge = ExecutionBridge(
+                oms=oms,
+                config=config or DEFAULT_EXECUTION_BRIDGE_CONFIG,
+            )
         # Production ITE runtime passes hydrate_hashes=True after cold start.
         # Unit tests keep an empty in-memory set (no polluted disk state).
         if hydrate_hashes:

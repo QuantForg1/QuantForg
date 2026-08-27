@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from threading import Lock
@@ -137,6 +137,45 @@ class ExecutionBridge:
         if reliability is not None:
             self.reliability = reliability
         return self
+
+    def _eligibility_recheck_config(
+        self,
+        decision: TradeDecision,
+        context: ExecutionBridgeContext,
+    ) -> ITEConfig:
+        """Use the same scalping vs swing semantics as the decision pipeline.
+
+        Production stall: pipeline ITEConfig is scalping (Opportunity 70 + sniper
+        TAKE), but the bridge defaulted to swing quality/confluence 80 and aborted
+        ELIGIBILITY_FAILED after Risk/Safety/OMS were already READY.
+        Hard gates (market, spread, margin, open-book, risk_allowed) still run.
+        """
+        cfg = self.ite_config
+        if cfg.is_scalping():
+            return cfg
+        checks = getattr(getattr(decision, "eligibility", None), "checks", None) or {}
+        if checks.get("quality_ok") is not True:
+            return cfg
+        quality_total = getattr(
+            getattr(context.snapshot, "trade_quality", None), "total", None
+        )
+        conf = getattr(getattr(decision, "confluence", None), "confidence", None)
+        below_swing_floors = False
+        try:
+            if quality_total is not None and int(quality_total) < int(
+                cfg.min_trade_quality_score
+            ):
+                below_swing_floors = True
+        except (TypeError, ValueError):
+            below_swing_floors = False
+        try:
+            if conf is not None and int(conf) < int(cfg.min_confluence_score):
+                below_swing_floors = True
+        except (TypeError, ValueError):
+            pass
+        if not below_swing_floors:
+            return cfg
+        return replace(cfg, trading_mode="scalping")
 
     def effective_mode(self) -> ExecutionMode:
         """Ops plane mode wins when bound; else bridge config."""
@@ -407,7 +446,9 @@ class ExecutionBridge:
             # Still enforces market/session/spread/margin via decision.eligibility.
             eligibility = decision.eligibility
         else:
-            eligibility = PositionEligibilityEngine(self.ite_config).evaluate(
+            eligibility = PositionEligibilityEngine(
+                self._eligibility_recheck_config(decision, context)
+            ).evaluate(
                 snapshot=context.snapshot,
                 confluence=decision.confluence,
                 account=context.account,

@@ -102,6 +102,12 @@ def apply_trading_mode_to_runtime(
 
     if runtime is not None:
         runtime.decision_pipeline.config = ite
+        # ExecutionBridge defaults to swing ITEConfig. Re-checking eligibility
+        # with quality/confluence 80 after a scalping TAKE silently dropped live
+        # SELL contracts (quality 66 / confluence 65) as ELIGIBILITY_FAILED.
+        bridge = getattr(getattr(runtime, "execution", None), "bridge", None)
+        if bridge is not None and hasattr(bridge, "ite_config"):
+            bridge.ite_config = ite
         from app.application.services.institutional_decision_pipeline import (
             risk_config_from_ite,
         )

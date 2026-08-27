@@ -2723,13 +2723,28 @@ class InstitutionalIteRuntime:
             logger.exception("pvm_decision_stages_failed")
 
         # Enrich diagnostics with live ATR sizing facts (observational only).
+        # Never overwrite the pipeline-sized stop with a swing 1.5× ATR multiple.
         sizing_diag: dict[str, Any] = dict(market_context_diagnostics or {})
         atr_val = getattr(account, "atr", None)
-        stop_dist = (
-            (atr_val * Decimal("1.5")).quantize(Decimal("0.0001"))
-            if atr_val is not None and atr_val > 0
-            else None
+        existing_stop = sizing_diag.get("stop_distance")
+        entry_atr_raw = sizing_diag.get("entry_atr")
+        atr_for_stop = None
+        try:
+            if entry_atr_raw not in (None, ""):
+                atr_for_stop = Decimal(str(entry_atr_raw))
+        except (TypeError, ValueError):
+            atr_for_stop = None
+        if atr_for_stop is None or atr_for_stop <= 0:
+            atr_for_stop = atr_val
+        scalp_cfg = bool(
+            getattr(self.decision_pipeline.config, "is_scalping", lambda: False)()
         )
+        stop_mult = Decimal("1.10") if scalp_cfg else Decimal("1.5")
+        stop_dist = None
+        if existing_stop not in (None, ""):
+            stop_dist = existing_stop
+        elif atr_for_stop is not None and atr_for_stop > 0:
+            stop_dist = (atr_for_stop * stop_mult).quantize(Decimal("0.0001"))
         risk_pct = getattr(self.decision_pipeline.config, "risk_per_trade_pct", None)
         if risk_pct is None:
             risk_pct = Decimal("1.0")
@@ -3768,8 +3783,12 @@ class InstitutionalIteRuntime:
                     )
                     or "UNKNOWN_EXECUTION_ERROR"
                 )
+                from app.domain.institutional_trading.operations.execution_chain_log import (
+                    bridge_abort_stage as _abort_stage,
+                )
+
                 blocked_ev = _blk_bridge(
-                    stage="BROKER",
+                    stage=_abort_stage(abort_s),
                     reason_code=abort_s,
                     human_reason=str(detail or abort_s),
                     correlation_id=tid,
