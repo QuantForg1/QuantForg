@@ -17,6 +17,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.ai_scalping.direction import (
     DirectionDecision,
+    iter_scalp_structures,
     structure_event_side,
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
@@ -411,11 +412,19 @@ def evaluate_sniper_entry(
         "ask": str(ask) if ask is not None else None,
     }
 
-    def _wait(primary: str) -> SniperEntryDecision:
+    def _wait(primary: str, *, setup_state: str | None = None) -> SniperEntryDecision:
         canon = canonical_sniper_blocker(primary)
         diagnostics["canonical_blocker"] = canon
-        if primary in {"WAIT_CHASE", "WAIT_STALE_FVG"}:
-            diagnostics["setup_state"] = "INVALIDATED"
+        if setup_state:
+            diagnostics["setup_state"] = setup_state
+        elif primary == "WAIT_CHASE":
+            diagnostics["setup_state"] = "CHASING"
+        elif primary in {"WAIT_STALE_FVG", "WAIT_STALE_DATA"}:
+            diagnostics["setup_state"] = "STALE"
+        elif primary == "WAIT_CONFLICTING_BUY_SELL":
+            diagnostics["setup_state"] = "CONFLICT"
+        elif primary == "WAIT_NO_DIRECTIONAL_EDGE":
+            diagnostics["setup_state"] = "NO_SETUP"
         elif pillars.get("clear_direction") and (
             pillars.get("liquidity_event")
             or pillars.get("structure_confirmation")
@@ -454,16 +463,19 @@ def evaluate_sniper_entry(
         reasons.append("WAIT — abnormal spread")
         return _wait("WAIT_ABNORMAL_SPREAD")
 
-    structure = snapshot.primary_structure
-    for br in _seq(structure, "breaks_of_structure")[-3:]:
-        mapped = structure_event_side(br) or _side_of_break(
-            getattr(br, "direction", None)
-        )
-        if mapped is side:
-            pillars["structure_confirmation"] = True
-            reasons.append(f"BOS confirms {side.value}")
+    for structure in iter_scalp_structures(snapshot):
+        if pillars["structure_confirmation"]:
             break
-    if not pillars["structure_confirmation"]:
+        for br in _seq(structure, "breaks_of_structure")[-3:]:
+            mapped = structure_event_side(br) or _side_of_break(
+                getattr(br, "direction", None)
+            )
+            if mapped is side:
+                pillars["structure_confirmation"] = True
+                reasons.append(f"BOS confirms {side.value}")
+                break
+        if pillars["structure_confirmation"]:
+            break
         for ch in _seq(structure, "changes_of_character")[-2:]:
             mapped = structure_event_side(ch)
             if mapped is side:
@@ -512,11 +524,8 @@ def evaluate_sniper_entry(
         elif any(z.source == "ob" for z in aligned):
             reasons.append(f"Aligned order-block zone for {side.value}")
 
-    if pillars["entry_zone"] and not pillars["liquidity_event"]:
-        pillars["liquidity_event"] = True
-        reasons.append(
-            f"Aligned FVG/OB imbalance is a {side.value} liquidity event"
-        )
+    # FVG/OB is an independent zone family. Do not auto-count it as liquidity —
+    # that double-counted the same evidence and then still AND-gated momentum.
 
     mom_floor = (
         int(min_momentum) if min_momentum is not None else int(cfg.min_momentum_score)
@@ -611,11 +620,48 @@ def evaluate_sniper_entry(
                     f"state={entry_state})"
                 )
 
-    if not pillars["liquidity_event"] and not pillars["structure_confirmation"]:
+    if (
+        not pillars["liquidity_event"]
+        and not pillars["structure_confirmation"]
+        and not pillars["entry_zone"]
+    ):
         reasons.append(
             "WAIT — no BOS/CHOCH/sweep/FVG/OB trigger (trend alone is not enough)"
         )
         return _wait("WAIT_NO_SNIPER_TRIGGER")
+
+    independent: list[str] = []
+    if pillars["structure_confirmation"]:
+        independent.append("structure")
+    if pillars["liquidity_event"]:
+        independent.append("liquidity")
+    if pillars["entry_zone"]:
+        independent.append("zone")
+    if pillars["displacement_or_momentum"]:
+        independent.append("momentum")
+    timing_state = str(diagnostics.get("entry_state") or "")
+    if timing_state in {"RETEST", "INSIDE", "CONTROLLED"}:
+        independent.append("timing")
+    structural = [f for f in independent if f in {"structure", "liquidity", "zone"}]
+    diagnostics["independent_evidence"] = independent
+    diagnostics["independent_count"] = len(independent)
+    diagnostics["structural_families"] = structural
+
+    buy_components = dict(getattr(direction, "buy_components", {}) or {})
+    sell_components = dict(getattr(direction, "sell_components", {}) or {})
+    aligned_components = (
+        buy_components if side is TradeDirection.BUY else sell_components
+    )
+    if pillars["risk_reward"]:
+        aligned_components["rr"] = int(aligned_components.get("rr") or 0) + 10
+    if timing_state == "RETEST":
+        aligned_components["retest"] = int(aligned_components.get("retest") or 0) + 10
+    elif timing_state in {"CONTROLLED", "INSIDE"}:
+        aligned_components["rejection"] = (
+            int(aligned_components.get("rejection") or 0) + 6
+        )
+    diagnostics["buy_components"] = buy_components
+    diagnostics["sell_components"] = sell_components
 
     core_ok = (
         pillars["clear_direction"]
@@ -626,20 +672,10 @@ def evaluate_sniper_entry(
         and pillars["risk_reward"]
         and pillars["fresh_zone"]
     )
-    mom_ok = pillars["displacement_or_momentum"]
-    has_trigger = pillars["liquidity_event"] or pillars["structure_confirmation"]
+    take_ok = core_ok and len(independent) >= 2 and bool(structural)
     tight_spread = int(spread_score) >= 85
-    # TIER A: previous full sniper contract (unchanged pass/fail).
-    old_pass = core_ok and mom_ok and has_trigger
-    # TIER B: liquidity + structure, momentum/displacement absent (one pillar).
-    tier_b_gap = (
-        core_ok
-        and pillars["liquidity_event"]
-        and pillars["structure_confirmation"]
-        and not mom_ok
-    )
-    if old_pass:
-        if pillars["entry_zone"] and mom_ok:
+    if take_ok:
+        if pillars["entry_zone"] and pillars["displacement_or_momentum"]:
             diagnostics["sniper_tier"] = "A"
             label = f"SNIPER {side.value} — Tier A"
         elif tight_spread and int(momentum) >= 70:
@@ -648,22 +684,9 @@ def evaluate_sniper_entry(
         else:
             diagnostics["sniper_tier"] = "B"
             label = f"CONFIRMED SCALP {side.value} — Tier B"
-        diagnostics["setup_state"] = "SETUP_READY"
+        diagnostics["setup_state"] = "TAKE"
         diagnostics["canonical_blocker"] = None
         reasons.append(label)
-        return SniperEntryDecision(
-            passed=True,
-            action=side.value,
-            reasons=tuple(reasons),
-            pillars=pillars,
-            primary_reason=None,
-            diagnostics=diagnostics,
-        )
-    if tier_b_gap:
-        diagnostics["sniper_tier"] = "B"
-        diagnostics["setup_state"] = "SETUP_READY"
-        diagnostics["canonical_blocker"] = None
-        reasons.append(f"CONFIRMED SCALP {side.value} — Tier B without momentum")
         return SniperEntryDecision(
             passed=True,
             action=side.value,
@@ -675,13 +698,24 @@ def evaluate_sniper_entry(
 
     missing = [k for k, ok in pillars.items() if not ok]
     primary = "WAIT_SNIPER_INCOMPLETE"
+    setup_state: str | None = None
     if not pillars["fresh_zone"] and pillars["not_chasing"]:
         primary = "WAIT_STALE_FVG"
+        setup_state = "STALE"
     elif not pillars["not_chasing"]:
         primary = "WAIT_CHASE"
+        setup_state = "CHASING"
     elif not pillars["invalidation"]:
         primary = "WAIT_NO_INVALIDATION"
+        setup_state = "SETUP_FORMING"
     elif not pillars["risk_reward"]:
         primary = "WAIT_INSUFFICIENT_RR"
+        setup_state = "SETUP_FORMING"
+    elif core_ok and structural:
+        primary = "WAIT_SNIPER_INCOMPLETE"
+        setup_state = "SETUP_READY"
+        reasons.append(
+            "SETUP_READY — waiting independent confirmation or M1/M5 trigger"
+        )
     reasons.append(f"WAIT — incomplete sniper pillars {missing}")
-    return _wait(primary)
+    return _wait(primary, setup_state=setup_state)

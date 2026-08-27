@@ -435,6 +435,7 @@ def hourly_scan_rates(
     buy_cand_n = sell_cand_n = opp_n = sniper_ready_n = sniper_take_n = 0
     risk_pass_n = safety_pass_n = oms_fwd_n = broker_n = fill_n = reject_n = 0
     edge_n = stale_n = daily_n = 0
+    forming_n = incomplete_n = opp_wait_n = 0
     for row in subset:
         action = str(row.get("decision_action") or row.get("action") or "").upper()
         if action == "BUY":
@@ -469,7 +470,11 @@ def hourly_scan_rates(
             pass
         setup = str(row.get("setup_state") or "").upper()
         sniper = str(row.get("sniper_state") or row.get("sniper") or "").upper()
-        if setup in {"SETUP_READY", "TAKE"} or sniper in {"READY", "TAKE"}:
+        if "FORMING" in setup:
+            forming_n += 1
+        if setup == "SETUP_READY" or (
+            sniper in {"READY", "PASS"} and setup not in {"TAKE", "SETUP_FORMING"}
+        ):
             ready_n += 1
             sniper_ready_n += 1
         if setup == "TAKE" or sniper == "TAKE" or bool(row.get("take")):
@@ -505,6 +510,15 @@ def hourly_scan_rates(
                 edge_n += 1
             if "STALE" in code:
                 stale_n += 1
+            if "SNIPER_INCOMPLETE" in code:
+                incomplete_n += 1
+        try:
+            opp_val = row.get("opportunity_score")
+            thresh = int(row.get("opportunity_threshold") or 70)
+            if opp_val is not None and int(opp_val) < thresh:
+                opp_wait_n += 1
+        except (TypeError, ValueError):
+            pass
         handoff = row.get("execution_handoff")
         if isinstance(handoff, dict):
             if handoff.get("risk_passed"):
@@ -524,6 +538,13 @@ def hourly_scan_rates(
         "sell_candidates": sell_cand_n,
         "opportunity_pass": opp_n,
         "setup_ready_count": ready_n,
+        "SETUP_FORMING_count": forming_n,
+        "SETUP_FORMING_per_hour": _rate(forming_n),
+        "SETUP_READY_per_hour": _rate(ready_n),
+        "WAIT_SNIPER_INCOMPLETE_count": incomplete_n,
+        "WAIT_SNIPER_INCOMPLETE_per_hour": _rate(incomplete_n),
+        "WAIT_OPPORTUNITY_count": opp_wait_n,
+        "WAIT_OPPORTUNITY_per_hour": _rate(opp_wait_n),
         "sniper_ready": sniper_ready_n,
         "sniper_take": sniper_take_n,
         "take_count": take_n,

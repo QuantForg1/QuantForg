@@ -199,7 +199,7 @@ class TestBidirectionalScores:
         assert dec.direction is TradeDirection.BUY
         assert dec.buy_score > dec.sell_score
 
-    def test_conflicting_htf_and_ltf_wait(self) -> None:
+    def test_h1_context_does_not_veto_m15_sell(self) -> None:
         snap = _snap(
             macro=TrendDirection.UP,
             primary=TrendDirection.DOWN,
@@ -211,8 +211,9 @@ class TestBidirectionalScores:
             "liquidity": 10,
         }
         dec = decide_scalping_direction(snap)
-        assert dec.direction is TradeDirection.NONE
-        assert abs(dec.buy_score - dec.sell_score) <= 8
+        assert dec.direction is TradeDirection.SELL
+        assert dec.sell_score > dec.buy_score
+        assert dec.factors.get("h1_bias") == 10
 
     def test_equal_highs_support_sell_not_buy_bias(self) -> None:
         snap = _snap(

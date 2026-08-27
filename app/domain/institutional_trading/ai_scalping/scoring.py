@@ -179,6 +179,16 @@ class AiScalpingScore:
             "sniper_entry": dict(self.sniper_entry or {}),
             "why_buy": list(self.why_buy),
             "why_sell": list(self.why_sell),
+            "buy_components": dict(
+                (self.sniper_entry or {}).get("buy_components")
+                or (self.factors or {}).get("buy_components")
+                or {}
+            ),
+            "sell_components": dict(
+                (self.sniper_entry or {}).get("sell_components")
+                or (self.factors or {}).get("sell_components")
+                or {}
+            ),
             "never_prefer_buy_only": True,
         }
 
@@ -692,6 +702,10 @@ def score_scalping_setup(
                     "BULLISH",
                     "EQUAL LOWS",
                     "HIGHEST PROBABILITY BUY",
+                    "CONTEXT UP",
+                    "STRUCTURE UP",
+                    "ENTRY UP",
+                    "EXECUTION UP",
                 )
             )
         ),
@@ -706,6 +720,10 @@ def score_scalping_setup(
                     "BEARISH",
                     "EQUAL HIGHS",
                     "HIGHEST PROBABILITY SELL",
+                    "CONTEXT DOWN",
+                    "STRUCTURE DOWN",
+                    "ENTRY DOWN",
+                    "EXECUTION DOWN",
                 )
             )
         ),

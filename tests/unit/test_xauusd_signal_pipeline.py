@@ -659,7 +659,7 @@ def test_risk_block_reaches_risk_not_fake_wait() -> None:
     assert row["pipeline"]["oms"] == "NOT_REACHED"
 
 
-def test_aligned_fvg_counts_as_liquidity_not_trend_alone() -> None:
+def test_aligned_fvg_is_zone_trigger_not_trend_alone() -> None:
     snap = _trend_snap(macro=TrendDirection.DOWN, primary=TrendDirection.RANGE)
     gap = MagicMock()
     gap.side = "BEARISH"
@@ -680,10 +680,12 @@ def test_aligned_fvg_counts_as_liquidity_not_trend_alone() -> None:
         min_momentum=55,
         config=DEFAULT_AI_SCALPING_CONFIG,
     )
-    assert out.pillars["liquidity_event"] is True
+    assert out.pillars["entry_zone"] is True
+    assert out.pillars["liquidity_event"] is False
     assert out.passed is True
     assert out.action == "SELL"
     assert out.primary_reason is None
+    assert out.diagnostics["setup_state"] == "TAKE"
 
 
 def test_fvg_without_momentum_is_incomplete_not_silent() -> None:
@@ -697,7 +699,7 @@ def test_fvg_without_momentum_is_incomplete_not_silent() -> None:
     out = evaluate_sniper_entry(
         snap,
         direction=_dir(TradeDirection.SELL, buy=18, sell=82),
-        mid=Decimal("2650"),
+        mid=Decimal("2658"),
         atr=Decimal("4.00"),
         expected_rr=Decimal("1.40"),
         min_expected_rr=Decimal("1.20"),
@@ -709,8 +711,10 @@ def test_fvg_without_momentum_is_incomplete_not_silent() -> None:
     )
     assert out.passed is False
     assert out.action == "WAIT"
-    assert out.pillars["liquidity_event"] is True
+    assert out.pillars["entry_zone"] is True
+    assert out.pillars["liquidity_event"] is False
     assert out.primary_reason == "WAIT_SNIPER_INCOMPLETE"
+    assert out.diagnostics["setup_state"] == "SETUP_READY"
 
 
 def test_scale_in_blocks_losing_leg_and_missing_pnl() -> None:

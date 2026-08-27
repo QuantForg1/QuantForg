@@ -27,6 +27,8 @@ export type SignalPipeline = {
   atr_timeframe: string | null;
   execution_lifecycle: string | null;
   chase_distance: string | null;
+  buy_components: Record<string, number>;
+  sell_components: Record<string, number>;
 };
 
 export function formatSignalHeadline(
@@ -54,6 +56,16 @@ export function signalDirectionGlyph(
   const action = (direction || "").trim().toUpperCase();
   if (action === "BUY" || action === "SELL" || action === "WAIT") return action;
   return "NONE";
+}
+
+function asScoreMap(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(value);
+    if (Number.isFinite(n)) out[key] = n;
+  }
+  return out;
 }
 
 export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
@@ -120,6 +132,8 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
       row.chase_distance == null || row.chase_distance === ""
         ? null
         : String(row.chase_distance),
+    buy_components: asScoreMap(row.buy_components),
+    sell_components: asScoreMap(row.sell_components),
   };
 }
 

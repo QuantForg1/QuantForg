@@ -68,6 +68,8 @@ assert.equal(pipeline.opportunity_threshold, 70);
 assert.equal(pipeline.opportunity_gate, "WAIT");
 assert.equal(pipeline.setup_state, "WAIT");
 assert.equal(pipeline.execution_lifecycle, null);
+assert.deepEqual(pipeline.buy_components, {});
+assert.deepEqual(pipeline.sell_components, {});
 
 const liveChase = parseSignalPipeline({
   market: "OPEN",

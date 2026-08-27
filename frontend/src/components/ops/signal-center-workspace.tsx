@@ -110,6 +110,13 @@ function fmt(v: unknown): string {
   return String(v);
 }
 
+function fmtComponents(map: Record<string, number> | undefined): string {
+  if (!map) return "—";
+  const parts = Object.entries(map).filter(([, n]) => Number(n) !== 0);
+  if (!parts.length) return "—";
+  return parts.map(([k, n]) => `${k}:${n}`).join(" ");
+}
+
 export function SignalCenterWorkspace() {
   const [q, setQ] = useState("");
   const [direction, setDirection] = useState<(typeof DIR_FILTERS)[number]>("ALL");
@@ -407,6 +414,14 @@ export function SignalCenterWorkspace() {
                 ["Direction", selected.direction],
                 ["BUY score", String(selected.bullish_score ?? 0)],
                 ["SELL score", String(selected.bearish_score ?? 0)],
+                [
+                  "BUY components",
+                  fmtComponents(selected.pipeline?.buy_components),
+                ],
+                [
+                  "SELL components",
+                  fmtComponents(selected.pipeline?.sell_components),
+                ],
                 ["Candidate", selected.pipeline?.candidate ?? "NONE"],
                 ["Setup", selected.pipeline?.setup_state ?? "WAIT"],
                 ["Tier", selected.pipeline?.sniper_tier ?? "—"],

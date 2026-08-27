@@ -501,7 +501,7 @@ def test_buy_sell_field_mapping_from_production_fvg_price() -> None:
     snap = _snap(fvgs=[_fvg(side="BEARISH")])
     out = _sniper(snap, _dir(TradeDirection.SELL))
     assert out.pillars["entry_zone"] is True
-    assert out.pillars["liquidity_event"] is True
+    assert out.pillars["liquidity_event"] is False
     assert out.diagnostics["ref_price"] == "4617.90"
     assert out.diagnostics["zone_source"] == "fvg"
 
@@ -515,7 +515,7 @@ def test_missing_zone_timeframe_defaults_to_m15_structure_atr() -> None:
     out = _sniper(snap, _dir(TradeDirection.SELL), atr_timeframe="M5")
     assert out.primary_reason != "WAIT_CHASE"
     assert out.passed is True
-    assert out.diagnostics.get("setup_state") == "SETUP_READY"
+    assert out.diagnostics.get("setup_state") == "TAKE"
 
 
 def test_chase_uses_bid_for_sell_not_ask() -> None:
@@ -544,9 +544,9 @@ def test_fresh_buy_and_sell_are_setup_ready() -> None:
         _snap(fvgs=[_fvg(side="BEARISH")]),
         _dir(TradeDirection.SELL),
     )
-    assert buy.diagnostics["setup_state"] == "SETUP_READY"
+    assert buy.diagnostics["setup_state"] == "TAKE"
     assert buy.passed is True
-    assert sell.diagnostics["setup_state"] == "SETUP_READY"
+    assert sell.diagnostics["setup_state"] == "TAKE"
     assert sell.passed is True
 
 
@@ -556,7 +556,7 @@ def test_extended_setup_is_invalidated_wait_chase() -> None:
         _dir(TradeDirection.SELL),
     )
     assert out.primary_reason == "WAIT_CHASE"
-    assert out.diagnostics["setup_state"] == "INVALIDATED"
+    assert out.diagnostics["setup_state"] == "CHASING"
     assert out.diagnostics["canonical_blocker"] == "WAIT_CHASE"
 
 
@@ -653,7 +653,7 @@ def test_tier_a_full_sniper_is_take() -> None:
     assert out.passed is True
     assert out.action == "BUY"
     assert out.diagnostics["sniper_tier"] == "A"
-    assert out.diagnostics["setup_state"] == "SETUP_READY"
+    assert out.diagnostics["setup_state"] == "TAKE"
     assert out.diagnostics["entry_state"] == "RETEST"
 
 

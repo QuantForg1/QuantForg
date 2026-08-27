@@ -543,6 +543,10 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "sniper": sniper,
         "why_buy": score.get("why_buy") or factors.get("why_buy"),
         "why_sell": score.get("why_sell") or factors.get("why_sell"),
+        "buy_components": score.get("buy_components")
+        or (sniper.get("buy_components") if isinstance(sniper, dict) else None),
+        "sell_components": score.get("sell_components")
+        or (sniper.get("sell_components") if isinstance(sniper, dict) else None),
         "why_no_trade": reason if reject else score.get("why_no_trade"),
         "signal_state": exec_cls["signal_state"],
         "execution_state": exec_cls["execution_state"],
@@ -827,6 +831,23 @@ def _pipeline_snapshot(
         "original_invalidation": stop_loss,
         "chase_distance": (sniper or {}).get("chase_distance") if sniper else None,
         "fvg_age_bars": (sniper or {}).get("fvg_age_bars") if sniper else None,
+        "buy_components": (
+            dict(sniper.get("buy_components") or {})
+            if isinstance(sniper, dict)
+            and isinstance(sniper.get("buy_components"), dict)
+            else {}
+        ),
+        "sell_components": (
+            dict(sniper.get("sell_components") or {})
+            if isinstance(sniper, dict)
+            and isinstance(sniper.get("sell_components"), dict)
+            else {}
+        ),
+        "independent_evidence": (
+            list(sniper.get("independent_evidence") or [])
+            if isinstance(sniper, dict)
+            else []
+        ),
         "bos": (
             bool(pillars.get("structure_confirmation"))
             if isinstance(pillars, dict)
