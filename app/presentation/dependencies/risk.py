@@ -10,7 +10,6 @@ from app.application.services.portfolio_sync import PortfolioSyncService
 from app.application.services.risk_engine import RiskEngine
 from app.application.use_cases.record_audit_event import RecordAuditEventUseCase
 from app.application.use_cases.risk_engine import CheckRiskUseCase
-from app.domain.entities.risk_engine import RiskEngineConfig
 from app.presentation.dependencies.execution import get_execution_audit_service
 from core.di.container import get_container
 
@@ -35,7 +34,11 @@ def get_risk_engine() -> RiskEngine:
     engine = getattr(get_container(), "risk_engine", None)
     if engine is not None:
         return engine  # type: ignore[no-any-return]
-    return RiskEngine(config=RiskEngineConfig())
+    from app.application.services.institutional_decision_pipeline import (
+        oms_risk_engine_from_ite,
+    )
+
+    return oms_risk_engine_from_ite()
 
 
 def get_portfolio_sync() -> PortfolioSyncService | None:

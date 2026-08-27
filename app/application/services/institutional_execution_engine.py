@@ -43,6 +43,15 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _default_oms_risk_engine() -> RiskEngine:
+    """OMS RiskEngine consumes ITE MAX_DAILY_LOSS_PCT — never a parallel 5% cap."""
+    from app.application.services.institutional_decision_pipeline import (
+        oms_risk_engine_from_ite,
+    )
+
+    return oms_risk_engine_from_ite()
+
+
 @dataclass
 class PipelineStageRecord:
     stage: str
@@ -167,7 +176,7 @@ class InstitutionalExecutionEngine:
     order_validation: MT5OrderValidationService
     intelligence: ExecutionIntelligenceService
     journal: ExecutionJournalStore
-    risk_engine: RiskEngine = field(default_factory=RiskEngine)
+    risk_engine: RiskEngine = field(default_factory=_default_oms_risk_engine)
     risk_tracker: LiveAccountRiskTracker = field(
         default_factory=get_live_account_risk_tracker
     )

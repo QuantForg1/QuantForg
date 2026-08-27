@@ -6499,13 +6499,19 @@ def build_ite_runtime(
     interval_seconds: float = 5.0,
 ) -> InstitutionalIteRuntime:
     """Wire Guarded OMS ports + shared kill + reliability into one runtime."""
+    from dataclasses import replace as dc_replace
+
     from app.application.services.execution_intelligence import (
         ExecutionIntelligenceService,
+    )
+    from app.application.services.institutional_decision_pipeline import (
+        oms_risk_engine_from_ite,
     )
     from app.application.services.institutional_execution_engine import (
         InstitutionalExecutionEngine,
     )
     from app.domain.execution_engine.journal import ExecutionJournalStore
+    from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
     from app.domain.institutional_trading.execution.config import (
         ExecutionBridgeConfig,
     )
@@ -6537,6 +6543,12 @@ def build_ite_runtime(
         order_validation=mt5_order_validation,
         intelligence=ExecutionIntelligenceService(),
         journal=ExecutionJournalStore(),
+        risk_engine=oms_risk_engine_from_ite(
+            dc_replace(
+                DEFAULT_ITE_CONFIG,
+                max_daily_loss_pct=plane.max_daily_loss_pct,
+            )
+        ),
     )
     raw_submit = InstitutionalOmsAdapter(engine=engine)
     raw_manage = InstitutionalOmsManageAdapter(engine=engine)

@@ -36,6 +36,21 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def oms_risk_config_from_ite(cfg: ITEConfig | None = None) -> RiskEngineConfig:
+    """OMS defensive daily-loss recheck — same ITE policy, not a parallel cap.
+
+    Other OMS RiskEngine defaults (max open positions, weekly/monthly, spread)
+    stay unchanged so this does not remap max_open_trades onto OMS.
+    """
+    ite = cfg if cfg is not None else DEFAULT_ITE_CONFIG
+    return RiskEngineConfig(max_daily_loss_pct=ite.max_daily_loss_pct)
+
+
+def oms_risk_engine_from_ite(cfg: ITEConfig | None = None) -> RiskEngine:
+    """OMS RiskEngine that consumes the ITE daily-loss source of truth."""
+    return RiskEngine(config=oms_risk_config_from_ite(cfg))
+
+
 def risk_config_from_ite(
     cfg: ITEConfig,
     *,

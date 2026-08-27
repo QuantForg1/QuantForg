@@ -239,6 +239,9 @@ class Container:
 
         from app.application.services.execution_gateway import ExecutionGateway
         from app.application.services.execution_safety import ExecutionSafetyService
+        from app.application.services.institutional_decision_pipeline import (
+            oms_risk_config_from_ite,
+        )
         from app.application.services.mt5_market_data import MT5MarketDataService
         from app.application.services.mt5_order_validation import (
             MT5OrderValidationService,
@@ -247,7 +250,6 @@ class Container:
         from app.application.services.risk_engine import RiskEngine
         from app.application.services.strategy_runtime import StrategyRuntimeService
         from app.domain.entities.execution_safety import ExecutionPolicy
-        from app.domain.entities.risk_engine import RiskEngineConfig
         from app.domain.entities.strategy_runtime import StrategyRuntimeConfig
 
         self.mt5_market_data = MT5MarketDataService(adapter=self.mt5_adapter)
@@ -262,7 +264,7 @@ class Container:
             order_validation=self.mt5_order_validation,
         )
         self.portfolio_sync = PortfolioSyncService(adapter=self.mt5_adapter)
-        self.risk_engine = RiskEngine(config=RiskEngineConfig())
+        self.risk_engine = RiskEngine(config=oms_risk_config_from_ite())
         self.strategy_runtime = StrategyRuntimeService(
             market_data=self.mt5_market_data,
             portfolio_sync=self.portfolio_sync,

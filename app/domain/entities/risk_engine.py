@@ -15,6 +15,7 @@ from app.domain.enums.risk import (
     RiskDecision,
     RiskScoreBand,
 )
+from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,7 +26,8 @@ class RiskEngineConfig:
     min_lot: Decimal = Decimal("0.01")
     lot_step: Decimal = Decimal("0.01")
     max_risk_per_trade_pct: Decimal = Decimal("1")  # % of equity
-    max_daily_loss_pct: Decimal = Decimal("5")
+    # Authoritative ITE daily-loss cap — never a parallel 5% OMS policy.
+    max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_weekly_loss_pct: Decimal = Decimal("10")
     max_monthly_loss_pct: Decimal = Decimal("20")
     max_drawdown_pct: Decimal = Decimal("25")

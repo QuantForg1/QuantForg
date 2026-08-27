@@ -106,12 +106,29 @@ def get_institutional_execution_engine() -> InstitutionalExecutionEngine:
     if order_validation is None:
         order_validation = MT5OrderValidationService(adapter=adapter)
     intelligence: ExecutionIntelligenceService = get_execution_intelligence()
+    from dataclasses import replace as dc_replace
+
+    from app.application.services.institutional_decision_pipeline import (
+        oms_risk_engine_from_ite,
+    )
+    from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
+    from app.domain.institutional_trading.operations.control_plane import (
+        get_control_plane,
+    )
+
+    plane = get_control_plane()
     return InstitutionalExecutionEngine(
         gateway=get_execution_gateway(),
         safety=get_execution_safety_service(),
         order_validation=order_validation,
         intelligence=intelligence,
         journal=get_execution_journal(),
+        risk_engine=oms_risk_engine_from_ite(
+            dc_replace(
+                DEFAULT_ITE_CONFIG,
+                max_daily_loss_pct=plane.max_daily_loss_pct,
+            )
+        ),
     )
 
 
