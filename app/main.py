@@ -489,6 +489,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                         try:
                             runtime._watchdog_restarts = restarts
                             runtime._watchdog_state = "BACKOFF"
+                            runtime._watchdog_restart_reason = (
+                                f"{type(exc).__name__}: orchestrator_crashed"
+                            )
                         except Exception:
                             pass
                         delay = min(30.0, 2.0 * (2 ** min(restarts - 1, 4)))

@@ -76,6 +76,7 @@ class ExecutionBridge:
     _canary_count: int = field(default=0, repr=False)
     _lock: Lock = field(default_factory=Lock, repr=False)
     _hashes_hydrated: bool = field(default=False, repr=False)
+    _hashes_unverified: bool = field(default=False, repr=False)
 
     def hydrate_executed_hashes(self) -> int:
         """Load durable decision hashes once at runtime startup (not per handle).
@@ -88,29 +89,43 @@ class ExecutionBridge:
             return len(self._executed_hashes)
 
     def _ensure_hashes_loaded(self) -> None:
-        """Hydrate durable decision hashes once (restart-safe dedupe)."""
-        if self._hashes_hydrated:
+        """Hydrate durable decision hashes (restart-safe dedupe).
+
+        If the durable store cannot be verified, leave ``_hashes_unverified``
+        set so handle() fail-closes instead of treating empty history as unique.
+        """
+        if self._hashes_hydrated and not self._hashes_unverified:
             return
         with self._lock:
-            if self._hashes_hydrated:
+            if self._hashes_hydrated and not self._hashes_unverified:
                 return
             try:
                 from app.domain.institutional_trading.execution.decision_hash_store import (  # noqa: E501
-                    load_executed_hashes,
+                    load_decision_hash_report,
                 )
 
-                loaded, order = load_executed_hashes(
+                report = load_decision_hash_report(
                     max_hashes=self._max_executed_hashes
                 )
-                self._executed_hashes |= loaded
-                # Preserve existing in-memory order; append missing from disk
+                if not report.verified:
+                    self._hashes_unverified = True
+                    self._hashes_hydrated = True
+                    logger.error(
+                        "decision_hash_hydrate_unverified",
+                        source=report.source,
+                        error=report.error,
+                    )
+                    return
+                self._executed_hashes |= report.hashes
                 seen = set(self._executed_hash_order)
-                for h in order:
+                for h in report.order:
                     if h not in seen:
                         self._executed_hash_order.append(h)
                         seen.add(h)
+                self._hashes_unverified = False
             except Exception:
                 logger.exception("decision_hash_hydrate_failed")
+                self._hashes_unverified = True
             self._hashes_hydrated = True
 
     def _persist_hashes(self) -> None:
@@ -235,6 +250,24 @@ class ExecutionBridge:
             )
             self._span_bridge(tid, t0, ok=True, detail="ignored_action")
             return result
+
+        # Production hydrates at create(). Unverified durable history must not
+        # be treated as "no prior orders". Unit tests skip hydrate entirely.
+        if self._hashes_hydrated or self._hashes_unverified:
+            self._ensure_hashes_loaded()
+            if self._hashes_unverified:
+                return self._abort(
+                    decision=decision,
+                    context=context,
+                    decision_hash=d_hash,
+                    reason=BridgeAbortReason.DECISION_HASH_UNVERIFIED,
+                    comment=(
+                        "Decision hash store unverified — fail closed, "
+                        "no OMS submit (missing history is not proof of no order)"
+                    ),
+                    t0=t0,
+                    count_reject=False,
+                )
 
         # --- Duplicate protection (before anything else that could call OMS) ---
         with self._lock:

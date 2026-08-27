@@ -105,12 +105,14 @@ def test_recover_script_forbids_live_orders() -> None:
     assert "BUY" in text or "never" in text.lower()
 
 
-def test_topology_still_requires_human_cutover() -> None:
+def test_topology_vps_cutover_executed_session_unproven() -> None:
     snap = topology_snapshot()
-    assert snap["migration_executed"] is False
-    assert snap["user_windows_pc_may_be_off"] is False
+    assert snap["migration_executed"] is True
+    assert snap["user_windows_pc_may_be_off"] is True
     assert snap["vps_deployment_automation_in_repo"] is True
-    assert snap["vps_cutover_requires_human"] is True
+    assert snap["vps_cutover_requires_human"] is False
+    assert snap["mt5_session_recovery_unproven"] is True
+    assert snap["windows_vps_required"] is True
 
 
 def test_vps_doc_exists_without_secrets() -> None:
@@ -459,6 +461,11 @@ def test_watchdog_does_not_trust_task_state_as_health() -> None:
     assert "Test-WatchdogGatewayStartAllowed" in text
     assert "duplicate_terminal" in text
     assert "not_restarting_gateway" in text
+    assert "PROCESS_RUNNING" in text
+    assert "PROCESS_UNHEALTHY" in text
+    assert "not_spawning_duplicate" in text
+    assert "do_not_fake_readiness" in text
+    assert "MT5_SESSION_RECOVERY_UNPROVEN" in _read("_host_recovery.ps1")
 
 
 def test_reboot_readiness_script_never_reboots() -> None:
@@ -477,6 +484,9 @@ def test_reboot_readiness_script_never_reboots() -> None:
     assert "MT5 SESSION" in text
     assert "PUBLIC TUNNEL" in text
     assert "AUTO_LOGON=READY" in text
+    assert "MT5_SESSION_RECOVERY_UNPROVEN" in text
+    assert "EXECUTION_PATH" in text
+    assert "Get-Mt5SessionClassification" in text
 
 
 def test_open_autologon_ui_never_takes_password() -> None:

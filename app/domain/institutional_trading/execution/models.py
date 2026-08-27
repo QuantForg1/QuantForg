@@ -50,6 +50,7 @@ class BridgeAbortReason(StrEnum):
     SLIPPAGE_EXCESSIVE = "slippage_excessive"
     HEALTH_DEGRADED = "health_degraded"
     SELF_PROTECTION = "self_protection"
+    DECISION_HASH_UNVERIFIED = "decision_hash_unverified"
     NONE = "none"
 
 

@@ -399,12 +399,18 @@ def test_server_side_sl_tp_is_report_only() -> None:
 
 def test_machine_independent_topology_is_honest() -> None:
     snap = topology_snapshot()
-    assert USER_WINDOWS_PC_MAY_BE_OFF is False
-    assert snap["user_windows_pc_may_be_off"] is False
-    assert snap["works_without_user_pc"] is False
+    assert USER_WINDOWS_PC_MAY_BE_OFF is True
+    assert snap["user_windows_pc_may_be_off"] is True
+    assert snap["works_without_user_pc"] is True
     assert snap["works_without_user_browser"] is True
-    assert MT5_CLOUD_VPS_MIGRATION_REQUIRED is True
-    assert snap["migration_executed"] is False
+    assert snap["owner_home_pc_required"] is False
+    assert snap["owner_wifi_required"] is False
+    assert snap["browser_required"] is False
+    assert snap["windows_vps_required"] is True
+    assert MT5_CLOUD_VPS_MIGRATION_REQUIRED is False
+    assert snap["migration_executed"] is True
+    assert snap["mt5_session_recovery_unproven"] is True
+    assert snap["running_terminal_is_not_execution_ready"] is True
     assert "mt5_terminal" in snap["user_windows_components"]
     assert "ite_worker" in snap["cloud_components"]
 

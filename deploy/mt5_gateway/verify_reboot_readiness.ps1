@@ -158,10 +158,20 @@ try {
 if ($mt5Attached) {
   Add-Check "mt5_session" "PASS" "connected=true session_mode=attached"
 } elseif ($liveOk) {
-  Add-Check "mt5_session" "WARN" "Gateway live but MT5 not attached yet"
+  Add-Check "mt5_session" "WARN" "Gateway live but MT5 not attached yet — MT5_SESSION_RECOVERY_UNPROVEN"
 } else {
-  Add-Check "mt5_session" "WARN" "Gateway /health not confirming attached session"
+  Add-Check "mt5_session" "WARN" "Gateway /health not confirming attached session — MT5_SESSION_RECOVERY_UNPROVEN"
 }
+$mt5Running = ($mt5Procs.Count -ge 1)
+$mt5Responding = $false
+if ($mt5Running) { $mt5Responding = Test-Mt5ProcessResponding }
+$session = Get-Mt5SessionClassification -Health $health -ProcessRunning $mt5Running -ProcessResponding $mt5Responding
+Add-Check "mt5_process_state" "PASS" $session.process
+Add-Check "mt5_terminal_state" $(if ($session.terminal -eq "TERMINAL_CONNECTED") { "PASS" } else { "WARN" }) $session.terminal
+Add-Check "mt5_broker_state" $(if ($session.broker -eq "BROKER_CONNECTED") { "PASS" } else { "WARN" }) $session.broker
+Add-Check "mt5_autotrading_state" $(if ($session.autotrading -eq "AUTOTRADING_ENABLED") { "PASS" } else { "WARN" }) $session.autotrading
+Add-Check "execution_path" $(if ($session.execution_path -eq "EXECUTION_PATH_READY") { "PASS" } else { "WARN" }) $session.execution_path
+Add-Check "session_recovery" $(if ($session.recovery -eq "SESSION_VERIFIED") { "PASS" } else { "WARN" }) $session.recovery
 
 $publicOk = Test-PublicGatewayLive
 if ($publicOk) {
@@ -186,6 +196,12 @@ Write-Host "--- PROVIDER POWER RECOVERY ---"
 Write-Host ("PROVIDER POWER RECOVERY: {0}" -f $provider.State)
 Write-Host "--- MT5 SESSION ---"
 Write-Host ("MT5 SESSION: {0}" -f $(if ($mt5Attached) { "ATTACHED" } else { "NOT_ATTACHED_OR_UNKNOWN" }))
+Write-Host ("PROCESS: {0}" -f $session.process)
+Write-Host ("TERMINAL: {0}" -f $session.terminal)
+Write-Host ("BROKER: {0}" -f $session.broker)
+Write-Host ("AUTOTRADING: {0}" -f $session.autotrading)
+Write-Host ("EXECUTION_PATH: {0}" -f $session.execution_path)
+Write-Host ("SESSION_RECOVERY: {0}" -f $session.recovery)
 Write-Host "--- PUBLIC TUNNEL ---"
 Write-Host ("PUBLIC TUNNEL: {0}" -f $(if ($publicOk) { "HEALTHY" } else { "NOT_REACHABLE" }))
 Write-Host "--- REBOOT READINESS ---"

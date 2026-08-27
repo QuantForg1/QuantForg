@@ -50,8 +50,18 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
         return "SAFETY"
     if any(
         tok in abort
-        for tok in ("EXECUTION_HEALTH", "HEALTH_DEGRADED", "HEALTH")
+        for tok in (
+            "EXECUTION_HEALTH",
+            "HEALTH_DEGRADED",
+            "DECISION_HASH_UNVERIFIED",
+            "HASH_STORE",
+        )
     ):
+        return "EXECUTION_HEALTH"
+    if any(
+        tok in abort
+        for tok in ("HEALTH",)
+    ) and "INPUT_HASH" not in abort:
         return "EXECUTION_HEALTH"
     if any(tok in abort for tok in ("OPTIMIZER", "DEFER")):
         return "OPTIMIZER"

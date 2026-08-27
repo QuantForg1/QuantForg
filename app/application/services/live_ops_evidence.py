@@ -136,5 +136,91 @@ def build_live_ops_evidence(
         }
     except Exception:
         payload["live_health"] = {"unavailable": True}
+
+    scanner: dict[str, Any] = {}
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        if runtime is not None and hasattr(runtime, "status"):
+            st = runtime.status()
+            scanner = {
+                "scanner_running": st.get("scanner_running"),
+                "last_cycle_timestamp": st.get("last_cycle_timestamp"),
+                "cycle_age_seconds": st.get("cycle_age_seconds"),
+                "last_successful_cycle": st.get("last_successful_cycle"),
+                "last_failure": st.get("last_failure"),
+                "restart_count": st.get("restart_count"),
+                "restart_reason": st.get("restart_reason"),
+                "scheduler_stalled": st.get("scheduler_stalled"),
+                "new_entries_blocked_for_recovery": st.get(
+                    "new_entries_blocked_for_recovery"
+                ),
+            }
+    except Exception:
+        scanner = {"unavailable": True}
+    payload["scanner"] = scanner
+
+    try:
+        from app.domain.institutional_trading.operations.infrastructure_heartbeats import (
+            CLOUDFLARED_HEARTBEAT,
+            GATEWAY_HEARTBEAT,
+            MT5_HEARTBEAT,
+            heartbeat_snapshot,
+            note_heartbeat,
+        )
+
+        statuses = (components.get("statuses") or {}) if isinstance(components, dict) else {}
+        gw = statuses.get("gateway") or {}
+        mt5 = statuses.get("mt5") or {}
+        gw_ok = str(gw.get("status") or "").upper() == "HEALTHY"
+        mt5_ok = str(mt5.get("status") or "").upper() in {"CONNECTED", "HEALTHY"}
+        note_heartbeat(
+            GATEWAY_HEARTBEAT,
+            ok=gw_ok,
+            state=str(gw.get("status") or "UNKNOWN"),
+            reason=None if gw_ok else str(gw.get("detail") or "gateway_down"),
+        )
+        note_heartbeat(
+            MT5_HEARTBEAT,
+            ok=mt5_ok,
+            state=str(mt5.get("status") or "UNKNOWN"),
+            reason=None if mt5_ok else str(mt5.get("detail") or "mt5_disconnected"),
+        )
+        tunnel_up = bool(
+            ((gw.get("evidence") or {}) if isinstance(gw, dict) else {}).get(
+                "cloudflare_tunnel_up"
+            )
+        )
+        note_heartbeat(
+            CLOUDFLARED_HEARTBEAT,
+            ok=tunnel_up,
+            state="UP" if tunnel_up else "DOWN",
+            reason=None if tunnel_up else "cloudflare_tunnel_down",
+        )
+        payload["heartbeats"] = heartbeat_snapshot()
+    except Exception:
+        payload["heartbeats"] = {"unavailable": True}
+
+    try:
+        from app.domain.institutional_trading.operations.resource_snapshot import (
+            collect_resource_snapshot,
+        )
+
+        payload["resources"] = collect_resource_snapshot()
+    except Exception:
+        payload["resources"] = {"unavailable": True}
+
+    try:
+        from app.infrastructure.brokers.mt5.deployment_topology import topology_snapshot
+
+        payload["topology"] = topology_snapshot()
+    except Exception:
+        payload["topology"] = {"unavailable": True}
+
+    payload["should_blind_retry_order_submit"] = False
+    payload["take_is_not_executed"] = True
+    payload["executed_requires_real_ticket"] = True
+
     cleaned = _scrub(payload)
     return cleaned if isinstance(cleaned, dict) else payload

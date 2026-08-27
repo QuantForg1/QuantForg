@@ -80,6 +80,125 @@ function Test-LocalGatewayLiveOk {
   }
 }
 
+function Get-LocalGatewayHealth {
+  param([int]$TimeoutSec = 5)
+  try {
+    return Invoke-RestMethod "http://127.0.0.1:8765/health" -TimeoutSec $TimeoutSec
+  } catch {
+    return $null
+  }
+}
+
+function Test-Mt5ProcessResponding {
+  $procs = @(Get-Process -Name "terminal64","terminal" -ErrorAction SilentlyContinue)
+  if ($procs.Count -eq 0) { return $false }
+  foreach ($p in $procs) {
+    try {
+      if ($p.Responding -eq $false) { return $false }
+    } catch {
+      return $false
+    }
+  }
+  return $true
+}
+
+function Get-HostResourceSnapshot {
+  $ramPct = $null
+  $diskFreePct = $null
+  try {
+    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    if ($os -and $os.TotalVisibleMemorySize -gt 0) {
+      $used = [double]$os.TotalVisibleMemorySize - [double]$os.FreePhysicalMemory
+      $ramPct = [math]::Round(100.0 * $used / [double]$os.TotalVisibleMemorySize, 1)
+    }
+  } catch {}
+  try {
+    $sys = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'" -ErrorAction SilentlyContinue
+    if ($sys -and $sys.Size -gt 0) {
+      $diskFreePct = [math]::Round(100.0 * [double]$sys.FreeSpace / [double]$sys.Size, 1)
+    }
+  } catch {}
+  $ramBand = "UNKNOWN"
+  if ($null -ne $ramPct) {
+    if ($ramPct -ge 95) { $ramBand = "CRITICAL" }
+    elseif ($ramPct -ge 80) { $ramBand = "WARNING" }
+    else { $ramBand = "OK" }
+  }
+  return [ordered]@{
+    ram_used_pct = $ramPct
+    ram_band = $ramBand
+    disk_free_pct = $diskFreePct
+    process_count = @(Get-Process -ErrorAction SilentlyContinue).Count
+  }
+}
+
+function Get-Mt5SessionClassification {
+  param(
+    $Health,
+    [bool]$ProcessRunning,
+    [bool]$ProcessResponding
+  )
+  $process = "PROCESS_MISSING"
+  if ($ProcessRunning -and -not $ProcessResponding) { $process = "PROCESS_UNHEALTHY" }
+  elseif ($ProcessRunning) { $process = "PROCESS_RUNNING" }
+
+  $terminal = "TERMINAL_DISCONNECTED"
+  $broker = "BROKER_DISCONNECTED"
+  $auto = "AUTOTRADING_UNKNOWN"
+  $fresh = "MARKET_DATA_UNKNOWN"
+  $ready = "EXECUTION_PATH_NOT_READY"
+  $recovery = "MT5_SESSION_RECOVERY_UNPROVEN"
+
+  $mt5 = $null
+  if ($null -ne $Health) {
+    try { $mt5 = $Health.mt5 } catch { $mt5 = $null }
+  }
+  if ($null -ne $mt5) {
+    try {
+      if ($mt5.connected -eq $true) { $terminal = "TERMINAL_CONNECTED" }
+    } catch {}
+    try {
+      if ($mt5.connected -eq $true -and $null -ne $mt5.login -and [string]$mt5.login -ne "") {
+        $broker = "BROKER_CONNECTED"
+      } elseif ($mt5.connected -eq $true -and $mt5.login_status -eq "ok") {
+        $broker = "BROKER_CONNECTED"
+      }
+    } catch {}
+    try {
+      $ta = $mt5.trade_allowed
+      $at = $mt5.mt5_autotrading_enabled
+      if ($ta -eq $true -or $at -eq $true) { $auto = "AUTOTRADING_ENABLED" }
+      elseif ($ta -eq $false -or $at -eq $false) { $auto = "AUTOTRADING_DISABLED" }
+    } catch {}
+    try {
+      $hb = [string]$mt5.last_heartbeat_at
+      if (-not [string]::IsNullOrWhiteSpace($hb)) { $fresh = "MARKET_DATA_FRESH" }
+    } catch {}
+  }
+
+  if (
+    $process -eq "PROCESS_RUNNING" -and
+    $terminal -eq "TERMINAL_CONNECTED" -and
+    $broker -eq "BROKER_CONNECTED" -and
+    $auto -eq "AUTOTRADING_ENABLED"
+  ) {
+    $ready = "EXECUTION_PATH_READY"
+    $recovery = "SESSION_VERIFIED"
+  } elseif ($process -eq "PROCESS_RUNNING" -and $broker -ne "BROKER_CONNECTED") {
+    $recovery = "MT5_SESSION_RECOVERY_UNPROVEN"
+  }
+
+  return [ordered]@{
+    process = $process
+    terminal = $terminal
+    broker = $broker
+    autotrading = $auto
+    market_data = $fresh
+    execution_path = $ready
+    recovery = $recovery
+  }
+}
+
 function Get-Mt5TerminalCandidatePaths {
   return @(
     "C:\Program Files\MetaTrader 5\terminal64.exe",

@@ -220,6 +220,8 @@ class InstitutionalIteRuntime:
     _recovery_orders_blocked: bool = field(default=False, repr=False)
     _watchdog_restarts: int = field(default=0, repr=False)
     _watchdog_state: str = field(default="IDLE", repr=False)
+    _watchdog_restart_reason: str | None = field(default=None, repr=False)
+    _last_failure: str | None = field(default=None, repr=False)
     _cycle_started_at: str | None = field(default=None, repr=False)
     _last_cycle_duration_ms: float | None = field(default=None, repr=False)
     user_id: UUID = field(default_factory=uuid4)
@@ -246,6 +248,9 @@ class InstitutionalIteRuntime:
                 self._last_successful_cycle_mono = now
                 self._last_successful_cycle_at = wall
                 self._recovery_orders_blocked = False
+                self._last_failure = None
+            else:
+                self._last_failure = "cycle_unsuccessful"
 
     def note_scheduler_stalled(self) -> bool:
         from app.domain.institutional_trading.operations.worker_runtime_state import (
@@ -263,6 +268,7 @@ class InstitutionalIteRuntime:
             )
             if stalled:
                 self._recovery_orders_blocked = True
+                self._last_failure = "SCHEDULER_STALLED"
         if stalled:
             logger.error(
                 SCHEDULER_STALLED,
@@ -4421,6 +4427,11 @@ class InstitutionalIteRuntime:
             last_at = self._last_cycle_at
             session_obs = dict(self._last_session_obs or {})
             recovering = self._recovery_orders_blocked
+            last_failure = self._last_failure
+            restart_reason = self._watchdog_restart_reason
+            watchdog_restarts = self._watchdog_restarts
+            watchdog_state = self._watchdog_state
+            started_mono = self._started_mono
         settings = get_settings()
         gold = {}
         try:
@@ -4475,7 +4486,7 @@ class InstitutionalIteRuntime:
             broker_session_open=broker_open,
         )
         blocker, blocker_stage = last_blocker_from_cycle(last)
-        return {
+        payload = {
             "mode": self.plane.mode.value,
             "kill_switch": self.plane.kill_switch_armed,
             "auto_trading_enabled": self.plane.auto_trading_enabled,
@@ -4547,12 +4558,50 @@ class InstitutionalIteRuntime:
                 else ("UNKNOWN" if last is None else "READY")
             ),
             "next_cycle_at": last_at,
-            "watchdog_state": self._watchdog_state,
-            "watchdog_restarts": self._watchdog_restarts,
+            "watchdog_state": watchdog_state,
+            "watchdog_restarts": watchdog_restarts,
+            "restart_count": watchdog_restarts,
+            "restart_reason": restart_reason,
             "runtime_git_sha": runtime_git_commit(),
             "deployment_id": runtime_deployment_id(),
             "scheduler_stalled": stalled,
+            "scanner_running": bool(not self._stop.is_set() and not stalled),
+            "last_cycle_timestamp": last_at,
+            "cycle_age_seconds": (
+                round(time.monotonic() - last_finished, 3)
+                if last_finished > 0
+                else round(time.monotonic() - started_mono, 3)
+            ),
+            "last_successful_cycle": last_ok_at,
+            "last_failure": last_failure
+            or (
+                getattr(last, "detail", None)
+                if last is not None
+                and str(getattr(last, "cycle_outcome", "") or "") == "error"
+                else None
+            ),
+            "scanner_unhealthy": bool(stalled),
+            "new_entries_blocked_for_recovery": bool(recovering or stalled),
         }
+        try:
+            from app.domain.institutional_trading.operations.infrastructure_heartbeats import (
+                RAILWAY_ITE_HEARTBEAT,
+                note_heartbeat,
+            )
+
+            note_heartbeat(
+                RAILWAY_ITE_HEARTBEAT,
+                ok=bool(not stalled and not self._stop.is_set()),
+                state=(
+                    "UNHEALTHY"
+                    if stalled
+                    else ("RUNNING" if not self._stop.is_set() else "STOPPED")
+                ),
+                reason=last_failure if stalled else None,
+            )
+        except Exception:
+            logger.exception("ite_heartbeat_note_failed")
+        return payload
 
     def strategy_diagnostics(self, *, limit: int = 100) -> dict[str, Any]:
         """Read-only NO_TRADE diagnostics for Operations desk."""

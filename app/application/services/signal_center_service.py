@@ -1147,6 +1147,10 @@ def _overlay_last_ite_cycle(
         or last.get("abort_reason")
         or ""
     )
+    if not human:
+        reasons = last.get("decision_reasons") or last.get("risk_reasons")
+        if isinstance(reasons, (list, tuple)):
+            human = "; ".join(str(r) for r in reasons if str(r).strip())
     hay = f"{abort} {human} {last.get('oms_message') or ''}".upper()
     if "MAX_POSITION" in hay or "POSITIONS PER SYMBOL" in hay:
         abort = "MAX_POSITIONS_REACHED"
@@ -1220,6 +1224,8 @@ def _overlay_last_ite_cycle(
         stage = "EXECUTION_REJECT_BURST"
     elif abort in {"EXECUTION_HEALTH_DEGRADED", "HEALTH_DEGRADED"}:
         stage = "EXECUTION_HEALTH"
+    elif abort == "DECISION_HASH_UNVERIFIED" or "DECISION_HASH_UNVERIFIED" in abort:
+        stage = "EXECUTION_HEALTH"
     elif not stage:
         stage = bridge_abort_stage(abort)
     not_reached = "NOT_REACHED"
@@ -1253,6 +1259,8 @@ def _overlay_last_ite_cycle(
     elif stage == "EXECUTION_HEALTH" or abort in {
         "EXECUTION_HEALTH_DEGRADED",
         "HEALTH_DEGRADED",
+        "DECISION_HASH_UNVERIFIED",
+        "HASH_STORE_UNAVAILABLE",
     }:
         pipe["risk"] = "READY"
         pipe["safety"] = "READY"
@@ -1319,6 +1327,7 @@ def _overlay_last_ite_cycle(
     row["status"] = abort
     if human:
         row["reasoning"] = human[:500]
+        pipe["blocker_reason"] = human[:500]
     if abort == "MAX_POSITIONS_REACHED":
         if str(pipe.get("decision") or row.get("direction") or "").upper() in {
             "BUY",

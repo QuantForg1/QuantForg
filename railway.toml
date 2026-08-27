@@ -16,5 +16,7 @@ startCommand = "/app/docker-entrypoint.sh"
 healthcheckPath = "/health/live"
 # Process must answer within ~10s after listen; keep a modest buffer for cold start.
 healthcheckTimeout = 60
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 5
+# 24/7 scanner: do not leave the container dead after a finite ON_FAILURE budget.
+# In-process ITE watchdog restarts run_forever; this policy restarts uvicorn
+# itself after process death. Duplicate OMS submits remain gated by hashes.
+restartPolicyType = "ALWAYS"

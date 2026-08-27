@@ -37,6 +37,7 @@ _PRE_OMS_ABORTS = frozenset(
         "SAFETY_BLOCKED",
         "EXECUTION_DISABLED",
         "HEALTH_DEGRADED",
+        "DECISION_HASH_UNVERIFIED",
         "SELF_PROTECTION",
         "CANARY_DAILY_CAP",
         "CANARY_LOT_LIMIT",

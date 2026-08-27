@@ -126,15 +126,22 @@ try {
     $script:WatchdogStarts = $existingCounters.Starts
     $script:WatchdogWindowUtc = $existingCounters.WindowUtc
 
-    # 1. MT5 — never duplicate terminal64; no broker login
+    # 1. MT5 — never duplicate terminal64; no broker login; process != session
     $mt5Pids = @(Get-Mt5TerminalPids)
     if ($mt5Pids.Count -gt 1) {
       Write-Wd "mt5" "observe" "duplicate_terminal" ("count={0} not_killing" -f $mt5Pids.Count)
     }
-    if (Test-Mt5TerminalProcess) {
-      Write-Wd "mt5" "preserve" "terminal_running" ("pids={0}" -f ($mt5Pids -join ","))
+    $mt5Running = Test-Mt5TerminalProcess
+    $mt5Responding = $false
+    if ($mt5Running) { $mt5Responding = Test-Mt5ProcessResponding }
+    if ($mt5Running) {
+      if ($mt5Responding) {
+        Write-Wd "mt5" "preserve" "PROCESS_RUNNING" ("pids={0}" -f ($mt5Pids -join ","))
+      } else {
+        Write-Wd "mt5" "observe" "PROCESS_UNHEALTHY" ("pids={0} not_spawning_duplicate" -f ($mt5Pids -join ","))
+      }
     } else {
-      Write-Wd "mt5" "recover" "process_missing" "start_mt5_terminal"
+      Write-Wd "mt5" "recover" "PROCESS_MISSING" "start_mt5_terminal"
       $starter = Join-Path $PSScriptRoot "start_mt5_terminal.ps1"
       if (Test-Path $starter) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $starter
@@ -145,9 +152,9 @@ try {
         Start-Sleep -Seconds 2
       }
       if (Test-Mt5TerminalProcess) {
-        Write-Wd "mt5" "recover" "started" "ok"
+        Write-Wd "mt5" "recover" "started" "PROCESS_RUNNING session_unproven"
       } else {
-        Write-Wd "mt5" "recover" "still_missing" "degraded"
+        Write-Wd "mt5" "recover" "still_missing" "PROCESS_MISSING"
       }
     }
 
@@ -207,7 +214,7 @@ try {
       Write-Wd "cloudflared" "observe" "cloudflared_duplicate" ("count={0} not_killing" -f $cfPids.Count)
     }
     if (Test-CloudflaredServiceRunning) {
-      Write-Wd "cloudflared" "preserve" "service_running" "ok"
+      Write-Wd "cloudflared" "preserve" "service_running" "CLOUDFLARED_HEARTBEAT ok"
     } else {
       Write-Wd "cloudflared" "recover" "service_stopped" "Start-Service"
       try {
@@ -221,13 +228,26 @@ try {
     $liveOk = Test-LocalLive
     $listen = Get-Listen
     $publicOk = Test-PublicGatewayLive
+    $health = $null
+    if ($liveOk) { $health = Get-LocalGatewayHealth -TimeoutSec 5 }
+    $mt5Pids = @(Get-Mt5TerminalPids)
+    $mt5Running = Test-Mt5TerminalProcess
+    $mt5Responding = $false
+    if ($mt5Running) { $mt5Responding = Test-Mt5ProcessResponding }
+    $session = Get-Mt5SessionClassification -Health $health -ProcessRunning $mt5Running -ProcessResponding $mt5Responding
+    Write-Wd "mt5" "observe" $session.process ("terminal={0} broker={1}" -f $session.terminal, $session.broker)
+    Write-Wd "mt5" "observe" $session.autotrading ("execution_path={0}" -f $session.execution_path)
+    Write-Wd "mt5" "observe" $session.recovery "do_not_fake_readiness"
+    $res = Get-HostResourceSnapshot
+    Write-Wd "host" "observe" $res.ram_band ("ram_used_pct={0} disk_free_pct={1} processes={2}" -f $res.ram_used_pct, $res.disk_free_pct, $res.process_count)
+
     if ($liveOk -and $listen.Count -eq 1 -and -not $publicOk) {
       Write-Wd "tunnel" "observe" "local_ok_public_fail" "not_restarting_gateway"
       if (-not (Test-CloudflaredServiceRunning)) {
         try { Start-Service -Name "Cloudflared" -ErrorAction Stop } catch {}
       }
     } elseif ($publicOk) {
-      Write-Wd "tunnel" "observe" "public_live_ok" "ok"
+      Write-Wd "tunnel" "observe" "public_live_ok" "CLOUDFLARED_HEARTBEAT ok"
     }
 
     if (-not ($liveOk -and $listen.Count -eq 1)) {
@@ -238,6 +258,10 @@ try {
       Write-Wd "watchdog" "end" "healthy_or_recovered" ("exit={0} listener={1}" -f $exitCode, $listen[0])
     }
 
+    $gwPid = 0
+    if ($listen.Count -eq 1) { $gwPid = $listen[0] }
+    $mt5Pid = 0
+    if ($mt5Pids.Count -gt 0) { $mt5Pid = $mt5Pids[0] }
     @(
       ("utc=" + (Get-Date).ToUniversalTime().ToString("o")),
       ("live_ok=" + $liveOk),
@@ -245,7 +269,21 @@ try {
       ("public_ok=" + $publicOk),
       ("exit=" + $exitCode),
       ("start_window_utc=" + $script:WatchdogWindowUtc.ToUniversalTime().ToString("o")),
-      ("starts_in_window=" + $script:WatchdogStarts)
+      ("starts_in_window=" + $script:WatchdogStarts),
+      ("gateway_pid=" + $gwPid),
+      ("mt5_pid=" + $mt5Pid),
+      ("mt5_process=" + $session.process),
+      ("terminal=" + $session.terminal),
+      ("broker=" + $session.broker),
+      ("autotrading=" + $session.autotrading),
+      ("market_data=" + $session.market_data),
+      ("execution_path=" + $session.execution_path),
+      ("recovery=" + $session.recovery),
+      ("ram_band=" + $res.ram_band),
+      ("ram_used_pct=" + $res.ram_used_pct),
+      ("gateway_heartbeat=" + $(if ($liveOk) { "ok" } else { "fail" })),
+      ("mt5_heartbeat=" + $session.broker),
+      ("cloudflared_heartbeat=" + $(if ($publicOk -or (Test-CloudflaredServiceRunning)) { "ok" } else { "fail" }))
     ) | Set-Content -Path $StateFile -Encoding ASCII
   }
 } catch {

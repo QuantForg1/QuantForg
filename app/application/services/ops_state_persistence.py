@@ -97,6 +97,45 @@ def is_volume_backed() -> bool:
     return bool((os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or "").strip())
 
 
+def load_postgres_state_strict() -> tuple[bool, bool, dict[str, Any], str | None]:
+    """Load singleton payload without treating transport failure as empty.
+
+    Returns ``(configured, ok, payload, error)``.
+    ``ok=False`` means durable state could not be verified — callers must
+    fail closed rather than interpret missing history as "never happened".
+    Does not change ``_load_postgres_state`` swallow-to-empty semantics used
+    by ops-mode restore.
+    """
+    cfg = _supabase_rest_config()
+    if cfg is None:
+        return False, True, {}, None
+    base, key = cfg
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            resp = client.get(
+                f"{base}/{_TABLE}",
+                params={"singleton": "eq.true", "select": "payload"},
+                headers=headers,
+            )
+            if resp.status_code == 404:
+                return True, True, {}, None
+            resp.raise_for_status()
+            rows = resp.json()
+    except Exception as exc:
+        logger.warning("ops_state_postgres_strict_load_failed", error=str(exc))
+        return True, False, {}, type(exc).__name__
+    if not isinstance(rows, list) or not rows:
+        return True, True, {}, None
+    payload = rows[0].get("payload") if isinstance(rows[0], dict) else None
+    result = payload if isinstance(payload, dict) else {}
+    return True, True, dict(result), None
+
+
 def _supabase_rest_config() -> tuple[str, str] | None:
     """Return (base_rest_url, service_or_api_key) or None when unconfigured."""
     try:
