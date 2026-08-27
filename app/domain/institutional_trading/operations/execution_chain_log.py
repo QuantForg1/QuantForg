@@ -42,6 +42,18 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
     if any(
         tok in abort
         for tok in (
+            "NO_EXECUTABLE",
+            "NO_ELIGIBLE",
+            "OPPORTUNITY",
+            "SETUP_NOT_READY",
+            "DIRECTION_NONE",
+            "WAITING_NEXT_CYCLE",
+        )
+    ):
+        return "STRATEGY"
+    if any(
+        tok in abort
+        for tok in (
             "MT5",
             "GATEWAY",
             "BROKER",

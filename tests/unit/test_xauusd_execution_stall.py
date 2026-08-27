@@ -108,6 +108,48 @@ def test_signal_center_wait_unchanged_without_abort() -> None:
     assert over["pipeline"].get("execution_lifecycle") != "FILLED"
 
 
+def test_signal_center_wait_not_oms_block_from_manage_only_last_cycle() -> None:
+    """Opportunity WAIT must not inherit last_cycle NO_EXECUTABLE_SYMBOL as OMS BLOCK."""
+    row = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "WAIT",
+            "signal_action": "WAIT",
+            "trade_quality": 52,
+            "ai_confidence": 58,
+            "opportunity_score": 69,
+            "opportunity_threshold": 70,
+            "reject": True,
+            "reason": "opportunity_score 69 < threshold 70 - WAIT",
+            "sniper_entry": {
+                "passed": True,
+                "action": "WAIT",
+                "setup_state": "SETUP_READY",
+            },
+        }
+    )
+    assert row["pipeline"]["oms"] == "NOT_REACHED"
+    assert row["pipeline"]["final_decision"] == "WAIT"
+    over = _overlay_last_ite_cycle(
+        row,
+        {
+            "forwarded_to_oms": False,
+            "abort_reason": "NO_EXECUTABLE_SYMBOL",
+            "cycle_outcome": "waiting_next_cycle",
+            "decision_action": None,
+            "mt5_ticket": None,
+            "detail": "WAITING_NEXT_CYCLE — no executable symbol",
+        },
+    )
+    assert over["pipeline"]["oms"] == "NOT_REACHED"
+    assert over["pipeline"]["broker"] == "NOT_REACHED"
+    assert over["pipeline"]["mt5"] == "NOT_REACHED"
+    assert over["pipeline"]["final_decision"] == "WAIT"
+    assert over["pipeline"].get("execution_lifecycle") != "EXECUTION_BLOCKED"
+    assert over["pipeline"].get("first_blocker") != "NO_EXECUTABLE_SYMBOL"
+    assert over.get("execution_state") != "EXECUTION_BLOCKED"
+
+
 def test_buy_and_sell_rows_overlay_independently() -> None:
     buy = _row_from_score(
         {

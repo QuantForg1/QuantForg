@@ -894,15 +894,20 @@ def _overlay_last_ite_cycle(
         pipe["broker"] = "SUBMITTED"
         pipe["mt5"] = "PENDING"
         pipe["execution_lifecycle"] = "ORDER_SENT"
+        pipe["forwarded_to_oms"] = True
+        pipe["ticket"] = ticket
         row["pipeline"] = pipe
         row["execution_state"] = "ORDER_SENT"
         return row
-    if forwarded:
+    # WAIT never reached OMS. A later manage-only last_cycle
+    # (NO_EXECUTABLE_SYMBOL) must not paint OMS BLOCK over strategy WAIT.
+    if not take:
+        return row
+    if forwarded and not abort:
         pipe["oms"] = "READY"
         pipe["execution_lifecycle"] = "EXECUTING"
+        pipe["forwarded_to_oms"] = True
         row["pipeline"] = pipe
-        return row
-    if not abort and not take:
         return row
     if not abort:
         abort = "UNKNOWN_EXECUTION_ERROR"
@@ -919,6 +924,10 @@ def _overlay_last_ite_cycle(
     not_reached = "NOT_REACHED"
     pipe["first_blocker"] = abort
     pipe["execution_lifecycle"] = "EXECUTION_BLOCKED"
+    pipe["forwarded_to_oms"] = bool(forwarded)
+    pipe["ticket"] = None
+    if last.get("broker_retcode") is not None:
+        pipe["broker_retcode"] = last.get("broker_retcode")
     if stage == "RISK":
         pipe["risk"] = "BLOCK"
         pipe["safety"] = not_reached
@@ -940,7 +949,7 @@ def _overlay_last_ite_cycle(
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
         pipe["mt5"] = not_reached
-    elif stage in {"ELIGIBILITY", "DECISION"}:
+    elif stage in {"ELIGIBILITY", "DECISION", "STRATEGY", "MARKET"}:
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
         pipe["mt5"] = not_reached

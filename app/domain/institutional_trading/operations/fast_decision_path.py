@@ -1103,6 +1103,49 @@ def blocking_gate_fault_code(reason: str | None) -> str:
     return code
 
 
+def scan_ineligible_abort_reason(scan: dict[str, Any] | None) -> str:
+    """Abort code when Gold was scanned but is not an executable candidate.
+
+    Observability only. Does not change Risk / Safety / OMS gates.
+    Distinguishes 'no eligible setup' from a true routing NO_EXECUTABLE_SYMBOL.
+    """
+    if not isinstance(scan, dict):
+        return "NO_ELIGIBLE_SETUP"
+    current = scan.get("current_scan")
+    nested = current if isinstance(current, dict) else {}
+    gate = str(
+        nested.get("first_blocking_gate")
+        or scan.get("first_blocking_gate")
+        or nested.get("blocking_gate")
+        or scan.get("blocking_gate")
+        or ""
+    )
+    code = blocking_gate_fault_code(gate) if gate else ""
+    if code and code not in {NO_CURRENT_BLOCK, "NONE", ""}:
+        return str(code)
+    ranked = scan.get("opportunity_ranked") or nested.get("opportunity_ranked") or []
+    if isinstance(ranked, list):
+        for row in ranked:
+            if not isinstance(row, dict):
+                continue
+            score = row.get("opportunity_score")
+            threshold = row.get("opportunity_threshold")
+            try:
+                if score is not None and int(score) < int(threshold or 70):
+                    return "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
+            except (TypeError, ValueError):
+                continue
+            reject = str(row.get("reject_reason") or row.get("blocking_gate") or "")
+            if reject:
+                mapped = blocking_gate_fault_code(reject)
+                if mapped and mapped not in {NO_CURRENT_BLOCK, "NONE"}:
+                    return str(mapped)
+            break
+    if scan.get("no_eligible_setup") or nested.get("no_eligible_setup"):
+        return "NO_ELIGIBLE_SETUP"
+    return "NO_ELIGIBLE_SETUP"
+
+
 def _row_symbol(row: Any) -> str | None:
     if not isinstance(row, dict):
         return None

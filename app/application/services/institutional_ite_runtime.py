@@ -205,6 +205,7 @@ class InstitutionalIteRuntime:
     _last_decision: Any | None = field(default=None, repr=False)
     _last_bridge_result: Any | None = field(default=None, repr=False)
     _last_multi_asset_scan: dict[str, Any] | None = field(default=None, repr=False)
+    _last_pick_abort: str | None = field(default=None, repr=False)
     _eligible_handoff_queue: list[str] = field(default_factory=list, repr=False)
     _eligible_consumed: set[str] = field(default_factory=set, repr=False)
     _entries_this_scan: int = field(default=0, repr=False)
@@ -5140,6 +5141,11 @@ class InstitutionalIteRuntime:
             logger.exception("fast_decision_snapshot_failed")
             return {"window": "FIRST_TRADE_OPPORTUNITY_WINDOW", "forces_trades": False}
 
+    def _remember_pick_abort(self, reason: str | None) -> None:
+        """Stamp why pick returned None. Observability only — does not send orders."""
+        with self._lock:
+            self._last_pick_abort = str(reason).strip() if reason else None
+
     async def _pick_executable_symbol_async(self) -> str | None:
         """Highest-ranked full-mode symbol after institutional multi-asset scan.
 
@@ -5161,6 +5167,7 @@ class InstitutionalIteRuntime:
             is_gold_symbol,
         )
 
+        self._remember_pick_abort(None)
         preferred = self._take_next_handoff_symbol()
         if not preferred:
             preferred = await self._multi_asset_preferred_symbol()
@@ -5198,6 +5205,7 @@ class InstitutionalIteRuntime:
                     next_action="NO_EXECUTABLE_FOCUS",
                     reason="SYMBOL_ROUTING_BLOCK",
                 )
+                self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
                 return None
             with self._lock:
                 last = (
@@ -5215,6 +5223,11 @@ class InstitutionalIteRuntime:
             ) if last else []
             if scan_complete and not eligible:
                 # Rejected / ineligible Gold — CURRENT_SCAN already published.
+                from app.domain.institutional_trading.operations.fast_decision_path import (
+                    scan_ineligible_abort_reason,
+                )
+
+                self._remember_pick_abort(scan_ineligible_abort_reason(last))
                 return None
             if symbol is None:
                 logger.warning(
@@ -5223,8 +5236,10 @@ class InstitutionalIteRuntime:
                     skipped=skipped,
                     selected=symbol,
                 )
+                self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
                 return None
             logger.warning("Submitting Order...", symbol=symbol)
+            self._remember_pick_abort(None)
             return symbol
 
         with self._lock:
@@ -5249,6 +5264,7 @@ class InstitutionalIteRuntime:
                         last.get("blocked_by_portfolio") if last else None
                     ),
                 )
+                self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
                 return None
             preferred = (
                 await self._offload_blocking_io(self._alpha_preferred_symbol)
@@ -5274,8 +5290,10 @@ class InstitutionalIteRuntime:
                 preferred=preferred,
                 skipped=skipped,
             )
+            self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
         else:
             logger.warning("Submitting Order...", symbol=symbol)
+            self._remember_pick_abort(None)
         return symbol
 
     def _pick_executable_symbol(self) -> str | None:
@@ -5900,12 +5918,16 @@ class InstitutionalIteRuntime:
                         )
                     except Exception:
                         logger.exception("manage_only_cycle_failed")
+                    pick_abort = (
+                        str(getattr(self, "_last_pick_abort", None) or "").strip()
+                        or "NO_EXECUTABLE_SYMBOL"
+                    )
                     logger.warning(
                         "AI Decision",
                         action="NO_TRADE",
-                        reason="no_executable_symbol",
+                        reason=pick_abort.lower(),
                     )
-                    logger.warning("Waiting Next Cycle", reason="no_executable_symbol")
+                    logger.warning("Waiting Next Cycle", reason=pick_abort.lower())
                     try:
                         from app.domain.institutional_trading.production_validation_mode import (  # noqa: E501
                             ValidationStage,
@@ -5919,11 +5941,11 @@ class InstitutionalIteRuntime:
                         pvm_stage(
                             ValidationStage.AI,
                             ok=False,
-                            reason="no_executable_symbol",
+                            reason=pick_abort.lower(),
                             validation_id=_pvm_vid,
                         )
                         _pvm_get().record_no_trade_reasons(
-                            ["no_executable_symbol"], validation_id=_pvm_vid
+                            [pick_abort.lower()], validation_id=_pvm_vid
                         )
                         pvm_finalize(validation_id=_pvm_vid)
                     except Exception:
@@ -5943,9 +5965,13 @@ class InstitutionalIteRuntime:
                         ok=True,
                         trace_id=None,
                         mode=self.plane.mode.value,
-                        detail="WAITING_NEXT_CYCLE — no executable symbol",
+                        detail=(
+                            "WAITING_NEXT_CYCLE — no executable symbol"
+                            if pick_abort == "NO_EXECUTABLE_SYMBOL"
+                            else f"WAITING_NEXT_CYCLE — {pick_abort}"
+                        ),
                         cycle_outcome="waiting_next_cycle",
-                        abort_reason="NO_EXECUTABLE_SYMBOL",
+                        abort_reason=pick_abort,
                         snapshot_present=True,
                     )
                     with self._lock:

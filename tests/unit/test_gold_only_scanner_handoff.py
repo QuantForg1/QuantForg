@@ -172,6 +172,7 @@ async def test_gold_only_pick_invokes_existing_scanner(
     chosen = await runtime._pick_executable_symbol_async()
     assert called["n"] == 1
     assert chosen is None
+    assert runtime._last_pick_abort not in {None, "", "NO_EXECUTABLE_SYMBOL"}
     src = inspect.getsource(InstitutionalIteRuntime._pick_executable_symbol_async)
     assert "_multi_asset_preferred_symbol" in src
     assert "preferred = await self._multi_asset_preferred_symbol()" in src
@@ -207,6 +208,7 @@ async def test_rejected_gold_publishes_named_current_scan(
     reset_fast_decision_path()
     chosen = await runtime._pick_executable_symbol_async()
     assert chosen is None
+    assert runtime._last_pick_abort not in {None, "", "NO_EXECUTABLE_SYMBOL"}
     snap = opportunity_window_snapshot()
     fd = runtime._fast_decision_snapshot()
     assert snap["setup_state"] != "MARKET_CONTEXT_NOT_READY"
@@ -258,6 +260,7 @@ async def test_eligible_gold_becomes_best_eligible(
     reset_fast_decision_path()
     chosen = await runtime._pick_executable_symbol_async()
     assert chosen == _GOLD
+    assert runtime._last_pick_abort is None
     fd = runtime._fast_decision_snapshot()
     current = fd.get("current_scan") or {}
     assert is_gold_symbol(str(current.get("symbol") or chosen))
