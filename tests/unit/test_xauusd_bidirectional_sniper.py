@@ -332,6 +332,23 @@ class TestSniperBuySellWait:
         if out.passed:
             assert out.action == "BUY"
 
+    def test_production_bos_trend_direction_confirms_structure(self) -> None:
+        bos = MagicMock()
+        bos.trend_direction = TrendDirection.UP
+        bos.kind = "BOS"
+        bos.direction = None
+        bos.bias = None
+        snap = _snap(
+            sweeps=[MagicMock(side="LOW")],
+            bos=[bos],
+            order_blocks=[_ob(bias="BUY")],
+        )
+        out = _sniper(snap, _dir(TradeDirection.BUY, buy=82, sell=18))
+        assert out.pillars["structure_confirmation"] is True
+        assert out.action in {"BUY", "WAIT"}
+        if out.passed:
+            assert out.action == "BUY"
+
     def test_bearish_bos_choch(self) -> None:
         snap = _snap(bos=[_break("DOWN")], choch=[_break("DOWN")])
         out = _sniper(

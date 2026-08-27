@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signalCenterApi } from "@/lib/api/endpoints";
 import {
+  formatFirstBlocker,
   formatSignalHeadline,
+  parseSignalPipeline,
   signalDirectionGlyph,
 } from "@/lib/ops/signal-display";
 import { displayTradingSymbol } from "@/lib/trading/gold-only";
@@ -39,6 +41,10 @@ type SignalRow = {
   reasoning: string | null;
   ai_explanation: string | null;
   asset_class?: string;
+  bullish_score?: number;
+  bearish_score?: number;
+  first_blocker?: string | null;
+  pipeline?: ReturnType<typeof parseSignalPipeline>;
   detail?: Record<string, unknown>;
 };
 
@@ -74,6 +80,13 @@ function asSignals(payload: Record<string, unknown> | undefined): SignalRow[] {
       ai_explanation:
         x.ai_explanation == null ? null : String(x.ai_explanation),
       asset_class: x.asset_class == null ? undefined : String(x.asset_class),
+      bullish_score: Number(x.bullish_score ?? x.buy_score ?? 0),
+      bearish_score: Number(x.bearish_score ?? x.sell_score ?? 0),
+      first_blocker:
+        x.first_blocker == null || x.first_blocker === ""
+          ? null
+          : String(x.first_blocker),
+      pipeline: parseSignalPipeline(x.pipeline),
       detail:
         x.detail && typeof x.detail === "object"
           ? (x.detail as Record<string, unknown>)
@@ -271,6 +284,32 @@ export function SignalCenterWorkspace() {
                       {s.probability}%
                     </span>
                   </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-xs text-[var(--fg)]">
+                    <div>
+                      BUY{" "}
+                      <span className="text-[var(--success)]">
+                        {Number.isFinite(s.bullish_score) ? s.bullish_score : 0}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      SELL{" "}
+                      <span className="text-[var(--danger)]">
+                        {Number.isFinite(s.bearish_score) ? s.bearish_score : 0}
+                      </span>
+                    </div>
+                  </div>
+                  {s.first_blocker ? (
+                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--warning)]">
+                      {formatFirstBlocker(s.first_blocker)}
+                    </p>
+                  ) : null}
+                  {s.pipeline ? (
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
+                      Market {s.pipeline.market} · Data {s.pipeline.data} ·
+                      Sniper {s.pipeline.sniper} · Risk {s.pipeline.risk} ·
+                      Safety {s.pipeline.safety} · OMS {s.pipeline.oms}
+                    </p>
+                  ) : null}
                   <div className="mt-3 space-y-2">
                     <MetricBar label="Confidence" value={s.confidence} />
                     <MetricBar label="Quality" value={s.quality} />
@@ -348,12 +387,21 @@ export function SignalCenterWorkspace() {
             <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
               {[
                 ["Direction", selected.direction],
+                ["BUY score", String(selected.bullish_score ?? 0)],
+                ["SELL score", String(selected.bearish_score ?? 0)],
+                ["First blocker", selected.first_blocker || "—"],
+                ["Sniper", selected.pipeline?.sniper ?? "—"],
+                ["Risk", selected.pipeline?.risk ?? "—"],
+                ["Safety", selected.pipeline?.safety ?? "—"],
+                ["OMS", selected.pipeline?.oms ?? "—"],
+                ["Market", selected.pipeline?.market ?? "—"],
+                ["Data", selected.pipeline?.data ?? "—"],
                 ["Price", fmt(selected.current_price)],
                 ["Trend", selected.trend],
                 ["ATR", fmt(selected.atr)],
                 ["Spread", fmt(selected.spread)],
                 ["Liquidity", fmt(selected.liquidity)],
-                ["Risk", fmt(selected.risk)],
+                ["Risk %", fmt(selected.risk)],
                 ["RR", fmt(selected.rr)],
                 ["Hold", fmt(selected.expected_hold)],
                 ["Strategy", selected.strategy],

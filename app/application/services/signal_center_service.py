@@ -73,6 +73,7 @@ def _factors(score: dict[str, Any]) -> dict[str, Any]:
 
 _WAIT_REASON_LABELS: dict[str, str] = {
     "WAIT_NO_SNIPER_TRIGGER": "WAIT — no liquidity event or structure confirmation",
+    "WAIT_NO_DIRECTIONAL_EDGE": "WAIT — no directional edge",
     "WAIT_NO_LIQUIDITY": "WAIT — no liquidity event",
     "NO_LIQUIDITY_EVENT": "WAIT — no liquidity event",
     "WAIT_NO_STRUCTURE": "WAIT — no structure confirmation",
@@ -89,6 +90,7 @@ _WAIT_REASON_LABELS: dict[str, str] = {
     "CHASE_DETECTED": "WAIT — chase detected",
     "WAIT_ABNORMAL_SPREAD": "WAIT — abnormal spread",
     "ABNORMAL_SPREAD": "WAIT — abnormal spread",
+    "WAIT_CONFLICTING_BUY_SELL": "WAIT — BUY/SELL conflict",
     "WAIT_CONFLICT": "WAIT — BUY/SELL conflict",
     "BUY_SELL_CONFLICT": "WAIT — BUY/SELL conflict",
     "WAIT_NO_CLEAR_EDGE": "WAIT — no clear BUY/SELL edge",
@@ -129,6 +131,8 @@ def _wait_block_code(reason: str | None) -> str | None:
     for code in _WAIT_REASON_LABELS:
         if code in upper:
             return code
+    if "NO CLEAR BUY/SELL" in upper or "BALANCED SCORES" in upper:
+        return "WAIT_NO_DIRECTIONAL_EDGE"
     if "OPPORTUNITY_SCORE" in upper and "THRESHOLD" in upper:
         return "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
     if upper.startswith("WAIT_") or " WAIT" in f" {upper}":
@@ -518,7 +522,23 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
         "bullish_score": buy_score,
         "bearish_score": sell_score,
         "opportunity_score": opportunity_score,
+        "opportunity_threshold": score.get("opportunity_threshold") or 70,
         "confluence": confluence,
+        "first_blocker": exec_cls["block_code"]
+        if (reject or direction_out in {"WAIT", "NO_TRADE"})
+        else None,
+        "pipeline": _pipeline_snapshot(
+            decision=str(exec_cls["decision"] or direction_out),
+            block_code=exec_cls["block_code"],
+            sniper=sniper if isinstance(sniper, dict) else None,
+            quote_age_seconds=score.get("quote_age_seconds"),
+            tick_time=score.get("tick_time"),
+            market_data_live=score.get("market_data_live"),
+            buy_score=buy_score,
+            sell_score=sell_score,
+            opportunity_score=opportunity_score,
+            opportunity_threshold=score.get("opportunity_threshold") or 70,
+        ),
         "detail": detail,
         "gauges": {
             "confidence": confidence,
@@ -526,6 +546,86 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             "momentum": momentum,
             "rr": float(rr) if isinstance(rr, (int, float)) else None,
         },
+    }
+
+
+def _pipeline_snapshot(
+    *,
+    decision: str,
+    block_code: str | None,
+    sniper: dict[str, Any] | None,
+    quote_age_seconds: Any,
+    tick_time: Any,
+    market_data_live: Any,
+    buy_score: int,
+    sell_score: int,
+    opportunity_score: Any,
+    opportunity_threshold: Any,
+) -> dict[str, Any]:
+    """Observe-only gate strip. Never invents Risk/Safety/OMS PASS on WAIT."""
+    code = str(block_code or "").upper()
+    action = str(decision or "").upper()
+    execution_codes = {
+        "RISK_BLOCK",
+        "SAFETY_BLOCK",
+        "OMS_BLOCK",
+        "MIN_LOT_CONSTRAINT",
+        "SYMBOL_ROUTING_BLOCK",
+        "PORTFOLIO_BLOCK",
+    }
+    reached_risk = action in {"BUY", "SELL"} or code in execution_codes
+    age: float | None
+    try:
+        age = float(quote_age_seconds) if quote_age_seconds is not None else None
+    except (TypeError, ValueError):
+        age = None
+    if market_data_live is False:
+        data = "STALE"
+    elif age is None:
+        data = "LIVE" if tick_time or market_data_live else "UNKNOWN"
+    elif age > 120:
+        data = "STALE"
+    else:
+        data = "LIVE"
+    sniper_passed = bool(sniper and sniper.get("passed"))
+    if sniper_passed:
+        sniper_state = "READY"
+    elif sniper:
+        sniper_state = "WAIT"
+    else:
+        sniper_state = "NOT_RUN"
+    not_reached = "NOT_REACHED"
+    risk_state = not_reached
+    safety_state = not_reached
+    oms_state = not_reached
+    if reached_risk:
+        if code == "RISK_BLOCK":
+            risk_state = "BLOCK"
+        else:
+            risk_state = "READY"
+        if code == "SAFETY_BLOCK":
+            safety_state = "BLOCK"
+        elif code not in {"RISK_BLOCK", "MIN_LOT_CONSTRAINT"}:
+            safety_state = "READY"
+        if code == "OMS_BLOCK":
+            oms_state = "BLOCK"
+        elif action in {"BUY", "SELL"} and code not in execution_codes:
+            oms_state = "READY"
+    return {
+        "market": "OPEN" if market_data_live is not False else "UNKNOWN",
+        "data": data,
+        "data_age_seconds": age,
+        "tick_time": tick_time,
+        "buy_score": buy_score,
+        "sell_score": sell_score,
+        "opportunity_score": opportunity_score,
+        "opportunity_threshold": opportunity_threshold,
+        "decision": action,
+        "first_blocker": code or None,
+        "sniper": sniper_state,
+        "risk": risk_state,
+        "safety": safety_state,
+        "oms": oms_state,
     }
 
 

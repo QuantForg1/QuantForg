@@ -12,7 +12,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 )
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
-from app.domain.market_structure.enums import StructureBreakKind, TrendDirection
+from app.domain.market_structure.enums import TrendDirection
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,13 +38,56 @@ class DirectionDecision:
         }
 
 
-def _side_of_break(_kind: Any, break_dir: Any) -> TradeDirection | None:
-    """Map BOS/CHOCH break direction to trade side."""
-    raw = str(getattr(break_dir, "value", break_dir) or "").upper()
+def _usable_dir_token(value: Any) -> str:
+    """Extract a real direction token; skip MagicMock / empty placeholders."""
+    nested = getattr(value, "value", value)
+    text = str(nested or "").strip().upper()
+    if not text or text.startswith("<") or "MAGICMOCK" in text:
+        return ""
+    return text
+
+
+def map_structure_side(value: Any) -> TradeDirection | None:
+    """Map UP/DOWN/BULLISH/BEARISH tokens to BUY/SELL."""
+    raw = _usable_dir_token(value)
     if raw in {"UP", "BULLISH", "BUY", "LONG"}:
         return TradeDirection.BUY
     if raw in {"DOWN", "BEARISH", "SELL", "SHORT"}:
         return TradeDirection.SELL
+    return None
+
+
+def _side_of_break(_kind: Any, break_dir: Any) -> TradeDirection | None:
+    """Map BOS/CHOCH break direction to trade side."""
+    return map_structure_side(break_dir)
+
+
+def structure_event_side(event: Any) -> TradeDirection | None:
+    """Read production BOS/CHOCH fields (trend_direction / previous_trend).
+
+    ``BreakOfStructure.trend_direction`` is the continuation side.
+    ``ChangeOfCharacter.previous_trend`` is the trend that was broken, so the
+    new character is the opposite side. Fixture mocks that only set
+    ``direction`` / ``bias`` still map.
+    """
+    if event is None:
+        return None
+    kind = _usable_dir_token(getattr(event, "kind", None))
+    prev = map_structure_side(getattr(event, "previous_trend", None))
+    if kind == "CHOCH" and prev is not None:
+        if prev is TradeDirection.BUY:
+            return TradeDirection.SELL
+        if prev is TradeDirection.SELL:
+            return TradeDirection.BUY
+    for name in ("trend_direction", "direction", "bias", "side"):
+        mapped = map_structure_side(getattr(event, name, None))
+        if mapped is not None:
+            return mapped
+    if prev is not None and kind != "BOS":
+        if prev is TradeDirection.BUY:
+            return TradeDirection.SELL
+        if prev is TradeDirection.SELL:
+            return TradeDirection.BUY
     return None
 
 
@@ -65,12 +108,12 @@ def decide_scalping_direction(
     factors: dict[str, int] = {}
 
     trend = snapshot.trend
-    # H1 / macro bias
-    if trend.macro_bias is TrendDirection.UP:
+    # H1 / macro bias — equality, not identity (StrEnum may arrive as value).
+    if trend.macro_bias == TrendDirection.UP:
         buy += 28
         factors["h1_bias"] = 28
         reasons.append(f"{cfg.direction_tf.value} bias UP")
-    elif trend.macro_bias is TrendDirection.DOWN:
+    elif trend.macro_bias == TrendDirection.DOWN:
         sell += 28
         factors["h1_bias"] = 28
         reasons.append(f"{cfg.direction_tf.value} bias DOWN")
@@ -79,10 +122,10 @@ def decide_scalping_direction(
         reasons.append(f"No clear {cfg.direction_tf.value} bias")
 
     # M15 alignment
-    if trend.primary is TrendDirection.UP:
+    if trend.primary == TrendDirection.UP:
         buy += 14
         factors["m15_structure"] = 14
-    elif trend.primary is TrendDirection.DOWN:
+    elif trend.primary == TrendDirection.DOWN:
         sell += 14
         factors["m15_structure"] = 14
     else:
@@ -96,10 +139,7 @@ def decide_scalping_direction(
 
     if structure:
         for br in list(structure.breaks_of_structure)[-3:]:
-            side = _side_of_break(
-                getattr(br, "kind", StructureBreakKind.BOS),
-                getattr(br, "direction", None) or getattr(br, "bias", None),
-            )
+            side = structure_event_side(br)
             if side is TradeDirection.BUY:
                 buy += 12
                 reasons.append("BOS supports BUY")
@@ -107,10 +147,7 @@ def decide_scalping_direction(
                 sell += 12
                 reasons.append("BOS supports SELL")
         for ch in list(structure.changes_of_character)[-2:]:
-            side = _side_of_break(
-                StructureBreakKind.CHOCH,
-                getattr(ch, "direction", None) or getattr(ch, "bias", None),
-            )
+            side = structure_event_side(ch)
             if side is TradeDirection.BUY:
                 buy += 10
                 reasons.append("CHOCH supports BUY")
@@ -155,9 +192,11 @@ def decide_scalping_direction(
             state = str(getattr(getattr(b, "state", None), "value", b.state)).lower()
             if state not in {"active", "validated"}:
                 continue
-            bias = str(
-                getattr(getattr(b, "bias", None), "value", getattr(b, "side", "")) or ""
-            ).upper()
+            bias = _usable_dir_token(
+                getattr(b, "side", None)
+                or getattr(b, "bias", None)
+                or getattr(b, "direction", None)
+            )
             if "BUY" in bias or "BULL" in bias:
                 buy += 8
                 reasons.append("Active bullish order block")
@@ -184,14 +223,15 @@ def decide_scalping_direction(
     raw_gaps = getattr(fvg, "active_gaps", None) if fvg else None
     gaps = list(raw_gaps) if isinstance(raw_gaps, (list, tuple)) else []
     for g in gaps[:3]:
-        bias = str(
-            getattr(getattr(g, "bias", None), "value", getattr(g, "direction", ""))
-            or ""
-        ).upper()
-        if "UP" in bias or "BULL" in bias or "BUY" in bias:
+        gap_side = map_structure_side(
+            getattr(g, "side", None)
+            or getattr(g, "bias", None)
+            or getattr(g, "direction", None)
+        )
+        if gap_side is TradeDirection.BUY:
             buy += 6
             reasons.append("Bullish FVG")
-        elif "DOWN" in bias or "BEAR" in bias or "SELL" in bias:
+        elif gap_side is TradeDirection.SELL:
             sell += 6
             reasons.append("Bearish FVG")
     factors["fvg"] = min(18, len(gaps) * 6)

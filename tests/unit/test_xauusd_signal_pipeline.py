@@ -507,3 +507,125 @@ def test_opportunity_threshold_unchanged() -> None:
     snap = opportunity_starvation_snapshot()
     assert snap["adaptive_threshold_enabled"] is False
     assert int(snap.get("threshold") or 70) == 70
+
+
+class _Struct:
+    def __init__(self, **kwargs: object) -> None:
+        self.__dict__.update(kwargs)
+
+
+def test_production_bos_trend_direction_scores_buy_on_range() -> None:
+    """Live BOS uses trend_direction, not direction/bias — RANGE H1 must still score."""
+    from app.domain.fair_value_gap.enums import FairValueGapSide
+    from app.domain.institutional_trading.ai_scalping.direction import (
+        structure_event_side,
+    )
+    from app.domain.market_structure.enums import StructureBreakKind
+
+    bos = _Struct(
+        trend_direction=TrendDirection.UP,
+        kind=StructureBreakKind.BOS,
+    )
+    assert structure_event_side(bos) is TradeDirection.BUY
+
+    choch = _Struct(
+        previous_trend=TrendDirection.UP,
+        kind=StructureBreakKind.CHOCH,
+    )
+    assert structure_event_side(choch) is TradeDirection.SELL
+
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    snap.primary_structure.breaks_of_structure = [bos]
+    snap.fair_value_gaps.active_gaps = [_Struct(side=FairValueGapSide.BULLISH)]
+    out = decide_scalping_direction(snap)
+    assert out.buy_score > 0
+    assert out.buy_score > out.sell_score
+    assert out.direction is TradeDirection.BUY
+
+
+def test_production_choch_previous_trend_scores_sell() -> None:
+    from app.domain.market_structure.enums import StructureBreakKind
+
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    snap.primary_structure.changes_of_character = [
+        _Struct(
+            previous_trend=TrendDirection.UP,
+            kind=StructureBreakKind.CHOCH,
+        )
+    ]
+    out = decide_scalping_direction(snap)
+    assert out.sell_score > 0
+    assert out.sell_score > out.buy_score
+    assert out.direction is TradeDirection.SELL
+
+
+def test_magicmock_direction_still_maps_buy() -> None:
+    snap = _trend_snap(macro=TrendDirection.RANGE, primary=TrendDirection.UNKNOWN)
+    snap.primary_structure.breaks_of_structure = [_break("UP")]
+    out = decide_scalping_direction(snap)
+    assert out.buy_score > 0
+    assert out.direction is TradeDirection.BUY
+
+
+def test_wait_directional_edge_exposes_pipeline_not_reached() -> None:
+    row = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "NONE",
+            "signal_action": "WAIT",
+            "trade_quality": 48,
+            "ai_confidence": 37,
+            "reject": True,
+            "reject_reason": (
+                "No clear BUY/SELL edge (balanced scores → reject); "
+                "WAIT_NO_DIRECTIONAL_EDGE"
+            ),
+            "buy_score": 0,
+            "sell_score": 0,
+            "opportunity_score": 43,
+            "quote_age_seconds": 0.0,
+            "tick_time": "2026-08-27T08:00:36+00:00",
+            "market_data_live": True,
+            "sniper_entry": {
+                "passed": False,
+                "action": "WAIT",
+                "primary_reason": "WAIT_NO_DIRECTIONAL_EDGE",
+            },
+        }
+    )
+    assert row["direction"] == "WAIT"
+    assert row["first_blocker"] == "WAIT_NO_DIRECTIONAL_EDGE"
+    assert row["block_code"] == "WAIT_NO_DIRECTIONAL_EDGE"
+    pipeline = row["pipeline"]
+    assert pipeline["buy_score"] == 0
+    assert pipeline["sell_score"] == 0
+    assert pipeline["data"] == "LIVE"
+    assert pipeline["sniper"] == "WAIT"
+    assert pipeline["risk"] == "NOT_REACHED"
+    assert pipeline["safety"] == "NOT_REACHED"
+    assert pipeline["oms"] == "NOT_REACHED"
+    assert row["status"] != "SAFETY_BLOCK"
+    assert row["block_code"] != "SAFETY_BLOCK"
+
+
+def test_risk_block_reaches_risk_not_fake_wait() -> None:
+    row = _row_from_score(
+        {
+            "symbol": "XAUUSD_I",
+            "direction": "BUY",
+            "signal_action": "BUY",
+            "trade_quality": 78,
+            "ai_confidence": 67,
+            "reject": True,
+            "reject_reason": "RISK_BLOCK: daily loss or size rejected",
+            "buy_score": 76,
+            "sell_score": 41,
+            "sniper_entry": {"passed": True, "action": "BUY"},
+        }
+    )
+    assert row["direction"] == "BUY"
+    assert row["first_blocker"] == "RISK_BLOCK"
+    assert row["pipeline"]["sniper"] == "READY"
+    assert row["pipeline"]["risk"] == "BLOCK"
+    assert row["pipeline"]["safety"] == "NOT_REACHED"
+    assert row["pipeline"]["oms"] == "NOT_REACHED"

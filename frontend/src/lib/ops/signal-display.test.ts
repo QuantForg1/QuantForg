@@ -4,7 +4,9 @@
  */
 import assert from "node:assert/strict";
 import {
+  formatFirstBlocker,
   formatSignalHeadline,
+  parseSignalPipeline,
   signalDirectionGlyph,
 } from "./signal-display.ts";
 
@@ -25,5 +27,31 @@ assert.equal(
 assert.equal(signalDirectionGlyph("WAIT"), "WAIT");
 assert.equal(signalDirectionGlyph("BUY"), "BUY");
 assert.equal(signalDirectionGlyph("NONE"), "NONE");
+
+assert.equal(
+  formatFirstBlocker("WAIT_NO_DIRECTIONAL_EDGE"),
+  "First blocker: WAIT_NO_DIRECTIONAL_EDGE",
+);
+assert.equal(formatFirstBlocker(null), "");
+
+const pipeline = parseSignalPipeline({
+  market: "OPEN",
+  data: "LIVE",
+  buy_score: 64,
+  sell_score: 0,
+  decision: "WAIT",
+  first_blocker: "WAIT_NO_SNIPER_TRIGGER",
+  sniper: "WAIT",
+  risk: "NOT_REACHED",
+  safety: "NOT_REACHED",
+  oms: "NOT_REACHED",
+});
+assert.ok(pipeline);
+assert.equal(pipeline.buy_score, 64);
+assert.equal(pipeline.sell_score, 0);
+assert.equal(pipeline.first_blocker, "WAIT_NO_SNIPER_TRIGGER");
+assert.equal(pipeline.risk, "NOT_REACHED");
+assert.equal(pipeline.safety, "NOT_REACHED");
+assert.equal(pipeline.oms, "NOT_REACHED");
 
 console.log("signal-display.test.ts: ok");

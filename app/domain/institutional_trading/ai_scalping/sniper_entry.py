@@ -14,7 +14,10 @@ from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
     AiScalpingConfig,
 )
-from app.domain.institutional_trading.ai_scalping.direction import DirectionDecision
+from app.domain.institutional_trading.ai_scalping.direction import (
+    DirectionDecision,
+    structure_event_side,
+)
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 
@@ -166,18 +169,14 @@ def evaluate_sniper_entry(
 
     structure = snapshot.primary_structure
     for br in _seq(structure, "breaks_of_structure")[-3:]:
-        mapped = _side_of_break(
-            getattr(br, "direction", None) or getattr(br, "bias", None)
-        )
+        mapped = structure_event_side(br)
         if mapped is side:
             pillars["structure_confirmation"] = True
             reasons.append(f"BOS confirms {side.value}")
             break
     if not pillars["structure_confirmation"]:
         for ch in _seq(structure, "changes_of_character")[-2:]:
-            mapped = _side_of_break(
-                getattr(ch, "direction", None) or getattr(ch, "bias", None)
-            )
+            mapped = structure_event_side(ch)
             if mapped is side:
                 pillars["structure_confirmation"] = True
                 reasons.append(f"CHOCH confirms {side.value}")
