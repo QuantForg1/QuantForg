@@ -18,6 +18,10 @@ from app.domain.institutional_trading.auto_trading import (
     evaluate_auto_trade_safety,
     normalize_run_state,
 )
+from app.domain.institutional_trading.config import (
+    MAX_DAILY_LOSS_PCT,
+    coerce_max_daily_loss_pct,
+)
 from app.domain.institutional_trading.operations.alerts import AlertService
 from app.domain.institutional_trading.operations.audit import AuditLog
 from app.domain.institutional_trading.operations.config_store import ConfigVersionStore
@@ -89,7 +93,7 @@ class OperationsControlPlane:
     promotion_status: str = "not_promoted"
     git_commit: str | None = None
     risk_per_trade_pct: Decimal = Decimal("1.0")
-    max_daily_loss_pct: Decimal = Decimal("3.0")
+    max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_open_trades: int = 10
     daily_loss_exceeded: bool = False
     daily_loss_armed_at: datetime | None = None
@@ -372,7 +376,7 @@ class OperationsControlPlane:
             if risk_per_trade_pct is not None:
                 self.risk_per_trade_pct = risk_per_trade_pct
             if max_daily_loss_pct is not None:
-                self.max_daily_loss_pct = max_daily_loss_pct
+                self.max_daily_loss_pct = coerce_max_daily_loss_pct(max_daily_loss_pct)
             if max_open_trades is not None:
                 self.max_open_trades = max_open_trades
             self.config_version = config_version
@@ -455,7 +459,7 @@ class OperationsControlPlane:
                 f"{self.max_open_trades}"
             )
             self.risk_per_trade_pct = risk_per_trade_pct
-            self.max_daily_loss_pct = max_daily_loss_pct
+            self.max_daily_loss_pct = coerce_max_daily_loss_pct(max_daily_loss_pct)
             self.max_open_trades = max_open_trades
             new = (
                 f"{self.risk_per_trade_pct}|{self.max_daily_loss_pct}|"
@@ -530,9 +534,7 @@ class OperationsControlPlane:
                     raise ValueError("risk_per_trade_pct must be in (0, 5]")
                 self.risk_per_trade_pct = risk_per_trade_pct
             if max_daily_loss_pct is not None:
-                if max_daily_loss_pct <= 0 or max_daily_loss_pct > Decimal("20"):
-                    raise ValueError("max_daily_loss_pct must be in (0, 20]")
-                self.max_daily_loss_pct = max_daily_loss_pct
+                self.max_daily_loss_pct = coerce_max_daily_loss_pct(max_daily_loss_pct)
             if allowed_sessions is not None:
                 cleaned = tuple(
                     s.strip().lower() for s in allowed_sessions if s and s.strip()

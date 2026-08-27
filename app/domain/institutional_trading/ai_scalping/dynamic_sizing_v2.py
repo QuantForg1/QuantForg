@@ -25,6 +25,7 @@ from app.domain.institutional_trading.ai_scalping.sizing import (
     LotSizingResult,
     _quantize_lot,
 )
+from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
 from app.domain.trading.xauusd_specs import (
     CONTRACT_SIZE,
     VOLUME_MAX,
@@ -273,7 +274,7 @@ def _dampen_lot_growth(
 def adaptive_protection_scale(
     *,
     daily_loss_pct: Decimal = Decimal("0"),
-    max_daily_loss_pct: Decimal = Decimal("3"),
+    max_daily_loss_pct: Decimal | None = None,
     current_drawdown_pct: Decimal = Decimal("0"),
     consecutive_losses: int = 0,
     consecutive_wins: int = 0,
@@ -286,7 +287,10 @@ def adaptive_protection_scale(
     notes: list[str] = []
     scale = Decimal("1")
     daily = max(Decimal("0"), daily_loss_pct or Decimal("0"))
-    cap = max(Decimal("0"), max_daily_loss_pct or Decimal("0"))
+    cap = max(
+        Decimal("0"),
+        max_daily_loss_pct if max_daily_loss_pct is not None else MAX_DAILY_LOSS_PCT,
+    )
     dd = max(Decimal("0"), current_drawdown_pct or Decimal("0"))
     losses = max(0, int(consecutive_losses or 0))
     _ = consecutive_wins  # never used to raise risk
@@ -569,7 +573,7 @@ def calculate_dynamic_lots_v2(
     daily_cap = (
         max_daily_loss_pct
         if max_daily_loss_pct is not None and max_daily_loss_pct > 0
-        else Decimal("3")
+        else MAX_DAILY_LOSS_PCT
     )
     adapt_scale, adapt_block, adapt_notes = adaptive_protection_scale(
         daily_loss_pct=daily_loss_pct,

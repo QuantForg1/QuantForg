@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Any
 
 from app.domain.institutional_trading.ai_scalping.profiles import SCALPING_V1
+from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
 from app.domain.institutional_trading.operations.fast_decision_path import (
     CandidateAction,
     DecisionState,
@@ -515,7 +516,8 @@ def evaluate_gold_execution_contract(
             code="DAILY_LOSS_BLOCK",
             reason=(
                 "; ".join(facts.risk_reasons)
-                or "UTC daily loss exceeds hard circuit-breaker — wait for session reset"
+                or "UTC daily loss exceeds hard circuit-breaker "
+                f"({MAX_DAILY_LOSS_PCT}%) — wait for session reset"
             ),
             fault_class=FaultClass.HARD_BLOCK.value,
             next_action=CandidateAction.WAIT_SAME_FOCUS.value,

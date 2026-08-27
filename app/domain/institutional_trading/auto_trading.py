@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Literal
 
+from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
+
 AutoTradeRunState = Literal["off", "running", "paused", "stopped"]
 
 
@@ -81,7 +83,7 @@ class AutoTradePolicy:
     run_state: AutoTradeRunState = "off"
     max_open_positions: int = 1
     risk_per_trade_pct: Decimal = Decimal("1.0")
-    max_daily_loss_pct: Decimal = Decimal("3.0")
+    max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     allowed_sessions: tuple[str, ...] = (
         "sydney",
         "tokyo",

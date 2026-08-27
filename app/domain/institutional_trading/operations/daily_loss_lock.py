@@ -4,8 +4,9 @@ Daily loss remains a hard new-entry lock. This module only:
 - measures realized UTC-day P/L the same way Risk Engine does
 - arms the plane latch when the current UTC day is over the cap
 - clears the latch when the current UTC day is back under the cap
+- uses ITE MAX_DAILY_LOSS_PCT as the single hard cap
 
-It does not change max_daily_loss_pct, bypass Risk, or force trades.
+It does not bypass Risk or force trades.
 """
 
 from __future__ import annotations

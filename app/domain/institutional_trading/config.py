@@ -11,6 +11,19 @@ from app.domain.market_context.enums import MarketSession
 from app.domain.market_data.timeframe import Timeframe
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
+# Authoritative XAUUSD autonomous daily-loss hard cap. Risk, Auto Trading,
+# diagnostics, Signal Center, and execution readiness must all read this value.
+# It is a maximum, not a target. Boundary: pct > cap blocks; pct == cap does not.
+MAX_DAILY_LOSS_PCT = Decimal("40.0")
+
+
+def coerce_max_daily_loss_pct(value: Decimal) -> Decimal:
+    """Reject non-positive values and anything above the hard cap."""
+    cap = Decimal(str(value))
+    if cap <= 0 or cap > MAX_DAILY_LOSS_PCT:
+        raise ValueError(f"max_daily_loss_pct must be in (0, {MAX_DAILY_LOSS_PCT}]")
+    return cap
+
 
 @dataclass(frozen=True, slots=True)
 class ITEConfig:
@@ -35,7 +48,7 @@ class ITEConfig:
 
     # Risk (Phase B+ uses these; stored here for single source of truth)
     risk_per_trade_pct: Decimal = Decimal("1.0")
-    max_daily_loss_pct: Decimal = Decimal("3.0")
+    max_daily_loss_pct: Decimal = MAX_DAILY_LOSS_PCT
     max_weekly_drawdown_pct: Decimal = Decimal("8.0")
     max_open_trades: int = 1
     max_consecutive_losses: int = 3

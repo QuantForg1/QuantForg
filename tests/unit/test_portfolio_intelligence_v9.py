@@ -79,7 +79,7 @@ def test_risk_budget_reduces_on_drawdown() -> None:
 
 @pytest.mark.unit
 def test_capital_protection_blocks_daily_loss() -> None:
-    state = build_portfolio_state(equity=100_000, daily_pnl=-4000)
+    state = build_portfolio_state(equity=100_000, daily_pnl=-41_000)
     prot = evaluate_capital_protection(state)
     assert prot.allow_new_exposure is False
     assert prot.new_exposure_scale == 0.0
@@ -89,7 +89,7 @@ def test_capital_protection_blocks_daily_loss() -> None:
 @pytest.mark.unit
 def test_capital_protection_scales_near_limit() -> None:
     state = build_portfolio_state(
-        equity=100_000, daily_pnl=-2500, current_drawdown_pct=0
+        equity=100_000, daily_pnl=-30_000, current_drawdown_pct=0
     )
     prot = evaluate_capital_protection(state)
     assert prot.allow_new_exposure is True

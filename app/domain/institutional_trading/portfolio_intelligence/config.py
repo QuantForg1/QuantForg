@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.domain.institutional_trading.config import MAX_DAILY_LOSS_PCT
+
 
 @dataclass(frozen=True, slots=True)
 class PortfolioIntelligenceConfig:
@@ -19,8 +21,8 @@ class PortfolioIntelligenceConfig:
     budget_step_down: float = 0.5
     drawdown_cut_pct: float = 3.0
 
-    # Capital protection ceilings
-    max_daily_loss_pct: float = 3.0
+    # Capital protection ceilings — daily loss matches ITE/Risk hard cap
+    max_daily_loss_pct: float = float(MAX_DAILY_LOSS_PCT)
     max_weekly_loss_pct: float = 6.0
     max_monthly_loss_pct: float = 12.0
     max_symbol_exposure_pct: float = 40.0
