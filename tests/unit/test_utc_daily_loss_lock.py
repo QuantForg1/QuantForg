@@ -611,3 +611,101 @@ def test_kill_switch_blocks_decision_ahead_of_daily_loss() -> None:
     )
     assert safety_blocks_decision(mixed) is True
     assert mixed.allowed is False
+
+
+def _sell_take_facts(**overrides: object) -> GoldExecutionFacts:
+    base: dict[str, object] = {
+        "symbol": "XAUUSD_I",
+        "direction": "SELL",
+        "action": "SELL",
+        "market_open": True,
+        "tradable": True,
+        "candles_ok": True,
+        "bid": Decimal("2400.10"),
+        "ask": Decimal("2400.30"),
+        "quote_age_seconds": 1.0,
+        "spread": Decimal("0.20"),
+        "structure_score": 70,
+        "momentum_score": 65,
+        "quality": 80,
+        "confidence": 75,
+        "pa_confluence": 55,
+        "risk_reward": Decimal("1.20"),
+        "market_regime": "TREND",
+        "volatility_ok": True,
+        "session_quality_ok": True,
+        "safety_allowed": True,
+        "kill_switch": False,
+        "execution_enabled": True,
+        "auto_running": True,
+        "account_leverage": Decimal("2000"),
+        "risk_eligible": True,
+        "approved_lots": Decimal("0.01"),
+        "min_lot_infeasible": False,
+        "portfolio_allow": True,
+        "optimizer_state": "EXECUTE_NOW",
+        "oms_orders_allowed": True,
+        "gateway_connected": True,
+        "broker_connected": True,
+        "gold_only": True,
+        "opportunity_score": 80,
+        "opportunity_threshold": 70,
+    }
+    base.update(overrides)
+    return GoldExecutionFacts(**base)  # type: ignore[arg-type]
+
+
+def test_wait_opportunity_is_not_relabeled_daily_loss() -> None:
+    """Score 69 is WAIT. Daily-loss lock stays in diagnostics, not the abort."""
+    out = evaluate_gold_execution_contract(
+        _sell_take_facts(opportunity_score=69, daily_loss_exceeded=True)
+    )
+    assert out.may_submit_oms is False
+    assert out.fault_code == "OPPORTUNITY_SCORE_BELOW_THRESHOLD"
+    assert out.blocking_stage != "RISK" or out.fault_code != "DAILY_LOSS_BLOCK"
+    assert "DAILY_LOSS_BLOCK" not in (out.fault_code or "")
+
+
+def test_direction_none_is_not_relabeled_daily_loss() -> None:
+    out = evaluate_gold_execution_contract(
+        _sell_take_facts(
+            direction="NONE",
+            action="NO_TRADE",
+            daily_loss_exceeded=True,
+        )
+    )
+    assert out.may_submit_oms is False
+    assert out.fault_code == "DIRECTION_NONE"
+
+
+def test_take_daily_loss_outranks_min_lot() -> None:
+    out = evaluate_gold_execution_contract(
+        _sell_take_facts(
+            daily_loss_exceeded=True,
+            min_lot_infeasible=True,
+            approved_lots=Decimal("0"),
+            risk_eligible=False,
+            risk_reasons=(
+                "MIN_LOT_INFEASIBLE",
+                "daily loss 15.21% exceeds 3.0%",
+            ),
+        )
+    )
+    assert out.may_submit_oms is False
+    assert out.fault_code == "DAILY_LOSS_BLOCK"
+    assert out.blocking_stage == "RISK"
+    assert out.stages["OMS"] == StageStatus.NOT_REACHED.value
+
+
+def test_mt5_autotrading_safety_not_relabeled_daily_loss() -> None:
+    out = evaluate_gold_execution_contract(
+        _sell_take_facts(
+            safety_allowed=False,
+            safety_reasons=("AutoTrading is disabled in MetaTrader 5",),
+            daily_loss_exceeded=True,
+        )
+    )
+    assert out.may_submit_oms is False
+    assert out.fault_code == "SAFETY_BLOCKED"
+    assert out.blocking_stage == "SAFETY"
+    assert "autotrading" in (out.fault_reason or "").lower()

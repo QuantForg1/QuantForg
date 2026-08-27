@@ -497,6 +497,10 @@ def evaluate_gold_execution_contract(
         stamps["safety_pass"] = _utc_now()
 
     # --- RISK ---
+    # Daily-loss is the session circuit-breaker. It outranks min-lot / capacity
+    # so a genuine lock cannot be mislabeled MIN_LOT_CONSTRAINT. WAIT / score
+    # below threshold still remain first — only TAKE proceeds toward Risk as
+    # the terminal reason (promotion below).
     risk_fail: dict[str, Any] | None = None
     min_lot_blocked = bool(facts.min_lot_infeasible) or _reasons_indicate_min_lot(
         facts.risk_reasons
@@ -505,19 +509,18 @@ def evaluate_gold_execution_contract(
     daily_loss_blocked = _reasons_indicate_daily_loss(
         facts.risk_reasons
     ) or bool(facts.daily_loss_exceeded)
-    if min_lot_blocked:
+    if daily_loss_blocked:
         risk_fail = _stage_fail(
             stage="RISK",
-            code="MIN_LOT_CONSTRAINT",
+            code="DAILY_LOSS_BLOCK",
             reason=(
                 "; ".join(facts.risk_reasons)
-                or "minimum lot would violate hard max risk — do not upsize"
+                or "UTC daily loss exceeds hard circuit-breaker — wait for session reset"
             ),
-            fault_class=FaultClass.CANDIDATE_BLOCK.value,
+            fault_class=FaultClass.HARD_BLOCK.value,
             next_action=CandidateAction.WAIT_SAME_FOCUS.value,
         )
         mark("RISK", StageStatus.BLOCK.value)
-        mark("SIZING", StageStatus.BLOCK.value)
         failures.append(risk_fail)
     elif max_pos_blocked:
         risk_fail = _stage_fail(
@@ -532,18 +535,19 @@ def evaluate_gold_execution_contract(
         )
         mark("RISK", StageStatus.BLOCK.value)
         failures.append(risk_fail)
-    elif daily_loss_blocked:
+    elif min_lot_blocked:
         risk_fail = _stage_fail(
             stage="RISK",
-            code="DAILY_LOSS_BLOCK",
+            code="MIN_LOT_CONSTRAINT",
             reason=(
                 "; ".join(facts.risk_reasons)
-                or "UTC daily loss exceeds hard circuit-breaker — wait for session reset"
+                or "minimum lot would violate hard max risk — do not upsize"
             ),
-            fault_class=FaultClass.HARD_BLOCK.value,
+            fault_class=FaultClass.CANDIDATE_BLOCK.value,
             next_action=CandidateAction.WAIT_SAME_FOCUS.value,
         )
         mark("RISK", StageStatus.BLOCK.value)
+        mark("SIZING", StageStatus.BLOCK.value)
         failures.append(risk_fail)
     elif not facts.risk_eligible:
         risk_fail = _stage_fail(
@@ -716,7 +720,17 @@ def evaluate_gold_execution_contract(
         if kill is not None:
             first = kill
         elif daily is not None and not facts.kill_switch:
-            first = daily
+            # Daily loss is authoritative for TAKE → Risk. It must not steal
+            # WAIT / opportunity-below-threshold / DIRECTION_NONE, and must not
+            # relabel independent Safety (MT5 AutoTrading, EXECUTION_ENABLED).
+            prior_stage = str((first or {}).get("stage") or "").upper()
+            prior_reason = str((first or {}).get("reason") or "")
+            if prior_stage in {"", "RISK", "SIZING", "OMS", "BROKER"}:
+                first = daily
+            elif prior_stage == "SAFETY" and _reasons_indicate_daily_loss(
+                (prior_reason,)
+            ):
+                first = daily
     all_pass = first is None
     may_submit = all_pass and not facts.force_shadow
     if may_submit:
