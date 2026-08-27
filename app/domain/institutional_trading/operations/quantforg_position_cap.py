@@ -119,9 +119,16 @@ def quantforg_open_symbols(
     magic: int = QUANTFORG_MAGIC,
     symbol: str | None = None,
 ) -> set[str]:
+    live = set(live_capacity_tickets(rows, symbol=symbol, execution_identity=magic))
+    if not live:
+        return set()
     out: set[str] = set()
     for row in rows or ():
-        if not is_quantforg_owned_position(row, magic=magic, symbol=symbol):
+        try:
+            ticket = int(_row_get(row, "ticket", 0) or 0)
+        except (TypeError, ValueError):
+            ticket = 0
+        if ticket not in live:
             continue
         sym = position_symbol(row).upper()
         if sym:
@@ -232,7 +239,10 @@ def same_symbol_ownership_facts(
 ) -> dict[str, Any]:
     """Scanner/capacity observability — strategy vs account vs manual."""
     cand = (candidate_symbol or CANONICAL_GOLD_BROKER_DISPLAY).strip().upper()
-    qf = 0
+    live = live_capacity_tickets(
+        rows, symbol=candidate_symbol, execution_identity=magic
+    )
+    qf = len(live)
     account = 0
     manual_same = 0
     for row in rows or ():
@@ -240,8 +250,8 @@ def same_symbol_ownership_facts(
         owned = is_quantforg_owned_position(row, magic=magic, symbol=candidate_symbol)
         same = matches_autonomous_symbol(row, symbol=candidate_symbol)
         if owned:
-            qf += 1
-        elif classify_position_owner(row, magic=magic) == OWNER_MANUAL and same:
+            continue
+        if classify_position_owner(row, magic=magic) == OWNER_MANUAL and same:
             manual_same += 1
     qf_syms = quantforg_open_symbols(rows, magic=magic, symbol=candidate_symbol)
     already = is_quantforg_same_symbol_open(cand, qf_syms)
@@ -275,10 +285,61 @@ def count_quantforg_positions(
 ) -> int:
     """Live QuantForg strategy count for XAUUSD_i (existing magic identity)."""
     return len(
-        filter_quantforg_positions(
-            rows, symbol=symbol, magic=execution_identity
+        live_capacity_tickets(
+            rows, symbol=symbol, execution_identity=execution_identity
         )
     )
+
+
+def live_capacity_tickets(
+    rows: list[Any] | tuple[Any, ...] | None,
+    *,
+    symbol: str | None = None,
+    execution_identity: int = QUANTFORG_MAGIC,
+) -> tuple[int, ...]:
+    """Unique live tickets that consume strategy capacity.
+
+    Pending/rejected orders are not positions. Volume 0 / remaining 0 is closed.
+    Duplicate ticket rows count once. Cap itself is unchanged.
+    """
+    from decimal import Decimal
+
+    owned = filter_quantforg_positions(
+        rows, symbol=symbol, magic=execution_identity
+    )
+    seen: set[int] = set()
+    tickets: list[int] = []
+    for row in owned:
+        try:
+            ticket = int(_row_get(row, "ticket", 0) or 0)
+        except (TypeError, ValueError):
+            ticket = 0
+        if ticket <= 0 or ticket in seen:
+            continue
+        state = str(
+            _row_get(row, "state", "") or _row_get(row, "order_state", "") or ""
+        ).strip().lower()
+        if state in {"rejected", "canceled", "cancelled", "expired"}:
+            continue
+        vol_raw = _row_get(row, "volume", None)
+        if vol_raw is None:
+            vol_raw = _row_get(row, "remaining_volume", None)
+        if vol_raw is not None:
+            try:
+                if Decimal(str(vol_raw)) <= 0:
+                    continue
+            except Exception:
+                pass
+        rem_raw = _row_get(row, "remaining_volume", None)
+        if rem_raw is not None and vol_raw is None:
+            try:
+                if Decimal(str(rem_raw)) <= 0:
+                    continue
+            except Exception:
+                pass
+        seen.add(ticket)
+        tickets.append(ticket)
+    return tuple(tickets)
 
 
 def count_account_positions(rows: list[Any] | tuple[Any, ...] | None) -> int:
@@ -321,7 +382,23 @@ def book_facts_from_positions(
 
     directions: list[str] = []
     entries: list[Decimal] = []
+    seen: set[int] = set()
     for row in rows or ():
+        try:
+            ticket = int(_row_get(row, "ticket", 0) or 0)
+        except (TypeError, ValueError):
+            ticket = 0
+        if ticket > 0:
+            if ticket in seen:
+                continue
+            seen.add(ticket)
+        vol_raw = _row_get(row, "volume", None)
+        if vol_raw is not None:
+            try:
+                if Decimal(str(vol_raw)) <= 0:
+                    continue
+            except Exception:
+                pass
         side = str(_row_get(row, "side", "") or "").strip().upper()
         if side in {"BUY", "SELL"}:
             directions.append(side)
@@ -372,15 +449,10 @@ def snapshot_quantforg_positions(
     owned = filter_quantforg_positions(
         rows, symbol=symbol, magic=execution_identity
     )
-    tickets: list[int] = []
-    for row in owned:
-        try:
-            ticket = int(_row_get(row, "ticket", 0) or 0)
-        except (TypeError, ValueError):
-            ticket = 0
-        if ticket > 0:
-            tickets.append(ticket)
-    count = len(owned)
+    tickets = live_capacity_tickets(
+        owned, symbol=symbol, execution_identity=execution_identity
+    )
+    count = len(tickets)
     cap = max(1, int(configured_max))
     stamp = as_of or datetime.now(UTC)
     as_of_s = stamp.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -394,5 +466,5 @@ def snapshot_quantforg_positions(
         capacity_available=capacity_available(
             current_count=count, configured_max=cap
         ),
-        tickets=tuple(tickets),
+        tickets=tickets,
     )

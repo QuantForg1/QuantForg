@@ -121,4 +121,37 @@ assert.equal(readyTier.market_regime, "TREND_UP");
 assert.equal(readyTier.entry_state, "RETEST");
 assert.equal(readyTier.setup_state, "SETUP_READY");
 
+const capacityFull = parseSignalPipeline({
+  market: "OPEN",
+  data: "LIVE",
+  buy_score: 6,
+  sell_score: 48,
+  decision: "SELL",
+  first_blocker: "MAX_POSITIONS_REACHED",
+  sniper: "READY",
+  risk: "BLOCK",
+  safety: "NOT_REACHED",
+  optimizer: "NOT_REACHED",
+  oms: "NOT_REACHED",
+  broker: "NOT_REACHED",
+  mt5: "NOT_REACHED",
+  opportunity_score: 75,
+  opportunity_threshold: 70,
+  opportunity_gate: "PASS",
+  setup_state: "TAKE",
+  final_decision: "TAKE",
+  execution_lifecycle: "EXECUTION_BLOCKED",
+});
+assert.ok(capacityFull);
+assert.equal(capacityFull.decision, "SELL");
+assert.equal(capacityFull.final_decision, "TAKE");
+assert.equal(capacityFull.sniper, "READY");
+assert.equal(capacityFull.risk, "BLOCK");
+assert.equal(capacityFull.safety, "NOT_REACHED");
+assert.equal(capacityFull.optimizer, "NOT_REACHED");
+assert.equal(capacityFull.oms, "NOT_REACHED");
+assert.equal(capacityFull.broker, "NOT_REACHED");
+assert.equal(capacityFull.mt5, "NOT_REACHED");
+assert.equal(capacityFull.first_blocker, "MAX_POSITIONS_REACHED");
+
 console.log("signal-display.test.ts: ok");

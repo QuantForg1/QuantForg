@@ -22,6 +22,8 @@ def bridge_abort_stage(abort_reason: str | None) -> str:
     abort = str(abort_reason or "").strip().upper()
     if not abort or abort in {"NONE", "NULL"}:
         return "OMS"
+    if "MAX_POSITION" in abort or "POSITIONS PER SYMBOL" in abort:
+        return "RISK"
     if any(
         tok in abort
         for tok in ("ELIGIBILITY", "CONFLUENCE", "QUALITY", "IGNORED_ACTION", "MISSING_ZONES")
@@ -69,6 +71,9 @@ def execution_blocked_event(
     reason_code: str,
     human_reason: str,
     correlation_id: str | None = None,
+    symbol: str | None = None,
+    direction: str | None = None,
+    signal_id: str | None = None,
 ) -> dict[str, Any]:
     """Explicit EXECUTION_BLOCKED artefact. Never a silent drop."""
     return {
@@ -76,6 +81,9 @@ def execution_blocked_event(
         "reason_code": str(reason_code or "UNKNOWN_EXECUTION_ERROR").upper(),
         "human_reason": str(human_reason or reason_code or "execution blocked"),
         "correlation_id": correlation_id,
+        "symbol": symbol,
+        "direction": direction,
+        "signal_id": signal_id,
         "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
     }
 

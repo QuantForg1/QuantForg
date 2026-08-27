@@ -13,7 +13,7 @@ from app.domain.institutional_trading.decision_models import AccountRiskState
 from app.domain.institutional_trading.operations.quantforg_position_cap import (
     QUANTFORG_MAGIC,
     count_quantforg_positions,
-    filter_quantforg_positions,
+    live_capacity_tickets,
     purge_non_quantforg_from_engine,
 )
 from app.domain.trading.gold_only import GOLD_SYMBOL, is_gold_symbol
@@ -200,15 +200,10 @@ def force_sync_positions(
     # QuantForg strategy cap uses identity + autonomous symbol only.
     mt5_count, tickets = _count_all_positions(rows)
     sym_count, sym_tickets = _count_symbol_positions(rows, symbol=sym)
-    qf_rows = filter_quantforg_positions(rows, symbol=sym, magic=QUANTFORG_MAGIC)
-    qf_count = count_quantforg_positions(
+    qf_tickets = live_capacity_tickets(
         rows, symbol=sym, execution_identity=QUANTFORG_MAGIC
     )
-    qf_tickets = tuple(
-        t
-        for t in (_ticket_of(p) for p in qf_rows)
-        if t > 0
-    )
+    qf_count = len(qf_tickets)
     purged = purge_non_quantforg_from_engine(position_engine, symbol=sym)
     engine_count = _internal_engine_count(position_engine, symbol=sym)
 

@@ -1790,6 +1790,16 @@ class InstitutionalIteRuntime:
                                     ticket=ticket,
                                 )
                                 try:
+                                    from app.application.services.mt5_position_truth import (
+                                        _invalidate_adapter_position_cache,
+                                    )
+
+                                    _invalidate_adapter_position_cache(self.mt5_adapter)
+                                except Exception:
+                                    logger.exception(
+                                        "position_close_cache_invalidate_failed"
+                                    )
+                                try:
                                     from app.domain.institutional_trading.operations.decision_cycle import (  # noqa: E501
                                         note_cycle_event,
                                     )
@@ -3074,6 +3084,13 @@ class InstitutionalIteRuntime:
                 reason_code=str(contract.fault_code or "EXECUTION_BLOCKED"),
                 human_reason=str(contract.fault_reason or ""),
                 correlation_id=tid,
+                symbol=str(getattr(snapshot, "symbol", "") or ""),
+                direction=str(
+                    getattr(getattr(decision, "action", None), "value", None)
+                    or getattr(decision, "action", "")
+                    or ""
+                ),
+                signal_id=str(tid or ""),
             )
             market_context_diagnostics["execution_blocked"] = blocked_ev
             logger.warning(

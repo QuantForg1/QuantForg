@@ -81,6 +81,7 @@ def test_signal_center_overlays_risk_reject_not_oms_ready() -> None:
     )
     assert over["pipeline"]["oms"] == "NOT_REACHED"
     assert over["pipeline"]["risk"] == "BLOCK"
+    assert over["pipeline"]["safety"] == "NOT_REACHED"
     assert over["pipeline"]["execution_lifecycle"] == "EXECUTION_BLOCKED"
     assert over["first_blocker"] == "RISK_REJECTED"
     assert over["execution_state"] == "EXECUTION_BLOCKED"

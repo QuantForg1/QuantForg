@@ -911,6 +911,9 @@ def _overlay_last_ite_cycle(
         or last.get("abort_reason")
         or ""
     )
+    hay = f"{abort} {human}".upper()
+    if "MAX_POSITION" in hay or "POSITIONS PER SYMBOL" in hay:
+        abort = "MAX_POSITIONS_REACHED"
     ticket = last.get("mt5_ticket")
     pipe = dict(row.get("pipeline") or {})
     if str(pipe.get("execution_lifecycle") or "").upper() == "FILLED":
@@ -950,6 +953,7 @@ def _overlay_last_ite_cycle(
     pipe["execution_lifecycle"] = "EXECUTION_BLOCKED"
     if stage == "RISK":
         pipe["risk"] = "BLOCK"
+        pipe["safety"] = not_reached
         pipe["optimizer"] = not_reached
         pipe["oms"] = not_reached
         pipe["broker"] = not_reached
@@ -987,6 +991,33 @@ def _overlay_last_ite_cycle(
     row["status"] = abort
     if human:
         row["reasoning"] = human[:500]
+    if abort == "MAX_POSITIONS_REACHED":
+        if str(pipe.get("decision") or row.get("direction") or "").upper() in {
+            "BUY",
+            "SELL",
+            "TAKE",
+        }:
+            pipe["final_decision"] = "TAKE"
+            pipe["setup_state"] = "TAKE"
+            row["status"] = "MAX_POSITIONS_REACHED"
+    mcd = last.get("market_context_diagnostics")
+    if isinstance(mcd, dict):
+        for key in (
+            "capacity_used",
+            "capacity_max",
+            "capacity_available",
+            "capacity_label",
+            "scale_in_eligible",
+            "scale_in_block_reason",
+            "open_directions",
+            "quantforg_positions",
+            "mt5_positions",
+            "position_tickets",
+        ):
+            if mcd.get(key) is not None:
+                row[key] = mcd[key]
+                pipe[key] = mcd[key]
+    row["pipeline"] = pipe
     return row
 
 

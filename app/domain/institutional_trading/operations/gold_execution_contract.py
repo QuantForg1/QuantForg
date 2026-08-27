@@ -60,6 +60,21 @@ def _as_int(value: Any) -> int | None:
             return None
 
 
+def _reasons_indicate_max_positions(
+    reasons: tuple[str, ...] | list[str] | None,
+) -> bool:
+    hay = " ".join(str(r).lower() for r in (reasons or ()) if str(r).strip())
+    return any(
+        token in hay
+        for token in (
+            "max_positions_reached",
+            "max positions per symbol",
+            "max positions reached",
+            "positions per symbol",
+        )
+    )
+
+
 def _reasons_indicate_min_lot(reasons: tuple[str, ...] | list[str] | None) -> bool:
     hay = " ".join(str(r).lower() for r in (reasons or ()) if str(r).strip())
     return any(
@@ -470,6 +485,7 @@ def evaluate_gold_execution_contract(
     min_lot_blocked = bool(facts.min_lot_infeasible) or _reasons_indicate_min_lot(
         facts.risk_reasons
     )
+    max_pos_blocked = _reasons_indicate_max_positions(facts.risk_reasons)
     if min_lot_blocked:
         risk_fail = _stage_fail(
             stage="RISK",
@@ -483,6 +499,19 @@ def evaluate_gold_execution_contract(
         )
         mark("RISK", StageStatus.BLOCK.value)
         mark("SIZING", StageStatus.BLOCK.value)
+        failures.append(risk_fail)
+    elif max_pos_blocked:
+        risk_fail = _stage_fail(
+            stage="RISK",
+            code="MAX_POSITIONS_REACHED",
+            reason=(
+                "; ".join(facts.risk_reasons)
+                or "Max positions per symbol — wait for close or capacity"
+            ),
+            fault_class=FaultClass.WAIT.value,
+            next_action=CandidateAction.WAIT_SAME_FOCUS.value,
+        )
+        mark("RISK", StageStatus.BLOCK.value)
         failures.append(risk_fail)
     elif not facts.risk_eligible:
         risk_fail = _stage_fail(
@@ -500,7 +529,7 @@ def evaluate_gold_execution_contract(
 
     # --- SIZING ---
     sizing_fail: dict[str, Any] | None = None
-    if not min_lot_blocked:
+    if not min_lot_blocked and not max_pos_blocked:
         lots = facts.approved_lots
         if lots is None or lots <= 0:
             sizing_fail = _stage_fail(

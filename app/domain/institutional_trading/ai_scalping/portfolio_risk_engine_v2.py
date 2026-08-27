@@ -249,11 +249,37 @@ def build_portfolio_book(
         used = max(Decimal("0"), equity - free)
 
     pos_list = list(positions or [])
-    open_n = max(int(account.open_positions or 0), len(pos_list))
+    seen_tickets: set[int] = set()
+    live_rows: list[Any] = []
+    for p in pos_list:
+        try:
+            ticket = int(getattr(p, "ticket", 0) or 0)
+        except (TypeError, ValueError):
+            ticket = 0
+        vol = _d(getattr(p, "volume", 0))
+        rem_raw = getattr(p, "remaining_volume", None)
+        state = str(getattr(p, "state", "") or getattr(p, "order_state", "") or "").lower()
+        if state in {"rejected", "canceled", "cancelled", "expired"}:
+            continue
+        if vol <= 0:
+            continue
+        if rem_raw is not None and _d(rem_raw) <= 0:
+            continue
+        if ticket > 0:
+            if ticket in seen_tickets:
+                continue
+            seen_tickets.add(ticket)
+        live_rows.append(p)
+    # Explicit book (including empty) is MT5 truth. Only fall back to the
+    # account counter when positions was not supplied (unknown book).
+    if positions is not None:
+        open_n = len(live_rows)
+    else:
+        open_n = int(account.open_positions or 0)
 
     float_pnl = floating_pnl if floating_pnl is not None else account.floating_pnl
     if float_pnl is None:
-        float_pnl = sum((_position_unrealized(p) for p in pos_list), Decimal("0"))
+        float_pnl = sum((_position_unrealized(p) for p in live_rows), Decimal("0"))
 
     # Per-position risk contribution (configured risk model; never fixed lots)
     position_risks: list[Decimal] = []
@@ -264,7 +290,7 @@ def build_portfolio_book(
     per_sym_count: dict[str, int] = {}
     lev = leverage if leverage is not None and leverage > 0 else Decimal("1000")
 
-    for p in pos_list:
+    for p in live_rows:
         sym = normalize_book_symbol(str(getattr(p, "symbol", "") or ""))
         if not sym:
             continue
@@ -608,7 +634,7 @@ def _evaluate_portfolio_allocation_unlocked(
     sym_count = book.positions_per_symbol.get(canon, 0)
     if sym_count >= max_per_sym > 0:
         return _reject(
-            f"Max positions per symbol ({sym_count}>={max_per_sym}) for {canon}"
+            f"MAX_POSITIONS_REACHED: {sym_count}/{max_per_sym} for {canon}"
         )
 
     # Portfolio / margin / correlation / symbol caps (override trade requests)
@@ -661,7 +687,18 @@ def _evaluate_portfolio_allocation_unlocked(
     same_sym_dirs: list[str] = []
     same_sym_entries: list[Decimal] = []
     dir_u = (new_direction or "").upper()
+    seen_py: set[int] = set()
     for p in pos_list:
+        try:
+            tk = int(getattr(p, "ticket", 0) or 0)
+        except (TypeError, ValueError):
+            tk = 0
+        if tk > 0:
+            if tk in seen_py:
+                continue
+            seen_py.add(tk)
+        if _d(getattr(p, "volume", 0)) <= 0:
+            continue
         psym = normalize_book_symbol(str(getattr(p, "symbol", "") or ""))
         pside = str(getattr(p, "side", "") or "").upper()
         upnl = _position_unrealized(p)

@@ -49,6 +49,7 @@ from app.domain.institutional_trading.operations.quantforg_position_cap import (
     QUANTFORG_MAGIC,
     capacity_available,
     count_quantforg_positions,
+    live_capacity_tickets,
     live_strategy_max_open,
     snapshot_quantforg_positions,
 )
@@ -386,3 +387,45 @@ def test_quantforg_identity_uses_existing_magic() -> None:
     assert sync.quantforg_positions == 1
     assert sync.quantforg_tickets == (3,)
     assert sync.mt5_positions == 2
+
+
+@pytest.mark.unit
+def test_duplicate_ticket_consumes_one_capacity_slot() -> None:
+    rows = [
+        _pos(10, magic=QUANTFORG_MAGIC),
+        _pos(10, magic=QUANTFORG_MAGIC),
+    ]
+    assert count_quantforg_positions(rows, symbol="XAUUSD_i") == 1
+    assert live_capacity_tickets(rows, symbol="XAUUSD_i") == (10,)
+
+
+@pytest.mark.unit
+def test_zero_volume_ticket_does_not_consume_capacity() -> None:
+    closed = SimpleNamespace(
+        ticket=88,
+        symbol="XAUUSD_i",
+        side="buy",
+        volume=Decimal("0"),
+        remaining_volume=Decimal("0"),
+        magic=QUANTFORG_MAGIC,
+        comment="ite:v1:closed",
+        open_price=Decimal("4000"),
+    )
+    live = _pos(89, magic=QUANTFORG_MAGIC)
+    assert count_quantforg_positions([closed, live], symbol="XAUUSD_i") == 1
+    assert live_capacity_tickets([closed], symbol="XAUUSD_i") == ()
+
+
+@pytest.mark.unit
+def test_pending_rejected_order_does_not_consume_capacity() -> None:
+    rejected = SimpleNamespace(
+        ticket=501,
+        symbol="XAUUSD_i",
+        side="sell",
+        volume=Decimal("0.01"),
+        magic=QUANTFORG_MAGIC,
+        comment="ite:v1:pending",
+        state="rejected",
+    )
+    assert count_quantforg_positions([rejected], symbol="XAUUSD_i") == 0
+    assert live_capacity_tickets([rejected], symbol="XAUUSD_i") == ()

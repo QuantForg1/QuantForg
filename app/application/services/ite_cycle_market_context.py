@@ -627,7 +627,7 @@ async def build_ite_cycle_market_context(
             mt5_adapter,
             symbol=symbol,
             position_engine=position_engine,
-            fresh=False,
+            fresh=True,
         ),
         _offload_sync(
             _load_history_deals,
@@ -743,6 +743,22 @@ async def build_ite_cycle_market_context(
             sync, "tickets", ()
         )
         diag["position_tickets"] = list(qf_tickets or [])
+        from app.domain.institutional_trading.ai_scalping.config import (
+            DEFAULT_AI_SCALPING_CONFIG,
+        )
+
+        cap_max = int(
+            getattr(DEFAULT_AI_SCALPING_CONFIG, "max_positions_per_symbol", 2) or 2
+        )
+        cap_used = int(open_positions or 0)
+        diag["capacity_used"] = cap_used
+        diag["capacity_max"] = cap_max
+        diag["capacity_available"] = max(0, cap_max - cap_used)
+        diag["capacity_label"] = (
+            "FULL"
+            if cap_used >= cap_max
+            else (f"{max(0, cap_max - cap_used)} SLOT" if cap_max - cap_used == 1 else f"{max(0, cap_max - cap_used)} SLOTS")
+        )
         diag["position_cap_identity"] = 260720
         book_rows = list(getattr(sync, "rows", ()) or ())
     except Exception as exc:
@@ -778,6 +794,48 @@ async def build_ite_cycle_market_context(
         open_entries = list(entries)
         diag["open_directions"] = list(open_directions)
         diag["open_entries"] = [str(e) for e in open_entries]
+        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+            live_capacity_tickets,
+        )
+
+        live_tix = live_capacity_tickets(owned, symbol=symbol)
+        open_positions = len(live_tix)
+        diag["positions"] = open_positions
+        diag["quantforg_positions"] = open_positions
+        cap_max = int(diag.get("capacity_max") or 2)
+        diag["capacity_used"] = open_positions
+        diag["capacity_available"] = max(0, cap_max - open_positions)
+        diag["capacity_label"] = (
+            "FULL"
+            if open_positions >= cap_max
+            else (
+                f"{max(0, cap_max - open_positions)} SLOT"
+                if cap_max - open_positions == 1
+                else f"{max(0, cap_max - open_positions)} SLOTS"
+            )
+        )
+        diag["position_tickets"] = list(live_tix)
+        profits = []
+        for row in owned:
+            try:
+                from decimal import Decimal as _Dec
+
+                profits.append(_Dec(str(getattr(row, "profit", 0) or 0)))
+            except Exception:
+                continue
+        cap_left = int(diag.get("capacity_available") or 0)
+        all_winners = bool(profits) and all(p > 0 for p in profits)
+        diag["scale_in_eligible"] = bool(
+            open_positions > 0 and cap_left > 0 and all_winners
+        )
+        if open_positions <= 0:
+            diag["scale_in_block_reason"] = "NO_OPEN_POSITION"
+        elif cap_left <= 0:
+            diag["scale_in_block_reason"] = "MAX_POSITIONS_REACHED"
+        elif not all_winners:
+            diag["scale_in_block_reason"] = "LOSING_POSITION_NO_SCALE_IN"
+        else:
+            diag["scale_in_block_reason"] = None
         book_facts_ok = True
         # Open book reported but no parseable sides/entries → treat as incomplete
         if open_positions > 0 and not open_directions and not open_entries:

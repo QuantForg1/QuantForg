@@ -317,6 +317,13 @@ export function AutoTradingWorkspace() {
     () => asList(asRecord(positionsQ.data).items ?? positionsQ.data).map(asRecord),
     [positionsQ.data],
   );
+  const goldPositions = useMemo(
+    () =>
+      positions.filter((p) =>
+        isGoldSymbol(str(p.symbol || p.code || p.broker_symbol)),
+      ),
+    [positions],
+  );
   const orders = useMemo(() => {
     const raw = ordersQ.data
       ? asList(asRecord(ordersQ.data).items ?? ordersQ.data)
@@ -810,6 +817,34 @@ export function AutoTradingWorkspace() {
   const orch = asRecord(asRecord(opsPayload).orchestrator);
   const last = asRecord(orch.last_cycle);
   const diag = asRecord(last.market_context_diagnostics);
+  const capUsed = Number.isFinite(num(diag.capacity_used))
+    ? num(diag.capacity_used)
+    : goldPositions.length;
+  const capMax =
+    Number.isFinite(num(diag.capacity_max)) && num(diag.capacity_max) > 0
+      ? num(diag.capacity_max)
+      : 2;
+  const capAvail = Number.isFinite(num(diag.capacity_available))
+    ? num(diag.capacity_available)
+    : Math.max(0, capMax - capUsed);
+  const capLabel = str(
+    diag.capacity_label,
+    capAvail <= 0
+      ? "FULL"
+      : capAvail === 1
+        ? "1 SLOT"
+        : `${capAvail} SLOTS`,
+  );
+  const goldDir = asList(diag.open_directions)
+    .map(String)
+    .filter(Boolean)
+    .join("/") || goldPositions.map((p) => str(p.side || p.direction, "")).filter(Boolean).join("/") || "—";
+  const goldPnl = goldPositions.reduce((sum, p) => sum + num(p.profit ?? p.unrealized_pnl, 0), 0);
+  const scaleInEligible = Boolean(diag.scale_in_eligible);
+  const scaleInWhy = str(
+    diag.scale_in_block_reason,
+    capAvail <= 0 ? "MAX_POSITIONS_REACHED" : "—",
+  );
   const scanSnap = asRecord(aiScalping.scan);
   const coherence = asRecord(
     orch.system_coherence ??
@@ -1970,8 +2005,34 @@ export function AutoTradingWorkspace() {
             <MetricCard label="Current Lot" value={calculatedLots} />
             <MetricCard label="Execution Time" value={lastLatency} />
             <MetricCard label="Profit Projection" value={profitProjection} />
-            <MetricCard label="Open Positions" value={String(positions.length)} />
-            <MetricCard label="Win Rate" value={winRate} />
+            <MetricCard
+              label="XAUUSD positions"
+              value={`${capUsed} / ${capMax}`}
+            />
+            <MetricCard
+              label="Capacity"
+              value={capLabel}
+              tone={capAvail <= 0 ? "bad" : "ok"}
+            />
+            <MetricCard label="Position direction" value={goldDir || "—"} />
+            <MetricCard
+              label="Unrealized P/L"
+              value={formatNumber(goldPnl, 2)}
+              tone={goldPnl >= 0 ? "ok" : "bad"}
+            />
+            <MetricCard
+              label="Scale-in"
+              value={scaleInEligible ? "ELIGIBLE" : "NO"}
+            />
+            <MetricCard
+              label="Why TAKE blocked"
+              value={str(
+                asRecord(last.execution_blocked).reason_code ||
+                  last.abort_reason ||
+                  scaleInWhy,
+                "NONE",
+              )}
+            />
             <MetricCard
               label="Decision"
               value={str(last.decision_action || last.cycle_outcome, "—")}
@@ -2028,7 +2089,10 @@ export function AutoTradingWorkspace() {
               tone={dailyRiskUsed >= maxDailyLossPct ? "bad" : "neutral"}
             />
             <MetricCard label="Exposure" value={formatNumber(openExposure, 2)} />
-            <MetricCard label="Open Positions" value={String(positions.length)} />
+            <MetricCard
+              label="Open Positions"
+              value={`${capUsed} / ${capMax}`}
+            />
             <MetricCard
               label="Risk / Trade"
               value={`${formatNumber(riskPerTradePct, 2)}%`}
