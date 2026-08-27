@@ -186,6 +186,8 @@ def score_scalping_setup(
     execution_quality_ok: bool = True,
     enforce_adaptive_cooldown: bool = False,
     symbol: str | None = None,
+    bid: Decimal | None = None,
+    ask: Decimal | None = None,
 ) -> AiScalpingScore:
     """Compute AI Confidence / Quality for institutional adaptive scalping."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
@@ -539,6 +541,9 @@ def score_scalping_setup(
         momentum=int(factors["momentum"]),
         min_momentum=int(cfg.min_momentum_score),
         config=cfg,
+        bid=bid,
+        ask=ask,
+        atr_timeframe=str(getattr(cfg.entry_tf, "value", cfg.entry_tf) or "M5"),
     )
     reasons.extend(sniper.reasons)
     if not sniper.passed:

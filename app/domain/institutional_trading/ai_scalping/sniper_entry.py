@@ -6,7 +6,8 @@ evidence returns WAIT. Never flips BUY into SELL or SELL into BUY.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -21,6 +22,21 @@ from app.domain.institutional_trading.ai_scalping.direction import (
 from app.domain.institutional_trading.decision_models import TradeDirection
 from app.domain.institutional_trading.models import MarketAnalysisSnapshot
 
+# Structure TF for scalping FVG is M15; ATR is computed on entry TF (M5).
+# Chase must compare distance in the *zone* timeframe, not a faster ATR.
+_TF_MINUTES: dict[str, int] = {
+    "M1": 1,
+    "M5": 5,
+    "M15": 15,
+    "M30": 30,
+    "H1": 60,
+    "H4": 240,
+    "D1": 1440,
+}
+_STALE_FRESHNESS_BARS = 40
+_STALE_MAX_AGE = timedelta(hours=12)
+_CHASE_ATR_MULT = Decimal("1.5")
+
 
 def _seq(obj: Any, name: str) -> list[Any]:
     raw = getattr(obj, name, None) if obj is not None else None
@@ -34,14 +50,55 @@ def _upper(value: Any) -> str:
 
 
 def _dec(value: Any) -> Decimal | None:
-    try:
-        if value is None:
+    """Unwrap Price / Decimal / numeric zone bounds. Never invent a price."""
+    current: Any = value
+    for _ in range(4):
+        if current is None:
             return None
-        nested = getattr(value, "value", value)
-        d = Decimal(str(nested))
+        nested = getattr(current, "value", None)
+        if nested is not None and nested is not current:
+            current = nested
+            continue
+        amount = getattr(current, "amount", None)
+        if amount is not None and amount is not current:
+            current = amount
+            continue
+        break
+    try:
+        d = Decimal(str(current))
         return d if d.is_finite() else None
     except (TypeError, ValueError, ArithmeticError):
         return None
+
+
+def _intish(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _tf_minutes(raw: Any) -> int | None:
+    token = str(getattr(raw, "value", raw) or "").strip().upper()
+    return _TF_MINUTES.get(token)
+
+
+def _atr_for_zone(
+    atr: Decimal,
+    *,
+    atr_timeframe: str | None,
+    zone_timeframe: Any,
+) -> Decimal:
+    """Scale ATR to the FVG/OB timeframe so M5 ATR is not used as M15 chase."""
+    src = _tf_minutes(atr_timeframe)
+    dst = _tf_minutes(zone_timeframe)
+    if src is None or dst is None or dst <= src or atr <= 0:
+        return atr
+    ratio = (Decimal(dst) / Decimal(src)).sqrt()
+    scaled = atr * ratio
+    return scaled if scaled.is_finite() and scaled > 0 else atr
 
 
 def _side_of_break(break_dir: Any) -> TradeDirection | None:
@@ -81,6 +138,157 @@ def _bias_side(raw_obj: Any) -> TradeDirection | None:
     return None
 
 
+def _as_utc(value: Any) -> datetime | None:
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+@dataclass(frozen=True, slots=True)
+class _AlignedZone:
+    high: Decimal
+    low: Decimal
+    timeframe: Any
+    freshness_bars: int | None
+    formed_at: datetime | None
+    source: str
+    stale: bool
+
+
+def _zone_is_stale(
+    *,
+    freshness_bars: int | None,
+    formed_at: datetime | None,
+    now: datetime,
+) -> bool:
+    if freshness_bars is not None and freshness_bars > _STALE_FRESHNESS_BARS:
+        return True
+    ts = _as_utc(formed_at)
+    if ts is None:
+        return False
+    return (now - ts) > _STALE_MAX_AGE
+
+
+def _collect_aligned_zones(
+    snapshot: MarketAnalysisSnapshot,
+    side: TradeDirection,
+    *,
+    now: datetime,
+) -> list[_AlignedZone]:
+    out: list[_AlignedZone] = []
+    ob_snap = snapshot.order_blocks
+    for block in _seq(ob_snap, "order_blocks")[:24]:
+        state = _upper(getattr(block, "state", None))
+        if state and state not in {"ACTIVE", "VALIDATED", ""}:
+            continue
+        if _bias_side(block) is not side:
+            continue
+        zone = getattr(block, "zone", None)
+        hi = _dec(getattr(zone, "high_price", None) if zone else None)
+        lo = _dec(getattr(zone, "low_price", None) if zone else None)
+        if hi is None or lo is None:
+            continue
+        freshness = _intish(
+            getattr(getattr(block, "quality", None), "freshness_bars", None)
+        )
+        formed = getattr(zone, "formed_at", None) or getattr(block, "formed_at", None)
+        tf = getattr(zone, "timeframe", None) or getattr(block, "timeframe", None)
+        out.append(
+            _AlignedZone(
+                high=max(hi, lo),
+                low=min(hi, lo),
+                timeframe=tf,
+                freshness_bars=freshness,
+                formed_at=_as_utc(formed),
+                source="ob",
+                stale=_zone_is_stale(
+                    freshness_bars=freshness, formed_at=formed, now=now
+                ),
+            )
+        )
+
+    fvg_snap = snapshot.fair_value_gaps
+    for gap in _seq(fvg_snap, "active_gaps")[:24]:
+        if _bias_side(gap) is not side:
+            continue
+        zone = getattr(gap, "zone", None)
+        hi = _dec(getattr(zone, "high_price", None) if zone else None)
+        lo = _dec(getattr(zone, "low_price", None) if zone else None)
+        if hi is None or lo is None:
+            continue
+        quality = getattr(gap, "quality", None)
+        freshness = _intish(getattr(quality, "freshness_bars", None) if quality else None)
+        formed = (
+            getattr(zone, "formed_at", None)
+            or getattr(gap, "formed_at", None)
+            or getattr(getattr(gap, "lifecycle", None), "detected_at", None)
+        )
+        tf = getattr(zone, "timeframe", None) or getattr(gap, "timeframe", None)
+        out.append(
+            _AlignedZone(
+                high=max(hi, lo),
+                low=min(hi, lo),
+                timeframe=tf,
+                freshness_bars=freshness,
+                formed_at=_as_utc(formed),
+                source="fvg",
+                stale=_zone_is_stale(
+                    freshness_bars=freshness, formed_at=formed, now=now
+                ),
+            )
+        )
+    return out
+
+
+def _chase_distance(
+    *,
+    side: TradeDirection,
+    ref: Decimal,
+    zone: _AlignedZone,
+    atr: Decimal,
+    atr_timeframe: str | None,
+) -> tuple[Decimal, Decimal, bool]:
+    """Return (distance beyond zone, extension, is_chase). Inside/pending = 0."""
+    zone_atr = _atr_for_zone(
+        atr, atr_timeframe=atr_timeframe, zone_timeframe=zone.timeframe
+    )
+    extension = zone_atr * _CHASE_ATR_MULT
+    if side is TradeDirection.BUY:
+        if ref <= zone.high:
+            return Decimal("0"), extension, False
+        distance = ref - zone.high
+        return distance, extension, distance > extension
+    if ref >= zone.low:
+        return Decimal("0"), extension, False
+    distance = zone.low - ref
+    return distance, extension, distance > extension
+
+
+def _nearest_zone(
+    zones: list[_AlignedZone],
+    *,
+    side: TradeDirection,
+    ref: Decimal,
+) -> _AlignedZone | None:
+    if not zones:
+        return None
+
+    def _key(zone: _AlignedZone) -> Decimal:
+        if zone.low <= ref <= zone.high:
+            return Decimal("0")
+        if side is TradeDirection.BUY:
+            if ref > zone.high:
+                return ref - zone.high
+            return zone.low - ref
+        if ref < zone.low:
+            return zone.low - ref
+        return ref - zone.high
+
+    return min(zones, key=_key)
+
+
 @dataclass(frozen=True, slots=True)
 class SniperEntryDecision:
     passed: bool
@@ -88,6 +296,7 @@ class SniperEntryDecision:
     reasons: tuple[str, ...]
     pillars: dict[str, bool]
     primary_reason: str | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -98,6 +307,7 @@ class SniperEntryDecision:
             "primary_reason": self.primary_reason,
             "never_prefer_buy_only": True,
             "never_flips_direction": True,
+            **dict(self.diagnostics or {}),
         }
 
 
@@ -116,9 +326,16 @@ def evaluate_sniper_entry(
     momentum: int = 0,
     min_momentum: int | None = None,
     config: AiScalpingConfig | None = None,
+    bid: Decimal | None = None,
+    ask: Decimal | None = None,
+    atr_timeframe: str | None = None,
+    now: datetime | None = None,
 ) -> SniperEntryDecision:
     """Require a high-quality XAUUSD trigger — trend alone is not enough."""
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    moment = now or datetime.now(UTC)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
     reasons: list[str] = []
     pillars = {
         "clear_direction": False,
@@ -131,7 +348,32 @@ def evaluate_sniper_entry(
         "not_chasing": True,
         "not_conflicting": True,
         "spread_ok": not spread_reject,
+        "fresh_zone": True,
     }
+    diagnostics: dict[str, Any] = {
+        "chase_distance": None,
+        "chase_extension": None,
+        "zone_bound": None,
+        "atr_used": str(atr) if atr is not None else None,
+        "atr_timeframe": atr_timeframe,
+        "ref_price": None,
+        "fvg_age_bars": None,
+        "zone_timeframe": None,
+        "zone_source": None,
+        "market_mid": str(mid) if mid is not None else None,
+        "bid": str(bid) if bid is not None else None,
+        "ask": str(ask) if ask is not None else None,
+    }
+
+    def _wait(primary: str) -> SniperEntryDecision:
+        return SniperEntryDecision(
+            passed=False,
+            action="WAIT",
+            reasons=tuple(reasons),
+            pillars=pillars,
+            primary_reason=primary,
+            diagnostics=diagnostics,
+        )
 
     side = direction.direction
     if side not in {TradeDirection.BUY, TradeDirection.SELL}:
@@ -139,13 +381,7 @@ def evaluate_sniper_entry(
             f"WAIT — no directional edge "
             f"(bullish={direction.buy_score} bearish={direction.sell_score})"
         )
-        return SniperEntryDecision(
-            passed=False,
-            action="WAIT",
-            reasons=tuple(reasons),
-            pillars=pillars,
-            primary_reason="WAIT_NO_DIRECTIONAL_EDGE",
-        )
+        return _wait("WAIT_NO_DIRECTIONAL_EDGE")
     pillars["clear_direction"] = True
 
     setup_raw = str(setup_family_direction or "").strip().upper()
@@ -154,27 +390,17 @@ def evaluate_sniper_entry(
         reasons.append(
             f"WAIT — conflicting evidence setup={setup_raw} vs AI={side.value}"
         )
-        return SniperEntryDecision(
-            passed=False,
-            action="WAIT",
-            reasons=tuple(reasons),
-            pillars=pillars,
-            primary_reason="WAIT_CONFLICTING_BUY_SELL",
-        )
+        return _wait("WAIT_CONFLICTING_BUY_SELL")
 
     if spread_reject:
         reasons.append("WAIT — abnormal spread")
-        return SniperEntryDecision(
-            passed=False,
-            action="WAIT",
-            reasons=tuple(reasons),
-            pillars=pillars,
-            primary_reason="WAIT_ABNORMAL_SPREAD",
-        )
+        return _wait("WAIT_ABNORMAL_SPREAD")
 
     structure = snapshot.primary_structure
     for br in _seq(structure, "breaks_of_structure")[-3:]:
-        mapped = structure_event_side(br)
+        mapped = structure_event_side(br) or _side_of_break(
+            getattr(br, "direction", None)
+        )
         if mapped is side:
             pillars["structure_confirmation"] = True
             reasons.append(f"BOS confirms {side.value}")
@@ -204,45 +430,29 @@ def evaluate_sniper_entry(
             pillars["liquidity_event"] = True
             reasons.append("Equal lows — bullish liquidity")
 
-    zone_highs: list[Decimal] = []
-    zone_lows: list[Decimal] = []
     displacement_ok = False
     ob_snap = snapshot.order_blocks
-    for block in _seq(ob_snap, "order_blocks")[:8]:
+    for block in _seq(ob_snap, "order_blocks")[:24]:
         state = _upper(getattr(block, "state", None))
         if state and state not in {"ACTIVE", "VALIDATED", ""}:
             continue
-        mapped = _bias_side(block)
-        if mapped is not side:
+        if _bias_side(block) is not side:
             continue
-        pillars["entry_zone"] = True
         quality = getattr(block, "quality", None)
         ratio = _dec(getattr(quality, "displacement_ratio", None) if quality else None)
         if ratio is not None and ratio >= Decimal("1.5"):
             displacement_ok = True
             reasons.append("Displacement-qualified order block")
-        zone = getattr(block, "zone", None)
-        hi = _dec(getattr(zone, "high_price", None) if zone else None)
-        lo = _dec(getattr(zone, "low_price", None) if zone else None)
-        if hi is not None:
-            zone_highs.append(hi)
-        if lo is not None:
-            zone_lows.append(lo)
 
-    fvg_snap = snapshot.fair_value_gaps
-    for gap in _seq(fvg_snap, "active_gaps")[:6]:
-        mapped = _bias_side(gap)
-        if mapped is not side:
-            continue
+    aligned = _collect_aligned_zones(snapshot, side, now=moment)
+    fresh_zones = [z for z in aligned if not z.stale]
+    stale_zones = [z for z in aligned if z.stale]
+    if aligned:
         pillars["entry_zone"] = True
-        zone = getattr(gap, "zone", None)
-        hi = _dec(getattr(zone, "high_price", None) if zone else None)
-        lo = _dec(getattr(zone, "low_price", None) if zone else None)
-        if hi is not None:
-            zone_highs.append(hi)
-        if lo is not None:
-            zone_lows.append(lo)
-        reasons.append(f"Aligned FVG zone for {side.value}")
+        if any(z.source == "fvg" for z in aligned):
+            reasons.append(f"Aligned FVG zone for {side.value}")
+        elif any(z.source == "ob" for z in aligned):
+            reasons.append(f"Aligned order-block zone for {side.value}")
 
     if pillars["entry_zone"] and not pillars["liquidity_event"]:
         pillars["liquidity_event"] = True
@@ -270,30 +480,65 @@ def evaluate_sniper_entry(
     else:
         reasons.append(f"WAIT — insufficient RR ({expected_rr} < {min_rr})")
 
-    if mid is not None and atr is not None and atr > 0 and (zone_highs or zone_lows):
-        extension = atr * Decimal("1.5")
-        if side is TradeDirection.BUY and zone_highs:
-            far = max(zone_highs)
-            if mid > far + extension:
+    ref = None
+    if side is TradeDirection.BUY:
+        ref = ask if ask is not None else mid
+    elif side is TradeDirection.SELL:
+        ref = bid if bid is not None else mid
+    else:
+        ref = mid
+    diagnostics["ref_price"] = str(ref) if ref is not None else None
+
+    chase_zones = fresh_zones if fresh_zones else stale_zones
+    used_stale_only = bool(stale_zones) and not fresh_zones
+    if used_stale_only:
+        pillars["fresh_zone"] = False
+        reasons.append("WAIT — FVG/OB zone is stale (freshness/formed_at)")
+
+    if (
+        ref is not None
+        and atr is not None
+        and atr > 0
+        and chase_zones
+    ):
+        nearest = _nearest_zone(chase_zones, side=side, ref=ref)
+        if nearest is not None:
+            distance, extension, chasing = _chase_distance(
+                side=side,
+                ref=ref,
+                zone=nearest,
+                atr=atr,
+                atr_timeframe=atr_timeframe,
+            )
+            diagnostics["chase_distance"] = str(distance)
+            diagnostics["chase_extension"] = str(extension)
+            diagnostics["atr_used"] = str(
+                _atr_for_zone(
+                    atr,
+                    atr_timeframe=atr_timeframe,
+                    zone_timeframe=nearest.timeframe,
+                )
+            )
+            diagnostics["zone_bound"] = (
+                str(nearest.high) if side is TradeDirection.BUY else str(nearest.low)
+            )
+            diagnostics["fvg_age_bars"] = nearest.freshness_bars
+            diagnostics["zone_timeframe"] = str(
+                getattr(nearest.timeframe, "value", nearest.timeframe) or ""
+            ) or None
+            diagnostics["zone_source"] = nearest.source
+            if chasing:
                 pillars["not_chasing"] = False
-                reasons.append("WAIT — chasing BUY after excessive displacement")
-        if side is TradeDirection.SELL and zone_lows:
-            far = min(zone_lows)
-            if mid < far - extension:
-                pillars["not_chasing"] = False
-                reasons.append("WAIT — chasing SELL after excessive displacement")
+                reasons.append(
+                    f"WAIT — chasing {side.value} after excessive displacement "
+                    f"(distance={distance} > 1.5 ATR={extension})"
+                )
 
     if not pillars["liquidity_event"] and not pillars["structure_confirmation"]:
         reasons.append(
             "WAIT — no BOS/CHOCH/sweep/FVG/OB trigger (trend alone is not enough)"
         )
-        return SniperEntryDecision(
-            passed=False,
-            action="WAIT",
-            reasons=tuple(reasons),
-            pillars=pillars,
-            primary_reason="WAIT_NO_SNIPER_TRIGGER",
-        )
+        return _wait("WAIT_NO_SNIPER_TRIGGER")
 
     required = (
         pillars["clear_direction"],
@@ -304,24 +549,21 @@ def evaluate_sniper_entry(
         pillars["risk_reward"],
         pillars["displacement_or_momentum"],
         pillars["liquidity_event"] or pillars["structure_confirmation"],
+        pillars["fresh_zone"],
     )
     if not all(required):
         missing = [k for k, ok in pillars.items() if not ok]
         primary = "WAIT_SNIPER_INCOMPLETE"
-        if not pillars["not_chasing"]:
+        if not pillars["fresh_zone"] and pillars["not_chasing"]:
+            primary = "WAIT_STALE_FVG"
+        elif not pillars["not_chasing"]:
             primary = "WAIT_CHASE"
         elif not pillars["invalidation"]:
             primary = "WAIT_NO_INVALIDATION"
         elif not pillars["risk_reward"]:
             primary = "WAIT_INSUFFICIENT_RR"
         reasons.append(f"WAIT — incomplete sniper pillars {missing}")
-        return SniperEntryDecision(
-            passed=False,
-            action="WAIT",
-            reasons=tuple(reasons),
-            pillars=pillars,
-            primary_reason=primary,
-        )
+        return _wait(primary)
 
     reasons.append(f"SNIPER {side.value} — liquidity/structure/confirmation aligned")
     return SniperEntryDecision(
@@ -330,4 +572,5 @@ def evaluate_sniper_entry(
         reasons=tuple(reasons),
         pillars=pillars,
         primary_reason=None,
+        diagnostics=diagnostics,
     )

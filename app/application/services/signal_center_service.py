@@ -88,6 +88,7 @@ _WAIT_REASON_LABELS: dict[str, str] = {
     "RR_TOO_LOW": "WAIT — RR too low",
     "WAIT_CHASE": "WAIT — chase detected",
     "CHASE_DETECTED": "WAIT — chase detected",
+    "WAIT_STALE_FVG": "WAIT — stale FVG",
     "WAIT_ABNORMAL_SPREAD": "WAIT — abnormal spread",
     "ABNORMAL_SPREAD": "WAIT — abnormal spread",
     "WAIT_CONFLICTING_BUY_SELL": "WAIT — BUY/SELL conflict",
@@ -540,6 +541,13 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             opportunity_threshold=score.get("opportunity_threshold") or 70,
             order_status=score.get("order_status") or score.get("fill_status"),
             order_ticket=score.get("order_ticket") or score.get("ticket"),
+            score_breakdown=score.get("score_breakdown")
+            if isinstance(score.get("score_breakdown"), dict)
+            else None,
+            candidate=direction if direction in {"BUY", "SELL"} else "NONE",
+            spread=spread,
+            atr=atr,
+            market_regime=score.get("market_regime") or factors.get("volatility"),
         ),
         "detail": detail,
         "gauges": {
@@ -565,6 +573,11 @@ def _pipeline_snapshot(
     opportunity_threshold: Any,
     order_status: Any = None,
     order_ticket: Any = None,
+    score_breakdown: dict[str, Any] | None = None,
+    candidate: str = "NONE",
+    spread: Any = None,
+    atr: Any = None,
+    market_regime: Any = None,
 ) -> dict[str, Any]:
     """Observe-only gate strip. Never invents Risk/Safety/OMS PASS on WAIT."""
     code = str(block_code or "").upper()
@@ -626,23 +639,61 @@ def _pipeline_snapshot(
         execution_lifecycle = "ORDER_SENT"
     elif action in {"BUY", "SELL"} and sniper_passed and code not in execution_codes:
         execution_lifecycle = "EXECUTION_READY"
+    broker_state = not_reached
+    mt5_state = not_reached
+    if execution_lifecycle == "FILLED":
+        broker_state = "ACK"
+        mt5_state = "FILLED"
+    elif execution_lifecycle == "ORDER_SENT":
+        broker_state = "SUBMITTED"
+        mt5_state = "PENDING"
+    cand = str(candidate or "NONE").upper()
+    if cand not in {"BUY", "SELL"}:
+        cand = "NONE"
+    take = action in {"BUY", "SELL"} and sniper_passed and code not in execution_codes
+    pillars = sniper.get("pillars") if isinstance(sniper, dict) else None
     return {
         "market": "OPEN" if market_data_live is not False else "UNKNOWN",
         "data": data,
         "data_age_seconds": age,
         "tick_time": tick_time,
+        "market_data_valid": data == "LIVE",
         "buy_score": buy_score,
         "sell_score": sell_score,
+        "candidate": cand,
         "opportunity_score": opportunity_score,
         "opportunity_threshold": opportunity_threshold,
+        "score_breakdown": dict(score_breakdown or {}),
         "decision": action,
+        "final_decision": "TAKE" if take else "WAIT",
         "first_blocker": code or None,
         "sniper": sniper_state,
         "risk": risk_state,
         "safety": safety_state,
         "optimizer": optimizer_state,
         "oms": oms_state,
+        "broker": broker_state,
+        "mt5": mt5_state,
         "execution_lifecycle": execution_lifecycle,
+        "spread": spread,
+        "atr": atr,
+        "volatility_regime": market_regime,
+        "chase_distance": (sniper or {}).get("chase_distance") if sniper else None,
+        "fvg_age_bars": (sniper or {}).get("fvg_age_bars") if sniper else None,
+        "bos": (
+            bool(pillars.get("structure_confirmation"))
+            if isinstance(pillars, dict)
+            else None
+        ),
+        "liquidity_event": (
+            bool(pillars.get("liquidity_event")) if isinstance(pillars, dict) else None
+        ),
+        "entry_zone": (
+            bool(pillars.get("entry_zone")) if isinstance(pillars, dict) else None
+        ),
+        "not_chasing": (
+            bool(pillars.get("not_chasing")) if isinstance(pillars, dict) else None
+        ),
     }
 
 

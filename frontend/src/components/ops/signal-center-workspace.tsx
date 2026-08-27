@@ -305,12 +305,15 @@ export function SignalCenterWorkspace() {
                   ) : null}
                   {s.pipeline ? (
                     <p className="mt-1 text-[10px] uppercase tracking-[0.08em] text-[var(--fg-subtle)]">
-                      Opportunity {s.pipeline.opportunity_score}/
+                      Candidate {s.pipeline.candidate} · Decision{" "}
+                      {s.pipeline.final_decision} · Opportunity{" "}
+                      {s.pipeline.opportunity_score}/
                       {s.pipeline.opportunity_threshold} · Market{" "}
                       {s.pipeline.market} · Data {s.pipeline.data} · Sniper{" "}
                       {s.pipeline.sniper} · Risk {s.pipeline.risk} · Safety{" "}
                       {s.pipeline.safety} · Optimizer {s.pipeline.optimizer} ·
-                      OMS {s.pipeline.oms}
+                      OMS {s.pipeline.oms} · Broker {s.pipeline.broker} · MT5{" "}
+                      {s.pipeline.mt5}
                       {s.pipeline.execution_lifecycle
                         ? ` · ${s.pipeline.execution_lifecycle.replaceAll("_", " ")}`
                         : ""}
@@ -395,12 +398,16 @@ export function SignalCenterWorkspace() {
                 ["Direction", selected.direction],
                 ["BUY score", String(selected.bullish_score ?? 0)],
                 ["SELL score", String(selected.bearish_score ?? 0)],
+                ["Candidate", selected.pipeline?.candidate ?? "NONE"],
+                ["Decision", selected.pipeline?.final_decision ?? "WAIT"],
                 ["First blocker", selected.first_blocker || "—"],
                 ["Sniper", selected.pipeline?.sniper ?? "—"],
                 ["Risk", selected.pipeline?.risk ?? "—"],
                 ["Safety", selected.pipeline?.safety ?? "—"],
-                ["OMS", selected.pipeline?.oms ?? "—"],
                 ["Optimizer", selected.pipeline?.optimizer ?? "—"],
+                ["OMS", selected.pipeline?.oms ?? "—"],
+                ["Broker", selected.pipeline?.broker ?? "NOT_REACHED"],
+                ["MT5", selected.pipeline?.mt5 ?? "NOT_REACHED"],
                 [
                   "Opportunity",
                   selected.pipeline

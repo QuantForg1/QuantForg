@@ -183,6 +183,13 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
         bullish_score=row.get("buy_score") or row.get("bullish_score"),
         bearish_score=row.get("sell_score") or row.get("bearish_score"),
         opportunity_score=row.get("opportunity_score"),
+        opportunity_threshold=row.get("opportunity_threshold") or 70,
+        score_breakdown=row.get("score_breakdown"),
+        chase_distance=sniper.get("chase_distance"),
+        chase_extension=sniper.get("chase_extension"),
+        zone_bound=sniper.get("zone_bound"),
+        fvg_age_bars=sniper.get("fvg_age_bars"),
+        first_blocker=sniper.get("primary_reason") or row.get("reject_reason"),
         ai_confidence=row.get("ai_confidence") or row.get("confidence"),
         confluence=row.get("confluence"),
         decision=action,
@@ -489,6 +496,8 @@ async def score_symbol_for_scan(
             highs=tuple(getattr(snapshot, "entry_highs", ()) or ()),
             lows=tuple(getattr(snapshot, "entry_lows", ()) or ()),
             closes=tuple(getattr(snapshot, "entry_closes", ()) or ()),
+            bid=getattr(account, "bid", None),
+            ask=getattr(account, "ask", None),
         )
         payload = score.to_dict()
         payload["symbol"] = resolved or code

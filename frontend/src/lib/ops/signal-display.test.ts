@@ -58,6 +58,10 @@ assert.equal(pipeline.risk, "NOT_REACHED");
 assert.equal(pipeline.safety, "NOT_REACHED");
 assert.equal(pipeline.optimizer, "NOT_REACHED");
 assert.equal(pipeline.oms, "NOT_REACHED");
+assert.equal(pipeline.broker, "NOT_REACHED");
+assert.equal(pipeline.mt5, "NOT_REACHED");
+assert.equal(pipeline.candidate, "NONE");
+assert.equal(pipeline.final_decision, "WAIT");
 assert.equal(pipeline.opportunity_threshold, 70);
 assert.equal(pipeline.execution_lifecycle, null);
 

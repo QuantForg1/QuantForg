@@ -67,6 +67,14 @@ def _clamp_int(value: Any, default: int | None = None) -> int | None:
     return max(0, min(100, n))
 
 
+def _smc_presence_score(raw: Any, *, absent_max: int = 30) -> int:
+    """Map scoring sentinels (20/25 = absent) to 0; keep real 70–85 presence."""
+    n = _clamp_int(raw, 0)
+    if n is None or n <= absent_max:
+        return 0
+    return n
+
+
 def _rr_quality(rr: Any) -> int | None:
     if rr is None or rr == "":
         return None
@@ -285,20 +293,25 @@ def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
     structure = _clamp_int(
         score.get("structure_score") or factors.get("structure_score")
     )
-    if structure is None and (
-        factors.get("bos") is not None or factors.get("choch") is not None
-    ):
-        bos = _clamp_int(factors.get("bos"), 0) or 0
-        choch = _clamp_int(factors.get("choch"), 0) or 0
-        if factors.get("bos") is not None and factors.get("choch") is not None:
-            structure = _clamp_int((float(bos) + float(choch)) / 2.0)
-        else:
-            structure = bos or choch
+    bos_q = _smc_presence_score(factors.get("bos"))
+    choch_q = _smc_presence_score(factors.get("choch"))
+    fvg_q = _smc_presence_score(factors.get("fvg"))
+    ob_q = _smc_presence_score(factors.get("order_block"))
+    smc = max(bos_q, choch_q, fvg_q, ob_q)
+    if structure is None:
+        if smc or factors.get("bos") is not None or factors.get("choch") is not None:
+            structure = smc
+    elif smc:
+        # Do not ignore live FVG/OB/BOS presence when structure_score is range/alignment.
+        structure = max(structure, smc)
     pa = _clamp_int(
         score.get("pa_confluence")
         or factors.get("pa_confluence")
         or factors.get("rsi")
     )
+    liquidity = _clamp_int(score.get("liquidity") or factors.get("liquidity_sweep"))
+    if fvg_q or ob_q:
+        liquidity = max(liquidity or 0, fvg_q, ob_q)
     return evaluate_opportunity(
         direction=str(score.get("direction") or "NONE"),
         structure=structure,
@@ -311,7 +324,7 @@ def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
         confidence=confidence,
         regime=str(score.get("market_regime") or score.get("regime") or "") or None,
         price_action=pa,
-        liquidity=_clamp_int(score.get("liquidity") or factors.get("liquidity_sweep")),
+        liquidity=liquidity,
         volatility=_vol_component(
             factors.get("volatility") or factors.get("atr_expansion"),
             vol if isinstance(vol, dict) else None,

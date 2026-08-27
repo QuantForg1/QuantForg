@@ -5,16 +5,21 @@ export type SignalPipeline = {
   data: string;
   buy_score: number;
   sell_score: number;
+  candidate: string;
   decision: string;
+  final_decision: string;
   first_blocker: string | null;
   sniper: string;
   risk: string;
   safety: string;
   optimizer: string;
   oms: string;
+  broker: string;
+  mt5: string;
   opportunity_score: number;
   opportunity_threshold: number;
   execution_lifecycle: string | null;
+  chase_distance: string | null;
 };
 
 export function formatSignalHeadline(
@@ -56,12 +61,17 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
     return s || fallback;
   };
   const blocker = row.first_blocker;
+  const decision = text(row.decision, "WAIT");
+  const takeFallback =
+    decision === "BUY" || decision === "SELL" ? "TAKE" : "WAIT";
   return {
     market: text(row.market, "UNKNOWN"),
     data: text(row.data, "UNKNOWN"),
     buy_score: num(row.buy_score),
     sell_score: num(row.sell_score),
-    decision: text(row.decision, "WAIT"),
+    candidate: text(row.candidate, "NONE"),
+    decision,
+    final_decision: text(row.final_decision, takeFallback),
     first_blocker:
       blocker == null || blocker === "" ? null : String(blocker),
     sniper: text(row.sniper, "NOT_RUN"),
@@ -69,12 +79,18 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
     safety: text(row.safety, "NOT_REACHED"),
     optimizer: text(row.optimizer, "NOT_REACHED"),
     oms: text(row.oms, "NOT_REACHED"),
+    broker: text(row.broker, "NOT_REACHED"),
+    mt5: text(row.mt5, "NOT_REACHED"),
     opportunity_score: num(row.opportunity_score),
     opportunity_threshold: num(row.opportunity_threshold) || 70,
     execution_lifecycle:
       row.execution_lifecycle == null || row.execution_lifecycle === ""
         ? null
         : String(row.execution_lifecycle),
+    chase_distance:
+      row.chase_distance == null || row.chase_distance === ""
+        ? null
+        : String(row.chase_distance),
   };
 }
 

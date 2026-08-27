@@ -323,6 +323,8 @@ class InstitutionalDecisionPipeline:
                     highs=tuple(getattr(snapshot, "entry_highs", ()) or ()),
                     lows=tuple(getattr(snapshot, "entry_lows", ()) or ()),
                     closes=tuple(getattr(snapshot, "entry_closes", ()) or ()),
+                    bid=getattr(account, "bid", None),
+                    ask=getattr(account, "ask", None),
                 )
                 self._last_ai_score = ai_score.to_dict()
                 diag = get_scalping_diagnostics_store()
