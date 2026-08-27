@@ -875,6 +875,19 @@ async def build_ite_cycle_market_context(
     except Exception:
         atr = None
     atr_dec = Decimal(str(atr)) if atr is not None else None
+    try:
+        entry_atr = getattr(snapshot, "entry_atr", None)
+        analysis_atr = getattr(snapshot, "atr", None)
+        if entry_atr is not None:
+            diag["entry_atr"] = str(entry_atr)
+        if analysis_atr is not None:
+            diag["analysis_atr"] = str(analysis_atr)
+            if "atr" not in diag:
+                diag["atr"] = str(analysis_atr)
+        if atr_dec is not None:
+            diag["stop_atr"] = str(atr_dec)
+    except Exception:
+        pass
 
     open_n = open_positions if isinstance(open_positions, int) else 0
     # Incomplete book with opens: clear sides so pipeline fail-closes add-ons

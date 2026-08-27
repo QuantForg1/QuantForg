@@ -1013,6 +1013,19 @@ export function AutoTradingWorkspace() {
           : "WAIT";
   const cycleOutcome = str(last.cycle_outcome, "").toLowerCase();
   const forwarded = Boolean(last.forwarded_to_oms);
+  const cycleAbort = str(
+    asRecord(last.execution_blocked).reason_code || last.abort_reason,
+    "",
+  ).toUpperCase();
+  const cycleBlockStage = str(
+    asRecord(last.execution_blocked).stage,
+    "",
+  ).toUpperCase();
+  const riskBlocked =
+    cycleBlockStage === "RISK" ||
+    cycleAbort.includes("RISK") ||
+    cycleAbort.includes("MIN_LOT") ||
+    cycleAbort.includes("SIZING");
   const hasTicket = last.mt5_ticket != null && str(last.mt5_ticket) !== "";
   const latencyMs =
     last.latency_ms != null && Number.isFinite(num(last.latency_ms))
@@ -1080,11 +1093,21 @@ export function AutoTradingWorkspace() {
         : stageOf(
             cycleOutcome === "forwarded" ||
               cycleOutcome === "safety_blocked" ||
-              (cycleOutcome.length > 0 && !cycleOutcome.includes("risk")),
-            cycleOutcome.includes("risk") || riskReasons.length > 0,
+              (cycleOutcome.length > 0 &&
+                !cycleOutcome.includes("risk") &&
+                !riskBlocked),
+            cycleOutcome.includes("risk") || riskReasons.length > 0 || riskBlocked,
           ),
-      statusLabel: noEligibleSetup ? "NOT_REACHED" : undefined,
-      detail: noEligibleSetup ? "Current scan did not reach Risk" : riskReasons[0] || "",
+      statusLabel: noEligibleSetup
+        ? "NOT_REACHED"
+        : riskBlocked
+          ? "BLOCK"
+          : undefined,
+      detail: noEligibleSetup
+        ? "Current scan did not reach Risk"
+        : riskBlocked
+          ? str(asRecord(last.execution_blocked).human_reason || last.abort_reason, cycleAbort)
+          : riskReasons[0] || "",
     },
     {
       id: "safety",
@@ -2179,6 +2202,13 @@ export function AutoTradingWorkspace() {
           <MetricCard
             label="OMS"
             value={str(lastPipeline.oms_state, "—")}
+          />
+          <MetricCard
+            label="Current blocker"
+            value={str(
+              asRecord(last.execution_blocked).reason_code || last.abort_reason,
+              "NONE",
+            )}
           />
         </div>
         <p className="mt-2 text-[11px] text-[var(--fg-muted)]">

@@ -101,6 +101,21 @@ def _oms_submit_path_healthy(probes: Any) -> bool:
     return bool(getattr(probes, "gateway_available", False))
 
 
+def _merge_cycle_diagnostics(
+    ctx_diag: dict[str, Any] | None,
+    cycle_diag: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Keep execution artefacts written during the cycle.
+
+    Overwriting with the pre-cycle market-context dict dropped
+    execution_contract / optimizer / EXECUTION_BLOCKED (silent TAKE stall).
+    """
+    merged = dict(ctx_diag or {})
+    extra = dict(cycle_diag or {})
+    merged.update(extra)
+    return merged
+
+
 @dataclass
 class ShadowCycleResult:
     ok: bool
@@ -126,6 +141,7 @@ class ShadowCycleResult:
     position_plan: dict[str, Any] | None = None
     stage_timings_ms: dict[str, Any] | None = None
     decision_cycle_latency_ms: float | None = None
+    execution_blocked: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -153,6 +169,9 @@ class ShadowCycleResult:
             "stage_timings_ms": self.stage_timings_ms,
             "decision_cycle_latency_ms": self.decision_cycle_latency_ms,
             "execute_now_required": False,
+            "execution_blocked": dict(self.execution_blocked)
+            if self.execution_blocked
+            else None,
         }
 
 
@@ -1910,6 +1929,16 @@ class InstitutionalIteRuntime:
                 snapshot_id=snap.snapshot_id,
             )
             diagnostics["stale_authorization"] = stale
+            from app.domain.institutional_trading.operations.execution_chain_log import (
+                execution_blocked_event as _blk_stale,
+            )
+
+            diagnostics["execution_blocked"] = _blk_stale(
+                stage="MARKET",
+                reason_code=str(stale),
+                human_reason=str(stale),
+                correlation_id=tid,
+            )
             from app.domain.institutional_trading.decision_models import (
                 DecisionAction as _DA_stale,
             )
@@ -2004,6 +2033,19 @@ class InstitutionalIteRuntime:
             )
 
             hold = plan.min_lot_constraint_reason or "effective_position_count=0"
+            from app.domain.institutional_trading.operations.execution_chain_log import (
+                execution_blocked_event as _blk_plan,
+            )
+
+            min_lot_hold = "min_lot" in str(hold).lower()
+            diagnostics["execution_blocked"] = _blk_plan(
+                stage="RISK" if min_lot_hold else "OMS",
+                reason_code=(
+                    "MIN_LOT_INFEASIBLE" if min_lot_hold else "POSITION_LIMIT"
+                ),
+                human_reason=str(hold),
+                correlation_id=tid,
+            )
             blocked = _dc_replace2(
                 decision,
                 action=_DA_zero.NO_TRADE,
@@ -2056,6 +2098,16 @@ class InstitutionalIteRuntime:
                 decision,
                 action=_DA_dup.NO_TRADE,
                 reasons=(*decision.reasons, "duplicate_or_empty_batch"),
+            )
+            from app.domain.institutional_trading.operations.execution_chain_log import (
+                execution_blocked_event as _blk_dup,
+            )
+
+            diagnostics["execution_blocked"] = _blk_dup(
+                stage="OMS",
+                reason_code="DUPLICATE_SIGNAL",
+                human_reason="duplicate_or_empty_batch",
+                correlation_id=tid,
             )
             last = self.execution.bridge.handle(blocked, ctx, trace_id=tid)
         return last, diagnostics
@@ -2915,6 +2967,18 @@ class InstitutionalIteRuntime:
                 f":count={opt.get('defer_count') or 0}"
                 f":remaining_wait_ms={opt.get('remaining_wait_ms') or 0}"
             )
+            from app.domain.institutional_trading.operations.execution_chain_log import (
+                execution_blocked_event,
+            )
+
+            blocked_ev = execution_blocked_event(
+                stage="OPTIMIZER",
+                reason_code="EXECUTION_OPTIMIZER_DEFER",
+                human_reason=detail,
+                correlation_id=tid,
+            )
+            if isinstance(market_context_diagnostics, dict):
+                market_context_diagnostics["execution_blocked"] = blocked_ev
             result = ShadowCycleResult(
                 ok=True,
                 trace_id=tid,
@@ -2933,6 +2997,7 @@ class InstitutionalIteRuntime:
                     else None
                 ),
                 signal_id=str(getattr(decision, "id", "") or "") or None,
+                execution_blocked=blocked_ev,
             )
             with self._lock:
                 self._last_cycle = result
@@ -2985,6 +3050,24 @@ class InstitutionalIteRuntime:
                 may_submit_oms=False,
                 execute_now_required=False,
             )
+            from app.domain.institutional_trading.operations.execution_chain_log import (
+                execution_blocked_event,
+            )
+
+            blocked_ev = execution_blocked_event(
+                stage=str(contract.blocking_stage or "RISK"),
+                reason_code=str(contract.fault_code or "EXECUTION_BLOCKED"),
+                human_reason=str(contract.fault_reason or ""),
+                correlation_id=tid,
+            )
+            market_context_diagnostics["execution_blocked"] = blocked_ev
+            logger.warning(
+                "EXECUTION_BLOCKED",
+                stage=blocked_ev["stage"],
+                reason_code=blocked_ev["reason_code"],
+                human_reason=blocked_ev["human_reason"],
+                correlation_id=tid,
+            )
             result = ShadowCycleResult(
                 ok=True,
                 trace_id=tid,
@@ -2999,6 +3082,7 @@ class InstitutionalIteRuntime:
                 snapshot_present=True,
                 market_context_diagnostics=dict(market_context_diagnostics),
                 signal_id=str(getattr(decision, "id", "") or "") or None,
+                execution_blocked=blocked_ev,
             )
             with self._lock:
                 self._last_cycle = result
@@ -3664,6 +3748,35 @@ class InstitutionalIteRuntime:
         if not bridge_result.forwarded_to_oms and decision_reasons:
             detail = f"{detail} | {'; '.join(decision_reasons)}"
 
+        blocked_ev = None
+        if not bool(bridge_result.forwarded_to_oms):
+            if isinstance(market_context_diagnostics, dict):
+                raw_b = market_context_diagnostics.get("execution_blocked")
+                if isinstance(raw_b, dict):
+                    blocked_ev = raw_b
+            action_now = str(getattr(decision.action, "value", decision.action) or "")
+            if blocked_ev is None and action_now in {"BUY", "SELL"}:
+                from app.domain.institutional_trading.operations.execution_chain_log import (
+                    execution_blocked_event as _blk_bridge,
+                )
+
+                abort_s = str(
+                    getattr(
+                        getattr(bridge_result, "abort_reason", None),
+                        "value",
+                        getattr(bridge_result, "abort_reason", None),
+                    )
+                    or "UNKNOWN_EXECUTION_ERROR"
+                )
+                blocked_ev = _blk_bridge(
+                    stage="BROKER",
+                    reason_code=abort_s,
+                    human_reason=str(detail or abort_s),
+                    correlation_id=tid,
+                )
+                if isinstance(market_context_diagnostics, dict):
+                    market_context_diagnostics["execution_blocked"] = blocked_ev
+
         result = ShadowCycleResult(
             ok=(not bridge_result.forwarded_to_oms) if force_shadow else True,
             trace_id=tid,
@@ -3702,6 +3815,7 @@ class InstitutionalIteRuntime:
                 else None
             ),
             decision_cycle_latency_ms=round(latency_ms, 3),
+            execution_blocked=blocked_ev,
         )
         with self._lock:
             self._last_cycle = result
@@ -5352,7 +5466,12 @@ class InstitutionalIteRuntime:
             oms_latency = None
             with self._lock:
                 if self._last_cycle is not None:
-                    self._last_cycle.market_context_diagnostics = dict(ctx.diagnostics)
+                    self._last_cycle.market_context_diagnostics = (
+                        _merge_cycle_diagnostics(
+                            ctx.diagnostics,
+                            self._last_cycle.market_context_diagnostics,
+                        )
+                    )
                     self._last_cycle.market_context_reason = ctx.reason
                     self._last_cycle.snapshot_present = True
                     cycle = self._last_cycle
@@ -5890,8 +6009,11 @@ class InstitutionalIteRuntime:
                         )
                     with self._lock:
                         if self._last_cycle is not None:
-                            self._last_cycle.market_context_diagnostics = dict(
-                                ctx.diagnostics
+                            self._last_cycle.market_context_diagnostics = (
+                                _merge_cycle_diagnostics(
+                                    ctx.diagnostics,
+                                    self._last_cycle.market_context_diagnostics,
+                                )
                             )
                             self._last_cycle.market_context_reason = ctx.reason
                             self._last_cycle.snapshot_present = True

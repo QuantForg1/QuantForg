@@ -154,6 +154,46 @@ class TestDynamicSizingSafety:
         assert d.quality_band == "weak"
         assert d.final_lot == Decimal("0")
 
+    def test_opportunity_pass_does_not_quality_weak_reject(self) -> None:
+        """Live stall: quality 66 / conf 57 after Opportunity 73 + sniper TAKE."""
+        d = calculate_dynamic_lots_v2(
+            equity=Decimal("5000"),
+            stop_distance=Decimal("1.50"),
+            risk_pct=Decimal("0.50"),
+            contract_size=Decimal("100"),
+            min_lot=Decimal("0.01"),
+            lot_step=Decimal("0.01"),
+            quality_score=66,
+            confidence=57,
+            quality_reject=False,
+            opportunity_score=73,
+            sniper_passed=True,
+            log=False,
+        )
+        assert d.valid is True
+        assert d.final_lot > 0
+        assert d.quality_band == "average"
+        assert "Weak setup" not in (d.rejection_reason or "")
+
+    def test_opportunity_pass_still_min_lot_infeasible(self) -> None:
+        d = calculate_dynamic_lots_v2(
+            equity=Decimal("139.90"),
+            stop_distance=Decimal("9.1724"),
+            risk_pct=Decimal("1.0"),
+            contract_size=Decimal("100"),
+            min_lot=Decimal("0.01"),
+            lot_step=Decimal("0.01"),
+            quality_score=66,
+            confidence=57,
+            quality_reject=False,
+            opportunity_score=73,
+            sniper_passed=True,
+            log=False,
+        )
+        assert d.valid is False
+        assert d.method == "below_min_lot"
+        assert d.final_lot == Decimal("0")
+
     def test_never_exceed_configured_max_risk(self) -> None:
         d = calculate_dynamic_lots_v2(
             equity=Decimal("10000"),

@@ -339,6 +339,8 @@ def calculate_dynamic_lots_v2(
     spread_score: int | None = None,
     trend_confidence: int | None = None,
     quality_reject: bool = False,
+    opportunity_score: int | None = None,
+    sniper_passed: bool = False,
     previous_final_lot: Decimal | None = None,
     max_margin_usage_pct: Decimal = Decimal("30"),
     max_symbol_exposure_pct: Decimal | None = None,
@@ -405,6 +407,17 @@ def calculate_dynamic_lots_v2(
         min_confidence=min_c,
     )
     q_scale = _QUALITY_RISK_SCALE[band]
+    # Opportunity 70 + sniper TAKE already selected the setup. Quality/confidence
+    # floors here are SOFT (reduce-only). Hard-zero after TAKE was a duplicate
+    # gate (live: quality=66 confidence=57 vs 74/71 after Opportunity 73 PASS).
+    opp_ok = False
+    try:
+        opp_ok = opportunity_score is not None and int(opportunity_score) >= 70
+    except (TypeError, ValueError):
+        opp_ok = False
+    take_already_selected = (not bool(quality_reject)) and (
+        opp_ok or bool(sniper_passed)
+    )
 
     def _reject(
         method: str,
@@ -459,14 +472,18 @@ def calculate_dynamic_lots_v2(
         )
 
     if band == "weak" or q_scale <= 0:
-        return _reject(
-            "quality_weak",
-            (
-                f"Weak setup — sizing reject "
-                f"(quality={quality_score} confidence={confidence})"
-            ),
-            risk=Decimal("0"),
-        )
+        if take_already_selected:
+            band = "average"
+            q_scale = _QUALITY_RISK_SCALE["average"]
+        else:
+            return _reject(
+                "quality_weak",
+                (
+                    f"Weak setup — sizing reject "
+                    f"(quality={quality_score} confidence={confidence})"
+                ),
+                risk=Decimal("0"),
+            )
 
     # Soft quality scales on liquidity / spread / trend (reduce only)
     soft_scale = Decimal("1")

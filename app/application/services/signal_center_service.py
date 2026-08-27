@@ -887,6 +887,108 @@ def _pipeline_snapshot(
     }
 
 
+def _overlay_last_ite_cycle(
+    row: dict[str, Any],
+    last: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Bind Signal Center to the authoritative ITE cycle.
+
+    Scanner TAKE + inferred OMS READY must not hide RISK_REJECTED / no ticket.
+    """
+    if not isinstance(last, dict) or not isinstance(row, dict):
+        return row
+    forwarded = bool(last.get("forwarded_to_oms"))
+    blocked = last.get("execution_blocked")
+    if not isinstance(blocked, dict):
+        blocked = {}
+        mcd = last.get("market_context_diagnostics")
+        if isinstance(mcd, dict) and isinstance(mcd.get("execution_blocked"), dict):
+            blocked = mcd["execution_blocked"]
+    abort = str(blocked.get("reason_code") or last.get("abort_reason") or "").upper()
+    human = str(
+        blocked.get("human_reason")
+        or last.get("detail")
+        or last.get("abort_reason")
+        or ""
+    )
+    ticket = last.get("mt5_ticket")
+    pipe = dict(row.get("pipeline") or {})
+    if str(pipe.get("execution_lifecycle") or "").upper() == "FILLED":
+        return row
+    take = str(pipe.get("final_decision") or row.get("direction") or "").upper() in {
+        "BUY",
+        "SELL",
+        "TAKE",
+    }
+    if forwarded and ticket:
+        pipe["oms"] = "READY"
+        pipe["broker"] = "SUBMITTED"
+        pipe["mt5"] = "PENDING"
+        pipe["execution_lifecycle"] = "ORDER_SENT"
+        row["pipeline"] = pipe
+        row["execution_state"] = "ORDER_SENT"
+        return row
+    if forwarded:
+        pipe["oms"] = "READY"
+        pipe["execution_lifecycle"] = "EXECUTING"
+        row["pipeline"] = pipe
+        return row
+    if not abort and not take:
+        return row
+    if not abort:
+        abort = "UNKNOWN_EXECUTION_ERROR"
+        human = human or "TAKE reached Risk/Safety/OMS with no MT5 ticket"
+    stage = str(blocked.get("stage") or "").upper()
+    if not stage:
+        if any(tok in abort for tok in ("RISK", "MIN_LOT", "SIZING", "WEAK")):
+            stage = "RISK"
+        elif "SAFETY" in abort or "KILL" in abort:
+            stage = "SAFETY"
+        elif "OPTIMIZER" in abort or "DEFER" in abort:
+            stage = "OPTIMIZER"
+        elif any(tok in abort for tok in ("OMS", "DUPLICATE", "POSITION")):
+            stage = "OMS"
+        elif any(tok in abort for tok in ("BROKER", "GATEWAY", "MT5")):
+            stage = "BROKER"
+        else:
+            stage = "OMS"
+    not_reached = "NOT_REACHED"
+    pipe["first_blocker"] = abort
+    pipe["execution_lifecycle"] = "EXECUTION_BLOCKED"
+    if stage == "RISK":
+        pipe["risk"] = "BLOCK"
+        pipe["optimizer"] = not_reached
+        pipe["oms"] = not_reached
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
+    elif stage == "SAFETY":
+        pipe["risk"] = "READY"
+        pipe["safety"] = "BLOCK"
+        pipe["optimizer"] = not_reached
+        pipe["oms"] = not_reached
+    elif stage == "OPTIMIZER":
+        pipe["risk"] = "READY"
+        pipe["safety"] = "READY"
+        pipe["optimizer"] = "WAIT"
+        pipe["oms"] = not_reached
+    elif stage == "BROKER":
+        pipe["oms"] = "READY"
+        pipe["broker"] = "BLOCK"
+        pipe["mt5"] = not_reached
+    else:
+        pipe["oms"] = "BLOCK"
+        pipe["broker"] = not_reached
+        pipe["mt5"] = not_reached
+    row["pipeline"] = pipe
+    row["first_blocker"] = abort
+    row["block_code"] = abort
+    row["execution_state"] = "EXECUTION_BLOCKED"
+    row["status"] = abort
+    if human:
+        row["reasoning"] = human[:500]
+    return row
+
+
 def _merge_score_row(prev: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     merged = dict(prev)
     for key, value in incoming.items():
@@ -1038,6 +1140,20 @@ def list_live_signals(
                 )
         except Exception:
             logger.exception("signal_center_diagnostics_fallback_failed")
+
+    last_cycle = None
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        if runtime is not None:
+            st = runtime.status() or {}
+            raw_last = st.get("last_cycle")
+            last_cycle = raw_last if isinstance(raw_last, dict) else None
+    except Exception:
+        last_cycle = None
+    if last_cycle:
+        signals = [_overlay_last_ite_cycle(s, last_cycle) for s in signals]
 
     qn = (q or "").strip().upper()
     if qn:

@@ -577,6 +577,19 @@ class InstitutionalDecisionPipeline:
                 broker_min_lot=live_min,
                 broker_lot_step=live_step,
             )
+            ai_payload = (
+                self._last_ai_score if isinstance(self._last_ai_score, dict) else {}
+            )
+            opportunity_score = None
+            try:
+                if ai_payload.get("opportunity_score") is not None:
+                    opportunity_score = int(ai_payload.get("opportunity_score"))
+            except (TypeError, ValueError):
+                opportunity_score = None
+            sniper_blob = ai_payload.get("sniper_entry") or ai_payload.get("sniper")
+            sniper_passed = bool(
+                isinstance(sniper_blob, dict) and sniper_blob.get("passed")
+            )
             session_assess = assess_session(
                 str(
                     getattr(
@@ -672,6 +685,8 @@ class InstitutionalDecisionPipeline:
                         quality_reject=(
                             bool(ai_score.reject) if ai_score is not None else False
                         ),
+                        opportunity_score=opportunity_score,
+                        sniper_passed=sniper_passed,
                         broker=broker_spec,
                         balance=account.balance,
                         used_margin=account.used_margin,
@@ -909,6 +924,8 @@ class InstitutionalDecisionPipeline:
                         quality_reject=(
                             bool(ai_score.reject) if ai_score is not None else False
                         ),
+                        opportunity_score=opportunity_score,
+                        sniper_passed=sniper_passed,
                         previous_final_lot=previous_lot,
                         max_margin_usage_pct=scalp_cfg.max_margin_usage_pct,
                         max_symbol_exposure_pct=scalp_cfg.max_symbol_exposure_pct,

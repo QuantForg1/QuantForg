@@ -6,11 +6,29 @@ never inherit a prior ticket / retcode / PASS.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 NOT_ATTEMPTED = "NOT_ATTEMPTED"
 CHAIN_PASS = "PASS"  # noqa: S105 — log label, not a secret
 CHAIN_FAIL = "FAIL"
+
+
+def execution_blocked_event(
+    *,
+    stage: str,
+    reason_code: str,
+    human_reason: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """Explicit EXECUTION_BLOCKED artefact. Never a silent drop."""
+    return {
+        "stage": str(stage or "UNKNOWN").upper(),
+        "reason_code": str(reason_code or "UNKNOWN_EXECUTION_ERROR").upper(),
+        "human_reason": str(human_reason or reason_code or "execution blocked"),
+        "correlation_id": correlation_id,
+        "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+    }
 
 
 def classify_post_ai_execution_chain(
