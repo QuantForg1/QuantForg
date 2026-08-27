@@ -27,7 +27,7 @@ from app.domain.institutional_trading.ai_scalping.direction import (
 from app.domain.institutional_trading.ai_scalping.duplicate_guard import (
     may_add_scalping_trade,
 )
-from app.domain.institutional_trading.ai_scalping.scoring import AiScalpingScore
+from app.domain.institutional_trading.ai_scalping.scoring import AiScalpingScore, score_scalping_setup
 from app.domain.institutional_trading.ai_scalping.sniper_entry import (
     evaluate_sniper_entry,
 )
@@ -856,3 +856,141 @@ def test_wait_overlay_does_not_paint_oms_block() -> None:
     assert over["pipeline"]["oms"] == "NOT_REACHED"
     assert over["pipeline"]["final_decision"] == "WAIT"
     assert over.get("execution_state") != "EXECUTED"
+
+
+def _live_like_opportunity(**factor_overrides: object) -> dict:
+    factors: dict[str, object] = {
+        "bos": 85,
+        "choch": 20,
+        "fvg": 80,
+        "order_block": 20,
+        "m1_bos": 85,
+        "m5_bos": 85,
+        "m15_bos": 20,
+        "displacement": 78,
+        "timing_retest": 80,
+        "liquidity_sweep": 40,
+        "h1_bias": 10,
+        "mtf": 36,
+    }
+    factors.update(factor_overrides)
+    return {
+        "direction": "SELL",
+        "trade_quality": 63,
+        "ai_confidence": 56,
+        "structure_score": 52,
+        "momentum": 52,
+        "liquidity": 40,
+        "spread_score": 80,
+        "expected_rr": Decimal("1.20"),
+        "market_regime": "weak_trend",
+        "mtf_alignment": 52,
+        "pa_confluence": 50,
+        "factors": factors,
+    }
+
+
+def test_live_like_ltf_scalp_reaches_opportunity_70() -> None:
+    """M5+M1 BOS + zone + timing must not stay at 66 because H1 alignment is 52."""
+    verdict = evaluate_from_score_dict(_live_like_opportunity())
+    assert verdict.threshold == 70
+    assert verdict.opportunity_score >= OPPORTUNITY_SCORE_THRESHOLD
+    assert verdict.score_breakdown["mtf_alignment"] >= 76
+    assert verdict.score_breakdown["momentum"] >= 75
+    assert verdict.score_breakdown["price_action"] >= 75
+    assert verdict.score_breakdown["structure"] == 85
+
+
+def test_h1_low_alignment_does_not_cap_ltf_mtf() -> None:
+    raw = _live_like_opportunity()
+    raw["mtf_alignment"] = 28
+    verdict = evaluate_from_score_dict(raw)
+    assert verdict.score_breakdown["mtf_alignment"] >= 76
+    assert verdict.opportunity_score >= OPPORTUNITY_SCORE_THRESHOLD
+
+
+def test_fvg_and_bos_are_max_not_sum() -> None:
+    verdict = evaluate_from_score_dict(_live_like_opportunity())
+    assert verdict.score_breakdown["structure"] == 85
+    assert verdict.score_breakdown["structure"] != 85 + 80
+
+
+def test_m1_m5_bos_not_discarded_when_alignment_is_range() -> None:
+    raw = _live_like_opportunity(displacement=20, timing_retest=20)
+    raw["mtf_alignment"] = 52
+    verdict = evaluate_from_score_dict(raw)
+    assert verdict.score_breakdown["mtf_alignment"] >= 76
+
+
+def test_stale_timing_does_not_receive_retest_points() -> None:
+    with_timing = evaluate_from_score_dict(_live_like_opportunity())
+    stale = evaluate_from_score_dict(
+        _live_like_opportunity(timing_retest=20, displacement=20)
+    )
+    assert with_timing.score_breakdown["price_action"] > stale.score_breakdown["price_action"]
+    assert stale.score_breakdown["price_action"] == 50
+
+
+def test_macro_only_live_like_stays_below_70() -> None:
+    verdict = evaluate_from_score_dict(
+        {
+            "direction": "SELL",
+            "trade_quality": 63,
+            "ai_confidence": 56,
+            "structure_score": 52,
+            "momentum": 52,
+            "liquidity": 40,
+            "spread_score": 80,
+            "expected_rr": Decimal("1.20"),
+            "market_regime": "weak_trend",
+            "mtf_alignment": 52,
+            "pa_confluence": 50,
+            "factors": {
+                "bos": 20,
+                "choch": 20,
+                "fvg": 25,
+                "order_block": 20,
+                "m1_bos": 20,
+                "m5_bos": 20,
+                "h1_bias": 10,
+                "mtf": 24,
+            },
+        }
+    )
+    assert verdict.opportunity_score < OPPORTUNITY_SCORE_THRESHOLD
+    assert verdict.eligible is False
+
+
+def test_opportunity_pass_alone_does_not_authorize_execution() -> None:
+    out = evaluate_gold_execution_contract(
+        _ready(opportunity_score=74, action="NO_TRADE", direction="NONE")
+    )
+    assert out.may_submit_oms is False
+
+
+def test_score_scalping_setup_uses_m1_m5_bos_not_h1_alignment() -> None:
+    snap = _snap(
+        macro=TrendDirection.UP,
+        primary=TrendDirection.UNKNOWN,
+        entry=TrendDirection.DOWN,
+        execution=TrendDirection.DOWN,
+        m1=_struct(bos=[_bos("DOWN")]),
+        m5=_struct(bos=[_bos("DOWN")]),
+        fvgs=[_fvg(side="BEARISH", high="2612", low="2608")],
+    )
+    snap.trade_quality.total = 63
+    snap.trade_quality.components = {"momentum": 52, "liquidity": 40, "volume": 40}
+    snap.entry_atr = None
+    out = score_scalping_setup(
+        snap,
+        atr=Decimal("4.00"),
+        mid=Decimal("2610"),
+        bid=Decimal("2609.90"),
+        ask=Decimal("2610.10"),
+        symbol="XAUUSD_i",
+    )
+    assert out.opportunity_threshold == 70
+    assert out.factors.get("m5_bos") == 85
+    assert out.factors.get("m1_bos") == 85
+    assert (out.opportunity_audit or {}).get("h1_context", {}).get("veto") is False
+    assert out.opportunity_score >= OPPORTUNITY_SCORE_THRESHOLD

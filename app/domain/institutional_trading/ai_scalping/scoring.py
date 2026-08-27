@@ -22,6 +22,7 @@ from app.domain.institutional_trading.ai_scalping.config import (
 from app.domain.institutional_trading.ai_scalping.direction import (
     decide_scalping_direction,
     iter_scalp_structures,
+    structure_tfs_for_side,
 )
 from app.domain.institutional_trading.ai_scalping.pa_confluence import (
     evaluate_pa_confluence,
@@ -102,6 +103,7 @@ class AiScalpingScore:
     score_band: str = "SETUP_NOT_READY"
     score_breakdown: dict[str, int] | None = None
     opportunity_eligible: bool = False
+    opportunity_audit: dict[str, object] | None = None
     sniper_entry: dict[str, object] | None = None
     # Operator-facing action. Bias stays on ``direction`` (BUY/SELL lean).
     signal_action: str = "WAIT"
@@ -150,6 +152,7 @@ class AiScalpingScore:
             "opportunity_threshold": self.opportunity_threshold,
             "score_band": self.score_band,
             "score_breakdown": dict(self.score_breakdown or {}),
+            "opportunity_audit": dict(self.opportunity_audit or {}),
             "opportunity_eligible": self.opportunity_eligible,
             "opportunity_gate": (
                 "PASS"
@@ -326,6 +329,10 @@ def score_scalping_setup(
     )
     factors["bos"] = 85 if bos else 20
     factors["choch"] = 80 if choch else 20
+    aligned_tfs = structure_tfs_for_side(snapshot, direction_dec.direction)
+    factors["m1_bos"] = 85 if "M1" in aligned_tfs else 20
+    factors["m5_bos"] = 85 if "M5" in aligned_tfs else 20
+    factors["m15_bos"] = 85 if "M15" in aligned_tfs else 20
 
     session = assess_session(
         str(getattr(snapshot.session.session, "value", snapshot.session.session)),
@@ -561,31 +568,6 @@ def score_scalping_setup(
             f"({cooldown_eval.remaining_seconds:.0f}s remaining)"
         )
 
-    verdict = evaluate_from_score_dict(
-        {
-            "direction": direction_dec.direction.value,
-            "trade_quality": trade_quality,
-            "ai_confidence": confidence,
-            "structure_score": direction_dec.structure_score,
-            "momentum": factors["momentum"],
-            "liquidity": liquidity_score,
-            "spread_score": spread_a.score,
-            "expected_rr": expected_rr,
-            "market_regime": regime.regime,
-            "mtf_alignment": max(
-                int(trend.alignment_score),
-                int(factors.get("mtf") or 0),
-            ),
-            "pa_confluence": pa.score,
-            "factors": factors,
-            "volatility_decision": gates.volatility_decision,
-        }
-    )
-    reasons.append(
-        f"opportunity_score={verdict.opportunity_score} "
-        f"threshold={verdict.threshold} band={verdict.score_band}"
-    )
-
     setup_dir = None
     if setup_scan is not None and setup_scan.best is not None:
         setup_dir = str(setup_scan.best.direction or "") or None
@@ -609,6 +591,50 @@ def score_scalping_setup(
         spread_score=int(spread_a.score),
     )
     reasons.extend(sniper.reasons)
+    setup_state = str(sniper.diagnostics.get("setup_state") or "")
+    stale_or_chase = setup_state in {"CHASING", "STALE", "CONFLICT"}
+    if stale_or_chase:
+        factors["displacement"] = 20
+        factors["timing_retest"] = 20
+    else:
+        factors["displacement"] = (
+            78 if sniper.pillars.get("displacement_or_momentum") else 20
+        )
+        entry_state = str(sniper.diagnostics.get("entry_state") or "")
+        factors["timing_retest"] = (
+            80 if entry_state in {"RETEST", "INSIDE", "CONTROLLED"} else 20
+        )
+    factors["ltf_mtf_alignment"] = (
+        82
+        if factors.get("m1_bos") == 85 and factors.get("m5_bos") == 85
+        else (
+            78
+            if factors.get("m5_bos") == 85
+            else (76 if factors.get("m1_bos") == 85 else 0)
+        )
+    )
+
+    verdict = evaluate_from_score_dict(
+        {
+            "direction": direction_dec.direction.value,
+            "trade_quality": trade_quality,
+            "ai_confidence": confidence,
+            "structure_score": direction_dec.structure_score,
+            "momentum": factors["momentum"],
+            "liquidity": liquidity_score,
+            "spread_score": spread_a.score,
+            "expected_rr": expected_rr,
+            "market_regime": regime.regime,
+            "mtf_alignment": int(trend.alignment_score),
+            "pa_confluence": pa.score,
+            "factors": factors,
+            "volatility_decision": gates.volatility_decision,
+        }
+    )
+    reasons.append(
+        f"opportunity_score={verdict.opportunity_score} "
+        f"threshold={verdict.threshold} band={verdict.score_band}"
+    )
     if not sniper.passed:
         wait_code = sniper.primary_reason or "WAIT_SNIPER"
         reject_list.append(wait_code)
@@ -705,6 +731,62 @@ def score_scalping_setup(
         opportunity_threshold=verdict.threshold,
         score_band=verdict.score_band,
         score_breakdown=dict(verdict.score_breakdown),
+        opportunity_audit={
+            "structure": {
+                "score": int(verdict.score_breakdown.get("structure") or 0),
+                "max": 100,
+                "weight": 14,
+                "independent": True,
+                "source": "BOS/CHOCH/FVG/OB (max, not sum)",
+            },
+            "liquidity": {
+                "score": int(verdict.score_breakdown.get("liquidity") or 0),
+                "max": 100,
+                "weight": 10,
+                "independent": True,
+            },
+            "zone": {
+                "score": max(
+                    80 if int(factors.get("fvg") or 0) >= 70 else 0,
+                    85 if int(factors.get("order_block") or 0) >= 70 else 0,
+                ),
+                "max": 100,
+                "independent": True,
+            },
+            "displacement": {
+                "score": int(factors.get("displacement") or 0),
+                "max": 100,
+                "independent": True,
+            },
+            "timing": {
+                "score": int(factors.get("timing_retest") or 0),
+                "max": 100,
+                "independent": True,
+            },
+            "rr": {
+                "score": int(verdict.score_breakdown.get("rr_quality") or 0),
+                "max": 100,
+                "weight": 6,
+            },
+            "freshness": (
+                "FAIL"
+                if stale_or_chase or not sniper.pillars.get("fresh_zone", True)
+                else "PASS"
+            ),
+            "confluence": sniper.diagnostics.get("confluence_class"),
+            "ltf_edge": int(direction_dec.directional_edge),
+            "h1_context": {
+                "score": int(factors.get("h1_bias") or 0),
+                "role": "context-only",
+                "veto": False,
+            },
+            "mtf_alignment": {
+                "score": int(verdict.score_breakdown.get("mtf_alignment") or 0),
+                "max": 100,
+                "weight": 6,
+                "source": "LTF M1/M5 BOS 0-100; H1 alignment does not cap",
+            },
+        },
         opportunity_eligible=bool(verdict.eligible) and not reject,
         sniper_entry=_sniper_payload(sniper),
         signal_action=signal_action,

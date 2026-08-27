@@ -85,6 +85,24 @@ def iter_scalp_structures(snapshot: MarketAnalysisSnapshot) -> list[Any]:
     return [struct for _, struct in iter_scalp_structure_entries(snapshot)]
 
 
+def structure_tfs_for_side(
+    snapshot: MarketAnalysisSnapshot,
+    side: TradeDirection,
+) -> set[str]:
+    """Timeframes that have a BOS/CHOCH aligned to ``side``. Discovery only."""
+    if side not in {TradeDirection.BUY, TradeDirection.SELL}:
+        return set()
+    out: set[str] = set()
+    for tf, structure in iter_scalp_structure_entries(snapshot):
+        events = _seq(structure, "breaks_of_structure")[-3:]
+        events.extend(_seq(structure, "changes_of_character")[-2:])
+        for event in events:
+            if structure_event_side(event) is side:
+                out.add(tf)
+                break
+    return out
+
+
 def _trend_matches(value: Any, expected: TrendDirection) -> bool:
     if value == expected:
         return True

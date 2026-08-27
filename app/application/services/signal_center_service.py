@@ -34,6 +34,18 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _xy(raw: Any) -> str | None:
+    if not isinstance(raw, dict):
+        return None
+    score = raw.get("score")
+    if score is None or score == "":
+        return None
+    try:
+        return f"{int(score)}/{int(raw.get('max') or 100)}"
+    except (TypeError, ValueError):
+        return None
+
+
 def _session() -> str:
     try:
         return classify_session_utc(datetime.now(UTC)).value
@@ -623,6 +635,9 @@ def _row_from_score(score: dict[str, Any], *, strategy: str | None = None) -> di
             score_breakdown=score.get("score_breakdown")
             if isinstance(score.get("score_breakdown"), dict)
             else None,
+            opportunity_audit=score.get("opportunity_audit")
+            if isinstance(score.get("opportunity_audit"), dict)
+            else None,
             candidate=direction if direction in {"BUY", "SELL"} else "NONE",
             spread=spread,
             atr=atr,
@@ -676,6 +691,7 @@ def _pipeline_snapshot(
     order_status: Any = None,
     order_ticket: Any = None,
     score_breakdown: dict[str, Any] | None = None,
+    opportunity_audit: dict[str, Any] | None = None,
     candidate: str = "NONE",
     spread: Any = None,
     atr: Any = None,
@@ -806,6 +822,17 @@ def _pipeline_snapshot(
         "stop": stop_loss,
         "target": take_profit,
         "score_breakdown": dict(score_breakdown or {}),
+        "opportunity_audit": dict(opportunity_audit or {}),
+        "structure_score_xy": _xy((opportunity_audit or {}).get("structure")),
+        "liquidity_score_xy": _xy((opportunity_audit or {}).get("liquidity")),
+        "zone_score_xy": _xy((opportunity_audit or {}).get("zone")),
+        "displacement_score_xy": _xy((opportunity_audit or {}).get("displacement")),
+        "timing_score_xy": _xy((opportunity_audit or {}).get("timing")),
+        "rr_score_xy": _xy((opportunity_audit or {}).get("rr")),
+        "freshness": (
+            str((opportunity_audit or {}).get("freshness") or "") or None
+        ),
+        "h1_context": "context-only",
         "decision": action,
         "final_decision": "TAKE" if take else "WAIT",
         "first_blocker": code or None,

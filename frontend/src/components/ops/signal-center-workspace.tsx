@@ -476,6 +476,17 @@ export function SignalCenterWorkspace() {
                     ? `${selected.pipeline.opportunity_gate} ${selected.pipeline.opportunity_score}/${selected.pipeline.opportunity_threshold}`
                     : "—",
                 ],
+                ["Structure", selected.pipeline?.structure_score_xy ?? "—"],
+                ["Liquidity", selected.pipeline?.liquidity_score_xy ?? "—"],
+                ["Zone", selected.pipeline?.zone_score_xy ?? "—"],
+                [
+                  "Displacement",
+                  selected.pipeline?.displacement_score_xy ?? "—",
+                ],
+                ["Timing", selected.pipeline?.timing_score_xy ?? "—"],
+                ["RR", selected.pipeline?.rr_score_xy ?? "—"],
+                ["Freshness", selected.pipeline?.freshness ?? "—"],
+                ["H1 context", selected.pipeline?.h1_context ?? "context-only"],
                 ["First blocker", selected.first_blocker || "—"],
                 ["Sniper", selected.pipeline?.sniper ?? "—"],
                 ["Risk", selected.pipeline?.risk ?? "—"],

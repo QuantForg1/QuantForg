@@ -40,6 +40,14 @@ export type SignalPipeline = {
   signal_age_ms: number | null;
   zone_age_ms: number | null;
   bars_since_structure_event: number | null;
+  structure_score_xy: string | null;
+  liquidity_score_xy: string | null;
+  zone_score_xy: string | null;
+  displacement_score_xy: string | null;
+  timing_score_xy: string | null;
+  rr_score_xy: string | null;
+  freshness: string | null;
+  h1_context: string | null;
 };
 
 export function formatSignalHeadline(
@@ -183,6 +191,38 @@ export function parseSignalPipeline(raw: unknown): SignalPipeline | null {
     )
       ? Number(row.bars_since_structure_event)
       : null,
+    structure_score_xy:
+      row.structure_score_xy == null || row.structure_score_xy === ""
+        ? null
+        : String(row.structure_score_xy),
+    liquidity_score_xy:
+      row.liquidity_score_xy == null || row.liquidity_score_xy === ""
+        ? null
+        : String(row.liquidity_score_xy),
+    zone_score_xy:
+      row.zone_score_xy == null || row.zone_score_xy === ""
+        ? null
+        : String(row.zone_score_xy),
+    displacement_score_xy:
+      row.displacement_score_xy == null || row.displacement_score_xy === ""
+        ? null
+        : String(row.displacement_score_xy),
+    timing_score_xy:
+      row.timing_score_xy == null || row.timing_score_xy === ""
+        ? null
+        : String(row.timing_score_xy),
+    rr_score_xy:
+      row.rr_score_xy == null || row.rr_score_xy === ""
+        ? null
+        : String(row.rr_score_xy),
+    freshness:
+      row.freshness == null || row.freshness === ""
+        ? null
+        : String(row.freshness),
+    h1_context:
+      row.h1_context == null || row.h1_context === ""
+        ? "context-only"
+        : String(row.h1_context),
   };
 }
 

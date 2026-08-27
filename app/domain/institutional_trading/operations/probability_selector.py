@@ -75,6 +75,27 @@ def _smc_presence_score(raw: Any, *, absent_max: int = 30) -> int:
     return n
 
 
+def _ltf_mtf_alignment(factors: Mapping[str, Any]) -> int:
+    """Map M1/M5/M15 BOS presence to a 0–100 MTF score.
+
+    ``factors['mtf']`` is a sum of small direction credits (10/12/14) and is
+    not a 0–100 quality score. Using it as mtf_alignment silently discarded
+    genuine M1/M5 structure in favour of H1 alignment (~52).
+    """
+    m1 = _smc_presence_score(factors.get("m1_bos"))
+    m5 = _smc_presence_score(factors.get("m5_bos"))
+    m15 = _smc_presence_score(factors.get("m15_bos"))
+    if m1 and m5:
+        return 82
+    if m5:
+        return 78
+    if m1:
+        return 76
+    if m15:
+        return 70
+    return 0
+
+
 def _rr_quality(rr: Any) -> int | None:
     if rr is None or rr == "":
         return None
@@ -312,14 +333,35 @@ def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
     liquidity = _clamp_int(score.get("liquidity") or factors.get("liquidity_sweep"))
     if fvg_q or ob_q:
         liquidity = max(liquidity or 0, fvg_q, ob_q)
+    momentum = _clamp_int(
+        score.get("momentum")
+        or factors.get("momentum")
+        or factors.get("trend_strength")
+    )
+    displacement = _smc_presence_score(factors.get("displacement"))
+    if displacement:
+        momentum = max(momentum or 0, displacement)
+    timing = _smc_presence_score(factors.get("timing_retest"))
+    if timing:
+        pa = max(pa or 0, timing)
+    # H1 alignment may be present as context. It must not cap LTF BOS.
+    raw_mtf = _clamp_int(score.get("mtf_alignment"))
+    credit_sum = _clamp_int(factors.get("mtf"))
+    if credit_sum is not None and credit_sum <= 40:
+        credit_sum = None
+    ltf_mtf = _ltf_mtf_alignment(factors)
+    mtf_alignment = max(
+        raw_mtf or 0,
+        credit_sum or 0,
+        ltf_mtf,
+        _clamp_int(factors.get("ltf_mtf_alignment")) or 0,
+    )
+    if not mtf_alignment:
+        mtf_alignment = raw_mtf
     return evaluate_opportunity(
         direction=str(score.get("direction") or "NONE"),
         structure=structure,
-        momentum=_clamp_int(
-            score.get("momentum")
-            or factors.get("momentum")
-            or factors.get("trend_strength")
-        ),
+        momentum=momentum,
         quality=quality,
         confidence=confidence,
         regime=str(score.get("market_regime") or score.get("regime") or "") or None,
@@ -332,9 +374,7 @@ def evaluate_from_score_dict(score: Mapping[str, Any]) -> OpportunityVerdict:
         execution_quality=_clamp_int(
             score.get("spread_score") or factors.get("spread")
         ),
-        mtf_alignment=_clamp_int(
-            score.get("mtf_alignment") or factors.get("mtf") or factors.get("h1_bias")
-        ),
+        mtf_alignment=mtf_alignment,
         risk_reward=score.get("expected_rr") or score.get("risk_reward"),
     )
 
