@@ -85,6 +85,9 @@ class AiScalpingScore:
     reject_reason: str | None = None
     buy_score: int = 0
     sell_score: int = 0
+    ltf_buy_score: int = 0
+    ltf_sell_score: int = 0
+    directional_edge: int = 0
     structure_score: int = 0
     entry: str | None = None
     stop_loss: str | None = None
@@ -130,6 +133,9 @@ class AiScalpingScore:
             "sell_score": self.sell_score,
             "bullish_score": self.buy_score,
             "bearish_score": self.sell_score,
+            "ltf_buy_score": self.ltf_buy_score,
+            "ltf_sell_score": self.ltf_sell_score,
+            "directional_edge": self.directional_edge,
             "structure_score": self.structure_score,
             "entry": self.entry,
             "stop_loss": self.stop_loss,
@@ -390,8 +396,8 @@ def score_scalping_setup(
             volume=factors["volume"],
             liquidity=liquidity_score,
             ema=pa.ema_score,
-            buy_score=direction_dec.buy_score,
-            sell_score=direction_dec.sell_score,
+            buy_score=int(direction_dec.ltf_buy_score),
+            sell_score=int(direction_dec.ltf_sell_score),
             atr_band=resolved.band,
             config=cfg,
         )
@@ -570,7 +576,12 @@ def score_scalping_setup(
 
     setup_dir = None
     if setup_scan is not None and setup_scan.best is not None:
-        setup_dir = str(setup_scan.best.direction or "") or None
+        raw = str(setup_scan.best.direction or "").strip().upper()
+        ai = str(direction_dec.direction.value).strip().upper()
+        # Ranking-only: never forward an opposite family label into sniper.
+        # Scoring already keeps AI direction; a manufactured fade must not WAIT.
+        if raw in {"BUY", "SELL"} and raw == ai:
+            setup_dir = raw
     sniper = evaluate_sniper_entry(
         snapshot,
         direction=direction_dec,
@@ -705,6 +716,9 @@ def score_scalping_setup(
         reject_reason=reject_reason,
         buy_score=direction_dec.buy_score,
         sell_score=direction_dec.sell_score,
+        ltf_buy_score=int(direction_dec.ltf_buy_score),
+        ltf_sell_score=int(direction_dec.ltf_sell_score),
+        directional_edge=int(direction_dec.directional_edge),
         structure_score=direction_dec.structure_score,
         entry=str(targets.entry) if targets.entry is not None else None,
         stop_loss=str(targets.stop_loss) if targets.stop_loss is not None else None,

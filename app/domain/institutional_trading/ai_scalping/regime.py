@@ -122,7 +122,7 @@ def operator_regime_label(
             return "TREND_DOWN"
         if lean == "BUY":
             return "TREND_UP"
-        return "TREND_UP" if "UP" in fam or "BULL" in fam else "TREND_DOWN"
+        return "CONFLICT"
     if raw in {"retest"}:
         return "RETEST"
     token = raw.replace(" ", "_").upper()

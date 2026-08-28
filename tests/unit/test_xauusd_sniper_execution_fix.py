@@ -871,6 +871,8 @@ def test_operator_regime_labels_are_display_only() -> None:
 
     assert operator_regime_label("strong_trend", direction="BUY") == "TREND_UP"
     assert operator_regime_label("strong_trend", direction="SELL") == "TREND_DOWN"
+    assert operator_regime_label("strong_trend") == "CONFLICT"
+    assert operator_regime_label("strong_trend", direction="WAIT") == "CONFLICT"
     assert operator_regime_label("range") == "RANGE"
     assert operator_regime_label("breakout") == "BREAKOUT"
     assert operator_regime_label("expansion") == "HIGH_VOLATILITY"

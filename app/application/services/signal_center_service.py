@@ -1003,6 +1003,12 @@ def _pipeline_snapshot(
         "ltf_sell_score": (
             sniper.get("ltf_sell_score") if isinstance(sniper, dict) else None
         ),
+        "buy_families": (
+            sniper.get("buy_families") if isinstance(sniper, dict) else None
+        ),
+        "sell_families": (
+            sniper.get("sell_families") if isinstance(sniper, dict) else None
+        ),
         "structure_timeframe": (
             sniper.get("structure_timeframe") if isinstance(sniper, dict) else None
         ),

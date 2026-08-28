@@ -543,12 +543,24 @@ def decide_scalping_direction(
     )
     mom_floor = int(cfg.min_momentum_score)
     if mom >= mom_floor:
-        if buy > sell:
-            _add(TradeDirection.BUY, 8, "momentum", "Momentum confirms BUY side")
-        elif sell > buy:
-            _add(TradeDirection.SELL, 8, "momentum", "Momentum confirms SELL side")
-        else:
-            reasons.append("Momentum present but sides tied")
+        # Independent confirmation: never award momentum to a side merely
+        # because HTF-inflated totals are already ahead.
+        if buy_core_ev:
+            _add(
+                TradeDirection.BUY,
+                8,
+                "momentum",
+                "Momentum confirms BUY LTF structure",
+            )
+        if sell_core_ev:
+            _add(
+                TradeDirection.SELL,
+                8,
+                "momentum",
+                "Momentum confirms SELL LTF structure",
+            )
+        if not buy_core_ev and not sell_core_ev:
+            reasons.append("Momentum present but no LTF core side to confirm")
     factors["momentum"] = mom
 
     # Session — no directional preference, only quality

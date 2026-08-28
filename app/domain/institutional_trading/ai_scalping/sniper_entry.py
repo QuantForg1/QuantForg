@@ -375,8 +375,14 @@ def _evidence_families(
     side: TradeDirection,
     *,
     now: datetime,
+    standing_levels: bool = True,
 ) -> list[str]:
-    """Independent families present for one side. Discovery only — not TAKE."""
+    """Independent families present for one side. Discovery only — not TAKE.
+
+    ``standing_levels=False`` skips equal highs/lows. Those persist across
+    cycles and must not globally mark BUY+SELL as CONFLICT when the real
+    blocker is an insufficient LTF edge.
+    """
     families: list[str] = []
     for structure in iter_scalp_structures(snapshot):
         found = False
@@ -403,7 +409,7 @@ def _evidence_families(
         if _sweep_side(sw) is side:
             families.append("liquidity")
             break
-    if "liquidity" not in families:
+    if standing_levels and "liquidity" not in families:
         eqh = _seq(liq, "equal_highs")
         eql = _seq(liq, "equal_lows")
         if side is TradeDirection.SELL and eqh:
@@ -541,8 +547,12 @@ def evaluate_sniper_entry(
 
     side = direction.direction
     if side not in {TradeDirection.BUY, TradeDirection.SELL}:
-        buy_fams = _evidence_families(snapshot, TradeDirection.BUY, now=moment)
-        sell_fams = _evidence_families(snapshot, TradeDirection.SELL, now=moment)
+        buy_fams = _evidence_families(
+            snapshot, TradeDirection.BUY, now=moment, standing_levels=False
+        )
+        sell_fams = _evidence_families(
+            snapshot, TradeDirection.SELL, now=moment, standing_levels=False
+        )
         diagnostics["buy_families"] = buy_fams
         diagnostics["sell_families"] = sell_fams
         reasons.append(
@@ -555,7 +565,9 @@ def evaluate_sniper_entry(
             diagnostics["confluence_class"] = _confluence_class(
                 take=False, independent=[], setup_state="CONFLICT"
             )
-            return _wait("WAIT_CONFLICTING_BUY_SELL", setup_state="CONFLICT")
+            # Scores are too close for a side. Do not label this as a
+            # directional conflict that suppresses the slightly-leading side.
+            return _wait("WAIT_NO_DIRECTIONAL_EDGE", setup_state="CONFLICT")
         if buy_fams or sell_fams:
             diagnostics["confluence_class"] = _confluence_class(
                 take=False, independent=buy_fams or sell_fams, setup_state="SETUP_FORMING"

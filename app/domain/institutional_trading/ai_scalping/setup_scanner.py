@@ -175,14 +175,9 @@ def _score_choch(
     elif alignment < 75:
         base += 8
     score = max(0, min(100, base))
-    # Flip lean: if buy dominated prior, sell reversal and vice versa
-    if choch and sweeps:
-        if buy >= sell:
-            direction = TradeDirection.SELL.value
-        else:
-            direction = TradeDirection.BUY.value
-    else:
-        direction = _dir_str(buy, sell)
+    # Family *type* is reversal; trade *side* follows independent LTF lean.
+    # Never fade buy>=sell into SELL (that defaulted ties and vetoed BUY).
+    direction = _dir_str(buy, sell) if score >= min_pass else TradeDirection.NONE.value
     passed = score >= min_pass and direction != TradeDirection.NONE.value
     if not passed:
         reasons.append(f"CHOCH reversal score {score} < {min_pass} or no direction")
@@ -220,12 +215,7 @@ def _score_sweep_reversal(
         base += 15
         reasons.append("CHOCH accompanies sweep reversal")
     score = max(0, min(100, base))
-    if sweeps and buy >= sell:
-        direction = TradeDirection.SELL.value
-    elif sweeps:
-        direction = TradeDirection.BUY.value
-    else:
-        direction = TradeDirection.NONE.value
+    direction = _dir_str(buy, sell) if score >= min_pass else TradeDirection.NONE.value
     passed = score >= min_pass and direction != TradeDirection.NONE.value
     if not passed:
         reasons.append(f"Sweep reversal score {score} < {min_pass} or no direction")
