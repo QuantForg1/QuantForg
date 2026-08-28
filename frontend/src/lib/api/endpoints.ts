@@ -1182,6 +1182,41 @@ export const marketIntelligenceApi = {
     }),
 };
 
+/** Global multi-asset market universe — research/intelligence only */
+export const marketUniverseApi = {
+  snapshot: (refresh = false) =>
+    apiFetch<Record<string, unknown>>(
+      `/market-universe/snapshot${refresh ? "?refresh=true" : ""}`,
+    ),
+  registry: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/registry"),
+  opportunities: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/opportunities"),
+  instrument: (symbol: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/market-universe/instrument/${encodeURIComponent(symbol)}`,
+    ),
+  shadow: () => apiFetch<Record<string, unknown>>("/market-universe/shadow"),
+  performance: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/performance"),
+  report: () => apiFetch<Record<string, unknown>>("/market-universe/report"),
+  configAudit: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/config-audit"),
+  byClass: () => apiFetch<Record<string, unknown>>("/market-universe/by-class"),
+  bySession: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/by-session"),
+  byRegime: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/by-regime"),
+  correlation: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/correlation"),
+  health: () => apiFetch<Record<string, unknown>>("/market-universe/health"),
+  refresh: () =>
+    apiFetch<Record<string, unknown>>("/market-universe/refresh", {
+      method: "POST",
+      body: {},
+    }),
+};
+
 /** Institutional AI Decision Engine V1 — dry-run evaluate, never order_send */
 export const institutionalDecisionApi = {
   status: () =>

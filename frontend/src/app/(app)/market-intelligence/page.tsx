@@ -6,13 +6,14 @@ import { PageMotion } from "@/components/desk/motion";
 import { Button } from "@/components/ui/button";
 import { MarketIntelligenceWorkspace } from "@/components/ops/market-intelligence-workspace";
 import { MarketIntelligenceRc3Panel } from "@/components/operator/market-intelligence-rc3-panel";
+import { GlobalMarketUniverseWorkspace } from "@/components/ops/global-market-universe-workspace";
 
 export default function MarketIntelligencePage() {
   return (
     <div>
       <PageHeader
         title="Market Intelligence"
-        description="LIVE heat map, breadth, volatility, opportunities, and risks — advisory only. Never invents market data. Never places orders."
+        description="LIVE heat map, breadth, and the global multi-asset research universe. Advisory only. Never invents market data. Never places orders."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
@@ -29,6 +30,7 @@ export default function MarketIntelligencePage() {
       />
       <PageMotion>
         <div className="space-y-8">
+          <GlobalMarketUniverseWorkspace />
           <MarketIntelligenceRc3Panel />
           <MarketIntelligenceWorkspace />
         </div>
