@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { DeskSkeleton } from "@/components/desk/primitives";
 
 const ResearchShell = dynamic(
@@ -19,9 +20,17 @@ const ResearchShell = dynamic(
 export default function ResearchPage() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <p className="shrink-0 border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-1.5 text-center text-[11px] font-medium uppercase tracking-wide text-[var(--fg-subtle)]">
-        RESEARCH · NOT A TRADE AUTHORIZATION
-      </p>
+      <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-1.5">
+        <p className="text-center text-[11px] font-medium uppercase tracking-wide text-[var(--fg-subtle)]">
+          RESEARCH · NOT A TRADE AUTHORIZATION
+        </p>
+        <Link
+          href="/signals"
+          className="text-[11px] font-medium text-[var(--fg-muted)] hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        >
+          Signals
+        </Link>
+      </div>
       <div className="min-h-0 flex-1">
         <ResearchShell />
       </div>

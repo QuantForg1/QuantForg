@@ -19,24 +19,25 @@ import { asList, asRecord, str } from "@/lib/desk";
 import { formatRelativeTime } from "@/lib/utils";
 
 const SECTIONS = [
-  "all",
-  "signals",
-  "orders",
-  "risk",
-  "gateway",
-  "broker",
-  "portfolio",
-  "reports",
-  "errors",
-  "trading",
-  "system",
-  "execution",
+  { id: "all", label: "All" },
+  { id: "alerts", label: "Alerts" },
+  { id: "broker", label: "Broker" },
+  { id: "system", label: "System" },
+  { id: "messages", label: "Messages" },
 ] as const;
+
+function inboxBucket(category: string): string {
+  const c = category.toLowerCase();
+  if (["risk", "errors", "error", "trading", "live"].some((k) => c.includes(k))) return "alerts";
+  if (["broker", "gateway", "portfolio", "account"].some((k) => c.includes(k))) return "broker";
+  if (["system", "reports", "ops"].some((k) => c.includes(k))) return "system";
+  return "messages";
+}
 
 export default function NotificationsPage() {
   const qc = useQueryClient();
   const realtime = useNotificationsStream();
-  const [section, setSection] = useState<(typeof SECTIONS)[number]>("all");
+  const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("all");
   const [q, setQ] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
 
@@ -60,8 +61,9 @@ export default function NotificationsPage() {
   const items = useMemo(() => {
     return allItems.filter((n) => {
       if (unreadOnly && n.is_read) return false;
-      const hay = `${str(n.category)} ${str(n.title)} ${str(n.body)}`.toLowerCase();
-      if (section !== "all" && !hay.includes(section)) return false;
+      const category = str(n.category, "system");
+      if (section !== "all" && inboxBucket(category) !== section) return false;
+      const hay = `${category} ${str(n.title)} ${str(n.body)}`.toLowerCase();
       if (!q.trim()) return true;
       return hay.includes(q.trim().toLowerCase());
     });
@@ -70,7 +72,7 @@ export default function NotificationsPage() {
   const grouped = useMemo(() => {
     const map = new Map<string, typeof items>();
     for (const n of items) {
-      const key = str(n.category, "system").toLowerCase();
+      const key = inboxBucket(str(n.category, "system"));
       const bucket = map.get(key) ?? [];
       bucket.push(n);
       map.set(key, bucket);
@@ -96,8 +98,8 @@ export default function NotificationsPage() {
   return (
     <div>
       <PageHeader
-        title="Notifications"
-        description="Trading, risk, system, and execution inbox."
+        title="Inbox"
+        description="Alerts, broker events, system notices, and messages for your account."
         actions={
           <>
             <RealtimeConnectionBadge status={realtime} />
@@ -133,15 +135,14 @@ export default function NotificationsPage() {
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Notification categories">
           {SECTIONS.map((s) => (
             <Button
-              key={s}
+              key={s.id}
               size="sm"
               role="tab"
-              aria-selected={section === s}
-              variant={section === s ? "default" : "ghost"}
-              onClick={() => setSection(s)}
-              className="capitalize"
+              aria-selected={section === s.id}
+              variant={section === s.id ? "default" : "ghost"}
+              onClick={() => setSection(s.id)}
             >
-              {s}
+              {s.label}
             </Button>
           ))}
         </div>
@@ -179,7 +180,7 @@ export default function NotificationsPage() {
             <section key={category} aria-label={`${category} notifications`}>
               <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-                  {category}
+                  {SECTIONS.find((s) => s.id === category)?.label ?? category}
                 </h2>
                 <Badge tone="neutral">{rows.length}</Badge>
               </div>

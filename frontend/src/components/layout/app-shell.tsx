@@ -21,7 +21,7 @@ const OS_FULLBLEED_PATHS = [
   "/terminal",
   "/workspace",
   "/execution",
-  "/portfolio",
+  "/book",
   "/research",
   "/ai-signals",
 ];

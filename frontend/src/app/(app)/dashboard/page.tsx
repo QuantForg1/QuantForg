@@ -25,12 +25,18 @@ import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
 import {
   catalogueViewState,
+  defaultSortedSignals,
   isLiveBrokerCatalogue,
   mergeCatalogueRows,
   numericDisplay,
   resolveConnectionPresentation,
   robotDisplayState,
+  scoreDisplay,
+  signalAvailability,
+  signalBoardDirection,
+  SIGNALS_NOT_AUTHORIZATION,
   traderFacingErrorMessage,
+  unavailableSignalsTitle,
 } from "@/lib/trading/trader-ux";
 
 type Row = Record<string, unknown>;
@@ -120,6 +126,14 @@ export default function DashboardPage() {
           asList(asRecord(universe.opportunity_board).rows).map(asRecord),
         )
       : [];
+  const signalState = signalAvailability(catalogue);
+  const signalPreview =
+    signalState === "LIVE_ROWS" ? defaultSortedSignals(rows).slice(0, 4) : [];
+  const signalCopy = unavailableSignalsTitle({
+    noBroker,
+    mismatch: sessionMismatch,
+    catalogue,
+  });
 
   const positionsUnavailable = Boolean(portfolio.isError) && !noBroker && !sessionMismatch;
   const activityUnavailable = Boolean(history.isError) && !noBroker && !sessionMismatch;
@@ -257,7 +271,7 @@ export default function DashboardPage() {
             ? "Connect your broker to see your account and markets."
             : sessionMismatch
               ? "Your trading session needs to be reconnected."
-              : "Your account, robot, positions, and broker-discovered markets."
+              : "Your account, robot, signals, and markets."
         }
         actions={
           noBroker || sessionMismatch ? (
@@ -341,53 +355,47 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Recent activity</CardTitle>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Signals</CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/signals">View all</Link>
+            </Button>
           </CardHeader>
-          <CardContent>
-            {noBroker || sessionMismatch ? (
+          <CardContent className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              {SIGNALS_NOT_AUTHORIZATION}
+            </p>
+            {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
               <DeskEmpty
                 icon={Activity}
-                title="No activity yet"
-                description="Fills appear after you connect your broker."
+                title={signalCopy.title}
+                description={signalCopy.description}
               />
-            ) : activityUnavailable ? (
+            ) : signalState === "NOT_READY" || universeQ.isLoading ? (
+              <DeskSkeleton rows={3} />
+            ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
               <DeskEmpty
                 icon={Activity}
-                title="Activity unavailable"
-                description="Your account could not be queried. This is not an empty history."
-              />
-            ) : deals.length === 0 ? (
-              <DeskEmpty
-                icon={Activity}
-                title="No recent activity"
-                description="No recent fills for your account."
+                title="No ranked signals"
+                description="The live catalogue was queried. No ranked research signals right now."
               />
             ) : (
               <ul className="space-y-2">
-                {deals.slice(0, 6).map((d, i) => {
-                  const pnl = num(d.profit);
+                {signalPreview.map((row, i) => {
+                  const dir = signalBoardDirection(row);
                   return (
                     <li
-                      key={str(d.ticket, String(i))}
-                      className="flex min-w-0 items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
+                      key={str(row.broker_symbol || row.symbol, String(i))}
+                      className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
                     >
-                      <span className="truncate">
-                        {str(d.symbol)} {str(d.side)}
+                      <span className="truncate font-medium">
+                        {str(row.broker_symbol || row.symbol)}
                       </span>
-                      <span
-                        className={
-                          Number.isFinite(pnl) && pnl >= 0
-                            ? "tabular text-[var(--success)]"
-                            : Number.isFinite(pnl)
-                              ? "tabular text-[var(--danger)]"
-                              : "tabular"
-                        }
-                      >
-                        {Number.isFinite(pnl) ? formatCurrency(pnl) : "—"}
-                      </span>
-                      <span className="shrink-0 text-xs text-[var(--fg-subtle)]">
-                        {formatRelativeTime(str(d.time, ""))}
+                      <Badge tone={dir === "BUY" ? "success" : dir === "SELL" ? "warning" : "neutral"}>
+                        {dir}
+                      </Badge>
+                      <span className="tabular text-[var(--fg-muted)]">
+                        {scoreDisplay(row.opportunity_score)}
                       </span>
                     </li>
                   );
@@ -402,7 +410,7 @@ export default function DashboardPage() {
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Positions</CardTitle>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/terminal">Terminal</Link>
+            <Link href="/portfolio">View all</Link>
           </Button>
         </CardHeader>
         <CardContent>
@@ -446,7 +454,7 @@ export default function DashboardPage() {
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Market snapshot</CardTitle>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/markets">Markets</Link>
+            <Link href="/markets">View all</Link>
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -472,6 +480,66 @@ export default function DashboardPage() {
             />
           ) : (
             <MarketCatalogueRows rows={rows} limit={8} showFilters compact />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Recent activity</CardTitle>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/portfolio">Portfolio</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {noBroker || sessionMismatch ? (
+            <DeskEmpty
+              icon={Activity}
+              title="No activity yet"
+              description="Fills appear after you connect your broker."
+            />
+          ) : activityUnavailable ? (
+            <DeskEmpty
+              icon={Activity}
+              title="Activity unavailable"
+              description="Your account could not be queried. This is not an empty history."
+            />
+          ) : deals.length === 0 ? (
+            <DeskEmpty
+              icon={Activity}
+              title="No recent activity"
+              description="No recent fills for your account."
+            />
+          ) : (
+            <ul className="space-y-2">
+              {deals.slice(0, 6).map((d, i) => {
+                const pnl = num(d.profit);
+                return (
+                  <li
+                    key={str(d.ticket, String(i))}
+                    className="flex min-w-0 items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
+                  >
+                    <span className="truncate">
+                      {str(d.symbol)} {str(d.side)}
+                    </span>
+                    <span
+                      className={
+                        Number.isFinite(pnl) && pnl >= 0
+                          ? "tabular text-[var(--success)]"
+                          : Number.isFinite(pnl)
+                            ? "tabular text-[var(--danger)]"
+                            : "tabular"
+                      }
+                    >
+                      {Number.isFinite(pnl) ? formatCurrency(pnl) : "—"}
+                    </span>
+                    <span className="shrink-0 text-xs text-[var(--fg-subtle)]">
+                      {formatRelativeTime(str(d.time, ""))}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </CardContent>
       </Card>

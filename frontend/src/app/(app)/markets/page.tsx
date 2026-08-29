@@ -65,9 +65,14 @@ export default function MarketsPage() {
         title="Markets"
         description="Instruments from your connected broker. Research cannot place orders."
         actions={
-          <Button variant="secondary" asChild>
-            <Link href="/research">Research</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" asChild>
+              <Link href="/signals">Signals</Link>
+            </Button>
+            <Button variant="secondary" asChild>
+              <Link href="/research">Research</Link>
+            </Button>
+          </div>
         }
       />
       <ConnectionStatus session={session} />

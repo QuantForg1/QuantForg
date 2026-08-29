@@ -89,8 +89,10 @@ export type PrimaryNavItem = NavItem & {
 /** Product desks for authenticated traders — ops/internal routes stay off this list. */
 export const TRADER_DESK_HREFS = new Set([
   "/dashboard",
-  "/terminal",
+  "/signals",
   "/markets",
+  "/portfolio",
+  "/terminal",
   "/research",
   "/broker",
   "/trading-journal",
@@ -124,7 +126,7 @@ const OPS_HREF_PREFIXES = [
   "/strategy-intelligence-center",
   "/strategy-research",
   "/signal-intelligence",
-  "/signals",
+  "/signal-center",
   "/symbol-management",
 ];
 
@@ -138,7 +140,7 @@ const TRADER_COMMAND_EXTRA = new Set([
   "/positions",
   "/journal",
   "/counsel",
-  "/portfolio",
+  "/book",
 ]);
 
 export function isTraderFacingHref(href: string): boolean {
@@ -150,7 +152,9 @@ export function isTraderFacingHref(href: string): boolean {
 
 export const TRADER_DESK_ORDER = [
   "/dashboard",
+  "/signals",
   "/markets",
+  "/portfolio",
   "/terminal",
   "/research",
   "/broker",
@@ -176,14 +180,14 @@ export function visibleCommandItems(isOperator: boolean, items: NavItem[]): NavI
 
 /**
  * Production workspace rail — grouped navigation to existing surfaces.
- * ⌘1–8 remain on the eight primary desks.
+ * ⌘1–8 jump the first eight trader desks. Inbox and Settings stay on the rail.
  */
 export const primaryRail: PrimaryNavItem[] = [
   {
     href: "/dashboard",
     label: "Home",
     icon: Radar,
-    hint: "Account · broker · robot",
+    hint: "Account · robot · markets",
     match: ["/dashboard"],
     shortcut: "1",
     section: "Trading",
@@ -226,7 +230,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: LayoutTemplate,
     hint: "Trade — chart · watchlist · ticket",
     match: ["/terminal", "/workspace", "/execution"],
-    shortcut: "3",
+    shortcut: "5",
     section: "Trading",
   },
   {
@@ -235,7 +239,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: CandlestickChart,
     hint: "Broker-discovered markets",
     match: ["/markets"],
-    shortcut: "2",
+    shortcut: "3",
     section: "Trading",
   },
   {
@@ -272,10 +276,11 @@ export const primaryRail: PrimaryNavItem[] = [
   },
   {
     href: "/signals",
-    label: "Signal Center",
-    icon: Radar,
-    hint: "LIVE signal board",
+    label: "Signals",
+    icon: Crosshair,
+    hint: "Market intelligence · research only",
     match: ["/signals"],
+    shortcut: "2",
     section: "Signals",
   },
   {
@@ -404,7 +409,6 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: NotebookPen,
     hint: "Closed trades · notes · export",
     match: ["/trading-journal", "/journal"],
-    shortcut: "6",
     section: "Operator",
   },
   {
@@ -485,7 +489,6 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Bell,
     hint: "Alerts and messages",
     match: ["/notifications", "/inbox"],
-    shortcut: "7",
     section: "Operator",
   },
   {
@@ -502,7 +505,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: FlaskConical,
     hint: "Idea → promote pipeline",
     match: ["/research", "/screeners"],
-    shortcut: "4",
+    shortcut: "6",
     section: "Research",
   },
   {
@@ -518,9 +521,10 @@ export const primaryRail: PrimaryNavItem[] = [
     href: "/portfolio",
     label: "Portfolio",
     icon: PieChart,
-    hint: "Equity · health · book OS",
-    match: ["/portfolio", "/book"],
-    section: "Research",
+    hint: "Your account · positions",
+    match: ["/portfolio"],
+    shortcut: "4",
+    section: "Portfolio",
   },
   {
     href: "/settings",
@@ -553,7 +557,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Building2,
     hint: "Attach session · connectivity",
     match: ["/broker"],
-    shortcut: "5",
+    shortcut: "7",
     section: "System",
   },
   {
@@ -973,9 +977,15 @@ export const appNav: NavGroup[] = [
       },
       {
         href: "/signals",
+        label: "Signals",
+        icon: Crosshair,
+        hint: "Market intelligence · research only",
+      },
+      {
+        href: "/signal-center",
         label: "Signal Center",
         icon: Radar,
-        hint: "LIVE AI signals · quality · confidence · detail",
+        hint: "Operator XAUUSD scan board",
       },
       {
         href: "/signal-intelligence",
@@ -1408,28 +1418,28 @@ export const mobileTabNav: NavItem[] = [
     hint: "Home",
   },
   {
+    href: "/signals",
+    label: "Signals",
+    icon: Crosshair,
+    hint: "Signals",
+  },
+  {
     href: "/markets",
     label: "Markets",
     icon: CandlestickChart,
     hint: "Markets",
   },
   {
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: PieChart,
+    hint: "Portfolio",
+  },
+  {
     href: "/terminal",
     label: "Trade",
     icon: LayoutTemplate,
     hint: "Terminal",
-  },
-  {
-    href: "/research",
-    label: "Research",
-    icon: FlaskConical,
-    hint: "Research",
-  },
-  {
-    href: "/broker",
-    label: "Broker",
-    icon: Building2,
-    hint: "Broker",
   },
 ];
 
@@ -1446,6 +1456,12 @@ export const commandItems: NavItem[] = (() => {
       label: "Counsel",
       icon: Scale,
       hint: "Decision intelligence (advise only)",
+    },
+    {
+      href: "/signal-center",
+      label: "Signal Center",
+      icon: Radar,
+      hint: "Operator gold-scan board",
     },
     {
       href: "/auto-trading",

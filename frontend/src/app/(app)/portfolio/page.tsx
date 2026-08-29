@@ -1,25 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { DeskSkeleton } from "@/components/desk/primitives";
+import { PortfolioWorkspace } from "@/components/trading/portfolio-workspace";
 
-const BookShell = dynamic(
-  () => import("@/components/book/shell").then((m) => m.BookShell),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full items-center justify-center p-6">
-        <DeskSkeleton variant="page" />
-      </div>
-    ),
-  },
-);
-
-/** Portfolio OS — institutional equity, exposure, and risk operating surface. */
 export default function PortfolioPage() {
-  return (
-    <div className="h-full min-h-0 w-full">
-      <BookShell />
-    </div>
-  );
+  return <PortfolioWorkspace />;
 }

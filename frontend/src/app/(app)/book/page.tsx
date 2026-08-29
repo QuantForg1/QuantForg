@@ -1,8 +1,25 @@
 "use client";
 
-import { redirect } from "next/navigation";
+import dynamic from "next/dynamic";
+import { DeskSkeleton } from "@/components/desk/primitives";
 
-/** Legacy Book route — Portfolio OS is canonical. */
+const BookShell = dynamic(
+  () => import("@/components/book/shell").then((m) => m.BookShell),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center p-6">
+        <DeskSkeleton variant="page" />
+      </div>
+    ),
+  },
+);
+
+/** Operator Book OS — trader Portfolio is /portfolio. */
 export default function BookPage() {
-  redirect("/portfolio");
+  return (
+    <div className="h-full min-h-0 w-full">
+      <BookShell />
+    </div>
+  );
 }

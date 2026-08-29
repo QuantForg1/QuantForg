@@ -33,6 +33,9 @@ const ADMIN_SECTIONS = [
   {
     title: "Research",
     items: [
+      { href: "/signals", label: "Trader Signals", hint: "Market intelligence (advisory)" },
+      { href: "/signal-center", label: "Signal Center", hint: "Operator XAUUSD scan board" },
+      { href: "/signal-intelligence", label: "Signal Intelligence", hint: "History and outcomes" },
       { href: "/research", label: "Market research diagnostics", hint: "Universe and research" },
       { href: "/market-scanner", label: "Scanner diagnostics", hint: "Scanner internals" },
       { href: "/strategy-diagnostics", label: "Strategy diagnostics", hint: "Why NO_TRADE" },
@@ -53,7 +56,7 @@ export default function AdminPortalPage() {
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Admin"
-        description="Internal operations. Trader desks stay on Home, Markets, and Terminal. Backend roles still enforce these routes."
+        description="Internal operations. Trader desks stay on Home, Signals, Markets, Portfolio, and Terminal. Backend roles still enforce these routes."
       />
       {ADMIN_SECTIONS.map((section) => (
         <Card key={section.title}>

@@ -20,6 +20,21 @@ import {
   scoreDisplay,
   sessionOwnership,
   traderFacingErrorMessage,
+  defaultSortedSignals,
+  EMPTY_SIGNAL_FILTERS,
+  filterSignalRows,
+  isHighConfidence,
+  mergeResearchSignalFields,
+  presentField,
+  signalAvailability,
+  signalBoardDirection,
+  signalSummary,
+  unavailableSignalsTitle,
+  accountHealth,
+  exposureUnavailableReason,
+  moneyDisplay,
+  portfolioAccount,
+  positionSideLabel,
 } from "./trader-ux.ts";
 
 {
@@ -261,5 +276,99 @@ assert.equal(
   }),
   "Your trading session needs to be reconnected.",
 );
+
+{
+  assert.equal(signalBoardDirection({ direction: "WAIT" }), "WATCH");
+  assert.equal(signalBoardDirection({ direction: "BUY" }), "BUY");
+  assert.equal(presentField(null), "Not available");
+  assert.equal(presentField("UNKNOWN"), "Not available");
+  assert.equal(presentField("TREND"), "TREND");
+}
+
+{
+  const live = signalAvailability("LIVE_EMPTY");
+  assert.equal(live, "LIVE_EMPTY");
+  const summaryEmpty = signalSummary({
+    availability: "LIVE_EMPTY",
+    rows: [],
+    instrumentCount: 0,
+    lastUpdate: "2026-08-29T00:00:00Z",
+  });
+  assert.equal(summaryEmpty.active, "0");
+  assert.equal(summaryEmpty.markets, "0");
+}
+
+{
+  const unavailable = signalSummary({
+    availability: "UNAVAILABLE",
+    rows: [],
+    instrumentCount: 0,
+    lastUpdate: null,
+  });
+  assert.equal(unavailable.active, "—");
+  assert.equal(unavailable.buy, "—");
+  assert.notEqual(unavailable.active, "0");
+  const copy = unavailableSignalsTitle({ noBroker: true });
+  assert.equal(copy.title, "SIGNALS UNAVAILABLE");
+}
+
+{
+  const rows = [
+    { symbol: "EURUSD", direction: "BUY", asset_class: "FOREX", opportunity_score: 80, qualified_research: true, research_rank_score: 12 },
+    { symbol: "GBPUSD", direction: "WAIT", asset_class: "FOREX", opportunity_score: 40, research_rank_score: 4 },
+    { symbol: "XAUUSD_i", direction: "SELL", asset_class: "METALS", opportunity_score: 90, board_status: "QUALIFIED", research_rank_score: 20 },
+  ];
+  assert.equal(filterSignalRows(rows, { ...EMPTY_SIGNAL_FILTERS, direction: "BUY" }).length, 1);
+  assert.equal(filterSignalRows(rows, { ...EMPTY_SIGNAL_FILTERS, direction: "WATCH" }).length, 1);
+  assert.equal(isHighConfidence(rows[0]!), true);
+  const ranked = defaultSortedSignals(rows);
+  assert.equal(ranked[0]?.symbol, "XAUUSD_i");
+}
+
+{
+  const merged = mergeResearchSignalFields(
+    [{ symbol: "EURUSD", direction: "BUY" }],
+    [{ symbol: "EURUSD", entry_candidate: "1.0800", SL_candidate: "1.0700" }],
+  );
+  assert.equal(merged[0]?.entry_candidate, "1.0800");
+  assert.equal(presentField(merged[0]?.entry_candidate), "1.0800");
+}
+
+{
+  assert.equal(moneyDisplay(null, false), "—");
+  assert.equal(moneyDisplay(0, true), "0");
+  assert.notEqual(moneyDisplay(null, false), "0");
+  assert.equal(positionSideLabel("buy"), "BUY");
+  assert.equal(positionSideLabel("short"), "SELL");
+  assert.equal(portfolioAccount({ account: { balance: "10" } }).balance, "10");
+  assert.equal(exposureUnavailableReason(), "EXPOSURE DATA UNAVAILABLE");
+}
+
+{
+  const health = accountHealth({
+    connection: {
+      state: "BROKER_NOT_CONNECTED",
+      label: "BROKER NOT CONNECTED",
+      tone: "danger",
+      health: "Disconnected",
+      maskedLogin: "—",
+      server: "—",
+      lastVerified: null,
+      connected: false,
+      ownership: "none",
+      catalogueUnavailable: true,
+      accountUnavailable: true,
+      liveBrokerCatalogue: false,
+    },
+    robot: "BLOCKED",
+    liveCatalogue: false,
+    positionsError: false,
+    positionsLoaded: false,
+    marginAvailable: false,
+    accountUnavailable: true,
+  });
+  assert.equal(health.find((h) => h.id === "broker")?.state, "Blocked");
+  assert.equal(health.find((h) => h.id === "robot")?.state, "Blocked");
+}
 
 console.log("trader-ux.test.ts ok");

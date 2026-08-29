@@ -109,7 +109,7 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="Settings"
-        description="Appearance, security, notifications, sessions, and workspace controls."
+        description="Appearance, security, notifications, and workspace preferences. Engineering controls live in Admin."
         actions={
           tab !== "Danger Zone" ? (
             <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>

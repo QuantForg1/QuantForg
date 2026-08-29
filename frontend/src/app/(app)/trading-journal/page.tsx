@@ -8,8 +8,8 @@ export default function Page() {
   return (
     <div>
       <PageHeader
-        title="Trading Journal"
-        description="Every LIVE closed trade becomes a journal entry — search, filters, notes, CSV/PDF."
+        title="Journal"
+        description="Closed trades, notes, and outcomes for your account. History is never fabricated."
       />
       <PageMotion>
         <TradingJournalWorkspace />
