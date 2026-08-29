@@ -21,6 +21,7 @@ export type ConnectionPresentation = {
   server: string;
   lastVerified: string | null;
   connected: boolean;
+  ownership: "owned" | "none";
   catalogueUnavailable: boolean;
   accountUnavailable: boolean;
   liveBrokerCatalogue: boolean;
@@ -42,6 +43,14 @@ export function isLiveBrokerCatalogue(session: Record<string, unknown>): boolean
     session.catalogue_source === LIVE_BROKER &&
     session.catalogue_unavailable !== true
   );
+}
+
+export function sessionOwnership(
+  session: Record<string, unknown>,
+): "owned" | "none" {
+  const raw = String(session.ownership || "").trim().toLowerCase();
+  if (raw === "owned" || session.owned === true) return "owned";
+  return "none";
 }
 
 export function resolveConnectionPresentation(
@@ -66,6 +75,7 @@ export function resolveConnectionPresentation(
   const health = mismatch
     ? "Degraded"
     : healthRaw || (connected ? "Healthy" : "Disconnected");
+  const ownership = sessionOwnership(session);
 
   if (!ux && !broker && !opts?.connecting) {
     return {
@@ -77,6 +87,7 @@ export function resolveConnectionPresentation(
       server: "—",
       lastVerified: null,
       connected: false,
+      ownership: "none",
       catalogueUnavailable: true,
       accountUnavailable: true,
       liveBrokerCatalogue: false,
@@ -93,6 +104,7 @@ export function resolveConnectionPresentation(
       server,
       lastVerified,
       connected: false,
+      ownership: "none",
       catalogueUnavailable: true,
       accountUnavailable: true,
       liveBrokerCatalogue: false,
@@ -108,6 +120,7 @@ export function resolveConnectionPresentation(
       server,
       lastVerified,
       connected: false,
+      ownership: "none",
       catalogueUnavailable: true,
       accountUnavailable: true,
       liveBrokerCatalogue: false,
@@ -123,6 +136,7 @@ export function resolveConnectionPresentation(
       server: server === "—" ? "—" : server,
       lastVerified,
       connected: false,
+      ownership: "none",
       catalogueUnavailable: true,
       accountUnavailable: true,
       liveBrokerCatalogue: false,
@@ -138,6 +152,7 @@ export function resolveConnectionPresentation(
       server,
       lastVerified,
       connected: true,
+      ownership,
       catalogueUnavailable: true,
       accountUnavailable,
       liveBrokerCatalogue: false,
@@ -152,6 +167,7 @@ export function resolveConnectionPresentation(
     server,
     lastVerified,
     connected: true,
+    ownership,
     catalogueUnavailable: false,
     accountUnavailable,
     liveBrokerCatalogue: isLiveBrokerCatalogue(session),

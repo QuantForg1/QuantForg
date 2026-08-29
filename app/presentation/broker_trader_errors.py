@@ -55,6 +55,8 @@ def classify_broker_connect_error(
             "invalid password",
             "invalid login",
             "login failed",
+            "rejected credentials",
+            "bad password",
         )
     ):
         code = INVALID_CREDENTIALS

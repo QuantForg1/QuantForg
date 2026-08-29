@@ -395,6 +395,10 @@ export function BrokerConfigWorkspace() {
           <Field label="Available margin" value={figuresOk && liveMargin ? liveMargin : "—"} />
           <Field label="Connection health" value={str(tradingSnap.connection, healthLabel)} />
           <Field label="Last verified" value={lastVerified} />
+          <Field
+            label="Ownership"
+            value={str(tradingSnap.ownership, connected ? "owned" : "none")}
+          />
         </div>
         {uxState === "SESSION_MISMATCH" ? (
           <p className="mt-3 text-sm text-[var(--warning)]">

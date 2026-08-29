@@ -18,6 +18,7 @@ import {
   resolveConnectionPresentation,
   robotDisplayState,
   scoreDisplay,
+  sessionOwnership,
   traderFacingErrorMessage,
 } from "./trader-ux.ts";
 
@@ -65,11 +66,14 @@ import {
     last_verified: "2026-08-29T10:00:00+00:00",
     catalogue_source: "LIVE_BROKER",
     catalogue_unavailable: false,
+    ownership: "owned",
+    owned: true,
   });
   assert.equal(view.state, "CONNECTED");
   assert.equal(view.label, "CONNECTED");
   assert.equal(view.liveBrokerCatalogue, true);
   assert.equal(view.maskedLogin, "16••06");
+  assert.equal(view.ownership, "owned");
 }
 
 {
@@ -246,6 +250,9 @@ assert.equal(
 assert.equal(passwordClearedAfterSubmit("secret", true), "");
 assert.equal(passwordClearedAfterSubmit("secret", false), "secret");
 assert.equal(RESEARCH_NOT_AUTHORIZATION.includes("NOT A TRADE AUTHORIZATION"), true);
+assert.equal(sessionOwnership({ ownership: "owned" }), "owned");
+assert.equal(sessionOwnership({ owned: true }), "owned");
+assert.equal(sessionOwnership({}), "none");
 
 assert.equal(
   traderFacingErrorMessage({

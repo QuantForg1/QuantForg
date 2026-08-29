@@ -55,6 +55,9 @@ _PATH_TOKENS: tuple[tuple[str, AssetClassName], ...] = (
     ("brent", "ENERGY"),
     ("wti", "ENERGY"),
     ("gas", "ENERGY"),
+    ("stock", "OTHER"),
+    ("share", "OTHER"),
+    ("equit", "OTHER"),
 )
 
 _ENERGY_DESKS: frozenset[str] = frozenset(
