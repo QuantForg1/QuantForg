@@ -252,7 +252,7 @@ def live_execution_snapshot(*, mt5_adapter: Any | None = None) -> dict[str, Any]
         seen.add(key)
         symbols.append(code)
     if not symbols:
-        base["catalogue_source"] = CATALOGUE_UNAVAILABLE
+        base["catalogue_source"] = CATALOGUE_LIVE_BROKER
         base["execution_unavailable_reason"] = "empty_catalogue"
         base["execution_rejected_count"] = rejected
         return base

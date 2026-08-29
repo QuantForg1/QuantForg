@@ -131,8 +131,9 @@ def _flatten_item(item: Any) -> dict[str, Any] | None:
 def discover_live_catalogue(mt5_adapter: Any | None) -> dict[str, Any]:
     """Read the connected broker catalogue. Empty if disconnected.
 
-    ``catalogue_source`` is LIVE_BROKER only when the adapter returned rows.
-    Fixtures must be passed separately as INJECTED and never labeled live.
+    ``catalogue_source`` is LIVE_BROKER when the existing adapter successfully
+    returned a listing — including zero rows. Mock/fixture adapters are never
+    labeled live. Unavailable means the broker was not queried.
     """
     if mt5_adapter is None:
         return {
@@ -195,28 +196,24 @@ def discover_live_catalogue(mt5_adapter: Any | None) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in listing or ():
-        row = _flatten_item(item)
+        try:
+            row = _flatten_item(item)
+        except Exception:
+            logger.info("broker_catalogue_skip_malformed_symbol")
+            continue
         if not row:
             continue
         code = str(row["code"]).upper()
-        if code in seen:
+        if not code or code in seen:
             continue
         seen.add(code)
         rows.append(row)
-    if not rows:
-        return {
-            "catalogue_source": CATALOGUE_UNAVAILABLE,
-            "rows": (),
-            "count": 0,
-            "error": "empty_catalogue",
-            "invented": False,
-            "quotes_fetched": False,
-        }
     return {
         "catalogue_source": source,
         "rows": tuple(rows),
         "count": len(rows),
         "error": None,
+        "empty": len(rows) == 0,
         "invented": False,
         "quotes_fetched": False,
         "sample": [r.get("code") for r in rows[:12]],

@@ -37,12 +37,30 @@ def _error_body(
         "error": {
             "code": code,
             "message": message,
-            "details": details or {},
+            "details": _safe_error_details(details),
         }
     }
     if request_id:
         body["request_id"] = request_id
     return body
+
+
+_SECRET_DETAIL_KEYS = frozenset(
+    {"password", "ciphertext", "password_ciphertext", "secret", "secret_key"}
+)
+
+
+def _safe_error_details(details: dict[str, Any] | None) -> dict[str, Any]:
+    if not details:
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in details.items():
+        if str(key).lower() in _SECRET_DETAIL_KEYS:
+            continue
+        if isinstance(value, str) and "password=" in value.lower():
+            continue
+        out[key] = value
+    return out
 
 
 def _request_id_from(request: Request) -> str | None:

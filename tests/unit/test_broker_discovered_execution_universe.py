@@ -321,11 +321,13 @@ def test_gateway_unavailable_fail_closed(broker_mode: None) -> None:
     assert live_execution_symbols(mt5_adapter=_DownAdapter()) == ()
 
 
-def test_empty_broker_catalogue_fail_closed(broker_mode: None) -> None:
+def test_empty_broker_catalogue_is_live_not_unavailable(broker_mode: None) -> None:
     adapter = _LiveAdapter(rows=())
     snap = live_execution_snapshot(mt5_adapter=adapter)
-    assert snap["catalogue_source"] == CATALOGUE_UNAVAILABLE
+    assert snap["catalogue_source"] == CATALOGUE_LIVE_BROKER
+    assert snap["catalogue_source"] != CATALOGUE_UNAVAILABLE
     assert snap["execution_unavailable_reason"] == "empty_catalogue"
+    assert snap["catalogue_symbol_count"] == 0
     assert live_execution_symbols(mt5_adapter=adapter) == ()
 
 

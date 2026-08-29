@@ -268,6 +268,13 @@ class GetTradingSessionUseCase:
             "last_verified": last_verified,
             "robot_blocked_reason": robot_blocked_reason,
             "concurrent_live_sessions_supported": False,
+            "authenticated": True,
+            "owned": bool(owned and session_code != ACCOUNT_SESSION_MISMATCH),
+            "ownership": (
+                "owned"
+                if owned and session_code != ACCOUNT_SESSION_MISMATCH
+                else "none"
+            ),
         }
 
 

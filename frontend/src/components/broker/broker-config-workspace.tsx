@@ -108,6 +108,7 @@ export function BrokerConfigWorkspace() {
   const [server, setServer] = useState("Weltrade-Real");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordFieldKey, setPasswordFieldKey] = useState(0);
   const [terminalPath, setTerminalPath] = useState("");
   const [progress, setProgress] = useState<string | null>(null);
 
@@ -139,7 +140,10 @@ export function BrokerConfigWorkspace() {
     await Promise.all([healthQ.refetch(), mt5Q.refetch()]);
   };
 
-  // v7.1 — auto-restore broker from encrypted profile when disconnected
+  const clearPasswordField = () => {
+    setPassword("");
+    setPasswordFieldKey((key) => key + 1);
+  };
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -169,9 +173,12 @@ export function BrokerConfigWorkspace() {
 
   const connectMut = useMutation({
     mutationFn: weltradeApi.connect,
-    onMutate: () => setProgress("Connecting to your broker..."),
+    onMutate: () => {
+      clearPasswordField();
+      setProgress("Connecting to your broker...");
+    },
     onSuccess: async (data) => {
-      setPassword("");
+      clearPasswordField();
       const body = asRecord(asRecord(data).dashboard);
       if (Object.keys(body).length > 0) {
         qc.setQueryData(["weltrade-dashboard"], body);
@@ -182,7 +189,7 @@ export function BrokerConfigWorkspace() {
       setProgress(null);
     },
     onError: (e) => {
-      setPassword("");
+      clearPasswordField();
       setProgress(null);
       toast.error(
         e instanceof ApiError
@@ -210,9 +217,11 @@ export function BrokerConfigWorkspace() {
       if (!Number.isFinite(loginNum) || loginNum <= 0) {
         throw new Error("Enter a valid login");
       }
+      const submittedPassword = password;
+      clearPasswordField();
       return weltradeApi.connect({
         login: loginNum,
-        password: password || undefined,
+        password: submittedPassword || undefined,
         server,
         account_type: accountType,
         prefer_attach: true,
@@ -220,15 +229,17 @@ export function BrokerConfigWorkspace() {
         remember_on_gateway: true,
       });
     },
-    onMutate: () => setProgress("Saving…"),
+    onMutate: () => {
+      setProgress("Saving…");
+    },
     onSuccess: async () => {
-      setPassword("");
+      clearPasswordField();
       toast.success("Broker configured — session validated and connected");
       await refresh();
       setProgress(null);
     },
     onError: (e) => {
-      setPassword("");
+      clearPasswordField();
       setProgress(null);
       toast.error(
         e instanceof ApiError
@@ -478,6 +489,7 @@ export function BrokerConfigWorkspace() {
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="bw-password">Password</Label>
             <Input
+              key={passwordFieldKey}
               id="bw-password"
               type="password"
               autoComplete="off"
