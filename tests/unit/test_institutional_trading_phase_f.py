@@ -227,7 +227,8 @@ class TestHealthAlertsPermissionsRunbooks:
     def test_permissions_viewer_denied(self) -> None:
         plane = OperationsControlPlane()
         viewer = _op("viewer")
-        assert viewer.has(OpsPermission.VIEW) is False
+        assert viewer.has(OpsPermission.CHANGE_RISK_CONFIG) is False
+        assert viewer.has(OpsPermission.CONTROL_OWN_ROBOT) is False
         with pytest.raises(PermissionDenied):
             plane.arm_kill_switch(viewer, reason="no", confirmed=True)
 

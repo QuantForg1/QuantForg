@@ -142,11 +142,29 @@ def _gateway_adapter() -> tuple[MemoryMT5UnitOfWorkFactory, MT5Adapter, FakeGate
     return factory, adapter, client
 
 
+async def seed_owned_mt5_connection(
+    factory: MemoryMT5UnitOfWorkFactory,
+    user_id,
+    *,
+    login: int = 16785006,
+    server: str = "Weltrade-Real",
+    session_ref: str = "stale-db-uuid",
+) -> MT5Connection:
+    """Owned row required before gateway heal (no anonymous terminal claim)."""
+    conn = MT5Connection.create(user_id=user_id, login=login, server=server)
+    conn.mark_connected(session_ref=session_ref)
+    async with factory() as uow:
+        await uow.connections.upsert_for_user(conn)
+        await uow.commit()
+    return conn
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_status_and_book_share_healed_session() -> None:
     factory, adapter, client = _gateway_adapter()
     user_id = uuid4()
+    await seed_owned_mt5_connection(factory, user_id)
     status = await GetMT5StatusUseCase(uow_factory=factory, adapter=adapter).execute(
         user_id=user_id
     )
@@ -196,6 +214,7 @@ async def test_concurrent_reads_single_flight_heal() -> None:
     client = FakeGatewayClient(delay_s=0.05)
     adapter = MT5Adapter(client=client)
     user_id = uuid4()
+    await seed_owned_mt5_connection(factory, user_id)
     results = await asyncio.gather(
         require_live_mt5_connection(factory, adapter, user_id),
         require_live_mt5_connection(factory, adapter, user_id),
@@ -246,6 +265,7 @@ async def test_status_connected_false_when_gateway_down() -> None:
 async def test_portfolio_uses_same_session_as_status() -> None:
     factory, adapter, _client = _gateway_adapter()
     user_id = uuid4()
+    await seed_owned_mt5_connection(factory, user_id)
     status = await GetMT5StatusUseCase(uow_factory=factory, adapter=adapter).execute(
         user_id=user_id
     )
@@ -264,6 +284,7 @@ async def test_portfolio_uses_same_session_as_status() -> None:
 async def test_process_live_handle_skips_second_heal() -> None:
     factory, adapter, client = _gateway_adapter()
     user_id = uuid4()
+    await seed_owned_mt5_connection(factory, user_id)
     first = await ensure_live_mt5_session_for_user(factory, adapter, user_id)
     assert first is not None
     heals = session_heal_count()

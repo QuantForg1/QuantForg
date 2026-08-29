@@ -687,6 +687,52 @@ class OperationsControlPlane:
             )
         return policy
 
+    def set_owned_account_run_state(
+        self,
+        operator: OperatorIdentity,
+        *,
+        run_state: str,
+        reason: str,
+        now: datetime | None = None,
+    ) -> AutoTradePolicy:
+        """Account-scoped robot start/pause/stop.
+
+        Does not grant CHANGE_RISK_CONFIG. Does not change risk, symbols, or mode.
+        Caller must already have verified owned live broker connection.
+        """
+        self.require(operator, OpsPermission.CONTROL_OWN_ROBOT)
+        with self._lock:
+            old = self.auto_trading_run_state
+            state = normalize_run_state(run_state)
+            self.auto_trading_run_state = state
+            self.auto_trading_enabled = state in {"running", "paused"}
+            policy = self.auto_trade_policy()
+        self.audit.record(
+            operator=operator,
+            action="owned_account_robot_run_state",
+            old_value=str(old),
+            new_value=state,
+            reason=reason,
+            now=now,
+        )
+        try:
+            from app.application.services.ops_state_persistence import save_ops_state
+
+            save_ops_state(
+                {
+                    "auto_trading_enabled": self.auto_trading_enabled,
+                    "auto_trading_run_state": self.auto_trading_run_state,
+                }
+            )
+        except Exception as exc:
+            from core.logging import get_logger
+
+            get_logger(__name__).warning(
+                "owned_account_robot_persist_failed",
+                error=str(exc),
+            )
+        return policy
+
     def evaluate_auto_trading(self, facts: AutoTradeLiveFacts) -> AutoTradeSafetyResult:
         """Evaluate whether auto-submit is allowed. Fail-closed."""
         with self._lock:

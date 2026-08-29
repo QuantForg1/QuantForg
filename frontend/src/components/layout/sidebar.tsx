@@ -7,7 +7,7 @@ import { ChevronsLeft, ChevronsRight, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   isPrimaryActive,
-  primaryRail,
+  visiblePrimaryRail,
   type PrimaryNavItem,
 } from "@/components/layout/nav-config";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ import {
   type ShellChromeState,
 } from "@/lib/workspace/shell-chrome";
 import { BrandLogo, BrandMark } from "@/components/brand/brand-logo";
+import { useAuth } from "@/providers/auth-provider";
+import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 
 function PrimaryLink({
   item,
@@ -97,6 +99,8 @@ function NavBody({
   collapsed?: boolean;
   onNavigate?: () => void;
 }) {
+  const { user } = useAuth();
+  const rail = visiblePrimaryRail(canAccessIteOps(user));
   const [sectionOpen, setSectionOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -123,8 +127,8 @@ function NavBody({
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
       <ul className="space-y-0.5">
-        {primaryRail.map((item, index) => {
-          const prev = index > 0 ? primaryRail[index - 1] : undefined;
+        {rail.map((item, index) => {
+          const prev = index > 0 ? rail[index - 1] : undefined;
           const sectionChanged = item.section !== prev?.section;
           const sectionTitle = item.section || "";
           const open = !sectionTitle || (sectionOpen[sectionTitle] ?? true);

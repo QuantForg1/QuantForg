@@ -61,6 +61,40 @@ def _live_ref(adapter: MT5Adapter) -> str:
     return (getattr(adapter.client, "session_token", "") or "").strip()
 
 
+def _live_account_login(adapter: MT5Adapter) -> int:
+    """Login currently attached on the shared terminal. 0 if unknown (fail closed).
+
+    Hot path: in-process session cache / client fields only. Never call
+    ``account_info()`` here — that is a network round-trip on every status poll.
+    """
+    live = _live_ref(adapter)
+    if live and live in getattr(adapter, "_sessions", {}):
+        stored = adapter._sessions.get(live)
+        login = int(getattr(stored, "login", 0) or 0) if stored is not None else 0
+        if login > 1:
+            return login
+    client = adapter.client
+    login = int(getattr(client, "_login", 0) or 0)
+    if login > 1:
+        return login
+    return 0
+
+
+def _owns_live_terminal(connection: MT5Connection, adapter: MT5Adapter) -> bool:
+    """True only when this user's stored login matches the live terminal login.
+
+    A process-global MT5 terminal can hold one account. Matching login is the
+    ownership gate — never remap User B onto User A's live session.
+    """
+    owned = int(getattr(connection, "login", 0) or 0)
+    if owned <= 1:
+        return False
+    live_login = _live_account_login(adapter)
+    if live_login <= 1:
+        return False
+    return owned == live_login
+
+
 async def _adapter_call(fn: Any, *args: Any, **kwargs: Any) -> Any:
     """Run blocking Gateway/MT5 I/O off the asyncio event loop."""
     return await asyncio.to_thread(fn, *args, **kwargs)
@@ -76,6 +110,8 @@ def _bind_connection_to_live(
     session_ref isolation so User A cannot read User B's login.
     """
     if connection is None or not connection.connected:
+        return None
+    if not _owns_live_terminal(connection, adapter):
         return None
     session_ref = (connection.session_ref or "").strip()
     if adapter.is_live_session(session_ref):
@@ -128,6 +164,13 @@ async def ensure_live_mt5_session_for_user(
             server_ms=round((time.perf_counter() - t0) * 1000.0, 1),
         )
         return bound
+
+    if connection is None:
+        logger.info(
+            "mt5_session_heal_skipped_no_owned_connection",
+            user_id=str(user_id),
+        )
+        return None
 
     if not _is_gateway_backed(adapter):
         return None
@@ -197,27 +240,46 @@ async def _heal_gateway_session(
     if not live_ref or not adapter.is_live_session(live_ref):
         return None
 
-    _heal_count += 1
-
     resolved_login = 0
     resolved_server = ""
     with contextlib.suppress(Exception):
         info = await _adapter_call(adapter.account_info)
         resolved_login = int(getattr(info, "login", 0) or 0)
         resolved_server = str(getattr(info, "server", "") or "")
-    if resolved_login <= 0 and live_ref in getattr(adapter, "_sessions", {}):
+    if resolved_login <= 1 and live_ref in getattr(adapter, "_sessions", {}):
         stored = adapter._sessions.get(live_ref)
         if stored is not None:
             resolved_login = int(getattr(stored, "login", 0) or 0)
             resolved_server = str(getattr(stored, "server", "") or "")
-    if resolved_login <= 0:
-        resolved_login = int(getattr(connection, "login", 0) or 0) if connection else 0
+    owned_login = int(getattr(connection, "login", 0) or 0) if connection else 0
+    owned_server = (
+        str(getattr(connection, "server", "") or "") if connection else ""
+    )
+    if resolved_login <= 1:
+        resolved_login = owned_login
     if not resolved_server:
-        resolved_server = (
-            str(getattr(connection, "server", "") or "") if connection else ""
-        ) or "Weltrade-MT5"
-    if resolved_login <= 0:
-        resolved_login = 1
+        resolved_server = owned_server
+    if (
+        connection is None
+        or owned_login <= 1
+        or resolved_login <= 1
+        or not resolved_server
+    ):
+        logger.info(
+            "mt5_session_heal_skipped_unresolved_identity",
+            user_id=str(user_id),
+        )
+        return None
+    if owned_login != resolved_login:
+        logger.info(
+            "mt5_session_heal_skipped_login_mismatch",
+            user_id=str(user_id),
+            owned_login=owned_login,
+            live_login=resolved_login,
+        )
+        return None
+
+    _heal_count += 1
 
     build: int | None = None
     version = ""
@@ -301,9 +363,12 @@ async def require_live_mt5_connection(
         uow_factory, adapter, user_id
     )
     if connection is None or not connection.connected:
-        if _is_gateway_backed(adapter):
+        if _is_gateway_backed(adapter) and not _client_connected(adapter):
             raise _unavailable_for_failed_heal(adapter)
-        raise NotFoundError("No active MT5 connection")
+        raise NotFoundError(
+            "No active MT5 connection",
+            details={"reason": "not_owner"},
+        )
     session_ref = (connection.session_ref or "").strip()
     if not session_ref or not adapter.is_live_session(session_ref):
         # Process handle drifted after heal — try one remap, then fail closed.

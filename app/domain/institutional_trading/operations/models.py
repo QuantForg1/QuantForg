@@ -36,14 +36,18 @@ class OpsPermission(StrEnum):
     ACK_ALERT = "ack_alert"
     RUN_RUNBOOK = "run_runbook"
     VIEW = "view"
+    CONTROL_OWN_ROBOT = "control_own_robot"
 
 
-# OWNER / ADMIN roles (existing enum values)
+# OWNER / ADMIN roles (existing enum values) — global ITE ops.
 OPERATOR_ROLES = frozenset({"owner", "admin"})
 
 PERMISSIONS_BY_ROLE: dict[str, frozenset[OpsPermission]] = {
     "owner": frozenset(OpsPermission),
     "admin": frozenset(OpsPermission),
+    "trader": frozenset({OpsPermission.CONTROL_OWN_ROBOT, OpsPermission.VIEW}),
+    "viewer": frozenset({OpsPermission.VIEW}),
+    "support": frozenset({OpsPermission.VIEW}),
 }
 
 
@@ -84,8 +88,6 @@ class OperatorIdentity:
     user_agent: str | None = None
 
     def has(self, permission: OpsPermission) -> bool:
-        if self.role not in OPERATOR_ROLES:
-            return False
         allowed = PERMISSIONS_BY_ROLE.get(self.role, frozenset())
         return permission in allowed
 

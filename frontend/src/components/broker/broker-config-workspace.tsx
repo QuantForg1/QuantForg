@@ -17,14 +17,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DeskSkeleton } from "@/components/desk/primitives";
 import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
-import { mt5Api, weltradeApi } from "@/lib/api/endpoints";
+import { ConnectionStatus } from "@/components/trading/connection-status";
+import { mt5Api, tradingSessionApi, weltradeApi, brokersApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
-import { asRecord, str } from "@/lib/desk";
+import { asList, asRecord, str } from "@/lib/desk";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { traderFacingErrorMessage } from "@/lib/trading/trader-ux";
 import { useTradingSession } from "@/providers/trading-session-provider";
+import { useAuth } from "@/providers/auth-provider";
+import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { cn } from "@/lib/utils";
 
 type AccountType = "demo" | "live";
+
+function maskAccountId(raw: string): string {
+  const digits = raw.replace(/\D/g, "") || raw.trim();
+  if (digits.length <= 4) return "••••";
+  return `${digits.slice(0, 2)}•••${digits.slice(-2)}`;
+}
 
 function Diag({
   ok,
@@ -113,6 +123,21 @@ function Section({
 export function BrokerConfigWorkspace() {
   const qc = useQueryClient();
   const session = useTradingSession();
+  const { user } = useAuth();
+  const isOperator = canAccessIteOps(user);
+
+  const tradingSessionQ = useQuery({
+    queryKey: ["trading-session"],
+    queryFn: tradingSessionApi.session,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    retry: false,
+  });
+  const accountsQ = useQuery({
+    queryKey: ["broker-accounts"],
+    queryFn: brokersApi.accounts,
+    retry: false,
+  });
 
   const healthQ = useQuery({
     queryKey: ["weltrade-health"],
@@ -137,7 +162,7 @@ export function BrokerConfigWorkspace() {
   const tickQ = useQuery({
     queryKey: ["mt5-tick", TRADING_SYMBOL, "broker-diag"],
     queryFn: () => mt5Api.tick(TRADING_SYMBOL),
-    enabled: session.connected,
+    enabled: session.connected && isOperator,
     staleTime: 5_000,
     refetchInterval: session.connected ? 8_000 : false,
     retry: false,
@@ -186,7 +211,8 @@ export function BrokerConfigWorkspace() {
     if (liveLogin && liveLogin !== "—" && !login) setLogin(liveLogin);
     const liveServer = str(mt5.server || session.server);
     if (liveServer && liveServer !== "—") setServer(liveServer);
-  }, [mt5.login, mt5.server, session.login, session.server, login]);
+    if (session.connected) setPassword("");
+  }, [mt5.login, mt5.server, session.login, session.server, session.connected, login]);
 
   const refresh = async () => {
     await session.invalidateAll();
@@ -223,7 +249,7 @@ export function BrokerConfigWorkspace() {
 
   const connectMut = useMutation({
     mutationFn: weltradeApi.connect,
-    onMutate: () => setProgress("Connecting…"),
+    onMutate: () => setProgress("Connecting to your broker..."),
     onSuccess: async (data) => {
       setPassword("");
       const body = asRecord(asRecord(data).dashboard);
@@ -231,12 +257,17 @@ export function BrokerConfigWorkspace() {
         qc.setQueryData(["weltrade-dashboard"], body);
       }
       toast.success("Broker connected");
+      await qc.invalidateQueries({ queryKey: ["trading-session"] });
       await refresh();
       setProgress(null);
     },
     onError: (e) => {
       setProgress(null);
-      toast.error(e instanceof ApiError ? e.message : "Connection failed");
+      toast.error(
+        e instanceof ApiError
+          ? traderFacingErrorMessage(e)
+          : "CONNECTION_FAILED",
+      );
     },
   });
 
@@ -247,7 +278,9 @@ export function BrokerConfigWorkspace() {
       await refresh();
     },
     onError: (e) =>
-      toast.error(e instanceof ApiError ? e.message : "Disconnect failed"),
+      toast.error(
+        e instanceof ApiError ? traderFacingErrorMessage(e) : "Disconnect failed",
+      ),
   });
 
   const testMut = useMutation({
@@ -267,7 +300,9 @@ export function BrokerConfigWorkspace() {
     },
     onError: (e) => {
       setProgress(null);
-      toast.error(e instanceof ApiError ? e.message : "Test failed");
+      toast.error(
+        e instanceof ApiError ? traderFacingErrorMessage(e) : "CONNECTION_FAILED",
+      );
     },
   });
 
@@ -296,7 +331,13 @@ export function BrokerConfigWorkspace() {
     },
     onError: (e) => {
       setProgress(null);
-      toast.error(e instanceof Error ? e.message : "Save failed");
+      toast.error(
+        e instanceof ApiError
+          ? traderFacingErrorMessage(e)
+          : e instanceof Error
+            ? traderFacingErrorMessage({ message: e.message })
+            : "CONNECTION_FAILED",
+      );
     },
   });
 
@@ -326,7 +367,11 @@ export function BrokerConfigWorkspace() {
             toast.success("Broker restored from secure profile");
             await refresh();
           } catch {
-            toast.error(e instanceof ApiError ? e.message : "Reconnect failed");
+            toast.error(
+              e instanceof ApiError
+                ? traderFacingErrorMessage(e)
+                : "CONNECTION_FAILED",
+            );
           }
         } finally {
           setProgress(null);
@@ -384,34 +429,70 @@ export function BrokerConfigWorkspace() {
   const autoSupport = str(health.autotrading_support, "");
   const dllSupport = str(health.dll_support, "");
 
+  const tradingSnap = asRecord(tradingSessionQ.data);
+  const ownedAccounts = asList(accountsQ.data).map(asRecord);
+  const uxState = str(tradingSnap.ux_state, connected ? "CONNECTED" : "NO_BROKER");
+  const maskedAccount = str(tradingSnap.account, "—");
+  const maskedServer = str(tradingSnap.server, str(mt5.server || session.server, "—"));
+  const liveBalance = str(tradingSnap.balance, "");
+  const liveEquity = str(tradingSnap.equity, "");
+  const liveMargin = str(tradingSnap.free_margin, str(tradingSnap.margin, ""));
+  const figuresOk =
+    connected && uxState !== "SESSION_MISMATCH" && !Boolean(tradingSnap.account_unavailable);
+  const lastVerified = str(tradingSnap.last_verified, heartbeat);
+  const healthLabel =
+    uxState === "SESSION_MISMATCH"
+      ? "ACCOUNT_SESSION_MISMATCH"
+      : connected
+        ? "CONNECTED"
+        : connectMut.isPending || saveMut.isPending
+          ? "CONNECTING"
+          : "BROKER NOT CONNECTED";
+  const showConnectForm = !connected || uxState === "SESSION_MISMATCH";
+
   if (healthQ.isLoading && mt5Q.isLoading && !session.login) {
     return <DeskSkeleton rows={6} />;
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-3">
-      <ExecutionStateStrip compact />
+    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-3 px-1 sm:px-0">
+      {isOperator ? <ExecutionStateStrip compact /> : null}
       <header className="border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
-              Operations · Broker
+              Your broker
             </p>
             <h1 className="mt-1 text-xl font-semibold tracking-tight text-[var(--fg)]">
-              Broker Workspace
+              {connected ? "Connected" : "Connect Broker"}
             </h1>
             <p className="mt-1 text-sm text-[var(--fg-muted)]">
-              Connection, diagnostics, and settings only. Observability lives in Monitoring.
+              {connected
+                ? "Password is hidden after verification and is never redisplayed."
+                : "Login, server, password, then Verify Connection. Password is sent securely and never stored in the browser."}
             </p>
           </div>
-          <Badge tone={connected ? "success" : gatewayOnline ? "warning" : "neutral"}>
-            {connected ? "Connected" : gatewayOnline ? "Gateway ready" : "Offline"}
+          <Badge
+            tone={
+              connected && uxState !== "SESSION_MISMATCH"
+                ? "success"
+                : connectMut.isPending
+                  ? "warning"
+                  : "neutral"
+            }
+          >
+            {healthLabel}
           </Badge>
         </div>
       </header>
 
+      <ConnectionStatus
+        session={tradingSnap}
+        connecting={Boolean(progress) && !connected}
+      />
+
       <Section
-        title="A · Connection"
+        title="Connect broker"
         aside={
           <Button
             size="sm"
@@ -427,13 +508,46 @@ export function BrokerConfigWorkspace() {
         }
       >
         <div className="grid gap-2 sm:grid-cols-2">
-          <Field label="Broker Status" value={connected ? "Connected" : "Disconnected"} />
-          <Field label="Broker Name" value={str(asRecord(health.account).company || broker, "Weltrade")} />
-          <Field label="Server" value={str(mt5.server || session.server, "—")} />
-          <Field label="Login" value={str(mt5.login || session.login, "—")} />
-          <Field label="Latency" value={latency} />
-          <Field label="Heartbeat" value={heartbeat} />
+          <Field
+            label="Connection status"
+            value={healthLabel}
+          />
+          <Field label="Masked login" value={maskedAccount} />
+          <Field label="Server" value={maskedServer} />
+          <Field label="Balance" value={figuresOk && liveBalance ? liveBalance : "—"} />
+          <Field label="Equity" value={figuresOk && liveEquity ? liveEquity : "—"} />
+          <Field label="Available margin" value={figuresOk && liveMargin ? liveMargin : "—"} />
+          <Field label="Connection health" value={str(tradingSnap.connection, healthLabel)} />
+          <Field label="Last verified" value={lastVerified} />
+          <Field label="Account ownership" value="This login only — never another user" />
+          {isOperator ? <Field label="Latency" value={latency} /> : null}
         </div>
+        {ownedAccounts.length > 1 ? (
+          <label className="mt-3 block text-sm">
+            <span className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Current account
+            </span>
+            <select
+              className="mt-1 flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+              defaultValue=""
+              onChange={() => void refresh()}
+            >
+              <option value="">
+                {maskedAccount} · {maskedServer}
+              </option>
+              {ownedAccounts.map((row, i) => (
+                <option key={str(row.id, String(i))} value={str(row.id)}>
+                  {maskAccountId(str(row.external_account_id, str(row.label)))} · {str(row.server)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {uxState === "SESSION_MISMATCH" ? (
+          <p className="mt-3 text-sm text-[var(--warning)]">
+            ACCOUNT_SESSION_MISMATCH. Reconnect your own account. Concurrent independent live logins are not supported.
+          </p>
+        ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <Button disabled={busy} onClick={onConnect}>
             {connectMut.isPending ? (
@@ -441,7 +555,7 @@ export function BrokerConfigWorkspace() {
             ) : (
               <Cable className="h-4 w-4" />
             )}
-            Connect
+            Connect & Verify
           </Button>
           <Button
             variant="secondary"
@@ -451,10 +565,12 @@ export function BrokerConfigWorkspace() {
             <Unplug className="h-4 w-4" />
             Disconnect
           </Button>
-          <Button variant="outline" disabled={busy} onClick={() => testMut.mutate()}>
-            <RefreshCw className="h-4 w-4" />
-            Test Connection
-          </Button>
+          {isOperator ? (
+            <Button variant="outline" disabled={busy} onClick={() => testMut.mutate()}>
+              <RefreshCw className="h-4 w-4" />
+              Test Connection
+            </Button>
+          ) : null}
         </div>
         {progress ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-[var(--accent)]">
@@ -464,6 +580,7 @@ export function BrokerConfigWorkspace() {
         ) : null}
       </Section>
 
+      {isOperator ? (
       <Section title="B · Diagnostics">
         <div className="grid gap-2 sm:grid-cols-2">
           <Diag ok={connected} label="MT5 Running" />
@@ -490,8 +607,10 @@ export function BrokerConfigWorkspace() {
           (MT5 API limitation) — never invented.
         </p>
       </Section>
+      ) : null}
 
-      <Section title="C · Broker Settings">
+      {showConnectForm ? (
+      <Section title="Connect Broker">
         <div className="mb-4 grid grid-cols-2 gap-2">
           {(["demo", "live"] as const).map((t) => (
             <button
@@ -527,7 +646,7 @@ export function BrokerConfigWorkspace() {
             <Label htmlFor="bw-server">Server</Label>
             <select
               id="bw-server"
-              className="flex h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+              className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
               value={server}
               onChange={(e) => setServer(e.target.value)}
             >
@@ -555,11 +674,13 @@ export function BrokerConfigWorkspace() {
               id="bw-password"
               type="password"
               autoComplete="current-password"
+              name="broker-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Only if terminal is not already logged in"
+              placeholder="Required to verify the connection"
             />
           </div>
+          {isOperator ? (
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="bw-path">Terminal Path</Label>
             <Input
@@ -569,6 +690,7 @@ export function BrokerConfigWorkspace() {
               placeholder="Optional — leave blank to auto-attach"
             />
           </div>
+          ) : null}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -576,16 +698,19 @@ export function BrokerConfigWorkspace() {
             {saveMut.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : null}
-            Save
+            Verify Connection
           </Button>
-          <Button variant="outline" disabled={busy} onClick={() => testMut.mutate()}>
-            Test Connection
-          </Button>
+          {isOperator ? (
+            <Button variant="outline" disabled={busy} onClick={() => testMut.mutate()}>
+              Test Connection
+            </Button>
+          ) : null}
         </div>
         <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
-          Password is sent to the local gateway only — never stored in the browser database.
+          Password is used only to submit this form. It is never stored in the browser, localStorage, or API responses.
         </p>
       </Section>
+      ) : null}
     </div>
   );
 }

@@ -7,8 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
+from app.domain.exceptions.base import NotFoundError
+from app.presentation.broker_trader_errors import raise_trader_broker_failure
 from app.presentation.dependencies.auth import CurrentUser
 from app.presentation.dependencies.weltrade import WeltradeSvc
 from app.presentation.schemas.weltrade import (
@@ -53,22 +55,12 @@ async def weltrade_connect(
             prefer_attach=body.prefer_attach,
             path=body.path,
         )
-    except ValueError as exc:
-        logger.exception("weltrade_connect_validation_error", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        ) from exc
-    except RuntimeError as exc:
-        logger.exception("weltrade_connect_http_error", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
     except Exception as exc:
-        logger.exception("weltrade_connect_unexpected_error", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Weltrade connect failed: {exc}",
-        ) from exc
+        logger.warning(
+            "weltrade_connect_failed",
+            error_type=type(exc).__name__,
+        )
+        raise_trader_broker_failure(exc)
 
 
 @router.post("/attach")
@@ -77,11 +69,9 @@ async def weltrade_attach(
 ) -> dict[str, Any]:
     try:
         return await svc.attach(user_id=user.id, path=body.path)
-    except RuntimeError as exc:
-        logger.exception("weltrade_attach_http_error", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
+    except Exception as exc:
+        logger.warning("weltrade_attach_failed", error_type=type(exc).__name__)
+        raise_trader_broker_failure(exc)
 
 
 @router.post("/disconnect")
@@ -93,11 +83,9 @@ async def weltrade_disconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, 
 async def weltrade_reconnect(user: CurrentUser, svc: WeltradeSvc) -> dict[str, Any]:
     try:
         return await svc.reconnect(user_id=user.id)
-    except RuntimeError as exc:
-        logger.exception("weltrade_reconnect_http_error", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
+    except Exception as exc:
+        logger.warning("weltrade_reconnect_failed", error_type=type(exc).__name__)
+        raise_trader_broker_failure(exc)
 
 
 @router.get("/runtime-profile")
@@ -117,16 +105,18 @@ async def weltrade_restore_profile(
     try:
         result = await svc.restore_from_persisted_profile(user_id=user.id)
         if result is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No persisted broker profile to restore",
+            raise NotFoundError(
+                "Connect your broker account to start.",
+                code="BROKER_NOT_CONNECTED",
+                details={"reason": "BROKER_NOT_CONNECTED"},
             )
         result["restored_from_profile"] = True
         return result
-    except HTTPException:
+    except NotFoundError:
         raise
-    except RuntimeError as exc:
-        logger.exception("weltrade_restore_profile_http_error", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
-        ) from exc
+    except Exception as exc:
+        logger.warning(
+            "weltrade_restore_profile_failed",
+            error_type=type(exc).__name__,
+        )
+        raise_trader_broker_failure(exc)

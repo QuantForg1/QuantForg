@@ -71,6 +71,27 @@ type Mt5SymbolsPage = {
   has_more: boolean;
 };
 
+export const tradingSessionApi = {
+  session: () => apiFetch<Record<string, unknown>>("/trading/session"),
+  account: () => apiFetch<Record<string, unknown>>("/trading/account"),
+  robotStatus: () => apiFetch<Record<string, unknown>>("/trading/robot/status"),
+  startRobot: () =>
+    apiFetch<Record<string, unknown>>("/trading/robot/start", {
+      method: "POST",
+      body: {},
+    }),
+  pauseRobot: () =>
+    apiFetch<Record<string, unknown>>("/trading/robot/pause", {
+      method: "POST",
+      body: {},
+    }),
+  stopRobot: () =>
+    apiFetch<Record<string, unknown>>("/trading/robot/stop", {
+      method: "POST",
+      body: {},
+    }),
+};
+
 export const mt5Api = {
   status: () => apiFetch<Record<string, unknown>>("/mt5/status"),
   connect: (body: {

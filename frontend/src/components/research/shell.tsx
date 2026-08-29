@@ -297,7 +297,7 @@ export function ResearchShell() {
       <header className="shrink-0">
         <DeskShellHeader
           title="Research"
-          subtitle="Idea → Promote · advisory only"
+          subtitle="RESEARCH · NOT A TRADE AUTHORIZATION"
           meta={
             <>
               <Input

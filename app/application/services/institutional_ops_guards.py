@@ -44,6 +44,20 @@ class GuardedOmsSubmitPort:
                 gateway_status="not_called",
                 retryable=False,
             )
+        from app.application.services.account_execution_gate import (
+            submit_blocked_reason,
+        )
+
+        mismatch = submit_blocked_reason(user_id=user_id, login=login)
+        if mismatch is not None:
+            return OmsSubmitResult(
+                outcome="disabled",
+                message="ACCOUNT_SESSION_MISMATCH — OMS not called",
+                retcode=90001,
+                oms_status="blocked",
+                gateway_status="not_called",
+                retryable=False,
+            )
         return cast(
             "OmsSubmitResult",
             self.inner.submit_market(

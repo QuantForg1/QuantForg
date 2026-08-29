@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -13,7 +13,8 @@ import { OfflineBanner } from "@/components/system/offline-banner";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { cn } from "@/lib/utils";
 import { labelForHref, pushRecentPage } from "@/lib/workspace/nav-memory";
-import { primaryRail } from "@/components/layout/nav-config";
+import { visiblePrimaryRail } from "@/components/layout/nav-config";
+import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 
 /** Full-bleed zero-scroll operating surfaces. */
 const OS_FULLBLEED_PATHS = [
@@ -64,19 +65,21 @@ function deskId(pathname: string): string {
   return "app";
 }
 
-/** ⌘1–8 map to desks that declare a shortcut (not raw rail order). */
-const DESK_SHORTCUTS: string[] = (() => {
+/** ⌘1–8 map to desks that declare a shortcut on the visible rail. */
+function deskShortcutsFor(rail: ReturnType<typeof visiblePrimaryRail>): string[] {
   const slots: string[] = [];
-  for (const item of primaryRail) {
+  for (const item of rail) {
     if (!item.shortcut) continue;
     const idx = Number(item.shortcut) - 1;
     if (idx >= 0 && idx <= 7) slots[idx] = item.href;
   }
   return slots;
-})();
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { loading, isAuthenticated, bootError, refreshMe, authPhase } = useAuth();
+  const { loading, isAuthenticated, bootError, refreshMe, authPhase, user } = useAuth();
+  const rail = visiblePrimaryRail(canAccessIteOps(user));
+  const deskShortcuts = useMemo(() => deskShortcutsFor(rail), [rail]);
   const router = useRouter();
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -101,14 +104,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key < "1" || e.key > "8") return;
       const idx = Number(e.key) - 1;
-      const href = DESK_SHORTCUTS[idx];
+      const href = deskShortcuts[idx];
       if (!href) return;
       e.preventDefault();
       router.push(href);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router]);
+  }, [router, deskShortcuts]);
 
   if (loading) {
     return (

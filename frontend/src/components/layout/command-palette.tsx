@@ -7,11 +7,14 @@ import { Clock, Pin, Star } from "lucide-react";
 import {
   appNav,
   commandCatalog,
-  primaryRail,
+  isOpsNavHref,
+  visiblePrimaryRail,
 } from "@/components/layout/nav-config";
 import { useNavMemory } from "@/hooks/use-nav-memory";
 import { labelForHref } from "@/lib/workspace/nav-memory";
 import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { useAuth } from "@/providers/auth-provider";
+import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 
 export function CommandPalette({
   open,
@@ -25,6 +28,17 @@ export function CommandPalette({
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const memory = useNavMemory();
+  const { user } = useAuth();
+  const isOperator = canAccessIteOps(user);
+  const deskRail = visiblePrimaryRail(isOperator);
+  const pageGroups = isOperator
+    ? appNav
+    : appNav
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => !isOpsNavHref(item.href)),
+        }))
+        .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -156,7 +170,7 @@ export function CommandPalette({
             ) : null}
 
             <Command.Group heading="Workspaces" className="qf-cmd-group">
-              {primaryRail.map((item) => {
+              {deskRail.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Command.Item
@@ -188,7 +202,7 @@ export function CommandPalette({
               </Command.Item>
             </Command.Group>
 
-            {appNav.map((group) => (
+            {pageGroups.map((group) => (
               <Command.Group
                 key={group.title}
                 heading={group.title}

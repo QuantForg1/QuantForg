@@ -25,6 +25,18 @@ os.environ.setdefault("GOLD_ONLY_MODE", "false")
 os.environ.setdefault("MULTI_SYMBOL_ENABLED", "true")
 
 
+@pytest.fixture(autouse=True)
+def _reset_execution_account_binding() -> Iterator[None]:
+    """Singleton gateway binding must not leak across tests."""
+    from app.application.services.account_execution_gate import (
+        reset_execution_binding_for_tests,
+    )
+
+    reset_execution_binding_for_tests()
+    yield
+    reset_execution_binding_for_tests()
+
+
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
     return "asyncio"

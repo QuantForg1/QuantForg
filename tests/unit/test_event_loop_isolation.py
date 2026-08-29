@@ -40,7 +40,10 @@ from app.domain.institutional_trading.operations.models import OpsExecutionMode
 from app.infrastructure.brokers.mt5.adapter import MT5Adapter
 from app.infrastructure.persistence.memory_mt5 import MemoryMT5UnitOfWorkFactory
 from app.presentation.routers.health import liveness
-from tests.unit.test_mt5_session_consistency import FakeGatewayClient
+from tests.unit.test_mt5_session_consistency import (
+    FakeGatewayClient,
+    seed_owned_mt5_connection,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -159,6 +162,7 @@ async def test_concurrent_mt5_reads_do_not_block_liveness(
     client = FakeGatewayClient(delay_s=0.6)
     adapter = MT5Adapter(client=client)
     user_id = uuid4()
+    await seed_owned_mt5_connection(factory, user_id)
 
     async def book_read() -> None:
         await require_live_mt5_connection(factory, adapter, user_id)
@@ -307,6 +311,7 @@ async def test_concurrent_heals_do_not_duplicate_gateway_attach() -> None:
     client = FakeGatewayClient(delay_s=0.2)
     adapter = MT5Adapter(client=client)
     user_id = uuid4()
+    await seed_owned_mt5_connection(factory, user_id)
     before = session_heal_count()
     results = await asyncio.gather(
         *[require_live_mt5_connection(factory, adapter, user_id) for _ in range(5)]

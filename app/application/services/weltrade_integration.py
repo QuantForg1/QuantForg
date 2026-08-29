@@ -502,10 +502,13 @@ class WeltradeIntegrationService:
                 if stored is not None:
                     resolved_login = resolved_login or int(stored.login or 0)
                     resolved_server = resolved_server or str(stored.server or "")
-        if resolved_login <= 0:
-            resolved_login = 1
-        if not resolved_server:
-            resolved_server = "Weltrade-MT5"
+        if resolved_login <= 1 or not resolved_server:
+            logger.warning(
+                "weltrade_bind_skipped",
+                reason="unresolved_account_identity",
+                user_id=str(user_id),
+            )
+            return None
 
         build: int | None = None
         version = ""
@@ -534,6 +537,19 @@ class WeltradeIntegrationService:
         async with self.uow_factory() as uow:
             await uow.connections.upsert_for_user(connection)
             await uow.commit()
+        with contextlib.suppress(Exception):
+            from app.application.services.institutional_ite_runtime import (
+                get_ite_runtime,
+            )
+
+            runtime = get_ite_runtime()
+            if runtime is not None:
+                runtime.user_id = user_id
+            from app.application.services.account_execution_gate import (
+                bind_execution_account,
+            )
+
+            bind_execution_account(user_id=user_id, login=resolved_login)
         logger.info(
             "weltrade_session_bound",
             user_id=str(user_id),
@@ -545,11 +561,17 @@ class WeltradeIntegrationService:
 
     async def unbind_user_session(self, *, user_id: UUID) -> None:
         """Mark the user's DB connection disconnected (does not stop other tenants)."""
+        from app.application.services.account_execution_gate import (
+            unbind_execution_account,
+        )
+
         if self.uow_factory is None:
+            unbind_execution_account(user_id=user_id)
             return
         async with self.uow_factory() as uow:
             connection = await uow.connections.get_active_for_user(user_id)
             if connection is None:
+                unbind_execution_account(user_id=user_id)
                 return
             session_ref = (connection.session_ref or "").strip()
             live = getattr(self.adapter, "_live_session_ref", None)
@@ -558,6 +580,7 @@ class WeltradeIntegrationService:
             connection.mark_disconnected()
             await uow.connections.update(connection)
             await uow.commit()
+        unbind_execution_account(user_id=user_id)
 
     async def ensure_user_session_bound(self, *, user_id: UUID) -> None:
         """Heal: if gateway session is live but DB row missing, bind it.

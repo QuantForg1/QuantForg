@@ -86,11 +86,90 @@ export type PrimaryNavItem = NavItem & {
     | "System";
 };
 
+/** Product desks for authenticated traders — ops/internal routes stay off this list. */
+export const TRADER_DESK_HREFS = new Set([
+  "/dashboard",
+  "/terminal",
+  "/markets",
+  "/research",
+  "/broker",
+  "/trading-journal",
+  "/notifications",
+  "/settings",
+]);
+
+const OPS_HREF_PREFIXES = [
+  "/ops",
+  "/admin",
+  "/mission-control",
+  "/operator-home",
+  "/executive-home",
+  "/executive-dashboard",
+  "/trading-kernel",
+  "/auto-trading",
+  "/institutional-alpha",
+  "/market-scanner",
+  "/gateway",
+  "/logs",
+  "/monitoring",
+  "/api-inspector",
+  "/live-alerts",
+];
+
+export function isOpsNavHref(href: string): boolean {
+  const path = href.split("?")[0] ?? href;
+  return OPS_HREF_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+export const TRADER_DESK_ORDER = [
+  "/dashboard",
+  "/terminal",
+  "/markets",
+  "/research",
+  "/broker",
+  "/trading-journal",
+  "/notifications",
+  "/settings",
+] as const;
+
+export function visiblePrimaryRail(isOperator: boolean): PrimaryNavItem[] {
+  if (isOperator) return primaryRail;
+  const allowed = new Map(
+    primaryRail
+      .filter((item) => TRADER_DESK_HREFS.has(item.href))
+      .map((item) => [item.href, item]),
+  );
+  return TRADER_DESK_ORDER.map((href) => allowed.get(href)).filter(
+    (item): item is PrimaryNavItem => item != null,
+  );
+}
+
+export function visibleCommandItems(isOperator: boolean, items: NavItem[]): NavItem[] {
+  if (isOperator) return items;
+  return items.filter((item) => !isOpsNavHref(item.href));
+}
+
 /**
  * Production workspace rail — grouped navigation to existing surfaces.
  * ⌘1–8 remain on the eight primary desks.
  */
 export const primaryRail: PrimaryNavItem[] = [
+  {
+    href: "/dashboard",
+    label: "Home",
+    icon: Radar,
+    hint: "Account · broker · robot",
+    match: ["/dashboard"],
+    section: "Trading",
+  },
+  {
+    href: "/admin",
+    label: "Admin",
+    icon: ShieldCheck,
+    hint: "Internal operations portal",
+    match: ["/admin", "/ops"],
+    section: "Operator",
+  },
   {
     href: "/mission-control",
     label: "Mission Control",
@@ -123,6 +202,14 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Trade — chart · watchlist · ticket",
     match: ["/terminal", "/workspace", "/execution"],
     shortcut: "1",
+    section: "Trading",
+  },
+  {
+    href: "/markets",
+    label: "Markets",
+    icon: CandlestickChart,
+    hint: "Live opportunities for your session",
+    match: ["/markets"],
     section: "Trading",
   },
   {
@@ -287,7 +374,7 @@ export const primaryRail: PrimaryNavItem[] = [
   },
   {
     href: "/trading-journal",
-    label: "Trading Journal",
+    label: "Journal",
     icon: NotebookPen,
     hint: "Closed trades · notes · export",
     match: ["/trading-journal", "/journal"],
@@ -368,7 +455,7 @@ export const primaryRail: PrimaryNavItem[] = [
   },
   {
     href: "/notifications",
-    label: "Notifications",
+    label: "Inbox",
     icon: Bell,
     hint: "Realtime operator inbox",
     match: ["/notifications", "/inbox"],
@@ -389,6 +476,15 @@ export const primaryRail: PrimaryNavItem[] = [
     hint: "Idea → promote pipeline",
     match: ["/research", "/screeners"],
     shortcut: "3",
+    section: "Research",
+  },
+  {
+    href: "/ai-signals",
+    label: "Counsel",
+    icon: Scale,
+    hint: "Decision intelligence",
+    match: ["/ai-signals", "/counsel"],
+    shortcut: "4",
     section: "Research",
   },
   {
@@ -928,6 +1024,12 @@ export const appNav: NavGroup[] = [
         hint: "Closed trades · patterns · historical favorability",
       },
       {
+        href: "/strategy-research",
+        label: "Strategy Research",
+        icon: FlaskConical,
+        hint: "Matched expectancy · shadow expansion · sample status",
+      },
+      {
         href: "/market-regime-intelligence",
         label: "Market Regime",
         icon: Layers3,
@@ -1274,28 +1376,28 @@ export const appNav: NavGroup[] = [
 /** Compact mobile bottom bar — thumb-first primary desks. */
 export const mobileTabNav: NavItem[] = [
   {
+    href: "/dashboard",
+    label: "Home",
+    icon: Radar,
+    hint: "Home",
+  },
+  {
     href: "/terminal",
     label: "Trade",
     icon: LayoutTemplate,
     hint: "Terminal",
   },
   {
-    href: "/portfolio",
-    label: "Book",
-    icon: Briefcase,
-    hint: "Book",
+    href: "/markets",
+    label: "Markets",
+    icon: CandlestickChart,
+    hint: "Markets",
   },
   {
     href: "/research",
     label: "Research",
     icon: FlaskConical,
     hint: "Research",
-  },
-  {
-    href: "/ai-signals",
-    label: "Counsel",
-    icon: Scale,
-    hint: "Counsel",
   },
   {
     href: "/broker",

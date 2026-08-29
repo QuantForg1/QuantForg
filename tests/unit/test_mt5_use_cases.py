@@ -97,7 +97,7 @@ class TestMT5UseCases:
 
     @pytest.mark.asyncio
     async def test_status_heals_gateway_session_without_local_handle(self) -> None:
-        """Cold Railway worker: gateway live, no process session → status connects."""
+        """Cold Railway worker: owned connection + live gateway remaps stale session_ref."""
         from tests.unit.test_weltrade_integration import _StubGateway
 
         client = _StubGateway()
@@ -110,6 +110,9 @@ class TestMT5UseCases:
         adapter._live_session_ref = None
         factory = MemoryMT5UnitOfWorkFactory()
         user_id = uuid4()
+        from tests.unit.test_mt5_session_consistency import seed_owned_mt5_connection
+
+        await seed_owned_mt5_connection(factory, user_id)
 
         status = await GetMT5StatusUseCase(
             uow_factory=factory, adapter=adapter
@@ -121,6 +124,22 @@ class TestMT5UseCases:
             conn = await uow.connections.get_active_for_user(user_id)
         assert conn is not None
         assert adapter.is_live_session(conn.session_ref)
+
+    @pytest.mark.asyncio
+    async def test_status_does_not_claim_unowned_gateway_session(self) -> None:
+        from tests.unit.test_weltrade_integration import _StubGateway
+
+        client = _StubGateway()
+        client._account_login = 16785006
+        client._connected = True
+        client._login = 16785006
+        client._server = "Weltrade-Real"
+        adapter = MT5Adapter(client=client)
+        factory = MemoryMT5UnitOfWorkFactory()
+        status = await GetMT5StatusUseCase(
+            uow_factory=factory, adapter=adapter
+        ).execute(user_id=uuid4())
+        assert status.connected is False
 
     @pytest.mark.asyncio
     async def test_status_does_not_heal_mock_without_connection(self) -> None:

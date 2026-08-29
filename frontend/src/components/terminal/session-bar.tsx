@@ -6,6 +6,7 @@ import { Cable, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TerminalSymbolSwitcher } from "@/components/terminal/symbol-switcher";
+import { ConnectionStatus } from "@/components/trading/connection-status";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { num, str } from "@/lib/desk";
 import {
@@ -65,29 +66,17 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
       aria-label="Session"
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-        <Badge
-          tone={
-            session.connected
-              ? "success"
-              : session.gatewayOnline === true
-                ? "warning"
-                : "neutral"
-          }
-          className="shrink-0 h-5 px-1.5 text-[10px]"
-        >
-          <span className="qf-status-dot mr-1 h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
-          {session.connected
-            ? "Broker live"
-            : session.gatewayOnline === true
-              ? "Gateway only"
-              : session.gatewayOnline == null
-                ? "Status unknown"
-                : "Broker off"}
-        </Badge>
+        <ConnectionStatus compact />
         <span className="truncate qf-caption tabular text-[var(--fg-muted)]">
           {str(session.server, "—")}
           <span className="text-[var(--fg-subtle)]"> · </span>
-          {str(session.login, "—")}
+          {(() => {
+            const raw = str(session.login, "");
+            const digits = raw.replace(/\D/g, "") || raw.trim();
+            if (!digits) return "—";
+            if (digits.length <= 4) return "••••";
+            return `${digits.slice(0, 2)}•••${digits.slice(-2)}`;
+          })()}
         </span>
         {onSymbolChange ? (
           <TerminalSymbolSwitcher symbol={symbol} onSelect={onSymbolChange} />
