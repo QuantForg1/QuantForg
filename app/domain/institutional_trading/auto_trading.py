@@ -100,7 +100,6 @@ class AutoTradePolicy:
 
     def __post_init__(self) -> None:
         from app.domain.trading.gold_only import (
-            GOLD_SYMBOL,
             autonomous_execution_symbols,
             gold_only_enabled,
         )
@@ -111,14 +110,21 @@ class AutoTradePolicy:
         if mode not in {"swing", "scalping", "alpha"}:
             mode = "scalping"
         object.__setattr__(self, "trading_mode", mode)
-        if gold_only_enabled():
+        from app.domain.trading.execution_universe import (
+            broker_discovered_enabled,
+            execution_universe_fail_closed,
+        )
+
+        if execution_universe_fail_closed():
+            object.__setattr__(self, "allowed_symbols", ())
+        elif gold_only_enabled() or broker_discovered_enabled():
             object.__setattr__(
                 self, "allowed_symbols", autonomous_execution_symbols()
             )
         else:
             cleaned = tuple(
                 s.strip().upper() for s in self.allowed_symbols if s and str(s).strip()
-            ) or (GOLD_SYMBOL,)
+            )
             object.__setattr__(self, "allowed_symbols", cleaned)
 
     def to_dict(self) -> dict[str, Any]:

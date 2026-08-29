@@ -116,6 +116,7 @@ def test_production_forces_gold_only_mode() -> None:
     )
     assert settings.gold_only_mode is True
     assert settings.multi_symbol_enabled is False
+    assert str(settings.execution_universe_mode).upper() == "GOLD_ONLY"
 
 
 def test_scanner_evaluates_xauusd_i_only(gold_only: None) -> None:

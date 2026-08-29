@@ -79,7 +79,16 @@ class ExecutionPolicy:
 
     def allows_symbol(self, symbol: str) -> bool:
         if not self.symbol_whitelist:
-            return True
+            from app.domain.trading.execution_universe import (
+                broker_discovered_enabled,
+                execution_universe_fail_closed,
+            )
+
+            # Empty LIVE_BROKER / invalid-mode universe is fail-closed, never
+            # "allow every symbol".
+            return not (
+                broker_discovered_enabled() or execution_universe_fail_closed()
+            )
         from app.domain.trading.execution_universe import execution_symbol_allowed
 
         return execution_symbol_allowed(symbol, self.symbol_whitelist)

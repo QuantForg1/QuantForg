@@ -48,15 +48,23 @@ def _default_allowed_symbols(
     trading_mode: str = "scalping",
     alpha_engine_enabled: bool = False,
 ) -> tuple[str, ...]:
-    """Resolve operator allowlist from gold-only vs multi-symbol policy.
+    """Resolve operator allowlist from execution-universe policy.
 
-    Production bug: bootstrap previously hard-forced ``(XAUUSD,)`` even when
-    ``MULTI_SYMBOL_ENABLED`` / Alpha / multi-asset scan were on, collapsing the
-    LIVE scanner to gold-only forever.
+    GOLD_ONLY and BROKER_DISCOVERED use ``autonomous_execution_symbols``.
+    DEFAULT_SCALPING_UNIVERSE is not a production live allowlist.
     """
-    from app.domain.trading.gold_only import autonomous_execution_symbols, gold_only_enabled
+    from app.domain.trading.execution_universe import (
+        broker_discovered_enabled,
+        execution_universe_fail_closed,
+    )
+    from app.domain.trading.gold_only import (
+        autonomous_execution_symbols,
+        gold_only_enabled,
+    )
 
-    if gold_only_enabled():
+    if execution_universe_fail_closed():
+        return ()
+    if gold_only_enabled() or broker_discovered_enabled():
         return autonomous_execution_symbols()
     mode = (trading_mode or "").strip().lower()
     if alpha_engine_enabled or mode == "alpha":

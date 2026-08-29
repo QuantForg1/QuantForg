@@ -4514,6 +4514,12 @@ class InstitutionalIteRuntime:
                 fd.get("system_coherence") if isinstance(fd, dict) else None
             ),
             "gold_only": gold,
+            "execution_universe_mode": gold.get("execution_universe_mode"),
+            "catalogue_source": gold.get("catalogue_source"),
+            "catalogue_symbol_count": gold.get("catalogue_symbol_count"),
+            "execution_candidate_count": gold.get("execution_candidate_count"),
+            "execution_rejected_count": gold.get("execution_rejected_count"),
+            "execution_unavailable_reason": gold.get("execution_unavailable_reason"),
             "worker_state": worker_state,
             "scheduler_state": scheduler_state,
             "session_state": session_obs.get("session_state"),
@@ -4785,7 +4791,6 @@ class InstitutionalIteRuntime:
                 get_alpha_config,
                 run_alpha_scan,
             )
-            from app.domain.trading.gold_only import GOLD_SYMBOL
 
             cfg = get_alpha_config()
             if not cfg.enabled and not getattr(
@@ -4856,7 +4861,7 @@ class InstitutionalIteRuntime:
                     score=selected[0].get("opportunity_score"),
                     rank=selected[0].get("rank"),
                 )
-                return sym or GOLD_SYMBOL
+                return sym or None
             logger.warning("alpha_scan_no_executable_opportunity")
             return None
         except Exception:
@@ -5359,8 +5364,10 @@ class InstitutionalIteRuntime:
                 return None
             preferred = (
                 await self._offload_blocking_io(self._alpha_preferred_symbol)
-                or GOLD_SYMBOL
             )
+            if not preferred:
+                self._remember_pick_abort("NO_EXECUTABLE_SYMBOL")
+                return None
         alpha_ranking = await self._offload_blocking_io(self._alpha_ranking_rows)
         symbol, skipped = await self._offload_blocking_io(
             resolve_executable_symbol,
@@ -5393,7 +5400,6 @@ class InstitutionalIteRuntime:
             resolve_executable_symbol,
         )
         from app.domain.trading.gold_only import (
-            GOLD_SYMBOL,
             canonical_gold_execution_symbol,
             gold_only_enabled,
             is_bare_gold_symbol,
@@ -5416,14 +5422,15 @@ class InstitutionalIteRuntime:
                 return None
             return symbol
 
-        preferred = self._alpha_preferred_symbol() or GOLD_SYMBOL
-        # Prefer last multi-asset winner when a scan already completed this cycle.
+        preferred = self._alpha_preferred_symbol()
         with self._lock:
             last = self._last_multi_asset_scan
         if isinstance(last, dict):
             best = str(last.get("best_symbol") or "").upper()
             if best:
                 preferred = best
+        if not preferred:
+            return None
         symbol, skipped = resolve_executable_symbol(
             self.mt5_adapter,
             preferred=preferred,

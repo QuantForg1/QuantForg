@@ -37,6 +37,15 @@ _LAST_SCAN: dict[str, Any] | None = None
 _SCAN_GATE = asyncio.Lock()
 
 
+def _execution_universe_obs(mt5_adapter: Any | None = None) -> dict[str, Any]:
+    try:
+        from app.domain.trading.execution_universe import execution_universe_diagnostics
+
+        return execution_universe_diagnostics(mt5_adapter=mt5_adapter)
+    except Exception:
+        return {}
+
+
 def get_last_multi_asset_scan() -> dict[str, Any] | None:
     """Observe-only snapshot of the most recent institutional multi-asset scan."""
     with _LOCK:
@@ -66,8 +75,13 @@ def _quantforg_open_symbol_set(
     return set(facts["quantforg_open_symbols"]), facts
 
 
-def _store_last_scan(payload: dict[str, Any]) -> None:
+def _store_last_scan(
+    payload: dict[str, Any], *, mt5_adapter: Any | None = None
+) -> None:
     global _LAST_SCAN
+    obs = _execution_universe_obs(mt5_adapter)
+    if obs:
+        payload.update(obs)
     with _LOCK:
         _LAST_SCAN = dict(payload)
 
@@ -282,23 +296,36 @@ def resolve_scan_universe(
     plane: Any | None = None,
     broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
     session: str | None = None,
+    mt5_adapter: Any | None = None,
 ) -> tuple[str, ...]:
-    """Watchlist: seed ∪ liquid broker discoveries, session/learning prioritized.
+    """Watchlist: seed plus liquid broker discoveries, session/learning prioritized.
 
     Quality / structure / momentum / RR gates are unchanged — this only decides
     *which* symbols are scored each cycle.
+
+    BROKER_DISCOVERED uses LIVE_BROKER codes from the existing MT5Adapter
+    chain. Injected ``broker_symbol_rows`` never become the live universe.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     try:
+        from app.domain.trading.execution_universe import (
+            broker_discovered_enabled,
+            execution_universe_fail_closed,
+            live_execution_symbols,
+        )
         from app.domain.trading.gold_only import (
             autonomous_execution_symbols,
             gold_only_enabled,
         )
 
+        if execution_universe_fail_closed():
+            return ()
         if gold_only_enabled():
             return autonomous_execution_symbols(
                 broker_symbol_rows=broker_symbol_rows
             )
+        if broker_discovered_enabled():
+            return live_execution_symbols(mt5_adapter=mt5_adapter)
     except Exception:
         logger.exception("gold_only_scan_universe_failed")
     seed = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
@@ -435,6 +462,20 @@ async def score_symbol_for_scan(
                 "symbol": code,
                 "reject": True,
                 "reject_reason": "DISABLED_AUTONOMOUS_SYMBOL",
+                "direction": "NONE",
+                "ai_confidence": 0,
+                "trade_quality": 0,
+            }
+        from app.domain.trading.execution_universe import (
+            broker_discovered_enabled,
+            execution_symbol_allowed,
+        )
+
+        if broker_discovered_enabled() and code and not execution_symbol_allowed(code):
+            return {
+                "symbol": code,
+                "reject": True,
+                "reject_reason": "NOT_IN_LIVE_EXECUTION_UNIVERSE",
                 "direction": "NONE",
                 "ai_confidence": 0,
                 "trade_quality": 0,
@@ -654,6 +695,7 @@ async def _run_institutional_multi_asset_scan_body(
         plane=plane,
         broker_symbol_rows=broker_rows or None,
         session=session_name,
+        mt5_adapter=mt5_adapter,
     )
     try:
         from app.domain.trading.gold_only import (
@@ -729,7 +771,7 @@ async def _run_institutional_multi_asset_scan_body(
             "governed_by_existing_ai_and_risk": True,
             "scanner_duration_ms": round((_time.perf_counter() - t_scan) * 1000.0, 1),
         }
-        _store_last_scan(payload)
+        _store_last_scan(payload, mt5_adapter=mt5_adapter)
         return payload
 
     if mt5_adapter is None:
@@ -753,7 +795,7 @@ async def _run_institutional_multi_asset_scan_body(
             "governed_by_existing_ai_and_risk": True,
             "scanner_duration_ms": round((_time.perf_counter() - t_scan) * 1000.0, 1),
         }
-        _store_last_scan(payload)
+        _store_last_scan(payload, mt5_adapter=mt5_adapter)
         return payload
 
     scored: list[dict[str, Any]] = []
@@ -1426,7 +1468,7 @@ async def _run_institutional_multi_asset_scan_body(
         payload["strategy_stats"] = get_strategy_stats_book().snapshot()
     except Exception:
         pass
-    _store_last_scan(payload)
+    _store_last_scan(payload, mt5_adapter=mt5_adapter)
     _log_scan_signal_row(payload)
     _publish_scan_observation(payload)
     logger.warning(

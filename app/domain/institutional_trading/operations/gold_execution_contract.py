@@ -307,6 +307,7 @@ def evaluate_gold_execution_contract(
 
     # --- MARKET ---
     market_fail: dict[str, Any] | None = None
+    apply_gold_specs = bool(gold_only or is_gold_symbol(symbol))
     if gold_only and symbol and not is_gold_symbol(symbol):
         market_fail = _stage_fail(
             stage="MARKET",
@@ -317,7 +318,21 @@ def evaluate_gold_execution_contract(
             current=raw_symbol or symbol,
             required=CANONICAL_GOLD,
         )
-    elif not symbol or (gold_only and not is_gold_symbol(symbol)):
+    elif not symbol:
+        market_fail = _stage_fail(
+            stage="MARKET",
+            code="NOT_EXECUTABLE",
+            reason=(
+                "canonical symbol must be XAUUSD_i"
+                if gold_only
+                else "executable symbol required — missing instrument identity"
+            ),
+            fault_class=FaultClass.WAIT.value,
+            next_action=CandidateAction.MARKET_CONTEXT_NOT_READY.value,
+            current=raw_symbol or "NONE",
+            required=CANONICAL_GOLD if gold_only else "BROKER_SYMBOL",
+        )
+    elif gold_only and not is_gold_symbol(symbol):
         market_fail = _stage_fail(
             stage="MARKET",
             code="MARKET_CONTEXT_NOT_READY",
@@ -366,7 +381,21 @@ def evaluate_gold_execution_contract(
                 fault_class=FaultClass.CANDIDATE_BLOCK.value,
                 next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
             )
-        elif facts.spread is not None and facts.spread > MAX_SPREAD:
+        elif not apply_gold_specs and (
+            facts.spread is None or facts.bid is None or facts.ask is None
+        ):
+            market_fail = _stage_fail(
+                stage="MARKET",
+                code="NOT_EXECUTABLE",
+                reason="non-gold instrument missing required metadata (spread/bid/ask)",
+                fault_class=FaultClass.CANDIDATE_BLOCK.value,
+                next_action=CandidateAction.NO_EXECUTABLE_FOCUS.value,
+            )
+        elif (
+            apply_gold_specs
+            and facts.spread is not None
+            and facts.spread > MAX_SPREAD
+        ):
             market_fail = _stage_fail(
                 stage="MARKET",
                 code="SPREAD_UNACCEPTABLE",
@@ -477,7 +506,7 @@ def evaluate_gold_execution_contract(
             fault_class=FaultClass.HARD_BLOCK.value,
             next_action=CandidateAction.FAIL_CLOSED.value,
         )
-    elif lev is not None and lev > MAX_LEVERAGE:
+    elif apply_gold_specs and lev is not None and lev > MAX_LEVERAGE:
         safety_fail = _stage_fail(
             stage="SAFETY",
             code="LEVERAGE_POLICY_EXCEEDED",

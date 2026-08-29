@@ -303,13 +303,26 @@ class Settings(BaseSettings):
         bool,
         Field(
             description=(
-                "Authoritative autonomous execution universe. When true, only "
+                "Authoritative autonomous execution universe when "
+                "EXECUTION_UNIVERSE_MODE=GOLD_ONLY. When true, only "
                 "XAUUSD_i (catalogue gold) may be scanned, focused, or executed. "
                 "Takes precedence over multi_symbol_enabled and Alpha."
             ),
             validation_alias=AliasChoices("GOLD_ONLY_MODE", "gold_only_mode"),
         ),
     ] = True
+    execution_universe_mode: Annotated[
+        str,
+        Field(
+            description=(
+                "GOLD_ONLY or BROKER_DISCOVERED. Invalid production values fail "
+                "closed (empty live universe). Missing is not BROKER_DISCOVERED."
+            ),
+            validation_alias=AliasChoices(
+                "EXECUTION_UNIVERSE_MODE", "execution_universe_mode"
+            ),
+        ),
+    ] = "GOLD_ONLY"
     multi_symbol_enabled: Annotated[
         bool,
         Field(
@@ -809,11 +822,24 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "allow_risk_lock_override", False)
             if self.production_validation_mode:
                 object.__setattr__(self, "production_validation_mode", False)
-            # Product policy: GOLD_ONLY_MODE is the autonomous-universe source
-            # of truth. Multi-asset scan / Alpha must not silently restore FX.
-            object.__setattr__(self, "gold_only_mode", True)
-            object.__setattr__(self, "multi_symbol_enabled", False)
-            object.__setattr__(self, "default_trading_symbol", "XAUUSD")
+            # Execution universe: GOLD_ONLY (default) stays gold-clamped.
+            # BROKER_DISCOVERED uses LIVE_BROKER catalogue. Invalid/empty
+            # explicit garbage fails closed — never silently BROKER_DISCOVERED.
+            raw_mode = str(self.execution_universe_mode or "").strip().upper()
+            raw_mode = raw_mode.replace("-", "_")
+            if raw_mode == "BROKER_DISCOVERED":
+                object.__setattr__(self, "execution_universe_mode", "BROKER_DISCOVERED")
+                object.__setattr__(self, "gold_only_mode", False)
+                object.__setattr__(self, "multi_symbol_enabled", True)
+            elif raw_mode == "GOLD_ONLY":
+                object.__setattr__(self, "execution_universe_mode", "GOLD_ONLY")
+                object.__setattr__(self, "gold_only_mode", True)
+                object.__setattr__(self, "multi_symbol_enabled", False)
+                object.__setattr__(self, "default_trading_symbol", "XAUUSD")
+            else:
+                object.__setattr__(self, "execution_universe_mode", "FAIL_CLOSED")
+                object.__setattr__(self, "gold_only_mode", False)
+                object.__setattr__(self, "multi_symbol_enabled", False)
             # Live trading requires an explicit flag AND a configured live gateway
             # (URL + caller token). Without a token DI uses MockMT5Client and
             # cannot place real orders — keep settings.execution_enabled aligned.

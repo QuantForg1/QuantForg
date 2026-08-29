@@ -36,9 +36,22 @@ class DisabledAutonomousSymbolError(ValueError):
 def gold_only_enabled() -> bool:
     """Authoritative autonomous gold-only switch.
 
-    Reads ``settings.gold_only_mode`` only. Institutional Alpha, multi-symbol,
-    and multi-asset scan do not lift this mandate.
+    BROKER_DISCOVERED and FAIL_CLOSED disable the gold clamp. GOLD_ONLY still
+    reads ``settings.gold_only_mode``. Institutional Alpha / multi-symbol flags
+    do not lift GOLD_ONLY.
     """
+    try:
+        from app.domain.trading.execution_universe import (
+            MODE_BROKER_DISCOVERED,
+            MODE_FAIL_CLOSED,
+            execution_universe_mode,
+        )
+
+        mode = execution_universe_mode()
+        if mode in {MODE_BROKER_DISCOVERED, MODE_FAIL_CLOSED}:
+            return False
+    except Exception:  # noqa: S110  # settings import is best-effort
+        pass
     try:
         from core.config.settings import get_settings
 
@@ -112,19 +125,31 @@ def display_autonomous_symbol(code: str | None = None) -> str:
 def autonomous_execution_symbols(
     *,
     broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+    mt5_adapter: Any | None = None,
 ) -> tuple[str, ...]:
     """Authoritative autonomous execution universe.
 
     Gold-only: catalogue-resolved gold broker form only. Never unsuffixed
     ``XAUUSD`` — that form 503s on the live Weltrade catalogue.
-    """
-    if not gold_only_enabled():
-        try:
-            from app.domain.trading.execution_universe import canonical_execution_desks
 
-            return tuple(sorted(canonical_execution_desks()))
-        except Exception:
-            return (GOLD_SYMBOL,)
+    BROKER_DISCOVERED: exact LIVE_BROKER codes from existing MT5Adapter.symbols.
+    Missing/mock/injected catalogues fail closed (empty). Never falls back to
+    XAUUSD_i or a hardcoded FX list.
+    """
+    from app.domain.trading.execution_universe import (
+        MODE_BROKER_DISCOVERED,
+        MODE_FAIL_CLOSED,
+        execution_universe_mode,
+        live_execution_symbols,
+    )
+
+    mode = execution_universe_mode()
+    if mode == MODE_FAIL_CLOSED:
+        return ()
+    if mode == MODE_BROKER_DISCOVERED:
+        return live_execution_symbols(mt5_adapter=mt5_adapter)
+    if not gold_only_enabled():
+        return ()
     resolved = ""
     try:
         from app.domain.institutional_trading.ai_scalping.universe_discovery import (
@@ -152,7 +177,7 @@ def is_autonomous_execution_symbol(code: str | None) -> bool:
 
         return execution_symbol_allowed(raw)
     except Exception:
-        return True
+        return False
 
 
 def filter_autonomous_symbols(codes: list[str] | tuple[str, ...]) -> tuple[str, ...]:
@@ -197,9 +222,7 @@ def symbol_in_scan_universe(
         return True
     if code in pool:
         return True
-    if is_gold_symbol(code) and any(is_gold_symbol(item) for item in pool):
-        return True
-    return False
+    return is_gold_symbol(code) and any(is_gold_symbol(item) for item in pool)
 
 
 def gold_only_diagnostics(
@@ -220,8 +243,17 @@ def gold_only_diagnostics(
     from app.domain.trading.xauusd_specs import MAX_LEVERAGE
 
     desk_max = str(MAX_LEVERAGE)
+    from app.domain.trading.execution_universe import execution_universe_diagnostics
+
+    obs = execution_universe_diagnostics()
     return {
         "gold_only_mode": enabled,
+        "execution_universe_mode": obs.get("execution_universe_mode"),
+        "catalogue_source": obs.get("catalogue_source"),
+        "catalogue_symbol_count": obs.get("catalogue_symbol_count"),
+        "execution_candidate_count": obs.get("execution_candidate_count"),
+        "execution_rejected_count": obs.get("execution_rejected_count"),
+        "execution_unavailable_reason": obs.get("execution_unavailable_reason"),
         "execution_universe": display,
         "execution_universe_gateway": universe,
         "logical_symbol": GOLD_SYMBOL,
