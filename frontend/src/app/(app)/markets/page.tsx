@@ -4,14 +4,15 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
-import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
+import { MarketCatalogueRows, ResearchAdvisoryNote } from "@/components/trading/market-catalogue-rows";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
-import { asList, asRecord, str } from "@/lib/desk";
+import { asList, asRecord } from "@/lib/desk";
 import {
+  catalogueViewState,
   isLiveBrokerCatalogue,
   mergeCatalogueRows,
   resolveConnectionPresentation,
@@ -40,26 +41,29 @@ export default function MarketsPage() {
 
   const universe = asRecord(universeQ.data);
   const instruments = asList(universe.instruments).map(asRecord);
-  const universeLive =
-    str(universe.catalogue_source) === "LIVE_BROKER" && instruments.length > 0;
-  const rows = universeLive
-    ? mergeCatalogueRows(
-        instruments,
-        asList(asRecord(universe.opportunity_board).rows).map(asRecord),
-      )
-    : [];
-
-  const catalogueUnavailable =
-    connection.catalogueUnavailable ||
-    !liveCatalogue ||
-    (universeQ.isFetched && !universeLive) ||
-    universeQ.isError;
+  const catalogue = catalogueViewState({
+    connected: connection.connected,
+    mismatch,
+    liveBrokerSession: liveCatalogue,
+    catalogueUnavailable: connection.catalogueUnavailable,
+    snapshotFetched: universeQ.isFetched,
+    snapshotError: Boolean(universeQ.isError),
+    catalogueSource: universe.catalogue_source,
+    instrumentCount: instruments.length,
+  });
+  const rows =
+    catalogue === "LIVE_ROWS"
+      ? mergeCatalogueRows(
+          instruments,
+          asList(asRecord(universe.opportunity_board).rows).map(asRecord),
+        )
+      : [];
 
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Markets"
-        description="Broker-discovered catalogue for your connected account. Research cannot place orders."
+        description="Instruments from your connected broker. Research cannot place orders."
         actions={
           <Button variant="secondary" asChild>
             <Link href="/research">Research</Link>
@@ -67,11 +71,9 @@ export default function MarketsPage() {
         }
       />
       <ConnectionStatus session={session} />
+      <ResearchAdvisoryNote />
       <Card>
-        <CardHeader>
-          <CardTitle>Market catalogue</CardTitle>
-        </CardHeader>
-        <CardContent className="min-w-0 overflow-x-auto">
+        <CardContent className="min-w-0 pt-4">
           {sessionQ.isLoading ? (
             <DeskSkeleton rows={4} />
           ) : noBroker ? (
@@ -85,29 +87,29 @@ export default function MarketsPage() {
           ) : mismatch ? (
             <DeskEmpty
               icon={Activity}
-              title="ACCOUNT_SESSION_MISMATCH"
+              title="ACCOUNT SESSION MISMATCH"
               description="This terminal is bound to another session. Reconnect your own account."
               actionLabel="Reconnect"
               actionHref="/broker"
             />
-          ) : catalogueUnavailable ? (
+          ) : catalogue === "UNAVAILABLE" ? (
             <DeskEmpty
               icon={Activity}
               title="CATALOGUE UNAVAILABLE"
-              description="Connect or verify your broker and refresh market data. This is not an empty market."
+              description="Broker market catalogue is currently unavailable. This is not an empty market."
               actionLabel="Connect Broker"
               actionHref="/broker"
             />
-          ) : universeQ.isLoading ? (
+          ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
             <DeskSkeleton rows={6} />
-          ) : rows.length === 0 ? (
+          ) : catalogue === "LIVE_EMPTY" ? (
             <DeskEmpty
               icon={Activity}
-              title="EMPTY"
-              description="The live catalogue was queried. No instruments are listed for this session."
+              title="No markets in catalogue"
+              description="The live broker catalogue was queried. No instruments are listed for your account."
             />
           ) : (
-            <MarketCatalogueRows rows={rows} />
+            <MarketCatalogueRows rows={rows} showFilters />
           )}
         </CardContent>
       </Card>

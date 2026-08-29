@@ -9,82 +9,41 @@ const ADMIN_SECTIONS = [
   {
     title: "Operations",
     items: [
-      { href: "/admin/noc", label: "NOC / Operations", hint: "Live production desk" },
-      { href: "/ops", label: "Control plane", hint: "Kill switch · auto-trading" },
-      { href: "/mission-control", label: "Mission Control", hint: "Burn-in and status" },
-    ],
-  },
-  {
-    title: "Risk",
-    items: [
-      { href: "/risk-center", label: "Risk center", hint: "Risk locks and limits" },
-      { href: "/risk-lab", label: "Risk lab", hint: "Risk analysis" },
-    ],
-  },
-  {
-    title: "Safety",
-    items: [
-      { href: "/admin/reliability", label: "Reliability", hint: "Production reliability program" },
-      { href: "/live-alerts", label: "Live alerts", hint: "Safety and runtime alerts" },
-    ],
-  },
-  {
-    title: "Execution",
-    items: [
-      { href: "/admin/live-trading-evidence", label: "Live evidence", hint: "Execution evidence" },
-      { href: "/execution-intel", label: "Execution intelligence", hint: "Fill quality" },
-      { href: "/trading-kernel", label: "Trading kernel", hint: "Runtime controls" },
-    ],
-  },
-  {
-    title: "OMS",
-    items: [
-      { href: "/execution", label: "OMS / execution", hint: "Order management — owner/admin" },
-      { href: "/execution/diagnostics", label: "Execution diagnostics", hint: "Session and fill diagnostics" },
-      { href: "/executions", label: "Execution history", hint: "Historical execution records" },
-    ],
-  },
-  {
-    title: "Execution sessions",
-    items: [
-      { href: "/gateway", label: "Active terminal session", hint: "Singleton GatewayMT5Client / one Windows terminal" },
-      { href: "/ops", label: "Robot run state", hint: "Global auto-trade run state · owner/admin" },
-    ],
-  },
-  {
-    title: "Account bindings",
-    items: [
-      { href: "/admin/customer-ops", label: "Owned accounts", hint: "User-owned broker accounts" },
-      { href: "/broker", label: "Your binding", hint: "Authenticated session bind — never another user" },
+      { href: "/ops", label: "Execution sessions", hint: "Robot run state · control plane" },
+      { href: "/admin/customer-ops", label: "Account bindings", hint: "Owned broker accounts" },
+      { href: "/ops", label: "Robot operations", hint: "Start · pause · stop · kill switch" },
     ],
   },
   {
     title: "Broker infrastructure",
     items: [
       { href: "/gateway", label: "Gateway diagnostics", hint: "MT5 gateway connectivity" },
-      { href: "/broker-connectivity", label: "Broker connectivity", hint: "Connection diagnostics" },
-      { href: "/execution/diagnostics", label: "Session diagnostics", hint: "Execution / session diagnostics" },
+      { href: "/broker-connectivity", label: "Broker health", hint: "Connection health" },
+      { href: "/execution/diagnostics", label: "Connection diagnostics", hint: "Session diagnostics" },
     ],
   },
   {
-    title: "System health",
+    title: "Trading control",
     items: [
-      { href: "/monitoring", label: "Monitoring", hint: "Health · latency" },
-      { href: "/logs", label: "System logs", hint: "Operational log stream" },
+      { href: "/risk-center", label: "Risk", hint: "Risk locks and limits" },
+      { href: "/admin/reliability", label: "Safety", hint: "Reliability and safety ops" },
+      { href: "/execution", label: "OMS", hint: "Order management" },
     ],
   },
   {
-    title: "Audit",
+    title: "Research",
     items: [
-      { href: "/admin/customer-ops", label: "Users / customer ops", hint: "Account operations" },
-      { href: "/admin/enterprise", label: "Enterprise", hint: "Platform controls" },
+      { href: "/research", label: "Market research diagnostics", hint: "Universe and research" },
+      { href: "/market-scanner", label: "Scanner diagnostics", hint: "Scanner internals" },
+      { href: "/strategy-diagnostics", label: "Strategy diagnostics", hint: "Why NO_TRADE" },
     ],
   },
   {
-    title: "Research diagnostics",
+    title: "System",
     items: [
-      { href: "/research", label: "Research", hint: "Market universe / research" },
-      { href: "/research-lab", label: "Research lab", hint: "Research internals" },
+      { href: "/monitoring", label: "Health", hint: "Health · latency" },
+      { href: "/admin/customer-ops", label: "Audit", hint: "Users and account operations" },
+      { href: "/logs", label: "Deployment / system diagnostics", hint: "Operational logs" },
     ],
   },
 ] as const;
@@ -94,7 +53,7 @@ export default function AdminPortalPage() {
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Admin"
-        description="Internal operations only. Trader desks stay on Home. Backend roles still enforce these routes."
+        description="Internal operations. Trader desks stay on Home, Markets, and Terminal. Backend roles still enforce these routes."
       />
       {ADMIN_SECTIONS.map((section) => (
         <Card key={section.title}>
@@ -105,7 +64,7 @@ export default function AdminPortalPage() {
           <CardContent>
             <ul className="grid gap-2 sm:grid-cols-2">
               {section.items.map((item) => (
-                <li key={item.href}>
+                <li key={`${section.title}-${item.href}-${item.label}`}>
                   <Link
                     href={item.href}
                     className="flex min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"

@@ -4,10 +4,19 @@
  */
 import assert from "node:assert/strict";
 import {
+  catalogueViewState,
+  EMPTY_MARKET_FILTERS,
+  filterMarketRows,
   isLiveBrokerCatalogue,
   marketDataState,
   mergeCatalogueRows,
+  numericDisplay,
+  passwordClearedAfterSubmit,
+  presentAssetClasses,
+  priceDisplay,
+  RESEARCH_NOT_AUTHORIZATION,
   resolveConnectionPresentation,
+  robotDisplayState,
   scoreDisplay,
   traderFacingErrorMessage,
 } from "./trader-ux.ts";
@@ -121,5 +130,129 @@ assert.equal(
   assert.equal(merged[0]?.opportunity_score, 72);
   assert.equal(mergeCatalogueRows([], [{ symbol: "FAKE" }]).length, 0);
 }
+
+{
+  const connected = {
+    ux_state: "ROBOT_READY",
+    broker: "Connected",
+    connection: "Healthy",
+    account: "16••06",
+    server: "Wel***eal",
+    catalogue_source: "LIVE_BROKER",
+    catalogue_unavailable: false,
+    robot: "Stopped",
+  };
+  const view = resolveConnectionPresentation(connected);
+  assert.equal(view.state, "CONNECTED");
+  assert.equal(view.connected, true);
+}
+
+{
+  const view = resolveConnectionPresentation({
+    ux_state: "NO_BROKER",
+    broker: "Disconnected",
+  });
+  assert.equal(view.state, "BROKER_NOT_CONNECTED");
+  assert.equal(view.connected, false);
+}
+
+{
+  const unavailable = catalogueViewState({
+    connected: true,
+    mismatch: false,
+    liveBrokerSession: false,
+    catalogueUnavailable: true,
+    snapshotFetched: true,
+    snapshotError: false,
+    catalogueSource: "UNAVAILABLE",
+    instrumentCount: 0,
+  });
+  assert.equal(unavailable, "UNAVAILABLE");
+}
+
+{
+  const live = catalogueViewState({
+    connected: true,
+    mismatch: false,
+    liveBrokerSession: true,
+    catalogueUnavailable: false,
+    snapshotFetched: true,
+    snapshotError: false,
+    catalogueSource: "LIVE_BROKER",
+    instrumentCount: 4,
+  });
+  assert.equal(live, "LIVE_ROWS");
+}
+
+{
+  const empty = catalogueViewState({
+    connected: true,
+    mismatch: false,
+    liveBrokerSession: true,
+    catalogueUnavailable: false,
+    snapshotFetched: true,
+    snapshotError: false,
+    catalogueSource: "LIVE_BROKER",
+    instrumentCount: 0,
+  });
+  assert.equal(empty, "LIVE_EMPTY");
+  assert.notEqual(empty, "UNAVAILABLE");
+}
+
+assert.equal(scoreDisplay(null), "UNKNOWN");
+assert.equal(numericDisplay(null), "—");
+assert.equal(numericDisplay(undefined), "—");
+assert.equal(numericDisplay(""), "—");
+assert.notEqual(numericDisplay(null), "0");
+assert.equal(numericDisplay(0), "0");
+assert.equal(priceDisplay(null), "—");
+assert.equal(priceDisplay(1.23456), "1.23456");
+
+assert.equal(
+  presentAssetClasses([
+    { asset_class: "FOREX" },
+    { asset_class: "METALS" },
+    { asset_class: "FOREX" },
+  ]).join(","),
+  "FOREX,METALS",
+);
+assert.equal(presentAssetClasses([{ asset_class: "UNKNOWN" }]).length, 0);
+
+{
+  const rows = [
+    { broker_symbol: "EURUSD_i", description: "Euro vs US Dollar", asset_class: "FOREX", session: "LONDON", regime: "TREND", data_quality: { state: "LIVE" } },
+    { broker_symbol: "XAUUSD_i", description: "Gold", asset_class: "METALS", session: "NEWYORK", data_quality: { state: "STALE" } },
+  ];
+  assert.equal(filterMarketRows(rows, { ...EMPTY_MARKET_FILTERS, q: "xau" }).length, 1);
+  assert.equal(filterMarketRows(rows, { ...EMPTY_MARKET_FILTERS, assetClass: "FOREX" }).length, 1);
+  assert.equal(filterMarketRows(rows, { ...EMPTY_MARKET_FILTERS, q: "eur" })[0]?.broker_symbol, "EURUSD_i");
+}
+
+assert.equal(
+  robotDisplayState({ broker: "Disconnected", ux_state: "NO_BROKER" }),
+  "BLOCKED",
+);
+assert.equal(
+  robotDisplayState({
+    broker: "Connected",
+    ux_state: "ROBOT_RUNNING",
+    robot: "Running",
+    catalogue_unavailable: false,
+    catalogue_source: "LIVE_BROKER",
+  }),
+  "RUNNING",
+);
+
+assert.equal(passwordClearedAfterSubmit("secret", true), "");
+assert.equal(passwordClearedAfterSubmit("secret", false), "secret");
+assert.equal(RESEARCH_NOT_AUTHORIZATION.includes("NOT A TRADE AUTHORIZATION"), true);
+
+assert.equal(
+  traderFacingErrorMessage({
+    code: "ACCOUNT_SESSION_MISMATCH",
+    message: "OMS blocked",
+  }),
+  "Your trading session needs to be reconnected.",
+);
 
 console.log("trader-ux.test.ts ok");

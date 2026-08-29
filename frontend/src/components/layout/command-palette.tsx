@@ -7,12 +7,11 @@ import { Clock, Pin, Star } from "lucide-react";
 import {
   appNav,
   commandCatalog,
-  isOpsNavHref,
+  isTraderFacingHref,
   visiblePrimaryRail,
 } from "@/components/layout/nav-config";
 import { useNavMemory } from "@/hooks/use-nav-memory";
 import { labelForHref } from "@/lib/workspace/nav-memory";
-import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 
@@ -36,7 +35,7 @@ export function CommandPalette({
     : appNav
         .map((group) => ({
           ...group,
-          items: group.items.filter((item) => !isOpsNavHref(item.href)),
+          items: group.items.filter((item) => isTraderFacingHref(item.href)),
         }))
         .filter((group) => group.items.length > 0);
 
@@ -191,14 +190,14 @@ export function CommandPalette({
               })}
             </Command.Group>
 
-            <Command.Group heading="Instrument" className="qf-cmd-group">
+            <Command.Group heading="Markets" className="qf-cmd-group">
               <Command.Item
-                value={`symbol ${TRADING_SYMBOL} gold xauusd`}
-                onSelect={() => go("/terminal", "Terminal")}
+                value="markets broker catalogue instruments"
+                onSelect={() => go("/markets", "Markets")}
                 className="qf-cmd-item"
               >
-                <span className="tabular text-[var(--accent)]">{TRADING_SYMBOL}</span>
-                <span className="text-[var(--fg-subtle)]">Open in Terminal</span>
+                <span className="text-[var(--fg)]">Broker-discovered markets</span>
+                <span className="text-[var(--fg-subtle)]">Open catalogue</span>
               </Command.Item>
             </Command.Group>
 

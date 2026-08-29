@@ -114,6 +114,18 @@ const OPS_HREF_PREFIXES = [
   "/monitoring",
   "/api-inspector",
   "/live-alerts",
+  "/risk-center",
+  "/risk",
+  "/risk-lab",
+  "/execution",
+  "/executions",
+  "/execution-intel",
+  "/strategy-diagnostics",
+  "/strategy-intelligence-center",
+  "/strategy-research",
+  "/signal-intelligence",
+  "/signals",
+  "/symbol-management",
 ];
 
 export function isOpsNavHref(href: string): boolean {
@@ -121,10 +133,25 @@ export function isOpsNavHref(href: string): boolean {
   return OPS_HREF_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
+const TRADER_COMMAND_EXTRA = new Set([
+  "/orders",
+  "/positions",
+  "/journal",
+  "/counsel",
+  "/portfolio",
+]);
+
+export function isTraderFacingHref(href: string): boolean {
+  const path = href.split("?")[0] ?? href;
+  if (TRADER_DESK_HREFS.has(path)) return true;
+  if (path.startsWith("/symbols/")) return true;
+  return TRADER_COMMAND_EXTRA.has(path);
+}
+
 export const TRADER_DESK_ORDER = [
   "/dashboard",
-  "/terminal",
   "/markets",
+  "/terminal",
   "/research",
   "/broker",
   "/trading-journal",
@@ -132,21 +159,19 @@ export const TRADER_DESK_ORDER = [
   "/settings",
 ] as const;
 
+export const OPERATOR_RAIL_ORDER = [...TRADER_DESK_ORDER, "/admin"] as const;
+
 export function visiblePrimaryRail(isOperator: boolean): PrimaryNavItem[] {
-  if (isOperator) return primaryRail;
-  const allowed = new Map(
-    primaryRail
-      .filter((item) => TRADER_DESK_HREFS.has(item.href))
-      .map((item) => [item.href, item]),
-  );
-  return TRADER_DESK_ORDER.map((href) => allowed.get(href)).filter(
+  const order = isOperator ? OPERATOR_RAIL_ORDER : TRADER_DESK_ORDER;
+  const allowed = new Map(primaryRail.map((item) => [item.href, item]));
+  return order.map((href) => allowed.get(href)).filter(
     (item): item is PrimaryNavItem => item != null,
   );
 }
 
 export function visibleCommandItems(isOperator: boolean, items: NavItem[]): NavItem[] {
   if (isOperator) return items;
-  return items.filter((item) => !isOpsNavHref(item.href));
+  return items.filter((item) => isTraderFacingHref(item.href) && !isOpsNavHref(item.href));
 }
 
 /**
@@ -160,6 +185,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Radar,
     hint: "Account · broker · robot",
     match: ["/dashboard"],
+    shortcut: "1",
     section: "Trading",
   },
   {
@@ -176,7 +202,6 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Radar,
     hint: "Production homepage · status · burn-in",
     match: ["/mission-control"],
-    shortcut: "2",
     section: "Trading",
   },
   {
@@ -201,15 +226,16 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: LayoutTemplate,
     hint: "Trade — chart · watchlist · ticket",
     match: ["/terminal", "/workspace", "/execution"],
-    shortcut: "1",
+    shortcut: "3",
     section: "Trading",
   },
   {
     href: "/markets",
     label: "Markets",
     icon: CandlestickChart,
-    hint: "Live opportunities for your session",
+    hint: "Broker-discovered markets",
     match: ["/markets"],
+    shortcut: "2",
     section: "Trading",
   },
   {
@@ -378,7 +404,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: NotebookPen,
     hint: "Closed trades · notes · export",
     match: ["/trading-journal", "/journal"],
-    shortcut: "5",
+    shortcut: "6",
     section: "Operator",
   },
   {
@@ -457,8 +483,9 @@ export const primaryRail: PrimaryNavItem[] = [
     href: "/notifications",
     label: "Inbox",
     icon: Bell,
-    hint: "Realtime operator inbox",
+    hint: "Alerts and messages",
     match: ["/notifications", "/inbox"],
+    shortcut: "7",
     section: "Operator",
   },
   {
@@ -475,7 +502,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: FlaskConical,
     hint: "Idea → promote pipeline",
     match: ["/research", "/screeners"],
-    shortcut: "3",
+    shortcut: "4",
     section: "Research",
   },
   {
@@ -526,7 +553,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Building2,
     hint: "Attach session · connectivity",
     match: ["/broker"],
-    shortcut: "6",
+    shortcut: "5",
     section: "System",
   },
   {
@@ -543,7 +570,6 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: HeartPulse,
     hint: "Health · latency · uptime",
     match: ["/monitoring", "/institutional-observability", "/system-health"],
-    shortcut: "7",
     section: "System",
   },
 ];
@@ -1382,16 +1408,16 @@ export const mobileTabNav: NavItem[] = [
     hint: "Home",
   },
   {
-    href: "/terminal",
-    label: "Trade",
-    icon: LayoutTemplate,
-    hint: "Terminal",
-  },
-  {
     href: "/markets",
     label: "Markets",
     icon: CandlestickChart,
     hint: "Markets",
+  },
+  {
+    href: "/terminal",
+    label: "Trade",
+    icon: LayoutTemplate,
+    hint: "Terminal",
   },
   {
     href: "/research",

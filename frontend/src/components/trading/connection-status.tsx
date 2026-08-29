@@ -72,7 +72,7 @@ export function ConnectionStatus({
         <Badge tone={view.tone}>{view.label}</Badge>
       </StatusCell>
       <StatusCell label="Health">{view.health}</StatusCell>
-      <StatusCell label="Login">{view.maskedLogin}</StatusCell>
+      <StatusCell label="Account">{view.maskedLogin}</StatusCell>
       <StatusCell label="Server">{view.server}</StatusCell>
       <StatusCell label="Last verified">
         {lastVerifiedLabel(view.lastVerified)}

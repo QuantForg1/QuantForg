@@ -5,8 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Cable,
-  CheckCircle2,
-  Circle,
   Loader2,
   RefreshCw,
   Unplug,
@@ -16,12 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DeskSkeleton } from "@/components/desk/primitives";
-import { ExecutionStateStrip } from "@/components/ops/execution-state-strip";
 import { ConnectionStatus } from "@/components/trading/connection-status";
-import { mt5Api, tradingSessionApi, weltradeApi, brokersApi } from "@/lib/api/endpoints";
+import { mt5Api, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
-import { asList, asRecord, str } from "@/lib/desk";
-import { TRADING_SYMBOL } from "@/lib/trading/gold-only";
+import { asRecord, str } from "@/lib/desk";
 import { traderFacingErrorMessage } from "@/lib/trading/trader-ux";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { useAuth } from "@/providers/auth-provider";
@@ -29,61 +25,6 @@ import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { cn } from "@/lib/utils";
 
 type AccountType = "demo" | "live";
-
-function maskAccountId(raw: string): string {
-  const digits = raw.replace(/\D/g, "") || raw.trim();
-  if (digits.length <= 4) return "••••";
-  return `${digits.slice(0, 2)}•••${digits.slice(-2)}`;
-}
-
-function Diag({
-  ok,
-  label,
-  support,
-}: {
-  ok: boolean | null;
-  label: string;
-  /** When set, use Enabled/Disabled/Unknown capability labels. */
-  support?: string | null;
-}) {
-  const capabilityMode = support != null;
-  const tone =
-    ok === true
-      ? "text-[var(--success)]"
-      : ok === false
-        ? capabilityMode
-          ? "text-[var(--danger)]"
-          : "text-[var(--fg-muted)]"
-        : "text-[var(--fg-subtle)]";
-  let status: string;
-  if (ok === true) {
-    status = capabilityMode ? "✅ Enabled" : "OK";
-  } else if (ok === false) {
-    status = capabilityMode ? "❌ Disabled" : "NO";
-  } else {
-    status = "⚪ Unknown (MT5 API limitation)";
-  }
-  return (
-    <div className="flex items-center gap-2 border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-2.5">
-      {ok === true ? (
-        <CheckCircle2 className={cn("h-3.5 w-3.5 shrink-0", tone)} aria-hidden />
-      ) : (
-        <Circle className={cn("h-3.5 w-3.5 shrink-0", tone)} aria-hidden />
-      )}
-      <span className="text-sm text-[var(--fg)]">{label}</span>
-      <span
-        className={cn(
-          "ml-auto max-w-[55%] truncate text-right font-mono text-[10px]",
-          !capabilityMode && "uppercase",
-          tone,
-        )}
-        title={status}
-      >
-        {status}
-      </span>
-    </div>
-  );
-}
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -133,11 +74,6 @@ export function BrokerConfigWorkspace() {
     refetchInterval: 15_000,
     retry: false,
   });
-  const accountsQ = useQuery({
-    queryKey: ["broker-accounts"],
-    queryFn: brokersApi.accounts,
-    retry: false,
-  });
 
   const healthQ = useQuery({
     queryKey: ["weltrade-health"],
@@ -159,28 +95,12 @@ export function BrokerConfigWorkspace() {
     staleTime: 60_000,
     retry: false,
   });
-  const tickQ = useQuery({
-    queryKey: ["mt5-tick", TRADING_SYMBOL, "broker-diag"],
-    queryFn: () => mt5Api.tick(TRADING_SYMBOL),
-    enabled: session.connected && isOperator,
-    staleTime: 5_000,
-    refetchInterval: session.connected ? 8_000 : false,
-    retry: false,
-  });
 
   const health = asRecord(healthQ.data);
   const mt5 = asRecord(mt5Q.data);
   const profile = asRecord(profileQ.data);
-  const tick = asRecord(tickQ.data);
 
   const connected = session.connected || Boolean(health.mt5_connected || health.mt5_attached || mt5.connected);
-  const gatewayOnline =
-    session.gatewayOnline || Boolean(health.gateway_online || health.gateway_reachable);
-  const loginOk =
-    connected &&
-    (str(session.loginStatus).toLowerCase().includes("log") ||
-      Boolean(mt5.login) ||
-      Boolean(session.login && session.login !== "—"));
 
   const [accountType, setAccountType] = useState<AccountType>("live");
   const [provider] = useState("MetaTrader 5");
@@ -262,6 +182,7 @@ export function BrokerConfigWorkspace() {
       setProgress(null);
     },
     onError: (e) => {
+      setPassword("");
       setProgress(null);
       toast.error(
         e instanceof ApiError
@@ -281,29 +202,6 @@ export function BrokerConfigWorkspace() {
       toast.error(
         e instanceof ApiError ? traderFacingErrorMessage(e) : "Disconnect failed",
       ),
-  });
-
-  const testMut = useMutation({
-    mutationFn: async () => {
-      const h = await weltradeApi.health();
-      const m = await mt5Api.status();
-      if (asRecord(m).connected) {
-        await mt5Api.tick(TRADING_SYMBOL);
-      }
-      return { health: h, mt5: m };
-    },
-    onMutate: () => setProgress("Testing connection…"),
-    onSuccess: async () => {
-      toast.success("Connection test completed");
-      await refresh();
-      setProgress(null);
-    },
-    onError: (e) => {
-      setProgress(null);
-      toast.error(
-        e instanceof ApiError ? traderFacingErrorMessage(e) : "CONNECTION_FAILED",
-      );
-    },
   });
 
   const saveMut = useMutation({
@@ -330,6 +228,7 @@ export function BrokerConfigWorkspace() {
       setProgress(null);
     },
     onError: (e) => {
+      setPassword("");
       setProgress(null);
       toast.error(
         e instanceof ApiError
@@ -344,7 +243,6 @@ export function BrokerConfigWorkspace() {
   const busy =
     connectMut.isPending ||
     disconnectMut.isPending ||
-    testMut.isPending ||
     saveMut.isPending;
 
   const onConnect = () => {
@@ -394,43 +292,11 @@ export function BrokerConfigWorkspace() {
     });
   };
 
-  const latency =
-    session.latencyMs !== "—"
-      ? `${session.latencyMs} ms`
-      : mt5.latency_ms != null
-        ? `${str(mt5.latency_ms)} ms`
-        : "—";
   const heartbeat = (session.heartbeatAt || str(mt5.last_heartbeat_at, "—"))
     .replace("T", " ")
     .slice(0, 19);
 
-  const tradingAllowed =
-    connected &&
-    (health.execution_enabled === true ||
-      str(asRecord(health.account).trade_mode).toLowerCase() !== "disabled");
-  const marketOpen = connected && (tick.bid != null || tick.ask != null);
-  const symbolAvailable = connected && (tickQ.isSuccess || tick.bid != null);
-  const pingHealthy =
-    connected &&
-    (Number(session.latencyMs) < 5000 ||
-      (typeof mt5.latency_ms === "number" && mt5.latency_ms < 5000));
-
-  // Terminal-side flags — report only when gateway/health exposes them
-  const autoTrading =
-    health.mt5_autotrading_enabled == null
-      ? null
-      : Boolean(health.mt5_autotrading_enabled);
-  const dllEnabled =
-    health.dll_allowed == null &&
-    health.dll_enabled == null &&
-    health.dlls_allowed == null
-      ? null
-      : Boolean(health.dll_allowed ?? health.dll_enabled ?? health.dlls_allowed);
-  const autoSupport = str(health.autotrading_support, "");
-  const dllSupport = str(health.dll_support, "");
-
   const tradingSnap = asRecord(tradingSessionQ.data);
-  const ownedAccounts = asList(accountsQ.data).map(asRecord);
   const uxState = str(tradingSnap.ux_state, connected ? "CONNECTED" : "NO_BROKER");
   const maskedAccount = str(tradingSnap.account, "—");
   const maskedServer = str(tradingSnap.server, str(mt5.server || session.server, "—"));
@@ -456,7 +322,6 @@ export function BrokerConfigWorkspace() {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-3xl space-y-3 px-1 sm:px-0">
-      {isOperator ? <ExecutionStateStrip compact /> : null}
       <header className="border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -492,7 +357,7 @@ export function BrokerConfigWorkspace() {
       />
 
       <Section
-        title="Connect broker"
+        title="Your account"
         aside={
           <Button
             size="sm"
@@ -519,30 +384,7 @@ export function BrokerConfigWorkspace() {
           <Field label="Available margin" value={figuresOk && liveMargin ? liveMargin : "—"} />
           <Field label="Connection health" value={str(tradingSnap.connection, healthLabel)} />
           <Field label="Last verified" value={lastVerified} />
-          <Field label="Account ownership" value="This login only — never another user" />
-          {isOperator ? <Field label="Latency" value={latency} /> : null}
         </div>
-        {ownedAccounts.length > 1 ? (
-          <label className="mt-3 block text-sm">
-            <span className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              Current account
-            </span>
-            <select
-              className="mt-1 flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-              defaultValue=""
-              onChange={() => void refresh()}
-            >
-              <option value="">
-                {maskedAccount} · {maskedServer}
-              </option>
-              {ownedAccounts.map((row, i) => (
-                <option key={str(row.id, String(i))} value={str(row.id)}>
-                  {maskAccountId(str(row.external_account_id, str(row.label)))} · {str(row.server)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
         {uxState === "SESSION_MISMATCH" ? (
           <p className="mt-3 text-sm text-[var(--warning)]">
             ACCOUNT_SESSION_MISMATCH. Reconnect your own account. Concurrent independent live logins are not supported.
@@ -555,7 +397,7 @@ export function BrokerConfigWorkspace() {
             ) : (
               <Cable className="h-4 w-4" />
             )}
-            Connect & Verify
+            {connected ? "Reconnect" : "Connect & Verify"}
           </Button>
           <Button
             variant="secondary"
@@ -565,12 +407,6 @@ export function BrokerConfigWorkspace() {
             <Unplug className="h-4 w-4" />
             Disconnect
           </Button>
-          {isOperator ? (
-            <Button variant="outline" disabled={busy} onClick={() => testMut.mutate()}>
-              <RefreshCw className="h-4 w-4" />
-              Test Connection
-            </Button>
-          ) : null}
         </div>
         {progress ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-[var(--accent)]">
@@ -579,35 +415,6 @@ export function BrokerConfigWorkspace() {
           </p>
         ) : null}
       </Section>
-
-      {isOperator ? (
-      <Section title="B · Diagnostics">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Diag ok={connected} label="MT5 Running" />
-          <Diag ok={gatewayOnline} label="Gateway Connected" />
-          <Diag ok={loginOk} label="Login OK" />
-          <Diag ok={tradingAllowed} label="Trading Allowed" />
-          <Diag
-            ok={autoTrading}
-            label="AutoTrading Enabled"
-            support={autoSupport || (autoTrading == null ? "NOT_SUPPORTED" : "SUPPORTED")}
-          />
-          <Diag
-            ok={dllEnabled}
-            label="DLL Enabled"
-            support={dllSupport || (dllEnabled == null ? "NOT_SUPPORTED" : "SUPPORTED")}
-          />
-          <Diag ok={marketOpen} label="Market Open" />
-          <Diag ok={symbolAvailable} label="Symbol Available (XAUUSD)" />
-          <Diag ok={pingHealthy} label="Ping Healthy" />
-        </div>
-        <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
-          AutoTrading / DLL come from MetaTrader5.terminal_info() via the gateway
-          (trade_allowed / dlls_allowed). States: Enabled, Disabled, or Unknown
-          (MT5 API limitation) — never invented.
-        </p>
-      </Section>
-      ) : null}
 
       {showConnectForm ? (
       <Section title="Connect Broker">
@@ -673,7 +480,7 @@ export function BrokerConfigWorkspace() {
             <Input
               id="bw-password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="off"
               name="broker-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -700,11 +507,6 @@ export function BrokerConfigWorkspace() {
             ) : null}
             Verify Connection
           </Button>
-          {isOperator ? (
-            <Button variant="outline" disabled={busy} onClick={() => testMut.mutate()}>
-              Test Connection
-            </Button>
-          ) : null}
         </div>
         <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
           Password is used only to submit this form. It is never stored in the browser, localStorage, or API responses.

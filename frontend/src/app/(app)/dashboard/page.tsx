@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Bot, Cable, Layers } from "lucide-react";
@@ -13,7 +13,6 @@ import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
 import {
-  brokersApi,
   marketUniverseApi,
   portfolioApi,
   tradingSessionApi,
@@ -25,9 +24,12 @@ import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
 import {
+  catalogueViewState,
   isLiveBrokerCatalogue,
   mergeCatalogueRows,
+  numericDisplay,
   resolveConnectionPresentation,
+  robotDisplayState,
   traderFacingErrorMessage,
 } from "@/lib/trading/trader-ux";
 
@@ -44,108 +46,34 @@ function statusTone(
   value: string,
 ): "success" | "warning" | "danger" | "neutral" {
   const v = value.toLowerCase();
-  if (["connected", "healthy", "running", "enabled", "robot_ready", "ready"].includes(v))
+  if (["connected", "healthy", "running", "enabled", "ready"].includes(v))
     return "success";
-  if (["paused", "degraded", "starting", "catalogue_unavailable", "connecting"].includes(v))
-    return "warning";
+  if (["paused", "degraded", "starting", "connecting"].includes(v)) return "warning";
   if (
     [
       "disconnected",
       "error",
       "stopped",
+      "blocked",
       "disabled",
-      "no_broker",
-      "session_mismatch",
       "broker_not_connected",
+      "account_session_mismatch",
     ].includes(v)
   )
     return "danger";
   return "neutral";
 }
 
-function maskAccountId(raw: string): string {
-  const digits = raw.replace(/\D/g, "") || raw.trim();
-  if (digits.length <= 4) return "••••";
-  return `${digits.slice(0, 2)}•••${digits.slice(-2)}`;
-}
-
-function greeting(name: string): string {
-  const h = new Date().getHours();
-  const part =
-    h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-  const trimmed = name.trim();
-  return trimmed ? `${part}, ${trimmed}` : part;
-}
-
-function uxCopy(state: string): { title: string; detail: string } {
-  switch (state) {
-    case "NO_BROKER":
-    case "BROKER_NOT_CONNECTED":
-      return {
-        title: "BROKER NOT CONNECTED",
-        detail: "QuantForg uses your connected account only — never a shared default.",
-      };
-    case "CONNECTING":
-      return {
-        title: "CONNECTING",
-        detail: "Validating the session. Your password is never stored in the browser.",
-      };
-    case "CONNECTED":
-    case "ROBOT_READY":
-      return {
-        title: "CONNECTED",
-        detail: "Your account is linked. Start the robot when you are ready.",
-      };
-    case "ROBOT_RUNNING":
-      return {
-        title: "Robot is running.",
-        detail: "Live execution is bound to your connected account.",
-      };
-    case "ROBOT_PAUSED":
-      return {
-        title: "Robot is paused.",
-        detail: "Your account session is still connected.",
-      };
-    case "SESSION_MISMATCH":
-    case "ACCOUNT_SESSION_MISMATCH":
-      return {
-        title: "ACCOUNT_SESSION_MISMATCH",
-        detail: "This workspace cannot use another account’s live terminal session.",
-      };
-    case "CATALOGUE_UNAVAILABLE":
-      return {
-        title: "CONNECTED",
-        detail: "Market catalogue is unavailable. This is not an empty market.",
-      };
-    case "ATTENTION":
-      return {
-        title: "Robot needs attention.",
-        detail: "Check your broker connection, then retry.",
-      };
-    default:
-      return {
-        title: "Your account",
-        detail: "Status is scoped to this login.",
-      };
-  }
-}
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const isOperator = canAccessIteOps(user);
   const qc = useQueryClient();
-  const [selectedAccountId, setSelectedAccountId] = useState("");
 
   const sessionQ = useQuery({
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
     retry: false,
     refetchInterval: 15_000,
-  });
-  const accountsQ = useQuery({
-    queryKey: ["broker-accounts"],
-    queryFn: brokersApi.accounts,
-    retry: false,
   });
   const portfolio = useQuery({
     queryKey: ["portfolio"],
@@ -160,15 +88,12 @@ export default function DashboardPage() {
 
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
-  const uxState = str(session.ux_state, "NO_BROKER");
-  const copy = uxCopy(connection.state === "CONNECTED" ? uxState : connection.state);
   const positions = asList(portfolio.data?.positions).map(asRecord);
   const deals = asList(history.data?.deals).map(asRecord);
-  const ownedAccounts = asList(accountsQ.data).map(asRecord);
   const liveCatalogue = isLiveBrokerCatalogue(session);
   const noBroker = connection.state === "BROKER_NOT_CONNECTED";
   const sessionMismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
-  const catalogueUnavailable = connection.catalogueUnavailable || !liveCatalogue;
+  const robot = robotDisplayState(session, connection);
 
   const universeQ = useQuery({
     queryKey: ["market-universe-snapshot", "home"],
@@ -178,18 +103,24 @@ export default function DashboardPage() {
   });
   const universe = asRecord(universeQ.data);
   const instruments = asList(universe.instruments).map(asRecord);
-  const universeLive =
-    str(universe.catalogue_source) === "LIVE_BROKER" && instruments.length > 0;
-  const rows = universeLive
-    ? mergeCatalogueRows(
-        instruments,
-        asList(asRecord(universe.opportunity_board).rows).map(asRecord),
-      )
-    : [];
+  const catalogue = catalogueViewState({
+    connected: connection.connected,
+    mismatch: sessionMismatch,
+    liveBrokerSession: liveCatalogue,
+    catalogueUnavailable: connection.catalogueUnavailable,
+    snapshotFetched: universeQ.isFetched,
+    snapshotError: Boolean(universeQ.isError),
+    catalogueSource: universe.catalogue_source,
+    instrumentCount: instruments.length,
+  });
+  const rows =
+    catalogue === "LIVE_ROWS"
+      ? mergeCatalogueRows(
+          instruments,
+          asList(asRecord(universe.opportunity_board).rows).map(asRecord),
+        )
+      : [];
 
-  const robot = str(session.robot, "Stopped");
-  const robotDisplay =
-    uxState === "ROBOT_READY" && robot === "Stopped" ? "Ready" : robot;
   const positionsUnavailable = Boolean(portfolio.isError) && !noBroker && !sessionMismatch;
   const activityUnavailable = Boolean(history.isError) && !noBroker && !sessionMismatch;
   const showMetrics =
@@ -234,35 +165,37 @@ export default function DashboardPage() {
       },
       {
         id: "side",
-        header: "Direction",
+        header: "Side",
         accessor: (r) => str(r.side),
         cell: (r) => (
           <Badge tone={str(r.side).toLowerCase() === "buy" ? "success" : "warning"}>
-            {str(r.side)}
+            {str(r.side, "—")}
           </Badge>
         ),
       },
       {
-        id: "size",
-        header: "Size",
+        id: "volume",
+        header: "Volume",
         accessor: (r) => num(r.volume),
-        cell: (r) => <span className="tabular">{str(r.volume, "—")}</span>,
+        cell: (r) => <span className="tabular">{numericDisplay(r.volume)}</span>,
       },
       {
         id: "entry",
         header: "Entry",
-        cell: (r) => <span className="tabular">{str(r.open_price, "—")}</span>,
+        cell: (r) => <span className="tabular">{numericDisplay(r.open_price)}</span>,
       },
       {
         id: "current",
         header: "Current",
         cell: (r) => (
-          <span className="tabular">{str(r.current_price, str(r.price, "—"))}</span>
+          <span className="tabular">
+            {numericDisplay(r.current_price ?? r.price)}
+          </span>
         ),
       },
       {
         id: "pnl",
-        header: "PnL",
+        header: "P/L",
         sortable: true,
         accessor: (r) => num(r.profit),
         cell: (r) => {
@@ -281,6 +214,11 @@ export default function DashboardPage() {
           );
         },
       },
+      {
+        id: "status",
+        header: "Status",
+        cell: (r) => <span>{str(r.status, "—")}</span>,
+      },
     ],
     [],
   );
@@ -288,7 +226,7 @@ export default function DashboardPage() {
   if (sessionQ.isLoading) {
     return (
       <div>
-        <PageHeader title="Home" description="Your account, broker, and robot." />
+        <PageHeader title="Welcome back" description="Your account and markets." />
         <DeskSkeleton variant="page" />
       </div>
     );
@@ -297,9 +235,9 @@ export default function DashboardPage() {
   if (sessionQ.isError) {
     return (
       <div>
-        <PageHeader title="Home" description="Your account, broker, and robot." />
+        <PageHeader title="Welcome back" description="Your account and markets." />
         <DeskError
-          message="DATA UNAVAILABLE. Unable to load your trading session."
+          message="Unable to load your trading session."
           onRetry={() => {
             void sessionQ.refetch();
           }}
@@ -308,131 +246,67 @@ export default function DashboardPage() {
     );
   }
 
+  const greeting = firstName ? `Welcome back, ${firstName}` : "Welcome back";
+
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 space-y-5">
       <PageHeader
-        title={greeting(firstName)}
-        description={copy.title}
+        title={greeting}
+        description={
+          noBroker
+            ? "Connect your broker to see your account and markets."
+            : sessionMismatch
+              ? "Your trading session needs to be reconnected."
+              : "Your account, robot, positions, and broker-discovered markets."
+        }
         actions={
-          <>
-            {noBroker || sessionMismatch ? (
-              <Button asChild>
-                <Link href="/broker">
-                  <Cable className="h-4 w-4" /> Connect Broker
-                </Link>
-              </Button>
-            ) : null}
-          </>
+          noBroker || sessionMismatch ? (
+            <Button asChild>
+              <Link href="/broker">
+                <Cable className="h-4 w-4" /> Connect Broker
+              </Link>
+            </Button>
+          ) : null
         }
       />
 
-      <p className="max-w-2xl text-sm text-[var(--fg-muted)]">{copy.detail}</p>
-
       <ConnectionStatus session={session} />
 
-      {ownedAccounts.length > 1 ? (
-        <label className="flex min-w-0 max-w-md flex-col gap-1 text-sm">
-          <span className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Current account
-          </span>
-          <select
-            className="h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3"
-            value={selectedAccountId}
-            onChange={(e) => {
-              setSelectedAccountId(e.target.value);
-              void sessionQ.refetch();
-              void portfolio.refetch();
-              void history.refetch();
-            }}
-          >
-            <option value="">
-              {str(session.account, "Connected account")} · {str(session.server)}
-            </option>
-            {ownedAccounts.map((row, i) => {
-              const id = str(row.id, String(i));
-              const ext = maskAccountId(
-                str(row.external_account_id, str(row.label)),
-              );
-              return (
-                <option key={id} value={id}>
-                  {ext} · {str(row.server, "Broker")}
-                </option>
-              );
-            })}
-          </select>
-        </label>
-      ) : null}
-
-      {noBroker ? (
-        <Card>
-          <CardContent className="py-6">
-            <DeskEmpty
-              icon={Cable}
-              title="BROKER NOT CONNECTED"
-              description="Connect your broker account to start. There is no shared or default account."
-              actionLabel="Connect Broker"
-              actionHref="/broker"
-            />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {sessionMismatch ? (
-        <Card>
-          <CardContent className="py-6">
-            <DeskEmpty
-              icon={Cable}
-              title="ACCOUNT_SESSION_MISMATCH"
-              description="This live terminal is bound to another session. Reconnect your own account before trading. Concurrent independent live logins are not supported."
-              actionLabel="Reconnect"
-              actionHref="/broker"
-            />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          label="Balance"
-          value={moneyOrUnavailable(session.balance, showMetrics)}
-        />
-        <MetricCard
-          label="Equity"
-          value={moneyOrUnavailable(session.equity, showMetrics)}
-        />
-        <MetricCard
-          label="Margin"
-          value={moneyOrUnavailable(session.margin, showMetrics)}
-        />
-        <MetricCard
-          label="Free margin"
-          value={moneyOrUnavailable(session.free_margin, showMetrics)}
-        />
-      </div>
-      {connection.accountUnavailable && connection.connected ? (
-        <p className="text-xs text-[var(--warning)]">DATA UNAVAILABLE — account figures are hidden, not shown as zero.</p>
-      ) : null}
+      <section aria-labelledby="account-overview">
+        <h2 id="account-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
+          Account overview
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
+          <MetricCard label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
+          <MetricCard label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
+          <MetricCard
+            label="Free margin"
+            value={moneyOrUnavailable(session.free_margin, showMetrics)}
+          />
+        </div>
+      </section>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Your robot</CardTitle>
-            <Badge tone={statusTone(robotDisplay)}>{robotDisplay}</Badge>
+            <CardTitle>Robot</CardTitle>
+            <Badge tone={statusTone(robot)}>{robot}</Badge>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-[var(--fg-muted)]">
-            <p>
-              {noBroker
-                ? "BROKER NOT CONNECTED"
-                : sessionMismatch
-                  ? "ACCOUNT_SESSION_MISMATCH"
-                  : copy.title}
-            </p>
+          <CardContent className="space-y-3">
+            {noBroker ? (
+              <p className="text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
+            ) : sessionMismatch ? (
+              <p className="text-sm text-[var(--fg-muted)]">ACCOUNT SESSION MISMATCH</p>
+            ) : (
+              <p className="text-sm text-[var(--fg-muted)]">
+                Your robot for this connected account.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                disabled={
-                  robotMut.isPending || noBroker || sessionMismatch || robot === "Running"
-                }
+                disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
                 onClick={() => robotMut.mutate("start")}
               >
                 Start
@@ -440,7 +314,7 @@ export default function DashboardPage() {
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={robotMut.isPending || robot !== "Running"}
+                disabled={robotMut.isPending || robot !== "RUNNING"}
                 onClick={() => robotMut.mutate("pause")}
               >
                 Pause
@@ -449,7 +323,7 @@ export default function DashboardPage() {
                 size="sm"
                 variant="secondary"
                 disabled={
-                  robotMut.isPending || (robot !== "Running" && robot !== "Paused")
+                  robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
                 }
                 onClick={() => robotMut.mutate("stop")}
               >
@@ -462,12 +336,7 @@ export default function DashboardPage() {
                   <Bot className="h-4 w-4" /> Admin portal
                 </Link>
               </Button>
-            ) : (
-              <p className="text-xs text-[var(--fg-subtle)]">
-                You can start or stop the robot for this connected account only.
-                Concurrent independent live logins require additional terminals.
-              </p>
-            )}
+            ) : null}
           </CardContent>
         </Card>
 
@@ -479,20 +348,20 @@ export default function DashboardPage() {
             {noBroker || sessionMismatch ? (
               <DeskEmpty
                 icon={Activity}
-                title="EMPTY"
-                description="Activity appears after you connect. Fills belong to your account only."
+                title="No activity yet"
+                description="Fills appear after you connect your broker."
               />
             ) : activityUnavailable ? (
               <DeskEmpty
                 icon={Activity}
-                title="DATA UNAVAILABLE"
+                title="Activity unavailable"
                 description="Your account could not be queried. This is not an empty history."
               />
             ) : deals.length === 0 ? (
               <DeskEmpty
                 icon={Activity}
-                title="EMPTY"
-                description="No recent fills for this connected account."
+                title="No recent activity"
+                description="No recent fills for your account."
               />
             ) : (
               <ul className="space-y-2">
@@ -540,16 +409,16 @@ export default function DashboardPage() {
           {noBroker || sessionMismatch ? (
             <DeskEmpty
               icon={Layers}
-              title={noBroker ? "BROKER NOT CONNECTED" : "ACCOUNT_SESSION_MISMATCH"}
-              description="Connect your broker to load live exposure. Unavailable data is not shown as zero."
+              title={noBroker ? "BROKER NOT CONNECTED" : "ACCOUNT SESSION MISMATCH"}
+              description="Connect your broker to load your positions."
               actionLabel="Connect Broker"
               actionHref="/broker"
             />
           ) : positionsUnavailable ? (
             <DeskEmpty
               icon={Layers}
-              title="DATA UNAVAILABLE"
-              description="POSITIONS UNAVAILABLE. This is not zero positions."
+              title="Positions unavailable"
+              description="Your positions could not be loaded. This is not zero positions."
             />
           ) : (
             <div className="min-w-0 overflow-x-auto">
@@ -563,8 +432,8 @@ export default function DashboardPage() {
                 empty={
                   <DeskEmpty
                     icon={Layers}
-                    title="EMPTY"
-                    description="No open positions on this connected account."
+                    title="No open positions"
+                    description="No open positions on your account."
                   />
                 }
               />
@@ -575,9 +444,9 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Markets</CardTitle>
+          <CardTitle>Market snapshot</CardTitle>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/markets">Open markets</Link>
+            <Link href="/markets">Markets</Link>
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -585,30 +454,24 @@ export default function DashboardPage() {
             <DeskEmpty
               icon={Activity}
               title="BROKER NOT CONNECTED"
-              description="Connect to see broker-discovered markets. Research cannot place orders."
+              description="Connect to see broker-discovered markets."
             />
-          ) : catalogueUnavailable || (universeQ.isFetched && !universeLive) ? (
+          ) : catalogue === "UNAVAILABLE" ? (
             <DeskEmpty
               icon={Activity}
               title="CATALOGUE UNAVAILABLE"
-              description="Connect or verify your broker and refresh market data. This is not an empty market."
+              description="Broker market catalogue is currently unavailable. This is not an empty market."
             />
-          ) : universeQ.isLoading ? (
+          ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
             <DeskSkeleton rows={3} />
-          ) : universeQ.isError ? (
+          ) : catalogue === "LIVE_EMPTY" ? (
             <DeskEmpty
               icon={Activity}
-              title="CATALOGUE UNAVAILABLE"
-              description="Connect or verify your broker and refresh market data."
-            />
-          ) : rows.length === 0 ? (
-            <DeskEmpty
-              icon={Activity}
-              title="EMPTY"
-              description="The live catalogue was queried. Nothing is listed for this session."
+              title="No markets in catalogue"
+              description="The live broker catalogue was queried. No instruments are listed for your account."
             />
           ) : (
-            <MarketCatalogueRows rows={rows} limit={6} />
+            <MarketCatalogueRows rows={rows} limit={8} showFilters compact />
           )}
         </CardContent>
       </Card>

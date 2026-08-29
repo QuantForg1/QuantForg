@@ -25,7 +25,6 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
   onSymbolChange,
   bid,
   ask,
-  realtime,
   terminalMode = "MANUAL",
   className,
 }: {
@@ -40,10 +39,11 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
   const session = useTradingSession();
   const equity = num(session.equity);
   const free = num(session.freeMargin);
-  const openPnl = useMemo(
-    () => session.positions.reduce((s, p) => s + num(p.profit, 0), 0),
-    [session.positions],
-  );
+  const openPnl = useMemo(() => {
+    const values = session.positions.map((p) => num(p.profit));
+    const finite = values.filter((n) => Number.isFinite(n));
+    return finite.length > 0 ? finite.reduce((s, n) => s + n, 0) : Number.NaN;
+  }, [session.positions]);
   const spread =
     typeof bid === "number" &&
     typeof ask === "number" &&
@@ -51,9 +51,6 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
     Number.isFinite(ask)
       ? ask - bid
       : null;
-  const latency =
-    realtime?.latencyMs ??
-    (Number.isFinite(num(session.latencyMs)) ? num(session.latencyMs) : null);
 
   return (
     <div
@@ -98,11 +95,6 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
             spr {spread.toFixed(5)}
           </span>
         ) : null}
-        {latency != null && Number.isFinite(latency) ? (
-          <span className="hidden tabular text-[10px] text-[var(--fg-subtle)] lg:inline">
-            {Math.round(latency)} ms
-          </span>
-        ) : null}
       </div>
 
       <dl className="hidden items-center gap-3.5 text-[11px] md:flex">
@@ -123,10 +115,14 @@ export const TerminalSessionBar = memo(function TerminalSessionBar({
           <dd
             className={cn(
               "tabular font-medium",
-              openPnl >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]",
+              Number.isFinite(openPnl)
+                ? openPnl >= 0
+                  ? "text-[var(--success)]"
+                  : "text-[var(--danger)]"
+                : "text-[var(--fg)]",
             )}
           >
-            {formatCurrency(openPnl)}
+            {Number.isFinite(openPnl) ? formatCurrency(openPnl) : "—"}
           </dd>
         </div>
         <div className="flex items-baseline gap-1">

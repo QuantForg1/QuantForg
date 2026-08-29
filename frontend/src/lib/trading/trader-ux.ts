@@ -243,3 +243,209 @@ export function marketDataState(row: Record<string, unknown>): string {
   ]);
   return allowed.has(raw) ? raw : "UNKNOWN";
 }
+
+export const ASSET_CLASS_ORDER = [
+  "FOREX",
+  "CRYPTO",
+  "METALS",
+  "INDICES",
+  "ENERGY",
+  "OTHER",
+] as const;
+
+export type CatalogueViewState =
+  | "NOT_READY"
+  | "UNAVAILABLE"
+  | "LIVE_EMPTY"
+  | "LIVE_ROWS";
+
+export type RobotDisplayState =
+  | "READY"
+  | "RUNNING"
+  | "PAUSED"
+  | "STOPPED"
+  | "BLOCKED";
+
+export type MarketFilterState = {
+  q: string;
+  assetClass: string;
+  session: string;
+  regime: string;
+  status: string;
+};
+
+export const EMPTY_MARKET_FILTERS: MarketFilterState = {
+  q: "",
+  assetClass: "ALL",
+  session: "ALL",
+  regime: "ALL",
+  status: "ALL",
+};
+
+/** Unavailable / missing numerics render as em dash — never coerced to 0. */
+export function numericDisplay(value: unknown): string {
+  if (value == null || value === "" || value === "—" || value === "UNKNOWN") {
+    return "—";
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "—";
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (Number.isFinite(n) && value.trim() === String(n)) return String(n);
+    if (value.toUpperCase() === "UNKNOWN") return "—";
+    return value;
+  }
+  return "—";
+}
+
+export function priceDisplay(value: unknown, digits = 5): string {
+  if (value == null || value === "" || value === "—") return "—";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toFixed(Math.min(Math.max(digits, 2), 8));
+}
+
+export function normalizeAssetClass(raw: unknown): string {
+  const v = String(raw ?? "")
+    .trim()
+    .toUpperCase();
+  if (!v || v === "—" || v === "NULL") return "UNKNOWN";
+  if (["FOREX", "FX", "CURRENCY", "CURRENCIES"].includes(v)) return "FOREX";
+  if (["CRYPTO", "CRYPTOCURRENCY", "CRYPTOCURRENCIES"].includes(v)) return "CRYPTO";
+  if (["METALS", "METAL"].includes(v)) return "METALS";
+  if (["INDICES", "INDEX"].includes(v)) return "INDICES";
+  if (["ENERGY", "ENERGIES"].includes(v)) return "ENERGY";
+  if (v === "OTHER") return "OTHER";
+  if (v === "UNKNOWN") return "UNKNOWN";
+  return v;
+}
+
+export function presentAssetClasses(rows: Record<string, unknown>[]): string[] {
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const cls = normalizeAssetClass(row.asset_class);
+    if (cls !== "UNKNOWN") seen.add(cls);
+  }
+  const ordered = ASSET_CLASS_ORDER.filter((cls) => seen.has(cls));
+  const extra = [...seen].filter((cls) => !ASSET_CLASS_ORDER.includes(cls as (typeof ASSET_CLASS_ORDER)[number])).sort();
+  return [...ordered, ...extra];
+}
+
+export function uniqueRowValues(
+  rows: Record<string, unknown>[],
+  pick: (row: Record<string, unknown>) => string,
+): string[] {
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const v = pick(row).trim();
+    if (v && v !== "—" && v !== "UNKNOWN") seen.add(v);
+  }
+  return [...seen].sort();
+}
+
+export function rowRegime(row: Record<string, unknown>): string {
+  const evidence =
+    row.evidence && typeof row.evidence === "object"
+      ? (row.evidence as Record<string, unknown>)
+      : {};
+  return String(evidence.REGIME || row.regime || row.market_regime || "UNKNOWN")
+    .trim()
+    .toUpperCase() || "UNKNOWN";
+}
+
+export function rowSession(row: Record<string, unknown>): string {
+  return String(row.session || row.trading_session || "UNKNOWN")
+    .trim()
+    .toUpperCase() || "UNKNOWN";
+}
+
+export function rowDirection(row: Record<string, unknown>): string {
+  const dir = String(row.direction || "UNKNOWN").trim().toUpperCase();
+  if (dir.includes("BUY")) return "BUY";
+  if (dir.includes("SELL")) return "SELL";
+  if (dir === "WAIT") return "WAIT";
+  return dir || "UNKNOWN";
+}
+
+export function instrumentSymbol(row: Record<string, unknown>): string {
+  return String(
+    row.broker_symbol || row.symbol || row.canonical_symbol || row.code || "",
+  ).trim();
+}
+
+export function instrumentName(row: Record<string, unknown>): string {
+  const name = String(row.description || row.name || row.display_name || "").trim();
+  return name || instrumentSymbol(row) || "—";
+}
+
+export function catalogueViewState(input: {
+  connected: boolean;
+  mismatch: boolean;
+  liveBrokerSession: boolean;
+  catalogueUnavailable: boolean;
+  snapshotFetched: boolean;
+  snapshotError: boolean;
+  catalogueSource?: unknown;
+  instrumentCount: number;
+}): CatalogueViewState {
+  if (input.mismatch || !input.connected) return "UNAVAILABLE";
+  if (input.catalogueUnavailable || !input.liveBrokerSession) return "UNAVAILABLE";
+  if (input.snapshotError) return "UNAVAILABLE";
+  if (!input.snapshotFetched) return "NOT_READY";
+  const source = String(input.catalogueSource || "").trim().toUpperCase();
+  if (source !== LIVE_BROKER) return "UNAVAILABLE";
+  return input.instrumentCount === 0 ? "LIVE_EMPTY" : "LIVE_ROWS";
+}
+
+export function filterMarketRows(
+  rows: Record<string, unknown>[],
+  filters: MarketFilterState,
+): Record<string, unknown>[] {
+  const q = filters.q.trim().toUpperCase();
+  return rows.filter((row) => {
+    if (q) {
+      const hay = `${instrumentSymbol(row)} ${instrumentName(row)}`.toUpperCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (filters.assetClass !== "ALL") {
+      if (normalizeAssetClass(row.asset_class) !== filters.assetClass) return false;
+    }
+    if (filters.session !== "ALL" && rowSession(row) !== filters.session) return false;
+    if (filters.regime !== "ALL" && rowRegime(row) !== filters.regime) return false;
+    if (filters.status !== "ALL" && marketDataState(row) !== filters.status) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function robotDisplayState(
+  session: Record<string, unknown>,
+  connection?: ConnectionPresentation,
+): RobotDisplayState {
+  const view = connection ?? resolveConnectionPresentation(session);
+  if (
+    view.state === "BROKER_NOT_CONNECTED" ||
+    view.state === "ACCOUNT_SESSION_MISMATCH" ||
+    view.state === "CONNECTING" ||
+    !view.connected
+  ) {
+    return "BLOCKED";
+  }
+  const robot = String(session.robot || "").trim().toLowerCase();
+  const ux = String(session.ux_state || "").trim().toUpperCase();
+  if (robot === "running" || ux === "ROBOT_RUNNING") return "RUNNING";
+  if (robot === "paused" || ux === "ROBOT_PAUSED") return "PAUSED";
+  if (ux === "ROBOT_READY" || robot === "ready") return "READY";
+  if (robot === "stopped" || robot === "disabled") return "STOPPED";
+  if (ux === "ATTENTION") return "BLOCKED";
+  return "STOPPED";
+}
+
+export const RESEARCH_NOT_AUTHORIZATION =
+  "RESEARCH · NOT A TRADE AUTHORIZATION";
+
+export function passwordClearedAfterSubmit(password: string, submitted: boolean): string {
+  return submitted ? "" : password;
+}
