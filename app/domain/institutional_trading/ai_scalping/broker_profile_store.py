@@ -54,6 +54,18 @@ class BrokerRuntimeProfile:
 
 
 def _default_path() -> Path:
+    """Prefer Railway volume / explicit data dir so redeploys keep restore profile."""
+    import os
+
+    explicit = (os.environ.get("QUANTFORG_BROKER_PROFILE_PATH") or "").strip()
+    if explicit:
+        return Path(explicit)
+    volume = (os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or "").strip()
+    if volume:
+        return Path(volume) / "broker_runtime_profile.json"
+    data_dir = (os.environ.get("QUANTFORG_DATA_DIR") or "").strip()
+    if data_dir:
+        return Path(data_dir) / "broker_runtime_profile.json"
     try:
         from core.config.settings import get_settings
 

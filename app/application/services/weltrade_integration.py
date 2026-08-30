@@ -115,9 +115,10 @@ class WeltradeIntegrationService:
             "execution_enabled": self.adapter.execution_enabled,
         }
 
-    async def health(self, *, user_id: UUID) -> dict[str, Any]:
+    async def health(
+        self, *, user_id: UUID, role: str | None = None
+    ) -> dict[str, Any]:
         """Production health probe for tunnel + gateway + MT5 session."""
-        _ = user_id
         cfg = self._configuration()
         gw = self._gateway()
         latency_ms: float | None = None
@@ -230,7 +231,7 @@ class WeltradeIntegrationService:
                 logger.warning("weltrade_mt5_probe_failed", error=str(exc))
 
         if gateway_reachable and mt5_attached:
-            await self.ensure_user_session_bound(user_id=user_id)
+            await self.ensure_user_session_bound(user_id=user_id, role=role)
 
         cfg = self._configuration()
         transport = gw.diagnostics_probe()
@@ -337,10 +338,12 @@ class WeltradeIntegrationService:
             ),
         }
 
-    async def dashboard(self, *, user_id: UUID) -> dict[str, Any]:
+    async def dashboard(
+        self, *, user_id: UUID, role: str | None = None
+    ) -> dict[str, Any]:
         gw = self._gateway()
         if gw is not None:
-            await self.ensure_user_session_bound(user_id=user_id)
+            await self.ensure_user_session_bound(user_id=user_id, role=role)
         gateway_online = False
         gateway_payload: dict[str, Any] = {}
         if gw is not None:
@@ -599,12 +602,120 @@ class WeltradeIntegrationService:
             await uow.commit()
         unbind_execution_account(user_id=user_id)
 
-    async def ensure_user_session_bound(self, *, user_id: UUID) -> None:
+    @staticmethod
+    def _role_may_adopt_unbound_gateway(role: str | None) -> bool:
+        """Owner/admin may re-claim a live gateway after ephemeral profile loss."""
+        return str(role or "").strip().lower() in {"owner", "admin"}
+
+    async def _active_foreign_owner_of_login(
+        self, *, login: int, user_id: UUID
+    ) -> UUID | None:
+        """Return another user_id that currently owns ``login`` live, if any."""
+        if self.uow_factory is None or login <= 1:
+            return None
+        async with self.uow_factory() as uow:
+            finder = getattr(uow.connections, "get_connected_by_login", None)
+            if callable(finder):
+                row = await finder(login)
+                if row is not None and row.user_id != user_id and row.connected:
+                    return row.user_id
+                return None
+            # Memory / minimal repos: scan list_for_user is insufficient — walk items.
+            items = getattr(uow.connections, "items", None)
+            if isinstance(items, dict):
+                for conn in items.values():
+                    if (
+                        int(getattr(conn, "login", 0) or 0) == login
+                        and bool(getattr(conn, "connected", False))
+                        and getattr(conn, "user_id", None) != user_id
+                    ):
+                        return conn.user_id
+        return None
+
+    async def _adopt_live_gateway_for_privileged_user(
+        self, *, user_id: UUID, role: str | None
+    ) -> bool:
+        """Bind owner/admin to the live gateway when DB ownership was lost.
+
+        Railway ephemeral disks drop ``broker_runtime_profile.json`` on redeploy
+        while the Windows MT5 session remains attached. Research/catalogue can
+        still see LIVE_BROKER, but /trading/session and /portfolio report
+        Disconnected. Privileged adopt restores ownership without a password
+        when the gateway already holds the session — never for unbound traders,
+        never when another user already owns that login.
+        """
+        if not self._role_may_adopt_unbound_gateway(role):
+            return False
+        if self.uow_factory is None:
+            return False
+        client = self.adapter.client
+        if not getattr(client, "is_connected", False):
+            return False
+        live_ref = (
+            (getattr(self.adapter, "_live_session_ref", None) or "").strip()
+            or (getattr(client, "session_token", "") or "").strip()
+        )
+        if not live_ref:
+            return False
+        live_login = 0
+        live_server = ""
+        try:
+            info = self.adapter.account_info()
+            live_login = int(getattr(info, "login", 0) or 0)
+            live_server = str(getattr(info, "server", "") or "").strip()
+        except Exception:
+            live_login = int(getattr(client, "_login", 0) or 0)
+        if live_login <= 1 or not live_server:
+            return False
+        foreign = await self._active_foreign_owner_of_login(
+            login=live_login, user_id=user_id
+        )
+        if foreign is not None:
+            logger.info(
+                "weltrade_ensure_skipped",
+                reason="login_owned_by_other_user",
+                user_id=str(user_id),
+                other_user_id=str(foreign),
+                live_login=live_login,
+            )
+            return False
+        bound = await self.bind_user_session(
+            user_id=user_id,
+            login=live_login,
+            server=live_server,
+            path="",
+            session_ref=live_ref,
+        )
+        if not bound:
+            return False
+        self._persist_broker_runtime_profile(
+            login=live_login,
+            server=live_server,
+            path="",
+            password="",
+            user_id=user_id,
+        )
+        logger.info(
+            "weltrade_owner_adopted_live_gateway",
+            user_id=str(user_id),
+            login=live_login,
+            server=live_server,
+            role=str(role or ""),
+        )
+        return True
+
+    async def ensure_user_session_bound(
+        self, *, user_id: UUID, role: str | None = None
+    ) -> None:
         """Heal owned session after redeploy — never steal another user's terminal.
 
         After a Railway redeploy the Windows terminal can still be logged in while
         this process has no ``_live_session_ref``. Probe/attach first, then re-bind
         ONLY when the calling user already owns the live login.
+
+        Owner/admin may also adopt when DB ownership + ephemeral profile were
+        lost but the gateway session is still attached (see
+        ``_adopt_live_gateway_for_privileged_user``).
         """
         if self.uow_factory is None:
             return
@@ -638,13 +749,21 @@ class WeltradeIntegrationService:
         async with self.uow_factory() as uow:
             existing = await uow.connections.get_active_for_user(user_id)
         if existing is None:
-            # Health/dashboard must not bind unbound callers to the shared terminal.
-            logger.info(
-                "weltrade_ensure_skipped",
-                reason="no_owned_connection",
-                user_id=str(user_id),
+            adopted = await self._adopt_live_gateway_for_privileged_user(
+                user_id=user_id, role=role
             )
-            return
+            if not adopted:
+                # Health/dashboard must not bind unbound traders to the shared terminal.
+                logger.info(
+                    "weltrade_ensure_skipped",
+                    reason="no_owned_connection",
+                    user_id=str(user_id),
+                )
+                return
+            async with self.uow_factory() as uow:
+                existing = await uow.connections.get_active_for_user(user_id)
+            if existing is None:
+                return
 
         live_login = 0
         live_server = ""

@@ -15,6 +15,7 @@ from app.application.services.trading_session import (
 )
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.mt5 import get_mt5_adapter, get_mt5_uow_factory
+from app.presentation.dependencies.weltrade import WeltradeSvc
 
 router = APIRouter(prefix="/trading", tags=["trading-session"])
 
@@ -34,17 +35,33 @@ def _control_uc() -> ControlTradingRobotUseCase:
 
 
 @router.get("/session")
-async def get_trading_session(user: CurrentUser) -> dict[str, object]:
+async def get_trading_session(
+    user: CurrentUser, weltrade: WeltradeSvc
+) -> dict[str, object]:
+    # Owner/admin adopt after Railway redeploy loses ephemeral profile/DB bind.
+    await weltrade.ensure_user_session_bound(
+        user_id=user.id, role=str(getattr(user, "role", "") or "")
+    )
     return await _session_uc().execute(user_id=user.id)
 
 
 @router.get("/account")
-async def get_trading_account(user: CurrentUser) -> dict[str, object]:
+async def get_trading_account(
+    user: CurrentUser, weltrade: WeltradeSvc
+) -> dict[str, object]:
+    await weltrade.ensure_user_session_bound(
+        user_id=user.id, role=str(getattr(user, "role", "") or "")
+    )
     return await _session_uc().execute(user_id=user.id)
 
 
 @router.get("/robot/status")
-async def get_robot_status(user: CurrentUser) -> dict[str, object]:
+async def get_robot_status(
+    user: CurrentUser, weltrade: WeltradeSvc
+) -> dict[str, object]:
+    await weltrade.ensure_user_session_bound(
+        user_id=user.id, role=str(getattr(user, "role", "") or "")
+    )
     return await _session_uc().execute(user_id=user.id)
 
 

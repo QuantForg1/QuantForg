@@ -159,6 +159,23 @@ class PostgresMT5ConnectionRepository:
         row = result.mappings().first()
         return _connection_from_row(row) if row else None
 
+    async def get_connected_by_login(self, login: int) -> MT5Connection | None:
+        """Active connection currently owning this broker login (any user)."""
+        if int(login or 0) <= 1:
+            return None
+        session = self._uow._require_session()
+        result = await session.execute(
+            text("""
+                SELECT * FROM mt5_connections
+                WHERE login = :login AND connected = true
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """),
+            {"login": int(login)},
+        )
+        row = result.mappings().first()
+        return _connection_from_row(row) if row else None
+
     async def list_for_user(self, user_id: UUID) -> list[MT5Connection]:
         session = self._uow._require_session()
         result = await session.execute(

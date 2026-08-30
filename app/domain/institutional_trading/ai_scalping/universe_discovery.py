@@ -131,7 +131,10 @@ def classify_broker_symbol(code: str, description: str = "") -> ScalpAssetClass:
         return "metals"
     if c in _CRYPTO or (c.startswith(("BTC", "ETH", "LTC")) and c.endswith("USD")):
         return "crypto"
-    if "USDT" in c or c.endswith("BTC"):
+    # Exact stablecoin / base-BTC pairs only — never "USDT" substring (USDTHB, USDTRY).
+    if c.endswith("USDT") or c.endswith("USDC") or (
+        c.endswith("BTC") and not c.endswith(("USD", "EUR", "GBP", "JPY"))
+    ):
         return "crypto"
     if c in _INDICES or any(
         x in c for x in ("NDX", "DJI", "SPX", "GER", "FTS", "HSI", "JPX", "AXJ", "STX", "AEX", "F40", "IBX", "IT4")

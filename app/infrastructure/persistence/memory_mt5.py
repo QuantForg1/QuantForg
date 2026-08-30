@@ -26,6 +26,18 @@ class InMemoryMT5ConnectionRepository:
             return None
         return max(candidates, key=lambda c: c.updated_at)
 
+    async def get_connected_by_login(self, login: int) -> MT5Connection | None:
+        if int(login or 0) <= 1:
+            return None
+        matches = [
+            c
+            for c in self.items.values()
+            if c.connected and int(c.login or 0) == int(login)
+        ]
+        if not matches:
+            return None
+        return max(matches, key=lambda c: c.updated_at)
+
     async def list_for_user(self, user_id: UUID) -> list[MT5Connection]:
         return [c for c in self.items.values() if c.user_id == user_id]
 

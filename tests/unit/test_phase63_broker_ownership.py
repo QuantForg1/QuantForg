@@ -135,6 +135,67 @@ async def test_ensure_user_session_bound_does_not_steal_for_unbound_user() -> No
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_owner_adopts_live_gateway_when_unbound() -> None:
+    owner = uuid4()
+    factory = MemoryMT5UnitOfWorkFactory()
+    svc = WeltradeIntegrationService(
+        adapter=_FakeAdapter(live_login=66666666),  # type: ignore[arg-type]
+        uow_factory=factory,
+    )
+    await svc.ensure_user_session_bound(user_id=owner, role="owner")
+    async with factory() as uow:
+        row = await uow.connections.get_active_for_user(owner)
+    assert row is not None
+    assert int(row.login) == 66666666
+    assert row.connected is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_trader_role_does_not_adopt_unbound_gateway() -> None:
+    trader = uuid4()
+    factory = MemoryMT5UnitOfWorkFactory()
+    svc = WeltradeIntegrationService(
+        adapter=_FakeAdapter(live_login=77777777),  # type: ignore[arg-type]
+        uow_factory=factory,
+    )
+    await svc.ensure_user_session_bound(user_id=trader, role="trader")
+    async with factory() as uow:
+        row = await uow.connections.get_active_for_user(trader)
+    assert row is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_owner_adopt_does_not_steal_other_users_login() -> None:
+    owner = uuid4()
+    other = uuid4()
+    factory = MemoryMT5UnitOfWorkFactory()
+    async with factory() as uow:
+        claimed = MT5Connection.create(
+            user_id=other,
+            login=88888888,
+            server="Weltrade-Real",
+            terminal_path="",
+        )
+        claimed.mark_connected(session_ref="sess-live")
+        await uow.connections.upsert_for_user(claimed)
+        await uow.commit()
+    svc = WeltradeIntegrationService(
+        adapter=_FakeAdapter(live_login=88888888),  # type: ignore[arg-type]
+        uow_factory=factory,
+    )
+    await svc.ensure_user_session_bound(user_id=owner, role="owner")
+    async with factory() as uow:
+        owner_row = await uow.connections.get_active_for_user(owner)
+        other_row = await uow.connections.get_active_for_user(other)
+    assert owner_row is None
+    assert other_row is not None
+    assert int(other_row.login) == 88888888
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_ensure_user_session_bound_heals_matching_owner() -> None:
     owner = uuid4()
     factory = MemoryMT5UnitOfWorkFactory()
