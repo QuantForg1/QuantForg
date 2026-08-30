@@ -152,6 +152,34 @@ async def test_ensure_user_session_bound_does_not_steal_for_unbound_user() -> No
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_owner_reclaims_stale_mismatched_login() -> None:
+    owner = uuid4()
+    factory = MemoryMT5UnitOfWorkFactory()
+    async with factory() as uow:
+        stale = MT5Connection.create(
+            user_id=owner,
+            login=11110001,
+            server="Weltrade-Demo",
+            terminal_path="",
+        )
+        stale.mark_connected(session_ref="stale-ref")
+        await uow.connections.upsert_for_user(stale)
+        await uow.commit()
+    svc = WeltradeIntegrationService(
+        adapter=_FakeAdapter(live_login=12439799),  # type: ignore[arg-type]
+        uow_factory=factory,
+    )
+    diag = await svc.ensure_user_session_bound(user_id=owner, role="owner")
+    assert diag.get("adopted") is True
+    assert "reclaim" in str(diag.get("reason") or "")
+    async with factory() as uow:
+        row = await uow.connections.get_active_for_user(owner)
+    assert row is not None
+    assert int(row.login) == 12439799
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_owner_adopts_when_health_connected_without_session_token() -> None:
     """Regression: health can set connected without minting session_token."""
     owner = uuid4()

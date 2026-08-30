@@ -768,6 +768,18 @@ class WeltradeIntegrationService:
                 live_login=live_login,
             )
             return diag
+        # Drop stale connected rows for this user on a different login so
+        # get_active_for_user cannot keep returning the mismatched claim.
+        async with self.uow_factory() as uow:
+            for conn in await uow.connections.list_for_user(user_id):
+                if (
+                    bool(conn.connected)
+                    and int(conn.login or 0) > 1
+                    and int(conn.login or 0) != live_login
+                ):
+                    conn.mark_disconnected()
+                    await uow.connections.update(conn)
+            await uow.commit()
         bound = await self.bind_user_session(
             user_id=user_id,
             login=live_login,
@@ -865,6 +877,21 @@ class WeltradeIntegrationService:
             live_login = int(getattr(client, "_login", 0) or 0)
         owned_login = int(existing.login or 0)
         if live_login > 1 and owned_login > 1 and live_login != owned_login:
+            # Stale ownership row (often still marked connected after redeploy)
+            # with a different login must not block owner reclaim of the live
+            # attached gateway. Never steals when another user owns live login.
+            if self._role_may_adopt_unbound_gateway(role):
+                adopt_diag = await self._adopt_live_gateway_for_privileged_user(
+                    user_id=user_id, role=role
+                )
+                diag.update(adopt_diag)
+                if adopt_diag.get("adopted"):
+                    diag["reason"] = "reclaimed_from_stale_login"
+                else:
+                    diag["reason"] = str(
+                        adopt_diag.get("reason") or "stale_login_reclaim_failed"
+                    )
+                return diag
             diag["reason"] = "login_mismatch"
             logger.warning(
                 "weltrade_ensure_skipped",
@@ -872,6 +899,7 @@ class WeltradeIntegrationService:
                 user_id=str(user_id),
                 owned_login=owned_login,
                 live_login=live_login,
+                existing_connected=bool(existing.connected),
             )
             return diag
 
