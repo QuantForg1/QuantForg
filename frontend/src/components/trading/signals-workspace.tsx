@@ -28,6 +28,8 @@ import {
   MARKET_UNIVERSE_QUERY_KEY,
   normalizeSignalCenterPayload,
   presentField,
+  presentLevel,
+  presentPrice,
   RESEARCH_INDEPENDENT_COPY,
   RESEARCH_SIGNAL,
   researchAvailabilityAsCatalogue,
@@ -303,7 +305,7 @@ export function SignalsWorkspace() {
                       </div>
                       <Badge tone={directionTone(dir)}>{dir}</Badge>
                     </div>
-                    <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                       <div>
                         <dt className="text-[var(--fg-subtle)]">Opp</dt>
                         <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
@@ -317,19 +319,27 @@ export function SignalsWorkspace() {
                         <dd className="tabular">{scoreDisplay(row.research_rank_score)}</dd>
                       </div>
                       <div>
+                        <dt className="text-[var(--fg-subtle)]">Price</dt>
+                        <dd className="tabular">
+                          {presentPrice(row.price ?? row.mid ?? row.bid)}
+                        </dd>
+                      </div>
+                      <div>
                         <dt className="text-[var(--fg-subtle)]">Entry</dt>
-                        <dd className="tabular">{presentField(row.entry ?? row.entry_candidate)}</dd>
+                        <dd className="tabular">
+                          {presentLevel(row.entry ?? row.entry_candidate, "Entry")}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-[var(--fg-subtle)]">SL</dt>
                         <dd className="tabular">
-                          {presentField(row.stop_loss ?? row.SL_candidate)}
+                          {presentLevel(row.stop_loss ?? row.SL_candidate, "SL")}
                         </dd>
                       </div>
                       <div>
                         <dt className="text-[var(--fg-subtle)]">TP</dt>
                         <dd className="tabular">
-                          {presentField(row.take_profit ?? row.TP_candidate)}
+                          {presentLevel(row.take_profit ?? row.TP_candidate, "TP")}
                         </dd>
                       </div>
                     </dl>
@@ -522,6 +532,9 @@ export function SignalsWorkspace() {
                             Regime
                           </th>
                           <th className="py-2 pr-3 font-medium" scope="col">
+                            Price
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
                             Entry
                           </th>
                           <th className="py-2 pr-3 font-medium" scope="col">
@@ -577,13 +590,16 @@ export function SignalsWorkspace() {
                               <td className="py-2 pr-3">{presentField(row.session)}</td>
                               <td className="py-2 pr-3">{presentField(rowRegime(row))}</td>
                               <td className="py-2 pr-3 tabular">
-                                {presentField(row.entry ?? row.entry_candidate)}
+                                {presentPrice(row.price ?? row.mid ?? row.bid)}
                               </td>
                               <td className="py-2 pr-3 tabular">
-                                {presentField(row.stop_loss ?? row.SL_candidate)}
+                                {presentLevel(row.entry ?? row.entry_candidate, "Entry")}
                               </td>
                               <td className="py-2 pr-3 tabular">
-                                {presentField(row.take_profit ?? row.TP_candidate)}
+                                {presentLevel(row.stop_loss ?? row.SL_candidate, "SL")}
+                              </td>
+                              <td className="py-2 pr-3 tabular">
+                                {presentLevel(row.take_profit ?? row.TP_candidate, "TP")}
                               </td>
                               <td className="py-2 pr-3 text-xs text-[var(--fg-muted)]">
                                 {signalTimestampLabel(row)}

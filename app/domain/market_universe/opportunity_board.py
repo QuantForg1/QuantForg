@@ -75,6 +75,21 @@ def _direction(row: dict[str, Any]) -> str:
     return UNKNOWN
 
 
+def _quote_number(value: Any) -> float | str:
+    n = _as_float(value)
+    return n if n is not None else UNKNOWN
+
+
+def _mid_from_quotes(*values: Any) -> float | str:
+    nums = [_as_float(v) for v in values]
+    present = [n for n in nums if n is not None and n > 0]
+    if len(present) >= 2:
+        return (present[0] + present[1]) / 2.0
+    if len(present) == 1:
+        return present[0]
+    return UNKNOWN
+
+
 def project_opportunity_row(
     row: dict[str, Any],
     *,
@@ -142,6 +157,31 @@ def project_opportunity_row(
         or UNKNOWN,
         "DATA_FRESHNESS": dq.get("quote_freshness") or row.get("freshness") or UNKNOWN,
     }
+    reg = registry_item or {}
+    bid = _quote_number(
+        row.get("bid") if row.get("bid") not in (None, "", UNKNOWN) else reg.get("bid")
+    )
+    ask = _quote_number(
+        row.get("ask") if row.get("ask") not in (None, "", UNKNOWN) else reg.get("ask")
+    )
+    mid = _quote_number(row.get("mid") or row.get("price"))
+    if mid is UNKNOWN:
+        mid = _mid_from_quotes(bid, ask)
+    entry = row.get("entry_candidate") or row.get("entry") or row.get("entry_price")
+    stop = (
+        row.get("SL_candidate")
+        or row.get("sl_candidate")
+        or row.get("stop_loss")
+        or row.get("sl")
+        or row.get("stop")
+    )
+    take = (
+        row.get("TP_candidate")
+        or row.get("tp_candidate")
+        or row.get("take_profit")
+        or row.get("tp")
+        or row.get("target")
+    )
     projected = {
         "symbol": symbol or desk,
         "canonical_symbol": desk,
@@ -172,6 +212,18 @@ def project_opportunity_row(
         "price_action_score": _score_or_unknown(row.get("price_action_score")),
         "RR": row.get("rr") or row.get("expected_rr") or UNKNOWN,
         "spread": row.get("spread") if row.get("spread") not in (None, "") else UNKNOWN,
+        "bid": bid,
+        "ask": ask,
+        "mid": mid,
+        "price": mid if mid is not UNKNOWN else UNKNOWN,
+        "entry": entry if entry not in (None, "", UNKNOWN) else UNKNOWN,
+        "entry_candidate": entry if entry not in (None, "", UNKNOWN) else UNKNOWN,
+        "stop_loss": stop if stop not in (None, "", UNKNOWN) else UNKNOWN,
+        "SL_candidate": stop if stop not in (None, "", UNKNOWN) else UNKNOWN,
+        "sl_candidate": stop if stop not in (None, "", UNKNOWN) else UNKNOWN,
+        "take_profit": take if take not in (None, "", UNKNOWN) else UNKNOWN,
+        "TP_candidate": take if take not in (None, "", UNKNOWN) else UNKNOWN,
+        "tp_candidate": take if take not in (None, "", UNKNOWN) else UNKNOWN,
         "session": row.get("market_session")
         or row.get("session")
         or (registry_item or {}).get("trading_sessions")

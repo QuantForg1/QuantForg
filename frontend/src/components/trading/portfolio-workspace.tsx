@@ -90,9 +90,11 @@ export function PortfolioWorkspace() {
 
   const money = (value: unknown) => {
     const raw = moneyDisplay(value, metricsReady);
-    if (raw === "—") return "—";
+    if (raw === "Unavailable" || raw === "—") return "Unavailable";
     const n = num(value);
-    return Number.isFinite(n) ? formatCurrency(n, currency === "—" ? "USD" : currency) : raw;
+    return Number.isFinite(n)
+      ? formatCurrency(n, currency === "—" ? "USD" : currency)
+      : raw;
   };
 
   const now = Date.now();
@@ -103,14 +105,16 @@ export function PortfolioWorkspace() {
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
   const historyReady = !historyUnavailable && !noBroker && !mismatch && historyQ.isFetched;
-  const todayPnl = historyReady ? periodPnl(deals, startOfDay.getTime()) : "—";
-  const weekPnl = historyReady ? periodPnl(deals, weekAgo) : "—";
-  const monthPnl = historyReady ? periodPnl(deals, monthStart.getTime()) : "—";
+  const todayPnl = historyReady ? periodPnl(deals, startOfDay.getTime()) : "Unavailable";
+  const weekPnl = historyReady ? periodPnl(deals, weekAgo) : "Unavailable";
+  const monthPnl = historyReady ? periodPnl(deals, monthStart.getTime()) : "Unavailable";
   const tradeStats = closedTradeStats(deals, historyReady);
   const formatPeriod = (raw: string) => {
-    if (raw === "—") return "—";
+    if (raw === "—" || raw === "Unavailable") return "Unavailable";
     const n = Number(raw);
-    return Number.isFinite(n) ? formatCurrency(n, currency === "—" ? "USD" : currency) : "—";
+    return Number.isFinite(n)
+      ? formatCurrency(n, currency === "—" ? "USD" : currency)
+      : "Unavailable";
   };
 
   const health = accountHealth({
@@ -285,23 +289,37 @@ export function PortfolioWorkspace() {
           <DeskMetric label="Margin" value={money(account.margin ?? session.margin)} />
           <DeskMetric
             label="Margin level"
-            value={metricsReady ? numericDisplay(account.margin_level ?? session.margin_level) : "—"}
+            value={
+              metricsReady
+                ? numericDisplay(account.margin_level ?? session.margin_level) === "—"
+                  ? "Unavailable"
+                  : numericDisplay(account.margin_level ?? session.margin_level)
+                : "Unavailable"
+            }
           />
           <DeskMetric label="Unrealized P&L" value={money(account.profit ?? session.profit)} />
           <DeskMetric
             label="Realized P&L"
             value={
               tradeStats.realized === "—" || tradeStats.realized.startsWith("INSUFFICIENT")
-                ? tradeStats.realized
+                ? tradeStats.realized === "—"
+                  ? "Unavailable"
+                  : tradeStats.realized
                 : formatPeriod(tradeStats.realized)
             }
           />
           <DeskMetric
             label="Open positions"
             value={
-              noBroker || mismatch || positionsUnavailable || portfolioQ.isLoading
-                ? "—"
-                : String(positions.length)
+              noBroker
+                ? "Broker not connected"
+                : mismatch
+                  ? "Waiting for broker"
+                  : positionsUnavailable || portfolioQ.isLoading
+                    ? "Unavailable"
+                    : positions.length === 0
+                      ? "No open positions"
+                      : String(positions.length)
             }
           />
           <DeskMetric label="Today" value={formatPeriod(todayPnl)} />

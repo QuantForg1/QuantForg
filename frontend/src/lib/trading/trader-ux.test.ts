@@ -420,7 +420,7 @@ assert.equal(
 }
 
 {
-  assert.equal(moneyDisplay(null, false), "—");
+  assert.equal(moneyDisplay(null, false), "Unavailable");
   assert.equal(moneyDisplay(0, true), "0");
   assert.notEqual(moneyDisplay(null, false), "0");
   assert.equal(positionSideLabel("buy"), "BUY");
@@ -596,6 +596,23 @@ assert.equal(
     { broker_symbol: "???" },
   ]), 2);
   assert.equal(hasResearchSignal({ has_research_signal: false, direction: "SELL" }), false);
+  assert.equal(
+    hasResearchSignal({
+      direction: "NONE",
+      board_status: "DISCOVERED",
+      opportunity_score: 0,
+    }),
+    false,
+  );
+  assert.equal(
+    hasResearchSignal({
+      direction: "BUY",
+      board_status: "ANALYZED",
+      opportunity_score: 73,
+      research_rank_score: 10,
+    }),
+    true,
+  );
   assert.equal(marketSignalLabel({ has_research_signal: false, direction: "SELL" }), "NO SIGNAL");
   assert.equal(catalogueStatusLabel("UNAVAILABLE"), "CATALOGUE_UNAVAILABLE");
   assert.equal(catalogueStatusLabel("LIVE_EMPTY"), "EMPTY");

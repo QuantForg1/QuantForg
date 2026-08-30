@@ -1470,13 +1470,33 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
     rr = row.get("RR") if row.get("RR") not in (None, "UNKNOWN") else row.get("rr")
     entry = row.get("entry_candidate")
     if entry in (None, "UNKNOWN"):
-        entry = row.get("entry")
+        entry = row.get("entry") or row.get("entry_price")
     stop = row.get("SL_candidate")
     if stop in (None, "UNKNOWN"):
-        stop = row.get("stop_loss") or row.get("sl") or row.get("stop")
+        stop = (
+            row.get("sl_candidate")
+            or row.get("stop_loss")
+            or row.get("sl")
+            or row.get("stop")
+        )
     take = row.get("TP_candidate")
     if take in (None, "UNKNOWN"):
-        take = row.get("take_profit") or row.get("tp") or row.get("target")
+        take = (
+            row.get("tp_candidate")
+            or row.get("take_profit")
+            or row.get("tp")
+            or row.get("target")
+        )
+    price = row.get("price")
+    if price in (None, "UNKNOWN"):
+        price = row.get("mid") or row.get("last") or row.get("last_price")
+    bid = row.get("bid") if row.get("bid") not in (None, "UNKNOWN") else None
+    ask = row.get("ask") if row.get("ask") not in (None, "UNKNOWN") else None
+    if price in (None, "UNKNOWN") and bid is not None and ask is not None:
+        try:
+            price = (float(bid) + float(ask)) / 2.0
+        except (TypeError, ValueError):
+            price = None
     signal_type = _signal_type_from_row(row)
     quality = _safe_int(opp, 0) if isinstance(opp, (int, float)) else 0
     confidence = _safe_int(edge, 0) if isinstance(edge, (int, float)) else 0
@@ -1486,11 +1506,17 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         confidence=confidence,
         reject=False,
     )
-    as_of = str(
+    as_of_raw = (
         row.get("features_as_of")
         or row.get("timestamp")
         or row.get("as_of")
-        or _now_iso()
+        or row.get("data_timestamp")
+        or row.get("market_timestamp")
+    )
+    as_of = (
+        str(as_of_raw)
+        if as_of_raw not in (None, "", "UNKNOWN")
+        else _now_iso()
     )
     return {
         "symbol": sym,
@@ -1505,10 +1531,17 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         "rr": _honest_numeric(rr),
         "RR": _honest_numeric(rr),
         "entry": _honest_numeric(entry),
+        "entry_candidate": _honest_numeric(entry),
         "stop": _honest_numeric(stop),
         "stop_loss": _honest_numeric(stop),
+        "SL_candidate": _honest_numeric(stop),
         "target": _honest_numeric(take),
         "take_profit": _honest_numeric(take),
+        "TP_candidate": _honest_numeric(take),
+        "price": _honest_numeric(price),
+        "mid": _honest_numeric(price),
+        "bid": _honest_numeric(bid),
+        "ask": _honest_numeric(ask),
         "signal_type": signal_type,
         "entry_type": signal_type,
         "asset_class": str(row.get("asset_class") or "OTHER").lower(),
@@ -1635,10 +1668,17 @@ def _merge_research_into_signals(
             "rr",
             "RR",
             "entry",
+            "entry_candidate",
             "stop",
             "stop_loss",
+            "SL_candidate",
             "target",
             "take_profit",
+            "TP_candidate",
+            "price",
+            "mid",
+            "bid",
+            "ask",
             "signal_type",
             "entry_type",
             "research_rank_score",
@@ -1655,6 +1695,8 @@ def _merge_research_into_signals(
             "kind",
             "research_only",
             "authorizes_trade",
+            "as_of",
+            "time_generated",
         ):
             if (
                 existing.get(key) in (None, "", "UNKNOWN")

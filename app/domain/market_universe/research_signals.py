@@ -72,10 +72,33 @@ def build_research_signals(
                 "regime": _u((row.get("evidence") or {}).get("REGIME")),
                 "session": _u(row.get("session")),
                 "entry_candidate": _u(
-                    row.get("entry_candidate") or row.get("entry")
+                    row.get("entry_candidate")
+                    or row.get("entry")
+                    or row.get("entry_price")
                 ),
-                "SL_candidate": _u(row.get("sl_candidate") or row.get("sl")),
-                "TP_candidate": _u(row.get("tp_candidate") or row.get("tp")),
+                "SL_candidate": _u(
+                    row.get("SL_candidate")
+                    or row.get("sl_candidate")
+                    or row.get("stop_loss")
+                    or row.get("sl")
+                    or row.get("stop")
+                ),
+                "TP_candidate": _u(
+                    row.get("TP_candidate")
+                    or row.get("tp_candidate")
+                    or row.get("take_profit")
+                    or row.get("tp")
+                    or row.get("target")
+                ),
+                "bid": _u(row.get("bid")),
+                "ask": _u(row.get("ask")),
+                "mid": _u(row.get("mid") or row.get("price")),
+                "price": _u(
+                    row.get("price")
+                    or row.get("mid")
+                    or row.get("last")
+                    or row.get("last_price")
+                ),
                 "RR": _u(row.get("RR") or row.get("rr")),
                 "spread": _u(row.get("spread")),
                 "reason": reason,

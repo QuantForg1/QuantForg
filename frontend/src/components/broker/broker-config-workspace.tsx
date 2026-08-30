@@ -96,7 +96,20 @@ export function BrokerConfigWorkspace() {
   const mt5 = asRecord(mt5Q.data);
   const profile = asRecord(profileQ.data);
 
-  const connected = session.connected || Boolean(health.mt5_connected || health.mt5_attached || mt5.connected);
+  // Owned trading session is the only "Connected" truth.
+  // Gateway / MT5 process health must never invent a user-owned connection.
+  const tradingSnapEarly = asRecord(tradingSessionQ.data);
+  const connectionEarly = resolveConnectionPresentation(tradingSnapEarly, {
+    connecting: false,
+  });
+  const connected =
+    connectionEarly.connected && connectionEarly.ownership === "owned";
+  const gatewayOnline = Boolean(
+    health.gateway_online || health.gateway_reachable,
+  );
+  const gatewayMt5Attached = Boolean(
+    health.mt5_connected || health.mt5_attached || mt5.connected,
+  );
 
   const [accountType, setAccountType] = useState<AccountType>("live");
   const [server, setServer] = useState("Weltrade-Real");
@@ -156,11 +169,13 @@ export function BrokerConfigWorkspace() {
         const meta = await weltradeApi.runtimeProfile();
         const profileRow = asRecord(meta.profile);
         if (!profileRow.login) return;
+        // Prefill configured credentials only — never claim Connected from profile.
         if (!cancelled && !login) setLogin(String(profileRow.login));
         if (!cancelled && profileRow.server) setServer(String(profileRow.server));
         if (!cancelled && profileRow.terminal_path) {
           setTerminalPath(String(profileRow.terminal_path));
         }
+        // Secure restore may re-attach an owned session when the gateway supports it.
         await weltradeApi.restoreProfile();
         if (!cancelled) await refresh();
       } catch {
@@ -309,28 +324,31 @@ export function BrokerConfigWorkspace() {
     });
   };
 
-  const tradingSnap = asRecord(tradingSessionQ.data);
+  const tradingSnap = tradingSnapEarly;
   const connectionView = resolveConnectionPresentation(tradingSnap, {
     connecting: Boolean(progress) || connectMut.isPending || saveMut.isPending,
   });
-  const uxState = str(tradingSnap.ux_state, connected ? "CONNECTED" : "NO_BROKER");
+  const uxState = str(
+    tradingSnap.ux_state,
+    connected ? "CONNECTED" : "NO_BROKER",
+  );
   const showConnectForm = !connected || uxState === "SESSION_MISMATCH";
 
   const showPasswordField =
     showConnectForm && !connectMut.isPending && !saveMut.isPending;
 
-  if (healthQ.isLoading && mt5Q.isLoading && !session.login) {
+  if (healthQ.isLoading && mt5Q.isLoading && tradingSessionQ.isLoading) {
     return <DeskSkeleton rows={6} />;
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-xl space-y-4 px-1 sm:px-0">
+    <div className="mx-auto w-full min-w-0 max-w-2xl space-y-4 px-1 sm:px-0">
       <PageHeader
-        title={connected ? "Broker" : "Connect Broker"}
+        title="Broker"
         description={
           connected
-            ? "Your owned connection. Password is never shown after verification."
-            : "Login, server, and password — then Verify. Password is sent securely and never kept in the browser."
+            ? "Owned connection. Password is never shown after verification. Connecting a broker does not enable live trading."
+            : "Connect and verify your account. Gateway health alone is not a connection. Live trading stays disabled until explicitly authorized."
         }
       />
 
@@ -341,8 +359,81 @@ export function BrokerConfigWorkspace() {
         }
       />
 
+      <Section title="Connection health">
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Broker
+            </dt>
+            <dd className="text-sm text-[var(--fg)]">
+              {connected ? "CONNECTED" : "BROKER NOT CONNECTED"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Gateway
+            </dt>
+            <dd className="text-sm text-[var(--fg)]">
+              {gatewayOnline
+                ? "Online"
+                : healthQ.isError
+                  ? "Unavailable"
+                  : "Offline"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              MT5 process
+            </dt>
+            <dd className="text-sm text-[var(--fg)]">
+              {gatewayMt5Attached
+                ? connected
+                  ? "Attached (owned)"
+                  : "Attached (not owned by you)"
+                : "Not attached"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Ownership
+            </dt>
+            <dd className="text-sm text-[var(--fg)]">
+              {connectionView.ownership === "owned"
+                ? "Owned by you"
+                : "None"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Last verified
+            </dt>
+            <dd className="text-sm text-[var(--fg)]">
+              {connectionView.lastVerified || "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Research analysis
+            </dt>
+            <dd className="text-sm text-[var(--fg)]">ACTIVE (advisory)</dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Live trading
+            </dt>
+            <dd className="text-sm text-[var(--fg)]">DISABLED</dd>
+          </div>
+        </dl>
+        {!connected && gatewayMt5Attached ? (
+          <p className="mt-3 text-xs text-[var(--warning)]">
+            A gateway session may exist, but it is not your owned broker connection.
+            Use Connect & Verify to claim ownership.
+          </p>
+        ) : null}
+      </Section>
+
       {connected && uxState !== "SESSION_MISMATCH" ? (
-        <Section title="Connected">
+        <Section title="Connected account">
           <dl className="grid gap-3 sm:grid-cols-2">
             <div>
               <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">Login</dt>
@@ -362,8 +453,46 @@ export function BrokerConfigWorkspace() {
               <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
                 Ownership
               </dt>
+              <dd className="text-sm text-[var(--fg)]">Owned by you</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Balance
+              </dt>
               <dd className="text-sm text-[var(--fg)]">
-                {connectionView.ownership === "owned" ? "Owned by you" : "—"}
+                {session.balance && session.balance !== "—"
+                  ? session.balance
+                  : "Unavailable"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Equity
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {session.equity && session.equity !== "—"
+                  ? session.equity
+                  : "Unavailable"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Free margin
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {session.freeMargin && session.freeMargin !== "—"
+                  ? session.freeMargin
+                  : "Unavailable"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Margin level
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {session.marginLevel && session.marginLevel !== "—"
+                  ? session.marginLevel
+                  : "Unavailable"}
               </dd>
             </div>
           </dl>

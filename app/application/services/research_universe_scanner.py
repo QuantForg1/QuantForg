@@ -85,6 +85,27 @@ def evaluate_injected_contexts(
                 "market_regime": score.get("market_regime"),
                 "first_authoritative_blocker": score.get("first_authoritative_blocker")
                 or score.get("reject_reason"),
+                # Preserve structure targets when the scorer produced them.
+                "entry": score.get("entry") or score.get("entry_candidate"),
+                "entry_candidate": score.get("entry_candidate") or score.get("entry"),
+                "stop_loss": score.get("stop_loss")
+                or score.get("sl")
+                or score.get("SL_candidate"),
+                "sl_candidate": score.get("sl_candidate")
+                or score.get("stop_loss")
+                or score.get("sl"),
+                "take_profit": score.get("take_profit")
+                or score.get("tp")
+                or score.get("TP_candidate"),
+                "tp_candidate": score.get("tp_candidate")
+                or score.get("take_profit")
+                or score.get("tp"),
+                "bid": score.get("bid"),
+                "ask": score.get("ask"),
+                "mid": score.get("mid") or score.get("price"),
+                "price": score.get("price") or score.get("mid"),
+                "as_of": score.get("as_of") or score.get("features_as_of"),
+                "features_as_of": score.get("features_as_of") or score.get("as_of"),
                 "layer": RESEARCH_SCAN_TAG,
                 "authorizes_trade": False,
                 "forwarded_to_oms": False,
@@ -280,6 +301,27 @@ async def _score_one_research_symbol(
     payload["ALLOW_LIVE_PROMOTION"] = False
     payload["research_only"] = True
     payload["broker_ok"] = True
+    bid = getattr(account, "bid", None)
+    ask = getattr(account, "ask", None)
+    mid = getattr(account, "mid_price", None)
+    if mid is None and bid is not None and ask is not None:
+        try:
+            mid = (float(bid) + float(ask)) / 2.0
+        except (TypeError, ValueError):
+            mid = None
+    payload["bid"] = bid if bid is not None else payload.get("bid")
+    payload["ask"] = ask if ask is not None else payload.get("ask")
+    payload["mid"] = mid if mid is not None else payload.get("mid")
+    payload["price"] = mid if mid is not None else payload.get("price")
+    # Alias structure targets for research signal serializers.
+    if payload.get("entry") not in (None, ""):
+        payload.setdefault("entry_candidate", payload.get("entry"))
+    if payload.get("stop_loss") not in (None, ""):
+        payload.setdefault("sl_candidate", payload.get("stop_loss"))
+        payload.setdefault("SL_candidate", payload.get("stop_loss"))
+    if payload.get("take_profit") not in (None, ""):
+        payload.setdefault("tp_candidate", payload.get("take_profit"))
+        payload.setdefault("TP_candidate", payload.get("take_profit"))
     return payload
 
 

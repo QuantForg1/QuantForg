@@ -748,6 +748,10 @@ export function normalizeSignalCenterPayload(
       item.stop_loss ?? item.stop ?? item.SL_candidate ?? detail.stop_loss;
     const take =
       item.take_profit ?? item.target ?? item.TP_candidate ?? detail.take_profit;
+    const price =
+      item.price ?? item.mid ?? item.last ?? item.last_price ?? detail.price;
+    const bid = item.bid ?? detail.bid;
+    const ask = item.ask ?? detail.ask;
     const signalTypeRaw = String(item.signal_type || item.entry_type || "")
       .trim()
       .toUpperCase();
@@ -785,6 +789,10 @@ export function normalizeSignalCenterPayload(
       SL_candidate: stop,
       take_profit: take,
       TP_candidate: take,
+      price,
+      mid: item.mid ?? price,
+      bid,
+      ask,
       signal_type: signalType,
       entry_type: signalType,
       freshness: item.freshness ?? item.data_state,
@@ -1035,6 +1043,27 @@ export function presentField(value: unknown): string {
   return text;
 }
 
+/** Market price — honest unavailable copy when feed lacks a quote. */
+export function presentPrice(value: unknown): string {
+  if (value == null || value === "" || value === "UNKNOWN" || value === "—") {
+    return "Price unavailable";
+  }
+  const formatted = priceDisplay(value);
+  return formatted === "—" ? "Price unavailable" : formatted;
+}
+
+/** Structure level (Entry / SL / TP) — never coerce missing to 0. */
+export function presentLevel(
+  value: unknown,
+  label: "Entry" | "SL" | "TP" = "Entry",
+): string {
+  if (value == null || value === "" || value === "UNKNOWN" || value === "—") {
+    return `${label} unavailable`;
+  }
+  const formatted = priceDisplay(value);
+  return formatted === "—" ? `${label} unavailable` : formatted;
+}
+
 export function mergeResearchSignalFields(
   rows: Record<string, unknown>[],
   researchSignals: Record<string, unknown>[],
@@ -1050,9 +1079,18 @@ export function mergeResearchSignalFields(
     if (!extra) return row;
     return {
       ...row,
-      entry_candidate: row.entry_candidate ?? extra.entry_candidate,
+      entry_candidate: row.entry_candidate ?? extra.entry_candidate ?? extra.entry,
+      entry: row.entry ?? extra.entry ?? extra.entry_candidate,
       sl_candidate: row.sl_candidate ?? extra.SL_candidate ?? extra.sl_candidate,
+      SL_candidate: row.SL_candidate ?? extra.SL_candidate ?? extra.sl_candidate,
+      stop_loss: row.stop_loss ?? extra.stop_loss ?? extra.SL_candidate,
       tp_candidate: row.tp_candidate ?? extra.TP_candidate ?? extra.tp_candidate,
+      TP_candidate: row.TP_candidate ?? extra.TP_candidate ?? extra.tp_candidate,
+      take_profit: row.take_profit ?? extra.take_profit ?? extra.TP_candidate,
+      price: row.price ?? extra.price ?? extra.mid,
+      mid: row.mid ?? extra.mid ?? extra.price,
+      bid: row.bid ?? extra.bid,
+      ask: row.ask ?? extra.ask,
       signal_id: row.signal_id ?? extra.signal_id,
       reason: row.reason ?? extra.reason,
     };
@@ -1583,8 +1621,9 @@ export type AccountHealthItem = {
 };
 
 export function moneyDisplay(value: unknown, available: boolean): string {
-  if (!available) return "—";
-  return numericDisplay(value);
+  if (!available) return "Unavailable";
+  const raw = numericDisplay(value);
+  return raw === "—" ? "Unavailable" : raw;
 }
 
 export function positionSideLabel(side: unknown): string {
