@@ -11,7 +11,7 @@ const ADMIN_SECTIONS = [
     items: [
       { href: "/ops", label: "Execution sessions", hint: "Robot run state · control plane" },
       { href: "/admin/customer-ops", label: "Account bindings", hint: "Owned broker accounts" },
-      { href: "/ops", label: "Robot operations", hint: "Start · pause · stop · kill switch" },
+      { href: "/admin/noc", label: "NOC", hint: "Network operations command" },
     ],
   },
   {
@@ -27,17 +27,15 @@ const ADMIN_SECTIONS = [
     items: [
       { href: "/risk-center", label: "Risk", hint: "Risk locks and limits" },
       { href: "/admin/reliability", label: "Safety", hint: "Reliability and safety ops" },
-      { href: "/execution", label: "OMS", hint: "Order management" },
+      { href: "/execution", label: "OMS", hint: "Order management (authorized only)" },
     ],
   },
   {
-    title: "Research",
+    title: "Research monitoring",
     items: [
-      { href: "/signals", label: "Trader Signals", hint: "Market intelligence (advisory)" },
+      { href: "/signals", label: "Trader Signals", hint: "Advisory market intelligence" },
       { href: "/signal-center", label: "Signal Center", hint: "Operator XAUUSD scan board" },
-      { href: "/signal-intelligence", label: "Signal Intelligence", hint: "History and outcomes" },
-      { href: "/research", label: "Market research diagnostics", hint: "Universe and research" },
-      { href: "/market-scanner", label: "Scanner diagnostics", hint: "Scanner internals" },
+      { href: "/research", label: "Research diagnostics", hint: "Universe and research worker" },
       { href: "/strategy-diagnostics", label: "Strategy diagnostics", hint: "Why NO_TRADE" },
     ],
   },
@@ -46,7 +44,7 @@ const ADMIN_SECTIONS = [
     items: [
       { href: "/monitoring", label: "Health", hint: "Health · latency" },
       { href: "/admin/customer-ops", label: "Audit", hint: "Users and account operations" },
-      { href: "/logs", label: "Deployment / system diagnostics", hint: "Operational logs" },
+      { href: "/logs", label: "Deployment diagnostics", hint: "Operational logs" },
     ],
   },
 ] as const;
@@ -55,9 +53,41 @@ export default function AdminPortalPage() {
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
-        title="Admin"
-        description="Internal operations. Trader desks stay on Home, Signals, Markets, Portfolio, and Terminal. Backend roles still enforce these routes."
+        title="Operations / Admin"
+        description="Internal QuantForg control surfaces. Not part of the trader desk navigation. Backend RBAC remains enforced."
       />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Safety</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
+            <p>Research stays advisory</p>
+            <p>Live trading requires explicit authorization</p>
+            <Badge tone="neutral">OMS not enabled by Admin</Badge>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Access</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
+            <p>OWNER / ADMIN only</p>
+            <p>Trader sidebar never links here</p>
+            <Badge tone="warning">Protected route</Badge>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Research</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
+            <p>Global catalogue discovery</p>
+            <p>Signals are not trade tickets</p>
+            <Badge tone="neutral">Advisory only</Badge>
+          </CardContent>
+        </Card>
+      </div>
       {ADMIN_SECTIONS.map((section) => (
         <Card key={section.title}>
           <CardHeader className="flex-row items-center justify-between">

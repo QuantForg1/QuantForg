@@ -9,6 +9,7 @@ import {
   appNav,
   commandCatalog,
   isTraderFacingHref,
+  visibleCommandItems,
   visiblePrimaryRail,
 } from "@/components/layout/nav-config";
 import { useNavMemory } from "@/hooks/use-nav-memory";
@@ -41,15 +42,14 @@ export function CommandPalette({
   const memory = useNavMemory();
   const { user } = useAuth();
   const isOperator = canAccessIteOps(user);
-  const deskRail = visiblePrimaryRail(isOperator);
-  const pageGroups = isOperator
-    ? appNav
-    : appNav
-        .map((group) => ({
-          ...group,
-          items: group.items.filter((item) => isTraderFacingHref(item.href)),
-        }))
-        .filter((group) => group.items.length > 0);
+  // Trader shell never lists Admin — operators open /admin by URL.
+  const deskRail = visiblePrimaryRail(false);
+  const pageGroups = appNav
+    .map((group) => ({
+      ...group,
+      items: visibleCommandItems(isOperator, group.items),
+    }))
+    .filter((group) => group.items.length > 0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

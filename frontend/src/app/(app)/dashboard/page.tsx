@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bot, Cable, Layers } from "lucide-react";
+import { Activity, Cable, Layers } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,7 @@ import {
 import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
-import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
+// Auth still required for session; Admin link removed from trader Home.
 import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
 import { directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
@@ -84,7 +84,6 @@ function statusTone(
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const isOperator = canAccessIteOps(user);
   const qc = useQueryClient();
 
   const sessionQ = useQuery({
@@ -388,13 +387,6 @@ export default function DashboardPage() {
           >
             Stop
           </Button>
-          {isOperator ? (
-            <Button variant="secondary" size="sm" asChild>
-              <Link href="/admin">
-                <Bot className="h-4 w-4" /> Admin
-              </Link>
-            </Button>
-          ) : null}
         </div>
       </section>
 

@@ -24,7 +24,6 @@ import {
   filterSignalRows,
   knownUniverseCountLabel,
   lastUpdatedCopy,
-  liveTradingLabel,
   MARKET_UNIVERSE_QUERY_KEY,
   normalizeSignalCenterPayload,
   presentField,
@@ -101,7 +100,6 @@ export function SignalsWorkspace() {
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
   const accountHint = accountConnectionHint(connection);
-  const tradingLabel = liveTradingLabel(session);
 
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -177,7 +175,7 @@ export function SignalsWorkspace() {
     <div className="min-w-0 space-y-5">
       <PageHeader
         title="Signals"
-        description="Global market intelligence — research analysis across available symbols. Not a trade authorization."
+        description="Global market intelligence — research analysis across the supported broker universe. Not a trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -202,39 +200,77 @@ export function SignalsWorkspace() {
       />
 
       <section
-        aria-label="Analysis and account status"
+        aria-label="Research, broker, and live trading status"
         aria-live="polite"
-        className="flex flex-wrap items-center gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5"
+        className="grid gap-2 sm:grid-cols-3"
       >
-        <Badge tone={analysisTone(analysisStatus)}>{analysisLabel}</Badge>
-        <Badge tone={researchWorkerTone(workerStatus)}>
-          RESEARCH ENGINE {workerStatus === "UNKNOWN" ? "" : workerStatus}
-        </Badge>
-        <Badge tone="neutral">BROKER NOT REQUIRED FOR RESEARCH</Badge>
-        <Badge
-          tone={
-            accountHint.detail === "CONNECTED"
-              ? "success"
-              : accountHint.detail === "SESSION MISMATCH"
-                ? "danger"
-                : "neutral"
-          }
-        >
-          BROKER {accountHint.detail}
-        </Badge>
-        <Badge tone="neutral">{tradingLabel}</Badge>
-        <Badge tone="neutral">{SIGNALS_NOT_AUTHORIZATION}</Badge>
-        {updated ? (
-          <span className="ml-auto text-xs text-[var(--fg-subtle)]">{updated}</span>
-        ) : null}
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Research
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <Badge tone={analysisTone(analysisStatus)}>{analysisLabel}</Badge>
+            <Badge tone={researchWorkerTone(workerStatus)}>
+              ENGINE {workerStatus === "UNKNOWN" ? "—" : workerStatus}
+            </Badge>
+          </div>
+          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+            Broker not required for research analysis
+          </p>
+        </div>
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Broker
+          </p>
+          <div className="mt-1.5">
+            <Badge
+              tone={
+                accountHint.detail === "CONNECTED"
+                  ? "success"
+                  : accountHint.detail === "SESSION MISMATCH"
+                    ? "danger"
+                    : "neutral"
+              }
+            >
+              {accountHint.detail === "CONNECTED"
+                ? "CONNECTED"
+                : accountHint.detail === "SESSION MISMATCH"
+                  ? "SESSION MISMATCH"
+                  : "NOT CONNECTED"}
+            </Badge>
+          </div>
+          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+            Ownership session — independent of research
+          </p>
+        </div>
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            Live trading
+          </p>
+          <div className="mt-1.5">
+            <Badge tone="neutral">NOT AUTHORIZED</Badge>
+          </div>
+          <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
+            {SIGNALS_NOT_AUTHORIZATION}
+          </p>
+        </div>
       </section>
+
+      {updated ? (
+        <p className="text-xs text-[var(--fg-subtle)]">Last analysis update · {updated}</p>
+      ) : null}
 
       <p className="text-sm text-[var(--fg-muted)]">{RESEARCH_INDEPENDENT_COPY}</p>
 
       <section aria-labelledby="market-universe">
-        <h2 id="market-universe" className="mb-2 text-sm font-medium text-[var(--fg)]">
-          Market universe
-        </h2>
+        <div className="mb-2">
+          <h2 id="market-universe" className="text-sm font-medium text-[var(--fg)]">
+            Global market universe
+          </h2>
+          <p className="text-xs text-[var(--fg-subtle)]">
+            Discovered from the live broker catalogue — never invented
+          </p>
+        </div>
         <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Market class">
           {MARKET_CLASS_FILTERS.map((cls) => (
             <FilterChip
@@ -246,14 +282,22 @@ export function SignalsWorkspace() {
             </FilterChip>
           ))}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <DeskMetric label="Instruments" value={marketsAnalyzed} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <DeskMetric label="Supported instruments" value={marketsAnalyzed} />
           <DeskMetric
             label="Analyzed"
             value={
               researchHealth.instruments_analyzed != null
                 ? String(researchHealth.instruments_analyzed)
                 : marketsAnalyzed
+            }
+          />
+          <DeskMetric
+            label="Coverage"
+            value={
+              researchHealth.coverage_pct != null
+                ? `${researchHealth.coverage_pct}%`
+                : "—"
             }
           />
           <DeskMetric label="Active signals" value={summary.active} />
@@ -264,7 +308,7 @@ export function SignalsWorkspace() {
 
       <section aria-labelledby="signals-overview">
         <h2 id="signals-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
-          Signal summary
+          Global research
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <DeskMetric label="Strongest opportunity" value={summary.strongest} />
@@ -353,6 +397,9 @@ export function SignalsWorkspace() {
                           .join(" · ")}
                       </span>
                     </div>
+                    <p className="mt-2 text-[11px] font-medium text-[var(--accent)]">
+                      Why this signal? →
+                    </p>
                   </button>
                 </li>
               );

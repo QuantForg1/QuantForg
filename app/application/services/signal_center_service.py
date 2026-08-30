@@ -1560,6 +1560,13 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         "reasoning": row.get("reason") or row.get("blocker"),
         "ai_explanation": row.get("reason") or row.get("explanation"),
         "setup_state": row.get("setup_state") or row.get("setup"),
+        "structure_score": row.get("structure_score"),
+        "momentum_score": row.get("momentum_score"),
+        "volatility_score": row.get("volatility_score"),
+        "zone_score": row.get("zone_score"),
+        "liquidity_score": row.get("liquidity_score"),
+        "evidence": row.get("evidence") if isinstance(row.get("evidence"), dict) else {},
+        "blocker": row.get("blocker") or row.get("first_authoritative_blocker"),
         "research_only": True,
         "authorizes_trade": False,
         "kind": "RESEARCH_SIGNAL",
@@ -1570,6 +1577,9 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
             "market_regime": (row.get("evidence") or {}).get("REGIME")
             if isinstance(row.get("evidence"), dict)
             else row.get("regime"),
+            "structure_score": row.get("structure_score"),
+            "momentum_score": row.get("momentum_score"),
+            "volatility_score": row.get("volatility_score"),
             "final_decision": "WAIT",
             "forwarded_to_oms": False,
         },
@@ -1697,6 +1707,13 @@ def _merge_research_into_signals(
             "authorizes_trade",
             "as_of",
             "time_generated",
+            "evidence",
+            "structure_score",
+            "momentum_score",
+            "volatility_score",
+            "zone_score",
+            "liquidity_score",
+            "blocker",
         ):
             if (
                 existing.get(key) in (None, "", "UNKNOWN")

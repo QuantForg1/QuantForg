@@ -804,6 +804,16 @@ export function normalizeSignalCenterPayload(
       research_only: true,
       authorizes_trade: false,
       kind: "RESEARCH_SIGNAL",
+      evidence:
+        item.evidence && typeof item.evidence === "object"
+          ? (item.evidence as Record<string, unknown>)
+          : {},
+      structure_score: item.structure_score ?? pipeline.structure_score,
+      momentum_score: item.momentum_score ?? pipeline.momentum_score,
+      volatility_score: item.volatility_score ?? pipeline.volatility_score,
+      zone_score: item.zone_score,
+      liquidity_score: item.liquidity_score,
+      blocker: item.blocker,
     });
   }
   const signalRows = rows.filter(hasResearchSignal);

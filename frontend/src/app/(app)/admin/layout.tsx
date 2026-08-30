@@ -7,9 +7,9 @@ import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { DeskSkeleton } from "@/components/desk/primitives";
 
 /**
- * Admin portal gate — client redirect mirrors backend require_roles(OWNER|ADMIN).
- * Privileged APIs still enforce authorization server-side; this layout must not
- * render admin UI for unauthenticated or non-operator users.
+ * Dedicated Admin Portal shell.
+ * Trader rail never links here — operators open /admin directly.
+ * Backend require_roles(OWNER|ADMIN) still enforces privileged APIs.
  */
 export default function AdminPortalLayout({
   children,
@@ -37,11 +37,19 @@ export default function AdminPortalLayout({
 
   return (
     <div className="min-w-0 space-y-4">
-      <p className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--fg-muted)]">
-        Operator area · role {String(user?.role || "").toUpperCase()} · backend
-        APIs enforce OWNER/ADMIN. Research stays advisory; live trading is not
-        enabled by opening Admin.
-      </p>
+      <header className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
+          QuantForg · Operations
+        </p>
+        <p className="mt-1 text-sm text-[var(--fg)]">
+          Admin Portal · role {String(user?.role || "").toUpperCase()}
+        </p>
+        <p className="mt-1 text-xs text-[var(--fg-muted)]">
+          Internal operations only. Research stays advisory. Opening Admin does
+          not enable live trading. Privileged APIs enforce OWNER/ADMIN
+          server-side.
+        </p>
+      </header>
       {children}
     </div>
   );

@@ -15,8 +15,8 @@ from app.domain.market_universe.constants import (
 from app.domain.market_universe.identity import canonical_desk
 from app.domain.trading.gold_only import is_gold_symbol
 
-DEFAULT_RESEARCH_BATCH = 16
-MAX_RESEARCH_BATCH = 32
+DEFAULT_RESEARCH_BATCH = 24
+MAX_RESEARCH_BATCH = 48
 
 _CLASS_ROTATION = (
     "FOREX",

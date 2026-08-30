@@ -42,6 +42,7 @@ from app.domain.market_universe.correlation_research import (
 from app.domain.market_universe.data_quality import evaluate_timeframe_quality
 from app.domain.market_universe.expansion_architecture import describe_layers
 from app.domain.market_universe.identity import canonical_desk
+from app.domain.market_universe.classification import classify_or_unknown
 from app.domain.market_universe.observations import (
     current_research_stage,
     list_observations,
@@ -523,14 +524,32 @@ def _resolve_catalogue(
 
 
 def _probe_codes_from_rows(rows: tuple[dict[str, Any], ...]) -> list[str]:
+    """Fair class-rotated probe set — never invent symbols outside the catalogue."""
     by_code: dict[str, str] = {}
     by_desk: dict[str, str] = {}
+    class_buckets: dict[str, list[str]] = {
+        "FOREX": [],
+        "METALS": [],
+        "CRYPTO": [],
+        "INDICES": [],
+        "ENERGY": [],
+        "STOCKS": [],
+        "COMMODITIES": [],
+        "OTHER": [],
+        "UNKNOWN": [],
+    }
     for row in rows:
         code = str(row.get("code") or row.get("symbol") or "")
         if not code:
             continue
         by_code[code.upper()] = code
-        by_desk[canonical_desk(code)] = code
+        desk = canonical_desk(code)
+        by_desk[desk] = code
+        asset = str(row.get("asset_class") or classify_or_unknown(code) or "OTHER").upper()
+        if asset not in class_buckets:
+            asset = "OTHER"
+        if code not in class_buckets[asset]:
+            class_buckets[asset].append(code)
     out: list[str] = []
     for hint in ("XAUUSD", *COVERAGE_OBSERVATION_HINTS):
         code = by_desk.get(hint) or by_code.get(hint)
@@ -538,12 +557,32 @@ def _probe_codes_from_rows(rows: tuple[dict[str, Any], ...]) -> list[str]:
             out.append(code)
         if len(out) >= MAX_HISTORY_PROBE_SYMBOLS:
             return out
-    for row in rows:
-        code = str(row.get("code") or "")
-        if code and code not in out:
-            out.append(code)
-        if len(out) >= MAX_HISTORY_PROBE_SYMBOLS:
-            break
+    rotation = (
+        "FOREX",
+        "METALS",
+        "CRYPTO",
+        "INDICES",
+        "ENERGY",
+        "STOCKS",
+        "COMMODITIES",
+        "OTHER",
+        "UNKNOWN",
+    )
+    progressed = True
+    while len(out) < MAX_HISTORY_PROBE_SYMBOLS and progressed:
+        progressed = False
+        for asset in rotation:
+            bucket = class_buckets.get(asset) or []
+            while bucket and bucket[0] in out:
+                bucket.pop(0)
+            if not bucket:
+                continue
+            code = bucket.pop(0)
+            if code not in out:
+                out.append(code)
+                progressed = True
+            if len(out) >= MAX_HISTORY_PROBE_SYMBOLS:
+                return out
     return out
 
 
@@ -578,6 +617,7 @@ def _unavailable_counts(counts: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _probe_codes(instruments: list[dict[str, Any]]) -> list[str]:
+    """Round-robin probe across asset classes up to MAX_HISTORY_PROBE_SYMBOLS."""
     out: list[str] = []
     gold = next(
         (i for i in instruments if i.get("canonical_symbol") == "XAUUSD"),
@@ -587,12 +627,49 @@ def _probe_codes(instruments: list[dict[str, Any]]) -> list[str]:
         code = str(gold.get("broker_symbol") or gold.get("canonical_symbol") or "")
         if code:
             out.append(code)
+    buckets: dict[str, list[str]] = {
+        "FOREX": [],
+        "METALS": [],
+        "CRYPTO": [],
+        "INDICES": [],
+        "ENERGY": [],
+        "STOCKS": [],
+        "COMMODITIES": [],
+        "OTHER": [],
+        "UNKNOWN": [],
+    }
     for item in instruments:
         code = str(item.get("broker_symbol") or item.get("canonical_symbol") or "")
-        if code and code not in out:
-            out.append(code)
-        if len(out) >= MAX_HISTORY_PROBE_SYMBOLS:
-            break
+        if not code or code in out:
+            continue
+        asset = str(item.get("asset_class") or "OTHER").upper()
+        if asset not in buckets:
+            asset = "OTHER"
+        buckets[asset].append(code)
+    rotation = (
+        "FOREX",
+        "METALS",
+        "CRYPTO",
+        "INDICES",
+        "ENERGY",
+        "STOCKS",
+        "COMMODITIES",
+        "OTHER",
+        "UNKNOWN",
+    )
+    progressed = True
+    while len(out) < MAX_HISTORY_PROBE_SYMBOLS and progressed:
+        progressed = False
+        for asset in rotation:
+            bucket = buckets[asset]
+            if not bucket:
+                continue
+            code = bucket.pop(0)
+            if code not in out:
+                out.append(code)
+                progressed = True
+            if len(out) >= MAX_HISTORY_PROBE_SYMBOLS:
+                return out
     return out
 
 

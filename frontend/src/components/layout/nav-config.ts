@@ -163,24 +163,31 @@ export const TRADER_DESK_ORDER = [
   "/settings",
 ] as const;
 
-export const OPERATOR_RAIL_ORDER = [...TRADER_DESK_ORDER, "/admin"] as const;
+/** @deprecated Ops chrome uses /admin directly — never append Admin to trader rail. */
+export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
 
-export function visiblePrimaryRail(isOperator: boolean): PrimaryNavItem[] {
-  const order = isOperator ? OPERATOR_RAIL_ORDER : TRADER_DESK_ORDER;
+/**
+ * Authenticated trader shell rail.
+ * Admin is never shown here — operators open /admin by URL; RBAC still gates the route.
+ */
+export function visiblePrimaryRail(_isOperator = false): PrimaryNavItem[] {
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
-  return order
-    .map((href) => allowed.get(href))
+  return TRADER_DESK_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
-    .map((item) => {
-      // Trader desks stay flat — section chrome is for full operator catalogs.
-      if (item.href === "/admin") return item;
-      return { ...item, section: undefined };
-    });
+    .map((item) => ({ ...item, section: undefined }));
 }
 
-export function visibleCommandItems(isOperator: boolean, items: NavItem[]): NavItem[] {
-  if (isOperator) return items;
-  return items.filter((item) => isTraderFacingHref(item.href) && !isOpsNavHref(item.href));
+/**
+ * Command palette for the trader shell — never surfaces /admin or ops routes.
+ * Operators still reach Admin via direct /admin (layout + backend RBAC).
+ */
+export function visibleCommandItems(
+  _isOperator: boolean,
+  items: NavItem[],
+): NavItem[] {
+  return items.filter(
+    (item) => isTraderFacingHref(item.href) && !isOpsNavHref(item.href),
+  );
 }
 
 /**

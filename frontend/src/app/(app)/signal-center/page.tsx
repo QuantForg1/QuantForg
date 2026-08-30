@@ -20,9 +20,6 @@ export default function SignalCenterPage() {
             <Button asChild size="sm" variant="outline">
               <Link href="/symbol-management">Symbol Management</Link>
             </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link href="/admin">Admin</Link>
-            </Button>
           </div>
         }
       />
