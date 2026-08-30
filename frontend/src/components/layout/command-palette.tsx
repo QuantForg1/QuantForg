@@ -230,7 +230,7 @@ export function CommandPalette({
               </Command.Group>
             ) : null}
 
-            <Command.Group heading="Workspaces" className="qf-cmd-group">
+            <Command.Group heading="Pages" className="qf-cmd-group">
               {deskRail.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -318,7 +318,8 @@ export function CommandPalette({
               </Command.Group>
             ) : null}
 
-            {pageGroups.map((group) => (
+            {isOperator
+              ? pageGroups.map((group) => (
               <Command.Group
                 key={group.title}
                 heading={group.title}
@@ -344,7 +345,8 @@ export function CommandPalette({
                   );
                 })}
               </Command.Group>
-            ))}
+            ))
+              : null}
           </Command.List>
           <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] px-3 py-2">
             <p className="qf-caption">Jump anywhere · pin favorites from the rail</p>

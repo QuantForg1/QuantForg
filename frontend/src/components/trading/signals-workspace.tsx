@@ -23,11 +23,11 @@ import {
   isLiveBrokerCatalogue,
   lastUpdatedCopy,
   MARKET_UNIVERSE_QUERY_KEY,
-  marketDataState,
   mergeCatalogueRows,
   mergeResearchSignalFields,
   presentAssetClasses,
   presentField,
+  RESEARCH_OPPORTUNITY,
   resolveConnectionPresentation,
   rowRegime,
   rowSession,
@@ -42,6 +42,7 @@ import {
   signalTimestampLabel,
   SIGNALS_NOT_AUTHORIZATION,
   sortSignalRows,
+  topResearchOpportunities,
   TRADER_POLL_MS,
   uniqueRowValues,
   unavailableSignalsTitle,
@@ -113,16 +114,8 @@ export function SignalsWorkspace() {
       ),
     [rows],
   );
-  const healths = useMemo(
-    () => uniqueRowValues(rows, (row) => marketDataState(row)),
-    [rows],
-  );
   const freshnessValues = useMemo(
     () => uniqueRowValues(rows, (row) => signalFreshness(row)),
-    [rows],
-  );
-  const ages = useMemo(
-    () => uniqueRowValues(rows, (row) => (signalTimestampLabel(row) !== "—" ? "HAS_AGE" : "")),
     [rows],
   );
 
@@ -135,6 +128,7 @@ export function SignalsWorkspace() {
     instrumentCount: instruments.length,
     lastUpdate: universe.as_of,
   });
+  const topOps = topResearchOpportunities(rows, availability, 4);
   const source = dataSourceLabel({
     liveBroker: liveCatalogue,
     catalogueSource: universe.catalogue_source ?? session.catalogue_source,
@@ -203,6 +197,62 @@ export function SignalsWorkspace() {
           <DeskMetric label="Last signal update" value={summary.lastUpdate} />
         </div>
       </section>
+
+      {topOps.length > 0 ? (
+        <section aria-labelledby="top-opportunities">
+          <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 id="top-opportunities" className="text-sm font-medium text-[var(--fg)]">
+                Top opportunities
+              </h2>
+              <p className="text-xs text-[var(--fg-subtle)]">
+                {RESEARCH_OPPORTUNITY} · ranked by research score · not a trade authorization
+              </p>
+            </div>
+          </div>
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {topOps.map((row, i) => {
+              const dir = signalBoardDirection(row);
+              const symbol = str(row.broker_symbol || row.symbol, "—");
+              const freshness = signalFreshness(row);
+              return (
+                <li key={`${symbol}-top-${i}`}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(row)}
+                    className="w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] hover:border-[var(--accent)]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate font-semibold">{symbol}</p>
+                      <Badge tone={directionTone(dir)}>{dir}</Badge>
+                    </div>
+                    <p className="mt-1 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                      RESEARCH SIGNAL
+                    </p>
+                    <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">Opportunity</dt>
+                        <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">Edge</dt>
+                        <dd className="tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">R/R</dt>
+                        <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                      </div>
+                    </dl>
+                    <Badge tone={freshnessTone(freshness)} className="mt-2">
+                      {freshness}
+                    </Badge>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <Card>
         <CardContent className="min-w-0 space-y-4 pt-4">
@@ -331,47 +381,6 @@ export function SignalsWorkspace() {
                         {item}
                       </FilterChip>
                     ))}
-                  </div>
-                ) : null}
-                {healths.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Data health">
-                    <FilterChip
-                      active={filters.dataHealth === "ALL"}
-                      onClick={() => setFilters((f) => ({ ...f, dataHealth: "ALL" }))}
-                    >
-                      All health
-                    </FilterChip>
-                    {healths.map((item) => (
-                      <FilterChip
-                        key={item}
-                        active={filters.dataHealth === item}
-                        onClick={() => setFilters((f) => ({ ...f, dataHealth: item }))}
-                      >
-                        {item}
-                      </FilterChip>
-                    ))}
-                  </div>
-                ) : null}
-                {ages.includes("HAS_AGE") ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Signal age">
-                    <FilterChip
-                      active={filters.age === "ALL"}
-                      onClick={() => setFilters((f) => ({ ...f, age: "ALL" }))}
-                    >
-                      All ages
-                    </FilterChip>
-                    <FilterChip
-                      active={filters.age === "RECENT"}
-                      onClick={() => setFilters((f) => ({ ...f, age: "RECENT" }))}
-                    >
-                      Recent
-                    </FilterChip>
-                    <FilterChip
-                      active={filters.age === "STALE"}
-                      onClick={() => setFilters((f) => ({ ...f, age: "STALE" }))}
-                    >
-                      Older
-                    </FilterChip>
                   </div>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-2">

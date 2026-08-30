@@ -40,6 +40,7 @@ import {
   signalBoardDirection,
   signalFreshness,
   SIGNALS_NOT_AUTHORIZATION,
+  RESEARCH_OPPORTUNITY,
   TRADER_POLL_MS,
   traderFacingErrorMessage,
   unavailableSignalsTitle,
@@ -374,7 +375,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <div>
-            <CardTitle>Top signals</CardTitle>
+            <CardTitle>Top opportunities</CardTitle>
             {lastUpdatedCopy(universe.as_of) ? (
               <p className="mt-1 text-xs text-[var(--fg-subtle)]">{lastUpdatedCopy(universe.as_of)}</p>
             ) : null}
@@ -385,7 +386,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent className="space-y-3">
             <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              {SIGNALS_NOT_AUTHORIZATION}
+              {RESEARCH_OPPORTUNITY} · {SIGNALS_NOT_AUTHORIZATION}
             </p>
             {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
               <DeskEmpty

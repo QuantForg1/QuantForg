@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Unplug,
 } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -311,11 +312,6 @@ export function BrokerConfigWorkspace() {
   const uxState = str(tradingSnap.ux_state, connected ? "CONNECTED" : "NO_BROKER");
   const maskedAccount = str(tradingSnap.account, "—");
   const maskedServer = str(tradingSnap.server, str(mt5.server || session.server, "—"));
-  const liveBalance = str(tradingSnap.balance, "");
-  const liveEquity = str(tradingSnap.equity, "");
-  const liveMargin = str(tradingSnap.free_margin, str(tradingSnap.margin, ""));
-  const figuresOk =
-    connected && uxState !== "SESSION_MISMATCH" && !Boolean(tradingSnap.account_unavailable);
   const lastVerified = str(tradingSnap.last_verified, heartbeat);
   const healthLabel =
     uxState === "SESSION_MISMATCH"
@@ -327,27 +323,23 @@ export function BrokerConfigWorkspace() {
           : "BROKER NOT CONNECTED";
   const showConnectForm = !connected || uxState === "SESSION_MISMATCH";
 
+  const showPasswordField =
+    showConnectForm && !connectMut.isPending && !saveMut.isPending;
+
   if (healthQ.isLoading && mt5Q.isLoading && !session.login) {
     return <DeskSkeleton rows={6} />;
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-3 px-1 sm:px-0">
-      <header className="border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
-              Your broker
-            </p>
-            <h1 className="mt-1 text-xl font-semibold tracking-tight text-[var(--fg)]">
-              {connected ? "Connected" : "Connect Broker"}
-            </h1>
-            <p className="mt-1 text-sm text-[var(--fg-muted)]">
-              {connected
-                ? "Password is hidden after verification and is never redisplayed."
-                : "Login, server, password, then Verify Connection. Password is sent securely and never stored in the browser."}
-            </p>
-          </div>
+    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-1 sm:px-0">
+      <PageHeader
+        title={connected ? "Broker" : "Connect Broker"}
+        description={
+          connected
+            ? "Your owned connection. Password is never shown after verification."
+            : "Login, server, password, then Verify. Password is sent securely and never kept in the browser."
+        }
+        actions={
           <Badge
             tone={
               connected && uxState !== "SESSION_MISMATCH"
@@ -359,8 +351,8 @@ export function BrokerConfigWorkspace() {
           >
             {healthLabel}
           </Badge>
-        </div>
-      </header>
+        }
+      />
 
       <ConnectionStatus
         session={tradingSnap}
@@ -384,16 +376,9 @@ export function BrokerConfigWorkspace() {
         }
       >
         <div className="grid gap-2 sm:grid-cols-2">
-          <Field
-            label="Connection status"
-            value={healthLabel}
-          />
+          <Field label="Connection status" value={healthLabel} />
           <Field label="Masked login" value={maskedAccount} />
           <Field label="Server" value={maskedServer} />
-          <Field label="Balance" value={figuresOk && liveBalance ? liveBalance : "—"} />
-          <Field label="Equity" value={figuresOk && liveEquity ? liveEquity : "—"} />
-          <Field label="Available margin" value={figuresOk && liveMargin ? liveMargin : "—"} />
-          <Field label="Connection health" value={str(tradingSnap.connection, healthLabel)} />
           <Field label="Last verified" value={lastVerified} />
           <Field
             label="Ownership"
@@ -440,7 +425,7 @@ export function BrokerConfigWorkspace() {
               type="button"
               onClick={() => setAccountType(t)}
               className={cn(
-                "border px-3 py-2 text-sm capitalize transition",
+                "border px-3 py-2 text-sm capitalize transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
                 accountType === t
                   ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--fg)]"
                   : "border-[var(--border)] text-[var(--fg-muted)] hover:border-[var(--border-strong)]",
@@ -492,6 +477,7 @@ export function BrokerConfigWorkspace() {
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="bw-password">Password</Label>
+            {showPasswordField ? (
             <Input
               key={passwordFieldKey}
               id="bw-password"
@@ -502,6 +488,11 @@ export function BrokerConfigWorkspace() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Required to verify the connection"
             />
+            ) : (
+              <p className="text-sm text-[var(--fg-subtle)]">
+                Password submitted. It is not kept on this page.
+              </p>
+            )}
           </div>
           {isOperator ? (
           <div className="space-y-1.5 sm:col-span-2">

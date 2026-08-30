@@ -15,6 +15,7 @@ import {
   presentAssetClasses,
   priceDisplay,
   RESEARCH_NOT_AUTHORIZATION,
+  RESEARCH_OPPORTUNITY,
   resolveConnectionPresentation,
   robotDisplayState,
   scoreDisplay,
@@ -42,11 +43,13 @@ import {
   EXPLANATION_UNAVAILABLE,
   exposureUnavailableReason,
   INSUFFICIENT_SAMPLE,
+  isValidBrokerSymbol,
   lastUpdatedCopy,
   moneyDisplay,
   portfolioAccount,
   positionExposureLabel,
   positionSideLabel,
+  topResearchOpportunities,
 } from "./trader-ux.ts";
 
 {
@@ -470,6 +473,46 @@ assert.equal(
   );
   assert.equal(buy.length, 1);
   assert.equal(buy[0]?.symbol, "GBPUSD");
+}
+
+{
+  assert.equal(isValidBrokerSymbol("EURUSD_i"), true);
+  assert.equal(isValidBrokerSymbol("XAUUSD_i"), true);
+  assert.equal(isValidBrokerSymbol(""), false);
+  assert.equal(isValidBrokerSymbol("???"), false);
+  assert.equal(isValidBrokerSymbol("UNKNOWN"), false);
+  const kept = mergeCatalogueRows(
+    [
+      { broker_symbol: "EURUSD_i", asset_class: "FOREX" },
+      { broker_symbol: "", asset_class: "FOREX" },
+      { broker_symbol: "???", asset_class: "FOREX" },
+    ],
+    [],
+  );
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0]?.broker_symbol, "EURUSD_i");
+  const directed = filterMarketRows(
+    [
+      { broker_symbol: "EURUSD", direction: "BUY", asset_class: "FOREX" },
+      { broker_symbol: "GBPUSD", direction: "SELL", asset_class: "FOREX" },
+    ],
+    { ...EMPTY_MARKET_FILTERS, direction: "BUY" },
+  );
+  assert.equal(directed.length, 1);
+  assert.equal(directed[0]?.broker_symbol, "EURUSD");
+  const tops = topResearchOpportunities(
+    [
+      { symbol: "AAA", direction: "BUY", research_rank_score: 1 },
+      { symbol: "BBB", direction: "SELL", research_rank_score: 9 },
+      { symbol: "CCC", direction: "WAIT", research_rank_score: 99 },
+    ],
+    "LIVE_ROWS",
+    2,
+  );
+  assert.equal(tops[0]?.symbol, "BBB");
+  assert.equal(tops.length, 2);
+  assert.equal(topResearchOpportunities([], "UNAVAILABLE", 4).length, 0);
+  assert.equal(RESEARCH_OPPORTUNITY.includes("RESEARCH"), true);
 }
 
 console.log("trader-ux.test.ts ok");

@@ -19,8 +19,10 @@ import {
   scoreDisplay,
   signalBoardDirection,
   signalFreshness,
+  sortSignalRows,
   uniqueRowValues,
   type MarketFilterState,
+  type SignalSortKey,
 } from "@/lib/trading/trader-ux";
 import { str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
@@ -42,6 +44,7 @@ export function MarketCatalogueRows({
 }) {
   const [filters, setFilters] = useState<MarketFilterState>(EMPTY_MARKET_FILTERS);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SignalSortKey>("instrument");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
 
   const classes = useMemo(() => presentAssetClasses(rows), [rows]);
@@ -51,12 +54,20 @@ export function MarketCatalogueRows({
     () => uniqueRowValues(rows, (row) => signalFreshness(row)),
     [rows],
   );
+  const directions = useMemo(
+    () =>
+      uniqueRowValues(rows, (row) => signalBoardDirection(row)).filter(
+        (d) => d === "BUY" || d === "SELL",
+      ),
+    [rows],
+  );
 
   const filtered = useMemo(
     () => (showFilters ? filterMarketRows(rows, filters) : rows),
     [filters, rows, showFilters],
   );
-  const capped = limit != null ? filtered.slice(0, limit) : filtered;
+  const ordered = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
+  const capped = limit != null ? ordered.slice(0, limit) : ordered;
   const pageCount = Math.max(1, Math.ceil(capped.length / PAGE_SIZE));
   const pageSafe = Math.min(page, pageCount);
   const shown =
@@ -101,7 +112,26 @@ export function MarketCatalogueRows({
               ))}
             </div>
           ) : null}
-          <div className="grid min-w-0 gap-2 sm:grid-cols-3">
+          {directions.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap gap-1.5" role="group" aria-label="Direction">
+              <FilterChip
+                active={filters.direction === "ALL"}
+                onClick={() => setFilter({ direction: "ALL" })}
+              >
+                All
+              </FilterChip>
+              {directions.map((dir) => (
+                <FilterChip
+                  key={dir}
+                  active={filters.direction === dir}
+                  onClick={() => setFilter({ direction: dir })}
+                >
+                  {dir}
+                </FilterChip>
+              ))}
+            </div>
+          ) : null}
+          <div className="grid min-w-0 gap-2 sm:grid-cols-4">
             {sessions.length > 0 ? (
               <select
                 className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
@@ -147,6 +177,30 @@ export function MarketCatalogueRows({
                 ))}
               </select>
             ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="market-sort" className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              Sort
+            </label>
+            <select
+              id="market-sort"
+              className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+              value={sort}
+              onChange={(e) => {
+                setPage(1);
+                setSort(e.target.value as SignalSortKey);
+              }}
+              aria-label="Sort markets"
+            >
+              <option value="instrument">Symbol</option>
+              <option value="strongest">Strongest</option>
+              <option value="opportunity">Opportunity</option>
+              <option value="edge">Edge</option>
+              <option value="risk_reward">Risk/Reward</option>
+            </select>
+            <p className="text-xs text-[var(--fg-subtle)]">
+              {capped.length} instrument{capped.length === 1 ? "" : "s"}
+            </p>
           </div>
         </div>
       ) : null}
@@ -281,11 +335,13 @@ export function MarketCatalogueRows({
         </>
       )}
 
-      {limit == null && pageCount > 1 ? (
+      {limit == null ? (
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-[var(--fg-subtle)]">
-            {capped.length} instruments
+            {capped.length} instrument{capped.length === 1 ? "" : "s"}
+            {pageCount > 1 ? ` · ${pageSafe} of ${pageCount}` : ""}
           </p>
+          {pageCount > 1 ? (
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -304,6 +360,7 @@ export function MarketCatalogueRows({
               Next
             </Button>
           </div>
+          ) : null}
         </div>
       ) : null}
 

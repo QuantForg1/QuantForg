@@ -212,27 +212,38 @@ export function scoreDisplay(value: unknown): string {
   return "UNKNOWN";
 }
 
+export function isValidBrokerSymbol(raw: unknown): boolean {
+  const s = String(raw ?? "").trim();
+  if (!s) return false;
+  const upper = s.toUpperCase();
+  if (upper === "UNKNOWN" || upper === "NULL" || upper === "NONE" || s === "—") {
+    return false;
+  }
+  if (s.length > 64) return false;
+  return /^[A-Za-z0-9][A-Za-z0-9._/#-]*$/.test(s);
+}
+
 export function mergeCatalogueRows(
   instruments: Record<string, unknown>[],
   opportunityRows: Record<string, unknown>[],
 ): Record<string, unknown>[] {
   const byKey = new Map<string, Record<string, unknown>>();
   for (const row of opportunityRows) {
-    const key = String(
-      row.broker_symbol || row.symbol || row.canonical_symbol || "",
-    )
-      .trim()
-      .toUpperCase();
-    if (key) byKey.set(key, row);
+    const raw = row.broker_symbol || row.symbol || row.canonical_symbol || "";
+    if (!isValidBrokerSymbol(raw)) continue;
+    const key = String(raw).trim().toUpperCase();
+    byKey.set(key, row);
   }
   if (instruments.length === 0) return [];
-  return instruments.map((inst) => {
-    const key = String(inst.broker_symbol || inst.canonical_symbol || "")
-      .trim()
-      .toUpperCase();
-    const scored = key ? byKey.get(key) : undefined;
-    return scored ? { ...inst, ...scored } : inst;
-  });
+  const out: Record<string, unknown>[] = [];
+  for (const inst of instruments) {
+    const raw = inst.broker_symbol || inst.canonical_symbol || inst.symbol || "";
+    if (!isValidBrokerSymbol(raw)) continue;
+    const key = String(raw).trim().toUpperCase();
+    const scored = byKey.get(key);
+    out.push(scored ? { ...inst, ...scored } : inst);
+  }
+  return out;
 }
 
 export function marketDataState(row: Record<string, unknown>): string {
@@ -289,6 +300,7 @@ export type MarketFilterState = {
   regime: string;
   status: string;
   freshness: string;
+  direction: string;
 };
 
 export const EMPTY_MARKET_FILTERS: MarketFilterState = {
@@ -298,6 +310,7 @@ export const EMPTY_MARKET_FILTERS: MarketFilterState = {
   regime: "ALL",
   status: "ALL",
   freshness: "ALL",
+  direction: "ALL",
 };
 
 /** Unavailable / missing numerics render as em dash — never coerced to 0. */
@@ -437,6 +450,9 @@ export function filterMarketRows(
     if (filters.freshness !== "ALL" && signalFreshness(row) !== filters.freshness) {
       return false;
     }
+    if (filters.direction !== "ALL" && signalBoardDirection(row) !== filters.direction) {
+      return false;
+    }
     return true;
   });
 }
@@ -466,6 +482,9 @@ export function robotDisplayState(
 
 export const RESEARCH_NOT_AUTHORIZATION =
   "RESEARCH · NOT A TRADE AUTHORIZATION";
+
+export const RESEARCH_OPPORTUNITY = "RESEARCH OPPORTUNITY";
+export const RESEARCH_SIGNAL = "RESEARCH SIGNAL";
 
 export const SIGNALS_NOT_AUTHORIZATION = RESEARCH_NOT_AUTHORIZATION;
 
@@ -915,6 +934,17 @@ export function strongestSetupLabel(
   const symbol = instrumentSymbol(top);
   const dir = signalBoardDirection(top);
   return symbol ? `${symbol} ${dir}` : "—";
+}
+
+export function topResearchOpportunities(
+  rows: Record<string, unknown>[],
+  availability: SignalAvailability,
+  limit = 4,
+): Record<string, unknown>[] {
+  if (availability !== "LIVE_ROWS" || limit <= 0) return [];
+  return defaultSortedSignals(rows)
+    .filter((row) => isActionableDirection(signalBoardDirection(row)))
+    .slice(0, limit);
 }
 
 export type SignalFeedState =
