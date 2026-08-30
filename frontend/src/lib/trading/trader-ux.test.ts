@@ -28,10 +28,15 @@ import {
   presentField,
   signalAvailability,
   signalBoardDirection,
+  signalFeedState,
   signalSummary,
+  sortSignalRows,
+  strongestSetupLabel,
   unavailableSignalsTitle,
   accountHealth,
+  closedTradeStats,
   exposureUnavailableReason,
+  INSUFFICIENT_SAMPLE,
   moneyDisplay,
   portfolioAccount,
   positionSideLabel,
@@ -323,6 +328,43 @@ assert.equal(
   assert.equal(isHighConfidence(rows[0]!), true);
   const ranked = defaultSortedSignals(rows);
   assert.equal(ranked[0]?.symbol, "XAUUSD_i");
+  assert.equal(sortSignalRows(rows, "strongest")[0]?.symbol, "XAUUSD_i");
+  assert.equal(strongestSetupLabel(rows, "LIVE_ROWS"), "XAUUSD_i SELL");
+  assert.equal(strongestSetupLabel(rows, "UNAVAILABLE"), "—");
+  const buySell = signalSummary({
+    availability: "LIVE_ROWS",
+    rows,
+    instrumentCount: 3,
+    lastUpdate: "2026-08-30T00:00:00Z",
+  });
+  assert.equal(buySell.buy, "1");
+  assert.equal(buySell.sell, "1");
+  assert.equal(buySell.strongest, "XAUUSD_i SELL");
+}
+
+{
+  assert.equal(
+    signalFeedState({
+      loading: false,
+      noBroker: true,
+      mismatch: false,
+      snapshotError: false,
+      availability: "UNAVAILABLE",
+      rows: [],
+    }),
+    "DISCONNECTED",
+  );
+  assert.equal(
+    signalFeedState({
+      loading: false,
+      noBroker: false,
+      mismatch: false,
+      snapshotError: false,
+      availability: "UNAVAILABLE",
+      rows: [],
+    }),
+    "CATALOGUE_UNAVAILABLE",
+  );
 }
 
 {
@@ -342,6 +384,26 @@ assert.equal(
   assert.equal(positionSideLabel("short"), "SELL");
   assert.equal(portfolioAccount({ account: { balance: "10" } }).balance, "10");
   assert.equal(exposureUnavailableReason(), "EXPOSURE DATA UNAVAILABLE");
+  const emptyStats = closedTradeStats([], true);
+  assert.equal(emptyStats.status, "INSUFFICIENT_SAMPLE");
+  assert.equal(emptyStats.winRate, INSUFFICIENT_SAMPLE);
+  assert.notEqual(emptyStats.realized, "0");
+  const unavailableStats = closedTradeStats([{ profit: "12" }], false);
+  assert.equal(unavailableStats.realized, "—");
+  assert.notEqual(unavailableStats.realized, "0");
+  const readyStats = closedTradeStats(
+    [
+      { profit: "10" },
+      { profit: "4" },
+      { profit: "-2" },
+      { profit: "1" },
+      { profit: "-1" },
+    ],
+    true,
+  );
+  assert.equal(readyStats.status, "READY");
+  assert.equal(readyStats.sample, "5");
+  assert.equal(readyStats.drawdown, INSUFFICIENT_SAMPLE);
 }
 
 {

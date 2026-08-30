@@ -471,6 +471,7 @@ export function passwordClearedAfterSubmit(password: string, submitted: boolean)
 export type SignalDirectionFilter = "ALL" | "BUY" | "SELL" | "WATCH";
 
 export type SignalSortKey =
+  | "strongest"
   | "newest"
   | "confidence"
   | "opportunity"
@@ -637,6 +638,7 @@ export function sortSignalRows(
   rows: Record<string, unknown>[],
   sort: SignalSortKey,
 ): Record<string, unknown>[] {
+  if (sort === "strongest") return defaultSortedSignals(rows);
   const copy = [...rows];
   const missingLast = (n: number | null): number =>
     n == null ? Number.NEGATIVE_INFINITY : n;
@@ -743,6 +745,7 @@ export type SignalSummary = {
   markets: string;
   assetClasses: string;
   lastUpdate: string;
+  strongest: string;
 };
 
 function countOrDash(available: boolean, n: number): string {
@@ -771,6 +774,7 @@ export function signalSummary(input: {
         presentField(input.lastUpdate) === "Not available"
           ? "—"
           : String(input.lastUpdate),
+      strongest: "—",
     };
   }
   const dirs = input.rows.map(signalBoardDirection);
@@ -787,7 +791,67 @@ export function signalSummary(input: {
       presentField(input.lastUpdate) === "Not available"
         ? "—"
         : String(input.lastUpdate),
+    strongest: strongestSetupLabel(input.rows, input.availability),
   };
+}
+
+export function strongestSetupLabel(
+  rows: Record<string, unknown>[],
+  availability: SignalAvailability,
+): string {
+  if (availability !== "LIVE_ROWS") return "—";
+  const top = defaultSortedSignals(rows).find((row) =>
+    isActionableDirection(signalBoardDirection(row)),
+  );
+  if (!top) return "—";
+  const symbol = instrumentSymbol(top);
+  const dir = signalBoardDirection(top);
+  return symbol ? `${symbol} ${dir}` : "—";
+}
+
+export type SignalFeedState =
+  | "LOADING"
+  | "DISCONNECTED"
+  | "MISMATCH"
+  | "CATALOGUE_UNAVAILABLE"
+  | "ERROR"
+  | "EMPTY"
+  | "STALE"
+  | "PARTIAL"
+  | "LIVE";
+
+export function signalFeedState(input: {
+  loading: boolean;
+  noBroker: boolean;
+  mismatch: boolean;
+  snapshotError: boolean;
+  availability: SignalAvailability;
+  rows: Record<string, unknown>[];
+}): SignalFeedState {
+  if (input.noBroker) return "DISCONNECTED";
+  if (input.mismatch) return "MISMATCH";
+  if (input.snapshotError) return "ERROR";
+  if (input.availability === "UNAVAILABLE") return "CATALOGUE_UNAVAILABLE";
+  if (input.loading || input.availability === "NOT_READY") return "LOADING";
+  if (input.availability === "LIVE_EMPTY") return "EMPTY";
+  const states = input.rows.map((row) => marketDataState(row));
+  const live = states.filter((s) => s === "LIVE").length;
+  const stale = states.filter((s) => s === "STALE").length;
+  if (stale > 0 && live === 0) return "STALE";
+  if (stale > 0 || states.some((s) => s === "ERROR" || s === "NO_DATA")) return "PARTIAL";
+  return "LIVE";
+}
+
+export function signalFeedStateLabel(state: SignalFeedState): string {
+  if (state === "DISCONNECTED") return "BROKER NOT CONNECTED";
+  if (state === "MISMATCH") return "ACCOUNT_SESSION_MISMATCH";
+  if (state === "CATALOGUE_UNAVAILABLE") return "CATALOGUE UNAVAILABLE";
+  if (state === "ERROR") return "ERROR";
+  if (state === "EMPTY") return "NO SIGNALS";
+  if (state === "STALE") return "STALE DATA";
+  if (state === "PARTIAL") return "PARTIAL DATA";
+  if (state === "LOADING") return "LOADING";
+  return "LIVE_BROKER";
 }
 
 export function unavailableSignalsTitle(reason: {
@@ -1059,6 +1123,73 @@ export function periodPnl(
   }
   if (counted === 0) return "—";
   return String(sum);
+}
+
+export const CLOSED_TRADE_MIN_SAMPLE = 5;
+export const INSUFFICIENT_SAMPLE = "INSUFFICIENT SAMPLE";
+
+export type ClosedTradeStats = {
+  status: "UNAVAILABLE" | "INSUFFICIENT_SAMPLE" | "READY";
+  realized: string;
+  sample: string;
+  winRate: string;
+  profitFactor: string;
+  drawdown: string;
+};
+
+export function closedTradeStats(
+  deals: Record<string, unknown>[],
+  available: boolean,
+): ClosedTradeStats {
+  if (!available) {
+    return {
+      status: "UNAVAILABLE",
+      realized: "—",
+      sample: "—",
+      winRate: "—",
+      profitFactor: "—",
+      drawdown: "—",
+    };
+  }
+  const pnls: number[] = [];
+  for (const deal of deals) {
+    const pnl = Number(deal.profit);
+    if (Number.isFinite(pnl)) pnls.push(pnl);
+  }
+  if (pnls.length === 0) {
+    return {
+      status: "INSUFFICIENT_SAMPLE",
+      realized: INSUFFICIENT_SAMPLE,
+      sample: INSUFFICIENT_SAMPLE,
+      winRate: INSUFFICIENT_SAMPLE,
+      profitFactor: INSUFFICIENT_SAMPLE,
+      drawdown: INSUFFICIENT_SAMPLE,
+    };
+  }
+  const realized = String(pnls.reduce((a, b) => a + b, 0));
+  if (pnls.length < CLOSED_TRADE_MIN_SAMPLE) {
+    return {
+      status: "INSUFFICIENT_SAMPLE",
+      realized,
+      sample: String(pnls.length),
+      winRate: INSUFFICIENT_SAMPLE,
+      profitFactor: INSUFFICIENT_SAMPLE,
+      drawdown: INSUFFICIENT_SAMPLE,
+    };
+  }
+  const wins = pnls.filter((p) => p > 0);
+  const losses = pnls.filter((p) => p < 0);
+  const grossWin = wins.reduce((a, b) => a + b, 0);
+  const grossLoss = Math.abs(losses.reduce((a, b) => a + b, 0));
+  return {
+    status: "READY",
+    realized,
+    sample: String(pnls.length),
+    winRate: `${((wins.length / pnls.length) * 100).toFixed(1)}%`,
+    profitFactor:
+      grossLoss === 0 ? INSUFFICIENT_SAMPLE : (grossWin / grossLoss).toFixed(2),
+    drawdown: INSUFFICIENT_SAMPLE,
+  };
 }
 
 export function exposureUnavailableReason(): string {

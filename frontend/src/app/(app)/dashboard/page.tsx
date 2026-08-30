@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty, DeskError, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
 import {
@@ -286,21 +286,6 @@ export default function DashboardPage() {
 
       <ConnectionStatus session={session} />
 
-      <section aria-labelledby="account-overview">
-        <h2 id="account-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
-          Account overview
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
-          <MetricCard label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
-          <MetricCard label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
-          <MetricCard
-            label="Free margin"
-            value={moneyOrUnavailable(session.free_margin, showMetrics)}
-          />
-        </div>
-      </section>
-
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
@@ -354,56 +339,25 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Signals</CardTitle>
+        <section aria-labelledby="portfolio-snapshot">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 id="portfolio-snapshot" className="text-sm font-medium text-[var(--fg)]">
+              Portfolio snapshot
+            </h2>
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/signals">View all</Link>
+              <Link href="/portfolio">View all</Link>
             </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              {SIGNALS_NOT_AUTHORIZATION}
-            </p>
-            {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
-              <DeskEmpty
-                icon={Activity}
-                title={signalCopy.title}
-                description={signalCopy.description}
-              />
-            ) : signalState === "NOT_READY" || universeQ.isLoading ? (
-              <DeskSkeleton rows={3} />
-            ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
-              <DeskEmpty
-                icon={Activity}
-                title="No ranked signals"
-                description="The live catalogue was queried. No ranked research signals right now."
-              />
-            ) : (
-              <ul className="space-y-2">
-                {signalPreview.map((row, i) => {
-                  const dir = signalBoardDirection(row);
-                  return (
-                    <li
-                      key={str(row.broker_symbol || row.symbol, String(i))}
-                      className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
-                    >
-                      <span className="truncate font-medium">
-                        {str(row.broker_symbol || row.symbol)}
-                      </span>
-                      <Badge tone={dir === "BUY" ? "success" : dir === "SELL" ? "warning" : "neutral"}>
-                        {dir}
-                      </Badge>
-                      <span className="tabular text-[var(--fg-muted)]">
-                        {scoreDisplay(row.opportunity_score)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DeskMetric label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
+            <DeskMetric label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
+            <DeskMetric label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
+            <DeskMetric
+              label="Free margin"
+              value={moneyOrUnavailable(session.free_margin, showMetrics)}
+            />
+          </div>
+        </section>
       </div>
 
       <Card>
@@ -447,6 +401,57 @@ export default function DashboardPage() {
               />
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Signals</CardTitle>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/signals">View all</Link>
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              {SIGNALS_NOT_AUTHORIZATION}
+            </p>
+            {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
+              <DeskEmpty
+                icon={Activity}
+                title={signalCopy.title}
+                description={signalCopy.description}
+              />
+            ) : signalState === "NOT_READY" || universeQ.isLoading ? (
+              <DeskSkeleton rows={3} />
+            ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
+              <DeskEmpty
+                icon={Activity}
+                title="No ranked signals"
+                description="The live catalogue was queried. No ranked research signals right now."
+              />
+            ) : (
+              <ul className="space-y-2">
+                {signalPreview.map((row, i) => {
+                  const dir = signalBoardDirection(row);
+                  return (
+                    <li
+                      key={str(row.broker_symbol || row.symbol, String(i))}
+                      className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
+                    >
+                      <span className="truncate font-medium">
+                        {str(row.broker_symbol || row.symbol)}
+                      </span>
+                      <Badge tone={dir === "BUY" ? "success" : dir === "SELL" ? "warning" : "neutral"}>
+                        {dir}
+                      </Badge>
+                      <span className="tabular text-[var(--fg-muted)]">
+                        {scoreDisplay(row.opportunity_score)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
         </CardContent>
       </Card>
 
@@ -543,25 +548,6 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
-      <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-        {label}
-      </p>
-      <p className="mt-1 truncate tabular text-lg font-semibold text-[var(--fg)]">
-        {value}
-      </p>
     </div>
   );
 }

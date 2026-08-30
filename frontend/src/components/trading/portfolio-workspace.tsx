@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty, DeskError, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { portfolioApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
@@ -18,6 +18,7 @@ import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import {
   accountHealth,
+  closedTradeStats,
   exposureUnavailableReason,
   isLiveBrokerCatalogue,
   moneyDisplay,
@@ -31,15 +32,6 @@ import {
 } from "@/lib/trading/trader-ux";
 
 type Row = Record<string, unknown>;
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
-      <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
-      <p className="mt-1 truncate tabular text-lg font-semibold text-[var(--fg)]">{value}</p>
-    </div>
-  );
-}
 
 function healthTone(state: string): "success" | "warning" | "danger" | "neutral" {
   if (state === "Healthy") return "success";
@@ -103,10 +95,14 @@ export function PortfolioWorkspace() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-  const todayPnl = historyUnavailable || noBroker || mismatch
-    ? "—"
-    : periodPnl(deals, startOfDay.getTime());
-  const weekPnl = historyUnavailable || noBroker || mismatch ? "—" : periodPnl(deals, weekAgo);
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const historyReady = !historyUnavailable && !noBroker && !mismatch && historyQ.isFetched;
+  const todayPnl = historyReady ? periodPnl(deals, startOfDay.getTime()) : "—";
+  const weekPnl = historyReady ? periodPnl(deals, weekAgo) : "—";
+  const monthPnl = historyReady ? periodPnl(deals, monthStart.getTime()) : "—";
+  const tradeStats = closedTradeStats(deals, historyReady);
   const formatPeriod = (raw: string) => {
     if (raw === "—") return "—";
     const n = Number(raw);
@@ -277,16 +273,24 @@ export function PortfolioWorkspace() {
           Account
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-          <Metric label="Balance" value={money(account.balance ?? session.balance)} />
-          <Metric label="Equity" value={money(account.equity ?? session.equity)} />
-          <Metric label="Free margin" value={money(account.free_margin ?? session.free_margin)} />
-          <Metric label="Margin" value={money(account.margin ?? session.margin)} />
-          <Metric
+          <DeskMetric label="Balance" value={money(account.balance ?? session.balance)} />
+          <DeskMetric label="Equity" value={money(account.equity ?? session.equity)} />
+          <DeskMetric label="Free margin" value={money(account.free_margin ?? session.free_margin)} />
+          <DeskMetric label="Margin" value={money(account.margin ?? session.margin)} />
+          <DeskMetric
             label="Margin level"
             value={metricsReady ? numericDisplay(account.margin_level ?? session.margin_level) : "—"}
           />
-          <Metric label="Unrealized P&L" value={money(account.profit ?? session.profit)} />
-          <Metric
+          <DeskMetric label="Unrealized P&L" value={money(account.profit ?? session.profit)} />
+          <DeskMetric
+            label="Realized P&L"
+            value={
+              tradeStats.realized === "—" || tradeStats.realized.startsWith("INSUFFICIENT")
+                ? tradeStats.realized
+                : formatPeriod(tradeStats.realized)
+            }
+          />
+          <DeskMetric
             label="Open positions"
             value={
               noBroker || mismatch || positionsUnavailable || portfolioQ.isLoading
@@ -294,8 +298,8 @@ export function PortfolioWorkspace() {
                 : String(positions.length)
             }
           />
-          <Metric label="Today" value={formatPeriod(todayPnl)} />
-          <Metric label="This week" value={formatPeriod(weekPnl)} />
+          <DeskMetric label="Today" value={formatPeriod(todayPnl)} />
+          <DeskMetric label="This week" value={formatPeriod(weekPnl)} />
         </div>
       </section>
 
@@ -433,20 +437,26 @@ export function PortfolioWorkspace() {
             ) : historyUnavailable ? (
               <DeskEmpty
                 icon={Activity}
-                title="INSUFFICIENT HISTORY"
+                title="DATA UNAVAILABLE"
                 description="Closed-trade history could not be loaded. This is not a zero performance chart."
               />
             ) : deals.length === 0 ? (
               <DeskEmpty
                 icon={Activity}
-                title="INSUFFICIENT HISTORY"
+                title="INSUFFICIENT SAMPLE"
                 description="No closed trades are available for this account yet."
               />
             ) : (
-              <ul className="space-y-2" aria-label="Recent closed trades">
-                <li className="text-sm text-[var(--fg-muted)]">
-                  Trade count {deals.length}. Equity curve is not shown without a dedicated history series.
-                </li>
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <DeskMetric label="Daily P/L" value={formatPeriod(todayPnl)} />
+                  <DeskMetric label="Weekly P/L" value={formatPeriod(weekPnl)} />
+                  <DeskMetric label="Monthly P/L" value={formatPeriod(monthPnl)} />
+                  <DeskMetric label="Win rate" value={tradeStats.winRate} />
+                  <DeskMetric label="Profit factor" value={tradeStats.profitFactor} />
+                  <DeskMetric label="Drawdown" value={tradeStats.drawdown} />
+                </div>
+                <ul className="space-y-2" aria-label="Recent closed trades">
                 {deals.slice(0, 8).map((d, i) => {
                   const pnl = num(d.profit);
                   return (
@@ -472,6 +482,7 @@ export function PortfolioWorkspace() {
                   );
                 })}
               </ul>
+              </div>
             )}
           </CardContent>
         </Card>

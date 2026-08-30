@@ -9,15 +9,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
   catalogueViewState,
   dataSourceLabel,
-  defaultSortedSignals,
   EMPTY_SIGNAL_FILTERS,
   filterSignalRows,
   isHighConfidence,
@@ -34,6 +33,8 @@ import {
   scoreDisplay,
   signalAvailability,
   signalBoardDirection,
+  signalFeedState,
+  signalFeedStateLabel,
   signalSummary,
   signalWhyFactors,
   SIGNALS_NOT_AUTHORIZATION,
@@ -89,28 +90,17 @@ function toneForHealth(
   return "neutral";
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
-      <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
-      <p className="mt-1 truncate tabular text-lg font-semibold text-[var(--fg)]">{value}</p>
-    </div>
-  );
-}
-
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
+  { id: "strongest", label: "Strongest" },
   { id: "newest", label: "Newest" },
-  { id: "confidence", label: "Confidence" },
   { id: "opportunity", label: "Opportunity" },
   { id: "edge", label: "Edge" },
   { id: "risk_reward", label: "Risk/Reward" },
-  { id: "instrument", label: "Instrument" },
-  { id: "asset_class", label: "Asset class" },
 ];
 
 export function SignalsWorkspace() {
   const [filters, setFilters] = useState<SignalFilterState>(EMPTY_SIGNAL_FILTERS);
-  const [sort, setSort] = useState<SignalSortKey | "backend">("backend");
+  const [sort, setSort] = useState<SignalSortKey>("strongest");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
 
   const sessionQ = useQuery({
@@ -176,7 +166,7 @@ export function SignalsWorkspace() {
 
   const filtered = useMemo(() => filterSignalRows(rows, filters), [filters, rows]);
   const sorted = useMemo(
-    () => (sort === "backend" ? defaultSortedSignals(filtered) : sortSignalRows(filtered, sort)),
+    () => sortSignalRows(filtered, sort),
     [filtered, sort],
   );
 
@@ -191,12 +181,29 @@ export function SignalsWorkspace() {
     catalogueSource: universe.catalogue_source ?? session.catalogue_source,
   });
   const unavailable = unavailableSignalsTitle({ noBroker, mismatch, catalogue });
+  const feed = signalFeedState({
+    loading: sessionQ.isLoading || universeQ.isLoading,
+    noBroker,
+    mismatch,
+    snapshotError: Boolean(universeQ.isError),
+    availability,
+    rows,
+  });
+  const feedLabel = signalFeedStateLabel(feed);
+  const feedTone =
+    feed === "LIVE"
+      ? "success"
+      : feed === "STALE" || feed === "PARTIAL" || feed === "LOADING"
+        ? "warning"
+        : feed === "EMPTY"
+          ? "neutral"
+          : "danger";
 
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Signals"
-        description="Market intelligence for your connected broker. Not a trade authorization."
+        description="Live market intelligence. Research is not a trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
@@ -219,25 +226,21 @@ export function SignalsWorkspace() {
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 id="signals-overview" className="text-sm font-medium text-[var(--fg)]">
-              Market intelligence
+              Live market intelligence
             </h2>
             <p className="text-xs text-[var(--fg-subtle)]">
-              Live market state · Last updated {summary.lastUpdate} · Source {source}
+              Last updated {summary.lastUpdate} · Freshness {feedLabel} · Catalogue {source}
             </p>
           </div>
-          <Badge tone={availability === "LIVE_ROWS" || availability === "LIVE_EMPTY" ? "success" : "warning"}>
-            {availability === "LIVE_ROWS" || availability === "LIVE_EMPTY" ? "LIVE DATA" : "NO DATA"}
-          </Badge>
+          <Badge tone={feedTone}>{feedLabel}</Badge>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-          <Metric label="Active signals" value={summary.active} />
-          <Metric label="High-confidence" value={summary.highConfidence} />
-          <Metric label="BUY candidates" value={summary.buy} />
-          <Metric label="SELL candidates" value={summary.sell} />
-          <Metric label="Watch" value={summary.watch} />
-          <Metric label="Markets monitored" value={summary.markets} />
-          <Metric label="Asset classes" value={summary.assetClasses} />
-          <Metric label="Last update" value={summary.lastUpdate} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <DeskMetric label="Active signals" value={summary.active} />
+          <DeskMetric label="BUY opportunities" value={summary.buy} />
+          <DeskMetric label="SELL opportunities" value={summary.sell} />
+          <DeskMetric label="Strongest setup" value={summary.strongest} />
+          <DeskMetric label="Markets covered" value={summary.markets} />
+          <DeskMetric label="Last signal update" value={summary.lastUpdate} />
         </div>
       </section>
 
@@ -400,9 +403,8 @@ export function SignalsWorkspace() {
                     id="signal-sort"
                     className="h-8 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                     value={sort}
-                    onChange={(e) => setSort(e.target.value as SignalSortKey | "backend")}
+                    onChange={(e) => setSort(e.target.value as SignalSortKey)}
                   >
-                    <option value="backend">Backend rank</option>
                     {SORT_OPTIONS.map((opt) => (
                       <option key={opt.id} value={opt.id}>
                         {opt.label}
@@ -419,62 +421,102 @@ export function SignalsWorkspace() {
                   description="No signals match the current filters."
                 />
               ) : (
-                <ul className="grid gap-3 lg:grid-cols-2" aria-label="Signals">
-                  {sorted.map((row, i) => {
-                    const dir = signalBoardDirection(row);
-                    const symbol = str(row.broker_symbol || row.symbol, "—");
-                    return (
-                      <li key={`${symbol}-${i}`}>
-                        <button
-                          type="button"
-                          onClick={() => setSelected(row)}
-                          className="w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-4 text-left transition hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-[var(--fg)]">{symbol}</p>
-                              <p className="text-xs text-[var(--fg-subtle)]">
-                                {presentField(row.asset_class)} · {presentField(row.session)}
-                              </p>
+                <>
+                  <div className="hidden min-w-0 overflow-x-auto md:block">
+                    <table className="w-full min-w-[720px] text-left text-sm" aria-label="Signals">
+                      <thead>
+                        <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                          <th className="py-2 pr-3 font-medium">Symbol</th>
+                          <th className="py-2 pr-3 font-medium">Direction</th>
+                          <th className="py-2 pr-3 font-medium">Opportunity</th>
+                          <th className="py-2 pr-3 font-medium">Edge</th>
+                          <th className="py-2 pr-3 font-medium">R/R</th>
+                          <th className="py-2 pr-3 font-medium">Session</th>
+                          <th className="py-2 pr-3 font-medium">Regime</th>
+                          <th className="py-2 pr-3 font-medium">Class</th>
+                          <th className="py-2 pr-3 font-medium">Freshness</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map((row, i) => {
+                          const dir = signalBoardDirection(row);
+                          const symbol = str(row.broker_symbol || row.symbol, "—");
+                          return (
+                            <tr key={`${symbol}-row-${i}`} className="border-b border-[var(--border)]">
+                              <td className="py-2 pr-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelected(row)}
+                                  className="font-medium text-[var(--fg)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                                >
+                                  {symbol}
+                                </button>
+                              </td>
+                              <td className="py-2 pr-3">
+                                <Badge tone={toneForDirection(dir)}>{dir}</Badge>
+                              </td>
+                              <td className="py-2 pr-3 tabular">{scoreDisplay(row.opportunity_score)}</td>
+                              <td className="py-2 pr-3 tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</td>
+                              <td className="py-2 pr-3 tabular">{scoreDisplay(row.RR ?? row.rr)}</td>
+                              <td className="py-2 pr-3">{presentField(row.session)}</td>
+                              <td className="py-2 pr-3">{presentField(rowRegime(row))}</td>
+                              <td className="py-2 pr-3">{presentField(row.asset_class)}</td>
+                              <td className="py-2 pr-3">
+                                <Badge tone={toneForHealth(str(row.data_state, "UNKNOWN"))}>
+                                  {str(row.data_state, "UNKNOWN")}
+                                </Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <ul className="grid gap-3 md:hidden" aria-label="Signals">
+                    {sorted.map((row, i) => {
+                      const dir = signalBoardDirection(row);
+                      const symbol = str(row.broker_symbol || row.symbol, "—");
+                      return (
+                        <li key={`${symbol}-${i}`}>
+                          <button
+                            type="button"
+                            onClick={() => setSelected(row)}
+                            className="w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-4 text-left transition hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-[var(--fg)]">{symbol}</p>
+                                <p className="text-xs text-[var(--fg-subtle)]">
+                                  {presentField(row.asset_class)} · {presentField(row.session)}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge tone={toneForDirection(dir)}>{dir}</Badge>
+                                <Badge tone={toneForHealth(str(row.data_state, "UNKNOWN"))}>
+                                  {str(row.data_state, "UNKNOWN")}
+                                </Badge>
+                              </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <Badge tone={toneForDirection(dir)}>{dir}</Badge>
-                              <Badge tone={toneForHealth(str(row.data_state, "UNKNOWN"))}>
-                                {str(row.data_state, "UNKNOWN")}
-                              </Badge>
-                              {isHighConfidence(row) ? (
-                                <Badge tone="accent">Qualified</Badge>
-                              ) : null}
-                            </div>
-                          </div>
-                          <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                            <div>
-                              <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">Opportunity</dt>
-                              <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">Edge</dt>
-                              <dd className="tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">R/R</dt>
-                              <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">Price</dt>
-                              <dd className="tabular">
-                                {priceDisplay(row.current_price ?? row.price ?? row.bid)}
-                              </dd>
-                            </div>
-                          </dl>
-                          <p className="mt-2 text-xs text-[var(--fg-muted)]">
-                            {presentField(row.setup_state)} · {formatRelativeTime(str(row.timestamp || row.features_as_of, "")) || "Not available"}
-                          </p>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                            <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">Opportunity</dt>
+                                <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">Edge</dt>
+                                <dd className="tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">R/R</dt>
+                                <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                              </div>
+                            </dl>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </>
           )}

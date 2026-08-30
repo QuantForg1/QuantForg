@@ -153,8 +153,8 @@ export function isTraderFacingHref(href: string): boolean {
 export const TRADER_DESK_ORDER = [
   "/dashboard",
   "/signals",
-  "/markets",
   "/portfolio",
+  "/markets",
   "/terminal",
   "/research",
   "/broker",
@@ -239,7 +239,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: CandlestickChart,
     hint: "Broker-discovered markets",
     match: ["/markets"],
-    shortcut: "3",
+    shortcut: "4",
     section: "Trading",
   },
   {
@@ -523,7 +523,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: PieChart,
     hint: "Your account · positions",
     match: ["/portfolio"],
-    shortcut: "4",
+    shortcut: "3",
     section: "Portfolio",
   },
   {
@@ -1424,16 +1424,16 @@ export const mobileTabNav: NavItem[] = [
     hint: "Signals",
   },
   {
-    href: "/markets",
-    label: "Markets",
-    icon: CandlestickChart,
-    hint: "Markets",
-  },
-  {
     href: "/portfolio",
     label: "Portfolio",
     icon: PieChart,
     hint: "Portfolio",
+  },
+  {
+    href: "/markets",
+    label: "Markets",
+    icon: CandlestickChart,
+    hint: "Markets",
   },
   {
     href: "/terminal",
