@@ -60,6 +60,9 @@ import {
   researchFeedStateLabel,
   researchMetricDisplay,
   researchSignalsEmptyCopy,
+  resolveAnalysisDeskStatus,
+  analysisDeskStatusLabel,
+  knownUniverseCountLabel,
   accountConnectionHint,
   skippedMalformedInstrumentCount,
   portfolioAccount,
@@ -613,6 +616,7 @@ assert.equal(
   const empty = normalizeSignalCenterPayload(null);
   assert.equal(empty.availability, "NOT_READY");
   assert.equal(empty.rows.length, 0);
+  assert.equal(empty.universeSize, null);
   const fabricated = normalizeSignalCenterPayload({
     fabricated: true,
     test_synthetic: true,
@@ -624,6 +628,7 @@ assert.equal(
   const live = normalizeSignalCenterPayload({
     as_of: "2026-08-30T00:00:00Z",
     source: "live_multi_asset_scan",
+    universe_size: 2000,
     items: [
       { symbol: "XAUUSD_i", direction: "BUY", opportunity_score: 70, directional_edge: 5, rr: "1.20", asset_class: "metals", session: "LONDON", time_generated: "2026-08-30T00:00:00Z" },
       { symbol: "EURUSD", direction: "NONE", opportunity_score: 10 },
@@ -635,6 +640,9 @@ assert.equal(
   assert.equal(live.rows[0]?.broker_symbol, "XAUUSD_I");
   assert.equal(live.rows[0]?.has_research_signal, true);
   assert.equal(live.rows[0]?.asset_class, "METALS");
+  assert.equal(live.universeSize, 2000);
+  assert.equal(knownUniverseCountLabel(null, true), "—");
+  assert.equal(knownUniverseCountLabel(2000, true), "2000");
   assert.equal(accountConnectionHint(resolveConnectionPresentation({ ux_state: "NO_BROKER" })).detail, "NOT CONNECTED");
   assert.equal(
     researchFeedStateLabel(
@@ -648,8 +656,33 @@ assert.equal(
     "INTELLIGENCE DATA UNAVAILABLE",
   );
   assert.equal(
-    researchSignalsEmptyCopy({ empty: true }).title,
-    "NO SIGNALS AVAILABLE",
+    researchSignalsEmptyCopy({ empty: true, universeSize: 2000 }).title,
+    "NO ACTIVE SIGNALS",
+  );
+  assert.equal(
+    resolveAnalysisDeskStatus({
+      loading: false,
+      fetchError: false,
+      availability: "LIVE_EMPTY",
+      rows: [],
+      asOf: "2026-08-30T12:00:00Z",
+      universeSize: 2000,
+      nowMs: Date.parse("2026-08-30T12:05:00Z"),
+    }),
+    "NO_ACTIVE_SIGNALS",
+  );
+  assert.equal(
+    analysisDeskStatusLabel("SCANNER_UNAVAILABLE"),
+    "SCANNER UNAVAILABLE",
+  );
+  assert.equal(
+    resolveAnalysisDeskStatus({
+      loading: false,
+      fetchError: true,
+      availability: "UNAVAILABLE",
+      rows: [],
+    }),
+    "SCANNER_UNAVAILABLE",
   );
 }
 

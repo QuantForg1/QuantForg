@@ -94,6 +94,16 @@ export function IntelligenceDetail({
           label="Strength"
           value={signal === "NO SIGNAL" ? "—" : signalStrength(row)}
         />
+        <Detail
+          label="Ranking"
+          value={
+            signal === "NO SIGNAL"
+              ? "—"
+              : presentField(row.research_rank_score) === "Not available"
+                ? "UNAVAILABLE"
+                : String(row.research_rank_score)
+          }
+        />
         <Detail label="Session" value={presentField(rowSession(row))} />
         <Detail label="Regime" value={presentField(rowRegime(row))} />
         <Detail label="Market condition" value={presentField(row.market_condition ?? row.data_state)} />

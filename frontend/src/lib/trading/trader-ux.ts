@@ -312,6 +312,7 @@ export const ASSET_CLASS_ORDER = [
   "METALS",
   "INDICES",
   "ENERGY",
+  "COMMODITIES",
   "OTHER",
 ] as const;
 
@@ -382,6 +383,7 @@ export function normalizeAssetClass(raw: unknown): string {
   if (["METALS", "METAL"].includes(v)) return "METALS";
   if (["INDICES", "INDEX"].includes(v)) return "INDICES";
   if (["ENERGY", "ENERGIES"].includes(v)) return "ENERGY";
+  if (["COMMODITY", "COMMODITIES"].includes(v)) return "COMMODITIES";
   if (v === "OTHER") return "OTHER";
   if (v === "UNKNOWN") return "UNKNOWN";
   return v;
@@ -621,7 +623,19 @@ export type NormalizedSignalCenter = {
   engineLabel: string;
   fabricatedBlocked: boolean;
   countConfirmed: boolean;
+  /** Confirmed scan universe size only — null when unknown (never invent 0). */
+  universeSize: number | null;
+  latencyMs: number | null;
 };
+
+function optionalConfirmedCount(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
 
 function normalizeAssetClassToken(raw: unknown): string {
   const cls = normalizeAssetClass(raw);
@@ -644,10 +658,24 @@ export function normalizeSignalCenterPayload(
       engineLabel: "UNKNOWN",
       fabricatedBlocked: false,
       countConfirmed: false,
+      universeSize: null,
+      latencyMs: null,
     };
   }
   const asOf = String(payload.as_of || "").trim();
   const source = String(payload.source || "").trim();
+  const dash =
+    payload.dashboard && typeof payload.dashboard === "object"
+      ? (payload.dashboard as Record<string, unknown>)
+      : {};
+  const universeSize =
+    optionalConfirmedCount(payload.universe_size) ??
+    optionalConfirmedCount(dash.total_symbols) ??
+    optionalConfirmedCount(dash.enabled_symbols);
+  const latencyMs =
+    optionalConfirmedCount(payload.latency_ms) ??
+    optionalConfirmedCount(payload.scan_latency_ms) ??
+    optionalConfirmedCount(dash.latency_ms);
   if (payload.fabricated === true || payload.test_synthetic === true) {
     return {
       availability: "LIVE_EMPTY",
@@ -657,6 +685,8 @@ export function normalizeSignalCenterPayload(
       engineLabel: "RESEARCH",
       fabricatedBlocked: true,
       countConfirmed: true,
+      universeSize,
+      latencyMs,
     };
   }
   const items = Array.isArray(payload.items) ? payload.items : [];
@@ -730,6 +760,8 @@ export function normalizeSignalCenterPayload(
     engineLabel: "RESEARCH",
     fabricatedBlocked: false,
     countConfirmed: true,
+    universeSize,
+    latencyMs,
   };
 }
 
@@ -783,25 +815,32 @@ export function researchSignalsEmptyCopy(input: {
   fetchError?: boolean;
   fabricatedBlocked?: boolean;
   empty?: boolean;
+  universeSize?: number | null;
 }): { title: string; description: string } {
   if (input.fetchError) {
     return {
-      title: "INTELLIGENCE DATA UNAVAILABLE",
+      title: "DATA UNAVAILABLE",
       description:
         "QuantForg research signals could not be loaded. This is not zero signals.",
     };
   }
   if (input.fabricatedBlocked) {
     return {
-      title: "NO SIGNALS AVAILABLE",
+      title: "NO ACTIVE SIGNALS",
       description:
         "Synthetic or fabricated signal payloads are not shown as live research.",
     };
   }
+  if (input.universeSize != null && input.universeSize > 0) {
+    return {
+      title: "NO ACTIVE SIGNALS",
+      description: `The analysis engine scanned ${input.universeSize} instruments. No qualifying BUY/SELL setup currently exists.`,
+    };
+  }
   return {
-    title: "NO SIGNALS AVAILABLE",
+    title: "NO ACTIVE SIGNALS",
     description:
-      "The research engine returned no ranked BUY/SELL signals right now.",
+      "The analysis engine completed its scan. No qualifying BUY/SELL setup currently exists.",
   };
 }
 
@@ -824,6 +863,85 @@ export function accountConnectionHint(
     label: "ACCOUNT",
     detail: "NOT CONNECTED",
   };
+}
+
+export type AnalysisDeskStatus =
+  | "ANALYSIS_RUNNING"
+  | "ANALYSIS_READY"
+  | "NO_ACTIVE_SIGNALS"
+  | "DATA_STALE"
+  | "DATA_PARTIAL"
+  | "DATA_UNAVAILABLE"
+  | "SCANNER_UNAVAILABLE";
+
+export function resolveAnalysisDeskStatus(input: {
+  loading: boolean;
+  fetchError: boolean;
+  availability: ResearchAvailability;
+  rows: Record<string, unknown>[];
+  fabricatedBlocked?: boolean;
+  asOf?: string;
+  universeSize?: number | null;
+  nowMs?: number;
+}): AnalysisDeskStatus {
+  if (input.fetchError) return "SCANNER_UNAVAILABLE";
+  if (input.loading && input.availability === "NOT_READY") {
+    return "ANALYSIS_RUNNING";
+  }
+  if (input.availability === "UNAVAILABLE") return "DATA_UNAVAILABLE";
+  if (input.availability === "NOT_READY") return "ANALYSIS_RUNNING";
+
+  const now = input.nowMs ?? Date.now();
+  const asOfMs = input.asOf ? Date.parse(input.asOf) : Number.NaN;
+  const ageMs = Number.isFinite(asOfMs) ? now - asOfMs : null;
+  const stale = ageMs != null && ageMs > 15 * 60 * 1000;
+
+  if (input.rows.length > 0) {
+    const states = input.rows.map((row) => marketDataState(row));
+    if (states.some((s) => s === "STALE") && !states.some((s) => s === "LIVE")) {
+      return "DATA_STALE";
+    }
+    if (states.some((s) => s === "ERROR" || s === "NO_DATA" || s === "STALE")) {
+      return "DATA_PARTIAL";
+    }
+    if (stale) return "DATA_STALE";
+    return "ANALYSIS_READY";
+  }
+
+  if (input.fabricatedBlocked) return "NO_ACTIVE_SIGNALS";
+  if (stale) return "DATA_STALE";
+  if (input.availability === "LIVE_EMPTY") return "NO_ACTIVE_SIGNALS";
+  return "NO_ACTIVE_SIGNALS";
+}
+
+export function analysisDeskStatusLabel(status: AnalysisDeskStatus): string {
+  if (status === "ANALYSIS_RUNNING") return "ANALYSIS RUNNING";
+  if (status === "ANALYSIS_READY") return "ANALYSIS READY";
+  if (status === "NO_ACTIVE_SIGNALS") return "NO ACTIVE SIGNALS";
+  if (status === "DATA_STALE") return "DATA STALE";
+  if (status === "DATA_PARTIAL") return "DATA PARTIAL";
+  if (status === "DATA_UNAVAILABLE") return "DATA UNAVAILABLE";
+  return "SCANNER UNAVAILABLE";
+}
+
+export function knownUniverseCountLabel(
+  size: number | null | undefined,
+  confirmed: boolean,
+): string {
+  if (!confirmed || size == null) return "—";
+  return String(size);
+}
+
+export function latencyLabel(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms)) return "—";
+  return `${Math.round(ms)} ms`;
+}
+
+/** Live trading robot is separate from research analysis — never conflate. */
+export function liveTradingLabel(session: Record<string, unknown>): string {
+  const trading = session.trading_enabled === true || session.execution_permitted === true;
+  if (trading) return "LIVE TRADING AUTHORIZED";
+  return "LIVE TRADING OFF";
 }
 
 export function signalAvailability(

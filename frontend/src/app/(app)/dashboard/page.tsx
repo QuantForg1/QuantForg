@@ -350,10 +350,13 @@ export default function DashboardPage() {
       <section aria-labelledby="robot-status">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 id="robot-status" className="text-sm font-medium text-[var(--fg)]">
-            Robot
+            Robot / Analysis
           </h2>
           <Badge tone={statusTone(robot)}>{robot}</Badge>
         </div>
+        <p className="mb-3 text-xs text-[var(--fg-subtle)]">
+          Research analysis runs independently. Live trading requires an explicit Start on your owned broker account — never automatic.
+        </p>
         {noBroker ? (
           <p className="mb-3 text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
         ) : sessionMismatch ? (

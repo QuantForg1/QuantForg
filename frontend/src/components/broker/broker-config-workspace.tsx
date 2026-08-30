@@ -20,6 +20,7 @@ import { ApiError } from "@/lib/api/client";
 import { asRecord, str } from "@/lib/desk";
 import {
   MARKET_UNIVERSE_QUERY_KEY,
+  SIGNAL_CENTER_QUERY_KEY,
   resolveConnectionPresentation,
   traderFacingErrorMessage,
 } from "@/lib/trading/trader-ux";
@@ -140,6 +141,7 @@ export function BrokerConfigWorkspace() {
       /* catalogue remains unverified — never invent LIVE_BROKER */
     }
     await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
+    await qc.invalidateQueries({ queryKey: SIGNAL_CENTER_QUERY_KEY });
   };
 
   const clearPasswordField = () => {
