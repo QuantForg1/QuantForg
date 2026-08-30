@@ -113,12 +113,17 @@ class InstitutionalAnalysisPipeline:
     ) -> MarketAnalysisSnapshot:
         cfg = self.config
         # Prefer caller symbol → bars in the store → config. Never rewrite a
-        # non-gold bar series back to XAUUSD when multi-symbol is enabled
-        # (that mismatch triggers "swing must match snapshot symbol/timeframe").
+        # non-gold bar series back to XAUUSD when multi-symbol research loads
+        # non-gold candles (that mismatch triggers
+        # "swing must match snapshot symbol/timeframe").
         inferred = self._infer_symbol_from_bars()
         raw = (symbol or inferred or cfg.symbol or GOLD_SYMBOL).strip().upper()
         if gold_only_enabled():
-            code_str = raw if raw and is_gold_symbol(raw) else GOLD_SYMBOL
+            if inferred and not is_gold_symbol(inferred):
+                # Research / catalogue desks keep the stamped bar symbol.
+                code_str = inferred
+            else:
+                code_str = raw if raw and is_gold_symbol(raw) else GOLD_SYMBOL
         else:
             code_str = resolve_trading_symbol(raw)
         code = SymbolCode(value=code_str)

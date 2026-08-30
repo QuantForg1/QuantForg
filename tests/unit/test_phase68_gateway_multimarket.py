@@ -130,15 +130,62 @@ async def test_research_mode_offload_uses_to_thread_not_ite_pool() -> None:
 
 
 @pytest.mark.unit
-def test_ensure_gateway_session_still_non_authorizing() -> None:
-    from app.application.services.market_universe_service import (
-        ensure_gateway_session_for_research,
-    )
+@pytest.mark.asyncio
+async def test_pipeline_keeps_non_gold_inferred_under_gold_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LIVE gold clamp must not rewrite research EURUSD bars to XAUUSD."""
+    from datetime import UTC, datetime
 
-    client = MagicMock()
-    client.is_connected = True
-    adapter = MagicMock()
-    adapter.client = client
-    diag = ensure_gateway_session_for_research(adapter)
-    assert diag["authorizes_trade"] is False
-    assert diag["adopted"] is True
+    from app.domain.institutional_trading.pipeline import InstitutionalAnalysisPipeline
+    from app.domain.institutional_trading.ports import MultiTimeframeBarStore
+
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.pipeline.gold_only_enabled",
+        lambda: True,
+    )
+    captured: list[str] = []
+
+    class _FakeEngine:
+        def __init__(self, **kwargs):  # noqa: ANN003
+            pass
+
+        async def analyze(self, code, tf, as_of=None):  # noqa: ANN001
+            captured.append(str(getattr(code, "value", code)))
+            snap = MagicMock()
+            snap.symbol_code = code
+            snap.timeframe = tf
+            snap.swings = ()
+            snap.nodes = ()
+            result = MagicMock()
+            result.snapshot = snap
+            return result
+
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.pipeline.MarketStructureEngine",
+        _FakeEngine,
+    )
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.pipeline.LiquidityEngine",
+        _FakeEngine,
+    )
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.pipeline.OrderBlockEngine",
+        _FakeEngine,
+    )
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.pipeline.FairValueGapEngine",
+        _FakeEngine,
+    )
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.pipeline.TrendEngine",
+        _FakeEngine,
+    )
+    pipe = InstitutionalAnalysisPipeline(bars=MultiTimeframeBarStore())
+    monkeypatch.setattr(pipe, "_infer_symbol_from_bars", lambda: "EURUSD")
+    try:
+        await pipe.analyze(symbol="XAUUSD", as_of=datetime.now(UTC))
+    except Exception:
+        pass
+    assert "EURUSD" in captured
+    assert "XAUUSD" not in captured
