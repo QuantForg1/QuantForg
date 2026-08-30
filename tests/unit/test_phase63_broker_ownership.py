@@ -27,26 +27,41 @@ class _Account:
 
 
 class _FakeAdapter:
-    def __init__(self, *, live_login: int) -> None:
+    def __init__(self, *, live_login: int, token_seeded: bool = True) -> None:
         self._live_login = live_login
-        self._live_session_ref = "sess-live"
-        self._sessions = {
-            "sess-live": type(
-                "S",
-                (),
-                {"login": live_login, "server": "Weltrade-Real"},
-            )()
-        }
+        self._live_session_ref = "sess-live" if token_seeded else ""
+        self._sessions = (
+            {
+                "sess-live": type(
+                    "S",
+                    (),
+                    {"login": live_login, "server": "Weltrade-Real"},
+                )()
+            }
+            if token_seeded
+            else {}
+        )
         self.client = type(
             "C",
             (),
             {
                 "is_connected": True,
-                "session_token": "sess-live",
+                "session_token": "sess-live" if token_seeded else "",
                 "_login": live_login,
+                "_server": "Weltrade-Real",
                 "stores_credentials_remotely": True,
+                "adopt_existing_session": lambda self=None: self,  # placeholder
             },
         )()
+        # Bind adopt to mutate client token like GatewayMT5Client.
+        def _adopt() -> bool:
+            self.client.session_token = "sess-live"  # type: ignore[attr-defined]
+            self.client.is_connected = True  # type: ignore[attr-defined]
+            self.client._login = live_login  # type: ignore[attr-defined]
+            self.client._server = "Weltrade-Real"  # type: ignore[attr-defined]
+            return True
+
+        self.client.adopt_existing_session = _adopt  # type: ignore[attr-defined]
         self._shutdown = False
 
     def account_info(self) -> _Account:
@@ -56,16 +71,18 @@ class _FakeAdapter:
         return type(
             "H",
             (),
-            {"terminal_build": 1, "version": "1", "latency_ms": 1.0},
+            {"terminal_build": 1, "version": "1", "latency_ms": 1.0, "connected": True},
         )()
 
     def terminal_info(self) -> object:
         return type("T", (), {"build": 1})()
 
     def is_live_session(self, ref: str) -> bool:
-        return ref == self._live_session_ref and not self._shutdown
+        return ref == (self._live_session_ref or "sess-live") and not self._shutdown
 
     def attach(self, *, path: str = "") -> str:
+        self._live_session_ref = "sess-live"
+        self.client.session_token = "sess-live"  # type: ignore[attr-defined]
         return self._live_session_ref
 
     def shutdown(self) -> None:
@@ -131,6 +148,24 @@ async def test_ensure_user_session_bound_does_not_steal_for_unbound_user() -> No
     async with factory() as uow:
         row = await uow.connections.get_active_for_user(stranger)
     assert row is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_owner_adopts_when_health_connected_without_session_token() -> None:
+    """Regression: health can set connected without minting session_token."""
+    owner = uuid4()
+    factory = MemoryMT5UnitOfWorkFactory()
+    svc = WeltradeIntegrationService(
+        adapter=_FakeAdapter(live_login=99990001, token_seeded=False),  # type: ignore[arg-type]
+        uow_factory=factory,
+    )
+    await svc.ensure_user_session_bound(user_id=owner, role="owner")
+    async with factory() as uow:
+        row = await uow.connections.get_active_for_user(owner)
+    assert row is not None
+    assert int(row.login) == 99990001
+    assert row.connected is True
 
 
 @pytest.mark.unit

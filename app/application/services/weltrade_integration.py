@@ -632,6 +632,71 @@ class WeltradeIntegrationService:
                         return conn.user_id
         return None
 
+    def _sync_adapter_live_handle(self, live_ref: str) -> None:
+        """Keep adapter session cache aligned with gateway client after adopt."""
+        ref = (live_ref or "").strip()
+        if not ref:
+            return
+        self.adapter._live_session_ref = ref
+        client = self.adapter.client
+        login = int(getattr(client, "_login", 0) or 0)
+        server = str(getattr(client, "_server", "") or "")
+        sessions = getattr(self.adapter, "_sessions", None)
+        if not isinstance(sessions, dict):
+            return
+        if ref in sessions and login > 1:
+            return
+        sessions[ref] = MT5LoginRequest(
+            login=login if login > 1 else 0,
+            password="",
+            server=server or "attached",
+            path="",
+        )
+
+    def _ensure_process_gateway_handle(self) -> str:
+        """Adopt the live Windows session into this Railway worker process.
+
+        Research catalogue uses ``adopt_existing_session``; ownership heal must
+        use the same path. ``health()`` can set ``is_connected`` without minting
+        a process ``session_token`` — without this, owner adopt never binds.
+        """
+        client = self.adapter.client
+        with contextlib.suppress(Exception):
+            self.adapter.health()
+
+        live_ref = (getattr(self.adapter, "_live_session_ref", None) or "").strip()
+        if not live_ref:
+            live_ref = (getattr(client, "session_token", "") or "").strip()
+        if live_ref and getattr(client, "is_connected", False):
+            self._sync_adapter_live_handle(live_ref)
+            return live_ref
+
+        adopt = getattr(client, "adopt_existing_session", None)
+        if callable(adopt):
+            try:
+                if bool(adopt()):
+                    live_ref = (getattr(client, "session_token", "") or "").strip()
+                    if live_ref:
+                        self._sync_adapter_live_handle(live_ref)
+                        return live_ref
+            except Exception as exc:
+                logger.warning(
+                    "weltrade_ensure_adopt_failed",
+                    error=str(exc),
+                )
+
+        try:
+            live_ref = ((self.adapter.attach(path="") or "")).strip()
+        except Exception as exc:
+            logger.warning(
+                "weltrade_ensure_attach_failed",
+                error=str(exc),
+            )
+            return ""
+        if live_ref:
+            self._sync_adapter_live_handle(live_ref)
+        return live_ref
+
     async def _adopt_live_gateway_for_privileged_user(
         self, *, user_id: UUID, role: str | None
     ) -> bool:
@@ -648,14 +713,9 @@ class WeltradeIntegrationService:
             return False
         if self.uow_factory is None:
             return False
+        live_ref = self._ensure_process_gateway_handle()
         client = self.adapter.client
-        if not getattr(client, "is_connected", False):
-            return False
-        live_ref = (
-            (getattr(self.adapter, "_live_session_ref", None) or "").strip()
-            or (getattr(client, "session_token", "") or "").strip()
-        )
-        if not live_ref:
+        if not live_ref or not getattr(client, "is_connected", False):
             return False
         live_login = 0
         live_server = ""
@@ -665,6 +725,7 @@ class WeltradeIntegrationService:
             live_server = str(getattr(info, "server", "") or "").strip()
         except Exception:
             live_login = int(getattr(client, "_login", 0) or 0)
+            live_server = str(getattr(client, "_server", "") or "").strip()
         if live_login <= 1 or not live_server:
             return False
         foreign = await self._active_foreign_owner_of_login(
@@ -720,30 +781,11 @@ class WeltradeIntegrationService:
         if self.uow_factory is None:
             return
 
-        client = self.adapter.client
-        # Sync in-process connected flag from gateway /session/status.
-        with contextlib.suppress(Exception):
-            self.adapter.health()
-
-        if not getattr(client, "is_connected", False):
+        live_ref = self._ensure_process_gateway_handle()
+        if not live_ref:
             return
-
-        live_ref = (getattr(self.adapter, "_live_session_ref", None) or "").strip()
-        if not live_ref:
-            live_ref = (getattr(client, "session_token", "") or "").strip()
-        if not live_ref:
-            # Terminal is live on Windows but this process has no session handle yet.
-            try:
-                live_ref = self.adapter.attach(path="")
-            except Exception as exc:
-                logger.warning(
-                    "weltrade_ensure_attach_failed",
-                    error=str(exc),
-                    user_id=str(user_id),
-                )
-                return
-            live_ref = (live_ref or "").strip()
-        if not live_ref:
+        client = self.adapter.client
+        if not getattr(client, "is_connected", False):
             return
 
         async with self.uow_factory() as uow:
