@@ -488,20 +488,37 @@ class WeltradeIntegrationService:
         if not live_ref or not getattr(self.adapter.client, "is_connected", False):
             return None
 
-        resolved_login = int(login or 0)
-        resolved_server = (server or "").strip()
-        if resolved_login <= 0 or not resolved_server:
-            try:
-                info = self.adapter.account_info()
-                resolved_login = resolved_login or int(info.login)
-                resolved_server = resolved_server or str(info.server or "")
-            except Exception:
-                stored = None
-                if live_ref in getattr(self.adapter, "_sessions", {}):
-                    stored = self.adapter._sessions.get(live_ref)
+        claimed_login = int(login or 0)
+        claimed_server = (server or "").strip()
+        live_login = 0
+        live_server = ""
+        try:
+            info = self.adapter.account_info()
+            live_login = int(getattr(info, "login", 0) or 0)
+            live_server = str(getattr(info, "server", "") or "").strip()
+        except Exception:
+            if live_ref in getattr(self.adapter, "_sessions", {}):
+                stored = self.adapter._sessions.get(live_ref)
                 if stored is not None:
-                    resolved_login = resolved_login or int(stored.login or 0)
-                    resolved_server = resolved_server or str(stored.server or "")
+                    live_login = int(getattr(stored, "login", 0) or 0)
+                    live_server = str(getattr(stored, "server", "") or "").strip()
+            if live_login <= 1:
+                client = self.adapter.client
+                live_login = int(getattr(client, "_login", 0) or 0)
+
+        # Live terminal identity is authoritative when known.
+        if live_login > 1 and claimed_login > 1 and live_login != claimed_login:
+            logger.warning(
+                "weltrade_bind_skipped",
+                reason="login_mismatch",
+                user_id=str(user_id),
+                claimed_login=claimed_login,
+                live_login=live_login,
+            )
+            return None
+
+        resolved_login = live_login if live_login > 1 else claimed_login
+        resolved_server = live_server or claimed_server
         if resolved_login <= 1 or not resolved_server:
             logger.warning(
                 "weltrade_bind_skipped",
@@ -583,10 +600,11 @@ class WeltradeIntegrationService:
         unbind_execution_account(user_id=user_id)
 
     async def ensure_user_session_bound(self, *, user_id: UUID) -> None:
-        """Heal: if gateway session is live but DB row missing, bind it.
+        """Heal owned session after redeploy — never steal another user's terminal.
 
         After a Railway redeploy the Windows terminal can still be logged in while
-        this process has no ``_live_session_ref``. Probe/attach first, then bind.
+        this process has no ``_live_session_ref``. Probe/attach first, then re-bind
+        ONLY when the calling user already owns the live login.
         """
         if self.uow_factory is None:
             return
@@ -619,14 +637,49 @@ class WeltradeIntegrationService:
 
         async with self.uow_factory() as uow:
             existing = await uow.connections.get_active_for_user(user_id)
+        if existing is None:
+            # Health/dashboard must not bind unbound callers to the shared terminal.
+            logger.info(
+                "weltrade_ensure_skipped",
+                reason="no_owned_connection",
+                user_id=str(user_id),
+            )
+            return
+
+        live_login = 0
+        live_server = ""
+        try:
+            info = self.adapter.account_info()
+            live_login = int(getattr(info, "login", 0) or 0)
+            live_server = str(getattr(info, "server", "") or "").strip()
+        except Exception:
+            live_login = int(getattr(client, "_login", 0) or 0)
+        owned_login = int(existing.login or 0)
+        if live_login > 1 and owned_login > 1 and live_login != owned_login:
+            logger.warning(
+                "weltrade_ensure_skipped",
+                reason="login_mismatch",
+                user_id=str(user_id),
+                owned_login=owned_login,
+                live_login=live_login,
+            )
+            return
+
         if (
-            existing is not None
-            and existing.connected
+            existing.connected
             and (existing.session_ref or "").strip() == live_ref
             and self.adapter.is_live_session(live_ref)
+            and (live_login <= 1 or live_login == owned_login)
         ):
             return
-        await self.bind_user_session(user_id=user_id, session_ref=live_ref)
+
+        await self.bind_user_session(
+            user_id=user_id,
+            login=owned_login if owned_login > 1 else None,
+            server=live_server or str(existing.server or ""),
+            path=str(existing.terminal_path or ""),
+            session_ref=live_ref,
+        )
 
     async def connect(
         self,
@@ -849,6 +902,56 @@ class WeltradeIntegrationService:
                     correlation_id=correlation_id,
                 )
 
+        if attached:
+            live_login = 0
+            live_server = ""
+            try:
+                info = self.adapter.account_info()
+                live_login = int(getattr(info, "login", 0) or 0)
+                live_server = str(getattr(info, "server", "") or "").strip()
+            except Exception:
+                live_login = int(getattr(self.adapter.client, "_login", 0) or 0)
+            if live_login > 1 and live_login != int(login):
+                if password:
+                    logger.info(
+                        "weltrade_attach_login_mismatch_forcing_auth",
+                        claimed_login=login,
+                        live_login=live_login,
+                        correlation_id=correlation_id,
+                    )
+                    steps.append(
+                        {
+                            "step": "reuse_session",
+                            "ok": False,
+                            "detail": (
+                                "Attached session belongs to a different account; "
+                                "authenticating requested login"
+                            ),
+                        }
+                    )
+                    with contextlib.suppress(Exception):
+                        self.adapter.shutdown()
+                    attached = False
+                    session_ref = ""
+                else:
+                    raise RuntimeError(
+                        "ACCOUNT_SESSION_MISMATCH: The gateway MT5 session belongs "
+                        "to a different account. Disconnect it first, or provide "
+                        "your password to switch to your own login."
+                    )
+            elif live_login > 1:
+                if live_server:
+                    server_name = live_server
+                steps.append(
+                    {
+                        "step": "verify_live_login",
+                        "ok": True,
+                        "detail": (
+                            f"Live login matches requested account ({live_login})"
+                        ),
+                    }
+                )
+
         if not attached:
             if not password:
                 raise RuntimeError(
@@ -898,13 +1001,18 @@ class WeltradeIntegrationService:
             # Password falls out of scope — adapter stores redacted copy for GW.
             del request
 
-        await self.bind_user_session(
+        bound = await self.bind_user_session(
             user_id=user_id,
             login=login,
             server=server_name,
             path=path,
             session_ref=session_ref,
         )
+        if not bound:
+            raise RuntimeError(
+                "ACCOUNT_SESSION_MISMATCH: Could not bind your owned broker session "
+                "to the live MT5 terminal. Disconnect and verify with your own login."
+            )
         self._persist_broker_runtime_profile(
             login=login,
             server=server_name,
@@ -1253,7 +1361,11 @@ class WeltradeIntegrationService:
             self.adapter, "_live_session_ref", None
         ):
             self.adapter.shutdown()
-        logger.info("broker_disconnected", state="DISCONNECTED", reason="user_disconnect")
+        logger.info(
+            "broker_disconnected",
+            state="DISCONNECTED",
+            reason="user_disconnect",
+        )
         return {
             "ok": True,
             "broker": WELTRADE_BROKER,

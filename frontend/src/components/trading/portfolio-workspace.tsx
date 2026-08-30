@@ -312,12 +312,40 @@ export function PortfolioWorkspace() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Robot</CardTitle>
-            <Badge tone={robotTone(robot)}>{noBroker ? "BROKER NOT CONNECTED" : robot}</Badge>
+            <CardTitle>Robot control</CardTitle>
+            <Badge tone={noBroker ? "warning" : robotTone(robot)}>
+              {noBroker ? "BROKER NOT CONNECTED" : robot}
+            </Badge>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2">
+                <p className="text-xs uppercase tracking-wide text-[var(--fg-subtle)]">
+                  Research analysis
+                </p>
+                <p className="mt-1 text-sm text-[var(--fg)]">ACTIVE</p>
+                <p className="text-xs text-[var(--fg-muted)]">
+                  Scans supported markets via Signals — broker not required.
+                </p>
+              </div>
+              <div className="rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2">
+                <p className="text-xs uppercase tracking-wide text-[var(--fg-subtle)]">
+                  Live trading
+                </p>
+                <p className="mt-1 text-sm text-[var(--fg)]">
+                  {noBroker || mismatch ? "DISABLED" : robot === "RUNNING" ? "ON" : "OFF"}
+                </p>
+                <p className="text-xs text-[var(--fg-muted)]">
+                  Explicit opt-in only. Connecting a broker does not enable live trading.
+                </p>
+              </div>
+            </div>
             <p className="text-sm text-[var(--fg-muted)]">
-              Robot state for this authenticated account. Start, pause, and stop use the existing session APIs.
+              Start / Pause / Stop control live trading for this owned session. Research signals stay on{" "}
+              <Link href="/signals" className="text-[var(--accent)] underline-offset-2 hover:underline">
+                /signals
+              </Link>
+              .
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -325,7 +353,7 @@ export function PortfolioWorkspace() {
                 disabled={robotMut.isPending || noBroker || mismatch || robot === "RUNNING"}
                 onClick={() => robotMut.mutate("start")}
               >
-                Start
+                Start live trading
               </Button>
               <Button
                 size="sm"

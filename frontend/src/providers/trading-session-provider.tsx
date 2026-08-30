@@ -121,11 +121,11 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
       healthPreview.mt5_connected ||
       healthPreview.mt5_attached,
   );
-  // Prefer MT5 status; fall back to weltrade health while status heals.
-  const connectedFlag =
-    statusConnected || (healthUsablePreview && healthAttached);
+  // Ownership-aware only: gateway health attach must not invent a user session.
+  // /mt5/status goes through ensure_live_mt5_session_for_user.
+  const connectedFlag = statusConnected;
 
-  // Book polls only after /mt5/status has a live session — not merely after
+  // Book polls only after /mt5/status has a live owned session — not merely after
   // Weltrade health, which used to fan out /portfolio+/positions+/orders+/history
   // and 404 "No active MT5 connection" during heal.
   const bookEnabled = sessionEnabled && statusConnected;
@@ -165,9 +165,9 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   const account = asRecord(portfolio.account);
   const health = healthPreview;
 
-  const connected = connectedFlag || componentsView?.mt5.ok === true;
+  const connected = connectedFlag;
   // Health feed may 500 under DB pressure — do not treat that as broker down
-  // when MT5 status already proves an attached session.
+  // when MT5 status already proves an owned attached session.
   const healthKnown =
     (healthQ.isFetched && !healthQ.isLoading) ||
     (statusQ.isFetched && !statusQ.isLoading) ||
@@ -181,11 +181,7 @@ export function TradingSessionProvider({ children }: { children: ReactNode }) {
   );
   const brokerConnected = mergePlaneOk(
     componentsView?.mt5.ok ?? null,
-    healthUsable
-      ? Boolean(health.weltrade_connected || health.mt5_connected || connectedFlag)
-      : connectedFlag
-        ? true
-        : null,
+    statusConnected ? true : null,
   );
   const executionEnabled =
     healthUsable && "execution_enabled" in health

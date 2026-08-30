@@ -374,7 +374,9 @@ class TestWeltradeIntegration:
 
     @pytest.mark.asyncio
     async def test_ensure_binds_when_gateway_live_without_session_ref(self) -> None:
-        """After process restart: gateway connected, no local session_ref yet."""
+        """After process restart: heal only when the caller already owns live login."""
+        from app.domain.entities.mt5 import MT5Connection
+
         client = _StubGateway()
         client._account_login = 16785006
         # Simulate gateway-live state without an adapter session handle.
@@ -385,8 +387,18 @@ class TestWeltradeIntegration:
         adapter = MT5Adapter(client=client)
         adapter._live_session_ref = None
         factory = MemoryMT5UnitOfWorkFactory()
-        svc = WeltradeIntegrationService(adapter=adapter, uow_factory=factory)
         user_id = uuid4()
+        async with factory() as uow:
+            owned = MT5Connection.create(
+                user_id=user_id,
+                login=16785006,
+                server="Weltrade-Real",
+                terminal_path="",
+            )
+            owned.mark_connected(session_ref="stale-pre-restart")
+            await uow.connections.upsert_for_user(owned)
+            await uow.commit()
+        svc = WeltradeIntegrationService(adapter=adapter, uow_factory=factory)
         await svc.ensure_user_session_bound(user_id=user_id)
         async with factory() as uow:
             conn = await uow.connections.get_active_for_user(user_id)
@@ -397,6 +409,12 @@ class TestWeltradeIntegration:
         assert ("GET", "/session/status") in client.calls
         # Connected gateway is adopted via status; POST attach is not required.
         assert ("POST", "/session/connect") not in client.calls
+
+        stranger = uuid4()
+        await svc.ensure_user_session_bound(user_id=stranger)
+        async with factory() as uow:
+            stolen = await uow.connections.get_active_for_user(stranger)
+        assert stolen is None
 
         from types import SimpleNamespace
 

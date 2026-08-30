@@ -37,8 +37,11 @@ def classify_broker_connect_error(
 ) -> tuple[type[DomainError], str, str]:
     """Return (exception class, code, public message). Never returns raw exc text."""
     text = str(exc).lower()
-    if "account_session_mismatch" in text or (
-        "mismatch" in text and "session" in text
+    if (
+        "account_session_mismatch" in text
+        or ("mismatch" in text and "session" in text)
+        or ("different account" in text)
+        or ("belongs to a different" in text)
     ):
         code = ACCOUNT_SESSION_MISMATCH
         return ConflictError, code, TRADER_BROKER_MESSAGES[code]
