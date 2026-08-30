@@ -231,7 +231,15 @@ class WeltradeIntegrationService:
                 logger.warning("weltrade_mt5_probe_failed", error=str(exc))
 
         if gateway_reachable and mt5_attached:
-            await self.ensure_user_session_bound(user_id=user_id, role=role)
+            ownership_heal = await self.ensure_user_session_bound(
+                user_id=user_id, role=role
+            )
+        else:
+            ownership_heal = {
+                "attempted": False,
+                "adopted": False,
+                "reason": "gateway_or_mt5_unavailable",
+            }
 
         cfg = self._configuration()
         transport = gw.diagnostics_probe()
@@ -331,6 +339,7 @@ class WeltradeIntegrationService:
             "gateway_online": gateway_reachable,
             "mt5_connected": mt5_attached,
             "weltrade_connected": bool(gateway_reachable and mt5_attached),
+            "ownership_heal": ownership_heal,
             "status": (
                 "healthy"
                 if gateway_reachable and mt5_attached
@@ -699,7 +708,7 @@ class WeltradeIntegrationService:
 
     async def _adopt_live_gateway_for_privileged_user(
         self, *, user_id: UUID, role: str | None
-    ) -> bool:
+    ) -> dict[str, Any]:
         """Bind owner/admin to the live gateway when DB ownership was lost.
 
         Railway ephemeral disks drop ``broker_runtime_profile.json`` on redeploy
@@ -708,15 +717,31 @@ class WeltradeIntegrationService:
         Disconnected. Privileged adopt restores ownership without a password
         when the gateway already holds the session — never for unbound traders,
         never when another user already owns that login.
+
+        Returns a non-secret diagnostic dict for /weltrade/health.
         """
-        if not self._role_may_adopt_unbound_gateway(role):
-            return False
+        diag: dict[str, Any] = {
+            "attempted": True,
+            "adopted": False,
+            "role_allowed": self._role_may_adopt_unbound_gateway(role),
+            "reason": None,
+            "has_live_ref": False,
+            "client_connected": False,
+            "live_login_known": False,
+        }
+        if not diag["role_allowed"]:
+            diag["reason"] = "role_not_privileged"
+            return diag
         if self.uow_factory is None:
-            return False
+            diag["reason"] = "uow_factory_missing"
+            return diag
         live_ref = self._ensure_process_gateway_handle()
         client = self.adapter.client
-        if not live_ref or not getattr(client, "is_connected", False):
-            return False
+        diag["has_live_ref"] = bool(live_ref)
+        diag["client_connected"] = bool(getattr(client, "is_connected", False))
+        if not live_ref or not diag["client_connected"]:
+            diag["reason"] = "gateway_handle_unavailable"
+            return diag
         live_login = 0
         live_server = ""
         try:
@@ -726,12 +751,15 @@ class WeltradeIntegrationService:
         except Exception:
             live_login = int(getattr(client, "_login", 0) or 0)
             live_server = str(getattr(client, "_server", "") or "").strip()
+        diag["live_login_known"] = live_login > 1 and bool(live_server)
         if live_login <= 1 or not live_server:
-            return False
+            diag["reason"] = "unresolved_live_identity"
+            return diag
         foreign = await self._active_foreign_owner_of_login(
             login=live_login, user_id=user_id
         )
         if foreign is not None:
+            diag["reason"] = "login_owned_by_other_user"
             logger.info(
                 "weltrade_ensure_skipped",
                 reason="login_owned_by_other_user",
@@ -739,7 +767,7 @@ class WeltradeIntegrationService:
                 other_user_id=str(foreign),
                 live_login=live_login,
             )
-            return False
+            return diag
         bound = await self.bind_user_session(
             user_id=user_id,
             login=live_login,
@@ -748,7 +776,8 @@ class WeltradeIntegrationService:
             session_ref=live_ref,
         )
         if not bound:
-            return False
+            diag["reason"] = "bind_user_session_failed"
+            return diag
         self._persist_broker_runtime_profile(
             login=live_login,
             server=live_server,
@@ -756,6 +785,8 @@ class WeltradeIntegrationService:
             password="",
             user_id=user_id,
         )
+        diag["adopted"] = True
+        diag["reason"] = "ok"
         logger.info(
             "weltrade_owner_adopted_live_gateway",
             user_id=str(user_id),
@@ -763,11 +794,11 @@ class WeltradeIntegrationService:
             server=live_server,
             role=str(role or ""),
         )
-        return True
+        return diag
 
     async def ensure_user_session_bound(
         self, *, user_id: UUID, role: str | None = None
-    ) -> None:
+    ) -> dict[str, Any]:
         """Heal owned session after redeploy — never steal another user's terminal.
 
         After a Railway redeploy the Windows terminal can still be logged in while
@@ -777,36 +808,53 @@ class WeltradeIntegrationService:
         Owner/admin may also adopt when DB ownership + ephemeral profile were
         lost but the gateway session is still attached (see
         ``_adopt_live_gateway_for_privileged_user``).
+
+        Returns a non-secret diagnostic dict.
         """
+        diag: dict[str, Any] = {
+            "attempted": True,
+            "adopted": False,
+            "reason": None,
+            "had_existing": False,
+        }
         if self.uow_factory is None:
-            return
+            diag["reason"] = "uow_factory_missing"
+            return diag
 
         live_ref = self._ensure_process_gateway_handle()
         if not live_ref:
-            return
+            diag["reason"] = "gateway_handle_unavailable"
+            return diag
         client = self.adapter.client
         if not getattr(client, "is_connected", False):
-            return
+            diag["reason"] = "client_not_connected"
+            return diag
 
         async with self.uow_factory() as uow:
             existing = await uow.connections.get_active_for_user(user_id)
         if existing is None:
-            adopted = await self._adopt_live_gateway_for_privileged_user(
+            adopt_diag = await self._adopt_live_gateway_for_privileged_user(
                 user_id=user_id, role=role
             )
-            if not adopted:
+            diag.update(adopt_diag)
+            if not adopt_diag.get("adopted"):
                 # Health/dashboard must not bind unbound traders to the shared terminal.
                 logger.info(
                     "weltrade_ensure_skipped",
-                    reason="no_owned_connection",
+                    reason=str(adopt_diag.get("reason") or "no_owned_connection"),
                     user_id=str(user_id),
                 )
-                return
+                return diag
             async with self.uow_factory() as uow:
                 existing = await uow.connections.get_active_for_user(user_id)
             if existing is None:
-                return
+                diag["reason"] = "adopt_persisted_but_unreadable"
+                diag["adopted"] = False
+                return diag
+            diag["reason"] = "ok"
+            return diag
 
+        diag["had_existing"] = True
         live_login = 0
         live_server = ""
         try:
@@ -817,6 +865,7 @@ class WeltradeIntegrationService:
             live_login = int(getattr(client, "_login", 0) or 0)
         owned_login = int(existing.login or 0)
         if live_login > 1 and owned_login > 1 and live_login != owned_login:
+            diag["reason"] = "login_mismatch"
             logger.warning(
                 "weltrade_ensure_skipped",
                 reason="login_mismatch",
@@ -824,7 +873,7 @@ class WeltradeIntegrationService:
                 owned_login=owned_login,
                 live_login=live_login,
             )
-            return
+            return diag
 
         if (
             existing.connected
@@ -832,15 +881,20 @@ class WeltradeIntegrationService:
             and self.adapter.is_live_session(live_ref)
             and (live_login <= 1 or live_login == owned_login)
         ):
-            return
+            diag["adopted"] = True
+            diag["reason"] = "already_bound"
+            return diag
 
-        await self.bind_user_session(
+        bound = await self.bind_user_session(
             user_id=user_id,
             login=owned_login if owned_login > 1 else None,
             server=live_server or str(existing.server or ""),
             path=str(existing.terminal_path or ""),
             session_ref=live_ref,
         )
+        diag["adopted"] = bool(bound)
+        diag["reason"] = "ok" if bound else "bind_user_session_failed"
+        return diag
 
     async def connect(
         self,
