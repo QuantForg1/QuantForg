@@ -841,7 +841,8 @@ export function connectionShortLabel(state: ConnectionDisplayState): string {
   if (state === "CONNECTED") return "CONNECTED";
   if (state === "CONNECTING") return "CONNECTING";
   if (state === "ACCOUNT_SESSION_MISMATCH") return "SESSION MISMATCH";
-  if (state === "BROKER_NOT_CONNECTED" || state === "DISCONNECTED") return "DISCONNECTED";
+  if (state === "BROKER_NOT_CONNECTED") return "BROKER NOT CONNECTED";
+  if (state === "DISCONNECTED") return "DISCONNECTED";
   return "UNAVAILABLE";
 }
 
@@ -989,7 +990,7 @@ export function signalFeedStateLabel(state: SignalFeedState): string {
   if (state === "STALE") return "STALE DATA";
   if (state === "PARTIAL") return "PARTIAL DATA";
   if (state === "LOADING") return "LOADING";
-  return "LIVE_BROKER";
+  return "LIVE";
 }
 
 export function unavailableSignalsTitle(reason: {
@@ -1027,14 +1028,15 @@ export function dataSourceLabel(input: {
   liveBroker: boolean;
   catalogueSource: unknown;
 }): string {
-  if (
-    input.liveBroker &&
-    String(input.catalogueSource || "").toUpperCase() === "LIVE_BROKER"
-  ) {
-    return "LIVE_BROKER";
+  const source = String(input.catalogueSource || "").trim().toUpperCase();
+  if (input.liveBroker && source === "LIVE_BROKER") {
+    return "Broker catalogue";
   }
-  const source = String(input.catalogueSource || "").trim();
-  return source || "UNAVAILABLE";
+  if (source === "UNAVAILABLE" || source === "CATALOGUE_UNAVAILABLE") {
+    return "CATALOGUE UNAVAILABLE";
+  }
+  if (!source) return "UNAVAILABLE";
+  return "UNAVAILABLE";
 }
 
 export type HealthTone = "Healthy" | "Attention" | "Unavailable" | "Blocked";
@@ -1131,7 +1133,7 @@ export function accountHealth(input: {
       };
     }
     if (input.liveCatalogue) {
-      return { id: "market", label: "Market data", state: "Healthy", detail: "LIVE_BROKER" };
+      return { id: "market", label: "Market data", state: "Healthy", detail: "Broker catalogue" };
     }
     if (input.connection.catalogueUnavailable) {
       return {

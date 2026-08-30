@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/auth-provider";
 import { usePathname, useRouter } from "next/navigation";
 import { MobileNav } from "@/components/layout/sidebar";
-import { useRealtime } from "@/hooks/realtime";
-import { RealtimeConnectionBadge } from "@/components/realtime/connection-badge";
 import { isPrimaryActive, primaryRail } from "@/components/layout/nav-config";
-import { useTradingSession } from "@/providers/trading-session-provider";
+import { ConnectionStatus } from "@/components/trading/connection-status";
 import { cn } from "@/lib/utils";
 
 function workspaceLabel(pathname: string): string {
@@ -27,8 +25,6 @@ export function Topbar({
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const realtime = useRealtime();
-  const session = useTradingSession();
   const desk = workspaceLabel(pathname);
   const initials =
     user?.display_name
@@ -48,39 +44,22 @@ export function Topbar({
       <div className="shrink-0 lg:hidden">
         <MobileNav />
       </div>
+      {!compact ? (
+        <div className="sm:hidden">
+          <ConnectionStatus compact />
+        </div>
+      ) : null}
 
       <div className="hidden min-w-0 shrink-0 items-center gap-2 sm:flex">
         <span className="truncate text-[13px] font-semibold tracking-tight text-[var(--fg)]">
           {desk}
         </span>
-        <span className="h-3 w-px bg-[var(--border)]" aria-hidden />
-        <span
-          className={cn(
-            "qf-caption truncate tabular",
-            session.connected
-              ? "text-[var(--success)]"
-              : session.gatewayOnline === true
-                ? "text-[var(--warning)]"
-                : "text-[var(--fg-subtle)]",
-          )}
-          title={
-            session.connected
-              ? "Broker session attached"
-              : session.gatewayOnline === true
-                ? "Gateway reachable — broker session not attached"
-                : session.gatewayOnline == null
-                  ? "Connectivity status unknown (API/auth)"
-                  : "No live broker session"
-          }
-        >
-          {session.connected
-            ? "MT5"
-            : session.gatewayOnline === true
-              ? "Gateway"
-              : session.gatewayOnline == null
-                ? "Unknown"
-                : "Broker off"}
-        </span>
+        {!compact ? (
+          <>
+            <span className="h-3 w-px bg-[var(--border)]" aria-hidden />
+            <ConnectionStatus compact />
+          </>
+        ) : null}
       </div>
 
       <button
@@ -100,10 +79,6 @@ export function Topbar({
       </button>
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
-        <RealtimeConnectionBadge
-          status={realtime}
-          className="hidden transition-opacity duration-[var(--duration-os)] md:inline-flex"
-        />
         <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
           <Link href="/notifications" aria-label="Inbox">
             <Bell className="h-4 w-4" />

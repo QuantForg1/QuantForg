@@ -1,10 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Download, FileText, NotebookPen, Search } from "lucide-react";
 import { DeskEmpty, DeskError, DeskSkeleton } from "@/components/desk/primitives";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLiveTrades } from "@/hooks/use-live-trades";
@@ -21,7 +19,7 @@ import { asList, asRecord, str } from "@/lib/desk";
  * Operator notes/tags are client-side; metrics from LIVE deals only.
  */
 export function TradingJournalWorkspace() {
-  const { trades, loading, error, refetch, connected } = useLiveTrades("month");
+  const { trades, loading, error, refetch } = useLiveTrades("month");
   const [q, setQ] = useState("");
   const [symbol, setSymbol] = useState("all");
   const [selected, setSelected] = useState<string | null>(null);
@@ -80,7 +78,7 @@ export function TradingJournalWorkspace() {
   if (error && !closed.length) {
     return (
       <DeskError
-        message="Unable to load LIVE trade history for the journal."
+        message="Unable to load closed trades for your account."
         onRetry={() => void refetch()}
       />
     );
@@ -120,7 +118,7 @@ export function TradingJournalWorkspace() {
   const exportPdf = () => {
     exportPrintablePdf({
       title: "Trading Journal",
-      subtitle: `${rows.length} LIVE closed trades · ${new Date().toISOString().slice(0, 10)}`,
+      subtitle: `${rows.length} closed trades · ${new Date().toISOString().slice(0, 10)}`,
       sections: [
         {
           heading: "Trades",
@@ -163,9 +161,6 @@ export function TradingJournalWorkspace() {
               </option>
             ))}
           </select>
-          <Badge tone={connected ? "success" : "warning"} className="h-5">
-            {connected ? "LIVE" : "Gateway"}
-          </Badge>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={exportCsv} disabled={!rows.length}>
@@ -176,9 +171,6 @@ export function TradingJournalWorkspace() {
             <FileText className="mr-1 h-3.5 w-3.5" />
             PDF
           </Button>
-          <Button asChild size="sm" variant="secondary">
-            <Link href="/ai-trade-replay">AI Replay</Link>
-          </Button>
         </div>
       </div>
 
@@ -186,7 +178,7 @@ export function TradingJournalWorkspace() {
         <DeskEmpty
           icon={NotebookPen}
           title="No closed trades yet"
-          description="Journal entries appear automatically from LIVE completed deals. Never fabricated."
+          description="Closed trades appear after they complete on your account. History is never fabricated."
         />
       ) : (
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -337,11 +329,6 @@ function DetailPanel(props: {
         <h3 className="font-mono text-[14px] font-semibold text-[var(--fg)]">
           {props.symbol}
         </h3>
-        <Button asChild size="sm" variant="outline">
-          <Link href={`/ai-trade-replay?trade=${encodeURIComponent(props.tradeId)}`}>
-            Replay
-          </Link>
-        </Button>
       </header>
       <div className="space-y-3 p-3 text-[12px]">
         <dl className="grid grid-cols-2 gap-2">
@@ -398,7 +385,7 @@ function DetailPanel(props: {
         </div>
         <div className="space-y-2">
           <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
-            Operator notes
+            Notes
             <textarea
               value={props.noteDraft}
               onChange={(e) => props.onNoteChange(e.target.value)}

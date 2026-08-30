@@ -1437,7 +1437,7 @@ export const mobileTabNav: NavItem[] = [
   },
   {
     href: "/terminal",
-    label: "Trade",
+    label: "Terminal",
     icon: LayoutTemplate,
     hint: "Terminal",
   },

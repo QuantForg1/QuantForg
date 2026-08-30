@@ -16,6 +16,7 @@ import {
   priceDisplay,
   RESEARCH_NOT_AUTHORIZATION,
   RESEARCH_OPPORTUNITY,
+  RESEARCH_SIGNAL,
   resolveConnectionPresentation,
   robotDisplayState,
   scoreDisplay,
@@ -30,6 +31,7 @@ import {
   signalAvailability,
   signalBoardDirection,
   signalFeedState,
+  signalFeedStateLabel,
   signalFreshness,
   signalSummary,
   signalWhyFactors,
@@ -40,6 +42,7 @@ import {
   accountHealthSummary,
   closedTradeStats,
   connectionShortLabel,
+  dataSourceLabel,
   EXPLANATION_UNAVAILABLE,
   exposureUnavailableReason,
   INSUFFICIENT_SAMPLE,
@@ -456,9 +459,21 @@ assert.equal(
   assert.match(lastUpdatedCopy(new Date(Date.now() - 12_000).toISOString()), /Last updated 1[0-4] seconds ago/);
   assert.equal(positionExposureLabel("buy"), "LONG");
   assert.equal(positionExposureLabel("short"), "SHORT");
-  assert.equal(connectionShortLabel("BROKER_NOT_CONNECTED"), "DISCONNECTED");
+  assert.equal(connectionShortLabel("BROKER_NOT_CONNECTED"), "BROKER NOT CONNECTED");
   assert.equal(connectionShortLabel("ACCOUNT_SESSION_MISMATCH"), "SESSION MISMATCH");
   assert.equal(connectionShortLabel("CONNECTED"), "CONNECTED");
+  assert.equal(connectionShortLabel("DISCONNECTED"), "DISCONNECTED");
+  assert.equal(connectionShortLabel("DATA_UNAVAILABLE"), "UNAVAILABLE");
+  assert.equal(signalFeedStateLabel("LIVE"), "LIVE");
+  assert.equal(
+    dataSourceLabel({ liveBroker: true, catalogueSource: "LIVE_BROKER" }),
+    "Broker catalogue",
+  );
+  assert.notEqual(
+    dataSourceLabel({ liveBroker: true, catalogueSource: "LIVE_BROKER" }),
+    "LIVE_BROKER",
+  );
+  assert.equal(RESEARCH_SIGNAL, "RESEARCH SIGNAL");
   assert.equal(signalWhyFactors({}).length, 0);
   assert.equal(EXPLANATION_UNAVAILABLE, "EXPLANATION UNAVAILABLE");
 }

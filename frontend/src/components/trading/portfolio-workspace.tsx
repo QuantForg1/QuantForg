@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
-import { ConnectionStatus } from "@/components/trading/connection-status";
 import { portfolioApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
@@ -256,8 +255,6 @@ export function PortfolioWorkspace() {
           </div>
         }
       />
-
-      <ConnectionStatus session={session} />
 
       {noBroker ? (
         <DeskEmpty

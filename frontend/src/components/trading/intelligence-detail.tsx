@@ -22,6 +22,7 @@ import {
   signalTimestampLabel,
   signalWhyFactors,
   SIGNALS_NOT_AUTHORIZATION,
+  RESEARCH_SIGNAL,
 } from "@/lib/trading/trader-ux";
 
 export function directionTone(
@@ -66,6 +67,7 @@ export function IntelligenceDetail({
     <div className="space-y-4">
       <DialogTitle>{symbol}</DialogTitle>
       <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+        {kind === "signal" ? `${RESEARCH_SIGNAL} · ` : ""}
         {SIGNALS_NOT_AUTHORIZATION}
       </p>
       <div className="flex flex-wrap gap-1.5">

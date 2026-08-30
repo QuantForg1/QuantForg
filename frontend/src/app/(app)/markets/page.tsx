@@ -8,7 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
-import { ConnectionStatus } from "@/components/trading/connection-status";
 import { MarketCatalogueRows, ResearchAdvisoryNote } from "@/components/trading/market-catalogue-rows";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asList, asRecord } from "@/lib/desk";
@@ -87,7 +86,6 @@ export default function MarketsPage() {
           </div>
         }
       />
-      <ConnectionStatus session={session} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ResearchAdvisoryNote />
         <div className="flex flex-wrap items-center gap-2">

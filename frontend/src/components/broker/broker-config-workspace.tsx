@@ -10,7 +10,6 @@ import {
   Unplug,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,15 +25,6 @@ import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { cn } from "@/lib/utils";
 
 type AccountType = "demo" | "live";
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border border-[var(--border)] bg-[var(--bg)]/30 px-3 py-2.5">
-      <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">{label}</p>
-      <p className="mt-1 truncate font-mono text-sm tabular text-[var(--fg)]">{value}</p>
-    </div>
-  );
-}
 
 function Section({
   title,
@@ -304,23 +294,8 @@ export function BrokerConfigWorkspace() {
     });
   };
 
-  const heartbeat = (session.heartbeatAt || str(mt5.last_heartbeat_at, "—"))
-    .replace("T", " ")
-    .slice(0, 19);
-
   const tradingSnap = asRecord(tradingSessionQ.data);
   const uxState = str(tradingSnap.ux_state, connected ? "CONNECTED" : "NO_BROKER");
-  const maskedAccount = str(tradingSnap.account, "—");
-  const maskedServer = str(tradingSnap.server, str(mt5.server || session.server, "—"));
-  const lastVerified = str(tradingSnap.last_verified, heartbeat);
-  const healthLabel =
-    uxState === "SESSION_MISMATCH"
-      ? "ACCOUNT_SESSION_MISMATCH"
-      : connected
-        ? "CONNECTED"
-        : connectMut.isPending || saveMut.isPending
-          ? "CONNECTING"
-          : "BROKER NOT CONNECTED";
   const showConnectForm = !connected || uxState === "SESSION_MISMATCH";
 
   const showPasswordField =
@@ -339,28 +314,17 @@ export function BrokerConfigWorkspace() {
             ? "Your owned connection. Password is never shown after verification."
             : "Login, server, password, then Verify. Password is sent securely and never kept in the browser."
         }
-        actions={
-          <Badge
-            tone={
-              connected && uxState !== "SESSION_MISMATCH"
-                ? "success"
-                : connectMut.isPending
-                  ? "warning"
-                  : "neutral"
-            }
-          >
-            {healthLabel}
-          </Badge>
-        }
       />
 
       <ConnectionStatus
         session={tradingSnap}
-        connecting={Boolean(progress) && !connected}
+        connecting={
+          Boolean(progress) && !connected || connectMut.isPending || saveMut.isPending
+        }
       />
 
       <Section
-        title="Your account"
+        title="Your connection"
         aside={
           <Button
             size="sm"
@@ -375,22 +339,12 @@ export function BrokerConfigWorkspace() {
           </Button>
         }
       >
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Field label="Connection status" value={healthLabel} />
-          <Field label="Masked login" value={maskedAccount} />
-          <Field label="Server" value={maskedServer} />
-          <Field label="Last verified" value={lastVerified} />
-          <Field
-            label="Ownership"
-            value={str(tradingSnap.ownership, connected ? "owned" : "none")}
-          />
-        </div>
         {uxState === "SESSION_MISMATCH" ? (
-          <p className="mt-3 text-sm text-[var(--warning)]">
-            ACCOUNT_SESSION_MISMATCH. Reconnect your own account. Concurrent independent live logins are not supported.
+          <p className="mb-3 text-sm text-[var(--warning)]">
+            SESSION MISMATCH. Reconnect your own account. Concurrent independent live logins are not supported.
           </p>
         ) : null}
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button disabled={busy} onClick={onConnect}>
             {connectMut.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

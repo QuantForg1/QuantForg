@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
-import { ConnectionStatus } from "@/components/trading/connection-status";
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
@@ -27,7 +26,8 @@ import {
   mergeResearchSignalFields,
   presentAssetClasses,
   presentField,
-  RESEARCH_OPPORTUNITY,
+  RESEARCH_SIGNAL,
+  SIGNALS_NOT_AUTHORIZATION,
   resolveConnectionPresentation,
   rowRegime,
   rowSession,
@@ -40,7 +40,6 @@ import {
   signalStrength,
   signalSummary,
   signalTimestampLabel,
-  SIGNALS_NOT_AUTHORIZATION,
   sortSignalRows,
   topResearchOpportunities,
   TRADER_POLL_MS,
@@ -168,22 +167,16 @@ export function SignalsWorkspace() {
         }
       />
 
-      <p className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-center text-[11px] font-medium uppercase tracking-wide text-[var(--fg-subtle)]">
-        {SIGNALS_NOT_AUTHORIZATION}
-      </p>
-
-      <ConnectionStatus session={session} />
-
       <section aria-labelledby="signals-overview">
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 id="signals-overview" className="text-sm font-medium text-[var(--fg)]">
-              Signal board
+              Overview
             </h2>
             <p className="text-xs text-[var(--fg-subtle)]">
-              Catalogue {source}
+              {source}
               {updated ? ` · ${updated}` : ""}
-              {` · Freshness ${feedLabel}`}
+              {` · ${feedLabel}`}
             </p>
           </div>
           <Badge tone={feedTone}>{feedLabel}</Badge>
@@ -206,7 +199,7 @@ export function SignalsWorkspace() {
                 Top opportunities
               </h2>
               <p className="text-xs text-[var(--fg-subtle)]">
-                {RESEARCH_OPPORTUNITY} · ranked by research score · not a trade authorization
+                {RESEARCH_SIGNAL} · {SIGNALS_NOT_AUTHORIZATION}
               </p>
             </div>
           </div>
@@ -256,6 +249,7 @@ export function SignalsWorkspace() {
 
       <Card>
         <CardContent className="min-w-0 space-y-4 pt-4">
+          <h2 className="text-sm font-medium text-[var(--fg)]">All signals</h2>
           {sessionQ.isLoading ? (
             <DeskSkeleton rows={6} />
           ) : noBroker || mismatch || availability === "UNAVAILABLE" ? (

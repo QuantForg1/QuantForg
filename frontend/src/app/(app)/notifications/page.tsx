@@ -11,12 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DeskQueryState } from "@/components/desk/query-state";
 import { PageMotion } from "@/components/desk/motion";
-import { RealtimeConnectionBadge, RealtimeMeta } from "@/components/realtime/connection-badge";
-import { useNotificationsStream } from "@/hooks/realtime";
 import { platformApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
 import { formatRelativeTime } from "@/lib/utils";
+import { useNotificationsStream } from "@/hooks/realtime";
 
 const SECTIONS = [
   { id: "all", label: "All" },
@@ -36,7 +35,7 @@ function inboxBucket(category: string): string {
 
 export default function NotificationsPage() {
   const qc = useQueryClient();
-  const realtime = useNotificationsStream();
+  useNotificationsStream();
   const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("all");
   const [q, setQ] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -102,7 +101,6 @@ export default function NotificationsPage() {
         description="Alerts, broker events, system notices, and messages for your account."
         actions={
           <>
-            <RealtimeConnectionBadge status={realtime} />
             {unreadCount > 0 ? (
               <Badge tone="accent" aria-label={`${unreadCount} unread`}>
                 {unreadCount} unread
@@ -128,8 +126,6 @@ export default function NotificationsPage() {
           </>
         }
       />
-
-      <RealtimeMeta status={realtime} className="mb-3" />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Notification categories">

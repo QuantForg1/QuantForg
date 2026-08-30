@@ -294,7 +294,11 @@ export default function DashboardPage() {
                 <Cable className="h-4 w-4" /> Connect Broker
               </Link>
             </Button>
-          ) : null
+          ) : (
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/terminal">Terminal</Link>
+            </Button>
+          )
         }
       />
 

@@ -23,17 +23,12 @@ export const RealtimeConnectionBadge = memo(function RealtimeConnectionBadge({
 
   const label = !status.online
     ? "Offline"
-    : status.transport === "websocket"
-      ? "Live WS"
-      : "Live";
+    : "Live";
 
   return (
     <Badge tone={tone} className={cn("gap-1.5", className)}>
       <span className="qf-status-dot h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
       {label}
-      {status.latencyMs != null ? (
-        <span className="tabular opacity-80">{status.latencyMs}ms</span>
-      ) : null}
     </Badge>
   );
 });

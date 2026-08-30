@@ -63,7 +63,7 @@ export function ConnectionStatus({
   return (
     <section
       className={cn(
-        "grid min-w-0 gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6",
+        "grid min-w-0 gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 sm:grid-cols-2 lg:grid-cols-5",
         className,
       )}
       role="status"
@@ -74,13 +74,10 @@ export function ConnectionStatus({
         <Badge tone={view.tone}>{connectionShortLabel(view.state)}</Badge>
       </StatusCell>
       <StatusCell label="Health">{view.health}</StatusCell>
-      <StatusCell label="Account">{view.maskedLogin}</StatusCell>
+      <StatusCell label="Login">{view.maskedLogin}</StatusCell>
       <StatusCell label="Server">{view.server}</StatusCell>
       <StatusCell label="Last verified">
         {lastVerifiedLabel(view.lastVerified)}
-      </StatusCell>
-      <StatusCell label="Ownership">
-        {view.ownership === "owned" ? "Owned" : "None"}
       </StatusCell>
     </section>
   );
