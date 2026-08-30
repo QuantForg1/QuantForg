@@ -36,6 +36,7 @@ import {
   signalFreshnessLabel,
   signalSummary,
   signalWhyFactors,
+  signalWhyPreview,
   sortSignalRows,
   strongestSetupLabel,
   unavailableSignalsTitle,
@@ -394,11 +395,35 @@ assert.equal(
     researchCoverageLabel({ instruments_discovered: 100, instruments_analyzed: 25 }),
     "25%",
   );
+  assert.equal(
+    researchCoverageLabel({
+      instruments_eligible: 40,
+      instruments_analyzed: 40,
+      instruments_discovered: 83,
+    }),
+    "100%",
+  );
   assert.equal(researchCoverageLabel({}), "—");
   assert.equal(
     researchProgressCopy({ instruments_discovered: 1000, instruments_analyzed: 250 }),
     "Analyzing 250 / 1,000 instruments",
   );
+  assert.equal(
+    researchProgressCopy({
+      instruments_eligible: 40,
+      instruments_analyzed: 40,
+      instruments_discovered: 83,
+    }),
+    "Analyzing 40 / 40 eligible",
+  );
+  assert.equal(
+    signalWhyPreview({
+      reason: "Bullish structure with positive momentum",
+      evidence: { WHY_THIS_DIRECTION: "BUY bias" },
+    }),
+    "Bullish structure with positive momentum",
+  );
+  assert.equal(signalWhyPreview({}), "EXPLANATION UNAVAILABLE");
 }
 
 {

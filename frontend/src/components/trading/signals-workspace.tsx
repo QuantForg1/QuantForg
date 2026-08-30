@@ -48,6 +48,7 @@ import {
   signalStrength,
   signalSummary,
   signalTimestampLabel,
+  signalWhyPreview,
   sortSignalRows,
   topResearchOpportunities,
   TRADER_POLL_MS,
@@ -169,6 +170,10 @@ export function SignalsWorkspace() {
     researchHealth.instruments_discovered != null
       ? String(researchHealth.instruments_discovered)
       : marketsAnalyzed;
+  const eligibleLabel =
+    researchHealth.instruments_eligible != null
+      ? String(researchHealth.instruments_eligible)
+      : "—";
   const analyzedLabel =
     researchHealth.instruments_analyzed != null
       ? String(researchHealth.instruments_analyzed)
@@ -186,6 +191,11 @@ export function SignalsWorkspace() {
       ? String(researchHealth.instruments_unavailable)
       : "—";
   const coverageState = String(researchHealth.coverage_state || "").toUpperCase();
+  const assetClassCounts =
+    researchHealth.asset_class_counts &&
+    typeof researchHealth.asset_class_counts === "object"
+      ? (researchHealth.asset_class_counts as Record<string, unknown>)
+      : {};
 
   async function refreshAnalysis() {
     setRefreshing(true);
@@ -315,8 +325,9 @@ export function SignalsWorkspace() {
             </FilterChip>
           ))}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-10">
           <DeskMetric label="Discovered" value={discoveredLabel} />
+          <DeskMetric label="Eligible" value={eligibleLabel} />
           <DeskMetric label="Analyzed" value={analyzedLabel} />
           <DeskMetric label="Coverage" value={coverageLabel} />
           <DeskMetric label="Skipped" value={skippedLabel} />
@@ -327,6 +338,22 @@ export function SignalsWorkspace() {
           <DeskMetric label="SELL" value={summary.sell} />
           <DeskMetric label="NEUTRAL" value={summary.neutral} />
         </div>
+        {Object.keys(assetClassCounts).length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Asset class distribution">
+            {ASSET_CLASS_ORDER.map((cls) => {
+              const raw = assetClassCounts[cls];
+              if (raw == null || raw === "UNAVAILABLE") return null;
+              return (
+                <span
+                  key={cls}
+                  className="rounded-md border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--fg-muted)]"
+                >
+                  {cls} · {String(raw)}
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
       </section>
 
       <section aria-labelledby="signals-overview">
@@ -409,7 +436,14 @@ export function SignalsWorkspace() {
                           {presentLevel(row.take_profit ?? row.TP_candidate, "TP")}
                         </dd>
                       </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">Regime</dt>
+                        <dd>{presentField(rowRegime(row))}</dd>
+                      </div>
                     </dl>
+                    <p className="mt-2 line-clamp-2 text-[11px] text-[var(--fg-muted)]">
+                      {signalWhyPreview(row)}
+                    </p>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <Badge tone={freshnessTone(freshness)}>
                         {signalFreshnessLabel(freshness)}
@@ -421,7 +455,7 @@ export function SignalsWorkspace() {
                       </span>
                     </div>
                     <p className="mt-2 text-[11px] font-medium text-[var(--accent)]">
-                      Why this signal? →
+                      View analysis →
                     </p>
                   </button>
                 </li>
@@ -784,8 +818,11 @@ export function SignalsWorkspace() {
                                 </dd>
                               </div>
                             </dl>
-                            <p className="mt-3 text-[11px] font-medium text-[var(--accent)]">
-                              Why this signal? →
+                            <p className="mt-3 line-clamp-2 text-[11px] text-[var(--fg-muted)]">
+                              {signalWhyPreview(row)}
+                            </p>
+                            <p className="mt-2 text-[11px] font-medium text-[var(--accent)]">
+                              View analysis →
                             </p>
                           </button>
                         </li>

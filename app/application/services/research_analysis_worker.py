@@ -38,11 +38,14 @@ _HEALTH: dict[str, Any] = {
     "scan_duration_ms": None,
     "instruments_discovered": None,
     "instruments_analyzed": None,
+    "instruments_eligible": None,
     "instruments_unavailable": None,
     "instruments_failed": None,
     "instruments_skipped": None,
     "coverage_pct": None,
+    "coverage_pct_catalogue": None,
     "coverage_state": None,
+    "coverage_basis": None,
     "signals_generated": None,
     "catalogue_source": None,
     "cycles": 0,
@@ -79,11 +82,14 @@ def reset_research_analysis_health_for_tests() -> None:
                 "scan_duration_ms": None,
                 "instruments_discovered": None,
                 "instruments_analyzed": None,
+                "instruments_eligible": None,
                 "instruments_unavailable": None,
                 "instruments_failed": None,
                 "instruments_skipped": None,
                 "coverage_pct": None,
+                "coverage_pct_catalogue": None,
                 "coverage_state": None,
+                "coverage_basis": None,
                 "signals_generated": None,
                 "catalogue_source": None,
                 "cycles": 0,
@@ -159,10 +165,11 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
         else {}
     )
     discovered = obs.get("symbols_discovered", obs.get("symbol_count"))
+    eligible = obs.get("symbols_eligible")
     analyzed = obs.get("symbols_scored")
     unavailable = 0
     if isinstance(by_state, dict):
-        for key in ("NO_DATA", "UNAVAILABLE", "INSUFFICIENT_DATA"):
+        for key in ("NO_DATA", "UNAVAILABLE", "INSUFFICIENT_DATA", "MARKET_CLOSED", "STALE"):
             n = _as_int(by_state.get(key))
             if n is not None:
                 unavailable += n
@@ -170,12 +177,19 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
     failed = obs.get("symbols_failed", obs.get("failed_n"))
     attempted = obs.get("symbols_research_attempted")
     returned = obs.get("symbols_research_returned")
-    skipped = None
-    att = _as_int(attempted)
-    ret = _as_int(returned)
-    if att is not None and ret is not None and att >= ret:
-        skipped = att - ret
-    coverage = _coverage_pct(discovered, analyzed)
+    skipped = obs.get("symbols_skipped")
+    if skipped is None:
+        att = _as_int(attempted)
+        ret = _as_int(returned)
+        if att is not None and ret is not None and att >= ret:
+            skipped = att - ret
+    # Prefer eligible-basis coverage; fall back to catalogue ratio.
+    coverage = _coverage_pct(eligible, analyzed)
+    if coverage is None:
+        coverage = _coverage_pct(discovered, analyzed)
+    coverage_catalogue = obs.get("coverage_pct_catalogue")
+    if not isinstance(coverage_catalogue, (int, float)):
+        coverage_catalogue = _coverage_pct(discovered, analyzed)
     status = "RUNNING"
     if source in {"UNAVAILABLE", "ERROR", "MOCK"}:
         status = "DEGRADED"
@@ -196,14 +210,18 @@ def run_research_analysis_once(*, mt5_adapter: Any | None = None) -> dict[str, A
         last_scan_completed=datetime.now(UTC).isoformat(),
         scan_duration_ms=elapsed_ms,
         instruments_discovered=discovered,
+        instruments_eligible=eligible,
         instruments_analyzed=analyzed,
         instruments_unavailable=unavailable_out,
         instruments_failed=failed,
         instruments_skipped=skipped,
         coverage_pct=coverage,
+        coverage_pct_catalogue=coverage_catalogue,
+        coverage_basis=obs.get("coverage_basis") or "eligible",
         instruments_research_attempted=attempted,
         instruments_research_returned=returned,
         research_batch=obs.get("research_batch"),
+        asset_class_counts=obs.get("asset_class_counts"),
         signals_generated=signal_n,
         catalogue_source=source,
         authorizes_trade=False,

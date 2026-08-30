@@ -58,7 +58,11 @@ from app.domain.market_universe.readiness import instrument_scorecard
 from app.domain.market_universe.registry import build_registry
 from app.domain.market_universe.report import build_market_universe_report
 from app.domain.market_universe.research_signals import build_research_signals
-from app.domain.market_universe.scheduler import research_scan_order
+from app.domain.market_universe.scheduler import (
+    DEFAULT_RESEARCH_BATCH,
+    MAX_RESEARCH_BATCH,
+    research_scan_order,
+)
 from app.domain.market_universe.shadow_virtual import record_from_candidates
 from app.domain.market_universe.shadow_wall import scan_package_isolation
 from core.logging import get_logger
@@ -318,6 +322,94 @@ def _row_has_numeric_opportunity(row: dict[str, Any]) -> bool:
     if isinstance(opp, bool):
         return False
     return isinstance(opp, (int, float))
+
+
+def _desk_key(row: dict[str, Any]) -> str:
+    return canonical_desk(
+        str(row.get("canonical_symbol") or row.get("broker_symbol") or row.get("symbol") or "")
+    )
+
+
+def _prior_numeric_research_scores() -> list[dict[str, Any]]:
+    """Carry forward numeric research scores from the last snapshot.
+
+    Research-only persistence. Never invents scores. Rows for desks that
+    are no longer in the catalogue are dropped by the merge step.
+    """
+    prior = get_last_market_universe_snapshot()
+    if not isinstance(prior, dict):
+        return []
+    board = prior.get("opportunity_board") if isinstance(prior.get("opportunity_board"), dict) else {}
+    candidates: list[Any] = []
+    for key in ("live_ranked", "rows", "ranked"):
+        block = board.get(key) if isinstance(board, dict) else None
+        if isinstance(block, list):
+            candidates.extend(block)
+    scored_block = prior.get("scored_rows")
+    if isinstance(scored_block, list):
+        candidates.extend(scored_block)
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in candidates:
+        if not isinstance(row, dict):
+            continue
+        if not _row_has_numeric_opportunity(row):
+            continue
+        desk = _desk_key(row)
+        if not desk or desk in seen:
+            continue
+        seen.add(desk)
+        out.append(dict(row))
+    return out
+
+
+def _merge_scored_seed(
+    live_rows: list[dict[str, Any]],
+    prior_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Prefer live numeric scores; fill gaps from prior research snapshot.
+
+    Live stubs without a numeric opportunity do not block prior scores.
+    """
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in live_rows:
+        if not isinstance(row, dict):
+            continue
+        if not _row_has_numeric_opportunity(row):
+            continue
+        desk = _desk_key(row)
+        if not desk or desk in seen:
+            continue
+        seen.add(desk)
+        merged.append(row)
+    for row in prior_rows:
+        if not isinstance(row, dict):
+            continue
+        desk = _desk_key(row)
+        if not desk or desk in seen:
+            continue
+        if not _row_has_numeric_opportunity(row):
+            continue
+        seen.add(desk)
+        merged.append(row)
+    return merged
+
+
+def _last_opportunity_map(scored: list[dict[str, Any]]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for row in scored:
+        if not isinstance(row, dict) or not _row_has_numeric_opportunity(row):
+            continue
+        desk = _desk_key(row)
+        if not desk:
+            continue
+        opp = row.get("opportunity_score")
+        try:
+            out[desk] = int(opp)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 _LAST_RESEARCH_BATCH_DIAG: dict[str, Any] = {
@@ -802,7 +894,10 @@ def build_snapshot(
         catalogue = dict(catalogue)
         catalogue["catalogue_source"] = CATALOGUE_UNAVAILABLE
         catalogue["invented"] = False
-    scored = _scored_rows_from_live_scan()
+    scored = _merge_scored_seed(
+        _scored_rows_from_live_scan(),
+        _prior_numeric_research_scores(),
+    )
     shadows = _shadow_candidates()
     matched = _matched_trades()
     news = _news_protection()
@@ -819,7 +914,25 @@ def build_snapshot(
     _attach_timeframes(
         instruments, mt5_adapter=mt5_adapter, catalogue_source=source
     )
-    schedule = research_scan_order(instruments)
+    # Score up to MAX_RESEARCH_BATCH eligible desks per cycle; prefer never-analyzed.
+    # Persistence + rotation fills remaining eligible desks on subsequent cycles.
+    schedule = research_scan_order(
+        instruments,
+        last_opportunity=_last_opportunity_map(scored),
+        max_batch=MAX_RESEARCH_BATCH,
+    )
+    skipped_desks = {
+        canonical_desk(str(item.get("symbol") or ""))
+        for item in (schedule.get("skipped") or [])
+        if isinstance(item, dict)
+    }
+    skipped_desks.discard("")
+    if skipped_desks:
+        scored = [
+            row
+            for row in scored
+            if _desk_key(row) not in skipped_desks
+        ]
     scored = _merge_research_batch_scores(
         scored,
         mt5_adapter=mt5_adapter,
@@ -950,20 +1063,45 @@ def build_snapshot(
         else None
     )
     universe_n = counts.get("universe")
+    eligible_n = (
+        schedule.get("eligible_n")
+        if source == CATALOGUE_LIVE_BROKER and isinstance(schedule.get("eligible_n"), int)
+        else None
+    )
+    skipped_n = (
+        schedule.get("skipped_n")
+        if source == CATALOGUE_LIVE_BROKER and isinstance(schedule.get("skipped_n"), int)
+        else None
+    )
     coverage_pct: float | str | None
+    coverage_pct_catalogue: float | str | None
     if source != CATALOGUE_LIVE_BROKER:
         coverage_pct = CATALOGUE_UNAVAILABLE
-    elif (
-        isinstance(universe_n, int)
-        and universe_n > 0
-        and isinstance(symbols_scored_n, int)
-    ):
-        coverage_pct = round(
-            min(100.0, max(0.0, (symbols_scored_n / float(universe_n)) * 100.0)),
-            1,
-        )
+        coverage_pct_catalogue = CATALOGUE_UNAVAILABLE
     else:
-        coverage_pct = None
+        # Primary coverage = analyzed / eligible (honest research readiness).
+        if (
+            isinstance(eligible_n, int)
+            and eligible_n > 0
+            and isinstance(symbols_scored_n, int)
+        ):
+            coverage_pct = round(
+                min(100.0, max(0.0, (symbols_scored_n / float(eligible_n)) * 100.0)),
+                1,
+            )
+        else:
+            coverage_pct = None
+        if (
+            isinstance(universe_n, int)
+            and universe_n > 0
+            and isinstance(symbols_scored_n, int)
+        ):
+            coverage_pct_catalogue = round(
+                min(100.0, max(0.0, (symbols_scored_n / float(universe_n)) * 100.0)),
+                1,
+            )
+        else:
+            coverage_pct_catalogue = None
     as_of = datetime.now(UTC).isoformat()
     payload = {
         "advisory_only": ADVISORY_ONLY,
@@ -1087,6 +1225,11 @@ def build_snapshot(
         "xauusd_reference": registry.get("xauusd_reference"),
         "catalogue_empty": not rows,
         "scored_from_live_scan_n": len(scored),
+        "scored_rows": [
+            r
+            for r in scored
+            if isinstance(r, dict) and _row_has_numeric_opportunity(r)
+        ],
         "catalogue_refresh_timestamp": as_of,
         "observability": {
             "catalogue_refresh_timestamp": as_of,
@@ -1102,12 +1245,28 @@ def build_snapshot(
             "data_quality_counts": by_state,
             "symbol_count": counts.get("universe"),
             "symbols_discovered": counts.get("universe"),
+            "symbols_eligible": (
+                eligible_n
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
+            "symbols_skipped": (
+                skipped_n
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
             "symbols_scored": (
                 symbols_scored_n
                 if source == CATALOGUE_LIVE_BROKER
                 else CATALOGUE_UNAVAILABLE
             ),
             "coverage_pct": coverage_pct,
+            "coverage_pct_catalogue": coverage_pct_catalogue,
+            "coverage_basis": (
+                "eligible"
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
             "research_batch": (
                 get_last_research_batch_diag()
                 if source == CATALOGUE_LIVE_BROKER
@@ -1187,6 +1346,9 @@ def build_snapshot(
             "token_exposed": False,
             "catalogue_ttl_s": CATALOGUE_TTL_S,
             "discovery_uncapped": True,
+            "research_score_persistence": True,
+            "max_research_batch": MAX_RESEARCH_BATCH,
+            "default_research_batch": DEFAULT_RESEARCH_BATCH,
         },
         "note": (
             "LIVE autonomous execution remains gold-only XAUUSD_i. "

@@ -119,19 +119,25 @@ def research_scan_order(
             key=lambda r: (
                 1 if r.get("data_state") == "LIVE" else 0,
                 1 if r.get("history_sufficient") is True else 0,
+                # Prefer never-analyzed desks so coverage fills across cycles.
+                1 if r.get("last_opportunity") is None else 0,
                 1 if r.get("data_age") not in (None, "") else 0,
                 -(
                     float(r.get("data_age") or 0)
                     if r.get("data_age") not in (None, "")
                     else 0
                 ),
-                r.get("last_opportunity") is not None,
-                r.get("last_opportunity")
-                if r.get("last_opportunity") is not None
-                else -1,
+                # Among already-scored, rotate lower scores first for refresh.
+                -(
+                    float(r.get("last_opportunity"))
+                    if r.get("last_opportunity") is not None
+                    else 0
+                ),
             ),
             reverse=True,
         )
+
+    eligible_n = len(gold) + sum(len(bucket) for bucket in buckets.values())
 
     ordered: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -167,19 +173,23 @@ def research_scan_order(
         "priority_never_bypasses_safety": True,
         "batch_size": len(ordered),
         "max_batch": cap,
+        "eligible_n": eligible_n,
+        "skipped_n": len(skipped),
         "queue": ordered,
         "skipped": skipped,
         "class_rotation": list(rotation),
         "note": (
             "Research queue only. Live ITE scan universe remains gold-only "
             "in production. Missing data is deferred, never scored as 0. "
-            "Weekend rotation prefers CRYPTO when available."
+            "Weekend rotation prefers CRYPTO when available. "
+            "Unscored eligible desks are preferred for coverage fill."
         ),
         "priority_order": (
             "LIVE_DATA",
             "sufficient_history",
+            "never_analyzed",
             "lower_data_age",
-            "known_opportunity",
+            "lower_known_opportunity",
         ),
         "retry_backoff_s": RESEARCH_RETRY_BACKOFF_S,
         "uncontrolled_polling": False,

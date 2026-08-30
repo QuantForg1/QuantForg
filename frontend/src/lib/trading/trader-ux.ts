@@ -1336,6 +1336,23 @@ export function signalWhyFactors(row: Record<string, unknown>): SignalWhyFactor[
   return out;
 }
 
+/** One-line Why preview from real evidence — never invents prose. */
+export function signalWhyPreview(row: Record<string, unknown>): string {
+  const factors = signalWhyFactors(row);
+  if (factors.length === 0) return EXPLANATION_UNAVAILABLE;
+  const preferred = ["Why this signal exists", "Direction", "Timing", "Market regime", "Momentum"];
+  for (const label of preferred) {
+    const hit = factors.find((f) => f.label === label);
+    if (hit && hit.value.trim()) {
+      return hit.value.length > 140 ? `${hit.value.slice(0, 137)}…` : hit.value;
+    }
+  }
+  const first = factors[0];
+  if (!first) return EXPLANATION_UNAVAILABLE;
+  const text = `${first.label}: ${first.value}`;
+  return text.length > 140 ? `${text.slice(0, 137)}…` : text;
+}
+
 /** Honest coverage from research worker health — never invents 100%. */
 export function researchCoverageLabel(health: Record<string, unknown> | undefined): string {
   if (!health) return "—";
@@ -1346,11 +1363,13 @@ export function researchCoverageLabel(health: Record<string, unknown> | undefine
   if (typeof pct === "string" && pct.trim() && pct !== "UNAVAILABLE") {
     return pct.endsWith("%") ? pct : `${pct}%`;
   }
-  const discovered = optionalConfirmedCount(health.instruments_discovered);
+  const eligible =
+    optionalConfirmedCount(health.instruments_eligible) ??
+    optionalConfirmedCount(health.instruments_discovered);
   const analyzed = optionalConfirmedCount(health.instruments_analyzed);
-  if (discovered != null && discovered > 0 && analyzed != null) {
-    const pct = Math.min(100, Math.max(0, (analyzed / discovered) * 100));
-    return `${Math.round(pct * 10) / 10}%`;
+  if (eligible != null && eligible > 0 && analyzed != null) {
+    const pctNum = Math.min(100, Math.max(0, (analyzed / eligible) * 100));
+    return `${Math.round(pctNum * 10) / 10}%`;
   }
   return "—";
 }
@@ -1358,9 +1377,16 @@ export function researchCoverageLabel(health: Record<string, unknown> | undefine
 export function researchProgressCopy(health: Record<string, unknown> | undefined): string | null {
   if (!health) return null;
   const discovered = optionalConfirmedCount(health.instruments_discovered);
+  const eligible = optionalConfirmedCount(health.instruments_eligible);
   const analyzed = optionalConfirmedCount(health.instruments_analyzed);
-  if (discovered == null || analyzed == null) return null;
-  return `Analyzing ${analyzed.toLocaleString()} / ${discovered.toLocaleString()} instruments`;
+  if (analyzed == null) return null;
+  if (eligible != null) {
+    return `Analyzing ${analyzed.toLocaleString()} / ${eligible.toLocaleString()} eligible`;
+  }
+  if (discovered != null) {
+    return `Analyzing ${analyzed.toLocaleString()} / ${discovered.toLocaleString()} instruments`;
+  }
+  return null;
 }
 
 export type SignalFreshness =
