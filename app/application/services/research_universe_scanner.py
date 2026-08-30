@@ -206,6 +206,8 @@ async def _score_one_research_symbol(
             mt5_adapter,
             symbol=code,
             position_engine=None,
+            reuse_cycle=False,
+            research_mode=True,
         )
     except Exception as exc:
         return {

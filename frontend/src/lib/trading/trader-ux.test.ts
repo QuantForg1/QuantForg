@@ -33,6 +33,7 @@ import {
   signalFeedState,
   signalFeedStateLabel,
   signalFreshness,
+  signalFreshnessLabel,
   signalSummary,
   signalWhyFactors,
   sortSignalRows,
@@ -478,6 +479,8 @@ assert.equal(
 
 {
   assert.equal(signalFreshness({ data_quality: { state: "LIVE" } }), "LIVE");
+  assert.equal(signalFreshnessLabel("LIVE"), "LIVE DATA");
+  assert.equal(signalFreshnessLabel("UNAVAILABLE"), "DATA UNAVAILABLE");
   assert.equal(signalFreshness({ data_quality: { state: "STALE" } }), "STALE");
   assert.equal(signalFreshness({ data_state: "ERROR" }), "UNAVAILABLE");
   assert.equal(signalFreshness({}), "UNAVAILABLE");

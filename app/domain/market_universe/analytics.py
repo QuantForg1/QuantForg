@@ -14,7 +14,17 @@ from app.domain.market_universe.honesty import DISCLAIMER, _metrics, sample_stat
 from app.domain.market_universe.identity import canonical_desk
 from app.domain.market_universe.opportunity_tiers import opportunity_band_label
 
-ASSET_KEYS = ("OVERALL", "FOREX", "CRYPTO", "METALS", "INDICES", "ENERGY", "OTHER")
+ASSET_KEYS = (
+    "OVERALL",
+    "FOREX",
+    "CRYPTO",
+    "METALS",
+    "INDICES",
+    "ENERGY",
+    "STOCKS",
+    "COMMODITIES",
+    "OTHER",
+)
 
 
 def _matched_only(trades: list[dict[str, Any]]) -> list[dict[str, Any]]:

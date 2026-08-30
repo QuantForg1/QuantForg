@@ -18,6 +18,7 @@ import {
   rowRegime,
   rowSession,
   signalFreshness,
+  signalFreshnessLabel,
   signalStrength,
   signalTimestampLabel,
   signalWhyFactors,
@@ -75,7 +76,7 @@ export function IntelligenceDetail({
         <Badge tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}>
           {signal}
         </Badge>
-        <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
+        <Badge tone={freshnessTone(freshness)}>{signalFreshnessLabel(freshness)}</Badge>
         <Badge tone="neutral">{presentField(row.asset_class)}</Badge>
         {isHighConfidence(row) ? <Badge tone="accent">Qualified</Badge> : null}
       </div>

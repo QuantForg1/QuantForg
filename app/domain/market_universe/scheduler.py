@@ -15,10 +15,38 @@ from app.domain.market_universe.constants import (
 from app.domain.market_universe.identity import canonical_desk
 from app.domain.trading.gold_only import is_gold_symbol
 
-DEFAULT_RESEARCH_BATCH = 12
-MAX_RESEARCH_BATCH = 24
+DEFAULT_RESEARCH_BATCH = 16
+MAX_RESEARCH_BATCH = 32
 
-_CLASS_ROTATION = ("FOREX", "METALS", "CRYPTO", "INDICES", "ENERGY", "OTHER")
+_CLASS_ROTATION = (
+    "FOREX",
+    "METALS",
+    "CRYPTO",
+    "INDICES",
+    "ENERGY",
+    "STOCKS",
+    "COMMODITIES",
+    "OTHER",
+)
+_WEEKEND_CLASS_ROTATION = (
+    "CRYPTO",
+    "METALS",
+    "FOREX",
+    "INDICES",
+    "ENERGY",
+    "STOCKS",
+    "COMMODITIES",
+    "OTHER",
+)
+
+
+def _class_rotation() -> tuple[str, ...]:
+    """Prefer 24/7 crypto first on weekends; otherwise standard rotation."""
+    from datetime import UTC, datetime
+
+    if datetime.now(UTC).weekday() >= 5:
+        return _WEEKEND_CLASS_ROTATION
+    return _CLASS_ROTATION
 
 
 def research_scan_order(
@@ -36,7 +64,8 @@ def research_scan_order(
     """
     cap = min(max(1, int(max_batch or DEFAULT_RESEARCH_BATCH)), MAX_RESEARCH_BATCH)
     opp = last_opportunity or {}
-    buckets: dict[str, list[dict[str, Any]]] = {k: [] for k in _CLASS_ROTATION}
+    rotation = _class_rotation()
+    buckets: dict[str, list[dict[str, Any]]] = {k: [] for k in rotation}
     skipped: list[dict[str, str]] = []
     gold: list[dict[str, Any]] = []
 
@@ -54,7 +83,15 @@ def research_scan_order(
         cls = str(item.get("asset_class") or "OTHER").upper()
         if cls not in buckets:
             cls = "OTHER"
-        if exclude_stale and state in {"STALE", "NO_DATA", "DISABLED", "UNSUPPORTED"}:
+        # Closed traditional markets stay in registry but are not scored.
+        # Open CRYPTO / OTHER (often LIVE on weekends) remain eligible.
+        if exclude_stale and state in {
+            "STALE",
+            "NO_DATA",
+            "DISABLED",
+            "UNSUPPORTED",
+            "MARKET_CLOSED",
+        }:
             skipped.append({"symbol": desk, "reason": state})
             continue
         payload = {
@@ -108,11 +145,11 @@ def research_scan_order(
 
     for row in gold:
         _take(row)
-    pointers = dict.fromkeys(_CLASS_ROTATION, 0)
+    pointers = dict.fromkeys(rotation, 0)
     progress = True
     while progress and len(ordered) < cap:
         progress = False
-        for key in _CLASS_ROTATION:
+        for key in rotation:
             i = pointers[key]
             bucket = buckets[key]
             if i >= len(bucket):
@@ -132,9 +169,11 @@ def research_scan_order(
         "max_batch": cap,
         "queue": ordered,
         "skipped": skipped,
+        "class_rotation": list(rotation),
         "note": (
             "Research queue only. Live ITE scan universe remains gold-only "
-            "in production. Missing data is deferred, never scored as 0."
+            "in production. Missing data is deferred, never scored as 0. "
+            "Weekend rotation prefers CRYPTO when available."
         ),
         "priority_order": (
             "LIVE_DATA",

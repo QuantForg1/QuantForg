@@ -308,10 +308,11 @@ export function marketDataState(row: Record<string, unknown>): string {
 
 export const ASSET_CLASS_ORDER = [
   "FOREX",
-  "CRYPTO",
   "METALS",
+  "CRYPTO",
   "INDICES",
   "ENERGY",
+  "STOCKS",
   "COMMODITIES",
   "OTHER",
 ] as const;
@@ -384,6 +385,7 @@ export function normalizeAssetClass(raw: unknown): string {
   if (["INDICES", "INDEX"].includes(v)) return "INDICES";
   if (["ENERGY", "ENERGIES"].includes(v)) return "ENERGY";
   if (["COMMODITY", "COMMODITIES"].includes(v)) return "COMMODITIES";
+  if (["STOCK", "STOCKS", "EQUITY", "EQUITIES", "SHARES"].includes(v)) return "STOCKS";
   if (v === "OTHER") return "OTHER";
   if (v === "UNKNOWN") return "UNKNOWN";
   return v;
@@ -628,6 +630,8 @@ export type NormalizedSignalCenter = {
   latencyMs: number | null;
   scannerStatus?: string;
   brokerRequiredForResearch?: boolean;
+  /** Research analysis worker health — never live trading. */
+  researchAnalysis?: Record<string, unknown>;
 };
 
 function optionalConfirmedCount(raw: unknown): number | null {
@@ -664,6 +668,7 @@ export function normalizeSignalCenterPayload(
       latencyMs: null,
       scannerStatus: undefined,
       brokerRequiredForResearch: false,
+      researchAnalysis: undefined,
     };
   }
   const asOf = String(payload.as_of || "").trim();
@@ -672,6 +677,10 @@ export function normalizeSignalCenterPayload(
     payload.dashboard && typeof payload.dashboard === "object"
       ? (payload.dashboard as Record<string, unknown>)
       : {};
+  const researchAnalysis =
+    payload.research_analysis && typeof payload.research_analysis === "object"
+      ? (payload.research_analysis as Record<string, unknown>)
+      : undefined;
   const universeSize =
     optionalConfirmedCount(payload.universe_size) ??
     optionalConfirmedCount(dash.total_symbols) ??
@@ -693,6 +702,7 @@ export function normalizeSignalCenterPayload(
       latencyMs,
       scannerStatus: "NO_ACTIVE_SIGNALS",
       brokerRequiredForResearch: false,
+      researchAnalysis,
     };
   }
   const items = Array.isArray(payload.items) ? payload.items : [];
@@ -804,6 +814,7 @@ export function normalizeSignalCenterPayload(
     latencyMs,
     scannerStatus: scannerStatus || undefined,
     brokerRequiredForResearch: payload.broker_required_for_research === true,
+    researchAnalysis,
   };
 }
 
@@ -1285,6 +1296,16 @@ export function signalFreshness(row: Record<string, unknown>): SignalFreshness {
   if (age === "RECENT") return "RECENT";
   if (age === "STALE") return "STALE";
   return "UNAVAILABLE";
+}
+
+/** Display label — never imply live trade from data freshness. */
+export function signalFreshnessLabel(freshness: SignalFreshness | string): string {
+  if (freshness === "LIVE") return "LIVE DATA";
+  if (freshness === "RECENT") return "RECENT";
+  if (freshness === "STALE") return "STALE";
+  if (freshness === "PARTIAL") return "PARTIAL";
+  if (freshness === "UNAVAILABLE") return "DATA UNAVAILABLE";
+  return String(freshness || "DATA UNAVAILABLE");
 }
 
 export function signalStrength(row: Record<string, unknown>): string {

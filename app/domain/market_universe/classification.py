@@ -32,9 +32,13 @@ _SCALP_TO_PRODUCT: dict[str, AssetClassName] = {
     "crypto": "CRYPTO",
     "indices": "INDICES",
     "index": "INDICES",
-    "commodities": "ENERGY",
+    "commodities": "COMMODITIES",
+    "commodity": "COMMODITIES",
     "energy": "ENERGY",
-    "stocks": "OTHER",
+    "stocks": "STOCKS",
+    "stock": "STOCKS",
+    "equity": "STOCKS",
+    "equities": "STOCKS",
     "other": "UNKNOWN",
 }
 
@@ -55,9 +59,11 @@ _PATH_TOKENS: tuple[tuple[str, AssetClassName], ...] = (
     ("brent", "ENERGY"),
     ("wti", "ENERGY"),
     ("gas", "ENERGY"),
-    ("stock", "OTHER"),
-    ("share", "OTHER"),
-    ("equit", "OTHER"),
+    ("commodit", "COMMODITIES"),
+    ("stock", "STOCKS"),
+    ("share", "STOCKS"),
+    ("equit", "STOCKS"),
+    ("synthet", "OTHER"),
 )
 
 _ENERGY_DESKS: frozenset[str] = frozenset(
@@ -221,6 +227,8 @@ def classify_instrument(
             "METALS",
             "INDICES",
             "ENERGY",
+            "STOCKS",
+            "COMMODITIES",
             "OTHER",
             "UNKNOWN",
         }
@@ -254,6 +262,8 @@ def product_class_label(value: str | None) -> str:
         "METALS",
         "INDICES",
         "ENERGY",
+        "STOCKS",
+        "COMMODITIES",
         "OTHER",
         "UNKNOWN",
     }:

@@ -332,11 +332,17 @@ async def build_ite_cycle_market_context(
     symbol: str = GOLD_SYMBOL,
     position_engine: Any | None = None,
     reuse_cycle: bool = True,
+    research_mode: bool = False,
 ) -> IteCycleMarketContext:
-    """Load XAUUSD multi-TF bars + account for one auto/shadow cycle."""
+    """Load multi-TF bars + account for one cycle.
+
+    ``research_mode=True`` loads market data for research scoring across
+    catalogue symbols without changing gold-only LIVE execution gates.
+    Research never authorizes OMS / order_send.
+    """
     import time
 
-    if reuse_cycle:
+    if reuse_cycle and not research_mode:
         cached = peek_cycle_market_context(symbol)
         if cached is not None and cached.ok:
             logger.warning(
@@ -372,6 +378,8 @@ async def build_ite_cycle_market_context(
         "timeframes": [tf.value for tf, _ in _TF_COUNTS],
         "connection": "UNKNOWN",
         "account": "UNKNOWN",
+        "research_mode": bool(research_mode),
+        "authorizes_trade": False if research_mode else None,
         "terminal": "UNKNOWN",
         "bars": {},
         "ticks": "UNKNOWN",
@@ -428,7 +436,9 @@ async def build_ite_cycle_market_context(
     try:
         from app.domain.trading.gold_only import gold_only_enabled, is_gold_symbol
 
-        if gold_only_enabled():
+        # Research mode loads catalogue market data for intelligence only.
+        # LIVE autonomous execution remains gold-clamped elsewhere.
+        if gold_only_enabled() and not research_mode:
             from app.domain.trading.gold_only import (
                 canonical_gold_execution_symbol,
                 is_bare_gold_symbol,
@@ -444,6 +454,8 @@ async def build_ite_cycle_market_context(
                 logical_symbol = canonical_gold_execution_symbol(logical_symbol)
                 diag["logical_symbol"] = logical_symbol
                 diag["symbol"] = logical_symbol
+        elif research_mode:
+            diag["research_gold_gate_bypassed"] = True
     except Exception:
         logger.exception("gold_only_market_context_gate_failed")
     diag["canonical_broker_symbol"] = None

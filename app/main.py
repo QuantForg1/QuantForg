@@ -394,10 +394,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     set_database_manager(database)
     _app.state.container = container
     shadow_task: asyncio.Task[Any] | None = None
+    research_task: asyncio.Task[Any] | None = None
     boot_task: asyncio.Task[Any] | None = None
 
     async def _deferred_boot() -> None:
-        nonlocal shadow_task
+        nonlocal shadow_task, research_task
         # Finish mounting non-core routers after listen (production path).
         pending = tuple(getattr(_app.state, "pending_router_specs", ()) or ())
         if pending:
@@ -522,6 +523,24 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                     execution_enabled=bool(settings.execution_enabled),
                     watchdog=True,
                 )
+            # Research analysis worker — distinct from live-trading robot.
+            # Refreshes market-universe research snapshot only; never OMS.
+            try:
+                from app.application.services.research_analysis_worker import (
+                    research_analysis_loop,
+                )
+
+                research_task = asyncio.create_task(
+                    research_analysis_loop(),
+                    name="research-analysis-worker",
+                )
+                logger.info(
+                    "research_analysis_worker_task_started",
+                    authorizes_trade=False,
+                    second_scanner=False,
+                )
+            except Exception:
+                logger.exception("research_analysis_worker_start_failed")
             total_ms = round((time.perf_counter() - t0) * 1000.0, 1)
             logger.info("startup_complete", startup_total_ms=total_ms)
             print(f"Startup Total: {total_ms}ms", flush=True)
@@ -568,6 +587,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             shadow_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await shadow_task
+        if research_task is not None:
+            research_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await research_task
         await container.shutdown()
     except Exception as exc:
         logger.warning("application_shutdown_error", error=str(exc))

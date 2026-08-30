@@ -19,15 +19,14 @@ import { cn } from "@/lib/utils";
 import {
   accountConnectionHint,
   analysisDeskStatusLabel,
+  ASSET_CLASS_ORDER,
   EMPTY_SIGNAL_FILTERS,
   filterSignalRows,
   knownUniverseCountLabel,
   lastUpdatedCopy,
-  latencyLabel,
   liveTradingLabel,
   MARKET_UNIVERSE_QUERY_KEY,
   normalizeSignalCenterPayload,
-  presentAssetClasses,
   presentField,
   RESEARCH_INDEPENDENT_COPY,
   RESEARCH_SIGNAL,
@@ -42,6 +41,7 @@ import {
   SIGNALS_NOT_AUTHORIZATION,
   signalBoardDirection,
   signalFreshness,
+  signalFreshnessLabel,
   signalStrength,
   signalSummary,
   signalTimestampLabel,
@@ -55,11 +55,13 @@ import {
 } from "@/lib/trading/trader-ux";
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
-  { id: "strongest", label: "Strongest" },
+  { id: "strongest", label: "Research rank" },
   { id: "opportunity", label: "Opportunity" },
   { id: "edge", label: "Edge" },
   { id: "newest", label: "Newest" },
 ];
+
+const MARKET_CLASS_FILTERS = ["ALL", ...ASSET_CLASS_ORDER] as const;
 
 function analysisTone(
   status: AnalysisDeskStatus,
@@ -70,6 +72,15 @@ function analysisTone(
     return "warning";
   }
   return "danger";
+}
+
+function researchWorkerTone(
+  status: string,
+): "success" | "warning" | "danger" | "neutral" | "accent" {
+  if (status === "RUNNING") return "accent";
+  if (status === "DEGRADED") return "warning";
+  if (status === "STOPPED" || status === "UNAVAILABLE") return "danger";
+  return "neutral";
 }
 
 export function SignalsWorkspace() {
@@ -109,8 +120,9 @@ export function SignalsWorkspace() {
     : normalized.availability;
   const catalogueAvailability = researchAvailabilityAsCatalogue(availability);
   const signalRows = normalized.rows;
+  const researchHealth = normalized.researchAnalysis ?? {};
+  const workerStatus = String(researchHealth.status || "UNKNOWN").toUpperCase();
 
-  const classes = useMemo(() => presentAssetClasses(signalRows), [signalRows]);
   const sessions = useMemo(() => uniqueRowValues(signalRows, rowSession), [signalRows]);
   const regimes = useMemo(() => uniqueRowValues(signalRows, rowRegime), [signalRows]);
 
@@ -146,7 +158,6 @@ export function SignalsWorkspace() {
     normalized.universeSize,
     normalized.countConfirmed && !signalsQ.isError,
   );
-  const latency = latencyLabel(normalized.latencyMs);
 
   async function refreshAnalysis() {
     setRefreshing(true);
@@ -161,7 +172,7 @@ export function SignalsWorkspace() {
   }
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 space-y-5">
       <PageHeader
         title="Signals"
         description="Global market intelligence — research analysis across available symbols. Not a trade authorization."
@@ -182,7 +193,7 @@ export function SignalsWorkspace() {
               Refresh analysis
             </Button>
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/markets">View all markets</Link>
+              <Link href="/markets">View markets</Link>
             </Button>
           </div>
         }
@@ -191,10 +202,12 @@ export function SignalsWorkspace() {
       <section
         aria-label="Analysis and account status"
         aria-live="polite"
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-wrap items-center gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5"
       >
         <Badge tone={analysisTone(analysisStatus)}>{analysisLabel}</Badge>
-        <Badge tone="accent">RESEARCH ENGINE</Badge>
+        <Badge tone={researchWorkerTone(workerStatus)}>
+          RESEARCH ENGINE {workerStatus === "UNKNOWN" ? "" : workerStatus}
+        </Badge>
         <Badge tone="neutral">BROKER NOT REQUIRED FOR RESEARCH</Badge>
         <Badge
           tone={
@@ -210,46 +223,64 @@ export function SignalsWorkspace() {
         <Badge tone="neutral">{tradingLabel}</Badge>
         <Badge tone="neutral">{SIGNALS_NOT_AUTHORIZATION}</Badge>
         {updated ? (
-          <span className="text-xs text-[var(--fg-subtle)]">{updated}</span>
-        ) : null}
-        {marketsAnalyzed !== "—" ? (
-          <span className="text-xs text-[var(--fg-subtle)]">
-            Instruments {marketsAnalyzed}
-          </span>
-        ) : null}
-        {latency !== "—" ? (
-          <span className="text-xs text-[var(--fg-subtle)]">Latency {latency}</span>
+          <span className="ml-auto text-xs text-[var(--fg-subtle)]">{updated}</span>
         ) : null}
       </section>
 
       <p className="text-sm text-[var(--fg-muted)]">{RESEARCH_INDEPENDENT_COPY}</p>
 
-      <section aria-labelledby="signals-overview">
-        <h2 id="signals-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
-          Overview
+      <section aria-labelledby="market-universe">
+        <h2 id="market-universe" className="mb-2 text-sm font-medium text-[var(--fg)]">
+          Market universe
         </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
-          <DeskMetric label="Signals available" value={summary.active} />
+        <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Market class">
+          {MARKET_CLASS_FILTERS.map((cls) => (
+            <FilterChip
+              key={cls}
+              active={filters.assetClass === cls}
+              onClick={() => setFilters((f) => ({ ...f, assetClass: cls }))}
+            >
+              {cls}
+            </FilterChip>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <DeskMetric label="Instruments" value={marketsAnalyzed} />
+          <DeskMetric
+            label="Analyzed"
+            value={
+              researchHealth.instruments_analyzed != null
+                ? String(researchHealth.instruments_analyzed)
+                : marketsAnalyzed
+            }
+          />
+          <DeskMetric label="Active signals" value={summary.active} />
           <DeskMetric label="BUY" value={summary.buy} />
           <DeskMetric label="SELL" value={summary.sell} />
+        </div>
+      </section>
+
+      <section aria-labelledby="signals-overview">
+        <h2 id="signals-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
+          Signal summary
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <DeskMetric label="Strongest opportunity" value={summary.strongest} />
           <DeskMetric label="Strongest edge" value={summary.strongestEdge} />
           <DeskMetric label="Markets analyzed" value={marketsAnalyzed} />
-          <DeskMetric label="Freshness" value={analysisLabel} />
+          <DeskMetric label="Desk status" value={analysisLabel} />
         </div>
       </section>
 
       {topOps.length > 0 ? (
         <section aria-labelledby="top-opportunities">
-          <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 id="top-opportunities" className="text-sm font-medium text-[var(--fg)]">
-                Top opportunities
-              </h2>
-              <p className="text-xs text-[var(--fg-subtle)]">
-                {RESEARCH_SIGNAL} · {SIGNALS_NOT_AUTHORIZATION}
-              </p>
-            </div>
+          <div className="mb-2">
+            <h2 id="top-opportunities" className="text-sm font-medium text-[var(--fg)]">
+              Top opportunities
+            </h2>
+            <p className="text-xs text-[var(--fg-subtle)]">
+              {RESEARCH_SIGNAL} · {SIGNALS_NOT_AUTHORIZATION}
+            </p>
           </div>
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {topOps.map((row, i) => {
@@ -264,15 +295,17 @@ export function SignalsWorkspace() {
                     className="w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] hover:border-[var(--accent)]"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate font-semibold">{symbol}</p>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{symbol}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                          {presentField(row.asset_class)} · RESEARCH SIGNAL
+                        </p>
+                      </div>
                       <Badge tone={directionTone(dir)}>{dir}</Badge>
                     </div>
-                    <p className="mt-1 text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                      RESEARCH SIGNAL
-                    </p>
                     <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
                       <div>
-                        <dt className="text-[var(--fg-subtle)]">Opportunity</dt>
+                        <dt className="text-[var(--fg-subtle)]">Opp</dt>
                         <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
                       </div>
                       <div>
@@ -280,8 +313,8 @@ export function SignalsWorkspace() {
                         <dd className="tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</dd>
                       </div>
                       <div>
-                        <dt className="text-[var(--fg-subtle)]">R/R</dt>
-                        <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                        <dt className="text-[var(--fg-subtle)]">Rank</dt>
+                        <dd className="tabular">{scoreDisplay(row.research_rank_score)}</dd>
                       </div>
                       <div>
                         <dt className="text-[var(--fg-subtle)]">Entry</dt>
@@ -300,14 +333,16 @@ export function SignalsWorkspace() {
                         </dd>
                       </div>
                     </dl>
-                    <p className="mt-2 truncate text-[11px] text-[var(--fg-subtle)]">
-                      {[signalStrength(row), presentField(row.session), presentField(rowRegime(row))]
-                        .filter((part) => part && part !== "Not available")
-                        .join(" · ")}
-                    </p>
-                    <Badge tone={freshnessTone(freshness)} className="mt-2">
-                      {freshness}
-                    </Badge>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge tone={freshnessTone(freshness)}>
+                        {signalFreshnessLabel(freshness)}
+                      </Badge>
+                      <span className="truncate text-[11px] text-[var(--fg-subtle)]">
+                        {[presentField(row.session), presentField(rowRegime(row))]
+                          .filter((part) => part && part !== "Not available")
+                          .join(" · ")}
+                      </span>
+                    </div>
                   </button>
                 </li>
               );
@@ -355,25 +390,6 @@ export function SignalsWorkspace() {
                     </FilterChip>
                   ))}
                 </div>
-                {classes.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Asset class">
-                    <FilterChip
-                      active={filters.assetClass === "ALL"}
-                      onClick={() => setFilters((f) => ({ ...f, assetClass: "ALL" }))}
-                    >
-                      All classes
-                    </FilterChip>
-                    {classes.map((cls) => (
-                      <FilterChip
-                        key={cls}
-                        active={filters.assetClass === cls}
-                        onClick={() => setFilters((f) => ({ ...f, assetClass: cls }))}
-                      >
-                        {cls}
-                      </FilterChip>
-                    ))}
-                  </div>
-                ) : null}
                 {sessions.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Session">
                     <FilterChip
@@ -428,12 +444,21 @@ export function SignalsWorkspace() {
                       active={filters.freshness === fresh}
                       onClick={() => setFilters((f) => ({ ...f, freshness: fresh }))}
                     >
-                      {fresh === "ALL" ? "All freshness" : fresh}
+                      {fresh === "ALL"
+                        ? "All freshness"
+                        : fresh === "LIVE"
+                          ? "LIVE DATA"
+                          : fresh === "UNAVAILABLE"
+                            ? "DATA UNAVAILABLE"
+                            : fresh}
                     </FilterChip>
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <label htmlFor="signal-sort" className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  <label
+                    htmlFor="signal-sort"
+                    className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]"
+                  >
                     Sort
                   </label>
                   <select
@@ -460,20 +485,57 @@ export function SignalsWorkspace() {
               ) : (
                 <>
                   <div className="hidden min-w-0 overflow-x-auto md:block">
-                    <table className="w-full min-w-[860px] text-left text-sm" aria-label="Signals">
+                    <table
+                      className="w-full min-w-[1100px] text-left text-sm"
+                      aria-label="Signals"
+                    >
                       <thead>
                         <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                          <th className="py-2 pr-3 font-medium" scope="col">Symbol</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Direction</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Opportunity</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Edge</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">R/R</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Strength</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Session</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Regime</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Class</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Timestamp</th>
-                          <th className="py-2 pr-3 font-medium" scope="col">Freshness</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Symbol
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Class
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Direction
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Opportunity
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Edge
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            R/R
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Strength
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Rank
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Session
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Regime
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Entry
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            SL
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            TP
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Timestamp
+                          </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Freshness
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -482,7 +544,10 @@ export function SignalsWorkspace() {
                           const symbol = str(row.broker_symbol || row.symbol, "—");
                           const freshness = signalFreshness(row);
                           return (
-                            <tr key={`${symbol}-row-${i}`} className="border-b border-[var(--border)]">
+                            <tr
+                              key={`${symbol}-row-${i}`}
+                              className="border-b border-[var(--border)]"
+                            >
                               <td className="py-2 pr-3">
                                 <button
                                   type="button"
@@ -492,19 +557,41 @@ export function SignalsWorkspace() {
                                   {symbol}
                                 </button>
                               </td>
+                              <td className="py-2 pr-3">{presentField(row.asset_class)}</td>
                               <td className="py-2 pr-3">
                                 <Badge tone={directionTone(dir)}>{dir}</Badge>
                               </td>
-                              <td className="py-2 pr-3 tabular">{scoreDisplay(row.opportunity_score)}</td>
-                              <td className="py-2 pr-3 tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</td>
-                              <td className="py-2 pr-3 tabular">{scoreDisplay(row.RR ?? row.rr)}</td>
+                              <td className="py-2 pr-3 tabular">
+                                {scoreDisplay(row.opportunity_score)}
+                              </td>
+                              <td className="py-2 pr-3 tabular">
+                                {scoreDisplay(row.directional_edge ?? row.edge)}
+                              </td>
+                              <td className="py-2 pr-3 tabular">
+                                {scoreDisplay(row.RR ?? row.rr)}
+                              </td>
                               <td className="py-2 pr-3 tabular">{signalStrength(row)}</td>
+                              <td className="py-2 pr-3 tabular">
+                                {scoreDisplay(row.research_rank_score)}
+                              </td>
                               <td className="py-2 pr-3">{presentField(row.session)}</td>
                               <td className="py-2 pr-3">{presentField(rowRegime(row))}</td>
-                              <td className="py-2 pr-3">{presentField(row.asset_class)}</td>
-                              <td className="py-2 pr-3 text-xs text-[var(--fg-muted)]">{signalTimestampLabel(row)}</td>
+                              <td className="py-2 pr-3 tabular">
+                                {presentField(row.entry ?? row.entry_candidate)}
+                              </td>
+                              <td className="py-2 pr-3 tabular">
+                                {presentField(row.stop_loss ?? row.SL_candidate)}
+                              </td>
+                              <td className="py-2 pr-3 tabular">
+                                {presentField(row.take_profit ?? row.TP_candidate)}
+                              </td>
+                              <td className="py-2 pr-3 text-xs text-[var(--fg-muted)]">
+                                {signalTimestampLabel(row)}
+                              </td>
                               <td className="py-2 pr-3">
-                                <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
+                                <Badge tone={freshnessTone(freshness)}>
+                                  {signalFreshnessLabel(freshness)}
+                                </Badge>
                               </td>
                             </tr>
                           );
@@ -526,28 +613,45 @@ export function SignalsWorkspace() {
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="truncate font-semibold text-[var(--fg)]">{symbol}</p>
+                                <p className="truncate font-semibold text-[var(--fg)]">
+                                  {symbol}
+                                </p>
                                 <p className="text-xs text-[var(--fg-subtle)]">
-                                  {presentField(row.asset_class)} · {presentField(row.session)}
+                                  {presentField(row.asset_class)} ·{" "}
+                                  {presentField(row.session)}
                                 </p>
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5">
                                 <Badge tone={directionTone(dir)}>{dir}</Badge>
-                                <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
+                                <Badge tone={freshnessTone(freshness)}>
+                                  {signalFreshnessLabel(freshness)}
+                                </Badge>
                               </div>
                             </div>
                             <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
                               <div>
-                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">Opportunity</dt>
-                                <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  Opportunity
+                                </dt>
+                                <dd className="tabular">
+                                  {scoreDisplay(row.opportunity_score)}
+                                </dd>
                               </div>
                               <div>
-                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">Edge</dt>
-                                <dd className="tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</dd>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  Edge
+                                </dt>
+                                <dd className="tabular">
+                                  {scoreDisplay(row.directional_edge ?? row.edge)}
+                                </dd>
                               </div>
                               <div>
-                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">R/R</dt>
-                                <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  Rank
+                                </dt>
+                                <dd className="tabular">
+                                  {scoreDisplay(row.research_rank_score)}
+                                </dd>
                               </div>
                             </dl>
                           </button>

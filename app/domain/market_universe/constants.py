@@ -19,6 +19,8 @@ AssetClassName = Literal[
     "METALS",
     "INDICES",
     "ENERGY",
+    "STOCKS",
+    "COMMODITIES",
     "OTHER",
     "UNKNOWN",
 ]
@@ -29,6 +31,8 @@ ASSET_CLASSES: tuple[AssetClassName, ...] = (
     "METALS",
     "INDICES",
     "ENERGY",
+    "STOCKS",
+    "COMMODITIES",
     "OTHER",
     "UNKNOWN",
 )

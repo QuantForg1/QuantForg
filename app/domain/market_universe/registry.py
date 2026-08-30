@@ -270,6 +270,8 @@ def build_registry(
             "METALS": by_class.get("METALS", 0),
             "INDICES": by_class.get("INDICES", 0),
             "ENERGY": by_class.get("ENERGY", 0),
+            "STOCKS": by_class.get("STOCKS", 0),
+            "COMMODITIES": by_class.get("COMMODITIES", 0),
             "OTHER": by_class.get("OTHER", 0),
             "UNKNOWN_CLASS": by_class.get("UNKNOWN", 0),
             "tradable": sum(1 for i in instruments if i.get("tradable")),

@@ -93,6 +93,6 @@ def weekend_behavior(asset_class: str | None) -> str:
     cls = str(asset_class or "").upper()
     if cls == "CRYPTO":
         return "24/7_CONTINUES"
-    if cls in {"FOREX", "METALS", "INDICES", "ENERGY"}:
+    if cls in {"FOREX", "METALS", "INDICES", "ENERGY", "STOCKS", "COMMODITIES"}:
         return "TYPICALLY_CLOSED"
     return UNKNOWN

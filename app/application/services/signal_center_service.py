@@ -1900,6 +1900,19 @@ def list_live_signals(
         and not any(s["direction"] in {"BUY", "SELL"} for s in signals)
     ):
         scanner_status = "NO_ACTIVE_SIGNALS"
+    research_analysis: dict[str, Any] = {}
+    try:
+        from app.application.services.research_analysis_worker import (
+            get_research_analysis_health,
+        )
+
+        research_analysis = get_research_analysis_health()
+    except Exception:
+        research_analysis = {
+            "status": "UNAVAILABLE",
+            "authorizes_trade": False,
+            "forwarded_to_oms": False,
+        }
     return {
         "as_of": as_of,
         "session": _session(),
@@ -1922,6 +1935,7 @@ def list_live_signals(
         "allow_live_promotion": False,
         "broker_required_for_research": False,
         "research_meta": research_meta,
+        "research_analysis": research_analysis,
         "dashboard": {
             "total_symbols": universe_size,
             "enabled_symbols": len(enabled)
@@ -1936,6 +1950,7 @@ def list_live_signals(
             "managed_prefs": len(all_prefs),
             "universe": universe_label,
             "scanner_status": scanner_status,
+            "research_analysis_status": research_analysis.get("status"),
             "scans_per_hour": hourly.get("scans_per_hour"),
             "candidates_per_hour": hourly.get("candidate_setups_per_hour"),
             "takes_per_hour": hourly.get("take_per_hour"),

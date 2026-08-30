@@ -364,7 +364,9 @@ def test_all_supported_asset_classes_from_broker_rows() -> None:
         ({"code": "XAUUSD_i", "path": "Metals\\XAUUSD"}, "METALS"),
         ({"code": "NDXUSD", "path": "Indices\\US"}, "INDICES"),
         ({"code": "XTIUSD", "path": "Energy\\Oil"}, "ENERGY"),
-        ({"code": "AAPL", "path": "Stocks\\US"}, "OTHER"),
+        ({"code": "AAPL", "path": "Stocks\\US"}, "STOCKS"),
+        ({"code": "WHEAT", "path": "Commodities\\Softs"}, "COMMODITIES"),
+        ({"code": "SYNTH01", "path": "Synthetics\\Other"}, "OTHER"),
         ({"code": "FOO"}, "UNKNOWN"),
     )
     found: set[str] = set()
