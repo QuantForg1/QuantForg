@@ -19,6 +19,7 @@ from app.domain.market_universe.broker_catalogue import (
     probe_quotes,
     probe_timeframe_history,
 )
+from app.domain.market_universe.classification import classify_or_unknown
 from app.domain.market_universe.config_audit import build_configuration_audit
 from app.domain.market_universe.constants import (
     ADVISORY_ONLY,
@@ -42,7 +43,6 @@ from app.domain.market_universe.correlation_research import (
 from app.domain.market_universe.data_quality import evaluate_timeframe_quality
 from app.domain.market_universe.expansion_architecture import describe_layers
 from app.domain.market_universe.identity import canonical_desk
-from app.domain.market_universe.classification import classify_or_unknown
 from app.domain.market_universe.observations import (
     current_research_stage,
     list_observations,
@@ -409,6 +409,27 @@ def _last_opportunity_map(scored: list[dict[str, Any]]) -> dict[str, int]:
             out[desk] = int(opp)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
+    return out
+
+
+def _last_analyzed_map(scored: list[dict[str, Any]]) -> dict[str, str]:
+    """Map desk → last research analysis timestamp for stale-first scheduling."""
+    out: dict[str, str] = {}
+    for row in scored:
+        if not isinstance(row, dict) or not _row_has_numeric_opportunity(row):
+            continue
+        desk = _desk_key(row)
+        if not desk:
+            continue
+        stamp = (
+            row.get("features_as_of")
+            or row.get("analysis_timestamp")
+            or row.get("as_of")
+            or row.get("timestamp")
+        )
+        if stamp in (None, "", UNKNOWN):
+            continue
+        out[desk] = str(stamp)
     return out
 
 
@@ -794,20 +815,27 @@ def _attach_scorecards(
     scored: list[dict[str, Any]],
     shadow_n: int,
     matched_n: int,
+    queued_desks: set[str] | None = None,
 ) -> None:
     by_desk: dict[str, dict[str, Any]] = {}
     for row in scored:
-        desk = canonical_desk(str(row.get("symbol") or ""))
+        desk = canonical_desk(
+            str(row.get("symbol") or row.get("canonical_symbol") or "")
+        )
         if desk and desk not in by_desk:
             by_desk[desk] = row
+    queued = queued_desks or set()
     for item in instruments:
         desk = str(item.get("canonical_symbol") or "")
-        item["scorecard"] = instrument_scorecard(
+        card = instrument_scorecard(
             item,
             scored=by_desk.get(desk),
             shadow_n=shadow_n,
             matched_n=matched_n,
+            in_queue=desk in queued,
         )
+        item["scorecard"] = card
+        item["research_lifecycle"] = card.get("RESEARCH_LIFECYCLE")
 
 
 def _count_dist(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
@@ -914,11 +942,12 @@ def build_snapshot(
     _attach_timeframes(
         instruments, mt5_adapter=mt5_adapter, catalogue_source=source
     )
-    # Score up to MAX_RESEARCH_BATCH eligible desks per cycle; prefer never-analyzed.
-    # Persistence + rotation fills remaining eligible desks on subsequent cycles.
+    # Score up to MAX_RESEARCH_BATCH eligible desks per cycle; prefer
+    # never-analyzed then stale-analyzed. Persistence + rotation fills coverage.
     schedule = research_scan_order(
         instruments,
         last_opportunity=_last_opportunity_map(scored),
+        last_analyzed=_last_analyzed_map(scored),
         max_batch=MAX_RESEARCH_BATCH,
     )
     skipped_desks = {
@@ -939,11 +968,18 @@ def build_snapshot(
         catalogue_source=source,
         schedule=schedule,
     )
+    queued_desks = {
+        canonical_desk(str(item.get("canonical_symbol") or ""))
+        for item in (schedule.get("queue") or [])
+        if isinstance(item, dict)
+    }
+    queued_desks.discard("")
     _attach_scorecards(
         instruments,
         scored=scored,
         shadow_n=len(shadows),
         matched_n=len(matched),
+        queued_desks=queued_desks,
     )
     by_desk = {str(i.get("canonical_symbol")): i for i in instruments}
     board = build_opportunity_board(scored, registry_by_desk=by_desk, filters=filters)

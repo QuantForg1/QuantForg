@@ -14,17 +14,21 @@ import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitive
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import { marketUniverseApi, signalCenterApi, tradingSessionApi } from "@/lib/api/endpoints";
-import { asRecord, str } from "@/lib/desk";
+import { asList, asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 import {
   accountConnectionHint,
   analysisDeskStatusLabel,
   ASSET_CLASS_ORDER,
+  cataloguePageSlice,
   EMPTY_SIGNAL_FILTERS,
   filterSignalRows,
   knownUniverseCountLabel,
   lastUpdatedCopy,
+  MARKET_PAGE_SIZE,
   MARKET_UNIVERSE_QUERY_KEY,
+  marketStateBucket,
+  normalizeAssetClass,
   normalizeSignalCenterPayload,
   presentField,
   presentLevel,
@@ -33,6 +37,7 @@ import {
   RESEARCH_SIGNAL,
   researchAvailabilityAsCatalogue,
   researchCoverageLabel,
+  researchLifecycleLabel,
   researchProgressCopy,
   researchSignalsEmptyCopy,
   resolveAnalysisDeskStatus,
@@ -52,6 +57,7 @@ import {
   sortSignalRows,
   topResearchOpportunities,
   TRADER_POLL_MS,
+  UNIVERSE_POLL_MS,
   uniqueRowValues,
   type AnalysisDeskStatus,
   type SignalFilterState,
@@ -95,6 +101,7 @@ export function SignalsWorkspace() {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [feedLimit, setFeedLimit] = useState(SIGNAL_FEED_PAGE_SIZE);
+  const [universePage, setUniversePage] = useState(1);
 
   const sessionQ = useQuery({
     queryKey: ["trading-session"],
@@ -112,6 +119,53 @@ export function SignalsWorkspace() {
     retry: false,
     refetchInterval: TRADER_POLL_MS,
   });
+
+  const universeQ = useQuery({
+    queryKey: MARKET_UNIVERSE_QUERY_KEY,
+    queryFn: () => marketUniverseApi.snapshot(),
+    retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
+  });
+  const universeSnap = asRecord(universeQ.data);
+  const universeInstruments = useMemo(() => {
+    const rows = asList(universeSnap.instruments).map(asRecord);
+    return rows.filter((row) => {
+      const sym = str(row.broker_symbol || row.canonical_symbol || row.symbol, "");
+      return Boolean(sym);
+    });
+  }, [universeSnap.instruments]);
+
+  const filteredUniverse = useMemo(() => {
+    return universeInstruments.filter((row) => {
+      if (
+        filters.assetClass !== "ALL" &&
+        normalizeAssetClass(row.asset_class) !== filters.assetClass
+      ) {
+        return false;
+      }
+      if (
+        filters.marketState !== "ALL" &&
+        marketStateBucket(row) !== filters.marketState
+      ) {
+        return false;
+      }
+      const q = (filters.q || "").trim().toUpperCase();
+      if (q) {
+        const hay = `${str(row.broker_symbol || row.symbol, "")} ${str(row.asset_class, "")}`.toUpperCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [filters.assetClass, filters.marketState, filters.q, universeInstruments]);
+
+  const universePageRows = useMemo(
+    () => cataloguePageSlice(filteredUniverse, universePage, MARKET_PAGE_SIZE),
+    [filteredUniverse, universePage],
+  );
+  const universePageCount = Math.max(
+    1,
+    Math.ceil(filteredUniverse.length / MARKET_PAGE_SIZE),
+  );
 
   const normalized = useMemo(
     () =>
@@ -213,7 +267,7 @@ export function SignalsWorkspace() {
     <div className="min-w-0 space-y-5">
       <PageHeader
         title="Global Market Intelligence"
-        description="Research analysis across the supported broker universe. Research intelligence — not trade authorization."
+        description="Research analysis across the available global universe. Research intelligence — not trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -236,6 +290,35 @@ export function SignalsWorkspace() {
           </div>
         }
       />
+
+      <section
+        aria-label="Global research status bar"
+        aria-live="polite"
+        className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
+      >
+        <DeskMetric label="Analysis" value={analysisLabel} />
+        <DeskMetric label="Universe" value={discoveredLabel} />
+        <DeskMetric label="Analyzed" value={analyzedLabel} />
+        <DeskMetric label="Coverage" value={coverageLabel} />
+        <DeskMetric
+          label="Last update"
+          value={updated || "—"}
+        />
+        <DeskMetric
+          label="Broker status"
+          value={
+            accountHint.detail === "CONNECTED"
+              ? "CONNECTED"
+              : accountHint.detail === "SESSION MISMATCH"
+                ? "MISMATCH"
+                : "NOT CONNECTED"
+          }
+        />
+        <DeskMetric
+          label="Research mode"
+          value={workerStatus === "UNKNOWN" ? "ADVISORY" : workerStatus}
+        />
+      </section>
 
       <section
         aria-label="Research, broker, and live trading status"
@@ -494,13 +577,27 @@ export function SignalsWorkspace() {
                   aria-label="Search signals"
                 />
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Direction">
-                  {(["ALL", "BUY", "SELL"] as const).map((dir) => (
+                  {(["ALL", "BUY", "SELL", "NEUTRAL"] as const).map((dir) => (
                     <FilterChip
                       key={dir}
                       active={filters.direction === dir}
                       onClick={() => setFilters((f) => ({ ...f, direction: dir }))}
                     >
                       {dir}
+                    </FilterChip>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Market state">
+                  {(["ALL", "OPEN", "CLOSED", "UNAVAILABLE"] as const).map((state) => (
+                    <FilterChip
+                      key={state}
+                      active={filters.marketState === state}
+                      onClick={() => {
+                        setUniversePage(1);
+                        setFilters((f) => ({ ...f, marketState: state }));
+                      }}
+                    >
+                      {state === "ALL" ? "All markets" : state}
                     </FilterChip>
                   ))}
                 </div>
@@ -843,6 +940,235 @@ export function SignalsWorkspace() {
                     </div>
                   ) : null}
                 </>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="min-w-0 space-y-4 pt-4">
+          <div>
+            <h2 className="text-sm font-medium text-[var(--fg)]">
+              Research universe
+            </h2>
+            <p className="text-xs text-[var(--fg-subtle)]">
+              Full broker-discovered catalogue — closed markets remain visible
+            </p>
+          </div>
+          {universeQ.isLoading ? (
+            <DeskSkeleton rows={6} />
+          ) : filteredUniverse.length === 0 ? (
+            <DeskEmpty
+              icon={Radar}
+              title="Universe unavailable"
+              description="No instruments in the research catalogue for the current filters."
+            />
+          ) : (
+            <>
+              <div className="hidden min-w-0 overflow-x-auto md:block">
+                <table
+                  className="w-full min-w-[960px] text-left text-sm"
+                  aria-label="Research universe"
+                >
+                  <thead>
+                    <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Symbol
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Class
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Market
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Signal
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Price
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Opportunity
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Edge
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        RR
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Freshness
+                      </th>
+                      <th className="py-2 pr-3 font-medium" scope="col">
+                        Last analysis
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {universePageRows.map((row, i) => {
+                      const symbol = str(
+                        row.broker_symbol || row.canonical_symbol || row.symbol,
+                        "—",
+                      );
+                      const market = marketStateBucket(row);
+                      const lifecycle = researchLifecycleLabel(row);
+                      const signalRow = signalRows.find(
+                        (s) =>
+                          str(s.broker_symbol || s.symbol, "").toUpperCase() ===
+                          symbol.toUpperCase(),
+                      );
+                      const dir = signalRow
+                        ? signalBoardDirection(signalRow)
+                        : market === "CLOSED"
+                          ? "MARKET CLOSED"
+                          : "NO SIGNAL";
+                      const freshness = signalFreshness(signalRow || row);
+                      const dq =
+                        row.data_quality && typeof row.data_quality === "object"
+                          ? (row.data_quality as Record<string, unknown>)
+                          : {};
+                      const price =
+                        row.bid ??
+                        row.ask ??
+                        dq.bid ??
+                        dq.ask ??
+                        signalRow?.price ??
+                        signalRow?.mid;
+                      return (
+                        <tr
+                          key={`${symbol}-uni-${i}`}
+                          className="border-b border-[var(--border)]"
+                        >
+                          <td className="py-2 pr-3 font-medium">{symbol}</td>
+                          <td className="py-2 pr-3">
+                            {presentField(row.asset_class)}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <Badge
+                              tone={
+                                market === "OPEN"
+                                  ? "success"
+                                  : market === "CLOSED"
+                                    ? "warning"
+                                    : "neutral"
+                              }
+                            >
+                              {market === "CLOSED" ? "MARKET CLOSED" : market}
+                            </Badge>
+                          </td>
+                          <td className="py-2 pr-3">
+                            <Badge
+                              tone={
+                                dir === "BUY" || dir === "SELL"
+                                  ? directionTone(dir)
+                                  : "neutral"
+                              }
+                            >
+                              {dir}
+                            </Badge>
+                            <span className="ml-2 text-[10px] text-[var(--fg-subtle)]">
+                              {lifecycle}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-3 tabular">
+                            {market === "CLOSED" && price == null
+                              ? "—"
+                              : presentPrice(price)}
+                          </td>
+                          <td className="py-2 pr-3 tabular">
+                            {scoreDisplay(
+                              signalRow?.opportunity_score ??
+                                (row.scorecard as Record<string, unknown> | undefined)
+                                  ?.OPPORTUNITY_QUALITY,
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 tabular">
+                            {scoreDisplay(
+                              signalRow?.directional_edge ?? signalRow?.edge,
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 tabular">
+                            {scoreDisplay(signalRow?.RR ?? signalRow?.rr)}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <Badge tone={freshnessTone(freshness)}>
+                              {signalFreshnessLabel(freshness)}
+                            </Badge>
+                          </td>
+                          <td className="py-2 pr-3 text-xs text-[var(--fg-muted)]">
+                            {signalRow
+                              ? signalTimestampLabel(signalRow)
+                              : presentField(
+                                  row.features_as_of ||
+                                    row.last_quote_timestamp ||
+                                    dq.last_quote_timestamp,
+                                )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <ul className="grid gap-2 md:hidden" aria-label="Research universe">
+                {universePageRows.map((row, i) => {
+                  const symbol = str(
+                    row.broker_symbol || row.canonical_symbol || row.symbol,
+                    "—",
+                  );
+                  const market = marketStateBucket(row);
+                  return (
+                    <li
+                      key={`${symbol}-uni-m-${i}`}
+                      className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold">{symbol}</p>
+                          <p className="text-[11px] text-[var(--fg-subtle)]">
+                            {presentField(row.asset_class)} · {researchLifecycleLabel(row)}
+                          </p>
+                        </div>
+                        <Badge tone={market === "OPEN" ? "success" : "warning"}>
+                          {market === "CLOSED" ? "MARKET CLOSED" : market}
+                        </Badge>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {universePageCount > 1 ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <p className="text-xs text-[var(--fg-subtle)]">
+                    {filteredUniverse.length} instruments · page {universePage} /{" "}
+                    {universePageCount}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={universePage <= 1}
+                      onClick={() => setUniversePage((p) => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={universePage >= universePageCount}
+                      onClick={() =>
+                        setUniversePage((p) => Math.min(universePageCount, p + 1))
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--fg-subtle)]">
+                  {filteredUniverse.length} instruments
+                </p>
               )}
             </>
           )}

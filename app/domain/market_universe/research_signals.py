@@ -56,6 +56,9 @@ def build_research_signals(
         decision_hash = hashlib.sha256(
             json.dumps(identity, sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()[:16]
+        evidence = (
+            row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
+        )
         signals.append(
             {
                 "kind": "RESEARCH_SIGNAL",
@@ -66,15 +69,39 @@ def build_research_signals(
                 "canonical_symbol": canonical,
                 "asset_class": _u(row.get("asset_class")),
                 "direction": direction,
+                "status": _u(row.get("board_status") or row.get("setup_state")),
+                "board_status": _u(row.get("board_status")),
                 "opportunity": opp,
+                "opportunity_score": opp,
                 "edge": _u(row.get("directional_edge")),
+                "directional_edge": _u(row.get("directional_edge")),
+                "research_rank_score": _u(row.get("research_rank_score")),
                 "setup": _u(row.get("setup_state")),
-                "regime": _u((row.get("evidence") or {}).get("REGIME")),
+                "setup_state": _u(row.get("setup_state")),
+                "regime": _u(evidence.get("REGIME") or row.get("regime")),
+                "market_regime": _u(evidence.get("REGIME") or row.get("regime")),
+                "trend": _u(
+                    evidence.get("STRUCTURE_EVIDENCE")
+                    or row.get("structure_score")
+                    or row.get("trend")
+                ),
                 "session": _u(row.get("session")),
                 "entry_candidate": _u(
                     row.get("entry_candidate")
                     or row.get("entry")
                     or row.get("entry_price")
+                ),
+                "entry": _u(
+                    row.get("entry_candidate")
+                    or row.get("entry")
+                    or row.get("entry_price")
+                ),
+                "stop_loss": _u(
+                    row.get("SL_candidate")
+                    or row.get("sl_candidate")
+                    or row.get("stop_loss")
+                    or row.get("sl")
+                    or row.get("stop")
                 ),
                 "SL_candidate": _u(
                     row.get("SL_candidate")
@@ -82,6 +109,13 @@ def build_research_signals(
                     or row.get("stop_loss")
                     or row.get("sl")
                     or row.get("stop")
+                ),
+                "take_profit": _u(
+                    row.get("TP_candidate")
+                    or row.get("tp_candidate")
+                    or row.get("take_profit")
+                    or row.get("tp")
+                    or row.get("target")
                 ),
                 "TP_candidate": _u(
                     row.get("TP_candidate")
@@ -100,26 +134,46 @@ def build_research_signals(
                     or row.get("last_price")
                 ),
                 "RR": _u(row.get("RR") or row.get("rr")),
+                "risk_reward": _u(row.get("RR") or row.get("rr")),
                 "spread": _u(row.get("spread")),
                 "reason": reason,
+                "evidence": evidence,
                 "data_timestamp": _u(row.get("data_timestamp")),
                 "analysis_timestamp": features_as_of,
                 "features_as_of": features_as_of,
+                "as_of": features_as_of,
+                "freshness": _u(row.get("data_freshness") or row.get("freshness")),
                 "reason_codes": (reason,),
                 "timestamp": features_as_of,
                 "quality": _u(row.get("quality") or row.get("market_quality")),
-                "volatility": _u(row.get("volatility")),
+                "confidence": _u(row.get("confidence") or row.get("directional_edge")),
+                "volatility": _u(
+                    row.get("volatility")
+                    or row.get("volatility_score")
+                    or evidence.get("VOLATILITY")
+                ),
+                "timeframe": _u(row.get("timeframe") or row.get("primary_timeframe")),
                 "data_quality": _u(
                     row.get("data_quality")
                     or row.get("data_state")
                     or row.get("data_freshness")
                 ),
+                "data_state": _u(row.get("data_state") or row.get("data_quality")),
                 "strategy_version": _u(row.get("strategy_version")),
                 "research_only": True,
                 "live_eligible": False,
                 "structure": _u(row.get("structure_score")),
+                "structure_score": _u(row.get("structure_score")),
                 "liquidity": _u(row.get("liquidity_score")),
-                "momentum": _u(row.get("momentum_score")),
+                "liquidity_score": _u(row.get("liquidity_score")),
+                "momentum": _u(
+                    row.get("momentum_score") or evidence.get("MOMENTUM")
+                ),
+                "momentum_score": _u(row.get("momentum_score")),
+                "volatility_score": _u(row.get("volatility_score")),
+                "invalidation": _u(
+                    row.get("invalidation") or evidence.get("INVALIDATION")
+                ),
                 "authorizes_trade": False,
                 "would_submit_order": False,
                 "forwarded_to_oms": False,

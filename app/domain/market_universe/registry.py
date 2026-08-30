@@ -134,7 +134,6 @@ def build_instrument(
     research_eligible = dq.state in {
         "LIVE",
         "STALE",
-        "MARKET_CLOSED",
         "INSUFFICIENT_HISTORY",
     }
     return InstrumentRecord(

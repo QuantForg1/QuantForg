@@ -265,14 +265,25 @@ export function hasResearchSignal(row: Record<string, unknown>): boolean {
   const dir = String(row.direction || "")
     .trim()
     .toUpperCase();
-  const actionable = dir === "BUY" || dir === "SELL";
-  if (!actionable) return false;
-  if (numericSortValue(row.research_rank_score) != null) return true;
-  if (numericSortValue(row.opportunity_score) != null) return true;
-  if (row.qualified_research === true) return true;
-  const status = String(row.board_status || "").trim().toUpperCase();
-  // Catalogue presence (DISCOVERED / DATA_READY) is not a research signal.
-  return status === "QUALIFIED" || status === "ANALYZED" || status === "ACTIVE";
+  const scored =
+    numericSortValue(row.research_rank_score) != null ||
+    numericSortValue(row.opportunity_score) != null ||
+    row.qualified_research === true;
+  if (dir === "BUY" || dir === "SELL") {
+    if (scored) return true;
+    const status = String(row.board_status || "").trim().toUpperCase();
+    return status === "QUALIFIED" || status === "ANALYZED" || status === "ACTIVE";
+  }
+  // Explicit WAIT / NEUTRAL research rows with a real score remain visible.
+  if (dir === "WAIT" || dir === "NEUTRAL") {
+    const status = String(row.board_status || "").trim().toUpperCase();
+    if (status === "DISCOVERED" || status === "DATA_READY") return false;
+    if (numericSortValue(row.research_rank_score) != null) return true;
+    if (row.qualified_research === true) return true;
+    const opp = numericSortValue(row.opportunity_score);
+    return opp != null && opp > 0;
+  }
+  return false;
 }
 
 export const MARKET_PAGE_SIZE = 50;
@@ -558,7 +569,9 @@ export function passwordClearedAfterSubmit(password: string, submitted: boolean)
   return submitted ? "" : password;
 }
 
-export type SignalDirectionFilter = "ALL" | "BUY" | "SELL" | "WATCH";
+export type SignalDirectionFilter = "ALL" | "BUY" | "SELL" | "NEUTRAL" | "WATCH";
+
+export type MarketStateFilter = "ALL" | "OPEN" | "CLOSED" | "UNAVAILABLE";
 
 export type SignalSortKey =
   | "strongest"
@@ -580,6 +593,7 @@ export type SignalFilterState = {
   regime: string;
   confidence: string;
   dataHealth: string;
+  marketState: MarketStateFilter;
   age: string;
   freshness: string;
 };
@@ -592,6 +606,7 @@ export const EMPTY_SIGNAL_FILTERS: SignalFilterState = {
   regime: "ALL",
   confidence: "ALL",
   dataHealth: "ALL",
+  marketState: "ALL",
   age: "ALL",
   freshness: "ALL",
 };
@@ -796,9 +811,12 @@ export function normalizeSignalCenterPayload(
       signal_type: signalType,
       entry_type: signalType,
       freshness: item.freshness ?? item.data_state,
-      data_state: item.data_state || (actionable ? "LIVE" : "NO_DATA"),
-      has_research_signal: actionable,
-      board_status: actionable ? dir : undefined,
+      data_state: item.data_state ?? item.data_quality,
+      has_research_signal: actionable || dir === "WAIT",
+      board_status:
+        item.board_status ??
+        item.status ??
+        (actionable ? dir : dir === "WAIT" ? "ANALYZED" : undefined),
       setup_state: pipeline.setup_state ?? item.setup_state,
       badge: item.badge,
       research_only: true,
@@ -813,7 +831,9 @@ export function normalizeSignalCenterPayload(
       volatility_score: item.volatility_score ?? pipeline.volatility_score,
       zone_score: item.zone_score,
       liquidity_score: item.liquidity_score,
+      invalidation: item.invalidation,
       blocker: item.blocker,
+      research_lifecycle: item.research_lifecycle,
     });
   }
   const signalRows = rows.filter(hasResearchSignal);
@@ -1030,8 +1050,50 @@ export function signalAvailability(
 
 export function signalBoardDirection(row: Record<string, unknown>): string {
   const dir = rowDirection(row);
-  if (dir === "WAIT") return "WATCH";
+  if (dir === "WAIT" || dir === "WATCH" || dir === "NONE") return "NEUTRAL";
   return dir;
+}
+
+/** Map instrument data quality into OPEN / CLOSED / UNAVAILABLE market state. */
+export function marketStateBucket(row: Record<string, unknown>): MarketStateFilter {
+  const state = marketDataState(row);
+  if (state === "MARKET_CLOSED") return "CLOSED";
+  if (
+    state === "LIVE" ||
+    state === "STALE" ||
+    state === "INSUFFICIENT_HISTORY"
+  ) {
+    return "OPEN";
+  }
+  if (
+    state === "NO_DATA" ||
+    state === "DISABLED" ||
+    state === "UNSUPPORTED" ||
+    state === "ERROR" ||
+    state === "CATALOGUE_UNAVAILABLE" ||
+    state === "UNKNOWN"
+  ) {
+    return "UNAVAILABLE";
+  }
+  return "UNAVAILABLE";
+}
+
+export function researchLifecycleLabel(row: Record<string, unknown>): string {
+  const raw = String(
+    row.research_lifecycle ||
+      (row.scorecard && typeof row.scorecard === "object"
+        ? (row.scorecard as Record<string, unknown>).RESEARCH_LIFECYCLE
+        : "") ||
+      "",
+  )
+    .trim()
+    .toUpperCase();
+  if (raw) return raw.replaceAll("_", " ");
+  const market = marketStateBucket(row);
+  if (market === "CLOSED") return "MARKET CLOSED";
+  if (market === "UNAVAILABLE") return "DATA UNAVAILABLE";
+  if (hasResearchSignal(row)) return "ANALYZED";
+  return "READY";
 }
 
 export function isActionableDirection(dir: string): boolean {
@@ -1161,8 +1223,10 @@ export function filterSignalRows(
       const hay = `${instrumentSymbol(row)} ${instrumentName(row)}`.toUpperCase();
       if (!hay.includes(q)) return false;
     }
-    const dir = signalBoardDirection(row);
-    if (filters.direction !== "ALL" && dir !== filters.direction) return false;
+    if (filters.direction !== "ALL") {
+      const want = filters.direction === "WATCH" ? "NEUTRAL" : filters.direction;
+      if (signalBoardDirection(row) !== want) return false;
+    }
     if (
       filters.assetClass !== "ALL" &&
       normalizeAssetClass(row.asset_class) !== filters.assetClass
@@ -1182,6 +1246,12 @@ export function filterSignalRows(
       if (conf !== filters.confidence) return false;
     }
     if (filters.dataHealth !== "ALL" && marketDataState(row) !== filters.dataHealth) {
+      return false;
+    }
+    if (
+      filters.marketState !== "ALL" &&
+      marketStateBucket(row) !== filters.marketState
+    ) {
       return false;
     }
     if (filters.age !== "ALL" && signalAgeBucket(row) !== filters.age) return false;
@@ -1563,7 +1633,7 @@ export function signalSummary(input: {
       true,
       dirs.filter((d) => d === "WATCH" || d === "NONE" || d === "NEUTRAL").length,
     ),
-    watch: countOrDash(true, dirs.filter((d) => d === "WATCH").length),
+    watch: countOrDash(true, dirs.filter((d) => d === "NEUTRAL" || d === "WATCH").length),
     markets: countOrDash(true, input.instrumentCount),
     assetClasses: countOrDash(true, presentAssetClasses(input.rows).length),
     lastUpdate:

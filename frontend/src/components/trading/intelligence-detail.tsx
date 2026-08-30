@@ -147,7 +147,7 @@ export function IntelligenceDetail({
       ) : why.length > 0 ? (
         <section>
           <h3 className="mb-2 text-sm font-medium text-[var(--fg)]">
-            Why this signal?
+            WHY THIS SIGNAL
           </h3>
           <p className="mb-2 text-xs text-[var(--fg-muted)]">
             Structured research evidence from the analysis engine — not generic copy.

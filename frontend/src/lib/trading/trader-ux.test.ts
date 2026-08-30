@@ -327,7 +327,7 @@ assert.equal(
 );
 
 {
-  assert.equal(signalBoardDirection({ direction: "WAIT" }), "WATCH");
+  assert.equal(signalBoardDirection({ direction: "WAIT" }), "NEUTRAL");
   assert.equal(signalBoardDirection({ direction: "BUY" }), "BUY");
   assert.equal(presentField(null), "Not available");
   assert.equal(presentField("UNKNOWN"), "Not available");
@@ -370,6 +370,7 @@ assert.equal(
     { symbol: "XAUUSD_i", direction: "SELL", asset_class: "METALS", opportunity_score: 90, board_status: "QUALIFIED", research_rank_score: 20 },
   ];
   assert.equal(filterSignalRows(rows, { ...EMPTY_SIGNAL_FILTERS, direction: "BUY" }).length, 1);
+  assert.equal(filterSignalRows(rows, { ...EMPTY_SIGNAL_FILTERS, direction: "NEUTRAL" }).length, 1);
   assert.equal(filterSignalRows(rows, { ...EMPTY_SIGNAL_FILTERS, direction: "WATCH" }).length, 1);
   assert.equal(isHighConfidence(rows[0]!), true);
   const ranked = defaultSortedSignals(rows);

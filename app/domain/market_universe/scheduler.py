@@ -53,21 +53,39 @@ def research_scan_order(
     instruments: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     *,
     last_opportunity: dict[str, int] | None = None,
+    last_analyzed: dict[str, str] | None = None,
     max_batch: int = DEFAULT_RESEARCH_BATCH,
     exclude_stale: bool = True,
 ) -> dict[str, Any]:
     """Return a rate-limited research queue.
 
     Gold reference is observed first for backward-compatible monitoring,
-    then round-robin across asset classes. Stale/no-data symbols are
+    then round-robin across asset classes. Closed/no-data symbols are
     excluded from scoring (they remain in the registry as explicit states).
+    Prefer never-analyzed desks, then oldest analyzed (stale-first).
     """
+    from datetime import UTC, datetime
+
     cap = min(max(1, int(max_batch or DEFAULT_RESEARCH_BATCH)), MAX_RESEARCH_BATCH)
     opp = last_opportunity or {}
+    analyzed_at = last_analyzed or {}
+    now = datetime.now(UTC)
     rotation = _class_rotation()
     buckets: dict[str, list[dict[str, Any]]] = {k: [] for k in rotation}
     skipped: list[dict[str, str]] = []
     gold: list[dict[str, Any]] = []
+
+    def _analysis_age_s(desk: str) -> float | None:
+        raw = analyzed_at.get(desk)
+        if not raw:
+            return None
+        try:
+            ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            return max(0.0, (now - ts).total_seconds())
+        except Exception:
+            return None
 
     for item in instruments:
         desk = canonical_desk(
@@ -94,12 +112,15 @@ def research_scan_order(
         }:
             skipped.append({"symbol": desk, "reason": state})
             continue
+        age_s = _analysis_age_s(desk)
         payload = {
             "canonical_symbol": desk,
             "broker_symbol": item.get("broker_symbol") or desk,
             "asset_class": cls,
             "data_state": state,
             "last_opportunity": opp.get(desk, None),
+            "last_analyzed_at": analyzed_at.get(desk),
+            "analysis_age_s": age_s,
             "history_sufficient": bool(
                 (item.get("timeframe_quality") or {}).get("sufficient")
             )
@@ -121,13 +142,14 @@ def research_scan_order(
                 1 if r.get("history_sufficient") is True else 0,
                 # Prefer never-analyzed desks so coverage fills across cycles.
                 1 if r.get("last_opportunity") is None else 0,
+                # Among scored desks, stale-first (oldest analysis first).
+                float(r.get("analysis_age_s") or 0.0),
                 1 if r.get("data_age") not in (None, "") else 0,
                 -(
                     float(r.get("data_age") or 0)
                     if r.get("data_age") not in (None, "")
                     else 0
                 ),
-                # Among already-scored, rotate lower scores first for refresh.
                 -(
                     float(r.get("last_opportunity"))
                     if r.get("last_opportunity") is not None
@@ -182,12 +204,13 @@ def research_scan_order(
             "Research queue only. Live ITE scan universe remains gold-only "
             "in production. Missing data is deferred, never scored as 0. "
             "Weekend rotation prefers CRYPTO when available. "
-            "Unscored eligible desks are preferred for coverage fill."
+            "Unscored then stale-analyzed desks are preferred for coverage fill."
         ),
         "priority_order": (
             "LIVE_DATA",
             "sufficient_history",
             "never_analyzed",
+            "stale_analyzed",
             "lower_data_age",
             "lower_known_opportunity",
         ),

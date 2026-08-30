@@ -13,12 +13,41 @@ from app.domain.market_universe.promotion import (
 )
 
 
+def research_lifecycle(
+    *,
+    data_state: str,
+    has_score: bool,
+    in_queue: bool = False,
+) -> str:
+    """Explicit per-instrument research lifecycle for Global Universe UX.
+
+    Closed / unsupported / failed desks stay visible — never fabricated.
+    """
+    state = str(data_state or "UNKNOWN").strip().upper()
+    if state == "MARKET_CLOSED":
+        return "MARKET_CLOSED"
+    if state in {"UNSUPPORTED", "DISABLED"}:
+        return "UNSUPPORTED"
+    if state == "ERROR":
+        return "FAILED"
+    if state in {"NO_DATA", "CATALOGUE_UNAVAILABLE"}:
+        return "DATA_UNAVAILABLE"
+    if has_score:
+        return "ANALYZED"
+    if in_queue:
+        return "QUEUED"
+    if state in {"LIVE", "STALE", "INSUFFICIENT_HISTORY"}:
+        return "READY"
+    return "DATA_UNAVAILABLE"
+
+
 def instrument_scorecard(
     item: dict[str, Any],
     *,
     scored: dict[str, Any] | None = None,
     shadow_n: int = 0,
     matched_n: int = 0,
+    in_queue: bool = False,
 ) -> dict[str, Any]:
     """Map discovery → readiness. Never jumps to LIVE_ELIGIBLE."""
     state = str(
@@ -29,6 +58,8 @@ def instrument_scorecard(
     has_score = bool(
         scored
         and scored.get("opportunity_score") not in (None, "", UNKNOWN)
+        and isinstance(scored.get("opportunity_score"), (int, float))
+        and not isinstance(scored.get("opportunity_score"), bool)
     )
     opp = (scored or {}).get("opportunity_score")
     edge = (scored or {}).get("directional_edge")
@@ -56,9 +87,15 @@ def instrument_scorecard(
         research_status=status,
         n=int(shadow_n or matched_n or 0),
     )
+    lifecycle = research_lifecycle(
+        data_state=state,
+        has_score=has_score,
+        in_queue=in_queue,
+    )
     return {
         "MARKET_READINESS": status,
         "DATA_QUALITY": state,
+        "RESEARCH_LIFECYCLE": lifecycle,
         "ANALYSIS_QUALITY": "READY" if has_score else "NOT_SCORED",
         "OPPORTUNITY_QUALITY": (scored or {}).get("opportunity_score", UNKNOWN),
         "DIRECTIONAL_QUALITY": (scored or {}).get("directional_edge", UNKNOWN),

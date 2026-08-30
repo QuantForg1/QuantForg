@@ -20,7 +20,6 @@ import { marketUniverseApi, portfolioApi, tradingSessionApi } from "@/lib/api/en
 import { asList, asRecord, str } from "@/lib/desk";
 import {
   MARKET_UNIVERSE_QUERY_KEY,
-  isLiveBrokerCatalogue,
   instrumentSymbol,
   mergeCatalogueRows,
   positionExposureLabel,
@@ -101,13 +100,12 @@ export function CommandPalette({
   });
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
-  const liveCatalogue = isLiveBrokerCatalogue(session);
   const mismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
 
   const universeQ = useQuery({
     queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
-    enabled: open && connection.connected && liveCatalogue && !mismatch,
+    enabled: open && !mismatch,
     retry: false,
   });
   const portfolioQ = useQuery({
@@ -120,11 +118,12 @@ export function CommandPalette({
   const symbols = useMemo(() => {
     const universe = asRecord(universeQ.data);
     const instruments = asList(universe.instruments).map(asRecord);
-    if (String(universe.catalogue_source || "").toUpperCase() !== "LIVE_BROKER") return [];
+    const source = String(universe.catalogue_source || "").toUpperCase();
+    if (source && source !== "LIVE_BROKER" && source !== "INJECTED") return [];
     return mergeCatalogueRows(
       instruments,
       asList(asRecord(universe.opportunity_board).rows).map(asRecord),
-    ).slice(0, 12);
+    ).slice(0, 200);
   }, [universeQ.data]);
 
   const signalHits = useMemo(
@@ -132,9 +131,9 @@ export function CommandPalette({
       symbols
         .filter((row) => {
           const dir = signalBoardDirection(row);
-          return dir === "BUY" || dir === "SELL";
+          return dir === "BUY" || dir === "SELL" || dir === "NEUTRAL";
         })
-        .slice(0, 8),
+        .slice(0, 40),
     [symbols],
   );
 

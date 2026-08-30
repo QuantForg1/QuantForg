@@ -1553,10 +1553,12 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         if isinstance(row.get("evidence"), dict)
         else row.get("regime"),
         "research_rank_score": row.get("research_rank_score"),
+        "board_status": row.get("board_status"),
+        "qualified_research": row.get("qualified_research"),
         "as_of": as_of,
         "time_generated": as_of,
         "freshness": row.get("data_freshness") or row.get("freshness"),
-        "data_state": row.get("data_state"),
+        "data_state": row.get("data_state") or row.get("data_quality"),
         "reasoning": row.get("reason") or row.get("blocker"),
         "ai_explanation": row.get("reason") or row.get("explanation"),
         "setup_state": row.get("setup_state") or row.get("setup"),
@@ -1565,6 +1567,12 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
         "volatility_score": row.get("volatility_score"),
         "zone_score": row.get("zone_score"),
         "liquidity_score": row.get("liquidity_score"),
+        "invalidation": row.get("invalidation")
+        or (
+            (row.get("evidence") or {}).get("INVALIDATION")
+            if isinstance(row.get("evidence"), dict)
+            else None
+        ),
         "evidence": row.get("evidence") if isinstance(row.get("evidence"), dict) else {},
         "blocker": row.get("blocker") or row.get("first_authoritative_blocker"),
         "research_only": True,
@@ -1582,6 +1590,8 @@ def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
             "volatility_score": row.get("volatility_score"),
             "final_decision": "WAIT",
             "forwarded_to_oms": False,
+            "research_can_execute": False,
+            "ALLOW_LIVE_PROMOTION": False,
         },
     }
 
