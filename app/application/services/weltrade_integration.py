@@ -758,6 +758,27 @@ class WeltradeIntegrationService:
         foreign = await self._active_foreign_owner_of_login(
             login=live_login, user_id=user_id
         )
+        if foreign is not None and self._role_may_adopt_unbound_gateway(role):
+            # Stale connected row from another identity (common after auth
+            # remaps / multi-worker redeploy). Only clear when that claim is
+            # not the live handle on THIS process — never steal an active
+            # in-process session belonging to someone else.
+            async with self.uow_factory() as uow:
+                finder = getattr(uow.connections, "get_connected_by_login", None)
+                row = await finder(live_login) if callable(finder) else None
+                if row is not None and row.user_id == foreign:
+                    ref = (row.session_ref or "").strip()
+                    if not ref or not self.adapter.is_live_session(ref):
+                        row.mark_disconnected()
+                        await uow.connections.update(row)
+                        await uow.commit()
+                        logger.info(
+                            "weltrade_stale_foreign_claim_cleared",
+                            other_user_id=str(foreign),
+                            live_login=live_login,
+                            by_user_id=str(user_id),
+                        )
+                        foreign = None
         if foreign is not None:
             diag["reason"] = "login_owned_by_other_user"
             logger.info(
