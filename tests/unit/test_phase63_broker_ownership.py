@@ -152,6 +152,31 @@ async def test_ensure_user_session_bound_does_not_steal_for_unbound_user() -> No
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_owner_does_not_clear_foreign_claim_matching_live_handle() -> None:
+    owner = uuid4()
+    other = uuid4()
+    factory = MemoryMT5UnitOfWorkFactory()
+    async with factory() as uow:
+        foreign = MT5Connection.create(
+            user_id=other,
+            login=12439799,
+            server="Weltrade-Real",
+            terminal_path="",
+        )
+        foreign.mark_connected(session_ref="sess-live")
+        await uow.connections.upsert_for_user(foreign)
+        await uow.commit()
+    svc = WeltradeIntegrationService(
+        adapter=_FakeAdapter(live_login=12439799),  # type: ignore[arg-type]
+        uow_factory=factory,
+    )
+    diag = await svc.ensure_user_session_bound(user_id=owner, role="owner")
+    assert diag.get("adopted") is False
+    assert diag.get("reason") == "login_owned_by_other_user"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_owner_clears_stale_foreign_claim_then_adopts() -> None:
     owner = uuid4()
     other = uuid4()

@@ -760,15 +760,19 @@ class WeltradeIntegrationService:
         )
         if foreign is not None and self._role_may_adopt_unbound_gateway(role):
             # Stale connected row from another identity (common after auth
-            # remaps / multi-worker redeploy). Only clear when that claim is
-            # not the live handle on THIS process — never steal an active
-            # in-process session belonging to someone else.
+            # remaps / multi-worker redeploy). Gateway is_live_session() treats
+            # ANY non-empty ref as live for remap — compare the process live
+            # handle exactly so stale foreign claims can be cleared.
+            live_handle = (
+                (getattr(self.adapter, "_live_session_ref", None) or "").strip()
+                or (getattr(client, "session_token", "") or "").strip()
+            )
             async with self.uow_factory() as uow:
                 finder = getattr(uow.connections, "get_connected_by_login", None)
                 row = await finder(live_login) if callable(finder) else None
                 if row is not None and row.user_id == foreign:
                     ref = (row.session_ref or "").strip()
-                    if not ref or not self.adapter.is_live_session(ref):
+                    if not ref or ref != live_handle:
                         row.mark_disconnected()
                         await uow.connections.update(row)
                         await uow.commit()
