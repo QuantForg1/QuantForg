@@ -268,6 +268,14 @@ def _scored_rows_from_live_scan() -> list[dict[str, Any]]:
     return unique
 
 
+def _row_has_numeric_opportunity(row: dict[str, Any]) -> bool:
+    """True only when research produced a real opportunity number (not UNKNOWN)."""
+    opp = row.get("opportunity_score")
+    if isinstance(opp, bool):
+        return False
+    return isinstance(opp, (int, float))
+
+
 def _merge_research_batch_scores(
     scored: list[dict[str, Any]],
     *,
@@ -279,6 +287,9 @@ def _merge_research_batch_scores(
 
     Does not create a second scanner. Gold-only live execution clamp stays
     intact — this path is research-only and never calls OMS.
+
+    Rows without a numeric opportunity_score are NOT treated as already
+    scored (WAIT/UNKNOWN stubs must be re-analyzed).
     """
     if catalogue_source != CATALOGUE_LIVE_BROKER or mt5_adapter is None:
         return scored
@@ -288,10 +299,11 @@ def _merge_research_batch_scores(
     already = {
         str(r.get("symbol") or r.get("broker_symbol") or "").upper()
         for r in scored
-        if isinstance(r, dict)
+        if isinstance(r, dict) and _row_has_numeric_opportunity(r)
     }
     already |= {canonical_desk(s) for s in already if s}
     want: list[str] = []
+    want_desks: set[str] = set()
     for item in queue:
         if not isinstance(item, dict):
             continue
@@ -302,6 +314,9 @@ def _merge_research_batch_scores(
         if code.upper() in already or desk in already:
             continue
         want.append(code)
+        want_desks.add(code.upper())
+        if desk:
+            want_desks.add(desk)
     if not want:
         return scored
     try:
@@ -313,15 +328,37 @@ def _merge_research_batch_scores(
     except Exception:
         logger.exception("research_batch_score_failed")
         return scored
-    merged = list(scored)
+
+    # Keep prior numeric scores; drop UNKNOWN stubs for desks in this batch.
+    merged: list[dict[str, Any]] = []
+    for row in scored:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get("symbol") or row.get("broker_symbol") or "").upper()
+        desk = canonical_desk(sym)
+        in_batch = sym in want_desks or desk in want_desks
+        if in_batch and not _row_has_numeric_opportunity(row):
+            continue
+        merged.append(row)
+
+    seen = {
+        str(r.get("symbol") or r.get("broker_symbol") or "").upper()
+        for r in merged
+        if isinstance(r, dict)
+    }
+    seen |= {canonical_desk(s) for s in seen if s}
     for row in batch.get("rows") or ():
         if not isinstance(row, dict):
             continue
         sym = str(row.get("symbol") or row.get("broker_symbol") or "").upper()
-        if not sym or sym in already:
+        desk = canonical_desk(sym)
+        if not sym:
             continue
-        already.add(sym)
-        already.add(canonical_desk(sym))
+        if sym in seen or desk in seen:
+            continue
+        seen.add(sym)
+        if desk:
+            seen.add(desk)
         merged.append(row)
     return merged
 
@@ -874,7 +911,23 @@ def build_snapshot(
             "symbol_count": counts.get("universe"),
             "symbols_discovered": counts.get("universe"),
             "symbols_scored": (
+                sum(
+                    1
+                    for r in scored
+                    if isinstance(r, dict)
+                    and isinstance(r.get("opportunity_score"), (int, float))
+                    and not isinstance(r.get("opportunity_score"), bool)
+                )
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
+            "symbols_live_ranked": (
                 len(live_ranked)
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
+            "research_batch_size": (
+                schedule.get("batch_size")
                 if source == CATALOGUE_LIVE_BROKER
                 else CATALOGUE_UNAVAILABLE
             ),
