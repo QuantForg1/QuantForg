@@ -185,17 +185,27 @@ class GetTradingSessionUseCase:
         catalogue_source = None
         catalogue_unavailable = True
         catalogue_last_error = None
+        execution_universe_mode = None
         if ctx.connected and session_code != ACCOUNT_SESSION_MISMATCH:
             try:
-                from app.domain.trading.execution_universe import (
+                from app.domain.market_universe.broker_catalogue import (
+                    discover_live_catalogue,
+                )
+                from app.domain.market_universe.constants import (
                     CATALOGUE_LIVE_BROKER,
+                )
+                from app.domain.trading.execution_universe import (
                     execution_universe_diagnostics,
                 )
 
-                diag = execution_universe_diagnostics(mt5_adapter=self.adapter)
-                catalogue_source = str(diag.get("catalogue_source") or "")
+                # Markets / Signals research catalogue — not the gold-only
+                # execution lock. Execution mode is reported separately.
+                research = discover_live_catalogue(self.adapter)
+                catalogue_source = str(research.get("catalogue_source") or "")
                 catalogue_unavailable = catalogue_source != CATALOGUE_LIVE_BROKER
-                catalogue_last_error = diag.get("execution_unavailable_reason")
+                catalogue_last_error = research.get("error")
+                exec_diag = execution_universe_diagnostics(mt5_adapter=self.adapter)
+                execution_universe_mode = exec_diag.get("execution_universe_mode")
             except Exception:
                 catalogue_source = "UNAVAILABLE"
                 catalogue_unavailable = True
@@ -268,6 +278,7 @@ class GetTradingSessionUseCase:
             "catalogue_source": catalogue_source,
             "catalogue_unavailable": catalogue_unavailable,
             "catalogue_last_error": catalogue_last_error,
+            "execution_universe_mode": execution_universe_mode,
             "account_unavailable": account_unavailable,
             "last_verified": last_verified,
             "robot_blocked_reason": robot_blocked_reason,
