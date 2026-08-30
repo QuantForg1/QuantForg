@@ -288,6 +288,7 @@ export type MarketFilterState = {
   session: string;
   regime: string;
   status: string;
+  freshness: string;
 };
 
 export const EMPTY_MARKET_FILTERS: MarketFilterState = {
@@ -296,6 +297,7 @@ export const EMPTY_MARKET_FILTERS: MarketFilterState = {
   session: "ALL",
   regime: "ALL",
   status: "ALL",
+  freshness: "ALL",
 };
 
 /** Unavailable / missing numerics render as em dash — never coerced to 0. */
@@ -432,6 +434,9 @@ export function filterMarketRows(
     if (filters.status !== "ALL" && marketDataState(row) !== filters.status) {
       return false;
     }
+    if (filters.freshness !== "ALL" && signalFreshness(row) !== filters.freshness) {
+      return false;
+    }
     return true;
   });
 }
@@ -488,6 +493,7 @@ export type SignalFilterState = {
   confidence: string;
   dataHealth: string;
   age: string;
+  freshness: string;
 };
 
 export const EMPTY_SIGNAL_FILTERS: SignalFilterState = {
@@ -498,7 +504,13 @@ export const EMPTY_SIGNAL_FILTERS: SignalFilterState = {
   confidence: "ALL",
   dataHealth: "ALL",
   age: "ALL",
+  freshness: "ALL",
 };
+
+export const MARKET_UNIVERSE_QUERY_KEY = ["market-universe-snapshot"] as const;
+export const TRADER_POLL_MS = 15_000;
+export const UNIVERSE_POLL_MS = 30_000;
+export const EXPLANATION_UNAVAILABLE = "EXPLANATION UNAVAILABLE";
 
 export type SignalAvailability = CatalogueViewState;
 
@@ -630,6 +642,9 @@ export function filterSignalRows(
       return false;
     }
     if (filters.age !== "ALL" && signalAgeBucket(row) !== filters.age) return false;
+    if (filters.freshness !== "ALL" && signalFreshness(row) !== filters.freshness) {
+      return false;
+    }
     return true;
   });
 }
@@ -723,6 +738,10 @@ const WHY_KEYS: Array<{ key: string; label: string }> = [
 export function signalWhyFactors(row: Record<string, unknown>): SignalWhyFactor[] {
   const ev = evidenceBag(row);
   const out: SignalWhyFactor[] = [];
+  const reason = presentField(row.reason ?? row.explanation);
+  if (reason !== "Not available") {
+    out.push({ label: "Why this signal exists", value: reason });
+  }
   for (const item of WHY_KEYS) {
     const shown = presentField(ev[item.key]);
     if (shown === "Not available") continue;
@@ -733,6 +752,95 @@ export function signalWhyFactors(row: Record<string, unknown>): SignalWhyFactor[
     out.push({ label: "Session", value: session });
   }
   return out;
+}
+
+export type SignalFreshness =
+  | "LIVE"
+  | "RECENT"
+  | "STALE"
+  | "PARTIAL"
+  | "UNAVAILABLE";
+
+/** Honesty map from existing quality/age fields. Never infers LIVE from page open. */
+export function signalFreshness(row: Record<string, unknown>): SignalFreshness {
+  const state = marketDataState(row);
+  if (
+    state === "CATALOGUE_UNAVAILABLE" ||
+    state === "ERROR" ||
+    state === "NO_DATA" ||
+    state === "UNSUPPORTED" ||
+    state === "DISABLED"
+  ) {
+    return "UNAVAILABLE";
+  }
+  if (state === "STALE") return "STALE";
+  if (state === "INSUFFICIENT_HISTORY" || state === "MARKET_CLOSED") return "PARTIAL";
+  if (state === "LIVE") {
+    return signalAgeBucket(row) === "STALE" ? "STALE" : "LIVE";
+  }
+  const age = signalAgeBucket(row);
+  if (age === "RECENT") return "RECENT";
+  if (age === "STALE") return "STALE";
+  return "UNAVAILABLE";
+}
+
+export function signalStrength(row: Record<string, unknown>): string {
+  const rank = numericSortValue(row.research_rank_score);
+  if (rank != null) return String(rank);
+  const conf = signalConfidence(row);
+  if (conf !== "Not available") return conf;
+  return "UNKNOWN";
+}
+
+export function signalTimestampLabel(row: Record<string, unknown>): string {
+  const raw = signalTimestamp(row);
+  return raw || "—";
+}
+
+export function lastUpdatedCopy(raw: unknown, nowMs = Date.now()): string {
+  if (raw == null || raw === "") return "";
+  const ms = typeof raw === "number" ? raw : Date.parse(String(raw));
+  if (!Number.isFinite(ms)) return "";
+  const diffSec = Math.round((nowMs - ms) / 1000);
+  if (!Number.isFinite(diffSec) || diffSec < 0) return "";
+  if (diffSec < 60) return `Last updated ${diffSec} seconds ago`;
+  const mins = Math.round(diffSec / 60);
+  if (mins < 60) return `Last updated ${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hrs = Math.round(mins / 60);
+  return `Last updated ${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+}
+
+export function marketSignalLabel(row: Record<string, unknown>): string {
+  const status = presentField(row.board_status || row.setup_state);
+  if (status !== "Not available") return status;
+  const dir = signalBoardDirection(row);
+  if (dir === "BUY" || dir === "SELL") return dir;
+  return "UNKNOWN";
+}
+
+export function connectionShortLabel(state: ConnectionDisplayState): string {
+  if (state === "CONNECTED") return "CONNECTED";
+  if (state === "CONNECTING") return "CONNECTING";
+  if (state === "ACCOUNT_SESSION_MISMATCH") return "SESSION MISMATCH";
+  if (state === "BROKER_NOT_CONNECTED" || state === "DISCONNECTED") return "DISCONNECTED";
+  return "UNAVAILABLE";
+}
+
+export function positionExposureLabel(side: unknown): "LONG" | "SHORT" | "—" {
+  const raw = positionSideLabel(side);
+  if (raw === "BUY") return "LONG";
+  if (raw === "SELL") return "SHORT";
+  return "—";
+}
+
+export function accountHealthSummary(
+  items: AccountHealthItem[],
+): "Healthy" | "Attention" | "Unavailable" {
+  if (items.length === 0) return "Unavailable";
+  const states = items.map((item) => item.state);
+  if (states.every((s) => s === "Healthy")) return "Healthy";
+  if (states.every((s) => s === "Unavailable" || s === "Blocked")) return "Unavailable";
+  return "Attention";
 }
 
 export type SignalSummary = {

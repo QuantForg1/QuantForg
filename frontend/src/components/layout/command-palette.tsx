@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
 import { Clock, Pin, Star } from "lucide-react";
 import {
@@ -14,6 +15,17 @@ import { useNavMemory } from "@/hooks/use-nav-memory";
 import { labelForHref } from "@/lib/workspace/nav-memory";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
+import { marketUniverseApi, portfolioApi, tradingSessionApi } from "@/lib/api/endpoints";
+import { asList, asRecord, str } from "@/lib/desk";
+import {
+  MARKET_UNIVERSE_QUERY_KEY,
+  isLiveBrokerCatalogue,
+  instrumentSymbol,
+  mergeCatalogueRows,
+  positionExposureLabel,
+  resolveConnectionPresentation,
+  signalBoardDirection,
+} from "@/lib/trading/trader-ux";
 
 export function CommandPalette({
   open,
@@ -80,6 +92,56 @@ export function CommandPalette({
     memory.recordPage({ href, label: label ?? labelForHref(href) });
     router.push(href);
   };
+
+  const sessionQ = useQuery({
+    queryKey: ["trading-session"],
+    queryFn: tradingSessionApi.session,
+    retry: false,
+    enabled: open,
+  });
+  const session = asRecord(sessionQ.data);
+  const connection = resolveConnectionPresentation(session);
+  const liveCatalogue = isLiveBrokerCatalogue(session);
+  const mismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
+
+  const universeQ = useQuery({
+    queryKey: MARKET_UNIVERSE_QUERY_KEY,
+    queryFn: () => marketUniverseApi.snapshot(),
+    enabled: open && connection.connected && liveCatalogue && !mismatch,
+    retry: false,
+  });
+  const portfolioQ = useQuery({
+    queryKey: ["portfolio"],
+    queryFn: portfolioApi.get,
+    enabled: open && connection.connected && !mismatch,
+    retry: false,
+  });
+
+  const symbols = useMemo(() => {
+    const universe = asRecord(universeQ.data);
+    const instruments = asList(universe.instruments).map(asRecord);
+    if (String(universe.catalogue_source || "").toUpperCase() !== "LIVE_BROKER") return [];
+    return mergeCatalogueRows(
+      instruments,
+      asList(asRecord(universe.opportunity_board).rows).map(asRecord),
+    ).slice(0, 12);
+  }, [universeQ.data]);
+
+  const signalHits = useMemo(
+    () =>
+      symbols
+        .filter((row) => {
+          const dir = signalBoardDirection(row);
+          return dir === "BUY" || dir === "SELL";
+        })
+        .slice(0, 8),
+    [symbols],
+  );
+
+  const positions = useMemo(
+    () => asList(asRecord(portfolioQ.data).positions).map(asRecord).slice(0, 8),
+    [portfolioQ.data],
+  );
 
   if (!open) return null;
 
@@ -199,7 +261,62 @@ export function CommandPalette({
                 <span className="text-[var(--fg)]">Broker-discovered markets</span>
                 <span className="text-[var(--fg-subtle)]">Open catalogue</span>
               </Command.Item>
+              {symbols.map((row, i) => {
+                const symbol = instrumentSymbol(row) || str(row.symbol, String(i));
+                if (!symbol) return null;
+                return (
+                  <Command.Item
+                    key={`sym-${symbol}`}
+                    value={`symbol ${symbol} ${str(row.asset_class)} ${str(row.description)}`}
+                    onSelect={() => go(`/symbols/${encodeURIComponent(symbol)}`, symbol)}
+                    className="qf-cmd-item"
+                  >
+                    <span className="truncate font-medium">{symbol}</span>
+                    <span className="text-[var(--fg-subtle)]">{str(row.asset_class, "")}</span>
+                  </Command.Item>
+                );
+              })}
             </Command.Group>
+
+            {signalHits.length > 0 ? (
+              <Command.Group heading="Signals" className="qf-cmd-group">
+                {signalHits.map((row, i) => {
+                  const symbol = instrumentSymbol(row) || str(row.symbol, String(i));
+                  const dir = signalBoardDirection(row);
+                  return (
+                    <Command.Item
+                      key={`sig-${symbol}-${dir}`}
+                      value={`signal ${symbol} ${dir} buy sell`}
+                      onSelect={() => go("/signals", "Signals")}
+                      className="qf-cmd-item"
+                    >
+                      <span className="truncate font-medium">{symbol}</span>
+                      <span className="text-[var(--fg-subtle)]">{dir}</span>
+                    </Command.Item>
+                  );
+                })}
+              </Command.Group>
+            ) : null}
+
+            {positions.length > 0 ? (
+              <Command.Group heading="Positions" className="qf-cmd-group">
+                {positions.map((row, i) => {
+                  const symbol = str(row.symbol, String(i));
+                  const side = positionExposureLabel(row.side);
+                  return (
+                    <Command.Item
+                      key={`pos-${str(row.ticket, symbol)}`}
+                      value={`position ${symbol} ${side} portfolio`}
+                      onSelect={() => go("/portfolio", "Portfolio")}
+                      className="qf-cmd-item"
+                    >
+                      <span className="truncate font-medium">{symbol}</span>
+                      <span className="text-[var(--fg-subtle)]">{side}</span>
+                    </Command.Item>
+                  );
+                })}
+              </Command.Group>
+            ) : null}
 
             {pageGroups.map((group) => (
               <Command.Group

@@ -23,20 +23,27 @@ import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
+import { directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import {
   catalogueViewState,
   defaultSortedSignals,
   isLiveBrokerCatalogue,
+  lastUpdatedCopy,
+  MARKET_UNIVERSE_QUERY_KEY,
   mergeCatalogueRows,
   numericDisplay,
+  positionExposureLabel,
   resolveConnectionPresentation,
   robotDisplayState,
   scoreDisplay,
   signalAvailability,
   signalBoardDirection,
+  signalFreshness,
   SIGNALS_NOT_AUTHORIZATION,
+  TRADER_POLL_MS,
   traderFacingErrorMessage,
   unavailableSignalsTitle,
+  UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
 
 type Row = Record<string, unknown>;
@@ -79,17 +86,19 @@ export default function DashboardPage() {
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: TRADER_POLL_MS,
   });
   const portfolio = useQuery({
     queryKey: ["portfolio"],
     queryFn: portfolioApi.get,
     retry: false,
+    refetchInterval: TRADER_POLL_MS,
   });
   const history = useQuery({
     queryKey: ["history"],
     queryFn: portfolioApi.history,
     retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
   });
 
   const session = asRecord(sessionQ.data);
@@ -102,10 +111,11 @@ export default function DashboardPage() {
   const robot = robotDisplayState(session, connection);
 
   const universeQ = useQuery({
-    queryKey: ["market-universe-snapshot", "home"],
+    queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
     enabled: connection.connected && !sessionMismatch && liveCatalogue,
     retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
   });
   const universe = asRecord(universeQ.data);
   const instruments = asList(universe.instruments).map(asRecord);
@@ -180,12 +190,15 @@ export default function DashboardPage() {
       {
         id: "side",
         header: "Side",
-        accessor: (r) => str(r.side),
-        cell: (r) => (
-          <Badge tone={str(r.side).toLowerCase() === "buy" ? "success" : "warning"}>
-            {str(r.side, "—")}
-          </Badge>
-        ),
+        accessor: (r) => positionExposureLabel(r.side),
+        cell: (r) => {
+          const side = positionExposureLabel(r.side);
+          return (
+            <Badge tone={side === "LONG" ? "success" : side === "SHORT" ? "danger" : "neutral"}>
+              {side}
+            </Badge>
+          );
+        },
       },
       {
         id: "volume",
@@ -286,85 +299,139 @@ export default function DashboardPage() {
 
       <ConnectionStatus session={session} />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Robot</CardTitle>
-            <Badge tone={statusTone(robot)}>{robot}</Badge>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {noBroker ? (
-              <p className="text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
-            ) : sessionMismatch ? (
-              <p className="text-sm text-[var(--fg-muted)]">ACCOUNT SESSION MISMATCH</p>
-            ) : (
-              <p className="text-sm text-[var(--fg-muted)]">
-                Your robot for this connected account.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
-                onClick={() => robotMut.mutate("start")}
-              >
-                Start
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={robotMut.isPending || robot !== "RUNNING"}
-                onClick={() => robotMut.mutate("pause")}
-              >
-                Pause
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={
-                  robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
-                }
-                onClick={() => robotMut.mutate("stop")}
-              >
-                Stop
-              </Button>
-            </div>
-            {isOperator ? (
-              <Button variant="secondary" size="sm" asChild>
-                <Link href="/admin">
-                  <Bot className="h-4 w-4" /> Admin portal
-                </Link>
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <section aria-labelledby="portfolio-snapshot">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 id="portfolio-snapshot" className="text-sm font-medium text-[var(--fg)]">
-              Portfolio snapshot
-            </h2>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/portfolio">View all</Link>
-            </Button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <DeskMetric label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
-            <DeskMetric label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
-            <DeskMetric label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
-            <DeskMetric
-              label="Free margin"
-              value={moneyOrUnavailable(session.free_margin, showMetrics)}
-            />
-          </div>
-        </section>
-      </div>
+      <section aria-labelledby="portfolio-snapshot">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 id="portfolio-snapshot" className="text-sm font-medium text-[var(--fg)]">
+            Account snapshot
+          </h2>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/portfolio">Portfolio</Link>
+          </Button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <DeskMetric label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
+          <DeskMetric label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
+          <DeskMetric label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
+          <DeskMetric
+            label="Free margin"
+            value={moneyOrUnavailable(session.free_margin, showMetrics)}
+          />
+        </div>
+      </section>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Positions</CardTitle>
+          <CardTitle>Robot</CardTitle>
+          <Badge tone={statusTone(robot)}>{robot}</Badge>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {noBroker ? (
+            <p className="text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
+          ) : sessionMismatch ? (
+            <p className="text-sm text-[var(--fg-muted)]">ACCOUNT SESSION MISMATCH</p>
+          ) : (
+            <p className="text-sm text-[var(--fg-muted)]">
+              Your robot for this connected account.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
+              onClick={() => robotMut.mutate("start")}
+            >
+              Start
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={robotMut.isPending || robot !== "RUNNING"}
+              onClick={() => robotMut.mutate("pause")}
+            >
+              Pause
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={
+                robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
+              }
+              onClick={() => robotMut.mutate("stop")}
+            >
+              Stop
+            </Button>
+            {isOperator ? (
+              <Button variant="secondary" size="sm" asChild>
+                <Link href="/admin">
+                  <Bot className="h-4 w-4" /> Admin
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle>Top signals</CardTitle>
+            {lastUpdatedCopy(universe.as_of) ? (
+              <p className="mt-1 text-xs text-[var(--fg-subtle)]">{lastUpdatedCopy(universe.as_of)}</p>
+            ) : null}
+          </div>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/portfolio">View all</Link>
+            <Link href="/signals">Signals</Link>
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+            <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+              {SIGNALS_NOT_AUTHORIZATION}
+            </p>
+            {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
+              <DeskEmpty
+                icon={Activity}
+                title={signalCopy.title}
+                description={signalCopy.description}
+              />
+            ) : signalState === "NOT_READY" || universeQ.isLoading ? (
+              <DeskSkeleton rows={3} />
+            ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
+              <DeskEmpty
+                icon={Activity}
+                title="No signals found"
+                description="The live catalogue was queried. No ranked research signals right now."
+              />
+            ) : (
+              <ul className="space-y-2">
+                {signalPreview.map((row, i) => {
+                  const dir = signalBoardDirection(row);
+                  const freshness = signalFreshness(row);
+                  return (
+                    <li
+                      key={str(row.broker_symbol || row.symbol, String(i))}
+                      className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
+                    >
+                      <span className="truncate font-medium">
+                        {str(row.broker_symbol || row.symbol)}
+                      </span>
+                      <Badge tone={directionTone(dir)}>{dir}</Badge>
+                      <span className="tabular text-[var(--fg-muted)]">
+                        {scoreDisplay(row.opportunity_score)}
+                      </span>
+                      <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Open positions</CardTitle>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/portfolio">Portfolio</Link>
           </Button>
         </CardHeader>
         <CardContent>
@@ -388,7 +455,7 @@ export default function DashboardPage() {
                 columns={positionCols}
                 rows={positions}
                 rowKey={(r, i) => str(r.ticket, String(i))}
-                searchKeys={(r) => `${str(r.symbol)} ${str(r.side)}`}
+                searchKeys={(r) => `${str(r.symbol)} ${positionExposureLabel(r.side)}`}
                 pageSize={8}
                 aria-label="Open positions"
                 empty={
@@ -406,73 +473,22 @@ export default function DashboardPage() {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Signals</CardTitle>
+          <CardTitle>Market intelligence</CardTitle>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/signals">View all</Link>
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-            <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              {SIGNALS_NOT_AUTHORIZATION}
-            </p>
-            {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
-              <DeskEmpty
-                icon={Activity}
-                title={signalCopy.title}
-                description={signalCopy.description}
-              />
-            ) : signalState === "NOT_READY" || universeQ.isLoading ? (
-              <DeskSkeleton rows={3} />
-            ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
-              <DeskEmpty
-                icon={Activity}
-                title="No ranked signals"
-                description="The live catalogue was queried. No ranked research signals right now."
-              />
-            ) : (
-              <ul className="space-y-2">
-                {signalPreview.map((row, i) => {
-                  const dir = signalBoardDirection(row);
-                  return (
-                    <li
-                      key={str(row.broker_symbol || row.symbol, String(i))}
-                      className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
-                    >
-                      <span className="truncate font-medium">
-                        {str(row.broker_symbol || row.symbol)}
-                      </span>
-                      <Badge tone={dir === "BUY" ? "success" : dir === "SELL" ? "warning" : "neutral"}>
-                        {dir}
-                      </Badge>
-                      <span className="tabular text-[var(--fg-muted)]">
-                        {scoreDisplay(row.opportunity_score)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Market snapshot</CardTitle>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/markets">View all</Link>
+            <Link href="/markets">Markets</Link>
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {noBroker || sessionMismatch ? (
             <DeskEmpty
               icon={Activity}
-              title="BROKER NOT CONNECTED"
+              title="MARKETS UNAVAILABLE"
               description="Connect to see broker-discovered markets."
             />
           ) : catalogue === "UNAVAILABLE" ? (
             <DeskEmpty
               icon={Activity}
-              title="CATALOGUE UNAVAILABLE"
+              title="MARKETS UNAVAILABLE"
               description="Broker market catalogue is currently unavailable. This is not an empty market."
             />
           ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
@@ -484,7 +500,7 @@ export default function DashboardPage() {
               description="The live broker catalogue was queried. No instruments are listed for your account."
             />
           ) : (
-            <MarketCatalogueRows rows={rows} limit={8} showFilters compact />
+            <MarketCatalogueRows rows={rows} limit={8} compact enableDetail={false} />
           )}
         </CardContent>
       </Card>
@@ -525,7 +541,7 @@ export default function DashboardPage() {
                     className="flex min-w-0 items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
                   >
                     <span className="truncate">
-                      {str(d.symbol)} {str(d.side)}
+                      {str(d.symbol)} {positionExposureLabel(d.side)}
                     </span>
                     <span
                       className={

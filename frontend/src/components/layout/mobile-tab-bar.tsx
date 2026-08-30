@@ -30,7 +30,7 @@ export function MobileTabBar() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "qf-touch-target flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)]",
+                  "qf-touch-target flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors duration-[var(--duration-fast)] ease-[var(--ease-os)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
                   active
                     ? "text-[var(--accent)]"
                     : "text-[var(--fg-muted)] active:text-[var(--fg)]",

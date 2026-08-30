@@ -187,7 +187,7 @@ export const primaryRail: PrimaryNavItem[] = [
     href: "/dashboard",
     label: "Home",
     icon: Radar,
-    hint: "Account · robot · markets",
+    hint: "Account · signals · markets",
     match: ["/dashboard"],
     shortcut: "1",
     section: "Trading",

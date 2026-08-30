@@ -18,6 +18,7 @@ import { asList, asRecord, num, str } from "@/lib/desk";
 import { formatCurrency, formatRelativeTime } from "@/lib/utils";
 import {
   accountHealth,
+  accountHealthSummary,
   closedTradeStats,
   exposureUnavailableReason,
   isLiveBrokerCatalogue,
@@ -25,10 +26,12 @@ import {
   numericDisplay,
   periodPnl,
   portfolioAccount,
-  positionSideLabel,
+  positionExposureLabel,
   resolveConnectionPresentation,
   robotDisplayState,
+  TRADER_POLL_MS,
   traderFacingErrorMessage,
+  UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
 
 type Row = Record<string, unknown>;
@@ -53,17 +56,19 @@ export function PortfolioWorkspace() {
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: TRADER_POLL_MS,
   });
   const portfolioQ = useQuery({
     queryKey: ["portfolio"],
     queryFn: portfolioApi.get,
     retry: false,
+    refetchInterval: TRADER_POLL_MS,
   });
   const historyQ = useQuery({
     queryKey: ["history"],
     queryFn: portfolioApi.history,
     retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
   });
 
   const session = asRecord(sessionQ.data);
@@ -147,10 +152,14 @@ export function PortfolioWorkspace() {
       {
         id: "side",
         header: "Side",
-        accessor: (r) => positionSideLabel(r.side),
+        accessor: (r) => positionExposureLabel(r.side),
         cell: (r) => {
-          const side = positionSideLabel(r.side);
-          return <Badge tone={side === "BUY" ? "success" : side === "SELL" ? "warning" : "neutral"}>{side}</Badge>;
+          const side = positionExposureLabel(r.side);
+          return (
+            <Badge tone={side === "LONG" ? "success" : side === "SHORT" ? "danger" : "neutral"}>
+              {side}
+            </Badge>
+          );
         },
       },
       {
@@ -235,7 +244,7 @@ export function PortfolioWorkspace() {
     <div className="min-w-0 space-y-5">
       <PageHeader
         title="Portfolio"
-        description="Your own account only. Positions, margin, and robot state for the authenticated session."
+        description="Current account. Your own broker session only."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
@@ -270,7 +279,7 @@ export function PortfolioWorkspace() {
 
       <section aria-labelledby="portfolio-kpis">
         <h2 id="portfolio-kpis" className="mb-2 text-sm font-medium text-[var(--fg)]">
-          Account
+          Current account
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
           <DeskMetric label="Balance" value={money(account.balance ?? session.balance)} />
@@ -342,8 +351,11 @@ export function PortfolioWorkspace() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Account health</CardTitle>
+            <Badge tone={healthTone(accountHealthSummary(health))}>
+              {accountHealthSummary(health)}
+            </Badge>
           </CardHeader>
           <CardContent>
             <ul className="grid gap-2 sm:grid-cols-2">
@@ -392,7 +404,7 @@ export function PortfolioWorkspace() {
                 columns={positionCols}
                 rows={positions}
                 rowKey={(r, i) => str(r.ticket, String(i))}
-                searchKeys={(r) => `${str(r.symbol)} ${positionSideLabel(r.side)}`}
+                searchKeys={(r) => `${str(r.symbol)} ${positionExposureLabel(r.side)}`}
                 pageSize={10}
                 aria-label="Open positions"
                 empty={
@@ -465,7 +477,7 @@ export function PortfolioWorkspace() {
                       className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
                     >
                       <span className="truncate">
-                        {str(d.symbol)} {positionSideLabel(d.side)}
+                        {str(d.symbol)} {positionExposureLabel(d.side)}
                       </span>
                       <span
                         className={

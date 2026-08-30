@@ -1,23 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { FilterChip } from "@/components/trading/filter-chip";
+import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import {
   EMPTY_MARKET_FILTERS,
   filterMarketRows,
-  instrumentName,
   instrumentSymbol,
-  marketDataState,
-  numericDisplay,
+  marketSignalLabel,
   presentAssetClasses,
-  priceDisplay,
-  rowDirection,
+  presentField,
   rowRegime,
   rowSession,
   scoreDisplay,
+  signalBoardDirection,
+  signalFreshness,
   uniqueRowValues,
   type MarketFilterState,
 } from "@/lib/trading/trader-ux";
@@ -26,79 +27,28 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
-function toneForState(
-  state: string,
-): "success" | "warning" | "danger" | "neutral" {
-  if (state === "LIVE") return "success";
-  if (state === "STALE" || state === "MARKET_CLOSED" || state === "INSUFFICIENT_HISTORY") {
-    return "warning";
-  }
-  if (
-    state === "ERROR" ||
-    state === "NO_DATA" ||
-    state === "DISABLED" ||
-    state === "UNSUPPORTED" ||
-    state === "CATALOGUE_UNAVAILABLE"
-  ) {
-    return "danger";
-  }
-  return "neutral";
-}
-
-function toneForDirection(dir: string): "success" | "warning" | "neutral" {
-  if (dir === "BUY") return "success";
-  if (dir === "SELL") return "warning";
-  return "neutral";
-}
-
-function Chip({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "h-8 shrink-0 rounded-md border px-2.5 text-[11px] font-medium",
-        active
-          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-          : "border-[var(--border)] text-[var(--fg-muted)] hover:border-[var(--border-strong)] hover:text-[var(--fg)]",
-      )}
-      aria-pressed={active}
-    >
-      {children}
-    </button>
-  );
-}
-
 export function MarketCatalogueRows({
   rows,
   limit,
   showFilters = false,
   compact = false,
+  enableDetail = true,
 }: {
   rows: Record<string, unknown>[];
   limit?: number;
   showFilters?: boolean;
   compact?: boolean;
+  enableDetail?: boolean;
 }) {
   const [filters, setFilters] = useState<MarketFilterState>(EMPTY_MARKET_FILTERS);
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
 
   const classes = useMemo(() => presentAssetClasses(rows), [rows]);
-  const sessions = useMemo(
-    () => uniqueRowValues(rows, rowSession),
-    [rows],
-  );
+  const sessions = useMemo(() => uniqueRowValues(rows, rowSession), [rows]);
   const regimes = useMemo(() => uniqueRowValues(rows, rowRegime), [rows]);
   const statuses = useMemo(
-    () => uniqueRowValues(rows, (row) => marketDataState(row)),
+    () => uniqueRowValues(rows, (row) => signalFreshness(row)),
     [rows],
   );
 
@@ -117,6 +67,10 @@ export function MarketCatalogueRows({
     setFilters((prev) => ({ ...prev, ...patch }));
   };
 
+  const openRow = (row: Record<string, unknown>) => {
+    if (enableDetail) setSelected(row);
+  };
+
   return (
     <div className="min-w-0 space-y-3">
       {showFilters ? (
@@ -133,24 +87,24 @@ export function MarketCatalogueRows({
           </label>
           {classes.length > 0 ? (
             <div className="flex min-w-0 flex-wrap gap-1.5" role="group" aria-label="Asset class">
-              <Chip active={filters.assetClass === "ALL"} onClick={() => setFilter({ assetClass: "ALL" })}>
+              <FilterChip active={filters.assetClass === "ALL"} onClick={() => setFilter({ assetClass: "ALL" })}>
                 All
-              </Chip>
+              </FilterChip>
               {classes.map((cls) => (
-                <Chip
+                <FilterChip
                   key={cls}
                   active={filters.assetClass === cls}
                   onClick={() => setFilter({ assetClass: cls })}
                 >
                   {cls.charAt(0) + cls.slice(1).toLowerCase()}
-                </Chip>
+                </FilterChip>
               ))}
             </div>
           ) : null}
           <div className="grid min-w-0 gap-2 sm:grid-cols-3">
             {sessions.length > 0 ? (
               <select
-                className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm"
+                className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                 value={filters.session}
                 onChange={(e) => setFilter({ session: e.target.value })}
                 aria-label="Session"
@@ -165,7 +119,7 @@ export function MarketCatalogueRows({
             ) : null}
             {regimes.length > 0 ? (
               <select
-                className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm"
+                className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                 value={filters.regime}
                 onChange={(e) => setFilter({ regime: e.target.value })}
                 aria-label="Regime"
@@ -180,12 +134,12 @@ export function MarketCatalogueRows({
             ) : null}
             {statuses.length > 0 ? (
               <select
-                className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm"
-                value={filters.status}
-                onChange={(e) => setFilter({ status: e.target.value })}
-                aria-label="Status"
+                className="h-9 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                value={filters.freshness}
+                onChange={(e) => setFilter({ freshness: e.target.value })}
+                aria-label="Freshness"
               >
-                <option value="ALL">All status</option>
+                <option value="ALL">All freshness</option>
                 {statuses.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -204,57 +158,58 @@ export function MarketCatalogueRows({
       ) : (
         <>
           <div className={cn("hidden min-w-0 overflow-x-auto", compact ? "lg:block" : "md:block")}>
-            <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[800px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                  <th className="py-2 pr-3 font-medium">Symbol</th>
-                  <th className="py-2 pr-3 font-medium">Name</th>
-                  <th className="py-2 pr-3 font-medium">Asset Class</th>
-                  <th className="py-2 pr-3 font-medium">Bid</th>
-                  <th className="py-2 pr-3 font-medium">Ask</th>
-                  <th className="py-2 pr-3 font-medium">Spread</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  <th className="py-2 pr-3 font-medium">Session</th>
-                  <th className="py-2 pr-3 font-medium">Regime</th>
-                  <th className="py-2 pr-3 font-medium">Opportunity</th>
-                  <th className="py-2 font-medium">Direction</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Symbol</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Asset Class</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Session</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Regime</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Signal</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Direction</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Opportunity</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">Edge</th>
+                  <th className="py-2 pr-3 font-medium" scope="col">R/R</th>
+                  <th className="py-2 font-medium" scope="col">Freshness</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.map((row, i) => {
                   const symbol = instrumentSymbol(row) || String(i);
-                  const dir = rowDirection(row);
-                  const state = marketDataState(row);
+                  const dir = signalBoardDirection(row);
+                  const freshness = signalFreshness(row);
                   return (
                     <tr
                       key={symbol}
                       className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]"
                     >
                       <td className="py-2 pr-3">
-                        <Link
-                          href={`/symbols/${encodeURIComponent(symbol)}`}
-                          className="font-medium text-[var(--fg)] underline-offset-2 hover:underline"
-                        >
-                          {symbol}
-                        </Link>
-                      </td>
-                      <td className="max-w-[10rem] truncate py-2 pr-3 text-[var(--fg-muted)]">
-                        {instrumentName(row)}
+                        {enableDetail ? (
+                          <button
+                            type="button"
+                            onClick={() => openRow(row)}
+                            className="font-medium text-[var(--fg)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                          >
+                            {symbol}
+                          </button>
+                        ) : (
+                          <span className="font-medium text-[var(--fg)]">{symbol}</span>
+                        )}
                       </td>
                       <td className="py-2 pr-3 text-[var(--fg-muted)]">
                         {str(row.asset_class, "UNKNOWN")}
                       </td>
-                      <td className="py-2 pr-3 tabular">{priceDisplay(row.bid)}</td>
-                      <td className="py-2 pr-3 tabular">{priceDisplay(row.ask)}</td>
-                      <td className="py-2 pr-3 tabular">{numericDisplay(row.spread)}</td>
-                      <td className="py-2 pr-3">
-                        <Badge tone={toneForState(state)}>{state}</Badge>
-                      </td>
                       <td className="py-2 pr-3 text-[var(--fg-muted)]">{rowSession(row)}</td>
                       <td className="py-2 pr-3 text-[var(--fg-muted)]">{rowRegime(row)}</td>
+                      <td className="py-2 pr-3">{marketSignalLabel(row)}</td>
+                      <td className="py-2 pr-3">
+                        <Badge tone={directionTone(dir)}>{dir}</Badge>
+                      </td>
                       <td className="py-2 pr-3 tabular">{scoreDisplay(row.opportunity_score)}</td>
+                      <td className="py-2 pr-3 tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</td>
+                      <td className="py-2 pr-3 tabular">{scoreDisplay(row.RR ?? row.rr)}</td>
                       <td className="py-2">
-                        <Badge tone={toneForDirection(dir)}>{dir}</Badge>
+                        <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
                       </td>
                     </tr>
                   );
@@ -266,45 +221,59 @@ export function MarketCatalogueRows({
           <ul className={cn("grid min-w-0 gap-2", compact ? "lg:hidden" : "md:hidden")}>
             {shown.map((row, i) => {
               const symbol = instrumentSymbol(row) || String(i);
-              const dir = rowDirection(row);
-              const state = marketDataState(row);
+              const dir = signalBoardDirection(row);
+              const freshness = signalFreshness(row);
               return (
                 <li key={symbol}>
-                  <Link
-                    href={`/symbols/${encodeURIComponent(symbol)}`}
-                    className="block min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3"
+                  {enableDetail ? (
+                  <button
+                    type="button"
+                    onClick={() => openRow(row)}
+                    className="block w-full min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{symbol}</p>
                         <p className="truncate text-xs text-[var(--fg-muted)]">
-                          {str(row.asset_class, "UNKNOWN")}
+                          {str(row.asset_class, "UNKNOWN")} · {presentField(rowSession(row))}
                         </p>
                       </div>
-                      <Badge tone={toneForState(state)}>{state}</Badge>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge tone={directionTone(dir)}>{dir}</Badge>
+                        <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
+                      </div>
                     </div>
-                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                      <div>
-                        <dt className="text-[var(--fg-subtle)]">Bid</dt>
-                        <dd className="tabular">{priceDisplay(row.bid)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[var(--fg-subtle)]">Ask</dt>
-                        <dd className="tabular">{priceDisplay(row.ask)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[var(--fg-subtle)]">Spread</dt>
-                        <dd className="tabular">{numericDisplay(row.spread)}</dd>
-                      </div>
+                    <dl className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
                       <div>
                         <dt className="text-[var(--fg-subtle)]">Opportunity</dt>
                         <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
                       </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">Edge</dt>
+                        <dd className="tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">R/R</dt>
+                        <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                      </div>
                     </dl>
-                    <div className="mt-2">
-                      <Badge tone={toneForDirection(dir)}>{dir}</Badge>
+                  </button>
+                  ) : (
+                    <div className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{symbol}</p>
+                          <p className="truncate text-xs text-[var(--fg-muted)]">
+                            {str(row.asset_class, "UNKNOWN")} · {presentField(rowSession(row))}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge tone={directionTone(dir)}>{dir}</Badge>
+                          <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
+                        </div>
+                      </div>
                     </div>
-                  </Link>
+                  )}
                 </li>
               );
             })}
@@ -337,6 +306,14 @@ export function MarketCatalogueRows({
           </div>
         </div>
       ) : null}
+
+      {enableDetail ? (
+        <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
+          <DialogContent className="w-[min(96vw,720px)]">
+            {selected ? <IntelligenceDetail row={selected} kind="market" /> : null}
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </div>
   );
 }
@@ -344,10 +321,7 @@ export function MarketCatalogueRows({
 export function ResearchAdvisoryNote() {
   return (
     <p className="text-xs text-[var(--fg-subtle)]">
-      RESEARCH · NOT A TRADE AUTHORIZATION.{" "}
-      <Link href="/research" className="text-[var(--accent)] underline-offset-2 hover:underline">
-        Open research
-      </Link>
+      RESEARCH · NOT A TRADE AUTHORIZATION.
     </p>
   );
 }

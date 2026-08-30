@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
@@ -13,9 +14,14 @@ import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asList, asRecord } from "@/lib/desk";
 import {
   catalogueViewState,
+  dataSourceLabel,
   isLiveBrokerCatalogue,
+  lastUpdatedCopy,
+  MARKET_UNIVERSE_QUERY_KEY,
   mergeCatalogueRows,
   resolveConnectionPresentation,
+  TRADER_POLL_MS,
+  UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
 
 export default function MarketsPage() {
@@ -23,7 +29,7 @@ export default function MarketsPage() {
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: TRADER_POLL_MS,
   });
 
   const session = asRecord(sessionQ.data);
@@ -33,10 +39,11 @@ export default function MarketsPage() {
   const mismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
 
   const universeQ = useQuery({
-    queryKey: ["market-universe-snapshot", "markets"],
+    queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
     enabled: connection.connected && !mismatch && liveCatalogue && !sessionQ.isLoading,
     retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
   });
 
   const universe = asRecord(universeQ.data);
@@ -58,12 +65,17 @@ export default function MarketsPage() {
           asList(asRecord(universe.opportunity_board).rows).map(asRecord),
         )
       : [];
+  const source = dataSourceLabel({
+    liveBroker: liveCatalogue,
+    catalogueSource: universe.catalogue_source ?? session.catalogue_source,
+  });
+  const updated = lastUpdatedCopy(universe.as_of);
 
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Markets"
-        description="Instruments from your connected broker. Research cannot place orders."
+        description="Broker-discovered instruments. Research cannot place orders."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" asChild>
@@ -76,7 +88,17 @@ export default function MarketsPage() {
         }
       />
       <ConnectionStatus session={session} />
-      <ResearchAdvisoryNote />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ResearchAdvisoryNote />
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={catalogue === "LIVE_ROWS" ? "success" : catalogue === "LIVE_EMPTY" ? "neutral" : "warning"}>
+            {source}
+          </Badge>
+          {updated ? (
+            <span className="text-xs text-[var(--fg-subtle)]">{updated}</span>
+          ) : null}
+        </div>
+      </div>
       <Card>
         <CardContent className="min-w-0 pt-4">
           {sessionQ.isLoading ? (
@@ -84,8 +106,8 @@ export default function MarketsPage() {
           ) : noBroker ? (
             <DeskEmpty
               icon={Activity}
-              title="BROKER NOT CONNECTED"
-              description="Connect and verify your broker to load the live catalogue."
+              title="MARKETS UNAVAILABLE"
+              description="BROKER NOT CONNECTED. Connect and verify your broker to load the live catalogue."
               actionLabel="Connect Broker"
               actionHref="/broker"
             />
@@ -100,7 +122,7 @@ export default function MarketsPage() {
           ) : catalogue === "UNAVAILABLE" ? (
             <DeskEmpty
               icon={Activity}
-              title="CATALOGUE UNAVAILABLE"
+              title="MARKETS UNAVAILABLE"
               description="Broker market catalogue is currently unavailable. This is not an empty market."
               actionLabel="Connect Broker"
               actionHref="/broker"

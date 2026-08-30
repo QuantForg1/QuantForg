@@ -14,6 +14,7 @@ import {
   RESEARCH_NOT_AUTHORIZATION,
   instrumentName,
   isLiveBrokerCatalogue,
+  MARKET_UNIVERSE_QUERY_KEY,
   marketDataState,
   mergeCatalogueRows,
   numericDisplay,
@@ -23,6 +24,9 @@ import {
   rowRegime,
   rowSession,
   scoreDisplay,
+  signalFreshness,
+  TRADER_POLL_MS,
+  UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
 
 function Cell({ label, value }: { label: string; value: string }) {
@@ -40,6 +44,7 @@ export function InstrumentDetail({ code }: { code: string }) {
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
     retry: false,
+    refetchInterval: TRADER_POLL_MS,
   });
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
@@ -48,10 +53,11 @@ export function InstrumentDetail({ code }: { code: string }) {
   const noBroker = connection.state === "BROKER_NOT_CONNECTED";
 
   const universeQ = useQuery({
-    queryKey: ["market-universe-snapshot", "instrument", symbol],
+    queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
     enabled: connection.connected && !mismatch && live && Boolean(symbol),
     retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
   });
 
   const universe = asRecord(universeQ.data);
@@ -123,21 +129,17 @@ export function InstrumentDetail({ code }: { code: string }) {
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Cell label="Asset class" value={str(row.asset_class, "UNKNOWN")} />
-            <Cell label="Broker status" value={marketDataState(row)} />
+            <Cell label="Trading status" value={marketDataState(row)} />
+            <Cell label="Session" value={rowSession(row)} />
+            <Cell label="Regime" value={rowRegime(row)} />
+            <Cell label="Direction" value={rowDirection(row)} />
+            <Cell label="Opportunity" value={scoreDisplay(row.opportunity_score)} />
+            <Cell label="Edge" value={scoreDisplay(row.directional_edge ?? row.edge)} />
+            <Cell label="Risk/Reward" value={scoreDisplay(row.RR ?? row.rr)} />
+            <Cell label="Freshness" value={signalFreshness(row)} />
             <Cell label="Bid" value={priceDisplay(row.bid)} />
             <Cell label="Ask" value={priceDisplay(row.ask)} />
             <Cell label="Spread" value={numericDisplay(row.spread)} />
-            <Cell label="Session" value={rowSession(row)} />
-            <Cell label="Regime" value={rowRegime(row)} />
-            <Cell label="Opportunity" value={scoreDisplay(row.opportunity_score)} />
-            <Cell label="Direction" value={rowDirection(row)} />
-            <Cell
-              label="History / data"
-              value={str(
-                asRecord(row.data_quality).state,
-                str(row.history_status, marketDataState(row)),
-              )}
-            />
           </CardContent>
         </Card>
       )}

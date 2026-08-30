@@ -6,7 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { tradingSessionApi } from "@/lib/api/endpoints";
 import { asRecord, str } from "@/lib/desk";
 import {
+  connectionShortLabel,
   resolveConnectionPresentation,
+  TRADER_POLL_MS,
   type ConnectionPresentation,
 } from "@/lib/trading/trader-ux";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -32,7 +34,7 @@ export function ConnectionStatus({
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: TRADER_POLL_MS,
     enabled: sessionOverride == null,
   });
   const session = sessionOverride ?? asRecord(sessionQ.data);
@@ -47,13 +49,13 @@ export function ConnectionStatus({
         className={cn("h-5 shrink-0 px-1.5 text-[10px]", className)}
         role="status"
         aria-live="polite"
-        aria-label={`Connection ${view.label}`}
+        aria-label={`Connection ${connectionShortLabel(view.state)}`}
       >
         <span
           className="qf-status-dot mr-1 h-1.5 w-1.5 rounded-full bg-current"
           aria-hidden
         />
-        {view.label}
+        {connectionShortLabel(view.state)}
       </Badge>
     );
   }
@@ -69,7 +71,7 @@ export function ConnectionStatus({
       aria-label="Broker connection status"
     >
       <StatusCell label="Connection">
-        <Badge tone={view.tone}>{view.label}</Badge>
+        <Badge tone={view.tone}>{connectionShortLabel(view.state)}</Badge>
       </StatusCell>
       <StatusCell label="Health">{view.health}</StatusCell>
       <StatusCell label="Account">{view.maskedLogin}</StatusCell>

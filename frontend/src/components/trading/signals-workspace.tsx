@@ -8,25 +8,26 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
+import { FilterChip } from "@/components/trading/filter-chip";
+import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
-import { cn } from "@/lib/utils";
 import {
   catalogueViewState,
   dataSourceLabel,
   EMPTY_SIGNAL_FILTERS,
   filterSignalRows,
-  isHighConfidence,
   isLiveBrokerCatalogue,
+  lastUpdatedCopy,
+  MARKET_UNIVERSE_QUERY_KEY,
   marketDataState,
   mergeCatalogueRows,
   mergeResearchSignalFields,
   presentAssetClasses,
   presentField,
-  priceDisplay,
   resolveConnectionPresentation,
   rowRegime,
   rowSession,
@@ -35,60 +36,19 @@ import {
   signalBoardDirection,
   signalFeedState,
   signalFeedStateLabel,
+  signalFreshness,
+  signalStrength,
   signalSummary,
-  signalWhyFactors,
+  signalTimestampLabel,
   SIGNALS_NOT_AUTHORIZATION,
   sortSignalRows,
+  TRADER_POLL_MS,
   uniqueRowValues,
   unavailableSignalsTitle,
+  UNIVERSE_POLL_MS,
   type SignalFilterState,
   type SignalSortKey,
 } from "@/lib/trading/trader-ux";
-
-function Chip({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "h-8 shrink-0 rounded-md border px-2.5 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
-        active
-          ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-          : "border-[var(--border)] text-[var(--fg-muted)] hover:border-[var(--border-strong)] hover:text-[var(--fg)]",
-      )}
-      aria-pressed={active}
-    >
-      {children}
-    </button>
-  );
-}
-
-function toneForDirection(dir: string): "success" | "warning" | "danger" | "neutral" {
-  if (dir === "BUY") return "success";
-  if (dir === "SELL") return "danger";
-  return "neutral";
-}
-
-function toneForHealth(
-  state: string,
-): "success" | "warning" | "danger" | "neutral" {
-  if (state === "LIVE") return "success";
-  if (state === "STALE" || state === "MARKET_CLOSED" || state === "INSUFFICIENT_HISTORY") {
-    return "warning";
-  }
-  if (state === "ERROR" || state === "NO_DATA" || state === "CATALOGUE_UNAVAILABLE") {
-    return "danger";
-  }
-  return "neutral";
-}
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
   { id: "strongest", label: "Strongest" },
@@ -107,7 +67,7 @@ export function SignalsWorkspace() {
     queryKey: ["trading-session"],
     queryFn: tradingSessionApi.session,
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: TRADER_POLL_MS,
   });
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
@@ -116,10 +76,11 @@ export function SignalsWorkspace() {
   const mismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
 
   const universeQ = useQuery({
-    queryKey: ["market-universe-snapshot", "signals"],
+    queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
     enabled: connection.connected && !mismatch && liveCatalogue && !sessionQ.isLoading,
     retry: false,
+    refetchInterval: UNIVERSE_POLL_MS,
   });
 
   const universe = asRecord(universeQ.data);
@@ -156,19 +117,17 @@ export function SignalsWorkspace() {
     () => uniqueRowValues(rows, (row) => marketDataState(row)),
     [rows],
   );
+  const freshnessValues = useMemo(
+    () => uniqueRowValues(rows, (row) => signalFreshness(row)),
+    [rows],
+  );
   const ages = useMemo(
-    () => uniqueRowValues(rows, (row) => {
-      const ts = String(row.timestamp || row.features_as_of || "");
-      return ts ? "HAS_AGE" : "";
-    }),
+    () => uniqueRowValues(rows, (row) => (signalTimestampLabel(row) !== "—" ? "HAS_AGE" : "")),
     [rows],
   );
 
   const filtered = useMemo(() => filterSignalRows(rows, filters), [filters, rows]);
-  const sorted = useMemo(
-    () => sortSignalRows(filtered, sort),
-    [filtered, sort],
-  );
+  const sorted = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
 
   const summary = signalSummary({
     availability,
@@ -190,20 +149,19 @@ export function SignalsWorkspace() {
     rows,
   });
   const feedLabel = signalFeedStateLabel(feed);
+  const updated = lastUpdatedCopy(universe.as_of);
   const feedTone =
     feed === "LIVE"
       ? "success"
-      : feed === "STALE" || feed === "PARTIAL" || feed === "LOADING"
+      : feed === "STALE" || feed === "PARTIAL" || feed === "LOADING" || feed === "EMPTY"
         ? "warning"
-        : feed === "EMPTY"
-          ? "neutral"
-          : "danger";
+        : "danger";
 
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Signals"
-        description="Live market intelligence. Research is not a trade authorization."
+        description="Real-time market intelligence. Research is not a trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
@@ -226,10 +184,12 @@ export function SignalsWorkspace() {
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 id="signals-overview" className="text-sm font-medium text-[var(--fg)]">
-              Live market intelligence
+              Signal board
             </h2>
             <p className="text-xs text-[var(--fg-subtle)]">
-              Last updated {summary.lastUpdate} · Freshness {feedLabel} · Catalogue {source}
+              Catalogue {source}
+              {updated ? ` · ${updated}` : ""}
+              {` · Freshness ${feedLabel}`}
             </p>
           </div>
           <Badge tone={feedTone}>{feedLabel}</Badge>
@@ -261,7 +221,7 @@ export function SignalsWorkspace() {
           ) : availability === "LIVE_EMPTY" ? (
             <DeskEmpty
               icon={Activity}
-              title="No ranked signals"
+              title="No signals found"
               description="The live broker catalogue was queried. No ranked research signals are available right now."
             />
           ) : (
@@ -269,130 +229,149 @@ export function SignalsWorkspace() {
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Direction">
                   {(["ALL", "BUY", "SELL", "WATCH"] as const).map((dir) => (
-                    <Chip
+                    <FilterChip
                       key={dir}
                       active={filters.direction === dir}
                       onClick={() => setFilters((f) => ({ ...f, direction: dir }))}
                     >
                       {dir}
-                    </Chip>
+                    </FilterChip>
                   ))}
                 </div>
                 {classes.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Asset class">
-                    <Chip
+                    <FilterChip
                       active={filters.assetClass === "ALL"}
                       onClick={() => setFilters((f) => ({ ...f, assetClass: "ALL" }))}
                     >
                       All classes
-                    </Chip>
+                    </FilterChip>
                     {classes.map((cls) => (
-                      <Chip
+                      <FilterChip
                         key={cls}
                         active={filters.assetClass === cls}
                         onClick={() => setFilters((f) => ({ ...f, assetClass: cls }))}
                       >
                         {cls}
-                      </Chip>
+                      </FilterChip>
                     ))}
                   </div>
                 ) : null}
                 {sessions.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Session">
-                    <Chip
+                    <FilterChip
                       active={filters.session === "ALL"}
                       onClick={() => setFilters((f) => ({ ...f, session: "ALL" }))}
                     >
                       All sessions
-                    </Chip>
+                    </FilterChip>
                     {sessions.map((item) => (
-                      <Chip
+                      <FilterChip
                         key={item}
                         active={filters.session === item}
                         onClick={() => setFilters((f) => ({ ...f, session: item }))}
                       >
                         {item}
-                      </Chip>
+                      </FilterChip>
                     ))}
                   </div>
                 ) : null}
                 {regimes.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Regime">
-                    <Chip
+                    <FilterChip
                       active={filters.regime === "ALL"}
                       onClick={() => setFilters((f) => ({ ...f, regime: "ALL" }))}
                     >
                       All regimes
-                    </Chip>
+                    </FilterChip>
                     {regimes.map((item) => (
-                      <Chip
+                      <FilterChip
                         key={item}
                         active={filters.regime === item}
                         onClick={() => setFilters((f) => ({ ...f, regime: item }))}
                       >
                         {item}
-                      </Chip>
+                      </FilterChip>
                     ))}
                   </div>
                 ) : null}
                 {confidences.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Confidence">
-                    <Chip
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Strength">
+                    <FilterChip
                       active={filters.confidence === "ALL"}
                       onClick={() => setFilters((f) => ({ ...f, confidence: "ALL" }))}
                     >
-                      All confidence
-                    </Chip>
+                      All strength
+                    </FilterChip>
                     {confidences.map((item) => (
-                      <Chip
+                      <FilterChip
                         key={item}
                         active={filters.confidence === item}
                         onClick={() => setFilters((f) => ({ ...f, confidence: item }))}
                       >
                         {item}
-                      </Chip>
+                      </FilterChip>
+                    ))}
+                  </div>
+                ) : null}
+                {freshnessValues.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Freshness">
+                    <FilterChip
+                      active={filters.freshness === "ALL"}
+                      onClick={() => setFilters((f) => ({ ...f, freshness: "ALL" }))}
+                    >
+                      All freshness
+                    </FilterChip>
+                    {freshnessValues.map((item) => (
+                      <FilterChip
+                        key={item}
+                        active={filters.freshness === item}
+                        onClick={() => setFilters((f) => ({ ...f, freshness: item }))}
+                      >
+                        {item}
+                      </FilterChip>
                     ))}
                   </div>
                 ) : null}
                 {healths.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Data health">
-                    <Chip
+                    <FilterChip
                       active={filters.dataHealth === "ALL"}
                       onClick={() => setFilters((f) => ({ ...f, dataHealth: "ALL" }))}
                     >
                       All health
-                    </Chip>
+                    </FilterChip>
                     {healths.map((item) => (
-                      <Chip
+                      <FilterChip
                         key={item}
                         active={filters.dataHealth === item}
                         onClick={() => setFilters((f) => ({ ...f, dataHealth: item }))}
                       >
                         {item}
-                      </Chip>
+                      </FilterChip>
                     ))}
                   </div>
                 ) : null}
                 {ages.includes("HAS_AGE") ? (
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label="Signal age">
-                    <Chip
+                    <FilterChip
                       active={filters.age === "ALL"}
                       onClick={() => setFilters((f) => ({ ...f, age: "ALL" }))}
                     >
                       All ages
-                    </Chip>
-                    <Chip
+                    </FilterChip>
+                    <FilterChip
                       active={filters.age === "RECENT"}
                       onClick={() => setFilters((f) => ({ ...f, age: "RECENT" }))}
                     >
                       Recent
-                    </Chip>
-                    <Chip
+                    </FilterChip>
+                    <FilterChip
                       active={filters.age === "STALE"}
                       onClick={() => setFilters((f) => ({ ...f, age: "STALE" }))}
                     >
                       Older
-                    </Chip>
+                    </FilterChip>
                   </div>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-2">
@@ -423,24 +402,27 @@ export function SignalsWorkspace() {
               ) : (
                 <>
                   <div className="hidden min-w-0 overflow-x-auto md:block">
-                    <table className="w-full min-w-[720px] text-left text-sm" aria-label="Signals">
+                    <table className="w-full min-w-[860px] text-left text-sm" aria-label="Signals">
                       <thead>
                         <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                          <th className="py-2 pr-3 font-medium">Symbol</th>
-                          <th className="py-2 pr-3 font-medium">Direction</th>
-                          <th className="py-2 pr-3 font-medium">Opportunity</th>
-                          <th className="py-2 pr-3 font-medium">Edge</th>
-                          <th className="py-2 pr-3 font-medium">R/R</th>
-                          <th className="py-2 pr-3 font-medium">Session</th>
-                          <th className="py-2 pr-3 font-medium">Regime</th>
-                          <th className="py-2 pr-3 font-medium">Class</th>
-                          <th className="py-2 pr-3 font-medium">Freshness</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Symbol</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Direction</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Opportunity</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Edge</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">R/R</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Strength</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Session</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Regime</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Class</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Timestamp</th>
+                          <th className="py-2 pr-3 font-medium" scope="col">Freshness</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sorted.map((row, i) => {
                           const dir = signalBoardDirection(row);
                           const symbol = str(row.broker_symbol || row.symbol, "—");
+                          const freshness = signalFreshness(row);
                           return (
                             <tr key={`${symbol}-row-${i}`} className="border-b border-[var(--border)]">
                               <td className="py-2 pr-3">
@@ -453,18 +435,18 @@ export function SignalsWorkspace() {
                                 </button>
                               </td>
                               <td className="py-2 pr-3">
-                                <Badge tone={toneForDirection(dir)}>{dir}</Badge>
+                                <Badge tone={directionTone(dir)}>{dir}</Badge>
                               </td>
                               <td className="py-2 pr-3 tabular">{scoreDisplay(row.opportunity_score)}</td>
                               <td className="py-2 pr-3 tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</td>
                               <td className="py-2 pr-3 tabular">{scoreDisplay(row.RR ?? row.rr)}</td>
+                              <td className="py-2 pr-3 tabular">{signalStrength(row)}</td>
                               <td className="py-2 pr-3">{presentField(row.session)}</td>
                               <td className="py-2 pr-3">{presentField(rowRegime(row))}</td>
                               <td className="py-2 pr-3">{presentField(row.asset_class)}</td>
+                              <td className="py-2 pr-3 text-xs text-[var(--fg-muted)]">{signalTimestampLabel(row)}</td>
                               <td className="py-2 pr-3">
-                                <Badge tone={toneForHealth(str(row.data_state, "UNKNOWN"))}>
-                                  {str(row.data_state, "UNKNOWN")}
-                                </Badge>
+                                <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
                               </td>
                             </tr>
                           );
@@ -476,6 +458,7 @@ export function SignalsWorkspace() {
                     {sorted.map((row, i) => {
                       const dir = signalBoardDirection(row);
                       const symbol = str(row.broker_symbol || row.symbol, "—");
+                      const freshness = signalFreshness(row);
                       return (
                         <li key={`${symbol}-${i}`}>
                           <button
@@ -491,10 +474,8 @@ export function SignalsWorkspace() {
                                 </p>
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <Badge tone={toneForDirection(dir)}>{dir}</Badge>
-                                <Badge tone={toneForHealth(str(row.data_state, "UNKNOWN"))}>
-                                  {str(row.data_state, "UNKNOWN")}
-                                </Badge>
+                                <Badge tone={directionTone(dir)}>{dir}</Badge>
+                                <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
                               </div>
                             </div>
                             <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
@@ -524,80 +505,10 @@ export function SignalsWorkspace() {
       </Card>
 
       <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="w-[min(96vw,720px)]" aria-describedby="signal-detail-note">
-          {selected ? (
-            <SignalDetail row={selected} />
-          ) : null}
+        <DialogContent className="w-[min(96vw,720px)]" aria-describedby={undefined}>
+          {selected ? <IntelligenceDetail row={selected} kind="signal" /> : null}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function SignalDetail({ row }: { row: Record<string, unknown> }) {
-  const dir = signalBoardDirection(row);
-  const why = signalWhyFactors(row);
-  return (
-    <div className="space-y-4">
-      <DialogTitle>
-        {str(row.broker_symbol || row.symbol, "Signal")}
-      </DialogTitle>
-      <p id="signal-detail-note" className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-        {SIGNALS_NOT_AUTHORIZATION}
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        <Badge tone={toneForDirection(dir)}>{dir}</Badge>
-        <Badge tone={toneForHealth(str(row.data_state, "UNKNOWN"))}>
-          {str(row.data_state, "UNKNOWN")}
-        </Badge>
-        <Badge tone="neutral">{presentField(row.asset_class)}</Badge>
-        {isHighConfidence(row) ? <Badge tone="accent">Qualified</Badge> : null}
-      </div>
-      <dl className="grid gap-3 sm:grid-cols-2">
-        <Detail label="Confidence" value={presentField(row.confidence_state)} />
-        <Detail label="Opportunity" value={scoreDisplay(row.opportunity_score)} />
-        <Detail label="Edge" value={scoreDisplay(row.directional_edge ?? row.edge)} />
-        <Detail label="Risk/Reward" value={scoreDisplay(row.RR ?? row.rr)} />
-        <Detail label="Market state" value={presentField(row.data_state)} />
-        <Detail label="Regime" value={presentField(rowRegime(row))} />
-        <Detail label="Session" value={presentField(rowSession(row))} />
-        <Detail label="Current price" value={priceDisplay(row.current_price ?? row.price ?? row.bid)} />
-        <Detail label="Entry context" value={presentField(row.entry_candidate)} />
-        <Detail label="Stop-loss context" value={presentField(row.sl_candidate ?? row.SL_candidate)} />
-        <Detail label="Take-profit context" value={presentField(row.tp_candidate ?? row.TP_candidate)} />
-        <Detail label="Spread / data health" value={presentField(row.spread ?? row.data_freshness)} />
-        <Detail label="Timestamp" value={presentField(row.timestamp || row.features_as_of)} />
-        <Detail label="Status" value={presentField(row.board_status || row.setup_state)} />
-      </dl>
-      {why.length > 0 ? (
-        <section>
-          <h3 className="mb-2 text-sm font-medium text-[var(--fg)]">Why this signal</h3>
-          <ul className="space-y-2">
-            {why.map((factor) => (
-              <li key={factor.label} className="rounded-md border border-[var(--border)] px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                  {factor.label}
-                </p>
-                <p className="text-sm text-[var(--fg)]">{factor.value}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : (
-        <p className="text-sm text-[var(--fg-muted)]">Explanation not available.</p>
-      )}
-      <p className="text-xs text-[var(--fg-subtle)]">
-        Signals are informational. There is no execute or place-order action on this desk.
-      </p>
-    </div>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</dt>
-      <dd className="text-sm text-[var(--fg)]">{value}</dd>
     </div>
   );
 }

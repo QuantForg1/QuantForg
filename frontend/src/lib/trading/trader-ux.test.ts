@@ -29,16 +29,23 @@ import {
   signalAvailability,
   signalBoardDirection,
   signalFeedState,
+  signalFreshness,
   signalSummary,
+  signalWhyFactors,
   sortSignalRows,
   strongestSetupLabel,
   unavailableSignalsTitle,
   accountHealth,
+  accountHealthSummary,
   closedTradeStats,
+  connectionShortLabel,
+  EXPLANATION_UNAVAILABLE,
   exposureUnavailableReason,
   INSUFFICIENT_SAMPLE,
+  lastUpdatedCopy,
   moneyDisplay,
   portfolioAccount,
+  positionExposureLabel,
   positionSideLabel,
 } from "./trader-ux.ts";
 
@@ -431,6 +438,38 @@ assert.equal(
   });
   assert.equal(health.find((h) => h.id === "broker")?.state, "Blocked");
   assert.equal(health.find((h) => h.id === "robot")?.state, "Blocked");
+  assert.equal(accountHealthSummary(health), "Unavailable");
+}
+
+{
+  assert.equal(signalFreshness({ data_quality: { state: "LIVE" } }), "LIVE");
+  assert.equal(signalFreshness({ data_quality: { state: "STALE" } }), "STALE");
+  assert.equal(signalFreshness({ data_state: "ERROR" }), "UNAVAILABLE");
+  assert.equal(signalFreshness({}), "UNAVAILABLE");
+  const recent = new Date(Date.now() - 60_000).toISOString();
+  assert.equal(signalFreshness({ timestamp: recent }), "RECENT");
+  assert.equal(lastUpdatedCopy(null), "");
+  assert.equal(lastUpdatedCopy(""), "");
+  assert.match(lastUpdatedCopy(new Date(Date.now() - 12_000).toISOString()), /Last updated 1[0-4] seconds ago/);
+  assert.equal(positionExposureLabel("buy"), "LONG");
+  assert.equal(positionExposureLabel("short"), "SHORT");
+  assert.equal(connectionShortLabel("BROKER_NOT_CONNECTED"), "DISCONNECTED");
+  assert.equal(connectionShortLabel("ACCOUNT_SESSION_MISMATCH"), "SESSION MISMATCH");
+  assert.equal(connectionShortLabel("CONNECTED"), "CONNECTED");
+  assert.equal(signalWhyFactors({}).length, 0);
+  assert.equal(EXPLANATION_UNAVAILABLE, "EXPLANATION UNAVAILABLE");
+}
+
+{
+  const buy = filterSignalRows(
+    [
+      { symbol: "EURUSD", direction: "BUY", asset_class: "FOREX" },
+      { symbol: "GBPUSD", direction: "SELL", asset_class: "FOREX" },
+    ],
+    { ...EMPTY_SIGNAL_FILTERS, direction: "SELL" },
+  );
+  assert.equal(buy.length, 1);
+  assert.equal(buy[0]?.symbol, "GBPUSD");
 }
 
 console.log("trader-ux.test.ts ok");
