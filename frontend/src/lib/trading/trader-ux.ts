@@ -262,10 +262,17 @@ export function skippedMalformedInstrumentCount(
 export function hasResearchSignal(row: Record<string, unknown>): boolean {
   if (row.has_research_signal === true) return true;
   if (row.has_research_signal === false) return false;
+  const dir = String(row.direction || "")
+    .trim()
+    .toUpperCase();
+  const actionable = dir === "BUY" || dir === "SELL";
+  if (!actionable) return false;
   if (numericSortValue(row.research_rank_score) != null) return true;
+  if (numericSortValue(row.opportunity_score) != null) return true;
   if (row.qualified_research === true) return true;
   const status = String(row.board_status || "").trim().toUpperCase();
-  return Boolean(status) && status !== "UNKNOWN" && status !== "NOT AVAILABLE";
+  // Catalogue presence (DISCOVERED / DATA_READY) is not a research signal.
+  return status === "QUALIFIED" || status === "ANALYZED" || status === "ACTIVE";
 }
 
 export const MARKET_PAGE_SIZE = 50;

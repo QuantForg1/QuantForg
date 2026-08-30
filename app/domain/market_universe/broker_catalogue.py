@@ -157,6 +157,17 @@ def discover_live_catalogue(mt5_adapter: Any | None) -> dict[str, Any]:
         }
     listing = None
     source = CATALOGUE_LIVE_BROKER
+    # Heal detached Railway↔gateway binding before catalogue read (no re-login).
+    try:
+        client = getattr(mt5_adapter, "client", None) or getattr(
+            mt5_adapter, "_client", None
+        )
+        if client is not None and not bool(getattr(client, "is_connected", False)):
+            adopt = getattr(client, "adopt_existing_session", None)
+            if callable(adopt):
+                adopt()
+    except Exception:
+        logger.info("broker_catalogue_adopt_before_symbols_failed")
     try:
         if hasattr(mt5_adapter, "symbols"):
             listing = mt5_adapter.symbols()

@@ -1549,11 +1549,17 @@ def _research_universe_feed() -> dict[str, Any]:
         from app.application.services.market_universe_service import (
             MarketUniverseService,
             get_last_market_universe_snapshot,
+            resolve_runtime_mt5_adapter,
         )
 
         snap = get_last_market_universe_snapshot()
         if snap is None:
-            snap = MarketUniverseService().snapshot(refresh=False)
+            adapter, diag = resolve_runtime_mt5_adapter()
+            snap = MarketUniverseService().snapshot(
+                refresh=False,
+                mt5_adapter=adapter,
+                adapter_resolution=diag,
+            )
         return snap if isinstance(snap, dict) else {}
     except Exception:
         logger.exception("signal_center_research_universe_unavailable")
@@ -1751,8 +1757,19 @@ def list_live_signals(
     if research_as_of:
         as_of = research_as_of
 
+    catalogue_src = str(
+        research_meta.get("catalogue_source")
+        or research_snap.get("catalogue_source")
+        or ""
+    ).upper()
+    # Only treat explicit broker-down sources as catalogue_down.
+    # Empty catalogue_source means research feed did not attach metadata yet;
+    # live-scan WAIT/BUY/SELL rows must still surface (do not treat "" as down).
+    catalogue_down = catalogue_src in {"UNAVAILABLE", "ERROR", "MOCK"}
+
     # Enrich with latest strategy diagnostics when scan empty for a symbol.
-    if not signals:
+    # Never invent a ghost signal while the broker catalogue is down.
+    if not signals and not catalogue_down:
         try:
             snap = get_strategy_diagnostics_store().snapshot(limit=40)
             latest = snap.get("latest") if isinstance(snap, dict) else None
@@ -1786,6 +1803,23 @@ def list_live_signals(
                 )
         except Exception:
             logger.exception("signal_center_diagnostics_fallback_failed")
+
+    if catalogue_down:
+        # Drop NONE/DISCOVERED/zero-score ghosts; keep real BUY/SELL/WAIT with scores.
+        def _honest_while_catalogue_down(s: Any) -> bool:
+            if not isinstance(s, dict):
+                return False
+            direction = str(s.get("direction") or "").upper()
+            if direction not in {"BUY", "SELL", "WAIT"}:
+                return False
+            opp = s.get("opportunity_score")
+            if isinstance(opp, bool) or not isinstance(opp, (int, float)):
+                return False
+            return float(opp) > 0
+
+        signals = [s for s in signals if _honest_while_catalogue_down(s)]
+        if research_meta.get("scanner_status") != "UNAVAILABLE":
+            research_meta["scanner_status"] = "UNAVAILABLE"
 
     last_cycle = None
     try:

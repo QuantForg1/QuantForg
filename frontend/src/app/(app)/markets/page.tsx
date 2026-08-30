@@ -10,7 +10,7 @@ import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { MarketCatalogueRows, ResearchAdvisoryNote } from "@/components/trading/market-catalogue-rows";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
-import { asList, asRecord } from "@/lib/desk";
+import { asList, asRecord, str } from "@/lib/desk";
 import { ApiError } from "@/lib/api/client";
 import {
   catalogueStatusLabel,
@@ -180,7 +180,10 @@ export default function MarketsPage() {
         <DeskEmpty
           icon={Activity}
           title="MARKETS UNAVAILABLE"
-          description="Broker market catalogue is currently unavailable. This is not an empty market."
+          description={
+            str(session.catalogue_last_error, "").trim() ||
+            "Broker market catalogue is currently unavailable. This is not an empty market."
+          }
           actionLabel="Connect Broker"
           actionHref="/broker"
         />

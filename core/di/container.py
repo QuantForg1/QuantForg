@@ -459,6 +459,10 @@ class Container:
 
                 adapter = self.mt5_adapter
                 uow = self.mt5_uow_factory
+                restore_event = getattr(self, "broker_restore_finished", None)
+                if restore_event is None:
+                    restore_event = asyncio.Event()
+                    self.broker_restore_finished = restore_event
 
                 async def _broker_restore_bg() -> None:
                     await asyncio.sleep(1.5)
@@ -481,16 +485,34 @@ class Container:
                             "broker_startup_restore_failed",
                             error=str(restore_exc),
                         )
+                    finally:
+                        restore_event.set()
 
                 asyncio.create_task(  # noqa: RUF006
                     _broker_restore_bg(), name="broker-auto-restore"
                 )
                 logger.info("broker_auto_restore_scheduled_background")
+            else:
+                ev = getattr(self, "broker_restore_finished", None)
+                if ev is None:
+                    self.broker_restore_finished = asyncio.Event()
+                    ev = self.broker_restore_finished
+                ev.set()
         except Exception as restore_sched_exc:
             logger.warning(
                 "broker_auto_restore_schedule_failed",
                 error=str(restore_sched_exc),
             )
+            try:
+                import asyncio
+
+                ev = getattr(self, "broker_restore_finished", None)
+                if ev is None:
+                    self.broker_restore_finished = asyncio.Event()
+                    ev = self.broker_restore_finished
+                ev.set()
+            except Exception:
+                pass
 
         logger.info(
             "container_startup_complete",

@@ -159,6 +159,19 @@ async def research_analysis_loop(
         authorizes_trade=False,
         second_scanner=False,
     )
+    # Wait for broker auto-restore attempt so first scan does not race redeploy.
+    try:
+        from core.di.container import get_container
+
+        container = get_container()
+        ev = getattr(container, "broker_restore_finished", None)
+        if ev is not None and not ev.is_set():
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(ev.wait(), timeout=45.0)
+        else:
+            await asyncio.sleep(2.0)
+    except Exception:
+        await asyncio.sleep(2.0)
     while not stop.is_set():
         try:
             await asyncio.to_thread(run_research_analysis_once)

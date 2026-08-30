@@ -111,6 +111,49 @@ def _credential_flags() -> dict[str, Any]:
     return flags
 
 
+def _client_of(mt5_adapter: Any) -> Any | None:
+    if mt5_adapter is None:
+        return None
+    return getattr(mt5_adapter, "client", None) or getattr(
+        mt5_adapter, "_client", None
+    )
+
+
+def ensure_gateway_session_for_research(mt5_adapter: Any) -> dict[str, Any]:
+    """Adopt a live Windows gateway session for catalogue/market reads.
+
+    Never constructs a second gateway. Never logs in with broker password.
+    Never authorizes OMS. Returns diagnostic only.
+    """
+    diag: dict[str, Any] = {
+        "adopted": False,
+        "already_connected": False,
+        "error": None,
+        "authorizes_trade": False,
+    }
+    client = _client_of(mt5_adapter)
+    if client is None:
+        diag["error"] = "no_gateway_client"
+        return diag
+    if bool(getattr(client, "is_connected", False)):
+        diag["adopted"] = True
+        diag["already_connected"] = True
+        return diag
+    adopt = getattr(client, "adopt_existing_session", None)
+    if not callable(adopt):
+        diag["error"] = "adopt_unavailable"
+        return diag
+    try:
+        ok = bool(adopt())
+        diag["adopted"] = ok
+        if not ok:
+            diag["error"] = "MT5 gateway session not connected"
+    except Exception as exc:
+        diag["error"] = f"{type(exc).__name__}:{exc}"[:200]
+        logger.warning("research_gateway_adopt_failed", error=diag["error"])
+    return diag
+
+
 def resolve_runtime_mt5_adapter() -> tuple[Any | None, dict[str, Any]]:
     """Resolve the existing DI MT5Adapter only.
 
@@ -628,6 +671,7 @@ def build_snapshot(
     adapter_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
+    gateway_session = ensure_gateway_session_for_research(mt5_adapter)
     catalogue = _resolve_catalogue(mt5_adapter=mt5_adapter, broker_rows=broker_rows)
     if adapter_resolution and adapter_resolution.get("error"):
         src = str(catalogue.get("catalogue_source") or "")
@@ -635,6 +679,14 @@ def build_snapshot(
             catalogue = dict(catalogue)
             catalogue["error"] = adapter_resolution.get("error")
             catalogue["invented"] = False
+    if (
+        gateway_session.get("error")
+        and not catalogue.get("error")
+        and str(catalogue.get("catalogue_source") or "")
+        in {CATALOGUE_UNAVAILABLE, CATALOGUE_ERROR, ""}
+    ):
+        catalogue = dict(catalogue)
+        catalogue["error"] = gateway_session.get("error")
     rows = tuple(catalogue.get("rows") or ())
     source = str(catalogue.get("catalogue_source") or CATALOGUE_UNAVAILABLE)
     if source == CATALOGUE_MOCK:
@@ -717,6 +769,12 @@ def build_snapshot(
         )
         by_state = dict.fromkeys(by_state or ("UNKNOWN",), overlay)
     trace = connection_trace(mt5_adapter)
+    trace["gateway_session"] = gateway_session
+    if gateway_session.get("error") and not catalogue.get("error"):
+        # Prefer adopt failure text when catalogue already unavailable.
+        if source in {CATALOGUE_UNAVAILABLE, CATALOGUE_ERROR, CATALOGUE_MOCK}:
+            catalogue = dict(catalogue)
+            catalogue["error"] = gateway_session.get("error")
     if source == CATALOGUE_LIVE_BROKER:
         trace["catalogue_source"] = CATALOGUE_LIVE_BROKER
         trace["broker_connection_available"] = True

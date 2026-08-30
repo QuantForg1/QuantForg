@@ -184,6 +184,7 @@ class GetTradingSessionUseCase:
             )
         catalogue_source = None
         catalogue_unavailable = True
+        catalogue_last_error = None
         if ctx.connected and session_code != ACCOUNT_SESSION_MISMATCH:
             try:
                 from app.domain.trading.execution_universe import (
@@ -194,9 +195,11 @@ class GetTradingSessionUseCase:
                 diag = execution_universe_diagnostics(mt5_adapter=self.adapter)
                 catalogue_source = str(diag.get("catalogue_source") or "")
                 catalogue_unavailable = catalogue_source != CATALOGUE_LIVE_BROKER
+                catalogue_last_error = diag.get("execution_unavailable_reason")
             except Exception:
                 catalogue_source = "UNAVAILABLE"
                 catalogue_unavailable = True
+                catalogue_last_error = "catalogue_diagnostics_failed"
         owned = connection is not None and bool(
             getattr(connection, "connected", False)
         )
@@ -264,6 +267,7 @@ class GetTradingSessionUseCase:
             "session_code": session_code,
             "catalogue_source": catalogue_source,
             "catalogue_unavailable": catalogue_unavailable,
+            "catalogue_last_error": catalogue_last_error,
             "account_unavailable": account_unavailable,
             "last_verified": last_verified,
             "robot_blocked_reason": robot_blocked_reason,

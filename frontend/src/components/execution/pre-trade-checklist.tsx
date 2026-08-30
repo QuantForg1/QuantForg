@@ -9,6 +9,7 @@ import {
   formatRiskRejection,
   parseRiskRules,
 } from "@/components/execution/risk-rules-panel";
+import { isGoldSymbol } from "@/lib/trading/gold-only";
 
 export type PreTradeInputs = {
   symbol: string;
@@ -72,6 +73,17 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
       : NaN;
   const hasQuote = Number.isFinite(spread) && spread > 0;
   const maxSpread = inputs.maxSpread ?? defaultMaxSpread();
+  const goldDesk = isGoldSymbol(inputs.symbol);
+  // Gold desk ceiling (≤2.00 absolute price) must not be applied to BTC/FX/etc.
+  // Non-gold still requires a live quote; Risk/OMS remain authoritative.
+  const spreadOk = goldDesk
+    ? hasQuote && spread <= maxSpread
+    : hasQuote;
+  const spreadDetail = !hasQuote
+    ? "n/a"
+    : goldDesk
+      ? `${spread.toFixed(5)} ≤ ${maxSpread}`
+      : `${spread.toFixed(5)} · gold desk ≤${maxSpread} N/A · backend Risk validates`;
   const vol = num(inputs.volume, 0);
   const free = num(session.freeMargin, NaN);
   const marginNeeded = num(inputs.marginRequired, NaN);
@@ -131,9 +143,9 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
         detail: hasQuote ? `spread ${spread.toFixed(5)}` : "No Tick",
       },
       {
-        ok: hasQuote && spread <= maxSpread,
+        ok: spreadOk,
         label: "Spread Acceptable",
-        detail: hasQuote ? `${spread.toFixed(5)} ≤ ${maxSpread}` : "n/a",
+        detail: spreadDetail,
       },
       {
         ok: vol > 0,
@@ -208,6 +220,9 @@ export const PreTradeChecklist = memo(function PreTradeChecklist({
     riskDetail,
     spread,
     maxSpread,
+    spreadOk,
+    spreadDetail,
+    goldDesk,
     vol,
     free,
     marginNeeded,
@@ -279,6 +294,7 @@ export function preTradeAllowsExecution(inputs: PreTradeInputs, session: {
       ? inputs.ask - inputs.bid
       : NaN;
   const maxSpread = inputs.maxSpread ?? defaultMaxSpread();
+  const goldDesk = isGoldSymbol(inputs.symbol);
   const vol = num(inputs.volume, 0);
   const free = num(session.freeMargin, NaN);
   const marginNeeded = num(inputs.marginRequired, NaN);
@@ -286,7 +302,9 @@ export function preTradeAllowsExecution(inputs: PreTradeInputs, session: {
   if (session.gatewayOnline !== true || !session.connected) return false;
   if (inputs.marketOpen === false) return false;
   if (!inputs.symbol.trim() || vol <= 0) return false;
-  if (!Number.isFinite(spread) || spread <= 0 || spread > maxSpread) return false;
+  if (!Number.isFinite(spread) || spread <= 0) return false;
+  // Gold desk absolute ceiling only — never apply XAUUSD ≤2.00 to BTC/FX.
+  if (goldDesk && spread > maxSpread) return false;
   if (Number.isFinite(marginNeeded) && Number.isFinite(free) && marginNeeded > free)
     return false;
   if (inputs.validationValid === false) return false;
