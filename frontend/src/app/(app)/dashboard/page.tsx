@@ -14,6 +14,7 @@ import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows"
 import {
   marketUniverseApi,
   portfolioApi,
+  signalCenterApi,
   tradingSessionApi,
 } from "@/lib/api/endpoints";
 import { asList, asRecord, num, str } from "@/lib/desk";
@@ -30,13 +31,16 @@ import {
   MARKET_UNIVERSE_QUERY_KEY,
   mergeCatalogueRows,
   hasResearchSignal,
+  normalizeSignalCenterPayload,
+  researchAvailabilityAsCatalogue,
+  researchSignalsEmptyCopy,
   skippedMalformedInstrumentCount,
+  SIGNAL_CENTER_QUERY_KEY,
   numericDisplay,
   positionExposureLabel,
   resolveConnectionPresentation,
   robotDisplayState,
   scoreDisplay,
-  signalAvailability,
   signalBoardDirection,
   signalFreshness,
   SIGNALS_NOT_AUTHORIZATION,
@@ -44,7 +48,6 @@ import {
   topResearchOpportunities,
   TRADER_POLL_MS,
   traderFacingErrorMessage,
-  unavailableSignalsTitle,
   UNIVERSE_POLL_MS,
 } from "@/lib/trading/trader-ux";
 
@@ -112,6 +115,29 @@ export default function DashboardPage() {
   const sessionMismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
   const robot = robotDisplayState(session, connection);
 
+  const signalsQ = useQuery({
+    queryKey: SIGNAL_CENTER_QUERY_KEY,
+    queryFn: () => signalCenterApi.list({ enabled_only: false }),
+    retry: false,
+    refetchInterval: TRADER_POLL_MS,
+  });
+  const research = normalizeSignalCenterPayload(
+    signalsQ.isError ? null : asRecord(signalsQ.data),
+  );
+  const researchAvailability = signalsQ.isError
+    ? ("UNAVAILABLE" as const)
+    : research.availability;
+  const signalState = researchAvailabilityAsCatalogue(researchAvailability);
+  const signalPreview =
+    signalState === "LIVE_ROWS"
+      ? topResearchOpportunities(research.rows, signalState, 3)
+      : [];
+  const signalCopy = researchSignalsEmptyCopy({
+    fetchError: Boolean(signalsQ.isError),
+    fabricatedBlocked: research.fabricatedBlocked,
+    empty: true,
+  });
+
   const universeQ = useQuery({
     queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
@@ -142,14 +168,6 @@ export default function DashboardPage() {
     ...rows.filter(hasResearchSignal),
     ...rows.filter((row) => !hasResearchSignal(row)),
   ];
-  const signalState = signalAvailability(catalogue);
-  const signalPreview =
-    signalState === "LIVE_ROWS" ? topResearchOpportunities(rows, signalState, 4) : [];
-  const signalCopy = unavailableSignalsTitle({
-    noBroker,
-    mismatch: sessionMismatch,
-    catalogue,
-  });
 
   const positionsUnavailable = Boolean(portfolio.isError) && !noBroker && !sessionMismatch;
   const activityUnavailable = Boolean(history.isError) && !noBroker && !sessionMismatch;
@@ -287,7 +305,7 @@ export default function DashboardPage() {
         title={greeting}
         description={
           noBroker
-            ? "Connect your broker to see your account and markets."
+            ? "Research signals are available without a broker. Connect to unlock account data and markets."
             : sessionMismatch
               ? "Your trading session needs to be reconnected."
               : "Your account, robot, signals, and markets."
@@ -381,10 +399,10 @@ export default function DashboardPage() {
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 id="top-signals" className="text-sm font-medium text-[var(--fg)]">
-              Top signals
+              Top opportunities
             </h2>
-            {lastUpdatedCopy(universe.as_of) ? (
-              <p className="mt-1 text-xs text-[var(--fg-subtle)]">{lastUpdatedCopy(universe.as_of)}</p>
+            {lastUpdatedCopy(research.asOf) ? (
+              <p className="mt-1 text-xs text-[var(--fg-subtle)]">{lastUpdatedCopy(research.asOf)}</p>
             ) : null}
           </div>
           <Button variant="ghost" size="sm" asChild>
@@ -394,19 +412,19 @@ export default function DashboardPage() {
         <p className="mb-3 text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
           {RESEARCH_OPPORTUNITY} · {SIGNALS_NOT_AUTHORIZATION}
         </p>
-        {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
+        {signalState === "UNAVAILABLE" ? (
           <DeskEmpty
             icon={Activity}
             title={signalCopy.title}
             description={signalCopy.description}
           />
-        ) : signalState === "NOT_READY" || universeQ.isLoading ? (
+        ) : signalState === "NOT_READY" || signalsQ.isLoading ? (
           <DeskSkeleton rows={3} />
         ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
           <DeskEmpty
             icon={Activity}
-            title="No signals found"
-            description="The live catalogue was queried. No ranked research signals right now."
+            title={signalCopy.title}
+            description={signalCopy.description}
           />
         ) : (
           <ul className="space-y-2">

@@ -55,7 +55,12 @@ import {
   knownInstrumentCountLabel,
   marketDirectionLabel,
   marketSignalLabel,
+  normalizeSignalCenterPayload,
+  researchFeedState,
+  researchFeedStateLabel,
   researchMetricDisplay,
+  researchSignalsEmptyCopy,
+  accountConnectionHint,
   skippedMalformedInstrumentCount,
   portfolioAccount,
   positionExposureLabel,
@@ -601,6 +606,50 @@ assert.equal(
       "signal",
     )[0]?.broker_symbol,
     "BBB",
+  );
+}
+
+{
+  const empty = normalizeSignalCenterPayload(null);
+  assert.equal(empty.availability, "NOT_READY");
+  assert.equal(empty.rows.length, 0);
+  const fabricated = normalizeSignalCenterPayload({
+    fabricated: true,
+    test_synthetic: true,
+    items: [{ symbol: "EURUSD", direction: "BUY", opportunity_score: 80 }],
+  });
+  assert.equal(fabricated.fabricatedBlocked, true);
+  assert.equal(fabricated.rows.length, 0);
+  assert.equal(fabricated.availability, "LIVE_EMPTY");
+  const live = normalizeSignalCenterPayload({
+    as_of: "2026-08-30T00:00:00Z",
+    source: "live_multi_asset_scan",
+    items: [
+      { symbol: "XAUUSD_i", direction: "BUY", opportunity_score: 70, directional_edge: 5, rr: "1.20", asset_class: "metals", session: "LONDON", time_generated: "2026-08-30T00:00:00Z" },
+      { symbol: "EURUSD", direction: "NONE", opportunity_score: 10 },
+      { symbol: "BAD???", direction: "BUY", opportunity_score: 90 },
+    ],
+  });
+  assert.equal(live.availability, "LIVE_ROWS");
+  assert.equal(live.rows.length, 1);
+  assert.equal(live.rows[0]?.broker_symbol, "XAUUSD_I");
+  assert.equal(live.rows[0]?.has_research_signal, true);
+  assert.equal(live.rows[0]?.asset_class, "METALS");
+  assert.equal(accountConnectionHint(resolveConnectionPresentation({ ux_state: "NO_BROKER" })).detail, "NOT CONNECTED");
+  assert.equal(
+    researchFeedStateLabel(
+      researchFeedState({
+        loading: false,
+        fetchError: true,
+        availability: "UNAVAILABLE",
+        rows: [],
+      }),
+    ),
+    "INTELLIGENCE DATA UNAVAILABLE",
+  );
+  assert.equal(
+    researchSignalsEmptyCopy({ empty: true }).title,
+    "NO SIGNALS AVAILABLE",
   );
 }
 

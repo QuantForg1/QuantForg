@@ -168,9 +168,14 @@ export const OPERATOR_RAIL_ORDER = [...TRADER_DESK_ORDER, "/admin"] as const;
 export function visiblePrimaryRail(isOperator: boolean): PrimaryNavItem[] {
   const order = isOperator ? OPERATOR_RAIL_ORDER : TRADER_DESK_ORDER;
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
-  return order.map((href) => allowed.get(href)).filter(
-    (item): item is PrimaryNavItem => item != null,
-  );
+  return order
+    .map((href) => allowed.get(href))
+    .filter((item): item is PrimaryNavItem => item != null)
+    .map((item) => {
+      // Trader desks stay flat — section chrome is for full operator catalogs.
+      if (item.href === "/admin") return item;
+      return { ...item, section: undefined };
+    });
 }
 
 export function visibleCommandItems(isOperator: boolean, items: NavItem[]): NavItem[] {
@@ -278,7 +283,7 @@ export const primaryRail: PrimaryNavItem[] = [
     href: "/signals",
     label: "Signals",
     icon: Crosshair,
-    hint: "Market intelligence · research only",
+    hint: "Research intelligence · no broker required",
     match: ["/signals"],
     shortcut: "2",
     section: "Signals",

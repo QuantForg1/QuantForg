@@ -11,35 +11,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
-import { ConnectionStatus } from "@/components/trading/connection-status";
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
-import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
-import { asList, asRecord, str } from "@/lib/desk";
+import { signalCenterApi, tradingSessionApi } from "@/lib/api/endpoints";
+import { asRecord, str } from "@/lib/desk";
 import {
-  catalogueViewState,
-  dataSourceLabel,
+  accountConnectionHint,
   EMPTY_SIGNAL_FILTERS,
   filterSignalRows,
-  isLiveBrokerCatalogue,
   lastUpdatedCopy,
-  MARKET_UNIVERSE_QUERY_KEY,
-  mergeCatalogueRows,
-  mergeResearchSignalFields,
+  normalizeSignalCenterPayload,
   presentAssetClasses,
   presentField,
+  RESEARCH_INDEPENDENT_COPY,
   RESEARCH_SIGNAL,
-  SIGNALS_NOT_AUTHORIZATION,
+  researchAvailabilityAsCatalogue,
+  researchFeedState,
+  researchFeedStateLabel,
+  researchSignalsEmptyCopy,
   resolveConnectionPresentation,
   rowRegime,
   rowSession,
   scoreDisplay,
-  hasResearchSignal,
-  skippedMalformedInstrumentCount,
-  signalAvailability,
+  SIGNAL_CENTER_QUERY_KEY,
+  SIGNALS_NOT_AUTHORIZATION,
   signalBoardDirection,
-  signalFeedState,
-  signalFeedStateLabel,
   signalFreshness,
   signalStrength,
   signalSummary,
@@ -48,18 +44,15 @@ import {
   topResearchOpportunities,
   TRADER_POLL_MS,
   uniqueRowValues,
-  unavailableSignalsTitle,
-  UNIVERSE_POLL_MS,
   type SignalFilterState,
   type SignalSortKey,
 } from "@/lib/trading/trader-ux";
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
   { id: "strongest", label: "Strongest" },
-  { id: "newest", label: "Newest" },
   { id: "opportunity", label: "Opportunity" },
   { id: "edge", label: "Edge" },
-  { id: "risk_reward", label: "Risk/Reward" },
+  { id: "newest", label: "Newest" },
 ];
 
 export function SignalsWorkspace() {
@@ -75,38 +68,27 @@ export function SignalsWorkspace() {
   });
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
-  const liveCatalogue = isLiveBrokerCatalogue(session);
-  const noBroker = connection.state === "BROKER_NOT_CONNECTED";
-  const mismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
+  const accountHint = accountConnectionHint(connection);
 
-  const universeQ = useQuery({
-    queryKey: MARKET_UNIVERSE_QUERY_KEY,
-    queryFn: () => marketUniverseApi.snapshot(),
-    enabled: connection.connected && !mismatch && liveCatalogue && !sessionQ.isLoading,
+  const signalsQ = useQuery({
+    queryKey: SIGNAL_CENTER_QUERY_KEY,
+    queryFn: () => signalCenterApi.list({ enabled_only: false }),
     retry: false,
-    refetchInterval: UNIVERSE_POLL_MS,
+    refetchInterval: TRADER_POLL_MS,
   });
 
-  const universe = asRecord(universeQ.data);
-  const instruments = asList(universe.instruments).map(asRecord);
-  const catalogue = catalogueViewState({
-    connected: connection.connected,
-    mismatch,
-    liveBrokerSession: liveCatalogue,
-    catalogueUnavailable: connection.catalogueUnavailable,
-    snapshotFetched: universeQ.isFetched,
-    snapshotError: Boolean(universeQ.isError),
-    catalogueSource: universe.catalogue_source,
-    instrumentCount: instruments.length - skippedMalformedInstrumentCount(instruments),
-  });
-  const availability = signalAvailability(catalogue);
-  const boardRows = asList(asRecord(universe.opportunity_board).rows).map(asRecord);
-  const researchRows = asList(asRecord(universe.research_signals).signals).map(asRecord);
-  const rows =
-    availability === "LIVE_ROWS"
-      ? mergeResearchSignalFields(mergeCatalogueRows(instruments, boardRows), researchRows)
-      : [];
-  const signalRows = useMemo(() => rows.filter(hasResearchSignal), [rows]);
+  const normalized = useMemo(
+    () =>
+      normalizeSignalCenterPayload(
+        signalsQ.isError ? null : asRecord(signalsQ.data),
+      ),
+    [signalsQ.data, signalsQ.isError],
+  );
+  const availability = signalsQ.isError
+    ? ("UNAVAILABLE" as const)
+    : normalized.availability;
+  const catalogueAvailability = researchAvailabilityAsCatalogue(availability);
+  const signalRows = normalized.rows;
 
   const classes = useMemo(() => presentAssetClasses(signalRows), [signalRows]);
   const sessions = useMemo(() => uniqueRowValues(signalRows, rowSession), [signalRows]);
@@ -116,27 +98,26 @@ export function SignalsWorkspace() {
   const sorted = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
 
   const summary = signalSummary({
+    availability: catalogueAvailability,
+    rows: signalRows,
+    instrumentCount: signalRows.length,
+    lastUpdate: normalized.asOf,
+  });
+  const topOps = topResearchOpportunities(signalRows, catalogueAvailability, 4);
+  const feed = researchFeedState({
+    loading: signalsQ.isLoading,
+    fetchError: Boolean(signalsQ.isError),
     availability,
     rows: signalRows,
-    instrumentCount: instruments.length,
-    lastUpdate: universe.as_of,
+    fabricatedBlocked: normalized.fabricatedBlocked,
   });
-  const topOps = topResearchOpportunities(signalRows, availability, 4);
-  const source = dataSourceLabel({
-    liveBroker: liveCatalogue,
-    catalogueSource: universe.catalogue_source ?? session.catalogue_source,
+  const feedLabel = researchFeedStateLabel(feed);
+  const updated = lastUpdatedCopy(normalized.asOf);
+  const emptyCopy = researchSignalsEmptyCopy({
+    fetchError: Boolean(signalsQ.isError),
+    fabricatedBlocked: normalized.fabricatedBlocked,
+    empty: true,
   });
-  const unavailable = unavailableSignalsTitle({ noBroker, mismatch, catalogue });
-  const feed = signalFeedState({
-    loading: sessionQ.isLoading || universeQ.isLoading,
-    noBroker,
-    mismatch,
-    snapshotError: Boolean(universeQ.isError),
-    availability,
-    rows: signalRows,
-  });
-  const feedLabel = signalFeedStateLabel(feed);
-  const updated = lastUpdatedCopy(universe.as_of);
   const feedTone =
     feed === "LIVE"
       ? "success"
@@ -148,7 +129,7 @@ export function SignalsWorkspace() {
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Signals"
-        description="Research intelligence for your connected catalogue. Not a trade authorization."
+        description="Market intelligence generated by QuantForg. Research only — not a trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
@@ -162,35 +143,60 @@ export function SignalsWorkspace() {
       />
 
       <section
-        aria-label="Signals command"
+        aria-label="Signals status"
         className="flex flex-wrap items-center gap-2"
       >
-        <ConnectionStatus session={session} compact />
+        <Badge tone="accent">RESEARCH</Badge>
+        <Badge tone={feed === "LIVE" ? "success" : feed === "EMPTY" ? "warning" : feedTone}>
+          {feed === "LIVE" || feed === "EMPTY" ? "Available" : feedLabel}
+        </Badge>
         <Badge
           tone={
-            liveCatalogue ? "success" : source === "CATALOGUE UNAVAILABLE" ? "warning" : "neutral"
+            accountHint.detail === "CONNECTED"
+              ? "success"
+              : accountHint.detail === "SESSION MISMATCH"
+                ? "danger"
+                : "neutral"
           }
         >
-          {source}
+          {accountHint.label}: {accountHint.detail}
         </Badge>
-        <Badge tone={feedTone}>{feedLabel}</Badge>
+        <Badge tone="neutral">{SIGNALS_NOT_AUTHORIZATION}</Badge>
         {updated ? (
           <span className="text-xs text-[var(--fg-subtle)]">{updated}</span>
         ) : null}
       </section>
+
+      <p className="text-sm text-[var(--fg-muted)]">{RESEARCH_INDEPENDENT_COPY}</p>
 
       <section aria-labelledby="signals-overview">
         <h2 id="signals-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
           Overview
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <DeskMetric label="Available signals" value={summary.active} />
+          <DeskMetric label="Active signals" value={summary.active} />
           <DeskMetric label="BUY" value={summary.buy} />
           <DeskMetric label="SELL" value={summary.sell} />
           <DeskMetric label="Strongest opportunity" value={summary.strongest} />
           <DeskMetric label="Strongest edge" value={summary.strongestEdge} />
-          <DeskMetric label="Catalogue freshness" value={feedLabel} />
+          <DeskMetric label="Markets covered" value={summary.markets} />
         </div>
+        <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--fg-subtle)]">
+          <div>
+            <dt className="inline">Research engine · </dt>
+            <dd className="inline text-[var(--fg-muted)]">{normalized.engineLabel}</dd>
+          </div>
+          <div>
+            <dt className="inline">Signal availability · </dt>
+            <dd className="inline text-[var(--fg-muted)]">{feedLabel}</dd>
+          </div>
+          <div>
+            <dt className="inline">Data freshness · </dt>
+            <dd className="inline text-[var(--fg-muted)]">
+              {feed === "LIVE" || feed === "STALE" || feed === "PARTIAL" ? feedLabel : "UNAVAILABLE"}
+            </dd>
+          </div>
+        </dl>
       </section>
 
       {topOps.length > 0 ? (
@@ -257,25 +263,23 @@ export function SignalsWorkspace() {
       <Card>
         <CardContent className="min-w-0 space-y-4 pt-4">
           <h2 className="text-sm font-medium text-[var(--fg)]">All signals</h2>
-          {sessionQ.isLoading ? (
+          {signalsQ.isLoading ? (
             <DeskSkeleton rows={6} />
-          ) : noBroker || mismatch || availability === "UNAVAILABLE" ? (
+          ) : signalsQ.isError || availability === "UNAVAILABLE" ? (
             <DeskEmpty
               icon={Radar}
-              title={unavailable.title}
-              description={unavailable.description}
-              actionLabel="Connect Broker"
-              actionHref="/broker"
+              title={emptyCopy.title}
+              description={emptyCopy.description}
             />
-          ) : availability === "NOT_READY" || universeQ.isLoading ? (
+          ) : availability === "NOT_READY" ? (
             <DeskSkeleton rows={6} />
           ) : availability === "LIVE_EMPTY" || signalRows.length === 0 ? (
             <DeskEmpty
               icon={Activity}
-              title="NO SIGNAL"
-              description="The live broker catalogue is available. No ranked research signals are present. Open Markets to see all instruments."
-              actionLabel="View all markets"
-              actionHref="/markets"
+              title={emptyCopy.title}
+              description={emptyCopy.description}
+              actionLabel={connection.connected ? "View markets" : "Connect Broker"}
+              actionHref={connection.connected ? "/markets" : "/broker"}
             />
           ) : (
             <>
@@ -287,7 +291,7 @@ export function SignalsWorkspace() {
                   aria-label="Search signals"
                 />
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Direction">
-                  {(["ALL", "BUY", "SELL", "WATCH"] as const).map((dir) => (
+                  {(["ALL", "BUY", "SELL"] as const).map((dir) => (
                     <FilterChip
                       key={dir}
                       active={filters.direction === dir}
@@ -354,6 +358,26 @@ export function SignalsWorkspace() {
                     ))}
                   </div>
                 ) : null}
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Freshness">
+                  {(
+                    [
+                      "ALL",
+                      "LIVE",
+                      "RECENT",
+                      "STALE",
+                      "PARTIAL",
+                      "UNAVAILABLE",
+                    ] as const
+                  ).map((fresh) => (
+                    <FilterChip
+                      key={fresh}
+                      active={filters.freshness === fresh}
+                      onClick={() => setFilters((f) => ({ ...f, freshness: fresh }))}
+                    >
+                      {fresh === "ALL" ? "All freshness" : fresh}
+                    </FilterChip>
+                  ))}
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <label htmlFor="signal-sort" className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
                     Sort

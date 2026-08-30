@@ -18,7 +18,11 @@ import { ConnectionStatus } from "@/components/trading/connection-status";
 import { mt5Api, marketUniverseApi, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, str } from "@/lib/desk";
-import { MARKET_UNIVERSE_QUERY_KEY, traderFacingErrorMessage } from "@/lib/trading/trader-ux";
+import {
+  MARKET_UNIVERSE_QUERY_KEY,
+  resolveConnectionPresentation,
+  traderFacingErrorMessage,
+} from "@/lib/trading/trader-ux";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
@@ -94,8 +98,6 @@ export function BrokerConfigWorkspace() {
   const connected = session.connected || Boolean(health.mt5_connected || health.mt5_attached || mt5.connected);
 
   const [accountType, setAccountType] = useState<AccountType>("live");
-  const [provider] = useState("MetaTrader 5");
-  const [broker, setBroker] = useState("Weltrade");
   const [server, setServer] = useState("Weltrade-Real");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -157,7 +159,6 @@ export function BrokerConfigWorkspace() {
         if (!cancelled && profileRow.terminal_path) {
           setTerminalPath(String(profileRow.terminal_path));
         }
-        if (!cancelled && profileRow.broker) setBroker(String(profileRow.broker));
         await weltradeApi.restoreProfile();
         if (!cancelled) await refresh();
       } catch {
@@ -307,6 +308,9 @@ export function BrokerConfigWorkspace() {
   };
 
   const tradingSnap = asRecord(tradingSessionQ.data);
+  const connectionView = resolveConnectionPresentation(tradingSnap, {
+    connecting: Boolean(progress) || connectMut.isPending || saveMut.isPending,
+  });
   const uxState = str(tradingSnap.ux_state, connected ? "CONNECTED" : "NO_BROKER");
   const showConnectForm = !connected || uxState === "SESSION_MISMATCH";
 
@@ -318,13 +322,13 @@ export function BrokerConfigWorkspace() {
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-1 sm:px-0">
+    <div className="mx-auto w-full min-w-0 max-w-xl space-y-4 px-1 sm:px-0">
       <PageHeader
         title={connected ? "Broker" : "Connect Broker"}
         description={
           connected
             ? "Your owned connection. Password is never shown after verification."
-            : "Login, server, password, then Verify. Password is sent securely and never kept in the browser."
+            : "Login, server, and password — then Verify. Password is sent securely and never kept in the browser."
         }
       />
 
@@ -334,6 +338,45 @@ export function BrokerConfigWorkspace() {
           Boolean(progress) && !connected || connectMut.isPending || saveMut.isPending
         }
       />
+
+      {connected && uxState !== "SESSION_MISMATCH" ? (
+        <Section title="Connected">
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">Login</dt>
+              <dd className="text-sm text-[var(--fg)]">{connectionView.maskedLogin}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">Server</dt>
+              <dd className="text-sm text-[var(--fg)]">{connectionView.server}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Connection health
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">{connectionView.health}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Ownership
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {connectionView.ownership === "owned" ? "Owned by you" : "—"}
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-4">
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => disconnectMut.mutate()}
+            >
+              <Unplug className="h-4 w-4" />
+              Disconnect
+            </Button>
+          </div>
+        </Section>
+      ) : null}
 
       <Section
         title="Your connection"
@@ -353,27 +396,23 @@ export function BrokerConfigWorkspace() {
       >
         {uxState === "SESSION_MISMATCH" ? (
           <p className="mb-3 text-sm text-[var(--warning)]">
-            SESSION MISMATCH. Reconnect your own account. Concurrent independent live logins are not supported.
+            ACCOUNT SESSION MISMATCH. Reconnect your own account.
           </p>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={onConnect}>
-            {connectMut.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Cable className="h-4 w-4" />
-            )}
-            {connected ? "Reconnect" : "Connect & Verify"}
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={busy || !connected}
-            onClick={() => disconnectMut.mutate()}
-          >
-            <Unplug className="h-4 w-4" />
-            Disconnect
-          </Button>
-        </div>
+        {showConnectForm ? (
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={onConnect}>
+              {connectMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Cable className="h-4 w-4" />
+              )}
+              Connect & Verify
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--fg-muted)]">CONNECTED</p>
+        )}
         {progress ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-[var(--accent)]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -402,19 +441,7 @@ export function BrokerConfigWorkspace() {
           ))}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="bw-provider">Provider</Label>
-            <Input id="bw-provider" value={provider} readOnly disabled />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="bw-broker">Broker</Label>
-            <Input
-              id="bw-broker"
-              value={broker}
-              onChange={(e) => setBroker(e.target.value)}
-            />
-          </div>
+        <div className="grid gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="bw-server">Server</Label>
             <select
@@ -441,7 +468,7 @@ export function BrokerConfigWorkspace() {
               placeholder="Account number"
             />
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5">
             <Label htmlFor="bw-password">Password</Label>
             {showPasswordField ? (
             <Input
@@ -461,7 +488,7 @@ export function BrokerConfigWorkspace() {
             )}
           </div>
           {isOperator ? (
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5">
             <Label htmlFor="bw-path">Terminal Path</Label>
             <Input
               id="bw-path"

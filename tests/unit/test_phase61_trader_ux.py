@@ -87,9 +87,10 @@ def test_signals_remain_research_only_and_consistent() -> None:
     assert "TRADE NOW" not in signals
     assert "Place Order" not in signals
     assert "submit_order" not in signals
-    assert "hasResearchSignal" in signals
+    assert "signalCenterApi" in signals
+    assert "RESEARCH_INDEPENDENT_COPY" in signals or "independently" in signals
     assert "View all markets" in signals
-    assert "View all markets" in dash
+    assert "View all markets" in dash or "View all signals" in dash
     assert "clearPasswordField" in broker
     assert "localStorage.setItem" not in broker
     assert "sessionStorage" not in broker

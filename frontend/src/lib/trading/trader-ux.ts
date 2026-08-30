@@ -586,11 +586,245 @@ export const EMPTY_SIGNAL_FILTERS: SignalFilterState = {
 };
 
 export const MARKET_UNIVERSE_QUERY_KEY = ["market-universe-snapshot"] as const;
+export const SIGNAL_CENTER_QUERY_KEY = ["signal-center-live"] as const;
 export const TRADER_POLL_MS = 15_000;
 export const UNIVERSE_POLL_MS = 30_000;
 export const EXPLANATION_UNAVAILABLE = "EXPLANATION UNAVAILABLE";
+export const RESEARCH_INDEPENDENT_COPY =
+  "Research intelligence is available independently from your trading account.";
 
 export type SignalAvailability = CatalogueViewState;
+
+export type SignalFeedState =
+  | "LOADING"
+  | "DISCONNECTED"
+  | "MISMATCH"
+  | "CATALOGUE_UNAVAILABLE"
+  | "ERROR"
+  | "EMPTY"
+  | "STALE"
+  | "PARTIAL"
+  | "LIVE";
+
+/** Broker-independent research feed from GET /signals (signal center). */
+export type ResearchAvailability =
+  | "NOT_READY"
+  | "UNAVAILABLE"
+  | "LIVE_EMPTY"
+  | "LIVE_ROWS";
+
+export type NormalizedSignalCenter = {
+  availability: ResearchAvailability;
+  rows: Record<string, unknown>[];
+  asOf: string;
+  source: string;
+  engineLabel: string;
+  fabricatedBlocked: boolean;
+  countConfirmed: boolean;
+};
+
+function normalizeAssetClassToken(raw: unknown): string {
+  const cls = normalizeAssetClass(raw);
+  return cls === "UNKNOWN" ? "OTHER" : cls;
+}
+
+/**
+ * Map authenticated signal-center payload into trader research rows.
+ * Never invents scores. Drops fabricated / synthetic rows.
+ */
+export function normalizeSignalCenterPayload(
+  payload: Record<string, unknown> | null | undefined,
+): NormalizedSignalCenter {
+  if (payload == null) {
+    return {
+      availability: "NOT_READY",
+      rows: [],
+      asOf: "",
+      source: "",
+      engineLabel: "UNKNOWN",
+      fabricatedBlocked: false,
+      countConfirmed: false,
+    };
+  }
+  const asOf = String(payload.as_of || "").trim();
+  const source = String(payload.source || "").trim();
+  if (payload.fabricated === true || payload.test_synthetic === true) {
+    return {
+      availability: "LIVE_EMPTY",
+      rows: [],
+      asOf,
+      source,
+      engineLabel: "RESEARCH",
+      fabricatedBlocked: true,
+      countConfirmed: true,
+    };
+  }
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const rows: Record<string, unknown>[] = [];
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    if (item.test_synthetic === true) continue;
+    const symbol = String(item.symbol || "")
+      .trim()
+      .toUpperCase();
+    if (!isValidBrokerSymbol(symbol)) continue;
+    const dirRaw = String(item.direction || "NONE")
+      .trim()
+      .toUpperCase();
+    const dir =
+      dirRaw === "BUY" || dirRaw === "SELL" || dirRaw === "WAIT" ? dirRaw : "NONE";
+    const actionable = dir === "BUY" || dir === "SELL";
+    const pipeline =
+      item.pipeline && typeof item.pipeline === "object"
+        ? (item.pipeline as Record<string, unknown>)
+        : {};
+    const detail =
+      item.detail && typeof item.detail === "object"
+        ? (item.detail as Record<string, unknown>)
+        : {};
+    const edge =
+      item.directional_edge ??
+      pipeline.directional_edge ??
+      detail.directional_edge ??
+      item.edge;
+    const rank = numericSortValue(item.research_rank_score);
+    const stamped = item.time_generated ?? item.as_of ?? asOf;
+    rows.push({
+      broker_symbol: symbol,
+      symbol,
+      direction: dir,
+      opportunity_score: item.opportunity_score,
+      directional_edge: edge,
+      edge,
+      RR: item.rr ?? item.RR,
+      rr: item.rr ?? item.RR,
+      asset_class: normalizeAssetClassToken(item.asset_class),
+      session: item.session,
+      regime: pipeline.market_regime ?? item.market_regime ?? detail.trend,
+      timestamp: stamped,
+      features_as_of: stamped,
+      as_of: stamped,
+      reason: item.reasoning ?? item.ai_explanation,
+      explanation: item.ai_explanation ?? item.reasoning,
+      confidence_state: item.confidence,
+      ai_confidence: item.confidence,
+      quality: item.quality,
+      research_rank_score: rank,
+      has_research_signal: actionable,
+      board_status: actionable ? dir : undefined,
+      setup_state: pipeline.setup_state ?? item.setup_state,
+      badge: item.badge,
+      data_state: actionable ? "LIVE" : "NO_DATA",
+      research_only: true,
+      authorizes_trade: false,
+      kind: "RESEARCH_SIGNAL",
+    });
+  }
+  const signalRows = rows.filter(hasResearchSignal);
+  return {
+    availability: signalRows.length > 0 ? "LIVE_ROWS" : "LIVE_EMPTY",
+    rows: signalRows,
+    asOf,
+    source: source || "live_multi_asset_scan",
+    engineLabel: "RESEARCH",
+    fabricatedBlocked: false,
+    countConfirmed: true,
+  };
+}
+
+export function researchAvailabilityAsCatalogue(
+  availability: ResearchAvailability,
+): CatalogueViewState {
+  if (availability === "LIVE_ROWS") return "LIVE_ROWS";
+  if (availability === "LIVE_EMPTY") return "LIVE_EMPTY";
+  if (availability === "UNAVAILABLE") return "UNAVAILABLE";
+  return "NOT_READY";
+}
+
+export function researchFeedState(input: {
+  loading: boolean;
+  fetchError: boolean;
+  availability: ResearchAvailability;
+  rows: Record<string, unknown>[];
+  fabricatedBlocked?: boolean;
+}): SignalFeedState {
+  if (input.fetchError) return "ERROR";
+  if (input.loading || input.availability === "NOT_READY") return "LOADING";
+  if (input.availability === "UNAVAILABLE") return "ERROR";
+  if (
+    input.fabricatedBlocked ||
+    input.availability === "LIVE_EMPTY" ||
+    input.rows.length === 0
+  ) {
+    return "EMPTY";
+  }
+  const states = input.rows.map((row) => marketDataState(row));
+  const live = states.filter((s) => s === "LIVE").length;
+  const stale = states.filter((s) => s === "STALE").length;
+  if (stale > 0 && live === 0) return "STALE";
+  if (stale > 0 || states.some((s) => s === "ERROR" || s === "NO_DATA")) {
+    return "PARTIAL";
+  }
+  return "LIVE";
+}
+
+export function researchFeedStateLabel(state: SignalFeedState): string {
+  if (state === "ERROR") return "INTELLIGENCE DATA UNAVAILABLE";
+  if (state === "EMPTY") return "NO SIGNALS AVAILABLE";
+  if (state === "STALE") return "STALE";
+  if (state === "PARTIAL") return "PARTIAL";
+  if (state === "LOADING") return "LOADING";
+  if (state === "LIVE") return "LIVE";
+  return signalFeedStateLabel(state);
+}
+
+export function researchSignalsEmptyCopy(input: {
+  fetchError?: boolean;
+  fabricatedBlocked?: boolean;
+  empty?: boolean;
+}): { title: string; description: string } {
+  if (input.fetchError) {
+    return {
+      title: "INTELLIGENCE DATA UNAVAILABLE",
+      description:
+        "QuantForg research signals could not be loaded. This is not zero signals.",
+    };
+  }
+  if (input.fabricatedBlocked) {
+    return {
+      title: "NO SIGNALS AVAILABLE",
+      description:
+        "Synthetic or fabricated signal payloads are not shown as live research.",
+    };
+  }
+  return {
+    title: "NO SIGNALS AVAILABLE",
+    description:
+      "The research engine returned no ranked BUY/SELL signals right now.",
+  };
+}
+
+export function accountConnectionHint(
+  connection: ConnectionPresentation,
+): { label: string; detail: string } {
+  if (connection.state === "ACCOUNT_SESSION_MISMATCH") {
+    return {
+      label: "ACCOUNT",
+      detail: "SESSION MISMATCH",
+    };
+  }
+  if (connection.connected && connection.ownership === "owned") {
+    return {
+      label: "ACCOUNT",
+      detail: "CONNECTED",
+    };
+  }
+  return {
+    label: "ACCOUNT",
+    detail: "NOT CONNECTED",
+  };
+}
 
 export function signalAvailability(
   catalogue: CatalogueViewState,
@@ -1069,17 +1303,6 @@ export function topResearchOpportunities(
     .filter((row) => isActionableDirection(signalBoardDirection(row)))
     .slice(0, limit);
 }
-
-export type SignalFeedState =
-  | "LOADING"
-  | "DISCONNECTED"
-  | "MISMATCH"
-  | "CATALOGUE_UNAVAILABLE"
-  | "ERROR"
-  | "EMPTY"
-  | "STALE"
-  | "PARTIAL"
-  | "LIVE";
 
 export function signalFeedState(input: {
   loading: boolean;
