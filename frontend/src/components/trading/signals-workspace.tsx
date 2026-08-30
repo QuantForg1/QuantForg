@@ -8,8 +8,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
+import { ConnectionStatus } from "@/components/trading/connection-status";
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
@@ -106,17 +108,6 @@ export function SignalsWorkspace() {
   const classes = useMemo(() => presentAssetClasses(rows), [rows]);
   const sessions = useMemo(() => uniqueRowValues(rows, rowSession), [rows]);
   const regimes = useMemo(() => uniqueRowValues(rows, rowRegime), [rows]);
-  const confidences = useMemo(
-    () =>
-      uniqueRowValues(rows, (row) =>
-        String(row.confidence_state || row.ai_confidence || "").trim().toUpperCase(),
-      ),
-    [rows],
-  );
-  const freshnessValues = useMemo(
-    () => uniqueRowValues(rows, (row) => signalFreshness(row)),
-    [rows],
-  );
 
   const filtered = useMemo(() => filterSignalRows(rows, filters), [filters, rows]);
   const sorted = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
@@ -154,7 +145,7 @@ export function SignalsWorkspace() {
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Signals"
-        description="Real-time market intelligence. Research is not a trade authorization."
+        description="Research intelligence for your connected catalogue. Not a trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
@@ -167,27 +158,35 @@ export function SignalsWorkspace() {
         }
       />
 
+      <section
+        aria-label="Signals command"
+        className="flex flex-wrap items-center gap-2"
+      >
+        <ConnectionStatus session={session} compact />
+        <Badge
+          tone={
+            liveCatalogue ? "success" : source === "CATALOGUE UNAVAILABLE" ? "warning" : "neutral"
+          }
+        >
+          {source}
+        </Badge>
+        <Badge tone={feedTone}>{feedLabel}</Badge>
+        {updated ? (
+          <span className="text-xs text-[var(--fg-subtle)]">{updated}</span>
+        ) : null}
+      </section>
+
       <section aria-labelledby="signals-overview">
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 id="signals-overview" className="text-sm font-medium text-[var(--fg)]">
-              Overview
-            </h2>
-            <p className="text-xs text-[var(--fg-subtle)]">
-              {source}
-              {updated ? ` · ${updated}` : ""}
-              {` · ${feedLabel}`}
-            </p>
-          </div>
-          <Badge tone={feedTone}>{feedLabel}</Badge>
-        </div>
+        <h2 id="signals-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
+          Overview
+        </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <DeskMetric label="Active signals" value={summary.active} />
-          <DeskMetric label="BUY opportunities" value={summary.buy} />
-          <DeskMetric label="SELL opportunities" value={summary.sell} />
-          <DeskMetric label="Strongest setup" value={summary.strongest} />
-          <DeskMetric label="Markets covered" value={summary.markets} />
-          <DeskMetric label="Last signal update" value={summary.lastUpdate} />
+          <DeskMetric label="Available signals" value={summary.active} />
+          <DeskMetric label="BUY" value={summary.buy} />
+          <DeskMetric label="SELL" value={summary.sell} />
+          <DeskMetric label="Strongest opportunity" value={summary.strongest} />
+          <DeskMetric label="Strongest edge" value={summary.strongestEdge} />
+          <DeskMetric label="Catalogue freshness" value={feedLabel} />
         </div>
       </section>
 
@@ -236,6 +235,11 @@ export function SignalsWorkspace() {
                         <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
                       </div>
                     </dl>
+                    <p className="mt-2 truncate text-[11px] text-[var(--fg-subtle)]">
+                      {[signalStrength(row), presentField(row.session), presentField(rowRegime(row))]
+                        .filter((part) => part && part !== "Not available")
+                        .join(" · ")}
+                    </p>
                     <Badge tone={freshnessTone(freshness)} className="mt-2">
                       {freshness}
                     </Badge>
@@ -271,6 +275,12 @@ export function SignalsWorkspace() {
           ) : (
             <>
               <div className="flex flex-col gap-3">
+                <Input
+                  value={filters.q}
+                  onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+                  placeholder="Search symbol"
+                  aria-label="Search signals"
+                />
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Direction">
                   {(["ALL", "BUY", "SELL", "WATCH"] as const).map((dir) => (
                     <FilterChip
@@ -333,44 +343,6 @@ export function SignalsWorkspace() {
                         key={item}
                         active={filters.regime === item}
                         onClick={() => setFilters((f) => ({ ...f, regime: item }))}
-                      >
-                        {item}
-                      </FilterChip>
-                    ))}
-                  </div>
-                ) : null}
-                {confidences.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Strength">
-                    <FilterChip
-                      active={filters.confidence === "ALL"}
-                      onClick={() => setFilters((f) => ({ ...f, confidence: "ALL" }))}
-                    >
-                      All strength
-                    </FilterChip>
-                    {confidences.map((item) => (
-                      <FilterChip
-                        key={item}
-                        active={filters.confidence === item}
-                        onClick={() => setFilters((f) => ({ ...f, confidence: item }))}
-                      >
-                        {item}
-                      </FilterChip>
-                    ))}
-                  </div>
-                ) : null}
-                {freshnessValues.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Freshness">
-                    <FilterChip
-                      active={filters.freshness === "ALL"}
-                      onClick={() => setFilters((f) => ({ ...f, freshness: "ALL" }))}
-                    >
-                      All freshness
-                    </FilterChip>
-                    {freshnessValues.map((item) => (
-                      <FilterChip
-                        key={item}
-                        active={filters.freshness === item}
-                        onClick={() => setFilters((f) => ({ ...f, freshness: item }))}
                       >
                         {item}
                       </FilterChip>

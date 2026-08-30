@@ -52,6 +52,7 @@ import {
   portfolioAccount,
   positionExposureLabel,
   positionSideLabel,
+  strongestEdgeLabel,
   topResearchOpportunities,
 } from "./trader-ux.ts";
 
@@ -314,6 +315,7 @@ assert.equal(
   });
   assert.equal(summaryEmpty.active, "0");
   assert.equal(summaryEmpty.markets, "0");
+  assert.equal(summaryEmpty.strongestEdge, "—");
 }
 
 {
@@ -325,6 +327,7 @@ assert.equal(
   });
   assert.equal(unavailable.active, "—");
   assert.equal(unavailable.buy, "—");
+  assert.equal(unavailable.strongestEdge, "—");
   assert.notEqual(unavailable.active, "0");
   const copy = unavailableSignalsTitle({ noBroker: true });
   assert.equal(copy.title, "SIGNALS UNAVAILABLE");
@@ -467,11 +470,11 @@ assert.equal(
   assert.equal(signalFeedStateLabel("LIVE"), "LIVE");
   assert.equal(
     dataSourceLabel({ liveBroker: true, catalogueSource: "LIVE_BROKER" }),
-    "Broker catalogue",
-  );
-  assert.notEqual(
-    dataSourceLabel({ liveBroker: true, catalogueSource: "LIVE_BROKER" }),
     "LIVE_BROKER",
+  );
+  assert.equal(
+    dataSourceLabel({ liveBroker: false, catalogueSource: "LIVE_BROKER" }),
+    "UNAVAILABLE",
   );
   assert.equal(RESEARCH_SIGNAL, "RESEARCH SIGNAL");
   assert.equal(signalWhyFactors({}).length, 0);
@@ -488,6 +491,25 @@ assert.equal(
   );
   assert.equal(buy.length, 1);
   assert.equal(buy[0]?.symbol, "GBPUSD");
+  const searched = filterSignalRows(
+    [
+      { symbol: "EURUSD", direction: "BUY" },
+      { symbol: "GBPUSD", direction: "SELL" },
+    ],
+    { ...EMPTY_SIGNAL_FILTERS, q: "gbp" },
+  );
+  assert.equal(searched.length, 1);
+  assert.equal(searched[0]?.symbol, "GBPUSD");
+}
+
+{
+  const ranked = [
+    { symbol: "AAA", direction: "BUY", research_rank_score: 1, directional_edge: 3 },
+    { symbol: "BBB", direction: "SELL", research_rank_score: 9, directional_edge: 8 },
+  ];
+  assert.equal(strongestEdgeLabel(ranked, "LIVE_ROWS"), "8");
+  assert.equal(strongestEdgeLabel(ranked, "UNAVAILABLE"), "—");
+  assert.notEqual(strongestEdgeLabel([{ symbol: "AAA", direction: "BUY" }], "LIVE_ROWS"), "0");
 }
 
 {

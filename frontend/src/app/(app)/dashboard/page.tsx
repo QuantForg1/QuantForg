@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Bot, Cable, Layers } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
@@ -26,7 +25,6 @@ import { toast } from "sonner";
 import { directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import {
   catalogueViewState,
-  defaultSortedSignals,
   isLiveBrokerCatalogue,
   lastUpdatedCopy,
   MARKET_UNIVERSE_QUERY_KEY,
@@ -41,6 +39,7 @@ import {
   signalFreshness,
   SIGNALS_NOT_AUTHORIZATION,
   RESEARCH_OPPORTUNITY,
+  topResearchOpportunities,
   TRADER_POLL_MS,
   traderFacingErrorMessage,
   unavailableSignalsTitle,
@@ -139,7 +138,7 @@ export default function DashboardPage() {
       : [];
   const signalState = signalAvailability(catalogue);
   const signalPreview =
-    signalState === "LIVE_ROWS" ? defaultSortedSignals(rows).slice(0, 4) : [];
+    signalState === "LIVE_ROWS" ? topResearchOpportunities(rows, signalState, 4) : [];
   const signalCopy = unavailableSignalsTitle({
     noBroker,
     mismatch: sessionMismatch,
@@ -296,7 +295,7 @@ export default function DashboardPage() {
             </Button>
           ) : (
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/terminal">Terminal</Link>
+              <Link href="/terminal">Open terminal</Link>
             </Button>
           )
         }
@@ -310,7 +309,7 @@ export default function DashboardPage() {
             Account snapshot
           </h2>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/portfolio">Portfolio</Link>
+            <Link href="/portfolio">View portfolio</Link>
           </Button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -324,251 +323,247 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Robot</CardTitle>
+      <section aria-labelledby="robot-status">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 id="robot-status" className="text-sm font-medium text-[var(--fg)]">
+            Robot
+          </h2>
           <Badge tone={statusTone(robot)}>{robot}</Badge>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {noBroker ? (
-            <p className="text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
-          ) : sessionMismatch ? (
-            <p className="text-sm text-[var(--fg-muted)]">ACCOUNT SESSION MISMATCH</p>
-          ) : (
-            <p className="text-sm text-[var(--fg-muted)]">
-              Your robot for this connected account.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
-              onClick={() => robotMut.mutate("start")}
-            >
-              Start
+        </div>
+        {noBroker ? (
+          <p className="mb-3 text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
+        ) : sessionMismatch ? (
+          <p className="mb-3 text-sm text-[var(--fg-muted)]">ACCOUNT SESSION MISMATCH</p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
+            onClick={() => robotMut.mutate("start")}
+          >
+            Start
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={robotMut.isPending || robot !== "RUNNING"}
+            onClick={() => robotMut.mutate("pause")}
+          >
+            Pause
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={
+              robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
+            }
+            onClick={() => robotMut.mutate("stop")}
+          >
+            Stop
+          </Button>
+          {isOperator ? (
+            <Button variant="secondary" size="sm" asChild>
+              <Link href="/admin">
+                <Bot className="h-4 w-4" /> Admin
+              </Link>
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={robotMut.isPending || robot !== "RUNNING"}
-              onClick={() => robotMut.mutate("pause")}
-            >
-              Pause
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={
-                robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
-              }
-              onClick={() => robotMut.mutate("stop")}
-            >
-              Stop
-            </Button>
-            {isOperator ? (
-              <Button variant="secondary" size="sm" asChild>
-                <Link href="/admin">
-                  <Bot className="h-4 w-4" /> Admin
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+          ) : null}
+        </div>
+      </section>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
+      <section aria-labelledby="top-signals">
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <CardTitle>Top opportunities</CardTitle>
+            <h2 id="top-signals" className="text-sm font-medium text-[var(--fg)]">
+              Top signals
+            </h2>
             {lastUpdatedCopy(universe.as_of) ? (
               <p className="mt-1 text-xs text-[var(--fg-subtle)]">{lastUpdatedCopy(universe.as_of)}</p>
             ) : null}
           </div>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/signals">Signals</Link>
+            <Link href="/signals">View all signals</Link>
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-            <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              {RESEARCH_OPPORTUNITY} · {SIGNALS_NOT_AUTHORIZATION}
-            </p>
-            {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
-              <DeskEmpty
-                icon={Activity}
-                title={signalCopy.title}
-                description={signalCopy.description}
-              />
-            ) : signalState === "NOT_READY" || universeQ.isLoading ? (
-              <DeskSkeleton rows={3} />
-            ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
-              <DeskEmpty
-                icon={Activity}
-                title="No signals found"
-                description="The live catalogue was queried. No ranked research signals right now."
-              />
-            ) : (
-              <ul className="space-y-2">
-                {signalPreview.map((row, i) => {
-                  const dir = signalBoardDirection(row);
-                  const freshness = signalFreshness(row);
-                  return (
-                    <li
-                      key={str(row.broker_symbol || row.symbol, String(i))}
-                      className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
-                    >
-                      <span className="truncate font-medium">
-                        {str(row.broker_symbol || row.symbol)}
-                      </span>
-                      <Badge tone={directionTone(dir)}>{dir}</Badge>
-                      <span className="tabular text-[var(--fg-muted)]">
-                        {scoreDisplay(row.opportunity_score)}
-                      </span>
-                      <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-        </CardContent>
-      </Card>
+        </div>
+        <p className="mb-3 text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+          {RESEARCH_OPPORTUNITY} · {SIGNALS_NOT_AUTHORIZATION}
+        </p>
+        {noBroker || sessionMismatch || signalState === "UNAVAILABLE" ? (
+          <DeskEmpty
+            icon={Activity}
+            title={signalCopy.title}
+            description={signalCopy.description}
+          />
+        ) : signalState === "NOT_READY" || universeQ.isLoading ? (
+          <DeskSkeleton rows={3} />
+        ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
+          <DeskEmpty
+            icon={Activity}
+            title="No signals found"
+            description="The live catalogue was queried. No ranked research signals right now."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {signalPreview.map((row, i) => {
+              const dir = signalBoardDirection(row);
+              const freshness = signalFreshness(row);
+              return (
+                <li
+                  key={str(row.broker_symbol || row.symbol, String(i))}
+                  className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
+                >
+                  <span className="truncate font-medium">
+                    {str(row.broker_symbol || row.symbol)}
+                  </span>
+                  <Badge tone={directionTone(dir)}>{dir}</Badge>
+                  <span className="tabular text-[var(--fg-muted)]">
+                    {scoreDisplay(row.opportunity_score)}
+                  </span>
+                  <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Open positions</CardTitle>
+      <section aria-labelledby="open-positions">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 id="open-positions" className="text-sm font-medium text-[var(--fg)]">
+            Open positions
+          </h2>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/portfolio">Portfolio</Link>
+            <Link href="/portfolio">View portfolio</Link>
           </Button>
-        </CardHeader>
-        <CardContent>
-          {noBroker || sessionMismatch ? (
-            <DeskEmpty
-              icon={Layers}
-              title={noBroker ? "BROKER NOT CONNECTED" : "ACCOUNT SESSION MISMATCH"}
-              description="Connect your broker to load your positions."
-              actionLabel="Connect Broker"
-              actionHref="/broker"
+        </div>
+        {noBroker || sessionMismatch ? (
+          <DeskEmpty
+            icon={Layers}
+            title={noBroker ? "BROKER NOT CONNECTED" : "ACCOUNT SESSION MISMATCH"}
+            description="Connect your broker to load your positions."
+            actionLabel="Connect Broker"
+            actionHref="/broker"
+          />
+        ) : positionsUnavailable ? (
+          <DeskEmpty
+            icon={Layers}
+            title="Positions unavailable"
+            description="Your positions could not be loaded. This is not zero positions."
+          />
+        ) : (
+          <div className="min-w-0 overflow-x-auto">
+            <DeskDataTable
+              columns={positionCols}
+              rows={positions}
+              rowKey={(r, i) => str(r.ticket, String(i))}
+              searchKeys={(r) => `${str(r.symbol)} ${positionExposureLabel(r.side)}`}
+              pageSize={8}
+              aria-label="Open positions"
+              empty={
+                <DeskEmpty
+                  icon={Layers}
+                  title="No open positions"
+                  description="No open positions on your account."
+                />
+              }
             />
-          ) : positionsUnavailable ? (
-            <DeskEmpty
-              icon={Layers}
-              title="Positions unavailable"
-              description="Your positions could not be loaded. This is not zero positions."
-            />
-          ) : (
-            <div className="min-w-0 overflow-x-auto">
-              <DeskDataTable
-                columns={positionCols}
-                rows={positions}
-                rowKey={(r, i) => str(r.ticket, String(i))}
-                searchKeys={(r) => `${str(r.symbol)} ${positionExposureLabel(r.side)}`}
-                pageSize={8}
-                aria-label="Open positions"
-                empty={
-                  <DeskEmpty
-                    icon={Layers}
-                    title="No open positions"
-                    description="No open positions on your account."
-                  />
-                }
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </section>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Market intelligence</CardTitle>
+      <section aria-labelledby="markets-preview">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 id="markets-preview" className="text-sm font-medium text-[var(--fg)]">
+            Markets
+          </h2>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/markets">Markets</Link>
+            <Link href="/markets">View markets</Link>
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {noBroker || sessionMismatch ? (
-            <DeskEmpty
-              icon={Activity}
-              title="MARKETS UNAVAILABLE"
-              description="Connect to see broker-discovered markets."
-            />
-          ) : catalogue === "UNAVAILABLE" ? (
-            <DeskEmpty
-              icon={Activity}
-              title="MARKETS UNAVAILABLE"
-              description="Broker market catalogue is currently unavailable. This is not an empty market."
-            />
-          ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
-            <DeskSkeleton rows={3} />
-          ) : catalogue === "LIVE_EMPTY" ? (
-            <DeskEmpty
-              icon={Activity}
-              title="No markets in catalogue"
-              description="The live broker catalogue was queried. No instruments are listed for your account."
-            />
-          ) : (
-            <MarketCatalogueRows rows={rows} limit={8} compact enableDetail={false} />
-          )}
-        </CardContent>
-      </Card>
+        </div>
+        {noBroker || sessionMismatch ? (
+          <DeskEmpty
+            icon={Activity}
+            title="MARKETS UNAVAILABLE"
+            description="Connect to see broker-discovered markets."
+          />
+        ) : catalogue === "UNAVAILABLE" ? (
+          <DeskEmpty
+            icon={Activity}
+            title="MARKETS UNAVAILABLE"
+            description="Broker market catalogue is currently unavailable. This is not an empty market."
+          />
+        ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
+          <DeskSkeleton rows={3} />
+        ) : catalogue === "LIVE_EMPTY" ? (
+          <DeskEmpty
+            icon={Activity}
+            title="No markets in catalogue"
+            description="The live broker catalogue was queried. No instruments are listed for your account."
+          />
+        ) : (
+          <MarketCatalogueRows rows={rows} limit={8} compact enableDetail={false} />
+        )}
+      </section>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Recent activity</CardTitle>
+      <section aria-labelledby="recent-activity">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 id="recent-activity" className="text-sm font-medium text-[var(--fg)]">
+            Recent activity
+          </h2>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/portfolio">Portfolio</Link>
+            <Link href="/portfolio">View portfolio</Link>
           </Button>
-        </CardHeader>
-        <CardContent>
-          {noBroker || sessionMismatch ? (
-            <DeskEmpty
-              icon={Activity}
-              title="No activity yet"
-              description="Fills appear after you connect your broker."
-            />
-          ) : activityUnavailable ? (
-            <DeskEmpty
-              icon={Activity}
-              title="Activity unavailable"
-              description="Your account could not be queried. This is not an empty history."
-            />
-          ) : deals.length === 0 ? (
-            <DeskEmpty
-              icon={Activity}
-              title="No recent activity"
-              description="No recent fills for your account."
-            />
-          ) : (
-            <ul className="space-y-2">
-              {deals.slice(0, 6).map((d, i) => {
-                const pnl = num(d.profit);
-                return (
-                  <li
-                    key={str(d.ticket, String(i))}
-                    className="flex min-w-0 items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
+        </div>
+        {noBroker || sessionMismatch ? (
+          <DeskEmpty
+            icon={Activity}
+            title="No activity yet"
+            description="Fills appear after you connect your broker."
+          />
+        ) : activityUnavailable ? (
+          <DeskEmpty
+            icon={Activity}
+            title="Activity unavailable"
+            description="Your account could not be queried. This is not an empty history."
+          />
+        ) : deals.length === 0 ? (
+          <DeskEmpty
+            icon={Activity}
+            title="No recent activity"
+            description="No recent fills for your account."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {deals.slice(0, 6).map((d, i) => {
+              const pnl = num(d.profit);
+              return (
+                <li
+                  key={str(d.ticket, String(i))}
+                  className="flex min-w-0 items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
+                >
+                  <span className="truncate">
+                    {str(d.symbol)} {positionExposureLabel(d.side)}
+                  </span>
+                  <span
+                    className={
+                      Number.isFinite(pnl) && pnl >= 0
+                        ? "tabular text-[var(--success)]"
+                        : Number.isFinite(pnl)
+                          ? "tabular text-[var(--danger)]"
+                          : "tabular"
+                    }
                   >
-                    <span className="truncate">
-                      {str(d.symbol)} {positionExposureLabel(d.side)}
-                    </span>
-                    <span
-                      className={
-                        Number.isFinite(pnl) && pnl >= 0
-                          ? "tabular text-[var(--success)]"
-                          : Number.isFinite(pnl)
-                            ? "tabular text-[var(--danger)]"
-                            : "tabular"
-                      }
-                    >
-                      {Number.isFinite(pnl) ? formatCurrency(pnl) : "—"}
-                    </span>
-                    <span className="shrink-0 text-xs text-[var(--fg-subtle)]">
-                      {formatRelativeTime(str(d.time, ""))}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                    {Number.isFinite(pnl) ? formatCurrency(pnl) : "—"}
+                  </span>
+                  <span className="shrink-0 text-xs text-[var(--fg-subtle)]">
+                    {formatRelativeTime(str(d.time, ""))}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

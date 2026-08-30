@@ -505,6 +505,7 @@ export type SignalSortKey =
   | "asset_class";
 
 export type SignalFilterState = {
+  q: string;
   direction: SignalDirectionFilter;
   assetClass: string;
   session: string;
@@ -516,6 +517,7 @@ export type SignalFilterState = {
 };
 
 export const EMPTY_SIGNAL_FILTERS: SignalFilterState = {
+  q: "",
   direction: "ALL",
   assetClass: "ALL",
   session: "ALL",
@@ -637,6 +639,11 @@ export function filterSignalRows(
   filters: SignalFilterState,
 ): Record<string, unknown>[] {
   return rows.filter((row) => {
+    const q = (filters.q || "").trim().toUpperCase();
+    if (q) {
+      const hay = `${instrumentSymbol(row)} ${instrumentName(row)}`.toUpperCase();
+      if (!hay.includes(q)) return false;
+    }
     const dir = signalBoardDirection(row);
     if (filters.direction !== "ALL" && dir !== filters.direction) return false;
     if (
@@ -874,6 +881,7 @@ export type SignalSummary = {
   assetClasses: string;
   lastUpdate: string;
   strongest: string;
+  strongestEdge: string;
 };
 
 function countOrDash(available: boolean, n: number): string {
@@ -903,6 +911,7 @@ export function signalSummary(input: {
           ? "—"
           : String(input.lastUpdate),
       strongest: "—",
+      strongestEdge: "—",
     };
   }
   const dirs = input.rows.map(signalBoardDirection);
@@ -920,6 +929,7 @@ export function signalSummary(input: {
         ? "—"
         : String(input.lastUpdate),
     strongest: strongestSetupLabel(input.rows, input.availability),
+    strongestEdge: strongestEdgeLabel(input.rows, input.availability),
   };
 }
 
@@ -935,6 +945,18 @@ export function strongestSetupLabel(
   const symbol = instrumentSymbol(top);
   const dir = signalBoardDirection(top);
   return symbol ? `${symbol} ${dir}` : "—";
+}
+
+export function strongestEdgeLabel(
+  rows: Record<string, unknown>[],
+  availability: SignalAvailability,
+): string {
+  if (availability !== "LIVE_ROWS") return "—";
+  const top = defaultSortedSignals(rows).find((row) =>
+    isActionableDirection(signalBoardDirection(row)),
+  );
+  if (!top) return "—";
+  return scoreDisplay(top.directional_edge ?? top.edge);
 }
 
 export function topResearchOpportunities(
@@ -1030,7 +1052,7 @@ export function dataSourceLabel(input: {
 }): string {
   const source = String(input.catalogueSource || "").trim().toUpperCase();
   if (input.liveBroker && source === "LIVE_BROKER") {
-    return "Broker catalogue";
+    return "LIVE_BROKER";
   }
   if (source === "UNAVAILABLE" || source === "CATALOGUE_UNAVAILABLE") {
     return "CATALOGUE UNAVAILABLE";
@@ -1133,7 +1155,7 @@ export function accountHealth(input: {
       };
     }
     if (input.liveCatalogue) {
-      return { id: "market", label: "Market data", state: "Healthy", detail: "Broker catalogue" };
+      return { id: "market", label: "Market data", state: "Healthy", detail: "LIVE_BROKER" };
     }
     if (input.connection.catalogueUnavailable) {
       return {
