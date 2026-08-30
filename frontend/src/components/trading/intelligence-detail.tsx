@@ -10,13 +10,13 @@ import {
   instrumentName,
   isHighConfidence,
   marketDataState,
+  marketDirectionLabel,
   marketSignalLabel,
   presentField,
   priceDisplay,
+  researchMetricDisplay,
   rowRegime,
   rowSession,
-  scoreDisplay,
-  signalBoardDirection,
   signalFreshness,
   signalStrength,
   signalTimestampLabel,
@@ -58,7 +58,8 @@ export function IntelligenceDetail({
   row: Record<string, unknown>;
   kind: "signal" | "market";
 }) {
-  const dir = signalBoardDirection(row);
+  const dir = marketDirectionLabel(row);
+  const signal = marketSignalLabel(row);
   const freshness = signalFreshness(row);
   const why = signalWhyFactors(row);
   const symbol = str(row.broker_symbol || row.symbol, "Instrument");
@@ -71,7 +72,9 @@ export function IntelligenceDetail({
         {SIGNALS_NOT_AUTHORIZATION}
       </p>
       <div className="flex flex-wrap gap-1.5">
-        <Badge tone={directionTone(dir)}>{dir}</Badge>
+        <Badge tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}>
+          {signal}
+        </Badge>
         <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
         <Badge tone="neutral">{presentField(row.asset_class)}</Badge>
         {isHighConfidence(row) ? <Badge tone="accent">Qualified</Badge> : null}
@@ -82,12 +85,15 @@ export function IntelligenceDetail({
         ) : null}
         <Detail label="Asset class" value={presentField(row.asset_class)} />
         <Detail label="Trading status" value={marketDataState(row)} />
-        <Detail label="Signal" value={marketSignalLabel(row)} />
+        <Detail label="Signal" value={signal} />
         <Detail label="Direction" value={dir} />
-        <Detail label="Opportunity" value={scoreDisplay(row.opportunity_score)} />
-        <Detail label="Edge" value={scoreDisplay(row.directional_edge ?? row.edge)} />
-        <Detail label="Risk/Reward" value={scoreDisplay(row.RR ?? row.rr)} />
-        <Detail label="Strength" value={signalStrength(row)} />
+        <Detail label="Opportunity" value={researchMetricDisplay(row, row.opportunity_score)} />
+        <Detail label="Edge" value={researchMetricDisplay(row, row.directional_edge ?? row.edge)} />
+        <Detail label="Risk/Reward" value={researchMetricDisplay(row, row.RR ?? row.rr)} />
+        <Detail
+          label="Strength"
+          value={signal === "NO SIGNAL" ? "—" : signalStrength(row)}
+        />
         <Detail label="Session" value={presentField(rowSession(row))} />
         <Detail label="Regime" value={presentField(rowRegime(row))} />
         <Detail label="Market condition" value={presentField(row.market_condition ?? row.data_state)} />
@@ -108,7 +114,9 @@ export function IntelligenceDetail({
         )}
         <Detail label="Risk status" value={presentField(row.risk_status ?? row.RISK_CONDITIONS)} />
       </dl>
-      {why.length > 0 ? (
+      {signal === "NO SIGNAL" ? (
+        <p className="text-sm text-[var(--fg-muted)]">NO SIGNAL</p>
+      ) : why.length > 0 ? (
         <section>
           <h3 className="mb-2 text-sm font-medium text-[var(--fg)]">Why this signal exists</h3>
           <ul className="space-y-2">

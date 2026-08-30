@@ -49,6 +49,14 @@ import {
   isValidBrokerSymbol,
   lastUpdatedCopy,
   moneyDisplay,
+  cataloguePageSlice,
+  catalogueStatusLabel,
+  hasResearchSignal,
+  knownInstrumentCountLabel,
+  marketDirectionLabel,
+  marketSignalLabel,
+  researchMetricDisplay,
+  skippedMalformedInstrumentCount,
   portfolioAccount,
   positionExposureLabel,
   positionSideLabel,
@@ -166,7 +174,17 @@ assert.equal(
   );
   assert.equal(merged.length, 1);
   assert.equal(merged[0]?.opportunity_score, 72);
+  assert.equal(merged[0]?.has_research_signal, true);
   assert.equal(mergeCatalogueRows([], [{ symbol: "FAKE" }]).length, 0);
+  const noSignal = mergeCatalogueRows(
+    [{ broker_symbol: "USDJPY", asset_class: "FOREX" }],
+    [],
+  );
+  assert.equal(noSignal[0]?.has_research_signal, false);
+  assert.equal(marketSignalLabel(noSignal[0] ?? {}), "NO SIGNAL");
+  assert.equal(marketDirectionLabel(noSignal[0] ?? {}), "—");
+  assert.equal(researchMetricDisplay(noSignal[0] ?? {}, 70), "—");
+  assert.equal(marketSignalLabel(merged[0] ?? {}), "BUY");
 }
 
 {
@@ -254,7 +272,7 @@ assert.equal(
   ]).join(","),
   "FOREX,METALS",
 );
-assert.equal(presentAssetClasses([{ asset_class: "UNKNOWN" }]).length, 0);
+assert.equal(presentAssetClasses([{ asset_class: "UNKNOWN" }]).join(","), "UNKNOWN");
 
 {
   const rows = [
@@ -530,8 +548,9 @@ assert.equal(
   assert.equal(kept[0]?.broker_symbol, "EURUSD_i");
   const directed = filterMarketRows(
     [
-      { broker_symbol: "EURUSD", direction: "BUY", asset_class: "FOREX" },
-      { broker_symbol: "GBPUSD", direction: "SELL", asset_class: "FOREX" },
+      { broker_symbol: "EURUSD", direction: "BUY", asset_class: "FOREX", has_research_signal: true },
+      { broker_symbol: "GBPUSD", direction: "SELL", asset_class: "FOREX", has_research_signal: true },
+      { broker_symbol: "USDJPY", direction: "BUY", asset_class: "FOREX", has_research_signal: false },
     ],
     { ...EMPTY_MARKET_FILTERS, direction: "BUY" },
   );
@@ -550,6 +569,39 @@ assert.equal(
   assert.equal(tops.length, 2);
   assert.equal(topResearchOpportunities([], "UNAVAILABLE", 4).length, 0);
   assert.equal(RESEARCH_OPPORTUNITY.includes("RESEARCH"), true);
+}
+
+{
+  const universe = Array.from({ length: 120 }, (_, i) => ({
+    broker_symbol: `SYM${String(i).padStart(3, "0")}`,
+  }));
+  assert.equal(universe.length, 120);
+  assert.equal(cataloguePageSlice(universe, 1).length, 50);
+  assert.equal(cataloguePageSlice(universe, 3).length, 20);
+  assert.equal(cataloguePageSlice(universe, 1)[0]?.broker_symbol, "SYM000");
+  assert.equal(skippedMalformedInstrumentCount([
+    { broker_symbol: "EURUSD" },
+    { broker_symbol: "" },
+    { broker_symbol: "???" },
+  ]), 2);
+  assert.equal(hasResearchSignal({ has_research_signal: false, direction: "SELL" }), false);
+  assert.equal(marketSignalLabel({ has_research_signal: false, direction: "SELL" }), "NO SIGNAL");
+  assert.equal(catalogueStatusLabel("UNAVAILABLE"), "CATALOGUE_UNAVAILABLE");
+  assert.equal(catalogueStatusLabel("LIVE_EMPTY"), "EMPTY");
+  assert.equal(catalogueStatusLabel("LIVE_ROWS"), "LIVE_BROKER");
+  assert.equal(knownInstrumentCountLabel("UNAVAILABLE", 0), "");
+  assert.equal(knownInstrumentCountLabel("LIVE_EMPTY", 0), "0");
+  assert.equal(knownInstrumentCountLabel("LIVE_ROWS", 500), "500");
+  assert.equal(
+    sortSignalRows(
+      [
+        { broker_symbol: "AAA", has_research_signal: false },
+        { broker_symbol: "BBB", has_research_signal: true, direction: "BUY" },
+      ],
+      "signal",
+    )[0]?.broker_symbol,
+    "BBB",
+  );
 }
 
 console.log("trader-ux.test.ts ok");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,18 @@ import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import {
   EMPTY_MARKET_FILTERS,
+  MARKET_PAGE_SIZE,
+  cataloguePageSlice,
   filterMarketRows,
+  hasResearchSignal,
   instrumentSymbol,
+  marketDirectionLabel,
   marketSignalLabel,
   presentAssetClasses,
   presentField,
+  researchMetricDisplay,
   rowRegime,
   rowSession,
-  scoreDisplay,
-  signalBoardDirection,
   signalFreshness,
   sortSignalRows,
   uniqueRowValues,
@@ -26,8 +29,6 @@ import {
 } from "@/lib/trading/trader-ux";
 import { str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
-
-const PAGE_SIZE = 50;
 
 export function MarketCatalogueRows({
   rows,
@@ -43,9 +44,18 @@ export function MarketCatalogueRows({
   enableDetail?: boolean;
 }) {
   const [filters, setFilters] = useState<MarketFilterState>(EMPTY_MARKET_FILTERS);
+  const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SignalSortKey>("instrument");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setFilters((prev) => (prev.q === searchInput ? prev : { ...prev, q: searchInput }));
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const classes = useMemo(() => presentAssetClasses(rows), [rows]);
   const sessions = useMemo(() => uniqueRowValues(rows, rowSession), [rows]);
@@ -56,9 +66,9 @@ export function MarketCatalogueRows({
   );
   const directions = useMemo(
     () =>
-      uniqueRowValues(rows, (row) => signalBoardDirection(row)).filter(
-        (d) => d === "BUY" || d === "SELL",
-      ),
+      uniqueRowValues(rows, (row) =>
+        hasResearchSignal(row) ? marketDirectionLabel(row) : "",
+      ).filter((d) => d === "BUY" || d === "SELL"),
     [rows],
   );
 
@@ -68,10 +78,12 @@ export function MarketCatalogueRows({
   );
   const ordered = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
   const capped = limit != null ? ordered.slice(0, limit) : ordered;
-  const pageCount = Math.max(1, Math.ceil(capped.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(capped.length / MARKET_PAGE_SIZE));
   const pageSafe = Math.min(page, pageCount);
   const shown =
-    limit != null ? capped : capped.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+    limit != null ? capped : cataloguePageSlice(capped, pageSafe, MARKET_PAGE_SIZE);
+  const rangeStart = capped.length === 0 ? 0 : (pageSafe - 1) * MARKET_PAGE_SIZE + 1;
+  const rangeEnd = Math.min(pageSafe * MARKET_PAGE_SIZE, capped.length);
 
   const setFilter = (patch: Partial<MarketFilterState>) => {
     setPage(1);
@@ -89,8 +101,8 @@ export function MarketCatalogueRows({
           <label className="block min-w-0">
             <span className="sr-only">Search markets</span>
             <Input
-              value={filters.q}
-              onChange={(e) => setFilter({ q: e.target.value })}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search symbol or name"
               aria-label="Search symbol or name"
               className="h-9"
@@ -193,13 +205,17 @@ export function MarketCatalogueRows({
               aria-label="Sort markets"
             >
               <option value="instrument">Symbol</option>
-              <option value="strongest">Strongest</option>
+              <option value="asset_class">Asset class</option>
+              <option value="signal">Signal</option>
+              <option value="strongest">Signal rank</option>
               <option value="opportunity">Opportunity</option>
               <option value="edge">Edge</option>
-              <option value="risk_reward">Risk/Reward</option>
+              <option value="risk_reward">RR</option>
+              <option value="freshness">Freshness</option>
             </select>
             <p className="text-xs text-[var(--fg-subtle)]">
               {capped.length} instrument{capped.length === 1 ? "" : "s"}
+              {capped.length !== rows.length ? ` of ${rows.length}` : ""}
             </p>
           </div>
         </div>
@@ -230,7 +246,7 @@ export function MarketCatalogueRows({
               <tbody>
                 {shown.map((row, i) => {
                   const symbol = instrumentSymbol(row) || String(i);
-                  const dir = signalBoardDirection(row);
+                  const dir = marketDirectionLabel(row);
                   const freshness = signalFreshness(row);
                   return (
                     <tr
@@ -257,11 +273,21 @@ export function MarketCatalogueRows({
                       <td className="py-2 pr-3 text-[var(--fg-muted)]">{rowRegime(row)}</td>
                       <td className="py-2 pr-3">{marketSignalLabel(row)}</td>
                       <td className="py-2 pr-3">
-                        <Badge tone={directionTone(dir)}>{dir}</Badge>
+                        {dir === "—" ? (
+                          <span className="text-[var(--fg-muted)]">—</span>
+                        ) : (
+                          <Badge tone={directionTone(dir)}>{dir}</Badge>
+                        )}
                       </td>
-                      <td className="py-2 pr-3 tabular">{scoreDisplay(row.opportunity_score)}</td>
-                      <td className="py-2 pr-3 tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</td>
-                      <td className="py-2 pr-3 tabular">{scoreDisplay(row.RR ?? row.rr)}</td>
+                      <td className="py-2 pr-3 tabular">
+                        {researchMetricDisplay(row, row.opportunity_score)}
+                      </td>
+                      <td className="py-2 pr-3 tabular">
+                        {researchMetricDisplay(row, row.directional_edge ?? row.edge)}
+                      </td>
+                      <td className="py-2 pr-3 tabular">
+                        {researchMetricDisplay(row, row.RR ?? row.rr)}
+                      </td>
                       <td className="py-2">
                         <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
                       </td>
@@ -275,7 +301,8 @@ export function MarketCatalogueRows({
           <ul className={cn("grid min-w-0 gap-2", compact ? "lg:hidden" : "md:hidden")}>
             {shown.map((row, i) => {
               const symbol = instrumentSymbol(row) || String(i);
-              const dir = signalBoardDirection(row);
+              const dir = marketDirectionLabel(row);
+              const signal = marketSignalLabel(row);
               const freshness = signalFreshness(row);
               return (
                 <li key={symbol}>
@@ -293,22 +320,26 @@ export function MarketCatalogueRows({
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        <Badge tone={directionTone(dir)}>{dir}</Badge>
+                        <Badge tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}>
+                          {signal}
+                        </Badge>
                         <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
                       </div>
                     </div>
                     <dl className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
                       <div>
                         <dt className="text-[var(--fg-subtle)]">Opportunity</dt>
-                        <dd className="tabular">{scoreDisplay(row.opportunity_score)}</dd>
+                        <dd className="tabular">{researchMetricDisplay(row, row.opportunity_score)}</dd>
                       </div>
                       <div>
                         <dt className="text-[var(--fg-subtle)]">Edge</dt>
-                        <dd className="tabular">{scoreDisplay(row.directional_edge ?? row.edge)}</dd>
+                        <dd className="tabular">
+                          {researchMetricDisplay(row, row.directional_edge ?? row.edge)}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-[var(--fg-subtle)]">R/R</dt>
-                        <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                        <dd className="tabular">{researchMetricDisplay(row, row.RR ?? row.rr)}</dd>
                       </div>
                     </dl>
                   </button>
@@ -322,7 +353,9 @@ export function MarketCatalogueRows({
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          <Badge tone={directionTone(dir)}>{dir}</Badge>
+                          <Badge tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}>
+                            {signal}
+                          </Badge>
                           <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
                         </div>
                       </div>
@@ -338,8 +371,10 @@ export function MarketCatalogueRows({
       {limit == null ? (
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-[var(--fg-subtle)]">
-            {capped.length} instrument{capped.length === 1 ? "" : "s"}
-            {pageCount > 1 ? ` · ${pageSafe} of ${pageCount}` : ""}
+            {capped.length === 0
+              ? "0 instruments"
+              : `Showing ${rangeStart}–${rangeEnd} of ${capped.length}`}
+            {pageCount > 1 ? ` · page ${pageSafe} of ${pageCount}` : ""}
           </p>
           {pageCount > 1 ? (
           <div className="flex gap-2">

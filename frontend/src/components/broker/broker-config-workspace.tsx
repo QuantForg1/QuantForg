@@ -15,10 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
-import { mt5Api, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
+import { mt5Api, marketUniverseApi, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asRecord, str } from "@/lib/desk";
-import { traderFacingErrorMessage } from "@/lib/trading/trader-ux";
+import { MARKET_UNIVERSE_QUERY_KEY, traderFacingErrorMessage } from "@/lib/trading/trader-ux";
 import { useTradingSession } from "@/providers/trading-session-provider";
 import { useAuth } from "@/providers/auth-provider";
 import { canAccessIteOps } from "@/lib/auth/ite-ops-access";
@@ -131,6 +131,15 @@ export function BrokerConfigWorkspace() {
     await Promise.all([healthQ.refetch(), mt5Q.refetch()]);
   };
 
+  const refreshOwnedCatalogue = async () => {
+    try {
+      await marketUniverseApi.refresh();
+    } catch {
+      /* catalogue remains unverified — never invent LIVE_BROKER */
+    }
+    await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
+  };
+
   const clearPasswordField = () => {
     setPassword("");
     setPasswordFieldKey((key) => key + 1);
@@ -166,7 +175,7 @@ export function BrokerConfigWorkspace() {
     mutationFn: weltradeApi.connect,
     onMutate: () => {
       clearPasswordField();
-      setProgress("Connecting to your broker...");
+      setProgress("CONNECTING");
     },
     onSuccess: async (data) => {
       clearPasswordField();
@@ -174,9 +183,10 @@ export function BrokerConfigWorkspace() {
       if (Object.keys(body).length > 0) {
         qc.setQueryData(["weltrade-dashboard"], body);
       }
-      toast.success("Broker connected");
+      toast.success("CONNECTED");
       await qc.invalidateQueries({ queryKey: ["trading-session"] });
       await refresh();
+      await refreshOwnedCatalogue();
       setProgress(null);
     },
     onError: (e) => {
@@ -195,6 +205,7 @@ export function BrokerConfigWorkspace() {
     onSuccess: async () => {
       toast.success("Disconnected");
       await refresh();
+      await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
     },
     onError: (e) =>
       toast.error(
@@ -221,12 +232,13 @@ export function BrokerConfigWorkspace() {
       });
     },
     onMutate: () => {
-      setProgress("Saving…");
+      setProgress("CONNECTING");
     },
     onSuccess: async () => {
       clearPasswordField();
-      toast.success("Broker configured — session validated and connected");
+      toast.success("CONNECTED");
       await refresh();
+      await refreshOwnedCatalogue();
       setProgress(null);
     },
     onError: (e) => {

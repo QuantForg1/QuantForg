@@ -56,7 +56,7 @@ def test_dashboard_command_links_and_no_global_account() -> None:
     ux = _TRADER_UX.read_text(encoding="utf-8")
     assert "View all signals" in dash
     assert "View portfolio" in dash
-    assert "View markets" in dash
+    assert "View all markets" in dash
     assert "Open terminal" in dash
     assert "Global Account" not in dash
     assert "Default Account" not in ux

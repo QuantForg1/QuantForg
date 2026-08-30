@@ -34,6 +34,8 @@ import {
   rowRegime,
   rowSession,
   scoreDisplay,
+  hasResearchSignal,
+  skippedMalformedInstrumentCount,
   signalAvailability,
   signalBoardDirection,
   signalFeedState,
@@ -95,7 +97,7 @@ export function SignalsWorkspace() {
     snapshotFetched: universeQ.isFetched,
     snapshotError: Boolean(universeQ.isError),
     catalogueSource: universe.catalogue_source,
-    instrumentCount: instruments.length,
+    instrumentCount: instruments.length - skippedMalformedInstrumentCount(instruments),
   });
   const availability = signalAvailability(catalogue);
   const boardRows = asList(asRecord(universe.opportunity_board).rows).map(asRecord);
@@ -104,21 +106,22 @@ export function SignalsWorkspace() {
     availability === "LIVE_ROWS"
       ? mergeResearchSignalFields(mergeCatalogueRows(instruments, boardRows), researchRows)
       : [];
+  const signalRows = useMemo(() => rows.filter(hasResearchSignal), [rows]);
 
-  const classes = useMemo(() => presentAssetClasses(rows), [rows]);
-  const sessions = useMemo(() => uniqueRowValues(rows, rowSession), [rows]);
-  const regimes = useMemo(() => uniqueRowValues(rows, rowRegime), [rows]);
+  const classes = useMemo(() => presentAssetClasses(signalRows), [signalRows]);
+  const sessions = useMemo(() => uniqueRowValues(signalRows, rowSession), [signalRows]);
+  const regimes = useMemo(() => uniqueRowValues(signalRows, rowRegime), [signalRows]);
 
-  const filtered = useMemo(() => filterSignalRows(rows, filters), [filters, rows]);
+  const filtered = useMemo(() => filterSignalRows(signalRows, filters), [filters, signalRows]);
   const sorted = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
 
   const summary = signalSummary({
     availability,
-    rows,
+    rows: signalRows,
     instrumentCount: instruments.length,
     lastUpdate: universe.as_of,
   });
-  const topOps = topResearchOpportunities(rows, availability, 4);
+  const topOps = topResearchOpportunities(signalRows, availability, 4);
   const source = dataSourceLabel({
     liveBroker: liveCatalogue,
     catalogueSource: universe.catalogue_source ?? session.catalogue_source,
@@ -130,7 +133,7 @@ export function SignalsWorkspace() {
     mismatch,
     snapshotError: Boolean(universeQ.isError),
     availability,
-    rows,
+    rows: signalRows,
   });
   const feedLabel = signalFeedStateLabel(feed);
   const updated = lastUpdatedCopy(universe.as_of);
@@ -149,7 +152,7 @@ export function SignalsWorkspace() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/markets">Markets</Link>
+              <Link href="/markets">View all markets</Link>
             </Button>
             <Button variant="secondary" size="sm" asChild>
               <Link href="/portfolio">Portfolio</Link>
@@ -266,11 +269,13 @@ export function SignalsWorkspace() {
             />
           ) : availability === "NOT_READY" || universeQ.isLoading ? (
             <DeskSkeleton rows={6} />
-          ) : availability === "LIVE_EMPTY" ? (
+          ) : availability === "LIVE_EMPTY" || signalRows.length === 0 ? (
             <DeskEmpty
               icon={Activity}
-              title="No signals found"
-              description="The live broker catalogue was queried. No ranked research signals are available right now."
+              title="NO SIGNAL"
+              description="The live broker catalogue is available. No ranked research signals are present. Open Markets to see all instruments."
+              actionLabel="View all markets"
+              actionHref="/markets"
             />
           ) : (
             <>

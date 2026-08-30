@@ -241,9 +241,44 @@ export function mergeCatalogueRows(
     if (!isValidBrokerSymbol(raw)) continue;
     const key = String(raw).trim().toUpperCase();
     const scored = byKey.get(key);
-    out.push(scored ? { ...inst, ...scored } : inst);
+    out.push(
+      scored
+        ? { ...inst, ...scored, has_research_signal: true }
+        : { ...inst, has_research_signal: false },
+    );
   }
   return out;
+}
+
+export function skippedMalformedInstrumentCount(
+  instruments: Record<string, unknown>[],
+): number {
+  return instruments.filter((inst) => {
+    const raw = inst.broker_symbol || inst.canonical_symbol || inst.symbol || "";
+    return !isValidBrokerSymbol(raw);
+  }).length;
+}
+
+export function hasResearchSignal(row: Record<string, unknown>): boolean {
+  if (row.has_research_signal === true) return true;
+  if (row.has_research_signal === false) return false;
+  if (numericSortValue(row.research_rank_score) != null) return true;
+  if (row.qualified_research === true) return true;
+  const status = String(row.board_status || "").trim().toUpperCase();
+  return Boolean(status) && status !== "UNKNOWN" && status !== "NOT AVAILABLE";
+}
+
+export const MARKET_PAGE_SIZE = 50;
+
+export function cataloguePageSlice<T>(
+  rows: T[],
+  page: number,
+  pageSize = MARKET_PAGE_SIZE,
+): T[] {
+  if (rows.length === 0) return [];
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pageSafe = Math.min(Math.max(1, page), pageCount);
+  return rows.slice((pageSafe - 1) * pageSize, pageSafe * pageSize);
 }
 
 export function marketDataState(row: Record<string, unknown>): string {
@@ -356,11 +391,14 @@ export function presentAssetClasses(rows: Record<string, unknown>[]): string[] {
   const seen = new Set<string>();
   for (const row of rows) {
     const cls = normalizeAssetClass(row.asset_class);
-    if (cls !== "UNKNOWN") seen.add(cls);
+    if (cls) seen.add(cls);
   }
   const ordered = ASSET_CLASS_ORDER.filter((cls) => seen.has(cls));
-  const extra = [...seen].filter((cls) => !ASSET_CLASS_ORDER.includes(cls as (typeof ASSET_CLASS_ORDER)[number])).sort();
-  return [...ordered, ...extra];
+  const extra = [...seen]
+    .filter((cls) => !ASSET_CLASS_ORDER.includes(cls as (typeof ASSET_CLASS_ORDER)[number]) && cls !== "UNKNOWN")
+    .sort();
+  const unknown = seen.has("UNKNOWN") ? ["UNKNOWN"] : [];
+  return [...ordered, ...extra, ...unknown];
 }
 
 export function uniqueRowValues(
@@ -429,6 +467,21 @@ export function catalogueViewState(input: {
   return input.instrumentCount === 0 ? "LIVE_EMPTY" : "LIVE_ROWS";
 }
 
+export function catalogueStatusLabel(state: CatalogueViewState): string {
+  if (state === "LIVE_ROWS") return "LIVE_BROKER";
+  if (state === "LIVE_EMPTY") return "EMPTY";
+  if (state === "NOT_READY") return "LOADING";
+  return "CATALOGUE_UNAVAILABLE";
+}
+
+export function knownInstrumentCountLabel(
+  state: CatalogueViewState,
+  count: number,
+): string {
+  if (state === "LIVE_ROWS" || state === "LIVE_EMPTY") return String(count);
+  return "";
+}
+
 export function filterMarketRows(
   rows: Record<string, unknown>[],
   filters: MarketFilterState,
@@ -450,8 +503,10 @@ export function filterMarketRows(
     if (filters.freshness !== "ALL" && signalFreshness(row) !== filters.freshness) {
       return false;
     }
-    if (filters.direction !== "ALL" && signalBoardDirection(row) !== filters.direction) {
-      return false;
+    if (filters.direction !== "ALL") {
+      if (!hasResearchSignal(row) || signalBoardDirection(row) !== filters.direction) {
+        return false;
+      }
     }
     return true;
   });
@@ -502,7 +557,9 @@ export type SignalSortKey =
   | "edge"
   | "risk_reward"
   | "instrument"
-  | "asset_class";
+  | "asset_class"
+  | "signal"
+  | "freshness";
 
 export type SignalFilterState = {
   q: string;
@@ -719,6 +776,32 @@ export function sortSignalRows(
         missingLast(numericSortValue(a.RR ?? a.rr))
       );
     }
+    if (sort === "freshness") {
+      const rank = (row: Record<string, unknown>): number => {
+        const fresh = signalFreshness(row);
+        if (fresh === "LIVE") return 5;
+        if (fresh === "RECENT") return 4;
+        if (fresh === "STALE") return 3;
+        if (fresh === "PARTIAL") return 2;
+        if (fresh === "UNAVAILABLE") return 1;
+        return 0;
+      };
+      const delta = rank(b) - rank(a);
+      if (delta !== 0) return delta;
+      return instrumentSymbol(a).localeCompare(instrumentSymbol(b));
+    }
+    if (sort === "signal") {
+      const rank = (row: Record<string, unknown>): number => {
+        if (!hasResearchSignal(row)) return 0;
+        const dir = signalBoardDirection(row);
+        if (dir === "BUY") return 3;
+        if (dir === "SELL") return 2;
+        return 1;
+      };
+      const delta = rank(b) - rank(a);
+      if (delta !== 0) return delta;
+      return instrumentSymbol(a).localeCompare(instrumentSymbol(b));
+    }
     return 0;
   });
   return copy;
@@ -837,11 +920,28 @@ export function lastUpdatedCopy(raw: unknown, nowMs = Date.now()): string {
 }
 
 export function marketSignalLabel(row: Record<string, unknown>): string {
+  if (!hasResearchSignal(row)) return "NO SIGNAL";
   const status = presentField(row.board_status || row.setup_state);
   if (status !== "Not available") return status;
   const dir = signalBoardDirection(row);
   if (dir === "BUY" || dir === "SELL") return dir;
+  if (dir === "WATCH") return "WATCH";
   return "UNKNOWN";
+}
+
+export function marketDirectionLabel(row: Record<string, unknown>): string {
+  if (!hasResearchSignal(row)) return "—";
+  const dir = signalBoardDirection(row);
+  if (!dir || dir === "UNKNOWN") return "UNAVAILABLE";
+  return dir;
+}
+
+export function researchMetricDisplay(
+  row: Record<string, unknown>,
+  value: unknown,
+): string {
+  if (!hasResearchSignal(row)) return "—";
+  return scoreDisplay(value);
 }
 
 export function connectionShortLabel(state: ConnectionDisplayState): string {
@@ -995,6 +1095,7 @@ export function signalFeedState(input: {
   if (input.availability === "UNAVAILABLE") return "CATALOGUE_UNAVAILABLE";
   if (input.loading || input.availability === "NOT_READY") return "LOADING";
   if (input.availability === "LIVE_EMPTY") return "EMPTY";
+  if (input.rows.length === 0) return "EMPTY";
   const states = input.rows.map((row) => marketDataState(row));
   const live = states.filter((s) => s === "LIVE").length;
   const stale = states.filter((s) => s === "STALE").length;

@@ -29,6 +29,8 @@ import {
   lastUpdatedCopy,
   MARKET_UNIVERSE_QUERY_KEY,
   mergeCatalogueRows,
+  hasResearchSignal,
+  skippedMalformedInstrumentCount,
   numericDisplay,
   positionExposureLabel,
   resolveConnectionPresentation,
@@ -127,7 +129,7 @@ export default function DashboardPage() {
     snapshotFetched: universeQ.isFetched,
     snapshotError: Boolean(universeQ.isError),
     catalogueSource: universe.catalogue_source,
-    instrumentCount: instruments.length,
+    instrumentCount: instruments.length - skippedMalformedInstrumentCount(instruments),
   });
   const rows =
     catalogue === "LIVE_ROWS"
@@ -136,6 +138,10 @@ export default function DashboardPage() {
           asList(asRecord(universe.opportunity_board).rows).map(asRecord),
         )
       : [];
+  const marketPreview = [
+    ...rows.filter(hasResearchSignal),
+    ...rows.filter((row) => !hasResearchSignal(row)),
+  ];
   const signalState = signalAvailability(catalogue);
   const signalPreview =
     signalState === "LIVE_ROWS" ? topResearchOpportunities(rows, signalState, 4) : [];
@@ -477,7 +483,7 @@ export default function DashboardPage() {
             Markets
           </h2>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/markets">View markets</Link>
+            <Link href="/markets">View all markets</Link>
           </Button>
         </div>
         {noBroker || sessionMismatch ? (
@@ -501,7 +507,7 @@ export default function DashboardPage() {
             description="The live broker catalogue was queried. No instruments are listed for your account."
           />
         ) : (
-          <MarketCatalogueRows rows={rows} limit={8} compact enableDetail={false} />
+          <MarketCatalogueRows rows={marketPreview} limit={8} compact enableDetail={false} />
         )}
       </section>
 
