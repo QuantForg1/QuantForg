@@ -92,14 +92,32 @@ def refresh_execution_gateway_reads(mt5_adapter: Any | None) -> None:
         fn()
 
 
-async def _offload_sync(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+async def _offload_sync(
+    fn: Any,
+    /,
+    *args: Any,
+    research_io: bool = False,
+    **kwargs: Any,
+) -> Any:
     """Run blocking MT5/gateway I/O off the asyncio event loop.
 
     Production bug: sync httpx gateway calls inside ``async`` market context
     starved login/health. Trading decisions are unchanged — only the thread
-    that performs I/O moves. Uses the bounded ITE I/O pool (not unlimited
-    threads, not the request-path default executor).
+    that performs I/O moves.
+
+    LIVE ITE / scanner work uses the bounded ITE I/O pool.
+    Research-mode scoring uses ``asyncio.to_thread`` so a multi-symbol
+    research batch cannot saturate the 5-worker ITE pool (4 symbols × 5
+    timeframes) and leave LIVE non-gold desks stuck as UNKNOWN stubs.
     """
+    import asyncio
+    from functools import partial
+
+    if research_io:
+        if kwargs:
+            return await asyncio.to_thread(partial(fn, *args, **kwargs))
+        return await asyncio.to_thread(fn, *args)
+
     from app.application.services.blocking_io_offload import offload_blocking
 
     return await offload_blocking(fn, *args, **kwargs)
@@ -379,6 +397,7 @@ async def build_ite_cycle_market_context(
         "connection": "UNKNOWN",
         "account": "UNKNOWN",
         "research_mode": bool(research_mode),
+        "research_io_isolated": bool(research_mode),
         "authorizes_trade": False if research_mode else None,
         "terminal": "UNKNOWN",
         "bars": {},
@@ -419,7 +438,12 @@ async def build_ite_cycle_market_context(
             connection="NO_ADAPTER",
         )
 
-    session_err = await _offload_sync(_ensure_gateway_session, mt5_adapter, diag)
+    async def _io(fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+        return await _offload_sync(
+            fn, *args, research_io=bool(research_mode), **kwargs
+        )
+
+    session_err = await _io(_ensure_gateway_session, mt5_adapter, diag)
     if session_err:
         return _fail(session_err)
 
@@ -461,7 +485,7 @@ async def build_ite_cycle_market_context(
     diag["canonical_broker_symbol"] = None
     broker_rows: tuple[dict[str, Any], ...] = ()
     try:
-        broker_rows = await _offload_sync(fetch_broker_symbol_rows, mt5_adapter)
+        broker_rows = await _io(fetch_broker_symbol_rows, mt5_adapter)
     except Exception:
         broker_rows = ()
     symbol_candidates = (
@@ -487,7 +511,7 @@ async def build_ite_cycle_market_context(
         import asyncio
 
         async def _one_tf(tf: Timeframe, count: int) -> tuple[Timeframe, list[Candle]]:
-            rates = await _offload_sync(
+            rates = await _io(
                 mt5_adapter.copy_rates_from_pos,
                 canonical_symbol,
                 tf,
@@ -551,7 +575,7 @@ async def build_ite_cycle_market_context(
     quote_ask: Decimal | None = None
     quote_age_seconds: float | None = None
     try:
-        tick = await _offload_sync(mt5_adapter.latest_tick, symbol)
+        tick = await _io(mt5_adapter.latest_tick, symbol)
         if tick is not None:
             bid = Decimal(str(getattr(tick, "bid", 0) or 0))
             ask = Decimal(str(getattr(tick, "ask", 0) or 0))
@@ -633,30 +657,30 @@ async def build_ite_cycle_market_context(
     day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     health_diag_box: dict[str, Any] = {}
     bundled = await asyncio.gather(
-        _offload_sync(mt5_adapter.account_info),
-        _offload_sync(
+        _io(mt5_adapter.account_info),
+        _io(
             force_sync_positions,
             mt5_adapter,
             symbol=symbol,
             position_engine=position_engine,
             fresh=True,
         ),
-        _offload_sync(
+        _io(
             _load_history_deals,
             mt5_adapter,
             date_from=day_start,
             date_to=datetime.now(UTC) + timedelta(days=1),
         ),
         (
-            _offload_sync(orders_fn)
+            _io(orders_fn)
             if callable(orders_fn)
-            else _offload_sync(lambda: "N/A")
+            else _io(lambda: "N/A")
         ),
-        _offload_sync(_read_mt5_autotrading_enabled, mt5_adapter, health_diag_box),
+        _io(_read_mt5_autotrading_enabled, mt5_adapter, health_diag_box),
         (
-            _offload_sync(specs_fn, symbol)
+            _io(specs_fn, symbol)
             if callable(specs_fn)
-            else _offload_sync(lambda: None)
+            else _io(lambda: None)
         ),
         return_exceptions=True,
     )

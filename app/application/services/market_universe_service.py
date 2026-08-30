@@ -319,6 +319,20 @@ def _row_has_numeric_opportunity(row: dict[str, Any]) -> bool:
     return isinstance(opp, (int, float))
 
 
+_LAST_RESEARCH_BATCH_DIAG: dict[str, Any] = {
+    "requested": [],
+    "returned": 0,
+    "errors": [],
+    "exception": None,
+    "symbols_with_numeric": 0,
+    "symbols_attempted": 0,
+}
+
+
+def get_last_research_batch_diag() -> dict[str, Any]:
+    return dict(_LAST_RESEARCH_BATCH_DIAG)
+
+
 def _merge_research_batch_scores(
     scored: list[dict[str, Any]],
     *,
@@ -334,6 +348,15 @@ def _merge_research_batch_scores(
     Rows without a numeric opportunity_score are NOT treated as already
     scored (WAIT/UNKNOWN stubs must be re-analyzed).
     """
+    global _LAST_RESEARCH_BATCH_DIAG
+    _LAST_RESEARCH_BATCH_DIAG = {
+        "requested": [],
+        "returned": 0,
+        "errors": [],
+        "exception": None,
+        "symbols_with_numeric": 0,
+        "symbols_attempted": 0,
+    }
     if catalogue_source != CATALOGUE_LIVE_BROKER or mt5_adapter is None:
         return scored
     queue = schedule.get("queue") if isinstance(schedule, dict) else None
@@ -360,6 +383,8 @@ def _merge_research_batch_scores(
         want_desks.add(code.upper())
         if desk:
             want_desks.add(desk)
+    _LAST_RESEARCH_BATCH_DIAG["requested"] = list(want)
+    _LAST_RESEARCH_BATCH_DIAG["symbols_attempted"] = len(want)
     if not want:
         return scored
     try:
@@ -368,9 +393,17 @@ def _merge_research_batch_scores(
         )
 
         batch = score_symbols_for_research(mt5_adapter, want)
-    except Exception:
+    except Exception as exc:
+        _LAST_RESEARCH_BATCH_DIAG["exception"] = f"{type(exc).__name__}:{exc}"[:200]
         logger.exception("research_batch_score_failed")
         return scored
+
+    batch_rows = [r for r in (batch.get("rows") or ()) if isinstance(r, dict)]
+    _LAST_RESEARCH_BATCH_DIAG["returned"] = len(batch_rows)
+    _LAST_RESEARCH_BATCH_DIAG["errors"] = list(batch.get("errors") or [])[:20]
+    _LAST_RESEARCH_BATCH_DIAG["symbols_with_numeric"] = sum(
+        1 for r in batch_rows if _row_has_numeric_opportunity(r)
+    )
 
     # Keep prior numeric scores; drop UNKNOWN stubs for desks in this batch.
     merged: list[dict[str, Any]] = []
@@ -390,9 +423,7 @@ def _merge_research_batch_scores(
         if isinstance(r, dict)
     }
     seen |= {canonical_desk(s) for s in seen if s}
-    for row in batch.get("rows") or ():
-        if not isinstance(row, dict):
-            continue
+    for row in batch_rows:
         sym = str(row.get("symbol") or row.get("broker_symbol") or "").upper()
         desk = canonical_desk(sym)
         if not sym:
@@ -976,6 +1007,21 @@ def build_snapshot(
                     and isinstance(r.get("opportunity_score"), (int, float))
                     and not isinstance(r.get("opportunity_score"), bool)
                 )
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
+            "research_batch": (
+                get_last_research_batch_diag()
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
+            "symbols_research_attempted": (
+                get_last_research_batch_diag().get("symbols_attempted")
+                if source == CATALOGUE_LIVE_BROKER
+                else CATALOGUE_UNAVAILABLE
+            ),
+            "symbols_research_returned": (
+                get_last_research_batch_diag().get("returned")
                 if source == CATALOGUE_LIVE_BROKER
                 else CATALOGUE_UNAVAILABLE
             ),
