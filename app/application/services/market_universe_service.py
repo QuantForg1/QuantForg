@@ -268,6 +268,64 @@ def _scored_rows_from_live_scan() -> list[dict[str, Any]]:
     return unique
 
 
+def _merge_research_batch_scores(
+    scored: list[dict[str, Any]],
+    *,
+    mt5_adapter: Any,
+    catalogue_source: str,
+    schedule: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Extend scored rows with research batch using existing scorer.
+
+    Does not create a second scanner. Gold-only live execution clamp stays
+    intact — this path is research-only and never calls OMS.
+    """
+    if catalogue_source != CATALOGUE_LIVE_BROKER or mt5_adapter is None:
+        return scored
+    queue = schedule.get("queue") if isinstance(schedule, dict) else None
+    if not isinstance(queue, list) or not queue:
+        return scored
+    already = {
+        str(r.get("symbol") or r.get("broker_symbol") or "").upper()
+        for r in scored
+        if isinstance(r, dict)
+    }
+    already |= {canonical_desk(s) for s in already if s}
+    want: list[str] = []
+    for item in queue:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("broker_symbol") or item.get("canonical_symbol") or "")
+        desk = canonical_desk(code)
+        if not code:
+            continue
+        if code.upper() in already or desk in already:
+            continue
+        want.append(code)
+    if not want:
+        return scored
+    try:
+        from app.application.services.research_universe_scanner import (
+            score_symbols_for_research,
+        )
+
+        batch = score_symbols_for_research(mt5_adapter, want)
+    except Exception:
+        logger.exception("research_batch_score_failed")
+        return scored
+    merged = list(scored)
+    for row in batch.get("rows") or ():
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get("symbol") or row.get("broker_symbol") or "").upper()
+        if not sym or sym in already:
+            continue
+        already.add(sym)
+        already.add(canonical_desk(sym))
+        merged.append(row)
+    return merged
+
+
 def _shadow_candidates() -> list[dict[str, Any]]:
     try:
         from app.application.services.shadow_observation_pipeline import (
@@ -564,6 +622,13 @@ def build_snapshot(
     _attach_timeframes(
         instruments, mt5_adapter=mt5_adapter, catalogue_source=source
     )
+    schedule = research_scan_order(instruments)
+    scored = _merge_research_batch_scores(
+        scored,
+        mt5_adapter=mt5_adapter,
+        catalogue_source=source,
+        schedule=schedule,
+    )
     _attach_scorecards(
         instruments,
         scored=scored,
@@ -573,7 +638,6 @@ def build_snapshot(
     by_desk = {str(i.get("canonical_symbol")): i for i in instruments}
     board = build_opportunity_board(scored, registry_by_desk=by_desk, filters=filters)
     board_rows = [r for r in (board.get("rows") or []) if isinstance(r, dict)]
-    schedule = research_scan_order(instruments)
     live_ranked = [r for r in (board.get("live_ranked") or []) if isinstance(r, dict)]
     portfolio = analyze_portfolio_exposure(
         [str(r.get("canonical_symbol")) for r in board_rows],

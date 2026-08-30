@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Radar, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
-import { signalCenterApi, tradingSessionApi } from "@/lib/api/endpoints";
+import { marketUniverseApi, signalCenterApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asRecord, str } from "@/lib/desk";
 import { cn } from "@/lib/utils";
 import {
@@ -25,6 +25,7 @@ import {
   lastUpdatedCopy,
   latencyLabel,
   liveTradingLabel,
+  MARKET_UNIVERSE_QUERY_KEY,
   normalizeSignalCenterPayload,
   presentAssetClasses,
   presentField,
@@ -72,9 +73,11 @@ function analysisTone(
 }
 
 export function SignalsWorkspace() {
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<SignalFilterState>(EMPTY_SIGNAL_FILTERS);
   const [sort, setSort] = useState<SignalSortKey>("strongest");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const sessionQ = useQuery({
     queryKey: ["trading-session"],
@@ -145,21 +148,36 @@ export function SignalsWorkspace() {
   );
   const latency = latencyLabel(normalized.latencyMs);
 
+  async function refreshAnalysis() {
+    setRefreshing(true);
+    try {
+      // Research refresh only — never starts live trading / OMS.
+      await marketUniverseApi.refresh().catch(() => null);
+      await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
+      await signalsQ.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Signals"
-        description="QuantForg Signals Intelligence Center — research analysis only. Not a trade authorization."
+        description="Global market intelligence — research analysis across available symbols. Not a trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               size="sm"
-              disabled={signalsQ.isFetching}
-              onClick={() => void signalsQ.refetch()}
+              disabled={signalsQ.isFetching || refreshing}
+              onClick={() => void refreshAnalysis()}
             >
               <RefreshCw
-                className={cn("h-3.5 w-3.5", signalsQ.isFetching && "animate-spin")}
+                className={cn(
+                  "h-3.5 w-3.5",
+                  (signalsQ.isFetching || refreshing) && "animate-spin",
+                )}
               />
               Refresh analysis
             </Button>
@@ -176,7 +194,8 @@ export function SignalsWorkspace() {
         className="flex flex-wrap items-center gap-2"
       >
         <Badge tone={analysisTone(analysisStatus)}>{analysisLabel}</Badge>
-        <Badge tone="accent">RESEARCH MODE</Badge>
+        <Badge tone="accent">RESEARCH ENGINE</Badge>
+        <Badge tone="neutral">BROKER NOT REQUIRED FOR RESEARCH</Badge>
         <Badge
           tone={
             accountHint.detail === "CONNECTED"
@@ -263,6 +282,22 @@ export function SignalsWorkspace() {
                       <div>
                         <dt className="text-[var(--fg-subtle)]">R/R</dt>
                         <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">Entry</dt>
+                        <dd className="tabular">{presentField(row.entry ?? row.entry_candidate)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">SL</dt>
+                        <dd className="tabular">
+                          {presentField(row.stop_loss ?? row.SL_candidate)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[var(--fg-subtle)]">TP</dt>
+                        <dd className="tabular">
+                          {presentField(row.take_profit ?? row.TP_candidate)}
+                        </dd>
                       </div>
                     </dl>
                     <p className="mt-2 truncate text-[11px] text-[var(--fg-subtle)]">

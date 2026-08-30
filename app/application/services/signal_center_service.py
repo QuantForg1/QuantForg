@@ -1,7 +1,8 @@
-"""Signal Center — LIVE signal projection from existing AI scan / diagnostics.
+"""Signal Center — LIVE + research projection from existing scan / universe.
 
 Read-only. Never fabricates signals. Never bypasses Trading Core.
-Uses ``get_last_multi_asset_scan`` and strategy diagnostics only.
+Uses ``get_last_multi_asset_scan``, market-universe research scores, and
+strategy diagnostics. Research never calls OMS.
 """
 
 from __future__ import annotations
@@ -1433,6 +1434,234 @@ def _scores_from_scan(scan: dict[str, Any]) -> list[dict[str, Any]]:
     return list(best.values())
 
 
+def _honest_numeric(value: Any) -> Any:
+    if value in (None, "", "UNKNOWN", "UNAVAILABLE", "—"):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _signal_type_from_row(row: dict[str, Any]) -> str | None:
+    raw = str(
+        row.get("signal_type")
+        or row.get("entry_type")
+        or row.get("order_type")
+        or ""
+    ).strip().upper()
+    if raw in {"MARKET", "LIMIT", "STOP"}:
+        return raw
+    return None
+
+
+def _row_from_research_opportunity(row: dict[str, Any]) -> dict[str, Any]:
+    """Map market-universe opportunity / research signal into desk contract."""
+    sym = str(row.get("broker_symbol") or row.get("symbol") or "").upper()
+    direction = str(row.get("direction") or "NONE").upper()
+    if direction not in {"BUY", "SELL", "WAIT"}:
+        direction = "NONE"
+    opp = row.get("opportunity_score")
+    if opp is None:
+        opp = row.get("opportunity")
+    edge = row.get("directional_edge")
+    if edge is None:
+        edge = row.get("edge")
+    rr = row.get("RR") if row.get("RR") not in (None, "UNKNOWN") else row.get("rr")
+    entry = row.get("entry_candidate")
+    if entry in (None, "UNKNOWN"):
+        entry = row.get("entry")
+    stop = row.get("SL_candidate")
+    if stop in (None, "UNKNOWN"):
+        stop = row.get("stop_loss") or row.get("sl") or row.get("stop")
+    take = row.get("TP_candidate")
+    if take in (None, "UNKNOWN"):
+        take = row.get("take_profit") or row.get("tp") or row.get("target")
+    signal_type = _signal_type_from_row(row)
+    quality = _safe_int(opp, 0) if isinstance(opp, (int, float)) else 0
+    confidence = _safe_int(edge, 0) if isinstance(edge, (int, float)) else 0
+    badge = _signal_badge(
+        direction=direction if direction in {"BUY", "SELL", "WAIT"} else "NONE",
+        quality=quality,
+        confidence=confidence,
+        reject=False,
+    )
+    as_of = str(
+        row.get("features_as_of")
+        or row.get("timestamp")
+        or row.get("as_of")
+        or _now_iso()
+    )
+    return {
+        "symbol": sym,
+        "canonical_symbol": row.get("canonical_symbol") or sym,
+        "broker_symbol": row.get("broker_symbol") or sym,
+        "direction": direction if direction in {"BUY", "SELL", "WAIT"} else "NONE",
+        "badge": badge,
+        "quality": quality if isinstance(opp, (int, float)) else None,
+        "confidence": confidence if isinstance(edge, (int, float)) else None,
+        "opportunity_score": opp if isinstance(opp, (int, float)) else None,
+        "directional_edge": edge if isinstance(edge, (int, float)) else None,
+        "rr": _honest_numeric(rr),
+        "RR": _honest_numeric(rr),
+        "entry": _honest_numeric(entry),
+        "stop": _honest_numeric(stop),
+        "stop_loss": _honest_numeric(stop),
+        "target": _honest_numeric(take),
+        "take_profit": _honest_numeric(take),
+        "signal_type": signal_type,
+        "entry_type": signal_type,
+        "asset_class": str(row.get("asset_class") or "OTHER").lower(),
+        "session": row.get("session"),
+        "market_regime": (row.get("evidence") or {}).get("REGIME")
+        if isinstance(row.get("evidence"), dict)
+        else row.get("regime"),
+        "regime": (row.get("evidence") or {}).get("REGIME")
+        if isinstance(row.get("evidence"), dict)
+        else row.get("regime"),
+        "research_rank_score": row.get("research_rank_score"),
+        "as_of": as_of,
+        "time_generated": as_of,
+        "freshness": row.get("data_freshness") or row.get("freshness"),
+        "data_state": row.get("data_state"),
+        "reasoning": row.get("reason") or row.get("blocker"),
+        "ai_explanation": row.get("reason") or row.get("explanation"),
+        "setup_state": row.get("setup_state") or row.get("setup"),
+        "research_only": True,
+        "authorizes_trade": False,
+        "kind": "RESEARCH_SIGNAL",
+        "source_layer": "market_universe_research",
+        "pipeline": {
+            "directional_edge": edge if isinstance(edge, (int, float)) else None,
+            "setup_state": row.get("setup_state"),
+            "market_regime": (row.get("evidence") or {}).get("REGIME")
+            if isinstance(row.get("evidence"), dict)
+            else row.get("regime"),
+            "final_decision": "WAIT",
+            "forwarded_to_oms": False,
+        },
+    }
+
+
+def _research_universe_feed() -> dict[str, Any]:
+    """Load cached market-universe research; soft-build when cache empty."""
+    try:
+        from app.application.services.market_universe_service import (
+            MarketUniverseService,
+            get_last_market_universe_snapshot,
+        )
+
+        snap = get_last_market_universe_snapshot()
+        if snap is None:
+            snap = MarketUniverseService().snapshot(refresh=False)
+        return snap if isinstance(snap, dict) else {}
+    except Exception:
+        logger.exception("signal_center_research_universe_unavailable")
+        return {}
+
+
+def _merge_research_into_signals(
+    signals: list[dict[str, Any]],
+    *,
+    research_snap: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Prefer research board rows for multi-symbol coverage; keep scan rows."""
+    meta: dict[str, Any] = {
+        "research_source": "market_universe",
+        "catalogue_source": research_snap.get("catalogue_source"),
+        "research_stage": research_snap.get("research_stage"),
+        "symbols_scanned": None,
+        "research_signal_n": None,
+        "scanner_status": "UNKNOWN",
+    }
+    obs = research_snap.get("observability")
+    if isinstance(obs, dict):
+        meta["symbols_scanned"] = obs.get("symbols_scored")
+        meta["research_signal_n"] = obs.get("research_signal_count")
+        if obs.get("catalogue_source") == "LIVE_BROKER":
+            meta["scanner_status"] = "ACTIVE"
+        elif obs.get("catalogue_source") in {"UNAVAILABLE", "ERROR", "MOCK"}:
+            meta["scanner_status"] = "UNAVAILABLE"
+    board = research_snap.get("opportunity_board")
+    board_rows = []
+    if isinstance(board, dict):
+        board_rows = [
+            r
+            for r in (board.get("live_ranked") or board.get("rows") or [])
+            if isinstance(r, dict)
+        ]
+    rs = research_snap.get("research_signals")
+    if isinstance(rs, dict) and not board_rows:
+        board_rows = [r for r in (rs.get("signals") or []) if isinstance(r, dict)]
+        if isinstance(rs.get("n"), int):
+            meta["research_signal_n"] = rs.get("n")
+        elif rs.get("n") == "UNAVAILABLE":
+            meta["scanner_status"] = "UNAVAILABLE"
+            meta["research_signal_n"] = None
+
+    if not board_rows:
+        if meta["scanner_status"] == "UNKNOWN" and research_snap:
+            meta["scanner_status"] = (
+                "NO_ACTIVE_SIGNALS"
+                if research_snap.get("catalogue_source") == "LIVE_BROKER"
+                else meta["scanner_status"]
+            )
+        return signals, meta
+
+    by_sym: dict[str, dict[str, Any]] = {}
+    for row in signals:
+        sym = str(row.get("symbol") or "").upper()
+        if sym:
+            by_sym[sym] = row
+    for raw in board_rows:
+        projected = _row_from_research_opportunity(raw)
+        sym = str(projected.get("symbol") or "").upper()
+        if not sym:
+            continue
+        existing = by_sym.get(sym)
+        if existing is None:
+            by_sym[sym] = projected
+            continue
+        # Enrich scan row with research fields without inventing values.
+        for key in (
+            "opportunity_score",
+            "directional_edge",
+            "rr",
+            "RR",
+            "entry",
+            "stop",
+            "stop_loss",
+            "target",
+            "take_profit",
+            "signal_type",
+            "entry_type",
+            "research_rank_score",
+            "session",
+            "regime",
+            "market_regime",
+            "asset_class",
+            "freshness",
+            "data_state",
+            "canonical_symbol",
+            "broker_symbol",
+            "reasoning",
+            "ai_explanation",
+            "kind",
+            "research_only",
+            "authorizes_trade",
+        ):
+            if (
+                existing.get(key) in (None, "", "UNKNOWN")
+                and projected.get(key) not in (None, "", "UNKNOWN")
+            ):
+                existing[key] = projected[key]
+        by_sym[sym] = existing
+    meta["scanner_status"] = "ACTIVE"
+    if meta["symbols_scanned"] is None:
+        meta["symbols_scanned"] = len(by_sym)
+    return list(by_sym.values()), meta
+
+
 def list_live_signals(
     *,
     q: str = "",
@@ -1514,6 +1743,14 @@ def list_live_signals(
             row.setdefault("status", "NO_TRADE")
         signals.append(row)
 
+    research_snap = _research_universe_feed()
+    signals, research_meta = _merge_research_into_signals(
+        signals, research_snap=research_snap
+    )
+    research_as_of = str(research_snap.get("as_of") or "")
+    if research_as_of:
+        as_of = research_as_of
+
     # Enrich with latest strategy diagnostics when scan empty for a symbol.
     if not signals:
         try:
@@ -1579,7 +1816,11 @@ def list_live_signals(
     if asset_class:
         ac = asset_class.strip().lower()
         if ac not in {"all", "*"}:
-            signals = [s for s in signals if s.get("asset_class") == ac]
+            signals = [
+                s
+                for s in signals
+                if str(s.get("asset_class") or "").lower() == ac
+            ]
     if strong_only:
         signals = [
             s
@@ -1592,6 +1833,11 @@ def list_live_signals(
     signals.sort(
         key=lambda s: (
             0 if s["direction"] in {"BUY", "SELL"} else 1,
+            -(
+                float(s["research_rank_score"])
+                if isinstance(s.get("research_rank_score"), (int, float))
+                else -1.0
+            ),
             -int(s.get("quality") or 0),
             -int(s.get("confidence") or 0),
             s["symbol"],
@@ -1631,20 +1877,56 @@ def list_live_signals(
                 "direction": item.get("direction"),
                 "ticket": pipe.get("ticket") or item.get("ticket"),
             }
+    scan_universe = list(scan.get("universe") or [])
+    research_n = research_meta.get("symbols_scanned")
+    universe_size = (
+        research_n
+        if isinstance(research_n, int)
+        else (len(scan_universe) if scan_universe else len(signals))
+    )
+    universe_label = (
+        research_meta.get("catalogue_source")
+        if research_meta.get("catalogue_source")
+        else ("live_multi_asset_scan" if scan_universe else "UNAVAILABLE")
+    )
+    scanner_status = str(research_meta.get("scanner_status") or "UNKNOWN")
+    if scanner_status == "UNKNOWN" and signals:
+        scanner_status = "ACTIVE"
+    elif scanner_status == "UNKNOWN" and not signals and not scan_universe:
+        scanner_status = "UNAVAILABLE"
+    elif (
+        scanner_status in {"ACTIVE", "NO_ACTIVE_SIGNALS"}
+        and scanner_status != "UNAVAILABLE"
+        and not any(s["direction"] in {"BUY", "SELL"} for s in signals)
+    ):
+        scanner_status = "NO_ACTIVE_SIGNALS"
     return {
         "as_of": as_of,
         "session": _session(),
-        "source": "TEST_SYNTHETIC" if test_synthetic else "live_multi_asset_scan",
+        "source": (
+            "TEST_SYNTHETIC"
+            if test_synthetic
+            else (
+                "market_universe_research"
+                if research_meta.get("catalogue_source")
+                else "live_multi_asset_scan"
+            )
+        ),
         "fabricated": bool(test_synthetic),
         "test_synthetic": bool(test_synthetic),
         "signal_id": scan.get("signal_id"),
-        "scan_note": scan.get("note"),
-        "universe_size": len(scan.get("universe") or []),
+        "scan_note": scan.get("note") or research_snap.get("note"),
+        "universe_size": universe_size,
+        "scanner_status": scanner_status,
+        "research_can_execute": False,
+        "allow_live_promotion": False,
+        "broker_required_for_research": False,
+        "research_meta": research_meta,
         "dashboard": {
-            "total_symbols": len(scan.get("universe") or []) or len(signals),
+            "total_symbols": universe_size,
             "enabled_symbols": len(enabled)
             if manage_active
-            else len(scan.get("universe") or []),
+            else universe_size,
             "buy_signals": buy_n,
             "sell_signals": sell_n,
             "wait": wait_n,
@@ -1652,7 +1934,8 @@ def list_live_signals(
             "average_confidence": round(sum(confs) / len(confs), 1) if confs else None,
             "average_quality": round(sum(quals) / len(quals), 1) if quals else None,
             "managed_prefs": len(all_prefs),
-            "universe": "XAUUSD_i",
+            "universe": universe_label,
+            "scanner_status": scanner_status,
             "scans_per_hour": hourly.get("scans_per_hour"),
             "candidates_per_hour": hourly.get("candidate_setups_per_hour"),
             "takes_per_hour": hourly.get("take_per_hour"),

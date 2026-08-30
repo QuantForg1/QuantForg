@@ -626,6 +626,8 @@ export type NormalizedSignalCenter = {
   /** Confirmed scan universe size only — null when unknown (never invent 0). */
   universeSize: number | null;
   latencyMs: number | null;
+  scannerStatus?: string;
+  brokerRequiredForResearch?: boolean;
 };
 
 function optionalConfirmedCount(raw: unknown): number | null {
@@ -660,6 +662,8 @@ export function normalizeSignalCenterPayload(
       countConfirmed: false,
       universeSize: null,
       latencyMs: null,
+      scannerStatus: undefined,
+      brokerRequiredForResearch: false,
     };
   }
   const asOf = String(payload.as_of || "").trim();
@@ -687,6 +691,8 @@ export function normalizeSignalCenterPayload(
       countConfirmed: true,
       universeSize,
       latencyMs,
+      scannerStatus: "NO_ACTIVE_SIGNALS",
+      brokerRequiredForResearch: false,
     };
   }
   const items = Array.isArray(payload.items) ? payload.items : [];
@@ -720,18 +726,33 @@ export function normalizeSignalCenterPayload(
       item.edge;
     const rank = numericSortValue(item.research_rank_score);
     const stamped = item.time_generated ?? item.as_of ?? asOf;
+    const entry = item.entry ?? item.entry_candidate ?? detail.entry;
+    const stop =
+      item.stop_loss ?? item.stop ?? item.SL_candidate ?? detail.stop_loss;
+    const take =
+      item.take_profit ?? item.target ?? item.TP_candidate ?? detail.take_profit;
+    const signalTypeRaw = String(item.signal_type || item.entry_type || "")
+      .trim()
+      .toUpperCase();
+    const signalType =
+      signalTypeRaw === "MARKET" ||
+      signalTypeRaw === "LIMIT" ||
+      signalTypeRaw === "STOP"
+        ? signalTypeRaw
+        : undefined;
     rows.push({
       broker_symbol: symbol,
       symbol,
+      canonical_symbol: item.canonical_symbol || symbol,
       direction: dir,
-      opportunity_score: item.opportunity_score,
+      opportunity_score: item.opportunity_score ?? item.quality,
       directional_edge: edge,
       edge,
       RR: item.rr ?? item.RR,
       rr: item.rr ?? item.RR,
       asset_class: normalizeAssetClassToken(item.asset_class),
       session: item.session,
-      regime: pipeline.market_regime ?? item.market_regime ?? detail.trend,
+      regime: pipeline.market_regime ?? item.market_regime ?? item.regime ?? detail.trend,
       timestamp: stamped,
       features_as_of: stamped,
       as_of: stamped,
@@ -741,19 +762,38 @@ export function normalizeSignalCenterPayload(
       ai_confidence: item.confidence,
       quality: item.quality,
       research_rank_score: rank,
+      entry_candidate: entry,
+      entry,
+      stop_loss: stop,
+      SL_candidate: stop,
+      take_profit: take,
+      TP_candidate: take,
+      signal_type: signalType,
+      entry_type: signalType,
+      freshness: item.freshness ?? item.data_state,
+      data_state: item.data_state || (actionable ? "LIVE" : "NO_DATA"),
       has_research_signal: actionable,
       board_status: actionable ? dir : undefined,
       setup_state: pipeline.setup_state ?? item.setup_state,
       badge: item.badge,
-      data_state: actionable ? "LIVE" : "NO_DATA",
       research_only: true,
       authorizes_trade: false,
       kind: "RESEARCH_SIGNAL",
     });
   }
   const signalRows = rows.filter(hasResearchSignal);
+  const scannerStatus = String(
+    payload.scanner_status || dash.scanner_status || "",
+  )
+    .trim()
+    .toUpperCase();
+  let availability: ResearchAvailability =
+    signalRows.length > 0 ? "LIVE_ROWS" : "LIVE_EMPTY";
+  if (scannerStatus === "UNAVAILABLE" && signalRows.length === 0) {
+    availability = "UNAVAILABLE";
+  }
   return {
-    availability: signalRows.length > 0 ? "LIVE_ROWS" : "LIVE_EMPTY",
+    availability,
     rows: signalRows,
     asOf,
     source: source || "live_multi_asset_scan",
@@ -762,6 +802,8 @@ export function normalizeSignalCenterPayload(
     countConfirmed: true,
     universeSize,
     latencyMs,
+    scannerStatus: scannerStatus || undefined,
+    brokerRequiredForResearch: payload.broker_required_for_research === true,
   };
 }
 

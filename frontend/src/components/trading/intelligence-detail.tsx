@@ -117,9 +117,26 @@ export function IntelligenceDetail({
         ) : (
           <>
             <Detail label="Current price" value={priceDisplay(row.current_price ?? row.price ?? row.bid)} />
-            <Detail label="Entry context" value={presentField(row.entry_candidate)} />
-            <Detail label="Stop-loss context" value={presentField(row.sl_candidate ?? row.SL_candidate)} />
-            <Detail label="Take-profit context" value={presentField(row.tp_candidate ?? row.TP_candidate)} />
+            <Detail
+              label="Signal type"
+              value={presentField(row.signal_type ?? row.entry_type)}
+            />
+            <Detail
+              label="Entry"
+              value={presentField(row.entry ?? row.entry_candidate)}
+            />
+            <Detail
+              label="Stop loss"
+              value={presentField(
+                row.stop_loss ?? row.SL_candidate ?? row.sl_candidate ?? row.stop,
+              )}
+            />
+            <Detail
+              label="Take profit"
+              value={presentField(
+                row.take_profit ?? row.TP_candidate ?? row.tp_candidate ?? row.target,
+              )}
+            />
           </>
         )}
         <Detail label="Risk status" value={presentField(row.risk_status ?? row.RISK_CONDITIONS)} />
