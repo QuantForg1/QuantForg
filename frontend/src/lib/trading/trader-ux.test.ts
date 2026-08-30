@@ -60,6 +60,8 @@ import {
   researchFeedState,
   researchFeedStateLabel,
   researchMetricDisplay,
+  researchCoverageLabel,
+  researchProgressCopy,
   researchSignalsEmptyCopy,
   resolveAnalysisDeskStatus,
   analysisDeskStatusLabel,
@@ -382,7 +384,21 @@ assert.equal(
   });
   assert.equal(buySell.buy, "1");
   assert.equal(buySell.sell, "1");
+  assert.equal(buySell.neutral, "1");
   assert.equal(buySell.strongest, "XAUUSD_i SELL");
+}
+
+{
+  assert.equal(researchCoverageLabel({ coverage_pct: 37.5 }), "37.5%");
+  assert.equal(
+    researchCoverageLabel({ instruments_discovered: 100, instruments_analyzed: 25 }),
+    "25%",
+  );
+  assert.equal(researchCoverageLabel({}), "—");
+  assert.equal(
+    researchProgressCopy({ instruments_discovered: 1000, instruments_analyzed: 250 }),
+    "Analyzing 250 / 1,000 instruments",
+  );
 }
 
 {

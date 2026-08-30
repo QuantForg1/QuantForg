@@ -1307,7 +1307,7 @@ const WHY_KEYS: Array<{ key: string; label: string }> = [
 export function signalWhyFactors(row: Record<string, unknown>): SignalWhyFactor[] {
   const ev = evidenceBag(row);
   const out: SignalWhyFactor[] = [];
-  const reason = presentField(row.reason ?? row.explanation);
+  const reason = presentField(row.reason ?? row.explanation ?? row.reasoning);
   if (reason !== "Not available") {
     out.push({ label: "Why this signal exists", value: reason });
   }
@@ -1316,11 +1316,51 @@ export function signalWhyFactors(row: Record<string, unknown>): SignalWhyFactor[
     if (shown === "Not available") continue;
     out.push({ label: item.label, value: shown });
   }
+  const scoreFallbacks: Array<{ label: string; value: unknown }> = [
+    { label: "Trend / structure", value: row.structure_score ?? ev.STRUCTURE_EVIDENCE },
+    { label: "Momentum", value: row.momentum_score ?? ev.MOMENTUM },
+    { label: "Volatility", value: row.volatility_score ?? ev.VOLATILITY },
+    { label: "Liquidity", value: row.liquidity_score ?? ev.LIQUIDITY_EVIDENCE },
+    { label: "Invalidation", value: row.invalidation ?? ev.INVALIDATION },
+  ];
+  for (const item of scoreFallbacks) {
+    const shown = presentField(item.value);
+    if (shown === "Not available") continue;
+    if (out.some((f) => f.label === item.label)) continue;
+    out.push({ label: item.label, value: shown });
+  }
   const session = presentField(row.session ?? row.trading_session);
   if (session !== "Not available" && !out.some((f) => f.label === "Session")) {
     out.push({ label: "Session", value: session });
   }
   return out;
+}
+
+/** Honest coverage from research worker health — never invents 100%. */
+export function researchCoverageLabel(health: Record<string, unknown> | undefined): string {
+  if (!health) return "—";
+  const pct = health.coverage_pct;
+  if (typeof pct === "number" && Number.isFinite(pct)) {
+    return `${pct}%`;
+  }
+  if (typeof pct === "string" && pct.trim() && pct !== "UNAVAILABLE") {
+    return pct.endsWith("%") ? pct : `${pct}%`;
+  }
+  const discovered = optionalConfirmedCount(health.instruments_discovered);
+  const analyzed = optionalConfirmedCount(health.instruments_analyzed);
+  if (discovered != null && discovered > 0 && analyzed != null) {
+    const pct = Math.min(100, Math.max(0, (analyzed / discovered) * 100));
+    return `${Math.round(pct * 10) / 10}%`;
+  }
+  return "—";
+}
+
+export function researchProgressCopy(health: Record<string, unknown> | undefined): string | null {
+  if (!health) return null;
+  const discovered = optionalConfirmedCount(health.instruments_discovered);
+  const analyzed = optionalConfirmedCount(health.instruments_analyzed);
+  if (discovered == null || analyzed == null) return null;
+  return `Analyzing ${analyzed.toLocaleString()} / ${discovered.toLocaleString()} instruments`;
 }
 
 export type SignalFreshness =
@@ -1446,6 +1486,7 @@ export type SignalSummary = {
   highConfidence: string;
   buy: string;
   sell: string;
+  neutral: string;
   watch: string;
   markets: string;
   assetClasses: string;
@@ -1473,6 +1514,7 @@ export function signalSummary(input: {
       highConfidence: "—",
       buy: "—",
       sell: "—",
+      neutral: "—",
       watch: "—",
       markets: "—",
       assetClasses: "—",
@@ -1491,6 +1533,10 @@ export function signalSummary(input: {
     highConfidence: countOrDash(true, input.rows.filter(isHighConfidence).length),
     buy: countOrDash(true, dirs.filter((d) => d === "BUY").length),
     sell: countOrDash(true, dirs.filter((d) => d === "SELL").length),
+    neutral: countOrDash(
+      true,
+      dirs.filter((d) => d === "WATCH" || d === "NONE" || d === "NEUTRAL").length,
+    ),
     watch: countOrDash(true, dirs.filter((d) => d === "WATCH").length),
     markets: countOrDash(true, input.instrumentCount),
     assetClasses: countOrDash(true, presentAssetClasses(input.rows).length),

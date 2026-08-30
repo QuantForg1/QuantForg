@@ -32,6 +32,8 @@ import {
   RESEARCH_INDEPENDENT_COPY,
   RESEARCH_SIGNAL,
   researchAvailabilityAsCatalogue,
+  researchCoverageLabel,
+  researchProgressCopy,
   researchSignalsEmptyCopy,
   resolveAnalysisDeskStatus,
   resolveConnectionPresentation,
@@ -63,6 +65,7 @@ const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
 ];
 
 const MARKET_CLASS_FILTERS = ["ALL", ...ASSET_CLASS_ORDER] as const;
+const SIGNAL_FEED_PAGE_SIZE = 40;
 
 function analysisTone(
   status: AnalysisDeskStatus,
@@ -90,6 +93,7 @@ export function SignalsWorkspace() {
   const [sort, setSort] = useState<SignalSortKey>("strongest");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [feedLimit, setFeedLimit] = useState(SIGNAL_FEED_PAGE_SIZE);
 
   const sessionQ = useQuery({
     queryKey: ["trading-session"],
@@ -128,6 +132,7 @@ export function SignalsWorkspace() {
 
   const filtered = useMemo(() => filterSignalRows(signalRows, filters), [filters, signalRows]);
   const sorted = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
+  const feedRows = useMemo(() => sorted.slice(0, feedLimit), [feedLimit, sorted]);
 
   const summary = signalSummary({
     availability: catalogueAvailability,
@@ -158,6 +163,29 @@ export function SignalsWorkspace() {
     normalized.universeSize,
     normalized.countConfirmed && !signalsQ.isError,
   );
+  const coverageLabel = researchCoverageLabel(researchHealth);
+  const progressCopy = researchProgressCopy(researchHealth);
+  const discoveredLabel =
+    researchHealth.instruments_discovered != null
+      ? String(researchHealth.instruments_discovered)
+      : marketsAnalyzed;
+  const analyzedLabel =
+    researchHealth.instruments_analyzed != null
+      ? String(researchHealth.instruments_analyzed)
+      : "—";
+  const skippedLabel =
+    researchHealth.instruments_skipped != null
+      ? String(researchHealth.instruments_skipped)
+      : "—";
+  const failedLabel =
+    researchHealth.instruments_failed != null
+      ? String(researchHealth.instruments_failed)
+      : "—";
+  const unavailableLabel =
+    researchHealth.instruments_unavailable != null
+      ? String(researchHealth.instruments_unavailable)
+      : "—";
+  const coverageState = String(researchHealth.coverage_state || "").toUpperCase();
 
   async function refreshAnalysis() {
     setRefreshing(true);
@@ -174,8 +202,8 @@ export function SignalsWorkspace() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
-        title="Signals"
-        description="Global market intelligence — research analysis across the supported broker universe. Not a trade authorization."
+        title="Global Market Intelligence"
+        description="Research analysis across the supported broker universe. Research intelligence — not trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -213,9 +241,14 @@ export function SignalsWorkspace() {
             <Badge tone={researchWorkerTone(workerStatus)}>
               ENGINE {workerStatus === "UNKNOWN" ? "—" : workerStatus}
             </Badge>
+            {coverageState && coverageState !== "UNKNOWN" ? (
+              <Badge tone={coverageState === "READY" ? "success" : "warning"}>
+                {coverageState}
+              </Badge>
+            ) : null}
           </div>
           <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
-            Broker not required for research analysis
+            {progressCopy || "Broker not required for research analysis"}
           </p>
         </div>
         <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5">
@@ -282,38 +315,28 @@ export function SignalsWorkspace() {
             </FilterChip>
           ))}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <DeskMetric label="Supported instruments" value={marketsAnalyzed} />
-          <DeskMetric
-            label="Analyzed"
-            value={
-              researchHealth.instruments_analyzed != null
-                ? String(researchHealth.instruments_analyzed)
-                : marketsAnalyzed
-            }
-          />
-          <DeskMetric
-            label="Coverage"
-            value={
-              researchHealth.coverage_pct != null
-                ? `${researchHealth.coverage_pct}%`
-                : "—"
-            }
-          />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
+          <DeskMetric label="Discovered" value={discoveredLabel} />
+          <DeskMetric label="Analyzed" value={analyzedLabel} />
+          <DeskMetric label="Coverage" value={coverageLabel} />
+          <DeskMetric label="Skipped" value={skippedLabel} />
+          <DeskMetric label="Unavailable" value={unavailableLabel} />
+          <DeskMetric label="Failed" value={failedLabel} />
           <DeskMetric label="Active signals" value={summary.active} />
           <DeskMetric label="BUY" value={summary.buy} />
           <DeskMetric label="SELL" value={summary.sell} />
+          <DeskMetric label="NEUTRAL" value={summary.neutral} />
         </div>
       </section>
 
       <section aria-labelledby="signals-overview">
         <h2 id="signals-overview" className="mb-2 text-sm font-medium text-[var(--fg)]">
-          Global research
+          Market bias & research
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <DeskMetric label="Strongest opportunity" value={summary.strongest} />
           <DeskMetric label="Strongest edge" value={summary.strongestEdge} />
-          <DeskMetric label="Markets analyzed" value={marketsAnalyzed} />
+          <DeskMetric label="Supported instruments" value={marketsAnalyzed} />
           <DeskMetric label="Desk status" value={analysisLabel} />
         </div>
       </section>
@@ -596,10 +619,13 @@ export function SignalsWorkspace() {
                           <th className="py-2 pr-3 font-medium" scope="col">
                             Freshness
                           </th>
+                          <th className="py-2 pr-3 font-medium" scope="col">
+                            Analysis
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {sorted.map((row, i) => {
+                        {feedRows.map((row, i) => {
                           const dir = signalBoardDirection(row);
                           const symbol = str(row.broker_symbol || row.symbol, "—");
                           const freshness = signalFreshness(row);
@@ -656,6 +682,15 @@ export function SignalsWorkspace() {
                                   {signalFreshnessLabel(freshness)}
                                 </Badge>
                               </td>
+                              <td className="py-2 pr-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelected(row)}
+                                  className="text-xs font-medium text-[var(--accent)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                                >
+                                  Why this signal?
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -663,7 +698,7 @@ export function SignalsWorkspace() {
                     </table>
                   </div>
                   <ul className="grid gap-3 md:hidden" aria-label="Signals">
-                    {sorted.map((row, i) => {
+                    {feedRows.map((row, i) => {
                       const dir = signalBoardDirection(row);
                       const symbol = str(row.broker_symbol || row.symbol, "—");
                       const freshness = signalFreshness(row);
@@ -691,7 +726,39 @@ export function SignalsWorkspace() {
                                 </Badge>
                               </div>
                             </div>
-                            <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                            <dl className="mt-3 grid grid-cols-3 gap-2 text-sm sm:grid-cols-4">
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  Price
+                                </dt>
+                                <dd className="tabular">
+                                  {presentPrice(row.price ?? row.mid ?? row.bid)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  Entry
+                                </dt>
+                                <dd className="tabular">
+                                  {presentLevel(row.entry ?? row.entry_candidate, "Entry")}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  SL
+                                </dt>
+                                <dd className="tabular">
+                                  {presentLevel(row.stop_loss ?? row.SL_candidate, "SL")}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  TP
+                                </dt>
+                                <dd className="tabular">
+                                  {presentLevel(row.take_profit ?? row.TP_candidate, "TP")}
+                                </dd>
+                              </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
                                   Opportunity
@@ -717,11 +784,27 @@ export function SignalsWorkspace() {
                                 </dd>
                               </div>
                             </dl>
+                            <p className="mt-3 text-[11px] font-medium text-[var(--accent)]">
+                              Why this signal? →
+                            </p>
                           </button>
                         </li>
                       );
                     })}
                   </ul>
+                  {feedLimit < sorted.length ? (
+                    <div className="flex justify-center pt-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setFeedLimit((n) => n + SIGNAL_FEED_PAGE_SIZE)
+                        }
+                      >
+                        Show more ({sorted.length - feedLimit} remaining)
+                      </Button>
+                    </div>
+                  ) : null}
                 </>
               )}
             </>

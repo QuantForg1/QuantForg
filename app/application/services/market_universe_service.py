@@ -938,6 +938,32 @@ def build_snapshot(
         for i in instruments
         if str((i.get("data_quality") or {}).get("state") or "") == "ERROR"
     ]
+    symbols_scored_n = (
+        sum(
+            1
+            for r in scored
+            if isinstance(r, dict)
+            and isinstance(r.get("opportunity_score"), (int, float))
+            and not isinstance(r.get("opportunity_score"), bool)
+        )
+        if source == CATALOGUE_LIVE_BROKER
+        else None
+    )
+    universe_n = counts.get("universe")
+    coverage_pct: float | str | None
+    if source != CATALOGUE_LIVE_BROKER:
+        coverage_pct = CATALOGUE_UNAVAILABLE
+    elif (
+        isinstance(universe_n, int)
+        and universe_n > 0
+        and isinstance(symbols_scored_n, int)
+    ):
+        coverage_pct = round(
+            min(100.0, max(0.0, (symbols_scored_n / float(universe_n)) * 100.0)),
+            1,
+        )
+    else:
+        coverage_pct = None
     as_of = datetime.now(UTC).isoformat()
     payload = {
         "advisory_only": ADVISORY_ONLY,
@@ -1077,16 +1103,11 @@ def build_snapshot(
             "symbol_count": counts.get("universe"),
             "symbols_discovered": counts.get("universe"),
             "symbols_scored": (
-                sum(
-                    1
-                    for r in scored
-                    if isinstance(r, dict)
-                    and isinstance(r.get("opportunity_score"), (int, float))
-                    and not isinstance(r.get("opportunity_score"), bool)
-                )
+                symbols_scored_n
                 if source == CATALOGUE_LIVE_BROKER
                 else CATALOGUE_UNAVAILABLE
             ),
+            "coverage_pct": coverage_pct,
             "research_batch": (
                 get_last_research_batch_diag()
                 if source == CATALOGUE_LIVE_BROKER

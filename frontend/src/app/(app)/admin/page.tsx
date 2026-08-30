@@ -11,11 +11,12 @@ const ADMIN_SECTIONS = [
     items: [
       { href: "/ops", label: "Execution sessions", hint: "Robot run state · control plane" },
       { href: "/admin/customer-ops", label: "Account bindings", hint: "Owned broker accounts" },
-      { href: "/admin/noc", label: "NOC", hint: "Network operations command" },
+      { href: "/ops", label: "Robot operations", hint: "Institutional robot controls" },
+      { href: "/risk-center", label: "Trading controls", hint: "Risk locks and desk controls" },
     ],
   },
   {
-    title: "Broker infrastructure",
+    title: "Broker Infrastructure",
     items: [
       { href: "/gateway", label: "Gateway diagnostics", hint: "MT5 gateway connectivity" },
       { href: "/broker-connectivity", label: "Broker health", hint: "Connection health" },
@@ -23,28 +24,30 @@ const ADMIN_SECTIONS = [
     ],
   },
   {
-    title: "Trading control",
+    title: "Research",
     items: [
-      { href: "/risk-center", label: "Risk", hint: "Risk locks and limits" },
-      { href: "/admin/reliability", label: "Safety", hint: "Reliability and safety ops" },
-      { href: "/execution", label: "OMS", hint: "Order management (authorized only)" },
+      { href: "/research", label: "Research engine status", hint: "Universe worker and diagnostics" },
+      { href: "/markets", label: "Universe discovery", hint: "Broker catalogue instruments" },
+      { href: "/signals", label: "Analysis coverage", hint: "Global market intelligence desk" },
+      { href: "/signal-center", label: "Signal health", hint: "Operator signal board" },
     ],
   },
   {
-    title: "Research monitoring",
+    title: "Safety",
     items: [
-      { href: "/signals", label: "Trader Signals", hint: "Advisory market intelligence" },
-      { href: "/signal-center", label: "Signal Center", hint: "Operator XAUUSD scan board" },
-      { href: "/research", label: "Research diagnostics", hint: "Universe and research worker" },
-      { href: "/strategy-diagnostics", label: "Strategy diagnostics", hint: "Why NO_TRADE" },
+      { href: "/admin/reliability", label: "Safety gates", hint: "research_can_execute · promotion · OMS" },
+      { href: "/execution", label: "OMS status", hint: "Order management (authorized only)" },
+      { href: "/portfolio", label: "Live orders / positions", hint: "Owned account exposure" },
+      { href: "/strategy-diagnostics", label: "Trading blockers", hint: "Why NO_TRADE" },
     ],
   },
   {
-    title: "System",
+    title: "System Health",
     items: [
-      { href: "/monitoring", label: "Health", hint: "Health · latency" },
-      { href: "/admin/customer-ops", label: "Audit", hint: "Users and account operations" },
+      { href: "/monitoring", label: "API health", hint: "Health · latency · readiness" },
+      { href: "/admin/noc", label: "Worker health", hint: "NOC operations command" },
       { href: "/logs", label: "Deployment diagnostics", hint: "Operational logs" },
+      { href: "/admin/customer-ops", label: "Audit", hint: "Users and account operations" },
     ],
   },
 ] as const;
@@ -53,18 +56,19 @@ export default function AdminPortalPage() {
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
-        title="Operations / Admin"
-        description="Internal QuantForg control surfaces. Not part of the trader desk navigation. Backend RBAC remains enforced."
+        title="Internal Trading Operations"
+        description="Dedicated QuantForg operations console. Not part of the trader desk. Backend RBAC (OWNER / ADMIN) remains enforced independently of this UI."
       />
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Safety</CardTitle>
+            <CardTitle className="text-sm">Safety invariants</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
-            <p>Research stays advisory</p>
-            <p>Live trading requires explicit authorization</p>
-            <Badge tone="neutral">OMS not enabled by Admin</Badge>
+            <p>research_can_execute = false</p>
+            <p>allow_live_promotion = false</p>
+            <p>forwarded_to_oms = false</p>
+            <Badge tone="neutral">Opening Admin does not enable live trading</Badge>
           </CardContent>
         </Card>
         <Card>
@@ -72,7 +76,7 @@ export default function AdminPortalPage() {
             <CardTitle className="text-sm">Access</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
-            <p>OWNER / ADMIN only</p>
+            <p>OWNER / ADMIN platform roles only</p>
             <p>Trader sidebar never links here</p>
             <Badge tone="warning">Protected route</Badge>
           </CardContent>
@@ -82,7 +86,7 @@ export default function AdminPortalPage() {
             <CardTitle className="text-sm">Research</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-[var(--fg-muted)]">
-            <p>Global catalogue discovery</p>
+            <p>Global catalogue discovery is advisory</p>
             <p>Signals are not trade tickets</p>
             <Badge tone="neutral">Advisory only</Badge>
           </CardContent>

@@ -146,7 +146,12 @@ export function IntelligenceDetail({
         <p className="text-sm text-[var(--fg-muted)]">NO SIGNAL</p>
       ) : why.length > 0 ? (
         <section>
-          <h3 className="mb-2 text-sm font-medium text-[var(--fg)]">Why this signal exists</h3>
+          <h3 className="mb-2 text-sm font-medium text-[var(--fg)]">
+            Why this signal?
+          </h3>
+          <p className="mb-2 text-xs text-[var(--fg-muted)]">
+            Structured research evidence from the analysis engine — not generic copy.
+          </p>
           <ul className="space-y-2">
             {why.map((factor) => (
               <li key={factor.label} className="rounded-md border border-[var(--border)] px-3 py-2">
@@ -157,6 +162,12 @@ export function IntelligenceDetail({
               </li>
             ))}
           </ul>
+          <p className="mt-3 text-sm text-[var(--fg)]">
+            Research conclusion: {dir} — {RESEARCH_SIGNAL}
+          </p>
+          <p className="mt-1 text-xs text-[var(--fg-subtle)]">
+            Risk note: this is market research and is not trade authorization.
+          </p>
         </section>
       ) : (
         <p className="text-sm text-[var(--fg-muted)]">{EXPLANATION_UNAVAILABLE}</p>

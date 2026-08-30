@@ -112,9 +112,10 @@ CATALOGUE_MOCK = "MOCK"
 CATALOGUE_CACHE = "CACHE"
 CATALOGUE_TTL_S = 60.0
 
-MAX_RESEARCH_WORKERS = 6
-# Bounded probe per refresh — fair class rotation, not full catalogue each tick.
-MAX_HISTORY_PROBE_SYMBOLS = 64
+MAX_RESEARCH_WORKERS = 8
+# Bounded probe per refresh — fair class rotation across the full catalogue over time.
+# Discovery remains uncapped; this only limits quote/history I/O per cycle.
+MAX_HISTORY_PROBE_SYMBOLS = 128
 HISTORY_PROBE_BARS = 80
 HISTORY_CONTEXT_BARS = 40
 RESEARCH_RETRY_BACKOFF_S = 2.0
