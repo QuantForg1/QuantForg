@@ -895,3 +895,31 @@ def test_adapter_account_fill_does_not_invent_numbers() -> None:
     ):
         _fill_from_adapter_account(empty)
     assert empty == {}
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_session_cache_login_does_not_call_account_info() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock, patch
+
+    from app.application.services.live_trading_control_service import (
+        _fill_from_session_cache,
+    )
+
+    adapter = MagicMock()
+    runtime = SimpleNamespace(probes=SimpleNamespace(mt5_adapter=adapter))
+    out: dict[str, object] = {}
+    with (
+        patch(
+            "app.application.services.institutional_ite_runtime.get_ite_runtime",
+            return_value=runtime,
+        ),
+        patch(
+            "app.application.services.mt5_session_guard._live_account_login",
+            return_value=247001,
+        ),
+    ):
+        _fill_from_session_cache(out)
+    assert out["account_login"] == 247001
+    adapter.account_info.assert_not_called()

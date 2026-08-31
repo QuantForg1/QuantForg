@@ -6,6 +6,7 @@ journal. Never fabricates broker state. Never submits orders.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -138,6 +139,29 @@ def _account_blob(health: dict[str, Any], mt5: dict[str, Any]) -> dict[str, Any]
     return {}
 
 
+def _fill_from_session_cache(out: dict[str, Any]) -> None:
+    """Login from in-process MT5 session cache. No account_info() network call."""
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+        from app.application.services.mt5_session_guard import _live_account_login
+
+        runtime = get_ite_runtime()
+        adapter = getattr(getattr(runtime, "probes", None), "mt5_adapter", None)
+        if adapter is None:
+            return
+        login_i = int(_live_account_login(adapter) or 0)
+    except Exception as exc:
+        logger.info("live_trading_session_login_unavailable", error=str(exc))
+        return
+    if login_i > 1 and not out.get("account_login"):
+        out["account_login"] = login_i
+        out["account_login_masked"] = mask_broker_login(login_i)
+        out["account_available"] = True
+        prior = str(out.get("probe_source") or "session")
+        if "+session_login" not in prior:
+            out["probe_source"] = f"{prior}+session_login"
+
+
 def _fill_from_adapter_account(out: dict[str, Any]) -> None:
     """Read live account from the existing MT5 adapter. Never invent numbers."""
     try:
@@ -147,7 +171,15 @@ def _fill_from_adapter_account(out: dict[str, Any]) -> None:
         adapter = getattr(getattr(runtime, "probes", None), "mt5_adapter", None)
         if adapter is None:
             return
-        info = adapter.account_info()
+
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            info = pool.submit(adapter.account_info).result(timeout=5)
+        except FuturesTimeout:
+            logger.info("live_trading_account_info_timeout")
+            return
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
     except Exception as exc:
         logger.info("live_trading_account_info_unavailable", error=str(exc))
         return
@@ -210,7 +242,7 @@ def _fill_from_adapter_account(out: dict[str, Any]) -> None:
             out["probe_source"] = f"{prior}+account_info"
 
 
-def _live_probe_facts() -> dict[str, Any]:
+def _live_probe_facts(*, enrich_account: bool = False) -> dict[str, Any]:
     """Best-effort live facts. Missing values stay false/None — never invented."""
     out: dict[str, Any] = {
         "gateway_online": False,
@@ -307,7 +339,11 @@ def _live_probe_facts() -> dict[str, Any]:
             out["open_positions"] = int(positions or facts.open_positions or 0)
         except (TypeError, ValueError):
             out["open_positions"] = int(facts.open_positions or 0)
-        if not out.get("account_login") or out.get("equity") is None:
+        if not out.get("account_login"):
+            _fill_from_session_cache(out)
+        if enrich_account and (
+            not out.get("account_login") or out.get("equity") is None
+        ):
             _fill_from_adapter_account(out)
         login_i = int(out.get("account_login") or 0)
         bound_user, bound_login = bound_execution_account()
@@ -511,7 +547,7 @@ def _safety_gates(facts: dict[str, Any]) -> list[dict[str, Any]]:
 
 def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, Any]:
     ctrl = get_live_trading_controller()
-    facts = _live_probe_facts()
+    facts = _live_probe_facts(enrich_account=False)
     counts = ctrl.counts_today()
     remaining_daily = None
     equity = facts.get("equity")
@@ -676,7 +712,7 @@ def arm_live_trading(
     if (confirmation_phrase or "").strip() != _CONFIRM_PHRASE:
         raise LiveTradingTransitionError("confirmation_phrase_required")
     ctrl = get_live_trading_controller()
-    facts = _live_probe_facts()
+    facts = _live_probe_facts(enrich_account=True)
     failures = activation_probe_failures(facts)
     if failures:
         raise LiveTradingTransitionError(failures[0])
@@ -722,7 +758,7 @@ def enable_live_trading(
         raise LiveTradingTransitionError(
             f"enable_requires_armed_or_paused_current={ctrl.snapshot_state()}"
         )
-    facts = _live_probe_facts()
+    facts = _live_probe_facts(enrich_account=True)
     failures = activation_probe_failures(facts)
     if failures:
         raise LiveTradingTransitionError(failures[0])
@@ -821,7 +857,7 @@ def apply_fail_closed_from_probes() -> LiveTradingState:
     ctrl = get_live_trading_controller()
     if not orders_may_submit(ctrl.snapshot_state()):
         return ctrl.snapshot_state()
-    facts = _live_probe_facts()
+    facts = _live_probe_facts(enrich_account=False)
     if not facts.get("gateway_online"):
         return ctrl.safety_pause(reason="gateway_offline")
     if not facts.get("mt5_connected"):
