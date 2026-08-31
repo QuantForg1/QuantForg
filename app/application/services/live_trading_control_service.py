@@ -23,6 +23,8 @@ from app.domain.institutional_trading.live_trading_control import (
     LiveTradingState,
     LiveTradingTransitionError,
     get_live_trading_controller,
+    orders_may_submit,
+    public_state_name,
     strip_secrets,
 )
 from app.domain.institutional_trading.operations.models import OperatorIdentity
@@ -83,6 +85,32 @@ def operator_from_user(
         ip=ip,
         user_agent=user_agent,
     )
+
+
+def activation_probe_failures(facts: dict[str, Any]) -> list[str]:
+    """Account-level checks required before ARMED or LIVE. Fail closed."""
+    failures: list[str] = []
+    if not facts.get("gateway_online"):
+        failures.append("gateway_offline")
+    if not facts.get("mt5_connected"):
+        failures.append("mt5_disconnected")
+    if not facts.get("mt5_attached"):
+        failures.append("mt5_not_attached")
+    if facts.get("ownership") != "OWNED":
+        failures.append("broker_ownership_failure")
+    if not facts.get("account_available"):
+        failures.append("account_unavailable")
+    equity = facts.get("equity")
+    balance = facts.get("balance")
+    if not isinstance(equity, Decimal) or equity <= 0:
+        failures.append("equity_unavailable")
+    if not isinstance(balance, Decimal) or balance <= 0:
+        failures.append("balance_unavailable")
+    return failures
+
+
+def _activation_ready(facts: dict[str, Any]) -> bool:
+    return not activation_probe_failures(facts)
 
 
 def _live_probe_facts() -> dict[str, Any]:
@@ -168,6 +196,14 @@ def _live_probe_facts() -> dict[str, Any]:
         )
         out["used_margin"] = _dec(account.get("margin") or account.get("margin_used"))
         out["margin_level"] = _dec(account.get("margin_level"))
+        floating = _dec(account.get("profit") or account.get("floating_pnl"))
+        daily = _dec(
+            account.get("daily_pnl")
+            or account.get("today_pnl")
+            or live.get("daily_pnl")
+        )
+        out["floating_pnl"] = floating
+        out["daily_pnl"] = daily
         positions = account.get("positions") or live.get("open_positions")
         try:
             out["open_positions"] = int(positions or facts.open_positions or 0)
@@ -322,6 +358,56 @@ def _signal_cards(
     return cards
 
 
+def _safety_gates(facts: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = [
+        ("broker_ownership", facts.get("ownership") == "OWNED", "PASS_FAIL"),
+        ("gateway_online", bool(facts.get("gateway_online")), "PASS_FAIL"),
+        ("mt5_attached", bool(facts.get("mt5_attached")), "PASS_FAIL"),
+        ("broker_session", bool(facts.get("broker_connected")), "PASS_FAIL"),
+        ("fresh_market_data", None, "PER_ORDER"),
+        ("market_open", None, "PER_ORDER"),
+        ("risk_engine_healthy", True, "PASS_FAIL"),
+        ("oms_healthy", bool(facts.get("oms_healthy")), "PASS_FAIL"),
+        ("authentication", True, "PASS_FAIL"),
+        ("authorization", True, "PASS_FAIL"),
+        ("kill_switch_ready", True, "PASS_FAIL"),
+    ]
+    labels = {
+        "broker_ownership": "Broker ownership",
+        "gateway_online": "Gateway online",
+        "mt5_attached": "MT5 attached",
+        "broker_session": "Broker session",
+        "fresh_market_data": "Fresh market data",
+        "market_open": "Market open",
+        "risk_engine_healthy": "Risk engine healthy",
+        "oms_healthy": "OMS healthy",
+        "authentication": "Authentication",
+        "authorization": "Authorization",
+        "kill_switch_ready": "Kill switch ready",
+    }
+    out: list[dict[str, Any]] = []
+    for key, ok, kind in rows:
+        if kind == "PER_ORDER":
+            out.append(
+                {
+                    "key": key,
+                    "label": labels[key],
+                    "passed": None,
+                    "status": "PER_ORDER",
+                }
+            )
+            continue
+        out.append(
+            {
+                "key": key,
+                "label": labels[key],
+                "passed": bool(ok),
+                "status": "PASS" if ok else "FAIL",
+            }
+        )
+    return out
+
+
 def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, Any]:
     ctrl = get_live_trading_controller()
     facts = _live_probe_facts()
@@ -336,15 +422,28 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
             )
         )
     state = ctrl.snapshot_state()
+    ready = _activation_ready(facts)
+    emergency = bool(ctrl.emergency_latched) or state == "KILLED"
+    display = public_state_name(
+        state, activation_ready=ready and state == "DISABLED", emergency=emergency
+    )
+    last_fill = ctrl.fills[-1].to_dict() if ctrl.fills else None
+    last_rej = ctrl.rejections[-1] if ctrl.rejections else None
     return strip_secrets(
         {
             "live_trading_state": state,
+            "display_state": display,
+            "activation_ready": ready and state == "DISABLED",
             "research_can_execute": ctrl.research_can_execute(),
             "allow_live_promotion": False,
-            "kill_switch": state == "KILLED",
+            "kill_switch": emergency,
+            "emergency_latched": emergency,
+            "last_emergency_reason": ctrl.kill_reason,
             "default_state": "DISABLED",
             "auto_enable_after_deploy": False,
             "auto_enable_after_reconnect": False,
+            "orders_may_submit": orders_may_submit(state),
+            "safety_gates": _safety_gates(facts),
             "broker": {
                 "status": "CONNECTED"
                 if facts.get("broker_connected")
@@ -387,6 +486,16 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
                 ),
                 "open_positions": facts.get("open_positions") or 0,
                 "available": bool(facts.get("account_available")),
+                "daily_pnl": (
+                    str(facts["daily_pnl"])
+                    if facts.get("daily_pnl") is not None
+                    else None
+                ),
+                "floating_pnl": (
+                    str(facts["floating_pnl"])
+                    if facts.get("floating_pnl") is not None
+                    else None
+                ),
             },
             "risk": {
                 **ctrl.risk.to_dict(),
@@ -399,6 +508,12 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
                 **counts,
                 "last_execution": ctrl.last_execution_at,
                 "last_rejection_reason": ctrl.last_rejection_reason or None,
+                "last_order_attempt": last_fill or last_rej,
+                "last_order_result": (
+                    (last_fill or {}).get("status")
+                    if last_fill
+                    else (last_rej or {}).get("reason")
+                ),
                 "ops_mode": facts.get("ops_mode"),
                 "execution_enabled_env": facts.get("execution_enabled"),
             },
@@ -461,6 +576,21 @@ def arm_live_trading(
         raise LiveTradingTransitionError("confirmation_phrase_required")
     ctrl = get_live_trading_controller()
     facts = _live_probe_facts()
+    failures = activation_probe_failures(facts)
+    if failures:
+        raise LiveTradingTransitionError(failures[0])
+    current = ctrl.snapshot_state()
+    if current == "DISABLED":
+        ctrl.transition(
+            operator,
+            "READY_FOR_REVIEW",
+            confirmed=True,
+            reason="activation_review",
+            account=str(facts.get("account_login_masked") or ""),
+            broker=str(
+                facts.get("broker_server_masked") or facts.get("broker_server") or ""
+            ),
+        )
     ctrl.transition(
         operator,
         "ARMED",
@@ -492,12 +622,9 @@ def enable_live_trading(
             f"enable_requires_armed_or_paused_current={ctrl.snapshot_state()}"
         )
     facts = _live_probe_facts()
-    if not facts.get("gateway_online"):
-        raise LiveTradingTransitionError("gateway_offline")
-    if not facts.get("mt5_connected"):
-        raise LiveTradingTransitionError("mt5_disconnected")
-    if facts.get("ownership") != "OWNED":
-        raise LiveTradingTransitionError("broker_ownership_failure")
+    failures = activation_probe_failures(facts)
+    if failures:
+        raise LiveTradingTransitionError(failures[0])
     target: LiveTradingState = "ENABLED"
     ctrl.transition(
         operator,
@@ -536,10 +663,8 @@ def pause_live_trading(operator: OperatorIdentity, *, reason: str) -> dict[str, 
 def disable_live_trading(operator: OperatorIdentity, *, reason: str) -> dict[str, Any]:
     ctrl = get_live_trading_controller()
     current = ctrl.snapshot_state()
-    if current not in {"ARMED", "PAUSED"}:
-        raise LiveTradingTransitionError(
-            f"disable_requires_armed_or_paused_current={current}"
-        )
+    if current not in {"READY_FOR_REVIEW", "ARMED", "ENABLED", "PAUSED"}:
+        raise LiveTradingTransitionError(f"disable_requires_active_current={current}")
     ctrl.transition(operator, "DISABLED", confirmed=True, reason=reason or "disable")
     _persist_or_block(ctrl)
     return build_live_trading_status()
@@ -554,25 +679,14 @@ def kill_live_trading(
     if not confirmed:
         raise LiveTradingTransitionError("confirmation_required")
     ctrl = get_live_trading_controller()
-    current = ctrl.snapshot_state()
-    if current in {"ENABLED", "PAUSED"}:
-        ctrl.transition(
-            operator, "KILLED", confirmed=True, reason=reason or "kill_live_trading"
-        )
-    elif current == "ARMED":
-        ctrl.transition(
-            operator, "DISABLED", confirmed=True, reason=reason or "kill_from_armed"
-        )
-        ctrl.kill_reason = reason or "kill_live_trading"
-    else:
-        ctrl.kill_reason = reason or "kill_live_trading"
+    ctrl.emergency_disable(operator, reason=reason or "emergency_stop")
     try:
         from app.domain.institutional_trading.operations.control_plane import (
             get_control_plane,
         )
 
         get_control_plane().emergency_stop(
-            operator, reason=reason or "kill_live_trading", confirmed=True
+            operator, reason=reason or "emergency_stop", confirmed=True
         )
     except Exception as exc:
         logger.warning("live_trading_kill_ops_sync_failed", error=str(exc))
@@ -604,7 +718,7 @@ def update_live_risk(
 def apply_fail_closed_from_probes() -> LiveTradingState:
     """When ENABLED, pause if gateway/MT5/ownership becomes uncertain."""
     ctrl = get_live_trading_controller()
-    if ctrl.snapshot_state() != "ENABLED":
+    if not orders_may_submit(ctrl.snapshot_state()):
         return ctrl.snapshot_state()
     facts = _live_probe_facts()
     if not facts.get("gateway_online"):

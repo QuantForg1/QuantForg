@@ -19,23 +19,40 @@ from uuid import UUID
 
 from app.domain.institutional_trading.operations.models import OperatorIdentity
 
-LiveTradingState = Literal["DISABLED", "ARMED", "ENABLED", "PAUSED", "KILLED"]
+LiveTradingState = Literal[
+    "DISABLED",
+    "READY_FOR_REVIEW",
+    "ARMED",
+    "ENABLED",
+    "PAUSED",
+    "KILLED",
+]
 
 STATES: tuple[LiveTradingState, ...] = (
     "DISABLED",
+    "READY_FOR_REVIEW",
     "ARMED",
     "ENABLED",
     "PAUSED",
     "KILLED",
 )
 
-# Operator-only transitions. Safety auto-PAUSE is handled separately.
+# Operator-only transitions. Safety auto-PAUSE and emergency_disable are separate.
+# ENABLED is the canonical live-authorization state (displayed as LIVE_ENABLED).
 ALLOWED_TRANSITIONS: dict[LiveTradingState, frozenset[LiveTradingState]] = {
-    "DISABLED": frozenset({"ARMED"}),
+    "DISABLED": frozenset({"READY_FOR_REVIEW", "ARMED"}),
+    "READY_FOR_REVIEW": frozenset({"ARMED", "DISABLED"}),
     "ARMED": frozenset({"ENABLED", "DISABLED"}),
-    "ENABLED": frozenset({"PAUSED", "KILLED"}),
+    "ENABLED": frozenset({"PAUSED", "KILLED", "DISABLED"}),
     "PAUSED": frozenset({"ENABLED", "KILLED", "DISABLED"}),
     "KILLED": frozenset({"DISABLED"}),
+}
+
+_STATE_ALIASES: dict[str, LiveTradingState] = {
+    "LIVE": "ENABLED",
+    "LIVE_ENABLED": "ENABLED",
+    "READY": "READY_FOR_REVIEW",
+    "EMERGENCY_STOP": "DISABLED",
 }
 
 OPERATOR_ROLES = frozenset({"owner", "admin"})
@@ -114,8 +131,10 @@ class LiveTradingAuthError(PermissionError):
 
 class LiveTradingStateName(StrEnum):
     DISABLED = "DISABLED"
+    READY_FOR_REVIEW = "READY_FOR_REVIEW"
     ARMED = "ARMED"
     ENABLED = "ENABLED"
+    LIVE_ENABLED = "ENABLED"
     PAUSED = "PAUSED"
     KILLED = "KILLED"
 
@@ -126,25 +145,61 @@ def utc_now() -> datetime:
 
 def normalize_state(value: Any) -> LiveTradingState:
     raw = str(value or "").strip().upper()
+    if raw in _STATE_ALIASES:
+        return _STATE_ALIASES[raw]
     if raw in STATES:
         return raw  # type: ignore[return-value]
     return "DISABLED"
 
 
+def orders_may_submit(state: Any) -> bool:
+    """True only for canonical ENABLED (LIVE_ENABLED alias included)."""
+    return normalize_state(state) == "ENABLED"
+
+
+def public_state_name(
+    state: Any, *, activation_ready: bool = False, emergency: bool = False
+) -> str:
+    """Operator-facing name. LIVE_ENABLED only when backend state is ENABLED."""
+    canonical = normalize_state(state)
+    if canonical == "ENABLED":
+        return "LIVE_ENABLED"
+    if canonical == "DISABLED" and emergency:
+        return "DISABLED"
+    if canonical == "DISABLED" and activation_ready:
+        return "READY_FOR_REVIEW"
+    if canonical == "KILLED":
+        return "EMERGENCY_STOP"
+    return canonical
+
+
 def recover_after_restart(persisted: Any) -> LiveTradingState:
     """Fail closed after deploy / reconnect / uncertain hydrate.
 
-    ENABLED never survives a restart. Incomplete ARM is dropped.
-    KILLED and PAUSED are preserved so the operator must re-arm.
+    ENABLED / LIVE_ENABLED never survives a restart.
+    Incomplete ARM / READY_FOR_REVIEW is dropped.
+    Emergency KILLED recovers as DISABLED and requires re-arm.
+    PAUSED is preserved so the operator must explicitly resume.
     """
     state = normalize_state(persisted)
     if state == "ENABLED":
         return "PAUSED"
-    if state == "ARMED":
+    if state in {"ARMED", "READY_FOR_REVIEW", "KILLED"}:
         return "DISABLED"
-    if state in {"PAUSED", "KILLED", "DISABLED"}:
+    if state in {"PAUSED", "DISABLED"}:
         return state
     return "DISABLED"
+
+
+def finite_positive(value: Any) -> bool:
+    """Reject None, NaN, Inf, zero, and negatives. Never coerce into a price."""
+    if value is None:
+        return False
+    try:
+        parsed = value if isinstance(value, Decimal) else Decimal(str(value))
+    except Exception:
+        return False
+    return not (parsed.is_nan() or parsed.is_infinite() or parsed <= 0)
 
 
 def _dec(value: Any, default: str = "0") -> Decimal:
@@ -496,11 +551,11 @@ def size_from_broker_specs(
 
     If the broker minimum lot would exceed the configured risk budget, reject.
     """
-    if equity <= 0:
+    if equity <= 0 or not finite_positive(equity):
         return PositionSizeResult(
             False, Decimal("0"), Decimal("0"), stop_distance, "equity_unavailable"
         )
-    if stop_distance <= 0:
+    if stop_distance <= 0 or not finite_positive(stop_distance):
         return PositionSizeResult(
             False, Decimal("0"), Decimal("0"), stop_distance, "invalid_stop_distance"
         )
@@ -636,6 +691,7 @@ class LiveOrderRequest:
     audit_healthy: bool = False
     authenticated_authorized: bool = False
     request_id: str | None = None
+    requested_volume: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -686,13 +742,15 @@ def evaluate_signal_quality(
     sl = req.stop_loss
     tp = req.take_profit
     entry = req.entry if req.entry is not None else req.price
-    sl_ok = sl is not None and entry is not None and sl != entry
+    price_ok = finite_positive(req.price) and req.price_valid
+    entry_ok = finite_positive(entry)
+    sl_ok = finite_positive(sl) and entry_ok and sl != entry
     if sl_ok and entry is not None and sl is not None:
         if direction == "BUY":
             sl_ok = sl < entry
         elif direction == "SELL":
             sl_ok = sl > entry
-    tp_ok = tp is not None and entry is not None and tp != entry
+    tp_ok = finite_positive(tp) and entry_ok and tp != entry
     if tp_ok and entry is not None and tp is not None:
         if direction == "BUY":
             tp_ok = tp > entry
@@ -721,12 +779,8 @@ def evaluate_signal_quality(
         _gate("valid_symbol", symbol_ok, "invalid_symbol"),
         _gate("valid_direction", dir_ok, "invalid_direction"),
         _gate("valid_signal_status", status_ok, f"signal_status_{status or 'MISSING'}"),
-        _gate(
-            "valid_price",
-            bool(req.price_valid and req.price is not None and req.price > 0),
-            "invalid_price",
-        ),
-        _gate("valid_entry", entry is not None and entry > 0, "invalid_entry"),
+        _gate("valid_price", price_ok, "invalid_price"),
+        _gate("valid_entry", entry_ok, "invalid_entry"),
         _gate("valid_sl", bool(sl_ok), "invalid_or_missing_stop_loss"),
         _gate("valid_tp", bool(tp_ok), "invalid_or_missing_take_profit"),
         _gate("valid_evidence", evidence_ok, "missing_evidence"),
@@ -757,8 +811,8 @@ def evaluate_broker_requirements(
         _gate("audit_healthy", req.audit_healthy, "audit_failure"),
         _gate(
             "live_trading_state",
-            state == "ENABLED",
-            f"live_trading_{state.lower()}",
+            orders_may_submit(state),
+            f"live_trading_{normalize_state(state).lower()}",
         ),
     ]
 
@@ -850,6 +904,18 @@ def evaluate_live_order(
     else:
         gates.append(_gate("duplicate_order", True))
 
+    vol = req.requested_volume
+    if vol is not None:
+        vol_ok = finite_positive(vol)
+        if vol_ok and req.spec is not None:
+            if req.spec.volume_min is not None and vol < req.spec.volume_min:
+                vol_ok = False
+            if req.spec.volume_max is not None and vol > req.spec.volume_max:
+                vol_ok = False
+        gates.append(_gate("valid_volume", vol_ok, "invalid_volume"))
+    else:
+        gates.append(_gate("valid_volume", True))
+
     gates.append(_gate("martingale", not cfg.allow_martingale, "martingale_prohibited"))
     gates.append(
         _gate(
@@ -866,8 +932,8 @@ def evaluate_live_order(
     if (
         req.spec is not None
         and req.equity is not None
-        and entry is not None
-        and sl is not None
+        and finite_positive(entry)
+        and finite_positive(sl)
     ):
         stop_dist = abs(entry - sl)
         sizing = size_from_broker_specs(
@@ -919,14 +985,14 @@ def evaluate_live_order(
         # Block, but do not flip ENABLED→PAUSED solely for a single-order health blip
         # unless already failing connectivity. Tests assert BLOCK vs PAUSE separately.
         pass
-    allowed = not failed and state == "ENABLED"
+    allowed = not failed and orders_may_submit(state)
     block = failed[0] if failed else ""
     return LiveOrderDecision(
         allowed=allowed,
         reasons=failed,
         gates=tuple(gates),
         sizing=sizing,
-        pause_execution=pause_execution and state == "ENABLED",
+        pause_execution=pause_execution and orders_may_submit(state),
         pause_symbol=pause_symbol,
         block_code=block,
     )
@@ -1021,6 +1087,7 @@ class LiveTradingController:
     armed_at: str | None = None
     enabled_at: str | None = None
     kill_reason: str | None = None
+    emergency_latched: bool = False
     recovered_from_enabled: bool = False
     _lock: RLock = field(default_factory=RLock, repr=False)
 
@@ -1030,7 +1097,7 @@ class LiveTradingController:
 
     def research_can_execute(self) -> bool:
         """True only after explicit ENABLE. Research never sets this."""
-        return self.snapshot_state() == "ENABLED"
+        return orders_may_submit(self.snapshot_state())
 
     def persist_payload(self) -> dict[str, Any]:
         with self._lock:
@@ -1041,6 +1108,7 @@ class LiveTradingController:
                     "live_trading_armed_at": self.armed_at,
                     "live_trading_enabled_at": self.enabled_at,
                     "live_trading_kill_reason": self.kill_reason,
+                    "live_trading_emergency_latched": self.emergency_latched,
                     "live_trading_consecutive_losses": self.consecutive_losses,
                     "live_trading_paused_symbols": sorted(self.paused_symbols),
                     "live_trading_audit": [e.to_dict() for e in self.audit[-50:]],
@@ -1059,6 +1127,9 @@ class LiveTradingController:
                 normalize_state(data.get("live_trading_state")) == "ENABLED"
                 and recovered == "PAUSED"
             )
+            persisted_killed = (
+                normalize_state(data.get("live_trading_state")) == "KILLED"
+            )
             if data.get("live_trading_risk"):
                 self.risk = LiveTradingRiskConfig.from_dict(
                     data.get("live_trading_risk")
@@ -1069,9 +1140,16 @@ class LiveTradingController:
                 else None
             )
             self.enabled_at = None  # never assume still enabled after hydrate
+            persisted_emergency = persisted_killed or bool(
+                data.get("live_trading_emergency_latched")
+            )
+            self.emergency_latched = persisted_emergency and recovered in {
+                "DISABLED",
+                "KILLED",
+            }
             self.kill_reason = (
                 str(data.get("live_trading_kill_reason") or "") or None
-                if recovered == "KILLED"
+                if self.emergency_latched
                 else None
             )
             try:
@@ -1142,20 +1220,23 @@ class LiveTradingController:
                 )
             self.state = wanted
             moment = (now or utc_now()).isoformat()
+            if wanted in {"ARMED", "ENABLED", "READY_FOR_REVIEW"}:
+                self.emergency_latched = False
+                self.kill_reason = None
             if wanted == "ARMED":
                 self.armed_at = moment
-                self.kill_reason = None
             if wanted == "ENABLED":
                 self.enabled_at = moment
-                self.kill_reason = None
             if wanted == "DISABLED":
                 self.armed_at = None
                 self.enabled_at = None
                 self.kill_reason = None
+                self.emergency_latched = False
                 self.paused_symbols.clear()
             if wanted == "KILLED":
                 self.enabled_at = None
                 self.kill_reason = reason or "kill_switch"
+                self.emergency_latched = True
             self._record_locked(
                 operator=operator,
                 action=f"transition_{current}_{wanted}".lower(),
@@ -1168,6 +1249,33 @@ class LiveTradingController:
                 now=now,
             )
             return wanted
+
+    def emergency_disable(
+        self,
+        operator: OperatorIdentity,
+        *,
+        reason: str,
+        now: datetime | None = None,
+    ) -> LiveTradingState:
+        """ANY state → DISABLED. Blocks new orders. Does not close positions."""
+        require_operator(operator)
+        with self._lock:
+            before = self.state
+            self.state = "DISABLED"
+            self.armed_at = None
+            self.enabled_at = None
+            self.kill_reason = reason or "emergency_stop"
+            self.emergency_latched = True
+            self.paused_symbols.clear()
+            self._record_locked(
+                operator=operator,
+                action="emergency_stop",
+                before=before,
+                after="DISABLED",
+                reason=self.kill_reason,
+                now=now,
+            )
+            return self.state
 
     def safety_pause(
         self, *, reason: str, symbol: str | None = None

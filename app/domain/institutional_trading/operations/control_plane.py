@@ -841,13 +841,9 @@ class OperationsControlPlane:
             )
 
             ctrl = get_live_trading_controller()
-            if ctrl.snapshot_state() in {"ENABLED", "PAUSED"}:
-                ctrl.transition(
-                    operator,
-                    "KILLED",
-                    confirmed=True,
-                    reason=reason or "emergency_stop",
-                    now=now,
+            if not ctrl.emergency_latched:
+                ctrl.emergency_disable(
+                    operator, reason=reason or "emergency_stop", now=now
                 )
         except Exception:
             pass

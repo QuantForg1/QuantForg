@@ -11,7 +11,7 @@ export default function LiveTradingAdminPage() {
     <div>
       <PageHeader
         title="Live Trading"
-        description="Controlled real-money authorization. Default DISABLED. ARM then ENABLE is required. Research cannot enable execution. Kill switch stops new orders immediately."
+        description="Controlled real-money authorization. Default DISABLED. ARM then ENABLE is required. Research cannot enable execution. Emergency stop disables new orders immediately and does not close existing positions."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">

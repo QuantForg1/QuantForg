@@ -564,13 +564,14 @@ def evaluate_auto_trade_safety(
 
     lt_state = str(facts.live_trading_state or "UNSET").strip().upper()
     if lt_state and lt_state != "UNSET":
+        live_ok = lt_state in {"ENABLED", "LIVE_ENABLED"}
         add(
             "live_trading_state",
             "Live trading ENABLED",
-            lt_state == "ENABLED",
+            live_ok,
             (
                 f"LIVE TRADING is {lt_state} — new orders blocked"
-                if lt_state != "ENABLED"
+                if not live_ok
                 else ""
             ),
         )

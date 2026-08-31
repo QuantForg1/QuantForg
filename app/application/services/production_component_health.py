@@ -191,6 +191,44 @@ def _build_payload(
         )
 
     components = [gateway, oms, mt5, ai]
+    live_trading = {
+        "live_trading_state": "DISABLED",
+        "orders_may_submit": False,
+        "kill_switch": False,
+        "research_can_execute": False,
+        "allow_live_promotion": False,
+        "last_order_attempt": None,
+        "last_order_result": None,
+        "source": "controller",
+        "fabricated": False,
+    }
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            get_live_trading_controller,
+            orders_may_submit,
+        )
+
+        ctrl = get_live_trading_controller()
+        state = ctrl.snapshot_state()
+        last_fill = ctrl.fills[-1].to_dict() if ctrl.fills else None
+        last_rej = ctrl.rejections[-1] if ctrl.rejections else None
+        live_trading = {
+            "live_trading_state": state,
+            "orders_may_submit": orders_may_submit(state),
+            "kill_switch": bool(ctrl.emergency_latched) or state == "KILLED",
+            "research_can_execute": ctrl.research_can_execute(),
+            "allow_live_promotion": False,
+            "last_order_attempt": last_fill or last_rej,
+            "last_order_result": (
+                (last_fill or {}).get("status")
+                if last_fill
+                else (last_rej or {}).get("reason")
+            ),
+            "source": "controller",
+            "fabricated": False,
+        }
+    except Exception:
+        live_trading["source"] = "unavailable"
     return {
         "git_commit": runtime_git_commit(),
         "deployment_id": runtime_deployment_id(),
@@ -198,12 +236,14 @@ def _build_payload(
         "oms": oms.to_dict(),
         "mt5": mt5.to_dict(),
         "ai": ai.to_dict(),
+        "live_trading": live_trading,
         "components": [c.to_dict() for c in components],
         "statuses": {
             "gateway": gateway.status,
             "oms": oms.status,
             "mt5": mt5.status,
             "ai": ai.status,
+            "live_trading": live_trading["live_trading_state"],
         },
         "all_ready_for_limited_pilot": (
             gateway.status == "HEALTHY"
@@ -242,19 +282,14 @@ def collect_trading_component_health(
 
     if use_cache and probes is None:
         with _cache_lock:
-            if (
-                _cache_payload is not None
-                and (now - _cache_at) <= _CACHE_TTL_S
-            ):
+            if _cache_payload is not None and (now - _cache_at) <= _CACHE_TTL_S:
                 cached = dict(_cache_payload)
                 timing = dict(cached.get("timing") or {})
                 timing.update(
                     {
                         "cache_hit": True,
                         "cache_age_ms": round((now - _cache_at) * 1000.0, 1),
-                        "total_ms": round(
-                            (time.perf_counter() - t_total) * 1000.0, 1
-                        ),
+                        "total_ms": round((time.perf_counter() - t_total) * 1000.0, 1),
                     }
                 )
                 cached["timing"] = timing
@@ -291,10 +326,7 @@ def collect_trading_component_health(
         )
         if use_cache:
             with _cache_lock:
-                if (
-                    _cache_payload is not None
-                    and (now - _cache_at) <= _STALE_TTL_S
-                ):
+                if _cache_payload is not None and (now - _cache_at) <= _STALE_TTL_S:
                     cached = dict(_cache_payload)
                     timing = dict(cached.get("timing") or {})
                     timing.update(

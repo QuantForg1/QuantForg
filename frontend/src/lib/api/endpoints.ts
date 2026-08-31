@@ -1219,21 +1219,26 @@ export const liveTradingControlApi = {
       method: "POST",
       body,
     }),
-  pause: (reason: string) =>
-    apiFetch<Record<string, unknown>>("/live-trading/pause", {
-      method: "POST",
-      body: { reason, confirmed: true },
-    }),
-  disable: (reason: string) =>
-    apiFetch<Record<string, unknown>>("/live-trading/disable", {
-      method: "POST",
-      body: { reason, confirmed: true },
-    }),
-  kill: (reason: string, confirmed: boolean) =>
-    apiFetch<Record<string, unknown>>("/live-trading/kill", {
-      method: "POST",
-      body: { reason, confirmed },
-    }),
+    pause: (reason: string) =>
+      apiFetch<Record<string, unknown>>("/live-trading/pause", {
+        method: "POST",
+        body: { reason, confirmed: true },
+      }),
+    disable: (reason: string) =>
+      apiFetch<Record<string, unknown>>("/live-trading/disable", {
+        method: "POST",
+        body: { reason, confirmed: true },
+      }),
+    kill: (reason: string, confirmed: boolean) =>
+      apiFetch<Record<string, unknown>>("/live-trading/kill", {
+        method: "POST",
+        body: { reason, confirmed },
+      }),
+    emergencyStop: (reason: string, confirmed: boolean) =>
+      apiFetch<Record<string, unknown>>("/live-trading/emergency-stop", {
+        method: "POST",
+        body: { reason, confirmed },
+      }),
   resetKilled: (reason: string) =>
     apiFetch<Record<string, unknown>>("/live-trading/reset-killed", {
       method: "POST",

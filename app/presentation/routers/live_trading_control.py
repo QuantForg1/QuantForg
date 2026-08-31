@@ -220,6 +220,24 @@ def live_trading_kill(
         raise _http_exc(exc) from exc
 
 
+@router.post("/emergency-stop")
+def live_trading_emergency_stop(
+    body: ConfirmBody,
+    user: OperatorUser,
+    request: Request,
+    x_forwarded_for: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Alias of kill — ANY state → DISABLED. Does not close positions."""
+    try:
+        return kill_live_trading(
+            _operator(user, request, x_forwarded_for),
+            confirmed=body.confirmed,
+            reason=body.reason or "emergency_stop",
+        )
+    except (LiveTradingAuthError, LiveTradingTransitionError) as exc:
+        raise _http_exc(exc) from exc
+
+
 @router.post("/reset-killed")
 def live_trading_reset_killed(
     body: ConfirmBody,

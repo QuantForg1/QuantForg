@@ -230,9 +230,11 @@ def test_pause_kill_reset() -> None:
 @pytest.mark.trading_core
 def test_restart_recovery_never_auto_enables() -> None:
     assert recover_after_restart("ENABLED") == "PAUSED"
+    assert recover_after_restart("LIVE_ENABLED") == "PAUSED"
     assert recover_after_restart("ARMED") == "DISABLED"
+    assert recover_after_restart("READY_FOR_REVIEW") == "DISABLED"
     assert recover_after_restart("PAUSED") == "PAUSED"
-    assert recover_after_restart("KILLED") == "KILLED"
+    assert recover_after_restart("KILLED") == "DISABLED"
     assert recover_after_restart(None) == "DISABLED"
     ctrl = reset_live_trading_controller_for_tests()
     recovered = ctrl.hydrate({"live_trading_state": "ENABLED"})
@@ -522,15 +524,16 @@ def test_kill_switch_from_enabled() -> None:
         ),
         patch(
             "app.application.services.live_trading_control_service.build_live_trading_status",
-            return_value={"live_trading_state": "KILLED"},
+            return_value={"live_trading_state": "DISABLED"},
         ),
         patch(
             "app.domain.institutional_trading.operations.control_plane.get_control_plane",
         ),
     ):
         out = kill_live_trading(op, confirmed=True, reason="emergency")
-    assert ctrl.snapshot_state() == "KILLED"
-    assert out["live_trading_state"] == "KILLED"
+    assert ctrl.snapshot_state() == "DISABLED"
+    assert ctrl.emergency_latched is True
+    assert out["live_trading_state"] == "DISABLED"
 
 
 @pytest.mark.unit
@@ -552,6 +555,13 @@ def test_audit_failure_blocks_enable() -> None:
             return_value={
                 "account_login_masked": "12••78",
                 "broker_server": "Weltrade",
+                "gateway_online": True,
+                "mt5_connected": True,
+                "mt5_attached": True,
+                "ownership": "OWNED",
+                "account_available": True,
+                "equity": Decimal("33"),
+                "balance": Decimal("33"),
             },
         ),
         pytest.raises(LiveTradingTransitionError, match="audit_failure"),
@@ -584,7 +594,11 @@ def test_enable_requires_connectivity_and_ownership() -> None:
             return_value={
                 "gateway_online": False,
                 "mt5_connected": True,
+                "mt5_attached": True,
                 "ownership": "OWNED",
+                "account_available": True,
+                "equity": Decimal("33"),
+                "balance": Decimal("33"),
             },
         ),
         pytest.raises(LiveTradingTransitionError, match="gateway_offline"),
@@ -596,7 +610,11 @@ def test_enable_requires_connectivity_and_ownership() -> None:
             return_value={
                 "gateway_online": True,
                 "mt5_connected": False,
+                "mt5_attached": False,
                 "ownership": "OWNED",
+                "account_available": True,
+                "equity": Decimal("33"),
+                "balance": Decimal("33"),
             },
         ),
         pytest.raises(LiveTradingTransitionError, match="mt5_disconnected"),
@@ -608,7 +626,11 @@ def test_enable_requires_connectivity_and_ownership() -> None:
             return_value={
                 "gateway_online": True,
                 "mt5_connected": True,
+                "mt5_attached": True,
                 "ownership": "NOT_OWNED",
+                "account_available": True,
+                "equity": Decimal("33"),
+                "balance": Decimal("33"),
             },
         ),
         pytest.raises(LiveTradingTransitionError, match="broker_ownership"),
@@ -632,9 +654,10 @@ def test_admin_page_and_nav_keep_trader_free_of_admin() -> None:
     ).read_text(encoding="utf-8")
     assert "/admin/live-trading" in page
     assert "research_can_execute = false" in page
-    assert "KILL LIVE TRADING" in panel
+    assert "KILL LIVE TRADING" in panel or "EMERGENCY STOP" in panel
     assert "ARM LIVE TRADING" in panel
     assert "ENABLE LIVE TRADING" in panel
+    assert "DISABLE LIVE TRADING" in panel
     assert "OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER" in nav
     assert (
         '"/admin/live-trading"' in nav
@@ -693,3 +716,134 @@ def test_neutral_none_stale_not_executed() -> None:
             cfg=LiveTradingRiskConfig(),
         )
         assert decision.allowed is False, status
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_invalid_volume_and_nan_price_blocked() -> None:
+    from app.domain.institutional_trading.live_trading_control import (
+        orders_may_submit,
+        public_state_name,
+    )
+
+    bad_vol = evaluate_live_order(
+        _req(requested_volume=Decimal("0")),
+        state="ENABLED",
+        cfg=LiveTradingRiskConfig(),
+    )
+    assert bad_vol.allowed is False
+    assert any("volume" in r for r in bad_vol.reasons)
+    nan = evaluate_live_order(
+        _req(price=Decimal("NaN"), price_valid=True),
+        state="ENABLED",
+        cfg=LiveTradingRiskConfig(),
+    )
+    assert nan.allowed is False
+    inf = evaluate_live_order(
+        _req(entry=Decimal("Infinity")),
+        state="ENABLED",
+        cfg=LiveTradingRiskConfig(),
+    )
+    assert inf.allowed is False
+    assert orders_may_submit("LIVE_ENABLED") is True
+    assert orders_may_submit("DISABLED") is False
+    assert public_state_name("ENABLED") == "LIVE_ENABLED"
+    assert public_state_name("DISABLED", activation_ready=True) == "READY_FOR_REVIEW"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_arm_blocked_when_broker_or_gateway_unhealthy() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import arm_live_trading
+
+    ctrl = reset_live_trading_controller_for_tests()
+    op = _op()
+    phrase = "I UNDERSTAND THIS USES REAL MONEY"
+    cases = [
+        ({"gateway_online": False}, "gateway_offline"),
+        ({"mt5_connected": False, "mt5_attached": False}, "mt5_disconnected"),
+        ({"ownership": "NOT_OWNED"}, "broker_ownership"),
+        ({"equity": None, "balance": None}, "equity_unavailable"),
+    ]
+    base = {
+        "gateway_online": True,
+        "mt5_connected": True,
+        "mt5_attached": True,
+        "ownership": "OWNED",
+        "account_available": True,
+        "equity": Decimal("33"),
+        "balance": Decimal("33"),
+    }
+    for extra, needle in cases:
+        facts = {**base, **extra}
+        with (
+            patch(
+                "app.application.services.live_trading_control_service._live_probe_facts",
+                return_value=facts,
+            ),
+            pytest.raises(LiveTradingTransitionError, match=needle),
+        ):
+            arm_live_trading(
+                op, confirmed=True, reason="arm", confirmation_phrase=phrase
+            )
+        assert ctrl.snapshot_state() == "DISABLED"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_emergency_stop_from_any_state_disables() -> None:
+    ctrl = reset_live_trading_controller_for_tests()
+    op = _op()
+    ctrl.transition(op, "ARMED", confirmed=True, reason="arm")
+    ctrl.transition(op, "ENABLED", confirmed=True, reason="enable")
+    assert ctrl.emergency_disable(op, reason="panic") == "DISABLED"
+    assert ctrl.research_can_execute() is False
+    assert ctrl.emergency_latched is True
+    decision = evaluate_live_order(
+        _req(), state=ctrl.snapshot_state(), cfg=LiveTradingRiskConfig()
+    )
+    assert decision.allowed is False
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_disable_from_enabled_and_live_alias_safety() -> None:
+    ctrl = reset_live_trading_controller_for_tests()
+    op = _op()
+    ctrl.transition(op, "ARMED", confirmed=True, reason="arm")
+    ctrl.transition(op, "ENABLED", confirmed=True, reason="enable")
+    assert ctrl.transition(op, "DISABLED", confirmed=True, reason="off") == "DISABLED"
+    assert ctrl.research_can_execute() is False
+    ok = evaluate_auto_trade_safety(
+        AutoTradePolicy(enabled=True, run_state="running"),
+        _all_pass_facts(live_trading_state="LIVE_ENABLED"),
+    )
+    assert ok.allowed is True
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_allow_live_promotion_never_true() -> None:
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        build_live_trading_status,
+    )
+
+    reset_live_trading_controller_for_tests()
+    with patch(
+        "app.application.services.live_trading_control_service._live_probe_facts",
+        return_value={
+            "gateway_online": False,
+            "mt5_connected": False,
+            "ownership": "NOT_OWNED",
+        },
+    ):
+        status = build_live_trading_status()
+    assert status["live_trading_state"] == "DISABLED"
+    assert status["research_can_execute"] is False
+    assert status["allow_live_promotion"] is False
+    assert status["orders_may_submit"] is False
+    assert ALLOW_LIVE_PROMOTION is False

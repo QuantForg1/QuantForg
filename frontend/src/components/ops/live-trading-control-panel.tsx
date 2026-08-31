@@ -14,15 +14,24 @@ import { cn } from "@/lib/utils";
 
 const CONFIRM_PHRASE = "I UNDERSTAND THIS USES REAL MONEY";
 
-type LiveState = "DISABLED" | "ARMED" | "ENABLED" | "PAUSED" | "KILLED";
+type LiveState =
+  | "DISABLED"
+  | "READY_FOR_REVIEW"
+  | "ARMED"
+  | "ENABLED"
+  | "LIVE_ENABLED"
+  | "PAUSED"
+  | "KILLED"
+  | "EMERGENCY_STOP";
 
 function toneForState(
   state: string,
 ): "success" | "warning" | "danger" | "neutral" | "accent" {
-  if (state === "ENABLED") return "danger";
+  if (state === "ENABLED" || state === "LIVE_ENABLED") return "danger";
+  if (state === "READY_FOR_REVIEW") return "accent";
   if (state === "ARMED") return "accent";
   if (state === "PAUSED") return "warning";
-  if (state === "KILLED") return "danger";
+  if (state === "KILLED" || state === "EMERGENCY_STOP") return "danger";
   return "neutral";
 }
 
@@ -87,7 +96,8 @@ export function LiveTradingControlPanel() {
     onSuccess: invalidate,
   });
   const killMut = useMutation({
-    mutationFn: () => liveTradingControlApi.kill(reason || "kill_live_trading", true),
+    mutationFn: () =>
+      liveTradingControlApi.emergencyStop(reason || "emergency_stop", true),
     onSuccess: () => {
       setStep("idle");
       invalidate();
@@ -112,7 +122,9 @@ export function LiveTradingControlPanel() {
   }
 
   const d = asRecord(statusQ.data);
-  const state = str(d.live_trading_state, "DISABLED").toUpperCase() as LiveState;
+  const canonical = str(d.live_trading_state, "DISABLED").toUpperCase();
+  const state = str(d.display_state, canonical).toUpperCase() as LiveState;
+  const liveConfirmed = canonical === "ENABLED" || canonical === "LIVE_ENABLED";
   const broker = asRecord(d.broker);
   const gateway = asRecord(d.gateway);
   const mt5 = asRecord(d.mt5);
@@ -122,6 +134,7 @@ export function LiveTradingControlPanel() {
   const execution = asRecord(d.execution);
   const research = asRecord(d.research);
   const signals = asList(d.signals).map(asRecord);
+  const gates = asList(d.safety_gates).map(asRecord);
   const confirm = asRecord(d.confirmation_required);
   const phraseOk = phrase.trim() === CONFIRM_PHRASE;
   const pending =
@@ -144,25 +157,34 @@ export function LiveTradingControlPanel() {
     <div className="space-y-4">
       <Card
         className={cn(
-          state === "ENABLED" && "border-[var(--danger)]",
-          state === "KILLED" && "border-[var(--danger)]",
+          liveConfirmed && "border-[var(--danger)]",
+          (state === "KILLED" ||
+            state === "EMERGENCY_STOP" ||
+            Boolean(d.kill_switch)) &&
+            "border-[var(--danger)]",
           state === "PAUSED" && "border-[var(--warning)]",
         )}
       >
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             LIVE TRADING
-            <Badge tone={toneForState(state)}>{state}</Badge>
+            <Badge tone={toneForState(liveConfirmed ? "LIVE_ENABLED" : state)}>
+              {liveConfirmed ? "LIVE_ENABLED" : state}
+            </Badge>
             <Badge tone="neutral">
               research_can_execute = {d.research_can_execute ? "true" : "false"}
+            </Badge>
+            <Badge tone="neutral">
+              allow_live_promotion = {d.allow_live_promotion ? "true" : "false"}
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-[var(--fg-muted)]">
-            Real-money execution is authorized only after ARM then ENABLE.
-            Research stays advisory. This page never enables trading on load.
-            Capital preservation is the priority. Returns are not promised.
+            Backend state is authoritative. LIVE_ENABLED is shown only when the
+            server confirms ENABLED. Research stays advisory. This page never
+            enables trading on load. Capital preservation is the priority.
+            Returns are not promised.
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <StatusTile
@@ -187,32 +209,67 @@ export function LiveTradingControlPanel() {
             />
             <StatusTile
               label="Kill switch"
-              value={d.kill_switch ? "ARMED" : "CLEAR"}
+              value={d.kill_switch ? "LATCHED" : "READY"}
               ok={!d.kill_switch}
             />
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Balance" value={str(account.balance, "—")} />
             <Metric label="Equity" value={str(account.equity, "—")} />
-            <Metric label="Free margin" value={str(account.free_margin, "—")} />
-            <Metric label="Margin level" value={str(account.margin_level, "—")} />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <Metric label="Available margin" value={str(account.free_margin, "—")} />
+            <Metric label="Open positions" value={str(account.open_positions, "0")} />
+            <Metric label="Today's P/L" value={str(account.daily_pnl, "—")} />
+            <Metric label="Today's loss %" value={str(risk.daily_loss_used_pct, "—")} />
             <Metric label="Risk / trade" value={`${str(risk.risk_per_trade_pct, "—")}%`} />
             <Metric label="Daily loss limit" value={`${str(risk.max_daily_loss_pct, "—")}%`} />
             <Metric
               label="Remaining daily budget"
               value={str(risk.remaining_daily_risk_budget, "—")}
             />
+            <Metric label="Max positions" value={str(risk.max_open_positions, "1")} />
             <Metric
               label="Consecutive losses"
               value={`${str(risk.consecutive_losses, "0")} / ${str(risk.max_consecutive_losses, "2")}`}
             />
-            <Metric label="Max positions" value={str(risk.max_open_positions, "1")} />
-            <Metric label="Open positions" value={str(account.open_positions, "0")} />
-            <Metric label="Orders today" value={str(execution.orders_today, "0")} />
-            <Metric label="Filled / rejected" value={`${str(execution.filled_orders, "0")} / ${str(execution.rejected_orders, "0")}`} />
+            <Metric label="Margin level" value={str(account.margin_level, "—")} />
           </div>
+
+          {gates.length > 0 ? (
+            <div>
+              <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                Safety gates
+              </p>
+              <ul className="grid gap-1 sm:grid-cols-2">
+                {gates.map((g) => {
+                  const status = str(g.status, "FAIL");
+                  const passed = g.passed === true;
+                  return (
+                    <li
+                      key={str(g.key)}
+                      className="flex items-center justify-between gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs"
+                    >
+                      <span>{str(g.label, str(g.key))}</span>
+                      <Badge
+                        tone={
+                          status === "PER_ORDER"
+                            ? "neutral"
+                            : passed
+                              ? "success"
+                              : "danger"
+                        }
+                      >
+                        {status === "PER_ORDER"
+                          ? "PER ORDER"
+                          : passed
+                            ? "PASS"
+                            : "FAIL"}
+                      </Badge>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
           {str(execution.last_rejection_reason, "") !== "—" &&
           str(execution.last_rejection_reason, "") ? (
             <p className="text-xs text-[var(--warning)]">
@@ -233,7 +290,7 @@ export function LiveTradingControlPanel() {
             <ConfirmationBlock
               title={
                 step === "kill"
-                  ? "Confirm KILL LIVE TRADING"
+                  ? "Confirm EMERGENCY STOP"
                   : step === "arm"
                     ? "Confirm ARM LIVE TRADING"
                     : "Confirm ENABLE LIVE TRADING"
@@ -262,70 +319,42 @@ export function LiveTradingControlPanel() {
             />
           ) : (
             <div className="flex flex-wrap gap-2">
-              {state === "DISABLED" ? (
+              {canonical === "DISABLED" || canonical === "READY_FOR_REVIEW" ? (
                 <Button type="button" onClick={() => setStep("arm")} disabled={pending}>
                   ARM LIVE TRADING
                 </Button>
               ) : null}
-              {state === "ARMED" ? (
-                <>
-                  <Button type="button" onClick={() => setStep("enable")} disabled={pending}>
-                    ENABLE LIVE TRADING
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => disableMut.mutate()}
-                    disabled={pending}
-                  >
-                    Cancel arm
-                  </Button>
-                </>
+              {canonical === "ARMED" ? (
+                <Button type="button" onClick={() => setStep("enable")} disabled={pending}>
+                  ENABLE LIVE TRADING
+                </Button>
               ) : null}
-              {state === "ENABLED" ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => pauseMut.mutate()}
-                    disabled={pending}
-                  >
-                    Pause
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    onClick={() => setStep("kill")}
-                    disabled={pending}
-                  >
-                    KILL LIVE TRADING
-                  </Button>
-                </>
+              {canonical === "ENABLED" || canonical === "LIVE_ENABLED" ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => pauseMut.mutate()}
+                  disabled={pending}
+                >
+                  Pause
+                </Button>
               ) : null}
-              {state === "PAUSED" ? (
-                <>
-                  <Button type="button" onClick={() => setStep("enable")} disabled={pending}>
-                    Resume (ENABLE)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => disableMut.mutate()}
-                    disabled={pending}
-                  >
-                    Disable
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    onClick={() => setStep("kill")}
-                    disabled={pending}
-                  >
-                    KILL LIVE TRADING
-                  </Button>
-                </>
+              {canonical === "PAUSED" ? (
+                <Button type="button" onClick={() => setStep("enable")} disabled={pending}>
+                  Resume (ENABLE)
+                </Button>
               ) : null}
-              {state === "KILLED" ? (
+              {canonical !== "DISABLED" ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => disableMut.mutate()}
+                  disabled={pending || canonical === "KILLED"}
+                >
+                  DISABLE LIVE TRADING
+                </Button>
+              ) : null}
+              {canonical === "KILLED" ? (
                 <Button
                   type="button"
                   variant="secondary"
@@ -335,6 +364,14 @@ export function LiveTradingControlPanel() {
                   Reset to DISABLED
                 </Button>
               ) : null}
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => setStep("kill")}
+                disabled={pending}
+              >
+                EMERGENCY STOP
+              </Button>
             </div>
           )}
           {errorText ? (
@@ -367,6 +404,7 @@ export function LiveTradingControlPanel() {
             <Metric label="Rejected" value={str(execution.rejected_orders, "0")} />
             <Metric label="Blocked" value={str(execution.blocked_orders, "0")} />
             <Metric label="Last execution" value={str(execution.last_execution, "—")} />
+            <Metric label="Last order result" value={str(execution.last_order_result, "—")} />
             <Metric label="ENV EXECUTION_ENABLED" value={execution.execution_enabled_env ? "true" : "false"} />
           </CardContent>
         </Card>
