@@ -169,7 +169,7 @@ export function LiveTradingControlPanel() {
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             LIVE TRADING
             <Badge tone={toneForState(liveConfirmed ? "LIVE_ENABLED" : state)}>
-              {liveConfirmed ? "LIVE_ENABLED" : state}
+              {liveConfirmed ? "ACTIVE" : state}
             </Badge>
             <Badge tone="neutral">
               research_can_execute = {d.research_can_execute ? "true" : "false"}
@@ -181,7 +181,7 @@ export function LiveTradingControlPanel() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-[var(--fg-muted)]">
-            Backend state is authoritative. LIVE_ENABLED is shown only when the
+            Backend state is authoritative. ACTIVE is shown only when the
             server confirms ENABLED. Research stays advisory. This page never
             enables trading on load. Capital preservation is the priority.
             Returns are not promised.
@@ -210,7 +210,34 @@ export function LiveTradingControlPanel() {
             <StatusTile
               label="Kill switch"
               value={d.kill_switch ? "LATCHED" : "READY"}
-              ok={!d.kill_switch}
+              ok={!Boolean(d.kill_switch)}
+            />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <StatusTile
+              label="Risk Engine"
+              value={
+                gates.some((g) => str(g.key) === "risk_engine_healthy" && g.passed === true)
+                  ? "READY"
+                  : "NOT READY"
+              }
+              ok={gates.some(
+                (g) => str(g.key) === "risk_engine_healthy" && g.passed === true,
+              )}
+            />
+            <StatusTile
+              label="OMS"
+              value={
+                gates.some((g) => str(g.key) === "oms_healthy" && g.passed === true)
+                  ? "READY"
+                  : "NOT READY"
+              }
+              ok={gates.some((g) => str(g.key) === "oms_healthy" && g.passed === true)}
+            />
+            <StatusTile
+              label="Kill Switch"
+              value={d.kill_switch ? "LATCHED" : "READY"}
+              ok={!Boolean(d.kill_switch)}
             />
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
