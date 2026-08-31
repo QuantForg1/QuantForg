@@ -1359,6 +1359,24 @@ def get_strategy_intelligence_center(
     return build_strategy_intelligence_center(days=window_days)
 
 
+@router.get("/strategy-research-forensics")
+def get_strategy_research_forensics(
+    _user: OperatorUser,
+    days: int = 90,
+) -> dict[str, Any]:
+    """Operations → Strategy Research (read-only forensic + shadow expansion).
+
+    Never mutates Strategy, Risk, Safety, OMS, or thresholds.
+    Never sends orders. Shadow candidates cannot execute.
+    """
+    window_days = max(1, min(int(days or 90), 365))
+    from app.application.services.strategy_research_forensics import (
+        build_strategy_research_forensics,
+    )
+
+    return build_strategy_research_forensics(days=window_days)
+
+
 @router.get("/market-regime-intelligence")
 def get_market_regime_intelligence(
     _user: OperatorUser,

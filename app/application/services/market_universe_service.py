@@ -950,17 +950,27 @@ def build_snapshot(
         last_analyzed=_last_analyzed_map(scored),
         max_batch=MAX_RESEARCH_BATCH,
     )
-    skipped_desks = {
+    # Drop prior scores only for desks that must not display live research
+    # (closed / no-data / unsupported). Quote-STALE desks keep last analysis.
+    _WIPE_SCORE_REASONS = {
+        "MARKET_CLOSED",
+        "NO_DATA",
+        "DISABLED",
+        "UNSUPPORTED",
+        "ERROR",
+    }
+    wipe_desks = {
         canonical_desk(str(item.get("symbol") or ""))
         for item in (schedule.get("skipped") or [])
         if isinstance(item, dict)
+        and str(item.get("reason") or "").upper() in _WIPE_SCORE_REASONS
     }
-    skipped_desks.discard("")
-    if skipped_desks:
+    wipe_desks.discard("")
+    if wipe_desks:
         scored = [
             row
             for row in scored
-            if _desk_key(row) not in skipped_desks
+            if _desk_key(row) not in wipe_desks
         ]
     scored = _merge_research_batch_scores(
         scored,

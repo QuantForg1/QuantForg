@@ -113,6 +113,103 @@ def _activation_ready(facts: dict[str, Any]) -> bool:
     return not activation_probe_failures(facts)
 
 
+def _pick_int_login(*values: Any) -> int:
+    for value in values:
+        if value in (None, "", 0, "0"):
+            continue
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 1:
+            return parsed
+    return 0
+
+
+def _account_blob(health: dict[str, Any], mt5: dict[str, Any]) -> dict[str, Any]:
+    for blob in (
+        health.get("account"),
+        mt5.get("account"),
+        health.get("account_info"),
+        mt5.get("account_info"),
+    ):
+        if isinstance(blob, dict):
+            return blob
+    return {}
+
+
+def _fill_from_adapter_account(out: dict[str, Any]) -> None:
+    """Read live account from the existing MT5 adapter. Never invent numbers."""
+    try:
+        from app.application.services.institutional_ite_runtime import get_ite_runtime
+
+        runtime = get_ite_runtime()
+        adapter = getattr(getattr(runtime, "probes", None), "mt5_adapter", None)
+        if adapter is None:
+            return
+        info = adapter.account_info()
+    except Exception as exc:
+        logger.info("live_trading_account_info_unavailable", error=str(exc))
+        return
+    if info is None:
+        return
+
+    def _field(name: str, *alts: str) -> Any:
+        if isinstance(info, dict):
+            for key in (name, *alts):
+                if info.get(key) not in (None, ""):
+                    return info.get(key)
+            return None
+        for key in (name, *alts):
+            val = getattr(info, key, None)
+            if val not in (None, ""):
+                return val
+        return None
+
+    filled = False
+    login_i = _pick_int_login(_field("login", "account_login"))
+    if login_i > 1 and not out.get("account_login"):
+        out["account_login"] = login_i
+        out["account_login_masked"] = mask_broker_login(login_i)
+        out["account_available"] = True
+        filled = True
+    if out.get("balance") is None:
+        parsed = _dec(_field("balance"))
+        if parsed is not None:
+            out["balance"] = parsed
+            filled = True
+    if out.get("equity") is None:
+        parsed = _dec(_field("equity")) or _dec(_field("balance"))
+        if parsed is not None:
+            out["equity"] = parsed
+            filled = True
+    if out.get("free_margin") is None:
+        parsed = _dec(_field("free_margin", "margin_free"))
+        if parsed is not None:
+            out["free_margin"] = parsed
+            filled = True
+    if out.get("used_margin") is None:
+        parsed = _dec(_field("margin", "margin_used"))
+        if parsed is not None:
+            out["used_margin"] = parsed
+            filled = True
+    if out.get("margin_level") is None:
+        parsed = _dec(_field("margin_level"))
+        if parsed is not None:
+            out["margin_level"] = parsed
+            filled = True
+    if not out.get("broker_server"):
+        server = str(_field("server") or "")
+        if server:
+            out["broker_server"] = server
+            out["broker_server_masked"] = mask_broker_server(server)
+            filled = True
+    if filled:
+        prior = str(out.get("probe_source") or "adapter")
+        if "+account_info" not in prior:
+            out["probe_source"] = f"{prior}+account_info"
+
+
 def _live_probe_facts() -> dict[str, Any]:
     """Best-effort live facts. Missing values stay false/None — never invented."""
     out: dict[str, Any] = {
@@ -164,9 +261,7 @@ def _live_probe_facts() -> dict[str, Any]:
             else {}
         )
         mt5 = health.get("mt5") if isinstance(health.get("mt5"), dict) else {}
-        account = (
-            health.get("account") if isinstance(health.get("account"), dict) else {}
-        )
+        account = _account_blob(health, mt5)
         session_mode = str(mt5.get("session_mode") or health.get("session_mode") or "")
         out["mt5_attached"] = session_mode.lower() in {
             "attached",
@@ -175,11 +270,14 @@ def _live_probe_facts() -> dict[str, Any]:
         }
         if not out["mt5_attached"]:
             out["mt5_attached"] = bool(mt5.get("connected") or facts.broker_connected)
-        login = account.get("login") or mt5.get("login") or health.get("login")
-        try:
-            login_i = int(login) if login not in (None, "", 0, "0") else 0
-        except (TypeError, ValueError):
-            login_i = 0
+        login_i = _pick_int_login(
+            account.get("login"),
+            account.get("account_login"),
+            mt5.get("login"),
+            mt5.get("account_login"),
+            health.get("login"),
+            health.get("account_login"),
+        )
         if login_i > 1:
             out["account_login"] = login_i
             out["account_login_masked"] = mask_broker_login(login_i)
@@ -209,6 +307,9 @@ def _live_probe_facts() -> dict[str, Any]:
             out["open_positions"] = int(positions or facts.open_positions or 0)
         except (TypeError, ValueError):
             out["open_positions"] = int(facts.open_positions or 0)
+        if not out.get("account_login") or out.get("equity") is None:
+            _fill_from_adapter_account(out)
+        login_i = int(out.get("account_login") or 0)
         bound_user, bound_login = bound_execution_account()
         if bound_login > 1 and login_i > 1:
             out["ownership"] = "OWNED" if bound_login == login_i else "NOT_OWNED"
@@ -217,7 +318,7 @@ def _live_probe_facts() -> dict[str, Any]:
             # A bound mismatch above already failed closed.
             out["ownership"] = "OWNED"
             _ = bound_user
-        if isinstance(health, dict) and health:
+        if isinstance(health, dict) and health and not out.get("probe_source"):
             out["probe_source"] = "gateway_health"
     except Exception as exc:
         logger.warning("live_trading_probe_failed", error=str(exc))

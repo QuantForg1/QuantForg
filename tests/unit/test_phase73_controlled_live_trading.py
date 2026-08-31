@@ -849,3 +849,49 @@ def test_allow_live_promotion_never_true() -> None:
     assert status["allow_live_promotion"] is False
     assert status["orders_may_submit"] is False
     assert ALLOW_LIVE_PROMOTION is False
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_adapter_account_fill_does_not_invent_numbers() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from app.application.services.live_trading_control_service import (
+        _fill_from_adapter_account,
+        _pick_int_login,
+    )
+
+    assert _pick_int_login(None, "0", 1, 247001) == 247001
+    assert _pick_int_login(None, 0, 1) == 0
+
+    class _Adapter:
+        def account_info(self) -> SimpleNamespace:
+            return SimpleNamespace(
+                login=247001,
+                balance="33.12",
+                equity="33.05",
+                free_margin="32.80",
+                margin="0.25",
+                margin_level="13220",
+                server="Weltrade-Demo",
+            )
+
+    runtime = SimpleNamespace(probes=SimpleNamespace(mt5_adapter=_Adapter()))
+    out: dict[str, object] = {}
+    with patch(
+        "app.application.services.institutional_ite_runtime.get_ite_runtime",
+        return_value=runtime,
+    ):
+        _fill_from_adapter_account(out)
+    assert out["account_login"] == 247001
+    assert out["balance"] == Decimal("33.12")
+    assert out["equity"] == Decimal("33.05")
+    assert out["account_available"] is True
+    empty: dict[str, object] = {}
+    with patch(
+        "app.application.services.institutional_ite_runtime.get_ite_runtime",
+        return_value=SimpleNamespace(probes=SimpleNamespace(mt5_adapter=None)),
+    ):
+        _fill_from_adapter_account(empty)
+    assert empty == {}

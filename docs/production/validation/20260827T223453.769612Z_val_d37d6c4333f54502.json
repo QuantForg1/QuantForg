@@ -1,0 +1,154 @@
+{
+  "report": {
+    "validation_id": "val_d37d6c4333f54502",
+    "timestamp": "2026-08-27T22:34:53.769612Z",
+    "signal_id": null,
+    "symbol": "",
+    "market_session": "",
+    "execution_mode": "SHADOW",
+    "ai_confidence": null,
+    "quality_score": null,
+    "confluence": null,
+    "mtf_alignment": null,
+    "risk_score": null,
+    "expected_rr": null,
+    "spread": null,
+    "atr": null,
+    "liquidity": null,
+    "order_blocks": null,
+    "fvg": null,
+    "bos": null,
+    "choch": null,
+    "ai_action": null,
+    "stages": {
+      "Scheduler": {
+        "stage": "Scheduler",
+        "status": "FAIL",
+        "timestamp": "2026-08-27T22:34:53.773825Z",
+        "latency_ms": null,
+        "reason": "cycle exception: injected cycle exception"
+      }
+    },
+    "pipeline": [
+      {
+        "stage": "Scheduler",
+        "status": "FAIL",
+        "timestamp": "2026-08-27T22:34:53.773825Z",
+        "latency_ms": null,
+        "reason": "cycle exception: injected cycle exception"
+      },
+      {
+        "stage": "Market Data",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Context",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "AI",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Risk",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Eligibility",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Execution Bridge",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "OMS",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Gateway",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "MT5",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Broker",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Open",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Close",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      }
+    ],
+    "no_trade_reasons": [],
+    "oms": null,
+    "gateway": null,
+    "mt5": null,
+    "first_blocker": "Scheduler: cycle exception: injected cycle exception",
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "export_paths": {},
+    "closed": true
+  },
+  "summary": {
+    "validation_id": "val_d37d6c4333f54502",
+    "pipeline_summary": [
+      {
+        "stage": "Scheduler",
+        "status": "FAIL",
+        "latency_ms": null,
+        "reason": "cycle exception: injected cycle exception"
+      }
+    ],
+    "execution_latency_ms": null,
+    "broker_ticket": null,
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "first_blocker": "Scheduler: cycle exception: injected cycle exception",
+    "ai_action": null,
+    "no_trade_reasons": []
+  },
+  "observe_only": true
+}

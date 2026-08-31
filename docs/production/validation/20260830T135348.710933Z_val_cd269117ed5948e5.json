@@ -1,0 +1,197 @@
+{
+  "report": {
+    "validation_id": "val_cd269117ed5948e5",
+    "timestamp": "2026-08-30T13:53:48.710933Z",
+    "signal_id": null,
+    "symbol": "",
+    "market_session": "",
+    "execution_mode": "SHADOW",
+    "ai_confidence": null,
+    "quality_score": null,
+    "confluence": null,
+    "mtf_alignment": null,
+    "risk_score": null,
+    "expected_rr": null,
+    "spread": null,
+    "atr": null,
+    "liquidity": null,
+    "order_blocks": null,
+    "fvg": null,
+    "bos": null,
+    "choch": null,
+    "ai_action": null,
+    "stages": {
+      "Scheduler": {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "timestamp": "2026-08-30T13:53:48.710956Z",
+        "latency_ms": null,
+        "reason": "interval=1.0s"
+      },
+      "Market Data": {
+        "stage": "Market Data",
+        "status": "FAIL",
+        "timestamp": "2026-08-30T13:53:48.711334Z",
+        "latency_ms": 1.0,
+        "reason": "mt5 disconnected"
+      },
+      "Context": {
+        "stage": "Context",
+        "status": "FAIL",
+        "timestamp": "2026-08-30T13:53:48.711345Z",
+        "latency_ms": null,
+        "reason": "mt5 disconnected"
+      },
+      "AI": {
+        "stage": "AI",
+        "status": "FAIL",
+        "timestamp": "2026-08-30T13:53:48.716562Z",
+        "latency_ms": null,
+        "reason": "mt5 disconnected"
+      }
+    },
+    "pipeline": [
+      {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "timestamp": "2026-08-30T13:53:48.710956Z",
+        "latency_ms": null,
+        "reason": "interval=1.0s"
+      },
+      {
+        "stage": "Market Data",
+        "status": "FAIL",
+        "timestamp": "2026-08-30T13:53:48.711334Z",
+        "latency_ms": 1.0,
+        "reason": "mt5 disconnected"
+      },
+      {
+        "stage": "Context",
+        "status": "FAIL",
+        "timestamp": "2026-08-30T13:53:48.711345Z",
+        "latency_ms": null,
+        "reason": "mt5 disconnected"
+      },
+      {
+        "stage": "AI",
+        "status": "FAIL",
+        "timestamp": "2026-08-30T13:53:48.716562Z",
+        "latency_ms": null,
+        "reason": "mt5 disconnected"
+      },
+      {
+        "stage": "Risk",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Eligibility",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Execution Bridge",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "OMS",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Gateway",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "MT5",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Broker",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Open",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Close",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      }
+    ],
+    "no_trade_reasons": [
+      "mt5 disconnected"
+    ],
+    "oms": null,
+    "gateway": null,
+    "mt5": null,
+    "first_blocker": "Market Data: mt5 disconnected",
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "export_paths": {},
+    "closed": true
+  },
+  "summary": {
+    "validation_id": "val_cd269117ed5948e5",
+    "pipeline_summary": [
+      {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "latency_ms": null,
+        "reason": "interval=1.0s"
+      },
+      {
+        "stage": "Market Data",
+        "status": "FAIL",
+        "latency_ms": 1.0,
+        "reason": "mt5 disconnected"
+      },
+      {
+        "stage": "Context",
+        "status": "FAIL",
+        "latency_ms": null,
+        "reason": "mt5 disconnected"
+      },
+      {
+        "stage": "AI",
+        "status": "FAIL",
+        "latency_ms": null,
+        "reason": "mt5 disconnected"
+      }
+    ],
+    "execution_latency_ms": null,
+    "broker_ticket": null,
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "first_blocker": "Market Data: mt5 disconnected",
+    "ai_action": null,
+    "no_trade_reasons": [
+      "mt5 disconnected"
+    ]
+  },
+  "observe_only": true
+}

@@ -1,0 +1,223 @@
+{
+  "phase": 67,
+  "base": "https://quantforg-production.up.railway.app/api/v1",
+  "expected_sha": "8ce37462f4718c029a04226dba6ee1cc11a8ccd3",
+  "probed_at": "2026-08-30T15:50:10.857119+00:00",
+  "auth": {
+    "method": "owner_email_password_login",
+    "token_printed": false,
+    "email_present": true,
+    "password_present": true,
+    "login_http": 200,
+    "token_acquired": true,
+    "me_http": 200,
+    "role": "owner",
+    "user_id_present": true
+  },
+  "live_orders_attempted": false,
+  "oms_endpoints_called": false,
+  "version": {
+    "http": 200,
+    "git_commit": "8ce37462f4718c029a04226dba6ee1cc11a8ccd3",
+    "match": true
+  },
+  "signals_http": 200,
+  "market_universe_http": 200,
+  "market_universe_refresh_http": 200,
+  "signals_http_after_refresh": 200,
+  "market_universe_http_after_refresh": 200,
+  "signal_center": {
+    "as_of": "2026-08-30T15:50:32.016537+00:00",
+    "source": "market_universe_research",
+    "scanner_status": "ACTIVE",
+    "universe_size": 1,
+    "count": 1,
+    "broker_required_for_research": false,
+    "research_can_execute": false,
+    "allow_live_promotion": false,
+    "fabricated": false,
+    "research_meta": {
+      "research_source": "market_universe",
+      "catalogue_source": "LIVE_BROKER",
+      "research_stage": {
+        "stage": "GENERATE_RESEARCH_SIGNAL",
+        "chain": [
+          "DISCOVER",
+          "CLASSIFY",
+          "VALIDATE_DATA",
+          "ANALYZE",
+          "RANK",
+          "GENERATE_RESEARCH_SIGNAL",
+          "SHADOW",
+          "COLLECT_EVIDENCE",
+          "OOS",
+          "WALK_FORWARD",
+          "RISK_REVIEW",
+          "HUMAN_AUTHORIZATION",
+          "LIVE_PROMOTION"
+        ],
+        "live_promotion_enabled": false,
+        "skipped_to_live": false,
+        "note": "LIVE_PROMOTION requires a later authorized phase."
+      },
+      "symbols_scanned": 1,
+      "research_signal_n": 1,
+      "scanner_status": "ACTIVE"
+    },
+    "dashboard_buy": 0,
+    "dashboard_sell": 1,
+    "items_total": 1,
+    "active_buy_sell": 1,
+    "by_direction": {
+      "SELL": 1
+    },
+    "by_asset_class": {
+      "OTHER": 1
+    },
+    "top5": [
+      {
+        "symbol": "XAUUSD",
+        "asset_class": "other",
+        "direction": "SELL",
+        "opportunity_score": 73,
+        "directional_edge": null,
+        "RR": 1.2,
+        "research_rank_score": 74.2,
+        "session": "off_hours",
+        "regime": "TREND_DOWN",
+        "entry": null,
+        "stop_loss": null,
+        "take_profit": null,
+        "freshness": "LIVE",
+        "as_of": "2026-08-30T15:50:24.565081Z",
+        "research_only": true,
+        "authorizes_trade": false
+      }
+    ],
+    "all_actionable": [
+      {
+        "symbol": "XAUUSD",
+        "asset_class": "other",
+        "direction": "SELL",
+        "opportunity_score": 73,
+        "directional_edge": null,
+        "RR": 1.2,
+        "research_rank_score": 74.2,
+        "session": "off_hours",
+        "regime": "TREND_DOWN",
+        "entry": null,
+        "stop_loss": null,
+        "take_profit": null,
+        "freshness": "LIVE",
+        "as_of": "2026-08-30T15:50:24.565081Z",
+        "research_only": true,
+        "authorizes_trade": false
+      }
+    ]
+  },
+  "research_analysis": {
+    "status": "RUNNING",
+    "last_scan_started": "2026-08-30T15:50:06.303383+00:00",
+    "last_scan_completed": "2026-08-30T15:50:16.036898+00:00",
+    "scan_duration_ms": 9733,
+    "instruments_discovered": 83,
+    "instruments_analyzed": 1,
+    "signals_generated": 1,
+    "catalogue_source": "LIVE_BROKER",
+    "cycles": 1,
+    "failures": 0,
+    "authorizes_trade": false,
+    "forwarded_to_oms": false,
+    "would_submit_order": false,
+    "second_scanner": false,
+    "last_error": null
+  },
+  "universe": {
+    "catalogue_source": "LIVE_BROKER",
+    "research_stage": {
+      "stage": "GENERATE_RESEARCH_SIGNAL",
+      "chain": [
+        "DISCOVER",
+        "CLASSIFY",
+        "VALIDATE_DATA",
+        "ANALYZE",
+        "RANK",
+        "GENERATE_RESEARCH_SIGNAL",
+        "SHADOW",
+        "COLLECT_EVIDENCE",
+        "OOS",
+        "WALK_FORWARD",
+        "RISK_REVIEW",
+        "HUMAN_AUTHORIZATION",
+        "LIVE_PROMOTION"
+      ],
+      "live_promotion_enabled": false,
+      "skipped_to_live": false,
+      "note": "LIVE_PROMOTION requires a later authorized phase."
+    },
+    "counts": {},
+    "by_state_api": {
+      "NO_DATA": 34,
+      "LIVE": 8,
+      "UNSUPPORTED": 41
+    },
+    "by_class_instruments": {
+      "INDICES": 13,
+      "FOREX": 53,
+      "CRYPTO": 11,
+      "METALS": 4,
+      "ENERGY": 2
+    },
+    "by_state_instruments": {
+      "NO_DATA": 34,
+      "LIVE": 8,
+      "UNSUPPORTED": 41
+    },
+    "instrument_n": 83,
+    "gold_instrument_n": 1,
+    "non_gold_live_n": 7,
+    "crypto_n": 11,
+    "other_n": 0,
+    "crypto_symbols_sample": [
+      "BCHBTC",
+      "BTCUSD",
+      "DASHBTC",
+      "ETHBTC",
+      "ETHUSD",
+      "LTCUSD",
+      "USDTHB",
+      "USDTRY",
+      "XMRBTC",
+      "XRPUSDT",
+      "ZECBTC"
+    ],
+    "other_symbols_sample": [],
+    "observability": {
+      "symbol_count": 83,
+      "symbols_scored": 1,
+      "research_signal_count": 1,
+      "catalogue_source": "LIVE_BROKER"
+    },
+    "authorizes_trade": false,
+    "ALLOW_LIVE_PROMOTION": false
+  },
+  "signal_quality": {
+    "valid": 1,
+    "incomplete": 0,
+    "suspicious_xau_copy": 0,
+    "issues": []
+  },
+  "invariants": {
+    "research_can_execute": true,
+    "allow_live_promotion": true,
+    "broker_required_for_research": true,
+    "fabricated": true,
+    "research_analysis_authorizes_trade": true,
+    "research_analysis_forwarded_to_oms": true,
+    "live_orders_attempted": false,
+    "oms_endpoints_called": false
+  },
+  "AUTHENTICATED_PRODUCTION_PROBE": "PASS",
+  "SIGNALS_LIVE": true,
+  "LIVE_BROKER_VERIFIED": true
+}

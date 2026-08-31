@@ -13,6 +13,11 @@ from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
+from app.application.services.opportunity_funnel_telemetry import (
+    classify_blocker_source,
+    funnel_snapshot,
+    observe_funnel_cycle,
+)
 from app.domain.institutional_trading.ai_scalping.direction import (
     iter_scalp_structures,
 )
@@ -408,6 +413,60 @@ def extract_cycle_diagnostics(
         "sniper_state": diag.get("sniper_state") or diag.get("sniper"),
         "execution_handoff": dict(handoff),
         "advisory_only": True,
+        "symbol": diag.get("symbol"),
+        "scan_as_of": diag.get("as_of") or diag.get("scan_as_of"),
+        "data": diag.get("data"),
+        "market_data_valid": diag.get("market_data_valid"),
+        "buy_score": diag.get("buy_score") or diag.get("bullish_score"),
+        "sell_score": diag.get("sell_score") or diag.get("bearish_score"),
+        "ltf_buy_score": diag.get("ltf_buy_score"),
+        "ltf_sell_score": diag.get("ltf_sell_score"),
+        "directional_edge": diag.get("directional_edge"),
+        "edge_margin": diag.get("edge_margin") or 5,
+        "buy_families": diag.get("buy_families"),
+        "sell_families": diag.get("sell_families"),
+        "freshness": diag.get("freshness"),
+        "first_authoritative_blocker": (
+            diag.get("first_authoritative_blocker")
+            or diag.get("blocking_gate")
+            or primary
+        ),
+        "blocker_source": diag.get("blocker_source")
+        or classify_blocker_source(
+            diag.get("first_authoritative_blocker")
+            or diag.get("blocking_gate")
+            or primary
+        ),
+        "decision_hash": diag.get("decision_hash"),
+        "request_id": diag.get("request_id") or trace_id,
+        "timeframe": diag.get("timeframe") or diag.get("atr_timeframe"),
+        "market_regime": diag.get("market_regime")
+        or trend.get("market_regime"),
+        "data_age": diag.get("data_age") or diag.get("data_age_seconds"),
+        "score_breakdown": diag.get("score_breakdown")
+        if isinstance(diag.get("score_breakdown"), dict)
+        else {},
+        "opportunity_audit": diag.get("opportunity_audit")
+        if isinstance(diag.get("opportunity_audit"), dict)
+        else {},
+        "structure_score": diag.get("structure_score"),
+        "liquidity_score": diag.get("liquidity_score"),
+        "zone_score": diag.get("zone_score"),
+        "displacement_score": diag.get("displacement_score"),
+        "timing_score": diag.get("timing_score"),
+        "momentum_score": diag.get("momentum_score"),
+        "mtf_score": diag.get("mtf_score") or trend.get("score"),
+        "consensus_score": diag.get("consensus_score"),
+        "volatility_score": diag.get("volatility_score"),
+        "regime_score": diag.get("regime_score"),
+        "price_action_score": diag.get("price_action_score"),
+        "rr": diag.get("rr") or diag.get("expected_rr"),
+        "ob_state": diag.get("ob_state"),
+        "fvg_state": diag.get("fvg_state"),
+        "bos_state": diag.get("bos_state"),
+        "choch_state": diag.get("choch_state"),
+        "mt5_ticket": diag.get("mt5_ticket") or diag.get("ticket"),
+        "mt5_retcode": diag.get("mt5_retcode"),
     }
 
 
@@ -814,8 +873,41 @@ class StrategyDiagnosticsStore:
                     str(cycle.get("trace_id")) if cycle.get("trace_id") else None
                 ),
                 sizing=sizing,
+                extra={
+                    "opportunity_score": cycle.get("opportunity_score"),
+                    "directional_edge": cycle.get("directional_edge"),
+                    "buy_score": cycle.get("buy_score"),
+                    "sell_score": cycle.get("sell_score"),
+                    "ltf_buy_score": cycle.get("ltf_buy_score"),
+                    "ltf_sell_score": cycle.get("ltf_sell_score"),
+                    "setup_state": cycle.get("setup_state"),
+                    "first_authoritative_blocker": cycle.get(
+                        "first_authoritative_blocker"
+                    ),
+                    "blocker_source": cycle.get("blocker_source"),
+                    "opportunity_audit": cycle.get("opportunity_audit"),
+                    "sniper_entry": cycle.get("sniper_entry"),
+                },
             )
         except Exception:  # noqa: S110  # best-effort evidence path
+            pass
+        try:
+            observe_funnel_cycle(cycle)
+        except Exception:  # noqa: S110  # best-effort funnel histogram
+            pass
+        try:
+            from app.application.services.strategy_forensic_ledger import persist_signal
+
+            persist_signal(cycle)
+        except Exception:  # noqa: S110  # best-effort forensic ledger
+            pass
+        try:
+            from app.application.services.shadow_observation_pipeline import (
+                observe_live_scan,
+            )
+
+            observe_live_scan(cycle)
+        except Exception:  # noqa: S110  # best-effort shadow observation
             pass
         # AI Decision Engine v2 rejection telemetry (advisory; never mutates gates)
         try:
@@ -990,6 +1082,7 @@ class StrategyDiagnosticsStore:
             "cycles": explained,
             "statistics": stats,
             "hourly": hourly,
+            "funnel_histograms": funnel_snapshot(),
             "smart_insights": insights,
             "thresholds": {
                 "required_quality": int(self._config.min_trade_quality_score),

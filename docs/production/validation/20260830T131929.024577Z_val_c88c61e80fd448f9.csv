@@ -1,0 +1,14 @@
+validation_id,timestamp,symbol,market_session,ai_action,quality_score,stage,status,stage_timestamp,latency_ms,reason,first_blocker,final_result,accepted,ticket,no_trade_reasons
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Scheduler,PASS,2026-08-30T13:19:29.024611Z,,interval=1.0s,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Market Data,FAIL,2026-08-30T13:19:29.025209Z,1.0,mt5 disconnected,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Context,FAIL,2026-08-30T13:19:29.025225Z,,mt5 disconnected,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,AI,FAIL,2026-08-30T13:19:29.032274Z,,mt5 disconnected,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Risk,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Eligibility,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Execution Bridge,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,OMS,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Gateway,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,MT5,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Broker,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Position Open,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected
+val_c88c61e80fd448f9,2026-08-30T13:19:29.024577Z,,,,,Position Close,PENDING,,,,Market Data: mt5 disconnected,BLOCKED,False,,mt5 disconnected

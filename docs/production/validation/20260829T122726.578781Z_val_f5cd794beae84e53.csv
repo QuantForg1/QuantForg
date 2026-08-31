@@ -1,0 +1,14 @@
+validation_id,timestamp,symbol,market_session,ai_action,quality_score,stage,status,stage_timestamp,latency_ms,reason,first_blocker,final_result,accepted,ticket,no_trade_reasons
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Scheduler,PASS,2026-08-29T12:27:26.578808Z,,interval=1.0s,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Market Data,FAIL,2026-08-29T12:27:26.579143Z,1.0,gateway timeout,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Context,FAIL,2026-08-29T12:27:26.579154Z,,gateway timeout,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,AI,FAIL,2026-08-29T12:27:26.589560Z,,gateway timeout,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Risk,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Eligibility,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Execution Bridge,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,OMS,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Gateway,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,MT5,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Broker,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Position Open,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout
+val_f5cd794beae84e53,2026-08-29T12:27:26.578781Z,,,,,Position Close,PENDING,,,,Market Data: gateway timeout,BLOCKED,False,,gateway timeout

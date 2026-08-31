@@ -1,0 +1,8 @@
+﻿
+[2026-08-25T03:38:55.7865067Z] begin deploy_production_vps
+[2026-08-25T03:38:55.9469849Z] repo=C:\QuantForg
+[2026-08-25T03:38:55.9638652Z] windows=Microsoft Windows NT 10.0.26100.0
+[2026-08-25T03:38:56.0647525Z] python=Python 3.13.15
+[2026-08-25T03:38:57.4879443Z] poetry=Poetry (version 2.4.1)
+[2026-08-25T03:38:57.8367017Z] venv=3.13.15
+[2026-08-25T03:38:57.9213010Z] git_sha=5bd6fd655e4d57c392d509114e05f8ce25d0ca59

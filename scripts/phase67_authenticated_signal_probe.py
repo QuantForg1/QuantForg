@@ -22,7 +22,10 @@ BASE = (
     or os.environ.get("QF_API_BASE")
     or "https://quantforg-production.up.railway.app/api/v1"
 ).rstrip("/")
-EXPECTED_SHA = "515529a948b601807473d05c81332543f77e9095"
+EXPECTED_SHA = (
+    os.environ.get("QF_EXPECTED_SHA")
+    or "81ae7c8fa1de36752a4581296a46fc3c7f334648"
+)
 OUT = Path(__file__).resolve().parents[1] / "docs" / "production" / "reports" / "phase67_auth_probe.json"
 
 

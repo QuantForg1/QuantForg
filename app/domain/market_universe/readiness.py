@@ -32,11 +32,14 @@ def research_lifecycle(
         return "FAILED"
     if state in {"NO_DATA", "CATALOGUE_UNAVAILABLE"}:
         return "DATA_UNAVAILABLE"
+    if state == "STALE":
+        # Quote stale: keep last research visible as ANALYZED when scored, else STALE.
+        return "ANALYZED" if has_score else "STALE"
     if has_score:
         return "ANALYZED"
     if in_queue:
         return "QUEUED"
-    if state in {"LIVE", "STALE", "INSUFFICIENT_HISTORY"}:
+    if state in {"LIVE", "INSUFFICIENT_HISTORY"}:
         return "READY"
     return "DATA_UNAVAILABLE"
 

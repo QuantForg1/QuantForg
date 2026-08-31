@@ -748,4 +748,52 @@ assert.equal(
   );
 }
 
+{
+  // Phase 73 — do not invent research signals from bare WAIT / OMS abort codes.
+  const bareWait = normalizeSignalCenterPayload({
+    as_of: "2026-08-30T00:00:00Z",
+    items: [
+      { symbol: "EURUSD", direction: "WAIT", status: "MAX_POSITIONS_REACHED" },
+      {
+        symbol: "GBPUSD",
+        direction: "WAIT",
+        opportunity_score: 55,
+        research_rank_score: 4,
+        board_status: "ANALYZED",
+      },
+      {
+        symbol: "USDJPY",
+        direction: "BUY",
+        opportunity_score: 80,
+        qualified_research: true,
+        board_status: "QUALIFIED",
+      },
+    ],
+  });
+  assert.equal(bareWait.rows.length, 2);
+  assert.equal(
+    bareWait.rows.some((r) => String(r.symbol) === "EURUSD"),
+    false,
+  );
+  const gbp = bareWait.rows.find((r) => String(r.symbol) === "GBPUSD");
+  assert.equal(gbp?.board_status, "ANALYZED");
+  assert.notEqual(gbp?.board_status, "MAX_POSITIONS_REACHED");
+  const jpy = bareWait.rows.find((r) => String(r.symbol) === "USDJPY");
+  assert.equal(jpy?.qualified_research, true);
+  assert.equal(isHighConfidence(jpy!), true);
+  assert.equal(
+    normalizeSignalCenterPayload({
+      items: [
+        {
+          symbol: "EURUSD",
+          direction: "BUY",
+          opportunity_score: 70,
+          status: "NO_TRADE",
+        },
+      ],
+    }).rows[0]?.board_status,
+    undefined,
+  );
+}
+
 console.log("trader-ux.test.ts ok");

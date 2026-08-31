@@ -1,0 +1,14 @@
+validation_id,timestamp,symbol,market_session,ai_action,quality_score,stage,status,stage_timestamp,latency_ms,reason,first_blocker,final_result,accepted,ticket,no_trade_reasons
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Scheduler,PASS,2026-08-27T17:56:50.879736Z,,interval=1.0s,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Market Data,PASS,2026-08-27T17:56:50.880090Z,1.0,market data ok,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Context,PASS,2026-08-27T17:56:50.880099Z,,context built,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,AI,FAIL,2026-08-27T17:56:50.880566Z,,no_executable_symbol,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Risk,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Eligibility,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Execution Bridge,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,OMS,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Gateway,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,MT5,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Broker,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Position Open,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol
+val_8eb82f02fa484fbb,2026-08-27T17:56:50.879710Z,,,,,Position Close,PENDING,,,,AI: no_executable_symbol,BLOCKED,False,,no_executable_symbol

@@ -20,6 +20,9 @@ export default function StrategyIntelligenceCenterPage() {
             <Button asChild size="sm" variant="outline">
               <Link href="/opportunity-timeline">Opportunity Timeline</Link>
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/strategy-research">Strategy Research</Link>
+            </Button>
           </div>
         }
       />

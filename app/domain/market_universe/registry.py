@@ -131,9 +131,10 @@ def build_instrument(
     )
     base, quote_ccy = _infer_currencies(desk, row)
     tradable = trade_mode == "full" and dq.state not in {"DISABLED", "UNSUPPORTED"}
+    # STALE quotes stay visible but are not research-eligible until LIVE again.
+    # Scheduler also defers STALE — keep eligibility aligned to avoid READY/QUEUED lies.
     research_eligible = dq.state in {
         "LIVE",
-        "STALE",
         "INSUFFICIENT_HISTORY",
     }
     return InstrumentRecord(

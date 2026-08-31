@@ -266,8 +266,8 @@ export function SignalsWorkspace() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
-        title="Global Market Intelligence"
-        description="Research analysis across the available global universe. Research intelligence — not trade authorization."
+        title="Signals"
+        description="Global Market Intelligence — research analysis across the available global universe. Not trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button

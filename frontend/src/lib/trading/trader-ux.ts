@@ -742,7 +742,6 @@ export function normalizeSignalCenterPayload(
       .toUpperCase();
     const dir =
       dirRaw === "BUY" || dirRaw === "SELL" || dirRaw === "WAIT" ? dirRaw : "NONE";
-    const actionable = dir === "BUY" || dir === "SELL";
     const pipeline =
       item.pipeline && typeof item.pipeline === "object"
         ? (item.pipeline as Record<string, unknown>)
@@ -812,11 +811,34 @@ export function normalizeSignalCenterPayload(
       entry_type: signalType,
       freshness: item.freshness ?? item.data_state,
       data_state: item.data_state ?? item.data_quality,
-      has_research_signal: actionable || dir === "WAIT",
-      board_status:
-        item.board_status ??
-        item.status ??
-        (actionable ? dir : dir === "WAIT" ? "ANALYZED" : undefined),
+      has_research_signal: undefined,
+      board_status: (() => {
+        const raw = item.board_status;
+        if (raw == null || raw === "") return undefined;
+        const text = String(raw).trim().toUpperCase();
+        // Never promote execution / OMS abort codes into research board status.
+        const allowed = new Set([
+          "QUALIFIED",
+          "ANALYZED",
+          "DISCOVERED",
+          "DATA_READY",
+          "SHADOW",
+          "MEANINGFUL_RESEARCH",
+          "ACTIVE",
+          "NEUTRAL",
+          "QUEUED",
+          "MARKET_CLOSED",
+          "DATA_UNAVAILABLE",
+          "FAILED",
+          "STALE",
+          "PARTIAL",
+          "BUY",
+          "SELL",
+          "WAIT",
+        ]);
+        return allowed.has(text) ? text : undefined;
+      })(),
+      qualified_research: item.qualified_research === true,
       setup_state: pipeline.setup_state ?? item.setup_state,
       badge: item.badge,
       research_only: true,
@@ -836,7 +858,14 @@ export function normalizeSignalCenterPayload(
       research_lifecycle: item.research_lifecycle,
     });
   }
-  const signalRows = rows.filter(hasResearchSignal);
+  // Stamp research-signal flag only after honest hasResearchSignal evaluation.
+  for (const row of rows) {
+    row.has_research_signal = hasResearchSignal({
+      ...row,
+      has_research_signal: undefined,
+    });
+  }
+  const signalRows = rows.filter((row) => row.has_research_signal === true);
   const scannerStatus = String(
     payload.scanner_status || dash.scanner_status || "",
   )
@@ -1531,7 +1560,7 @@ export function marketSignalLabel(row: Record<string, unknown>): string {
   if (status !== "Not available") return status;
   const dir = signalBoardDirection(row);
   if (dir === "BUY" || dir === "SELL") return dir;
-  if (dir === "WATCH") return "WATCH";
+  if (dir === "NEUTRAL" || dir === "WATCH") return "NEUTRAL";
   return "UNKNOWN";
 }
 

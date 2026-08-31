@@ -1,0 +1,197 @@
+{
+  "report": {
+    "validation_id": "val_684d54b5ff274c5c",
+    "timestamp": "2026-08-27T21:59:00.663447Z",
+    "signal_id": null,
+    "symbol": "",
+    "market_session": "",
+    "execution_mode": "SHADOW",
+    "ai_confidence": null,
+    "quality_score": null,
+    "confluence": null,
+    "mtf_alignment": null,
+    "risk_score": null,
+    "expected_rr": null,
+    "spread": null,
+    "atr": null,
+    "liquidity": null,
+    "order_blocks": null,
+    "fvg": null,
+    "bos": null,
+    "choch": null,
+    "ai_action": null,
+    "stages": {
+      "Scheduler": {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "timestamp": "2026-08-27T21:59:00.663462Z",
+        "latency_ms": null,
+        "reason": "interval=1.0s"
+      },
+      "Market Data": {
+        "stage": "Market Data",
+        "status": "PASS",
+        "timestamp": "2026-08-27T21:59:00.663953Z",
+        "latency_ms": 1.0,
+        "reason": "market data ok"
+      },
+      "Context": {
+        "stage": "Context",
+        "status": "PASS",
+        "timestamp": "2026-08-27T21:59:00.663965Z",
+        "latency_ms": null,
+        "reason": "context built"
+      },
+      "AI": {
+        "stage": "AI",
+        "status": "FAIL",
+        "timestamp": "2026-08-27T21:59:00.664145Z",
+        "latency_ms": null,
+        "reason": "no_executable_symbol"
+      }
+    },
+    "pipeline": [
+      {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "timestamp": "2026-08-27T21:59:00.663462Z",
+        "latency_ms": null,
+        "reason": "interval=1.0s"
+      },
+      {
+        "stage": "Market Data",
+        "status": "PASS",
+        "timestamp": "2026-08-27T21:59:00.663953Z",
+        "latency_ms": 1.0,
+        "reason": "market data ok"
+      },
+      {
+        "stage": "Context",
+        "status": "PASS",
+        "timestamp": "2026-08-27T21:59:00.663965Z",
+        "latency_ms": null,
+        "reason": "context built"
+      },
+      {
+        "stage": "AI",
+        "status": "FAIL",
+        "timestamp": "2026-08-27T21:59:00.664145Z",
+        "latency_ms": null,
+        "reason": "no_executable_symbol"
+      },
+      {
+        "stage": "Risk",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Eligibility",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Execution Bridge",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "OMS",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Gateway",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "MT5",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Broker",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Open",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      },
+      {
+        "stage": "Position Close",
+        "status": "PENDING",
+        "timestamp": null,
+        "latency_ms": null,
+        "reason": ""
+      }
+    ],
+    "no_trade_reasons": [
+      "no_executable_symbol"
+    ],
+    "oms": null,
+    "gateway": null,
+    "mt5": null,
+    "first_blocker": "AI: no_executable_symbol",
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "export_paths": {},
+    "closed": true
+  },
+  "summary": {
+    "validation_id": "val_684d54b5ff274c5c",
+    "pipeline_summary": [
+      {
+        "stage": "Scheduler",
+        "status": "PASS",
+        "latency_ms": null,
+        "reason": "interval=1.0s"
+      },
+      {
+        "stage": "Market Data",
+        "status": "PASS",
+        "latency_ms": 1.0,
+        "reason": "market data ok"
+      },
+      {
+        "stage": "Context",
+        "status": "PASS",
+        "latency_ms": null,
+        "reason": "context built"
+      },
+      {
+        "stage": "AI",
+        "status": "FAIL",
+        "latency_ms": null,
+        "reason": "no_executable_symbol"
+      }
+    ],
+    "execution_latency_ms": null,
+    "broker_ticket": null,
+    "final_result": "BLOCKED",
+    "accepted": false,
+    "first_blocker": "AI: no_executable_symbol",
+    "ai_action": null,
+    "no_trade_reasons": [
+      "no_executable_symbol"
+    ]
+  },
+  "observe_only": true
+}
