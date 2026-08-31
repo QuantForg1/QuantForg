@@ -1036,6 +1036,12 @@ export const appNav: NavGroup[] = [
         hint: "Trade archive · rejections · readiness · OWNER/ADMIN",
       },
       {
+        href: "/admin/live-trading",
+        label: "Live Trading Control",
+        icon: Activity,
+        hint: "DISABLED · ARM · ENABLE · KILL · OWNER/ADMIN",
+      },
+      {
         href: "/production-validation",
         label: "Production Validation",
         icon: BadgeCheck,

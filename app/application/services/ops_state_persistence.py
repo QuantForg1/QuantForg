@@ -368,4 +368,5 @@ def ops_state_diagnostics() -> dict[str, Any]:
         "resolved_trading_mode": resolved_mode,
         "resolved_trading_mode_source": resolved_source,
         "persisted_max_open_positions": state.get("max_open_positions"),
+        "persisted_live_trading_state": state.get("live_trading_state"),
     }

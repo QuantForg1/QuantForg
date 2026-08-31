@@ -215,6 +215,14 @@ class TestAutoTradeOpsControls:
         assert policy.max_open_positions == 2
         assert policy.news_filter_enabled is True
 
+        from app.domain.institutional_trading.live_trading_control import (
+            reset_live_trading_controller_for_tests,
+        )
+
+        ctrl = reset_live_trading_controller_for_tests()
+        ctrl.transition(op, "ARMED", confirmed=True, reason="test-arm")
+        ctrl.transition(op, "ENABLED", confirmed=True, reason="test-enable")
+
         safety = plane.evaluate_auto_trading(_all_pass_facts(ops_mode="LIVE"))
         assert safety.allowed is True
 

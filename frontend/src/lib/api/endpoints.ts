@@ -1088,6 +1088,10 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       `/ite/ops/strategy-intelligence-center?days=${days}`,
     ),
+  strategyResearchForensics: (days = 90) =>
+    apiFetch<Record<string, unknown>>(
+      `/ite/ops/strategy-research-forensics?days=${days}`,
+    ),
   marketRegimeIntelligence: (limit = 100) =>
     apiFetch<Record<string, unknown>>(
       `/ite/ops/market-regime-intelligence?limit=${limit}`,
@@ -1190,6 +1194,56 @@ export const iteOpsApi = {
     apiFetch<Record<string, unknown>>(
       "/ite/ops/auto-trading/live-certification/report",
     ),
+};
+
+/** Phase 73 controlled live-trading authorization — OWNER/ADMIN only. */
+export const liveTradingControlApi = {
+  status: () => apiFetch<Record<string, unknown>>("/live-trading/status"),
+  confirmationPreview: () =>
+    apiFetch<Record<string, unknown>>("/live-trading/confirmation-preview"),
+  arm: (body: {
+    reason: string;
+    confirmed: boolean;
+    confirmation_phrase?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/live-trading/arm", {
+      method: "POST",
+      body,
+    }),
+  enable: (body: {
+    reason: string;
+    confirmed: boolean;
+    confirmation_phrase?: string;
+  }) =>
+    apiFetch<Record<string, unknown>>("/live-trading/enable", {
+      method: "POST",
+      body,
+    }),
+  pause: (reason: string) =>
+    apiFetch<Record<string, unknown>>("/live-trading/pause", {
+      method: "POST",
+      body: { reason, confirmed: true },
+    }),
+  disable: (reason: string) =>
+    apiFetch<Record<string, unknown>>("/live-trading/disable", {
+      method: "POST",
+      body: { reason, confirmed: true },
+    }),
+  kill: (reason: string, confirmed: boolean) =>
+    apiFetch<Record<string, unknown>>("/live-trading/kill", {
+      method: "POST",
+      body: { reason, confirmed },
+    }),
+  resetKilled: (reason: string) =>
+    apiFetch<Record<string, unknown>>("/live-trading/reset-killed", {
+      method: "POST",
+      body: { reason, confirmed: true },
+    }),
+  updateRisk: (body: Record<string, unknown>) =>
+    apiFetch<Record<string, unknown>>("/live-trading/risk", {
+      method: "POST",
+      body,
+    }),
 };
 
 /** Institutional Market Intelligence Engine V1 — evaluate only */

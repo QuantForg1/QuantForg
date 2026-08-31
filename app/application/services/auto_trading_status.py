@@ -57,6 +57,7 @@ _REASON_GROUPS: dict[str, str] = {
     "trading_session": "market",
     "max_spread": "market",
     "news_filter": "market",
+    "live_trading_state": "safety",
 }
 
 

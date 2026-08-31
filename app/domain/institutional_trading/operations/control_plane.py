@@ -43,6 +43,17 @@ from app.domain.institutional_trading.operations.runbooks import RunbookCatalog
 from app.domain.trading.gold_only import GOLD_SYMBOL
 
 
+def _live_trading_state_or_unset() -> str:
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            get_live_trading_controller,
+        )
+
+        return get_live_trading_controller().snapshot_state()
+    except Exception:
+        return "DISABLED"
+
+
 def _default_allowed_symbols(
     *,
     trading_mode: str = "scalping",
@@ -784,8 +795,22 @@ class OperationsControlPlane:
                 ops_mode=self.mode.value,
                 execution_enabled=facts.execution_enabled,
                 status_snapshot=facts.status_snapshot,
+                live_trading_state=_live_trading_state_or_unset(),
             )
-        return evaluate_auto_trade_safety(policy, merged)
+        result = evaluate_auto_trade_safety(policy, merged)
+        try:
+            from app.domain.institutional_trading.live_trading_control import (
+                get_live_trading_controller,
+            )
+
+            ctrl = get_live_trading_controller()
+            if ctrl.snapshot_state() == "ENABLED" and (
+                not merged.gateway_connected or not merged.broker_connected
+            ):
+                ctrl.safety_pause(reason="gateway_or_mt5_disconnected")
+        except Exception:
+            pass
+        return result
 
     def emergency_stop(
         self,
@@ -810,6 +835,22 @@ class OperationsControlPlane:
                 reason=reason,
                 now=now,
             )
+        try:
+            from app.domain.institutional_trading.live_trading_control import (
+                get_live_trading_controller,
+            )
+
+            ctrl = get_live_trading_controller()
+            if ctrl.snapshot_state() in {"ENABLED", "PAUSED"}:
+                ctrl.transition(
+                    operator,
+                    "KILLED",
+                    confirmed=True,
+                    reason=reason or "emergency_stop",
+                    now=now,
+                )
+        except Exception:
+            pass
 
     # --- Health / alerts ---------------------------------------------------
 
@@ -1318,6 +1359,22 @@ def get_control_plane() -> OperationsControlPlane:
                 durable=diag.get("durable"),
                 postgres_has_state=diag.get("postgres_has_state"),
             )
+            try:
+                from app.application.services.live_trading_control_service import (
+                    hydrate_live_trading_from_ops_state,
+                )
+
+                recovered = hydrate_live_trading_from_ops_state(state)
+                get_logger(__name__).info(
+                    "live_trading_hydrated",
+                    live_trading_state=recovered,
+                    auto_enabled=False,
+                )
+            except Exception as lt_exc:
+                get_logger(__name__).warning(
+                    "live_trading_hydrate_failed",
+                    error=str(lt_exc),
+                )
         except Exception as exc:
             from core.logging import get_logger
 
@@ -1361,6 +1418,14 @@ def reset_control_plane_for_tests() -> OperationsControlPlane:
         )
 
         reset_phase_d_plane_for_tests()
+    except Exception:
+        pass
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            reset_live_trading_controller_for_tests,
+        )
+
+        reset_live_trading_controller_for_tests()
     except Exception:
         pass
     return _GLOBAL_PLANE

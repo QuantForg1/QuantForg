@@ -186,6 +186,9 @@ class AutoTradeLiveFacts:
     execution_enabled: bool = False
     # Status polls: unknown trade-context must not invent FAIL.
     status_snapshot: bool = False
+    # Phase 73 live-trading authorization. UNSET skips the overlay (unit tests
+    # of the auto-trade gate). The control plane always injects the real state.
+    live_trading_state: str = "UNSET"
 
 
 @dataclass(frozen=True, slots=True)
@@ -559,6 +562,19 @@ def evaluate_auto_trade_safety(
             "News filter OFF — not blocking",
         )
 
+    lt_state = str(facts.live_trading_state or "UNSET").strip().upper()
+    if lt_state and lt_state != "UNSET":
+        add(
+            "live_trading_state",
+            "Live trading ENABLED",
+            lt_state == "ENABLED",
+            (
+                f"LIVE TRADING is {lt_state} — new orders blocked"
+                if lt_state != "ENABLED"
+                else ""
+            ),
+        )
+
     failed_reasons = tuple(
         dict.fromkeys(
             (c.detail if c.detail else f"{c.label} failed")
@@ -584,6 +600,7 @@ _SCAN_CONTINUE_CONDITION_KEYS = frozenset(
         "max_open_positions",
         "risk_engine",
         "margin_available",
+        "live_trading_state",
     }
 )
 

@@ -24,6 +24,21 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _research_can_execute() -> bool:
+    """True only when the live-trading controller is ENABLED.
+
+    Research never sets this. A BUY/SELL/QUALIFIED row is not authorization.
+    """
+    try:
+        from app.domain.institutional_trading.live_trading_control import (
+            get_live_trading_controller,
+        )
+
+        return get_live_trading_controller().research_can_execute()
+    except Exception:
+        return False
+
+
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -1724,7 +1739,20 @@ def _merge_research_into_signals(
             "zone_score",
             "liquidity_score",
             "blocker",
+            "board_status",
+            "qualified_research",
+            "invalidation",
+            "setup_state",
         ):
+            if key == "qualified_research":
+                if projected.get("qualified_research") is True:
+                    existing["qualified_research"] = True
+                continue
+            if key == "board_status":
+                projected_status = projected.get("board_status")
+                if projected_status not in (None, "", "UNKNOWN"):
+                    existing["board_status"] = projected_status
+                continue
             if (
                 existing.get(key) in (None, "", "UNKNOWN")
                 and projected.get(key) not in (None, "", "UNKNOWN")
@@ -2034,7 +2062,7 @@ def list_live_signals(
         "scan_note": scan.get("note") or research_snap.get("note"),
         "universe_size": universe_size,
         "scanner_status": scanner_status,
-        "research_can_execute": False,
+        "research_can_execute": _research_can_execute(),
         "allow_live_promotion": False,
         "broker_required_for_research": False,
         "research_meta": research_meta,

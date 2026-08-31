@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --experimental-strip-types src/lib/api/communication.test.ts && node --experimental-strip-types src/lib/trading/gold-only.test.ts && node --experimental-strip-types src/lib/trading/trader-ux.test.ts && node --experimental-strip-types src/lib/trading/phase69-trader-ux.test.ts && node --experimental-strip-types src/lib/trading/phase70-nav.test.ts && node --experimental-strip-types src/lib/ops/signal-display.test.ts && node --experimental-strip-types src/lib/ops/sample-confidence.test.ts",
+    "test:unit": "node --experimental-strip-types src/lib/api/communication.test.ts && node --experimental-strip-types src/lib/trading/gold-only.test.ts && node --experimental-strip-types src/lib/trading/trader-ux.test.ts && node --experimental-strip-types src/lib/trading/phase69-trader-ux.test.ts && node --experimental-strip-types src/lib/trading/phase70-nav.test.ts && node --experimental-strip-types src/lib/trading/phase73-live-trading-nav.test.ts && node --experimental-strip-types src/lib/ops/signal-display.test.ts && node --experimental-strip-types src/lib/ops/sample-confidence.test.ts",
     "test:e2e": "playwright test --project=chromium --workers=1",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:all": "playwright test --workers=1",

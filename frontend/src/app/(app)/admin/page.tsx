@@ -9,6 +9,7 @@ const ADMIN_SECTIONS = [
   {
     title: "Operations",
     items: [
+      { href: "/admin/live-trading", label: "Live trading control", hint: "DISABLED · ARM · ENABLE · KILL" },
       { href: "/ops", label: "Execution sessions", hint: "Robot run state · control plane" },
       { href: "/admin/customer-ops", label: "Account bindings", hint: "Owned broker accounts" },
       { href: "/ops", label: "Robot operations", hint: "Institutional robot controls" },
@@ -35,6 +36,7 @@ const ADMIN_SECTIONS = [
   {
     title: "Safety",
     items: [
+      { href: "/admin/live-trading", label: "Live trading control", hint: "DISABLED · ARM · ENABLE · KILL" },
       { href: "/admin/reliability", label: "Safety gates", hint: "research_can_execute · promotion · OMS" },
       { href: "/execution", label: "OMS status", hint: "Order management (authorized only)" },
       { href: "/portfolio", label: "Live orders / positions", hint: "Owned account exposure" },
