@@ -8,6 +8,7 @@ export default function Page() {
   return (
     <div>
       <PageHeader
+        eyebrow="Tools"
         title="Journal"
         description="Closed trades, notes, and outcomes for your account. History is never fabricated."
       />

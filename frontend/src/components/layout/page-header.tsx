@@ -1,26 +1,35 @@
+import type { ReactNode } from "react";
+
 export function PageHeader({
   title,
   description,
+  eyebrow,
   actions,
 }: {
   title: string;
   description?: string;
-  actions?: React.ReactNode;
+  eyebrow?: string;
+  actions?: ReactNode;
 }) {
   return (
     <div className="mb-[var(--space-5)] flex flex-col gap-[var(--space-3)] sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-[var(--text-heading)] font-semibold leading-[var(--leading-heading)] tracking-tight text-[var(--fg)]">
+        {eyebrow ? (
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight text-[var(--fg)] sm:text-[var(--text-title)] sm:leading-[var(--leading-title)]">
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 max-w-2xl text-sm text-[var(--fg-muted)]">
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[var(--fg-muted)]">
             {description}
           </p>
         ) : null}
       </div>
       {actions ? (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
       ) : null}
     </div>
   );

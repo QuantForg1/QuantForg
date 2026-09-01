@@ -105,7 +105,7 @@ export default function PricingPage() {
         {/* 1. Cinematic hero */}
         <section className="qf-pricing-hero relative mx-auto w-full max-w-6xl overflow-hidden px-4 pb-12 pt-4 text-center sm:px-6 sm:pb-16 sm:pt-8">
           <div
-            className="pointer-events-none absolute left-1/2 top-0 h-[28rem] w-[42rem] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(0,212,224,0.16),transparent_62%)]"
+            className="pointer-events-none absolute left-1/2 top-0 h-[28rem] w-[42rem] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(255,90,31,0.16),transparent_62%)]"
             aria-hidden
           />
           <div className="qf-fade-in relative">
@@ -134,7 +134,7 @@ export default function PricingPage() {
             className="qf-fade-in qf-glass-card qf-glass-card--hero relative mx-auto mt-10 max-w-md overflow-hidden p-8 text-center sm:mt-12 sm:p-10 [animation-delay:90ms]"
           >
             <div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,212,224,0.18),transparent_52%)]"
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,90,31,0.18),transparent_52%)]"
               aria-hidden
             />
             <div className="pointer-events-none absolute -right-4 top-6 opacity-[0.1]" aria-hidden>
@@ -309,7 +309,7 @@ export default function PricingPage() {
             </article>
             <article className="qf-glass-card relative overflow-hidden border-[var(--accent)]/30 p-6 sm:p-8">
               <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,212,224,0.14),transparent_55%)]"
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,90,31,0.14),transparent_55%)]"
                 aria-hidden
               />
               <div className="relative">
@@ -358,7 +358,7 @@ export default function PricingPage() {
         <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-20" aria-labelledby="buy-heading">
           <div className="qf-glass-card qf-glass-card--hero relative mx-auto max-w-lg overflow-hidden p-8 text-center sm:p-10">
             <div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,212,224,0.12),transparent_60%)]"
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,90,31,0.12),transparent_60%)]"
               aria-hidden
             />
             <div className="relative">

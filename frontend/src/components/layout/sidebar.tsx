@@ -59,7 +59,7 @@ function PrimaryLink({
               "qf-rail-link group relative flex items-center gap-2.5 rounded-[var(--radius-sm)] text-[13px] font-medium",
               collapsed ? "justify-center px-0 py-2.5" : "px-2.5 py-2",
               active
-                ? "bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_2px_0_0_0_var(--accent)]"
+                ? "bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_3px_0_0_0_var(--accent)]"
                 : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]",
             )}
           >
@@ -249,7 +249,7 @@ export function Sidebar() {
   return (
     <aside
       style={{ width }}
-      className="relative hidden shrink-0 border-r border-[var(--border)] bg-[var(--bg-elevated)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
+      className="relative hidden shrink-0 border-r border-[var(--border)] bg-[var(--surface)] transition-[width] duration-[var(--duration-os)] ease-[var(--ease-os)] lg:flex lg:flex-col"
       aria-label="Workspace rail"
     >
       <Brand collapsed={chrome.collapsed} />

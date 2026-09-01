@@ -43,7 +43,7 @@ export function exportPrintablePdf(opts: {
 <style>
   @page { margin: 18mm; }
   body { margin:0; padding:28px; background:#111827; color:#e5e7eb; font-family:IBM Plex Sans,system-ui,sans-serif; }
-  h1 { font:600 22px/1.2 IBM Plex Sans,system-ui,sans-serif; margin:0 0 4px; color:#00d4e0; }
+  h1 { font:600 22px/1.2 IBM Plex Sans,system-ui,sans-serif; margin:0 0 4px; color:#ff5a1f; }
   .sub { color:#94a3b8; font-size:12px; margin-bottom:28px; }
   table { width:100%; border-collapse:collapse; font-size:12px; }
   th,td { border-bottom:1px solid #334155; padding:6px 8px; text-align:left; }

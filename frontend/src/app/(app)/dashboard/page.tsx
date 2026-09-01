@@ -25,15 +25,15 @@ import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
 import { directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import {
-  catalogueViewState,
-  isLiveBrokerCatalogue,
   lastUpdatedCopy,
   MARKET_UNIVERSE_QUERY_KEY,
   mergeCatalogueRows,
   hasResearchSignal,
   normalizeSignalCenterPayload,
   researchAvailabilityAsCatalogue,
+  researchDeskLiveTradingStatus,
   researchSignalsEmptyCopy,
+  researchUniverseViewState,
   skippedMalformedInstrumentCount,
   SIGNAL_CENTER_QUERY_KEY,
   numericDisplay,
@@ -54,10 +54,10 @@ import {
 type Row = Record<string, unknown>;
 
 function moneyOrUnavailable(raw: unknown, available: boolean): string {
-  if (!available) return "—";
-  if (raw == null || raw === "") return "—";
+  if (!available) return "Unavailable";
+  if (raw == null || raw === "") return "Unavailable";
   const n = num(raw);
-  return Number.isFinite(n) ? formatCurrency(n) : "—";
+  return Number.isFinite(n) ? formatCurrency(n) : "Unavailable";
 }
 
 function statusTone(
@@ -109,10 +109,10 @@ export default function DashboardPage() {
   const connection = resolveConnectionPresentation(session);
   const positions = asList(portfolio.data?.positions).map(asRecord);
   const deals = asList(history.data?.deals).map(asRecord);
-  const liveCatalogue = isLiveBrokerCatalogue(session);
   const noBroker = connection.state === "BROKER_NOT_CONNECTED";
   const sessionMismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
   const robot = robotDisplayState(session, connection);
+  const liveTradingHint = researchDeskLiveTradingStatus(connection);
 
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -140,17 +140,12 @@ export default function DashboardPage() {
   const universeQ = useQuery({
     queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
-    enabled: connection.connected && !sessionMismatch && liveCatalogue,
     retry: false,
     refetchInterval: UNIVERSE_POLL_MS,
   });
   const universe = asRecord(universeQ.data);
   const instruments = asList(universe.instruments).map(asRecord);
-  const catalogue = catalogueViewState({
-    connected: connection.connected,
-    mismatch: sessionMismatch,
-    liveBrokerSession: liveCatalogue,
-    catalogueUnavailable: connection.catalogueUnavailable,
+  const catalogue = researchUniverseViewState({
     snapshotFetched: universeQ.isFetched,
     snapshotError: Boolean(universeQ.isError),
     catalogueSource: universe.catalogue_source,
@@ -276,7 +271,11 @@ export default function DashboardPage() {
   if (sessionQ.isLoading) {
     return (
       <div>
-        <PageHeader title="Welcome back" description="Your account and markets." />
+        <PageHeader
+          eyebrow="Workspace"
+          title="Welcome back"
+          description="Your research, markets, and account."
+        />
         <DeskSkeleton variant="page" />
       </div>
     );
@@ -285,7 +284,11 @@ export default function DashboardPage() {
   if (sessionQ.isError) {
     return (
       <div>
-        <PageHeader title="Welcome back" description="Your account and markets." />
+        <PageHeader
+          eyebrow="Workspace"
+          title="Welcome back"
+          description="Your research, markets, and account."
+        />
         <DeskError
           message="Unable to load your trading session."
           onRetry={() => {
@@ -301,13 +304,14 @@ export default function DashboardPage() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
+        eyebrow="Workspace"
         title={greeting}
         description={
           noBroker
-            ? "Research signals are available without a broker. Connect to unlock account data and markets."
+            ? "Global research is available. Connect a broker to load account data and enable live trading."
             : sessionMismatch
               ? "Your trading session needs to be reconnected."
-              : "Your account, robot, signals, and markets."
+              : "Market research, account state, and what needs attention."
         }
         actions={
           noBroker || sessionMismatch ? (
@@ -354,7 +358,7 @@ export default function DashboardPage() {
           <Badge tone={statusTone(robot)}>{robot}</Badge>
         </div>
         <p className="mb-3 text-xs text-[var(--fg-subtle)]">
-          Research analysis runs independently. Live trading requires an explicit Start on your owned broker account — never automatic.
+          Research analysis runs independently. {liveTradingHint.detail}
         </p>
         {noBroker ? (
           <p className="mb-3 text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
@@ -499,17 +503,22 @@ export default function DashboardPage() {
             <Link href="/markets">View all markets</Link>
           </Button>
         </div>
-        {noBroker || sessionMismatch ? (
+        {noBroker ? (
+          <p className="mb-3 text-sm text-[var(--fg-muted)]" role="status">
+            GLOBAL RESEARCH AVAILABLE. Personal broker: not connected.
+            Live trading unavailable until broker connection.
+          </p>
+        ) : null}
+        {sessionMismatch ? (
+          <p className="mb-3 text-sm text-[var(--warning)]" role="status">
+            ACCOUNT SESSION MISMATCH — live trading is blocked. Global research remains available.
+          </p>
+        ) : null}
+        {catalogue === "UNAVAILABLE" ? (
           <DeskEmpty
             icon={Activity}
-            title="MARKETS UNAVAILABLE"
-            description="Connect to see broker-discovered markets."
-          />
-        ) : catalogue === "UNAVAILABLE" ? (
-          <DeskEmpty
-            icon={Activity}
-            title="MARKETS UNAVAILABLE"
-            description="Broker market catalogue is currently unavailable. This is not an empty market."
+            title="RESEARCH CATALOGUE UNAVAILABLE"
+            description="Global market catalogue is currently unavailable. This is not an empty market."
           />
         ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
           <DeskSkeleton rows={3} />
@@ -517,7 +526,7 @@ export default function DashboardPage() {
           <DeskEmpty
             icon={Activity}
             title="No markets in catalogue"
-            description="The live broker catalogue was queried. No instruments are listed for your account."
+            description="The live catalogue was queried. No instruments are listed."
           />
         ) : (
           <MarketCatalogueRows rows={marketPreview} limit={8} compact enableDetail={false} />

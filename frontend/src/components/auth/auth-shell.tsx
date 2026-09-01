@@ -17,14 +17,14 @@ export function AuthShell({
       tabIndex={-1}
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_85%_40%,rgba(0,212,224,0.12),transparent_58%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_85%_40%,rgba(255,90,31,0.1),transparent_58%)]"
         aria-hidden
       />
       <div className="relative w-full max-w-[420px]">
         <Link href="/" className="mb-8 flex justify-center">
           <BrandLogo size={40} priority />
         </Link>
-        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]/90 p-7 shadow-[var(--shadow-elevated)] backdrop-blur-sm">
+        <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[var(--shadow-elevated)]">
           <h1 className="text-center font-[family-name:var(--font-display)] text-[1.65rem] font-semibold leading-tight tracking-tight text-[var(--fg)]">
             {title}
           </h1>

@@ -92,8 +92,9 @@ export default function MarketsPage() {
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
-        title="Markets"
-        description="Global research universe — broker-discovered catalogue. Personal MT5 is not required."
+        eyebrow="Markets"
+        title="Global market terminal"
+        description="Search, filter, and review research state across the broker-discovered universe. Personal MT5 is not required."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button

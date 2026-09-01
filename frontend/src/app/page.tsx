@@ -98,7 +98,7 @@ export default function LandingPage() {
           </div>
 
           <div className="qf-fade-in relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/80 p-5 shadow-[var(--shadow-card)] [animation-delay:120ms]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,212,224,0.16),transparent_48%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,90,31,0.12),transparent_48%)]" />
             <div className="relative space-y-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-[var(--fg-muted)]">Live book · MT5 gateway</p>

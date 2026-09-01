@@ -34,12 +34,17 @@ export function AuthLayoutProviders({ children }: { children: React.ReactNode })
   );
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="light"
+      enableSystem={false}
+      storageKey="qf.theme.v2"
+    >
       <QueryClientProvider client={client}>
         <AuthProvider>
           {children}
           <Toaster
-            theme="dark"
+            theme="light"
             position="top-right"
             toastOptions={{
               className: "rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] text-[var(--fg)]",

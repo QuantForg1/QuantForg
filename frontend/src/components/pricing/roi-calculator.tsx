@@ -42,7 +42,7 @@ export function RoiCalculator() {
   return (
     <div className="qf-glass-card relative overflow-hidden p-6 sm:p-8">
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(0,212,224,0.1),transparent_55%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,90,31,0.08),transparent_55%)]"
         aria-hidden
       />
       <div className="relative">

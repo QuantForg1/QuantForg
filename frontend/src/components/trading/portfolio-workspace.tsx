@@ -223,7 +223,11 @@ export function PortfolioWorkspace() {
   if (sessionQ.isLoading) {
     return (
       <div>
-        <PageHeader title="Portfolio" description="Your connected account." />
+        <PageHeader
+          eyebrow="Account"
+          title="Portfolio"
+          description="Equity, margin, positions, and exposure from your own broker session."
+        />
         <DeskSkeleton variant="page" />
       </div>
     );
@@ -232,7 +236,11 @@ export function PortfolioWorkspace() {
   if (sessionQ.isError) {
     return (
       <div>
-        <PageHeader title="Portfolio" description="Your connected account." />
+        <PageHeader
+          eyebrow="Account"
+          title="Portfolio"
+          description="Equity, margin, positions, and exposure from your own broker session."
+        />
         <DeskError
           message="Unable to load your trading session."
           onRetry={() => {
@@ -246,8 +254,9 @@ export function PortfolioWorkspace() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
+        eyebrow="Account"
         title="Portfolio"
-        description="Current account. Your own broker session only."
+        description="Equity, margin, positions, and exposure from your own broker session. Never fabricated."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>

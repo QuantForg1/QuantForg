@@ -265,7 +265,7 @@ export default function EcosystemPage() {
 
   const savePrefs = useMutation({
     mutationFn: () =>
-      ecosystemApi.preferencesSave({ timezone: tz, theme: "dark" }),
+      ecosystemApi.preferencesSave({ timezone: tz, theme: "light" }),
     onSuccess: async () => {
       toast.success("Ecosystem preferences saved");
       await qc.invalidateQueries({ queryKey: ["ecosystem-preferences"] });

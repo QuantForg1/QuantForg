@@ -77,13 +77,15 @@ export type PrimaryNavItem = NavItem & {
    * previous item (expanded rail only).
    */
   section?:
+    | "Workspace"
     | "Trading"
     | "Signals"
     | "Market"
     | "Portfolio"
     | "Operator"
     | "Research"
-    | "System";
+    | "System"
+    | "Tools";
 };
 
 /** Product desks for authenticated traders — ops/internal routes stay off this list. */
@@ -152,16 +154,32 @@ export function isTraderFacingHref(href: string): boolean {
 
 export const TRADER_DESK_ORDER = [
   "/dashboard",
+  "/markets",
   "/signals",
   "/portfolio",
-  "/markets",
-  "/terminal",
   "/research",
+  "/terminal",
   "/broker",
   "/trading-journal",
   "/notifications",
   "/settings",
 ] as const;
+
+const TRADER_RAIL_SECTIONS: Record<
+  (typeof TRADER_DESK_ORDER)[number],
+  NonNullable<PrimaryNavItem["section"]>
+> = {
+  "/dashboard": "Workspace",
+  "/markets": "Workspace",
+  "/signals": "Workspace",
+  "/portfolio": "Workspace",
+  "/research": "Research",
+  "/terminal": "Trading",
+  "/broker": "Trading",
+  "/trading-journal": "Tools",
+  "/notifications": "Tools",
+  "/settings": "Tools",
+};
 
 /** @deprecated Ops chrome uses /admin directly — never append Admin to trader rail. */
 export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
@@ -174,7 +192,10 @@ export function visiblePrimaryRail(_isOperator = false): PrimaryNavItem[] {
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
   return TRADER_DESK_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
-    .map((item) => ({ ...item, section: undefined }));
+    .map((item) => ({
+      ...item,
+      section: TRADER_RAIL_SECTIONS[item.href as (typeof TRADER_DESK_ORDER)[number]],
+    }));
 }
 
 /**
@@ -197,9 +218,9 @@ export function visibleCommandItems(
 export const primaryRail: PrimaryNavItem[] = [
   {
     href: "/dashboard",
-    label: "Home",
+    label: "Overview",
     icon: Radar,
-    hint: "Account · signals · markets",
+    hint: "Workspace · research · account",
     match: ["/dashboard"],
     shortcut: "1",
     section: "Trading",
@@ -249,7 +270,7 @@ export const primaryRail: PrimaryNavItem[] = [
     href: "/markets",
     label: "Markets",
     icon: CandlestickChart,
-    hint: "Broker-discovered markets",
+    hint: "Global market terminal",
     match: ["/markets"],
     shortcut: "4",
     section: "Trading",
@@ -1431,9 +1452,9 @@ export const appNav: NavGroup[] = [
 export const mobileTabNav: NavItem[] = [
   {
     href: "/dashboard",
-    label: "Home",
+    label: "Overview",
     icon: Radar,
-    hint: "Home",
+    hint: "Overview",
   },
   {
     href: "/signals",

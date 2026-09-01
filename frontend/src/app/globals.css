@@ -1,50 +1,50 @@
 @import "tailwindcss";
 
-/* QuantForg RC4 — logo-derived institutional charcoal + cyan.
-   Product-owner Design Freeze override (RC4 rebrand). Visual layer only. */
-:root {
-  /* Neutrals — premium charcoal (never pure black) */
-  --bg: #111827;
-  --bg-elevated: #151b23;
-  --surface: #1a2330;
-  --surface-2: #202938;
-  --surface-3: #283344;
-  --border: #2f3b4d;
-  --border-strong: #3d4d63;
-  --fg: #f4f7fb;
-  --fg-muted: #9aa8bc;
-  --fg-subtle: #6b7a8f;
+/* QuantForg — light-first institutional product language.
+   Product-owner visual override: calm light surfaces + orange accent.
+   Dark tokens remain on .dark so existing theme switching still works. */
+:root,
+.light {
+  --bg: #f7f9fc;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-3: #e8eef5;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --fg: #111827;
+  --fg-muted: #64748b;
+  --fg-subtle: #94a3b8;
 
-  /* Primary — logo turquoise / cyan */
-  --accent: #00d4e0;
-  --accent-hover: #2de8f0;
-  --accent-active: #00a8b8;
-  --accent-fg: #0b1219;
-  --accent-soft: rgba(0, 212, 224, 0.14);
-  --accent-glow: rgba(0, 212, 224, 0.22);
-  --accent-gradient: linear-gradient(135deg, #5ef6ff 0%, #00d4e0 48%, #0891a8 100%);
+  --accent: #ff5a1f;
+  --accent-hover: #ff7340;
+  --accent-active: #e04a14;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(255, 90, 31, 0.1);
+  --accent-glow: rgba(255, 90, 31, 0.16);
+  --accent-gradient: linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%);
 
-  --success: #2f9e7a;
-  --success-soft: rgba(47, 158, 122, 0.14);
-  --warning: #d4a017;
-  --warning-soft: rgba(212, 160, 23, 0.14);
-  --danger: #e05d5d;
-  --danger-soft: rgba(224, 93, 93, 0.14);
-  --buy: #2f9e7a;
-  --sell: #e05d5d;
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.12);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.12);
+  --info: #2563eb;
+  --info-soft: rgba(37, 99, 235, 0.1);
+  --buy: #16a34a;
+  --sell: #dc2626;
 
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.28);
-  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 48px rgba(0, 0, 0, 0.36);
-  --shadow-elevated: 0 24px 64px rgba(0, 0, 0, 0.45);
-  --ring: rgba(0, 212, 224, 0.55);
-  --radius-os: 0.625rem;
+  --shadow-card: 0 1px 0 rgba(17, 24, 39, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 1px 0 rgba(17, 24, 39, 0.05), 0 12px 32px rgba(15, 23, 42, 0.1);
+  --shadow-elevated: 0 24px 56px rgba(15, 23, 42, 0.14);
+  --ring: rgba(255, 90, 31, 0.45);
+  --radius-os: 0.75rem;
   --radius-sm: 0.5rem;
 
-  /* Ambient scene (subtle — no noisy grid) */
   --bg-ambient:
-    radial-gradient(ellipse 80% 55% at 85% 15%, rgba(0, 212, 224, 0.1), transparent 55%),
-    radial-gradient(ellipse 60% 45% at 10% 90%, rgba(8, 145, 168, 0.08), transparent 50%),
-    linear-gradient(180deg, #151b23 0%, #111827 48%, #0f1419 100%);
+    radial-gradient(ellipse 70% 50% at 92% 0%, rgba(255, 90, 31, 0.06), transparent 52%),
+    linear-gradient(180deg, #f8fafc 0%, #f7f9fc 42%, #eef2f7 100%);
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;
@@ -79,27 +79,45 @@
   --duration-slow: 220ms;
 }
 
-/* Dark product only — light kept for rare forced contexts */
-.light {
-  --bg: #f4f6f9;
-  --bg-elevated: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #eef1f6;
-  --surface-3: #e2e7ef;
-  --border: #d5dce6;
-  --border-strong: #b7c2d0;
-  --fg: #111827;
-  --fg-muted: #5b6575;
-  --fg-subtle: #8793a4;
-  --accent: #0891a8;
-  --accent-hover: #00a8b8;
-  --accent-active: #067989;
+.dark {
+  --bg: #111827;
+  --bg-elevated: #151b23;
+  --surface: #1a2330;
+  --surface-2: #202938;
+  --surface-3: #283344;
+  --border: #2f3b4d;
+  --border-strong: #3d4d63;
+  --fg: #f4f7fb;
+  --fg-muted: #9aa8bc;
+  --fg-subtle: #6b7a8f;
+
+  --accent: #ff5a1f;
+  --accent-hover: #ff7340;
+  --accent-active: #e04a14;
   --accent-fg: #ffffff;
-  --accent-soft: rgba(8, 145, 168, 0.1);
-  --accent-glow: rgba(8, 145, 168, 0.16);
-  --accent-gradient: linear-gradient(135deg, #00d4e0 0%, #0891a8 100%);
-  --ring: rgba(8, 145, 168, 0.45);
-  --bg-ambient: linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+  --accent-soft: rgba(255, 90, 31, 0.16);
+  --accent-glow: rgba(255, 90, 31, 0.22);
+  --accent-gradient: linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%);
+
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.16);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.16);
+  --info: #3b82f6;
+  --info-soft: rgba(59, 130, 246, 0.14);
+  --buy: #22c55e;
+  --sell: #ef4444;
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.28);
+  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 48px rgba(0, 0, 0, 0.36);
+  --shadow-elevated: 0 24px 64px rgba(0, 0, 0, 0.45);
+  --ring: rgba(255, 90, 31, 0.5);
+  --bg-ambient:
+    radial-gradient(ellipse 80% 55% at 85% 15%, rgba(255, 90, 31, 0.08), transparent 55%),
+    radial-gradient(ellipse 60% 45% at 10% 90%, rgba(37, 99, 235, 0.06), transparent 50%),
+    linear-gradient(180deg, #151b23 0%, #111827 48%, #0f1419 100%);
 }
 
 @theme inline {
@@ -144,7 +162,7 @@ body {
   }
 
   ::selection {
-    background: rgba(0, 212, 224, 0.28);
+    background: rgba(255, 90, 31, 0.22);
   }
 
   h1,
@@ -297,6 +315,21 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+.qf-motion-sheet {
+  animation: qf-motion-sheet var(--duration-os) var(--ease-os-out) both;
+}
+
+@keyframes qf-motion-sheet {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -575,7 +608,7 @@ body {
   transform: translateY(-1px);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
-    0 10px 28px rgba(0, 212, 224, 0.18);
+    0 10px 28px rgba(255, 90, 31, 0.16);
 }
 
 .qf-btn-elevate:active {
@@ -621,7 +654,7 @@ body {
 .qf-success-ring {
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
-    0 0 32px rgba(0, 212, 224, 0.2);
+    0 0 32px rgba(255, 90, 31, 0.16);
   animation: qf-fade-in var(--duration-slow) var(--ease-os-out) both;
 }
 
@@ -636,12 +669,12 @@ body {
   100% {
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
-      0 0 24px rgba(0, 212, 224, 0.18);
+      0 0 24px rgba(255, 90, 31, 0.14);
   }
   50% {
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent),
-      0 0 40px rgba(0, 212, 224, 0.32);
+      0 0 40px rgba(255, 90, 31, 0.24);
   }
 }
 
@@ -665,6 +698,7 @@ body {
   .qf-motion-slide-up,
   .qf-motion-slide-down,
   .qf-motion-desk,
+  .qf-motion-sheet,
   .qf-shimmer,
   .qf-pulse-once,
   .qf-exec-flash,

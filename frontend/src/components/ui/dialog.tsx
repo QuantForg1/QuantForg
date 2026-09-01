@@ -17,10 +17,10 @@ export function DialogContent({
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--bg)_55%,#000)] qf-motion-overlay" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--fg)_18%,transparent)] qf-motion-overlay" />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 max-h-[min(92dvh,920px)] w-[min(96vw,1100px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--bg-elevated)] p-[var(--space-4)] shadow-[var(--shadow-elevated)] qf-motion-pop focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+          "fixed left-1/2 top-1/2 z-50 max-h-[min(92dvh,920px)] w-[min(96vw,1100px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-[var(--space-4)] shadow-[var(--shadow-elevated)] qf-motion-pop focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
           className,
         )}
         {...props}
@@ -32,6 +32,37 @@ export function DialogContent({
             size="icon"
             className="absolute right-2 top-2 h-9 w-9"
             aria-label="Close dialog"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+}
+
+export function SheetContent({
+  className,
+  children,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>) {
+  return (
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--fg)_18%,transparent)] qf-motion-overlay" />
+      <DialogPrimitive.Content
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex h-full w-[min(100vw,32rem)] flex-col overflow-y-auto overscroll-contain border-l border-[var(--border)] bg-[var(--surface)] p-[var(--space-5)] shadow-[var(--shadow-elevated)] qf-motion-sheet focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+        <DialogPrimitive.Close asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-2 top-2 h-9 w-9"
+            aria-label="Close drawer"
           >
             <X className="h-4 w-4" />
           </Button>

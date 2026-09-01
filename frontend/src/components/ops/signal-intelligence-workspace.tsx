@@ -570,7 +570,7 @@ function ChartOverlayPanel({ symbol }: { symbol: string }) {
           | "aboveBar"
           | "belowBar"
           | "inBar",
-        color: str(m.color) || "#00d4e0",
+        color: str(m.color) || "#ff5a1f",
         shape: (str(m.shape) || "circle") as
           | "circle"
           | "square"

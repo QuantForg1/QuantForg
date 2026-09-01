@@ -58,7 +58,8 @@ export default function AdminPortalPage() {
   return (
     <div className="min-w-0 space-y-4">
       <PageHeader
-        title="Internal Trading Operations"
+        eyebrow="Internal"
+        title="Operations Control Center"
         description="Dedicated QuantForg operations console. Not part of the trader desk. Backend RBAC (OWNER / ADMIN) remains enforced independently of this UI."
       />
       <div className="grid gap-3 sm:grid-cols-3">
@@ -106,7 +107,7 @@ export default function AdminPortalPage() {
                 <li key={`${section.title}-${item.href}-${item.label}`}>
                   <Link
                     href={item.href}
-                    className="flex min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+        className="flex min-w-0 flex-col rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
                   >
                     <span className="text-sm font-medium text-[var(--fg)]">
                       {item.label}

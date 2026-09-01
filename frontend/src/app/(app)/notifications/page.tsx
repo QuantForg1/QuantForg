@@ -97,7 +97,8 @@ export default function NotificationsPage() {
   return (
     <div>
       <PageHeader
-        title="Inbox"
+        eyebrow="Inbox"
+        title="Notifications"
         description="Alerts, broker events, system notices, and messages for your account."
         actions={
           <>

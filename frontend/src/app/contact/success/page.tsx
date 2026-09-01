@@ -20,7 +20,7 @@ export default function ContactSuccessPage() {
       >
         <div className="qf-fade-in qf-glass-card relative w-full overflow-hidden border-[var(--accent)]/25 p-8 text-center sm:p-12">
           <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,212,224,0.18),transparent_55%)]"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,90,31,0.12),transparent_55%)]"
             aria-hidden
           />
           <div className="relative">

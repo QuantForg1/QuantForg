@@ -24,6 +24,7 @@ import {
   signalWhyFactors,
   SIGNALS_NOT_AUTHORIZATION,
   RESEARCH_SIGNAL,
+  type SignalWhyFactor,
 } from "@/lib/trading/trader-ux";
 
 export function directionTone(
@@ -52,6 +53,57 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+const WHY_SECTIONS: Array<{ title: string; labels: string[] }> = [
+  {
+    title: "Signal",
+    labels: ["Direction", "Why this signal exists", "Why the model prefers this direction"],
+  },
+  {
+    title: "Market condition",
+    labels: ["Market condition", "Market", "Market regime", "Session"],
+  },
+  {
+    title: "Price structure",
+    labels: ["Structure", "Trend / structure", "Zone"],
+  },
+  { title: "Momentum", labels: ["Momentum"] },
+  { title: "Trend", labels: ["Trend / structure"] },
+  { title: "Volatility", labels: ["Volatility"] },
+  {
+    title: "Technical evidence",
+    labels: ["Timing", "Liquidity", "Data quality"],
+  },
+  {
+    title: "Risk context",
+    labels: ["Risk context", "Blockers", "Invalidation"],
+  },
+  {
+    title: "Model reasoning",
+    labels: ["Why this signal exists", "Why the model prefers this direction"],
+  },
+];
+
+function groupedWhy(factors: SignalWhyFactor[]): Array<{
+  title: string;
+  items: SignalWhyFactor[];
+}> {
+  const used = new Set<string>();
+  const sections: Array<{ title: string; items: SignalWhyFactor[] }> = [];
+  for (const section of WHY_SECTIONS) {
+    const items = factors.filter(
+      (factor) => section.labels.includes(factor.label) && !used.has(factor.label),
+    );
+    if (items.length === 0) continue;
+    items.forEach((item) => used.add(item.label));
+    sections.push({ title: section.title, items });
+  }
+  const leftover = factors.filter((factor) => !used.has(factor.label));
+  if (leftover.length > 0) {
+    sections.push({ title: "Additional evidence", items: leftover });
+  }
+  return sections;
+}
+
 export function IntelligenceDetail({
   row,
   kind,
@@ -63,15 +115,20 @@ export function IntelligenceDetail({
   const signal = marketSignalLabel(row);
   const freshness = signalFreshness(row);
   const why = signalWhyFactors(row);
+  const whySections = groupedWhy(why);
   const symbol = str(row.broker_symbol || row.symbol, "Instrument");
+  const score = researchMetricDisplay(row, row.opportunity_score);
+  const edge = researchMetricDisplay(row, row.directional_edge ?? row.edge);
 
   return (
-    <div className="space-y-4">
-      <DialogTitle>{symbol}</DialogTitle>
-      <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-        {kind === "signal" ? `${RESEARCH_SIGNAL} · ` : ""}
-        {SIGNALS_NOT_AUTHORIZATION}
-      </p>
+    <div className="space-y-5 pr-2">
+      <div>
+        <DialogTitle>{symbol}</DialogTitle>
+        <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+          {kind === "signal" ? `${RESEARCH_SIGNAL} · ` : ""}
+          {SIGNALS_NOT_AUTHORIZATION}
+        </p>
+      </div>
       <div className="flex flex-wrap gap-1.5">
         <Badge tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}>
           {signal}
@@ -88,15 +145,15 @@ export function IntelligenceDetail({
         <Detail label="Trading status" value={marketDataState(row)} />
         <Detail label="Signal" value={signal} />
         <Detail label="Direction" value={dir} />
-        <Detail label="Opportunity" value={researchMetricDisplay(row, row.opportunity_score)} />
-        <Detail label="Edge" value={researchMetricDisplay(row, row.directional_edge ?? row.edge)} />
+        <Detail label="Opportunity" value={score} />
+        <Detail label="Edge" value={edge} />
         <Detail label="Risk/Reward" value={researchMetricDisplay(row, row.RR ?? row.rr)} />
         <Detail
           label="Strength"
           value={signal === "NO SIGNAL" ? "—" : signalStrength(row)}
         />
         <Detail
-          label="Ranking"
+          label="Confidence / score"
           value={
             signal === "NO SIGNAL"
               ? "—"
@@ -144,37 +201,44 @@ export function IntelligenceDetail({
       </dl>
       {signal === "NO SIGNAL" ? (
         <p className="text-sm text-[var(--fg-muted)]">NO SIGNAL</p>
-      ) : why.length > 0 ? (
-        <section>
-          <h3 className="mb-2 text-sm font-medium text-[var(--fg)]">
-            WHY THIS SIGNAL
-          </h3>
-          <p className="mb-2 text-xs text-[var(--fg-muted)]">
-            Structured research evidence from the analysis engine — not generic copy.
-          </p>
-          <ul className="space-y-2">
-            {why.map((factor) => (
-              <li key={factor.label} className="rounded-md border border-[var(--border)] px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                  {factor.label}
-                </p>
-                <p className="text-sm text-[var(--fg)]">{factor.value}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-sm text-[var(--fg)]">
+      ) : whySections.length > 0 ? (
+        <section className="space-y-4">
+          <h3 className="text-sm font-semibold text-[var(--fg)]">Why this signal</h3>
+          {whySections.map((section) => (
+            <div key={section.title}>
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+                {section.title}
+              </h4>
+              <ul className="space-y-2">
+                {section.items.map((factor) => (
+                  <li
+                    key={factor.label}
+                    className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
+                  >
+                    <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                      {factor.label}
+                    </p>
+                    <p className="text-sm text-[var(--fg)]">{factor.value}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <p className="text-sm text-[var(--fg)]">
             Research conclusion: {dir} — {RESEARCH_SIGNAL}
-          </p>
-          <p className="mt-1 text-xs text-[var(--fg-subtle)]">
-            Risk note: this is market research and is not trade authorization.
           </p>
         </section>
       ) : (
         <p className="text-sm text-[var(--fg-muted)]">{EXPLANATION_UNAVAILABLE}</p>
       )}
-      <p className="text-xs text-[var(--fg-subtle)]">
-        Research intelligence only. There is no execute or place-order action on this desk.
-      </p>
+      <div className="border-t border-[var(--border)] pt-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
+          Research intelligence
+        </p>
+        <p className="mt-1 text-xs text-[var(--fg-muted)]">
+          Not trade authorization. There is no execute or place-order action on this desk.
+        </p>
+      </div>
       {kind === "market" ? (
         <Button variant="secondary" size="sm" asChild>
           <Link href={`/symbols/${encodeURIComponent(symbol)}`}>Open market page</Link>

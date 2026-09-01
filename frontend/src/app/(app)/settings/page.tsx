@@ -16,18 +16,24 @@ import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, str } from "@/lib/desk";
 import { clearSession } from "@/lib/auth/session";
 
+import { useTheme } from "next-themes";
+import { useAuth } from "@/providers/auth-provider";
+
 const TABS = [
-  "Appearance",
+  "Account",
   "Security",
   "Notifications",
-  "Workspace",
-  "Sessions",
+  "Appearance",
+  "Preferences",
+  "Connections",
   "Danger Zone",
 ] as const;
 
 export default function SettingsPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Appearance");
+  const { user } = useAuth();
+  const { setTheme } = useTheme();
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Account");
   const settingsQ = useQuery({
     queryKey: ["settings"],
     queryFn: platformApi.settings,
@@ -42,11 +48,11 @@ export default function SettingsPage() {
     queryKey: ["sessions"],
     queryFn: platformApi.sessions,
     retry: false,
-    enabled: tab === "Sessions" || tab === "Security",
+    enabled: tab === "Connections" || tab === "Security",
   });
 
   const [form, setForm] = useState({
-    theme: "dark",
+    theme: "light",
     notifications_enabled: true,
     email_marketing: false,
     email_security: true,
@@ -61,7 +67,7 @@ export default function SettingsPage() {
     if (!settingsQ.data) return;
     const s = asRecord(settingsQ.data);
     setForm({
-      theme: str(s.theme, "dark"),
+      theme: str(s.theme, "light") === "dark" ? "dark" : "light",
       notifications_enabled: Boolean(s.notifications_enabled),
       email_marketing: Boolean(s.email_marketing),
       email_security: Boolean(s.email_security),
@@ -72,12 +78,19 @@ export default function SettingsPage() {
     });
   }, [settingsQ.data]);
 
+  useEffect(() => {
+    if (form.theme === "dark" || form.theme === "light") {
+      setTheme(form.theme);
+    }
+  }, [form.theme, setTheme]);
+
   const save = useMutation({
     mutationFn: () => platformApi.updateSettings(form),
     onSuccess: async () => {
       const { recordAudit } = await import("@/lib/observability/audit");
       recordAudit("settings_change", "success", "Settings updated");
       toast.success("Settings saved");
+      setTheme(form.theme === "dark" ? "dark" : "light");
       await qc.invalidateQueries({ queryKey: ["settings"] });
     },
     onError: (e) => toast.error(e instanceof ApiError ? e.message : "Save failed"),
@@ -109,7 +122,7 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="Settings"
-        description="Appearance, security, notifications, and workspace preferences. Engineering controls live in Admin."
+        description="Account, security, notifications, appearance, and workspace preferences. Engineering controls live in Admin."
         actions={
           tab !== "Danger Zone" ? (
             <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
@@ -149,19 +162,25 @@ export default function SettingsPage() {
         <DeskError message="Unable to load settings." onRetry={() => settingsQ.refetch()} />
       ) : (
         <PageMotion>
-          {tab === "Appearance" ? (
-            <Card className="qf-card-interactive">
+          {tab === "Account" ? (
+            <Card>
               <CardHeader>
-                <CardTitle>Appearance</CardTitle>
+                <CardTitle>Account</CardTitle>
               </CardHeader>
-              <CardContent className="grid max-w-xl gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="theme">Theme</Label>
-                  <Input
-                    id="theme"
-                    value={form.theme}
-                    onChange={(e) => setForm((f) => ({ ...f, theme: e.target.value }))}
-                  />
+              <CardContent className="grid max-w-xl gap-4">
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Name
+                  </p>
+                  <p className="text-sm text-[var(--fg)]">
+                    {user?.display_name || "Unavailable"}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                    Email
+                  </p>
+                  <p className="text-sm text-[var(--fg)]">{user?.email || "Unavailable"}</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="timeout">Session timeout (minutes)</Label>
@@ -176,6 +195,35 @@ export default function SettingsPage() {
                       }))
                     }
                   />
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {tab === "Appearance" ? (
+            <Card className="qf-card-interactive">
+              <CardHeader>
+                <CardTitle>Appearance</CardTitle>
+              </CardHeader>
+              <CardContent className="grid max-w-xl gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="theme">Theme</Label>
+                  <select
+                    id="theme"
+                    value={form.theme === "dark" ? "dark" : "light"}
+                    onChange={(e) => {
+                      const theme = e.target.value === "dark" ? "dark" : "light";
+                      setForm((f) => ({ ...f, theme }));
+                      setTheme(theme);
+                    }}
+                    className="flex h-10 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-sm text-[var(--fg)]"
+                  >
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                  <p className="text-xs text-[var(--fg-subtle)]">
+                    Light is the primary QuantForg experience. Dark remains available.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -272,10 +320,10 @@ export default function SettingsPage() {
             </Card>
           ) : null}
 
-          {tab === "Workspace" ? (
+          {tab === "Preferences" ? (
             <Card className="qf-card-interactive">
               <CardHeader>
-                <CardTitle>Workspace</CardTitle>
+                <CardTitle>Preferences</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-[var(--fg-muted)]">
                 <p>
@@ -292,7 +340,7 @@ export default function SettingsPage() {
             </Card>
           ) : null}
 
-          {tab === "Sessions" ? (
+          {tab === "Connections" ? (
             <Card>
               <CardHeader>
                 <CardTitle>Active sessions</CardTitle>

@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, SheetContent } from "@/components/ui/dialog";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
@@ -270,8 +270,9 @@ export function SignalsWorkspace() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
-        title="Signals"
-        description="GLOBAL MARKET INTELLIGENCE — research analysis across the available global universe. Not trade authorization."
+        eyebrow="Global research"
+        title="Global Market Intelligence"
+        description="Research analysis across the global market universe. Signals remain available without a broker connection. Live trading is a separate authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -602,8 +603,8 @@ export function SignalsWorkspace() {
                           .join(" · ")}
                       </span>
                     </div>
-                    <p className="mt-2 text-[11px] font-medium text-[var(--accent)]">
-                      WHY THIS SIGNAL
+                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
+                      Why this signal
                     </p>
                   </button>
                 </li>
@@ -991,8 +992,8 @@ export function SignalsWorkspace() {
                             <p className="mt-3 line-clamp-2 text-[11px] text-[var(--fg-muted)]">
                               {signalWhyPreview(row)}
                             </p>
-                            <p className="mt-2 text-[11px] font-medium text-[var(--accent)]">
-                              WHY THIS SIGNAL
+                            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
+                              Why this signal
                             </p>
                           </button>
                         </li>
@@ -1249,9 +1250,9 @@ export function SignalsWorkspace() {
       </Card>
 
       <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="w-[min(96vw,720px)]" aria-describedby={undefined}>
+        <SheetContent aria-describedby={undefined}>
           {selected ? <IntelligenceDetail row={selected} kind="signal" /> : null}
-        </DialogContent>
+        </SheetContent>
       </Dialog>
     </div>
   );

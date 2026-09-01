@@ -37,7 +37,7 @@ export function Topbar({
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--bg)]/85 px-3 backdrop-blur-md sm:gap-3 sm:px-4",
+        "sticky top-0 z-30 flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)]/92 px-3 backdrop-blur-md sm:gap-3 sm:px-4",
         compact ? "h-[3.25rem]" : "h-14",
       )}
     >
@@ -84,13 +84,13 @@ export function Topbar({
             <Bell className="h-4 w-4" />
           </Link>
         </Button>
-        <div
-          className="hidden h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[11px] font-semibold text-[var(--fg)] sm:flex"
-          title={user?.email ?? user?.display_name ?? "Profile"}
-          aria-hidden
-        >
-          {initials}
-        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+          <Link href="/settings" aria-label="Profile and settings">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-[11px] font-semibold text-[var(--fg)]">
+              {initials}
+            </span>
+          </Link>
+        </Button>
         <Button
           variant="ghost"
           size="icon"

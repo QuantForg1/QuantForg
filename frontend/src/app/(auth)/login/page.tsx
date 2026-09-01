@@ -31,7 +31,7 @@ export default function LoginPage() {
   });
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to your QuantForg workspace.">
+    <AuthShell title="Sign in" subtitle="Access your QuantForg workspace.">
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {

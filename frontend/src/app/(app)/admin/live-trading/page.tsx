@@ -10,6 +10,7 @@ export default function LiveTradingAdminPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Authorization"
         title="Live Trading"
         description="Controlled real-money authorization. Default DISABLED. ARM then ENABLE is required. Research cannot enable execution. Emergency stop disables new orders immediately and does not close existing positions."
         actions={

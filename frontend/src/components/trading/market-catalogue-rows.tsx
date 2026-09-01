@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, SheetContent } from "@/components/ui/dialog";
 import { FilterChip } from "@/components/trading/filter-chip";
 import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import {
@@ -401,9 +401,9 @@ export function MarketCatalogueRows({
 
       {enableDetail ? (
         <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
-          <DialogContent className="w-[min(96vw,720px)]">
+          <SheetContent>
             {selected ? <IntelligenceDetail row={selected} kind="market" /> : null}
-          </DialogContent>
+          </SheetContent>
         </Dialog>
       ) : null}
     </div>

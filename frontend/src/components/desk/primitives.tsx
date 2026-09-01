@@ -173,7 +173,7 @@ export function DeskMetric({
   value: string;
 }) {
   return (
-    <div className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
+    <div className="min-w-0 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-3 py-3 shadow-[var(--shadow-card)]">
       <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</p>
       <p className="mt-1 truncate tabular text-lg font-semibold text-[var(--fg)]">{value}</p>
     </div>

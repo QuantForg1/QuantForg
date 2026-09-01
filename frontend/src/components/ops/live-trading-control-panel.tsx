@@ -186,7 +186,7 @@ export function LiveTradingControlPanel() {
             enables trading on load. Capital preservation is the priority.
             Returns are not promised.
           </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <StatusTile
               label="Broker"
               value={str(broker.status, "DISCONNECTED")}
@@ -208,13 +208,6 @@ export function LiveTradingControlPanel() {
               ok={str(ownership.status) === "OWNED"}
             />
             <StatusTile
-              label="Kill switch"
-              value={d.kill_switch ? "LATCHED" : "READY"}
-              ok={!Boolean(d.kill_switch)}
-            />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <StatusTile
               label="Risk Engine"
               value={
                 gates.some((g) => str(g.key) === "risk_engine_healthy" && g.passed === true)
@@ -235,7 +228,12 @@ export function LiveTradingControlPanel() {
               ok={gates.some((g) => str(g.key) === "oms_healthy" && g.passed === true)}
             />
             <StatusTile
-              label="Kill Switch"
+              label="Robot"
+              value={liveConfirmed ? "ACTIVE" : state}
+              ok={liveConfirmed}
+            />
+            <StatusTile
+              label="Kill switch"
               value={d.kill_switch ? "LATCHED" : "READY"}
               ok={!Boolean(d.kill_switch)}
             />
