@@ -89,25 +89,30 @@ def sync_utc_daily_loss_lock(
 ) -> dict[str, Any]:
     """Arm or clear the plane latch from current UTC-day P/L.
 
-    Untrusted P/L (deals unavailable) fail-closes: keep/arm the lock.
+    Untrusted P/L (deals unavailable) fail-closes this measurement: do not
+    clear an existing latch, and do not arm a durable "daily loss exceeded"
+    latch from missing history. The caller still blocks this cycle.
     """
     cap = Decimal(str(max_daily_loss_pct or 0))
     pct = utc_daily_loss_pct(daily_pnl=daily_pnl, equity=equity, balance=balance)
     session = utc_session_day(now)
     resets = utc_daily_loss_resets_at(now)
-    exceeded = True if not trusted else utc_daily_loss_exceeded(
+    measured = utc_daily_loss_exceeded(
         daily_pnl=daily_pnl,
         equity=equity,
         balance=balance,
         max_daily_loss_pct=cap,
     )
-    prior = bool(getattr(plane, "daily_loss_exceeded", False)) if plane is not None else False
+    exceeded = True if not trusted else measured
+    prior = bool(
+        getattr(plane, "daily_loss_exceeded", False) if plane is not None else False
+    )
     changed = False
     moment = now or datetime.now(UTC)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=UTC)
     if plane is not None:
-        if exceeded and not prior:
+        if trusted and measured and not prior:
             plane.flag_daily_loss(now=now)
             changed = True
             logger.warning(
@@ -116,7 +121,7 @@ def sync_utc_daily_loss_lock(
                 limit_pct=str(cap),
                 session_day=session,
             )
-        elif not exceeded and prior:
+        elif trusted and not measured and prior:
             clear = getattr(plane, "clear_daily_loss", None)
             if callable(clear):
                 clear(now=now, reason="utc_session_under_cap")
@@ -152,7 +157,9 @@ def sync_utc_daily_loss_lock(
             except Exception:
                 logger.exception("daily_loss_auto_resume_failed")
     base, base_name = utc_daily_loss_base(equity=equity, balance=balance)
-    armed_at = getattr(plane, "daily_loss_armed_at", None) if plane is not None else None
+    armed_at = (
+        getattr(plane, "daily_loss_armed_at", None) if plane is not None else None
+    )
     lock_age: int | None = None
     if exceeded and isinstance(armed_at, datetime):
         armed = armed_at if armed_at.tzinfo else armed_at.replace(tzinfo=UTC)

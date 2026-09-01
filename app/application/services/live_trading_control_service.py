@@ -15,6 +15,7 @@ from app.application.dto.auth import AuthUserDTO
 from app.application.services.account_execution_gate import (
     ACCOUNT_SESSION_MISMATCH,
     SESSION_MATCHED,
+    bind_execution_account,
     bound_execution_account,
     classify_account_session,
 )
@@ -800,6 +801,26 @@ def enable_live_trading(
         if str(getattr(plane, "auto_trading_run_state", "")) != "running":
             plane.auto_trading_run_state = "running"
             plane.auto_trading_enabled = True
+        try:
+            from app.application.services.institutional_ite_runtime import (
+                get_ite_runtime,
+            )
+
+            runtime = get_ite_runtime()
+            if runtime is not None:
+                runtime.user_id = operator.user_id
+        except Exception as bind_exc:
+            logger.warning(
+                "live_trading_runtime_user_bind_failed", error=str(bind_exc)
+            )
+        try:
+            login_i = int(facts.get("account_login") or 0)
+            if login_i > 1:
+                bind_execution_account(user_id=operator.user_id, login=login_i)
+        except Exception as bind_exc:
+            logger.warning(
+                "live_trading_execution_bind_failed", error=str(bind_exc)
+            )
     except Exception as exc:
         logger.warning("live_trading_enable_auto_trade_sync_failed", error=str(exc))
     _persist_or_block(ctrl)

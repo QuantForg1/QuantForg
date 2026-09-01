@@ -271,10 +271,10 @@ def _cache_reusable(
     }:
         return False
     if source == CATALOGUE_LIVE_BROKER:
-        age = _cache_age_s(cached)
-        if age is None:
-            return True
-        return age < CATALOGUE_TTL_S
+        # Serve the last research snapshot immediately. The research worker
+        # refreshes it. A 60s TTL is shorter than a live scan (~77s) and
+        # caused GET /market-universe/snapshot to rebuild in-request.
+        return True
     return True
 
 

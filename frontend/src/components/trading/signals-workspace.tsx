@@ -31,7 +31,6 @@ import {
   presentLevel,
   presentPrice,
   presentUnavailable,
-  RESEARCH_INDEPENDENT_COPY,
   researchCoverageLabel,
   researchDeskLiveTradingStatus,
   researchLifecycleCounts,
@@ -487,9 +486,9 @@ export function SignalsWorkspace() {
         }
       />
 
-      <p className="max-w-3xl text-sm leading-relaxed text-[var(--fg-muted)]">
-        {RESEARCH_INDEPENDENT_COPY} Research does not require a personal MT5 session. Live
-        trading remains a separate, explicitly authorized step.
+      <p className="text-sm text-[var(--fg-muted)]">
+        Research does not require a personal MT5 session. Live trading is a separate
+        authorized step.
       </p>
 
       <section
@@ -498,14 +497,27 @@ export function SignalsWorkspace() {
       >
         <StatusDot label="Research" value={researchLabel} />
         <StatusDot label="Broker" value={brokerLabel} />
+        <StatusDot
+          label="MT5"
+          value={
+            session.connection_status === "CONNECTED" ||
+            session.connection_status === "RUNNING"
+              ? "ATTACHED"
+              : "DETACHED"
+          }
+        />
         <StatusDot label="Live trading" value={liveTradingHint.label} />
         <StatusDot
-          label="Orders may submit"
+          label="Execution"
           value={
             session.orders_may_submit === true || normalized.ordersMaySubmit === true
-              ? "TRUE"
-              : "FALSE"
+              ? "READY"
+              : "BLOCKED"
           }
+        />
+        <StatusDot
+          label="Robot"
+          value={str(session.robot, "UNKNOWN").toUpperCase()}
         />
       </section>
 

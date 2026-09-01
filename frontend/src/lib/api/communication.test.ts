@@ -68,6 +68,7 @@ const CANONICAL = "XAUUSD_i";
   assert.equal(defaultTimeoutForPath("/positions"), API_HEAVY_TIMEOUT_MS);
   assert.equal(defaultTimeoutForPath("/orders"), API_HEAVY_TIMEOUT_MS);
   assert.equal(defaultTimeoutForPath("/portfolio"), API_HEAVY_TIMEOUT_MS);
+  assert.equal(defaultTimeoutForPath("/market-universe/snapshot"), API_HEAVY_TIMEOUT_MS);
 }
 
 // 4. Auth refresh — GET replay, one shot

@@ -176,16 +176,13 @@ class GetTradingSessionUseCase:
             )
             connection = None
         plane = get_control_plane()
-        runtime = get_ite_runtime()
-        runtime_user = (
-            getattr(runtime, "user_id", None) if runtime is not None else None
-        )
+        bound_user, _bound_login = bound_execution_account()
         ctx = resolve_trading_context(
             user_id=user_id,
             connection=connection,
             run_state=str(getattr(plane, "auto_trading_run_state", "off") or "off"),
             trading_enabled=bool(getattr(plane, "auto_trading_enabled", False)),
-            runtime_user_id=runtime_user if isinstance(runtime_user, UUID) else None,
+            runtime_user_id=bound_user,
         )
         balance = None
         equity = None

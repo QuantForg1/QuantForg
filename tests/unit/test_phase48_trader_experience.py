@@ -60,6 +60,33 @@ async def test_no_owned_account_does_not_select_another_account() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.trading_core
+def test_robot_running_uses_bound_owner_not_random_runtime_user() -> None:
+    from app.application.services.trading_session import _robot_status
+
+    owner = uuid4()
+    other = uuid4()
+    assert (
+        _robot_status(
+            owned=True,
+            run_state="running",
+            runtime_user=None,
+            user_id=owner,
+        )
+        == "Running"
+    )
+    assert (
+        _robot_status(
+            owned=True,
+            run_state="running",
+            runtime_user=other,
+            user_id=owner,
+        )
+        == "Stopped"
+    )
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_robot_start_blocked_without_connection() -> None:
     factory = MemoryMT5UnitOfWorkFactory()

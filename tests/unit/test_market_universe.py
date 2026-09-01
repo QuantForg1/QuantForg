@@ -1370,3 +1370,26 @@ def test_market_universe_router_registered_in_bootstrap() -> None:
         "/instrument/{symbol}",
     ):
         assert any(required in path for path in paths)
+
+
+@pytest.mark.trading_core
+def test_snapshot_serves_cached_live_broker_without_rebuild() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.application.services import market_universe_service as mus
+    from app.domain.market_universe.constants import CATALOGUE_LIVE_BROKER
+
+    mus.reset_market_universe_cache_for_tests()
+    stale_as_of = (datetime.now(UTC) - timedelta(seconds=300)).isoformat()
+    cached = {
+        "catalogue_source": CATALOGUE_LIVE_BROKER,
+        "as_of": stale_as_of,
+        "instruments": [{"symbol": "EURUSD", "broker_symbol": "EURUSD"}],
+        "would_submit_order": False,
+    }
+    with mus._LOCK:
+        mus._LAST_SNAPSHOT = cached
+    out = mus.MarketUniverseService().snapshot()
+    assert out["as_of"] == stale_as_of
+    assert out["instruments"][0]["symbol"] == "EURUSD"
+    mus.reset_market_universe_cache_for_tests()

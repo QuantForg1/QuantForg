@@ -111,6 +111,7 @@ export function defaultTimeoutForPath(path: string): number {
     p.includes("/execution/check") ||
     p.includes("/execution/cancel") ||
     p.includes("/signals") ||
+    p.includes("/market-universe") ||
     p.includes("/symbol")
   ) {
     return API_HEAVY_TIMEOUT_MS;

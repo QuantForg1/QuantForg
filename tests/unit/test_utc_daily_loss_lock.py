@@ -161,6 +161,25 @@ def test_untrusted_deals_fail_closed_do_not_clear() -> None:
     assert plane.daily_loss_exceeded is True
 
 
+def test_untrusted_deals_do_not_arm_durable_latch() -> None:
+    plane = SimpleNamespace(
+        daily_loss_exceeded=False,
+        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
+        clear_daily_loss=lambda **k: False,
+    )
+    out = sync_utc_daily_loss_lock(
+        plane,
+        daily_pnl=Decimal("-99"),
+        equity=Decimal("165.13"),
+        balance=Decimal("165.13"),
+        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        trusted=False,
+    )
+    assert out["daily_loss_exceeded"] is True
+    assert out["source"] == "fail_closed"
+    assert plane.daily_loss_exceeded is False
+
+
 def test_cap_unchanged() -> None:
     assert AiScalpingConfig().allow_martingale is False
     from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG

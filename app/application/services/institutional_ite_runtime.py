@@ -760,6 +760,9 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("force_sync_positions_before_safety_failed")
 
+        cycle_daily_loss = bool(self.plane.daily_loss_exceeded) or (
+            diag_in.get("daily_pnl_fail_closed") is True
+        )
         safety = self.plane.evaluate_auto_trading(
             AutoTradeLiveFacts(
                 gateway_connected=gw,
@@ -780,7 +783,7 @@ class InstitutionalIteRuntime:
                 spread=getattr(snapshot, "spread", None),
                 news_blocked=bool(news.blocked),
                 news_reason=str(news.reason or ""),
-                daily_loss_exceeded=self.plane.daily_loss_exceeded,
+                daily_loss_exceeded=cycle_daily_loss,
                 emergency_stop=self.plane.kill_switch_armed,
                 ops_mode=self.plane.mode.value,
                 execution_enabled=execution_on,
@@ -833,7 +836,7 @@ class InstitutionalIteRuntime:
                             spread=getattr(snapshot, "spread", None),
                             news_blocked=bool(news.blocked),
                             news_reason=str(news.reason or ""),
-                            daily_loss_exceeded=self.plane.daily_loss_exceeded,
+                            daily_loss_exceeded=cycle_daily_loss,
                             emergency_stop=self.plane.kill_switch_armed,
                             ops_mode=self.plane.mode.value,
                             execution_enabled=execution_on,
