@@ -317,16 +317,20 @@ def build_status_facts(
         return when_unknown if value is None else bool(value)
 
     daily_pnl_verified = True
+    last_diag: dict[str, Any] | None = None
     try:
         last = getattr(get_ite_runtime(), "_last_cycle", None)
         diag = getattr(last, "market_context_diagnostics", None) if last else None
-        if isinstance(diag, dict) and (
-            diag.get("daily_pnl_fail_closed") is True
-            or diag.get("daily_pnl_trusted") is False
-        ):
-            daily_pnl_verified = False
+        if isinstance(diag, dict):
+            last_diag = diag
+            if (
+                diag.get("daily_pnl_fail_closed") is True
+                or diag.get("daily_pnl_trusted") is False
+            ):
+                daily_pnl_verified = False
     except Exception:
         daily_pnl_verified = True
+        last_diag = None
 
     facts = AutoTradeLiveFacts(
         gateway_connected=gateway_ok,
@@ -367,6 +371,9 @@ def build_status_facts(
         news_blocked=False,
         daily_loss_exceeded=plane.daily_loss_exceeded,
         daily_pnl_verified=daily_pnl_verified,
+        deposit_verification=(
+            str(last_diag.get("deposit_verification") or "") if last_diag else ""
+        ),
         emergency_stop=plane.kill_switch_armed,
         ops_mode=plane.mode.value,
         execution_enabled=bool(getattr(cfg, "execution_enabled", False)),

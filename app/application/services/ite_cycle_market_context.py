@@ -889,6 +889,7 @@ async def build_ite_cycle_market_context(
     daily_pnl_trusted = False
     try:
         from app.application.services.live_account_risk_tracker import (
+            LiveAccountRiskTracker,
             get_live_account_risk_tracker,
         )
         from app.domain.institutional_trading.config import DEFAULT_ITE_CONFIG
@@ -918,6 +919,25 @@ async def build_ite_cycle_market_context(
                 deals=deals,
             )
             daily_pnl_trusted = True
+            try:
+                resolved = LiveAccountRiskTracker.session_pnl_resolution(
+                    list(deals),
+                    ending_balance=balance,
+                )
+                diag["session_trade_pnl"] = str(resolved["session_trade_pnl"])
+                diag["pre_deposit_trade_pnl"] = str(
+                    resolved["pre_deposit_trade_pnl"]
+                )
+                diag["post_deposit_trade_pnl"] = str(
+                    resolved["post_deposit_trade_pnl"]
+                )
+                diag["new_capital_detected"] = bool(
+                    resolved["new_capital_detected"]
+                )
+                if resolved.get("capital_baseline"):
+                    diag["capital_baseline"] = resolved["capital_baseline"]
+            except Exception as exc:
+                logger.warning("ite_cycle_deposit_baseline_failed", error=str(exc))
         else:
             # Still refresh HWM from live equity; never invent flat daily PnL.
             peak_equity = tracker.observe_equity(login=login, equity=equity)
@@ -963,6 +983,13 @@ async def build_ite_cycle_market_context(
             floating_pnl=Decimal(str(diag.get("floating_pnl") or 0)),
         )
         diag.update(lock)
+        if daily_pnl_trusted and diag.get("new_capital_detected"):
+            diag["deposit_verification"] = "verified"
+        elif daily_pnl_trusted and lock.get("daily_loss_exceeded"):
+            diag["deposit_verification"] = "required"
+        elif daily_pnl_trusted:
+            diag["deposit_verification"] = "not_applicable"
+        diag["max_daily_loss_limit_pct"] = str(DEFAULT_ITE_CONFIG.max_daily_loss_pct)
     except Exception as exc:
         logger.warning("ite_cycle_daily_loss_lock_sync_failed", error=str(exc))
 

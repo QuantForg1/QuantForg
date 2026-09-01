@@ -387,6 +387,8 @@ def _overlay_trusted_daily_pnl(out: dict[str, Any]) -> None:
             out["daily_pnl"] = None
             out["daily_pnl_trusted"] = False
             out["daily_pnl_status"] = "UNAVAILABLE"
+            out["new_capital_detected"] = False
+            out["deposit_verification"] = None
             return
         if diag.get("daily_pnl_trusted") is not True:
             return
@@ -399,6 +401,16 @@ def _overlay_trusted_daily_pnl(out: dict[str, Any]) -> None:
         pct = diag.get("daily_loss_pct")
         if pct not in (None, ""):
             out["daily_loss_pct"] = _dec(pct)
+        if diag.get("new_capital_detected") is True:
+            out["new_capital_detected"] = True
+            out["capital_baseline"] = diag.get("capital_baseline")
+            out["pre_deposit_trade_pnl"] = diag.get("pre_deposit_trade_pnl")
+            out["post_deposit_trade_pnl"] = diag.get("post_deposit_trade_pnl")
+            out["session_trade_pnl"] = diag.get("session_trade_pnl")
+            out["deposit_verification"] = diag.get("deposit_verification")
+            out["max_daily_loss_limit_pct"] = diag.get("max_daily_loss_limit_pct")
+        elif diag.get("deposit_verification"):
+            out["deposit_verification"] = diag.get("deposit_verification")
     except Exception:
         return
 
@@ -691,6 +703,13 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
                 or (
                     "UNAVAILABLE" if facts.get("daily_pnl") is None else None
                 ),
+                "new_capital_detected": facts.get("new_capital_detected"),
+                "capital_baseline": facts.get("capital_baseline"),
+                "pre_deposit_trade_pnl": facts.get("pre_deposit_trade_pnl"),
+                "post_deposit_trade_pnl": facts.get("post_deposit_trade_pnl"),
+                "session_trade_pnl": facts.get("session_trade_pnl"),
+                "deposit_verification": facts.get("deposit_verification"),
+                "max_daily_loss_limit_pct": facts.get("max_daily_loss_limit_pct"),
                 "floating_pnl": (
                     str(facts["floating_pnl"])
                     if facts.get("floating_pnl") is not None

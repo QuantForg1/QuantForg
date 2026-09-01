@@ -182,6 +182,8 @@ class AutoTradeLiveFacts:
     news_reason: str = ""
     daily_loss_exceeded: bool = False
     daily_pnl_verified: bool = True
+    # "verified" | "required" | "not_applicable" | ""
+    deposit_verification: str = ""
     emergency_stop: bool = False
     ops_mode: str = "SHADOW"
     execution_enabled: bool = False
@@ -472,7 +474,14 @@ def evaluate_auto_trade_safety(
         (
             "TEST MODE — daily loss lock overridden"
             if daily_override
-            else ("Maximum daily loss exceeded" if facts.daily_loss_exceeded else "")
+            else (
+                "Maximum daily loss exceeded — deposit verification required."
+                if facts.daily_loss_exceeded
+                and str(facts.deposit_verification or "") != "verified"
+                else (
+                    "Maximum daily loss exceeded" if facts.daily_loss_exceeded else ""
+                )
+            )
         ),
     )
     add(

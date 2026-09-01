@@ -158,9 +158,57 @@ class LiveAccountRiskTracker:
             return rec.peak_equity if rec is not None else None
 
     @staticmethod
+    def _deal_value(deal: Any, *names: str) -> Any:
+        if isinstance(deal, dict):
+            for name in names:
+                if deal.get(name) not in (None, ""):
+                    return deal.get(name)
+            return None
+        for name in names:
+            val = getattr(deal, name, None)
+            if val not in (None, ""):
+                return val
+        return None
+
+    @staticmethod
+    def _deal_ticket(deal: Any) -> int:
+        try:
+            return int(LiveAccountRiskTracker._deal_value(deal, "ticket") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _deal_cash_delta(deal: Any) -> Decimal:
+        return (
+            _dec(LiveAccountRiskTracker._deal_value(deal, "profit"))
+            + _dec(LiveAccountRiskTracker._deal_value(deal, "commission"))
+            + _dec(LiveAccountRiskTracker._deal_value(deal, "swap"))
+        )
+
+    @staticmethod
+    def _deal_time(deal: Any) -> datetime | None:
+        raw_t = LiveAccountRiskTracker._deal_value(deal, "time")
+        if raw_t is None:
+            return None
+        if isinstance(raw_t, datetime):
+            moment = raw_t
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=UTC)
+            return moment.astimezone(UTC)
+        try:
+            ts = int(raw_t)
+            if ts > 10_000_000_000:
+                ts = ts // 1000
+            return datetime.fromtimestamp(ts, tz=UTC)
+        except (TypeError, ValueError, OSError):
+            return None
+
+    @staticmethod
     def _is_trade_deal(deal: Any) -> bool:
         """True for market buy/sell fills. Balance/credit/deposit never count."""
-        dtype = str(getattr(deal, "deal_type", "") or getattr(deal, "type", "") or "")
+        dtype = str(
+            LiveAccountRiskTracker._deal_value(deal, "deal_type", "type") or ""
+        )
         low = dtype.lower()
         if any(
             tok in low
@@ -175,53 +223,162 @@ class LiveAccountRiskTracker:
             )
         ):
             return False
-        vol = _dec(getattr(deal, "volume", None), "0")
+        vol = _dec(LiveAccountRiskTracker._deal_value(deal, "volume"), "0")
         return vol > 0
+
+    @staticmethod
+    def _is_verified_deposit(deal: Any) -> bool:
+        """Broker cash/credit in. Never inferred from a balance increase."""
+        vol = _dec(LiveAccountRiskTracker._deal_value(deal, "volume"), "0")
+        if vol > 0:
+            return False
+        profit = _dec(LiveAccountRiskTracker._deal_value(deal, "profit"))
+        if profit <= 0:
+            return False
+        raw_type = LiveAccountRiskTracker._deal_value(deal, "deal_type", "type")
+        low = str(raw_type or "").strip().lower()
+        if low in {"balance", "credit", "deposit"}:
+            return True
+        try:
+            numeric = int(raw_type)
+        except (TypeError, ValueError):
+            numeric = -1
+        return numeric in {2, 3}
+
+    @staticmethod
+    def session_pnl_resolution(
+        deals: list[Any],
+        *,
+        now: datetime | None = None,
+        ending_balance: Decimal | None = None,
+    ) -> dict[str, Any]:
+        """UTC-day trade P/L, optionally sliced after a verified deposit.
+
+        Pre-deposit trade P/L is retained for audit. It is not deleted from
+        broker history. Risk uses only post-baseline realized trade P/L.
+        """
+        day = utc_session_day(now)
+        seen_trade: set[int] = set()
+        seen_dep: set[int] = set()
+        trades: list[tuple[datetime, int, Decimal]] = []
+        deposits: list[tuple[datetime, int, Any]] = []
+        for deal in deals:
+            ticket = LiveAccountRiskTracker._deal_ticket(deal)
+            moment = LiveAccountRiskTracker._deal_time(deal)
+            if moment is None:
+                continue
+            if utc_session_day(moment) != day:
+                continue
+            if LiveAccountRiskTracker._is_verified_deposit(deal):
+                if ticket > 0:
+                    if ticket in seen_dep:
+                        continue
+                    seen_dep.add(ticket)
+                deposits.append((moment, ticket, deal))
+                continue
+            if not LiveAccountRiskTracker._is_trade_deal(deal):
+                continue
+            if ticket > 0:
+                if ticket in seen_trade:
+                    continue
+                seen_trade.add(ticket)
+            trades.append(
+                (moment, ticket, LiveAccountRiskTracker._deal_cash_delta(deal))
+            )
+        session_trade = sum((p for _t, _k, p in trades), Decimal("0"))
+        baseline: dict[str, Any] | None = None
+        cutoff: tuple[datetime, int] | None = None
+        if deposits:
+            deposits.sort(key=lambda row: (row[0], row[1]))
+            moment, ticket, dep = deposits[-1]
+            cutoff = (moment, ticket)
+            before: Decimal | None = None
+            after: Decimal | None = None
+            amount = LiveAccountRiskTracker._deal_cash_delta(dep)
+            if ending_balance is not None:
+                snapshots = LiveAccountRiskTracker._balance_around_deals(
+                    deals, ending_balance=ending_balance
+                )
+                pair = snapshots.get(ticket)
+                if pair is not None:
+                    before, after = pair
+            baseline = {
+                "deposit_timestamp": moment.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "deposit_amount": str(amount),
+                "balance_before": str(before) if before is not None else None,
+                "balance_after": str(after) if after is not None else None,
+                "broker_deal_ticket": ticket or None,
+                "utc_date": day,
+                "baseline_source": "mt5_balance_credit_deal",
+                "deal_type": str(
+                    LiveAccountRiskTracker._deal_value(dep, "deal_type", "type")
+                    or "balance"
+                ),
+            }
+        pre = Decimal("0")
+        post = Decimal("0")
+        for moment, ticket, pnl in trades:
+            if cutoff is None:
+                post += pnl
+                continue
+            cut_t, cut_k = cutoff
+            if moment < cut_t or (moment == cut_t and ticket <= cut_k):
+                pre += pnl
+            else:
+                post += pnl
+        risk_pnl = post if cutoff is not None else session_trade
+        return {
+            "risk_daily_pnl": risk_pnl,
+            "session_trade_pnl": session_trade,
+            "pre_deposit_trade_pnl": pre if cutoff is not None else Decimal("0"),
+            "post_deposit_trade_pnl": post if cutoff is not None else session_trade,
+            "new_capital_detected": cutoff is not None,
+            "capital_baseline": baseline,
+        }
+
+    @staticmethod
+    def _balance_around_deals(
+        deals: list[Any],
+        *,
+        ending_balance: Decimal,
+    ) -> dict[int, tuple[Decimal, Decimal]]:
+        """Walk cash deltas backward from live balance. Never invents a deposit."""
+        ordered: list[tuple[datetime, int, Decimal, int]] = []
+        for deal in deals:
+            ticket = LiveAccountRiskTracker._deal_ticket(deal)
+            if ticket <= 0:
+                continue
+            moment = LiveAccountRiskTracker._deal_time(deal)
+            if moment is None:
+                continue
+            delta = LiveAccountRiskTracker._deal_cash_delta(deal)
+            ordered.append((moment, ticket, delta, ticket))
+        ordered.sort(key=lambda row: (row[0], row[1]), reverse=True)
+        cursor = Decimal(str(ending_balance))
+        out: dict[int, tuple[Decimal, Decimal]] = {}
+        for _moment, ticket, delta, _k in ordered:
+            after = cursor
+            before = after - delta
+            out[ticket] = (before, after)
+            cursor = before
+        return out
 
     @staticmethod
     def daily_pnl_from_deals(
         deals: list[Any],
         *,
         now: datetime | None = None,
+        ending_balance: Decimal | None = None,
     ) -> Decimal:
         """Sum realized trade P/L for the current UTC session day.
 
-        Deduplicates by ticket. Skips balance/credit/deposit. Includes
-        commission and swap on trade deals. Does not invent values when empty.
+        Deduplicates by ticket. Skips balance/credit/deposit as P/L. After a
+        verified UTC-day deposit, only post-deposit trade P/L is returned.
         """
-        day = utc_session_day(now)
-        total = Decimal("0")
-        seen: set[int] = set()
-        for deal in deals:
-            if not LiveAccountRiskTracker._is_trade_deal(deal):
-                continue
-            try:
-                ticket = int(getattr(deal, "ticket", 0) or 0)
-            except (TypeError, ValueError):
-                ticket = 0
-            if ticket > 0:
-                if ticket in seen:
-                    continue
-                seen.add(ticket)
-            profit = _dec(getattr(deal, "profit", None))
-            profit += _dec(getattr(deal, "commission", None))
-            profit += _dec(getattr(deal, "swap", None))
-            raw_t = getattr(deal, "time", None)
-            if raw_t is None:
-                continue
-            if isinstance(raw_t, datetime):
-                deal_day = utc_session_day(raw_t)
-            else:
-                try:
-                    ts = int(raw_t)
-                    if ts > 10_000_000_000:
-                        ts = ts // 1000
-                    deal_day = utc_session_day(datetime.fromtimestamp(ts, tz=UTC))
-                except (TypeError, ValueError, OSError):
-                    continue
-            if deal_day == day:
-                total += profit
-        return total
+        resolved = LiveAccountRiskTracker.session_pnl_resolution(
+            deals, now=now, ending_balance=ending_balance
+        )
+        return Decimal(str(resolved["risk_daily_pnl"]))
 
     def resolve_for_risk(
         self,
@@ -238,7 +395,9 @@ class LiveAccountRiskTracker:
         if balance > peak:
             peak = self.observe_equity(login=login, equity=balance, now=now)
         daily = (
-            self.daily_pnl_from_deals(list(deals or []), now=now)
+            self.daily_pnl_from_deals(
+                list(deals or []), now=now, ending_balance=balance
+            )
             if deals is not None
             else Decimal("0")
         )

@@ -314,6 +314,34 @@ export function LiveTradingControlPanel() {
             <Metric label="Margin level" value={str(account.margin_level, "—")} />
           </div>
 
+          {account.new_capital_detected === true ? (
+            <div
+              className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--fg-muted)]"
+              data-testid="deposit-risk-baseline"
+            >
+              <p className="font-medium text-[var(--fg)]">New capital detected</p>
+              <p>Risk baseline recalculated from verified deposit</p>
+              <p>
+                Maximum daily loss limit:{" "}
+                {str(account.max_daily_loss_limit_pct, "40")}%
+              </p>
+              <p>Pre-deposit P/L preserved</p>
+              <p>
+                Post-deposit risk:{" "}
+                {account.daily_loss_pct != null && account.daily_loss_pct !== ""
+                  ? `${str(account.daily_loss_pct)}%`
+                  : "unavailable"}
+              </p>
+            </div>
+          ) : null}
+
+          {account.deposit_verification === "required" &&
+          account.new_capital_detected !== true ? (
+            <p className="text-xs text-[var(--fg-muted)]">
+              Maximum daily loss exceeded — deposit verification required.
+            </p>
+          ) : null}
+
           {gates.length > 0 ? (
             <div>
               <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">

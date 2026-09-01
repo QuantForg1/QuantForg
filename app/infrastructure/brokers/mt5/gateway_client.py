@@ -80,6 +80,24 @@ def _dec(value: Any, default: str = "0") -> Decimal:
     return Decimal(str(value))
 
 
+# MT5 DEAL_TYPE_BALANCE=2, DEAL_TYPE_CREDIT=3 (cash/credit ops, volume 0).
+_MT5_DEAL_TYPE_BALANCE = 2
+_MT5_DEAL_TYPE_CREDIT = 3
+
+
+def mt5_history_deal_kind(*, typ: int, entry: int) -> str:
+    """Map MetaTrader deal type/entry to QuantForg deal_type labels."""
+    if typ == _MT5_DEAL_TYPE_BALANCE:
+        return "balance"
+    if typ == _MT5_DEAL_TYPE_CREDIT:
+        return "credit"
+    if entry == 0:
+        return "entry_in"
+    if entry == 1:
+        return "entry_out"
+    return "deal"
+
+
 def _mt5_retcode(payload: dict[str, Any], *, default: int = RETCODE_INVALID) -> int:
     """Parse broker retcode without collapsing success ``0`` via falsy ``or``."""
     if "retcode" not in payload or payload.get("retcode") is None:
@@ -2090,20 +2108,28 @@ class GatewayMT5Client:
         data = self._request("GET", "/history/deals", params={"days": days})
         out: list[MT5Deal] = []
         for row in data.get("items") or []:
-            symbol = str(row.get("symbol") or "").strip()
             ticket = int(row.get("ticket") or 0)
-            if ticket <= 0 or not symbol:
+            if ticket <= 0:
                 continue
+            try:
+                typ = int(row.get("type") or 0)
+            except (TypeError, ValueError):
+                typ = 0
+            try:
+                entry = int(row.get("entry") or 0)
+            except (TypeError, ValueError):
+                entry = 0
+            deal_type = mt5_history_deal_kind(typ=typ, entry=entry)
+            balance_op = deal_type in {"balance", "credit"}
+            symbol = str(row.get("symbol") or "").strip()
+            if not symbol:
+                if not balance_op:
+                    continue
+                symbol = "BALANCE"
             vol = _dec(row.get("volume"), "0")
-            if vol <= 0:
+            if vol <= 0 and not balance_op:
                 continue
-            typ = int(row.get("type") or 0)
-            # MT5 DEAL_TYPE_BUY=0, DEAL_TYPE_SELL=1
             side = "buy" if typ % 2 == 0 else "sell"
-            entry = int(row.get("entry") or 0)
-            deal_type = (
-                "entry_in" if entry == 0 else "entry_out" if entry == 1 else "deal"
-            )
             deal_time: datetime | None = None
             raw_t = row.get("time")
             if raw_t:

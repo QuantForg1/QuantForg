@@ -787,6 +787,7 @@ class InstitutionalIteRuntime:
                 news_reason=str(news.reason or ""),
                 daily_loss_exceeded=cycle_daily_loss,
                 daily_pnl_verified=daily_pnl_verified,
+                deposit_verification=str(diag_in.get("deposit_verification") or ""),
                 emergency_stop=self.plane.kill_switch_armed,
                 ops_mode=self.plane.mode.value,
                 execution_enabled=execution_on,
@@ -841,6 +842,9 @@ class InstitutionalIteRuntime:
                             news_reason=str(news.reason or ""),
                             daily_loss_exceeded=cycle_daily_loss,
                             daily_pnl_verified=daily_pnl_verified,
+                            deposit_verification=str(
+                                diag_in.get("deposit_verification") or ""
+                            ),
                             emergency_stop=self.plane.kill_switch_armed,
                             ops_mode=self.plane.mode.value,
                             execution_enabled=execution_on,

@@ -2213,6 +2213,32 @@ export function AutoTradingWorkspace() {
             />
             <MetricCard label="Ops Mode" value={opsMode} />
           </div>
+          {diag.new_capital_detected === true ? (
+            <div
+              className="mt-3 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[11px] leading-relaxed text-[var(--fg-muted)]"
+              data-testid="deposit-risk-baseline"
+            >
+              <p className="font-medium text-[var(--fg)]">New capital detected</p>
+              <p>Risk baseline recalculated from verified deposit</p>
+              <p>
+                Maximum daily loss limit:{" "}
+                {str(diag.max_daily_loss_limit_pct || utcDailyLimit, "40")}%
+              </p>
+              <p>Pre-deposit P/L preserved</p>
+              <p>
+                Post-deposit risk:{" "}
+                {pnlUnavailable
+                  ? "unavailable"
+                  : `${formatNumber(utcDailyLossPct, 2)}%`}
+              </p>
+            </div>
+          ) : null}
+          {diag.deposit_verification === "required" &&
+          diag.new_capital_detected !== true ? (
+            <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
+              Maximum daily loss exceeded — deposit verification required.
+            </p>
+          ) : null}
           {riskReasons.length > 0 ? (
             <ul className="mt-3 list-disc space-y-0.5 pl-4 text-[11px] text-[var(--danger)]">
               {riskReasons.slice(0, 4).map((r) => (
