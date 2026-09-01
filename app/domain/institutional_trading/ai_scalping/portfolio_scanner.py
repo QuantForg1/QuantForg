@@ -34,6 +34,9 @@ from app.domain.institutional_trading.ai_scalping.symbol_state import (
 )
 from app.domain.institutional_trading.config import ITEConfig
 from app.domain.institutional_trading.decision_models import AccountRiskState
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +142,21 @@ def _as_decimal(value: Any, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
+def _coerce_int(value: Any, default: int = 0) -> int:
+    """Numeric score fields. 0 is valid; quote strings must not abort the scan."""
+    if value is None or isinstance(value, (dict, list, tuple, set, bool)):
+        return int(default)
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return int(default)
+
+
 def _resolve_execution_health_ok(
     score: dict[str, Any],
     prior: SymbolExecutionState,
@@ -166,9 +184,14 @@ def _row_from_score(
     config: AiScalpingConfig,
 ) -> SymbolScanRow:
     symbol = str(score.get("symbol") or "").upper()
-    confidence = int(score.get("ai_confidence") or score.get("confidence") or 0)
-    quality = int(score.get("trade_quality") or score.get("quality") or 0)
-    spread_score = int(score.get("spread_score") or score.get("spread") or 50)
+    confidence = _coerce_int(
+        score.get("ai_confidence"),
+        _coerce_int(score.get("confidence"), 0),
+    )
+    quality = _coerce_int(score.get("trade_quality"), 0)
+    if quality == 0 and not isinstance(score.get("quality"), (dict, list)):
+        quality = _coerce_int(score.get("quality"), 0)
+    spread_score = _coerce_int(score.get("spread_score"), 50)
     regime = score.get("market_regime") or score.get("regime")
     setup_family = score.get("setup_family")
     direction = str(score.get("direction") or "NONE").upper()
@@ -193,9 +216,11 @@ def _row_from_score(
     cd = resolve_adaptive_cooldown_seconds(
         atr_pct=atr_d,
         spread_score=spread_score,
-        liquidity_score=int(score.get("liquidity") or 70),
+        liquidity_score=_coerce_int(score.get("liquidity"), 70),
         execution_quality_ok=health_ok,
-        recent_rejects=int(score.get("recent_rejects") or state.recent_rejects),
+        recent_rejects=_coerce_int(
+            score.get("recent_rejects"), int(state.recent_rejects)
+        ),
         regime=str(regime) if regime else None,
         config=config,
     )
@@ -213,7 +238,10 @@ def _row_from_score(
     cd = dc_replace(cd, seconds=scaled)
     cd_eval = book.evaluate_cooldown(symbol, cd)
 
-    reasons = tuple(score.get("reasons") or ())
+    raw_reasons = score.get("reasons")
+    reasons = (
+        tuple(raw_reasons) if isinstance(raw_reasons, (list, tuple)) else ()
+    )
     extra_reject: list[str] = []
     # Reject-streak latch (recent_rejects >= 5) is NOT gateway/OMS/MT5 health.
     # Hard infra pause lives in the execution bridge (live_health.allow_new_entries)
@@ -367,11 +395,31 @@ def scan_multi_asset_portfolio(
 
     rows: list[SymbolScanRow] = []
     for raw in scored:
+        if not isinstance(raw, dict):
+            continue
         sym = str(raw.get("symbol") or "").upper()
         if universe and sym and not symbol_in_scan_universe(sym, universe):
             continue
         payload = {**raw, "symbol": sym}
-        rows.append(_row_from_score(payload, book=book, config=cfg))
+        try:
+            rows.append(_row_from_score(payload, book=book, config=cfg))
+        except Exception as exc:
+            logger.exception("portfolio_row_from_score_failed", symbol=sym)
+            isolated = {
+                **payload,
+                "reject": True,
+                "reject_reason": f"SCORING_ERROR:{type(exc).__name__}",
+                "direction": str(payload.get("direction") or "NONE"),
+                "ai_confidence": 0,
+                "trade_quality": 0,
+                "spread_score": 50,
+                "context_status": "SCORING_ERROR",
+                "failure_class": "SYMBOL_FAILURE",
+            }
+            try:
+                rows.append(_row_from_score(isolated, book=book, config=cfg))
+            except Exception:
+                logger.exception("portfolio_row_isolate_failed", symbol=sym)
 
     rank_payload = [r.to_dict() for r in rows]
     ranked_bundle = rank_scalping_opportunities(rank_payload, config=cfg)

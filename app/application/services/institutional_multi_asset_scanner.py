@@ -42,16 +42,28 @@ _SCAN_GATE = asyncio.Lock()
 def _isolated_symbol_failure(symbol: str, reason: str) -> dict[str, Any]:
     """Record one desk failure without aborting the remaining universe."""
     code = str(symbol or "").strip().upper()
+    hay = str(reason or "").upper()
+    if "TIMEOUT" in hay or "CYCLE_BUDGET" in hay:
+        status = "SYMBOL_TIMEOUT"
+    elif (
+        "SCORING" in hay
+        or "AI_SCORE" in hay
+        or "EXECUTION_ERROR" in hay
+    ):
+        status = "SCORING_ERROR"
+    else:
+        status = "SYMBOL_CONTEXT_NOT_READY"
     return {
         "symbol": code,
         "reject": True,
         "reject_reason": reason,
         "failure_class": "SYMBOL_FAILURE",
-        "context_status": "SYMBOL_CONTEXT_NOT_READY",
+        "context_status": status,
         "context_reason": reason,
         "direction": "NONE",
         "ai_confidence": 0,
         "trade_quality": 0,
+        "spread_score": 50,
     }
 
 
@@ -307,6 +319,20 @@ def _log_scan_signal_row(payload: dict[str, Any]) -> None:
     )
 
 
+def _safe_score_int(value: Any, default: int = 0) -> int:
+    if value is None or isinstance(value, (dict, list, tuple, set, bool)):
+        return int(default)
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return int(default)
+
+
 def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
     """Normalize a score dict into NOC multi-asset table columns."""
     factors = score.get("factors") if isinstance(score.get("factors"), dict) else {}
@@ -315,8 +341,12 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         if isinstance(score.get("volatility_decision"), dict)
         else {}
     )
-    quality = int(score.get("trade_quality") or score.get("quality") or 0)
-    confidence = int(score.get("ai_confidence") or score.get("confidence") or 0)
+    quality = _safe_score_int(score.get("trade_quality"), 0)
+    if quality == 0 and not isinstance(score.get("quality"), (dict, list)):
+        quality = _safe_score_int(score.get("quality"), 0)
+    confidence = _safe_score_int(score.get("ai_confidence"), 0)
+    if confidence == 0 and not isinstance(score.get("confidence"), (dict, list)):
+        confidence = _safe_score_int(score.get("confidence"), 0)
     reject = bool(score.get("reject"))
     direction = str(score.get("direction") or "NONE").upper()
     signal_action = str(score.get("signal_action") or "").upper()
@@ -358,7 +388,11 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
         "blocking_gate": blocker,
         "reject": reject,
         "reject_reason": score.get("reject_reason"),
-        "reject_reasons": list(score.get("reject_reasons") or []),
+        "reject_reasons": (
+            list(score.get("reject_reasons"))
+            if isinstance(score.get("reject_reasons"), (list, tuple))
+            else []
+        ),
         "eligible": (not reject) and direction in {"BUY", "SELL"},
         "expected_rr": score.get("expected_rr"),
         "setup_family": score.get("setup_family"),
@@ -1002,14 +1036,9 @@ async def score_symbol_for_scan(
         return payload
     except Exception as exc:
         logger.exception("multi_asset_score_failed", symbol=code)
-        return {
-            "symbol": code,
-            "reject": True,
-            "reject_reason": f"ai_score_error:{type(exc).__name__}",
-            "direction": "NONE",
-            "ai_confidence": 0,
-            "trade_quality": 0,
-        }
+        return _isolated_symbol_failure(
+            code, f"SCORING_ERROR:{type(exc).__name__}"
+        )
 
 
 async def run_institutional_multi_asset_scan(
@@ -1097,7 +1126,7 @@ async def run_institutional_multi_asset_scan(
             ite_config=ite_config,
             scan_budget_seconds=scan_budget_seconds,
         )
-    except Exception:
+    except Exception as exc:
         logger.exception("institutional_multi_asset_scan_body_failed")
         failed = {
             "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -1111,6 +1140,8 @@ async def run_institutional_multi_asset_scan(
             "eligible_count": 0,
             "eligible_symbols": [],
             "scan_incomplete": True,
+            "scan_error_type": type(exc).__name__,
+            "scan_error": str(exc)[:240],
             "note": "multi_asset_scan_body_failed",
             "version": cfg.version,
             "forced_trades": False,
@@ -1169,13 +1200,21 @@ async def _run_institutional_multi_asset_scan_body(
             )
         except Exception:
             logger.exception("broker_universe_fetch_failed")
-    universe = resolve_scan_universe(
-        cfg,
-        plane=plane,
-        broker_symbol_rows=broker_rows or None,
-        session=session_name,
-        mt5_adapter=mt5_adapter,
-    )
+    try:
+        universe = resolve_scan_universe(
+            cfg,
+            plane=plane,
+            broker_symbol_rows=broker_rows or None,
+            session=session_name,
+            mt5_adapter=mt5_adapter,
+        )
+    except Exception:
+        logger.exception("resolve_scan_universe_failed")
+        universe = tuple(
+            str(s).strip().upper()
+            for s in (cfg.universe or DEFAULT_SCALPING_UNIVERSE)
+            if str(s).strip()
+        )
     try:
         from app.domain.trading.gold_only import (
             autonomous_execution_symbols,
@@ -1462,13 +1501,29 @@ async def _run_institutional_multi_asset_scan_body(
     cfg_for_rank = dc_replace(
         cfg, universe=tuple(str(s).strip().upper() for s in universe if str(s).strip())
     )
-    scan = run_multi_asset_scan(
-        scored,
-        account=account,
-        open_positions=open_n,
-        ite_config=ite_config,
-        config=cfg_for_rank,
-    )
+    try:
+        scan = run_multi_asset_scan(
+            scored,
+            account=account,
+            open_positions=open_n,
+            ite_config=ite_config,
+            config=cfg_for_rank,
+        )
+        if not isinstance(scan, dict):
+            scan = {}
+    except Exception as exc:
+        logger.exception("run_multi_asset_scan_failed")
+        scan = {
+            "ranked": [
+                r
+                for r in scored
+                if isinstance(r, dict) and not r.get("reject")
+            ],
+            "rows": [r for r in scored if isinstance(r, dict)],
+            "best": None,
+            "blocked_by_portfolio": False,
+            "note": f"portfolio_rank_failed:{type(exc).__name__}",
+        }
     ranked = scan.get("ranked") if isinstance(scan.get("ranked"), list) else []
     best = scan.get("best") if isinstance(scan.get("best"), dict) else None
     from app.domain.institutional_trading.operations.scalp_eligibility import (
@@ -1583,16 +1638,20 @@ async def _run_institutional_multi_asset_scan_body(
         if not isinstance(row, dict):
             continue
         sym = str(row.get("symbol") or "").upper()
-        trace = explain_scalp_handoff(
-            row,
-            portfolio_row=match_portfolio_row(sym, portfolio_rows),
-            universe=tuple(universe),
-            blocked_by_portfolio=bool(scan.get("blocked_by_portfolio")),
-            portfolio_block_reason=str(scan.get("portfolio_block_reason") or "")
-            or None,
-            in_portfolio_eligible=_portfolio_has(sym),
-            ite_trading_mode=ite_mode,
-        )
+        try:
+            trace = explain_scalp_handoff(
+                row,
+                portfolio_row=match_portfolio_row(sym, portfolio_rows),
+                universe=tuple(universe),
+                blocked_by_portfolio=bool(scan.get("blocked_by_portfolio")),
+                portfolio_block_reason=str(scan.get("portfolio_block_reason") or "")
+                or None,
+                in_portfolio_eligible=_portfolio_has(sym),
+                ite_trading_mode=ite_mode,
+            )
+        except Exception:
+            logger.exception("explain_scalp_handoff_failed", symbol=sym)
+            continue
         scalp_traces.append(trace.to_dict())
         if (
             trace.should_hand_off
@@ -1758,7 +1817,24 @@ async def _run_institutional_multi_asset_scan_body(
     except Exception:
         logger.exception("focused_pair_watch_hysteresis_failed")
 
-    noc_rows = [_noc_row_from_score(r) for r in scored]
+    noc_rows: list[dict[str, Any]] = []
+    for r in scored:
+        if not isinstance(r, dict):
+            continue
+        try:
+            noc_rows.append(_noc_row_from_score(r))
+        except Exception:
+            logger.exception("noc_row_from_score_failed", symbol=r.get("symbol"))
+            noc_rows.append(
+                {
+                    "symbol": str(r.get("symbol") or "").upper(),
+                    "reject": True,
+                    "decision": "NO_TRADE",
+                    "blocking_gate": "SCORING_ERROR",
+                    "context_status": "SCORING_ERROR",
+                    "eligible": False,
+                }
+            )
     # Prefer ranked portfolio rows for richer reject/cooldown annotations
     by_sym = {
         str(r.get("symbol") or "").upper(): r
@@ -1895,6 +1971,7 @@ async def _run_institutional_multi_asset_scan_body(
                 "expected_rr": r.get("expected_rr"),
             }
             for r in opportunity_ranked[:20]
+            if isinstance(r, dict)
         ],
         "trade_queue": queue_snap,
         "best": best,

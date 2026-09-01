@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -19,7 +20,6 @@ from app.domain.institutional_trading.ai_scalping.config import (
     DEFAULT_AI_SCALPING_CONFIG,
     DEFAULT_SCALPING_UNIVERSE,
 )
-
 
 EXPECTED_UNIVERSE = {
     "XAUUSD",
@@ -259,7 +259,9 @@ def test_portfolio_rank_must_include_dynamic_universe_symbols() -> None:
     from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
         scan_multi_asset_portfolio,
     )
-    from app.domain.institutional_trading.ai_scalping.symbol_state import SymbolStateBook
+    from app.domain.institutional_trading.ai_scalping.symbol_state import (
+        SymbolStateBook,
+    )
 
     audnzd = {
         "symbol": "AUDNZD",
@@ -463,3 +465,320 @@ async def test_score_records_ready_context_and_broker_symbol(
     assert row["context_status"] == "SYMBOL_CONTEXT_READY"
     assert row["broker_symbol"] == "EURUSD_I"
     assert row["reject"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_zero_spread_score_plus_quote_spread_does_not_abort_scan() -> None:
+    """Production: quote overlay sets spread='0.00012' while spread_score can be 0.
+
+    ``int(spread_score or spread)`` raised ValueError and aborted the whole body.
+    """
+    from app.domain.institutional_trading.ai_scalping.portfolio_scanner import (
+        _row_from_score,
+        scan_multi_asset_portfolio,
+    )
+    from app.domain.institutional_trading.ai_scalping.symbol_state import (
+        SymbolStateBook,
+    )
+
+    book = SymbolStateBook()
+    row = _row_from_score(
+        {
+            "symbol": "USDCHF",
+            "reject": False,
+            "direction": "SELL",
+            "ai_confidence": 88,
+            "trade_quality": 86,
+            "spread_score": 0,
+            "spread": "0.00012",
+            "liquidity": 80,
+            "execution_health_ok": True,
+        },
+        book=book,
+        config=DEFAULT_AI_SCALPING_CONFIG,
+    )
+    assert row.symbol == "USDCHF"
+    assert row.spread_score == 0
+
+    poisoned = {
+        "symbol": "GBPUSD",
+        "reject": False,
+        "direction": "BUY",
+        "ai_confidence": 80,
+        "trade_quality": 80,
+        "spread_score": 0,
+        "spread": "malformed",
+        "reasons": 123,
+        "liquidity": "n/a",
+        "execution_health_ok": True,
+    }
+    healthy = {
+        "symbol": "EURJPY",
+        "reject": False,
+        "direction": "BUY",
+        "ai_confidence": 90,
+        "trade_quality": 91,
+        "spread_score": 85,
+        "liquidity": 80,
+        "execution_health_ok": True,
+        "atr_pct": "0.12",
+    }
+    timeout = {
+        "symbol": "USDJPY",
+        "reject": True,
+        "reject_reason": "SYMBOL_TIMEOUT",
+        "direction": "NONE",
+        "context_status": "SYMBOL_TIMEOUT",
+        "failure_class": "SYMBOL_FAILURE",
+        "spread_score": 0,
+        "spread": "1.2",
+    }
+    out = scan_multi_asset_portfolio(
+        [healthy, poisoned, timeout],
+        open_positions=0,
+        config=replace(
+            DEFAULT_AI_SCALPING_CONFIG,
+            universe=("EURJPY", "GBPUSD", "USDJPY"),
+        ),
+        state_book=SymbolStateBook(),
+    )
+    symbols = {r.symbol for r in out.rows}
+    assert "EURJPY" in symbols
+    assert "GBPUSD" in symbols
+    assert "USDJPY" in symbols
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+@pytest.mark.asyncio
+async def test_one_symbol_timeout_does_not_abort_universe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.application.services.institutional_multi_asset_scanner import (
+        score_universe_with_budget,
+    )
+
+    async def _fake_score(_adapter: Any, symbol: str, **_k: Any) -> dict[str, Any]:
+        if symbol == "USDCHF":
+            raise TimeoutError("gateway hung")
+        if symbol == "GBPUSD":
+            raise RuntimeError("malformed history")
+        return {
+            "symbol": symbol,
+            "reject": False,
+            "direction": "BUY",
+            "ai_confidence": 88,
+            "trade_quality": 90,
+            "spread_score": 80,
+            "context_status": "SYMBOL_CONTEXT_READY",
+        }
+
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.score_symbol_for_scan",
+        _fake_score,
+    )
+    rows, stats = await score_universe_with_budget(
+        object(),
+        ("EURJPY", "USDCHF", "XAUUSD", "GBPUSD"),
+        budget_seconds=30.0,
+        per_symbol_timeout=2.0,
+        concurrency=2,
+    )
+    by_sym = {r["symbol"]: r for r in rows}
+    assert by_sym["EURJPY"]["reject"] is False
+    assert by_sym["XAUUSD"]["reject"] is False
+    assert by_sym["USDCHF"]["context_status"] == "SYMBOL_TIMEOUT"
+    assert by_sym["GBPUSD"]["context_status"] == "SCORING_ERROR"
+    assert int(stats["symbols_completed"]) >= 2
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+@pytest.mark.asyncio
+async def test_scan_body_survives_quote_spread_overlay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_score(_adapter: Any, symbol: str, **_k: Any) -> dict[str, Any]:
+        if symbol == "USDCHF":
+            return {
+                "symbol": "USDCHF",
+                "reject": False,
+                "direction": "SELL",
+                "ai_confidence": 88,
+                "trade_quality": 86,
+                "spread_score": 0,
+                "spread": "0.00012",
+                "bid": "0.80112",
+                "ask": "0.80124",
+                "liquidity": 80,
+                "execution_health_ok": True,
+                "atr_pct": "0.10",
+                "context_status": "SYMBOL_CONTEXT_READY",
+            }
+        if symbol == "XAUUSD":
+            return {
+                "symbol": "XAUUSD",
+                "reject": True,
+                "reject_reason": "SYMBOL_TIMEOUT",
+                "direction": "NONE",
+                "context_status": "SYMBOL_TIMEOUT",
+                "failure_class": "SYMBOL_FAILURE",
+                "spread_score": 0,
+                "spread": "1.4",
+            }
+        return {
+            "symbol": symbol,
+            "reject": False,
+            "direction": "BUY",
+            "ai_confidence": 84,
+            "trade_quality": 85,
+            "spread_score": 70,
+            "liquidity": 75,
+            "execution_health_ok": True,
+            "atr_pct": "0.11",
+            "context_status": "SYMBOL_CONTEXT_READY",
+        }
+
+    from app.application.services import institutional_multi_asset_scanner as mas
+    from app.application.services.market_universe_service import (
+        reset_market_universe_cache_for_tests,
+    )
+
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.score_symbol_for_scan",
+        _fake_score,
+    )
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
+    narrow = replace(
+        DEFAULT_AI_SCALPING_CONFIG,
+        universe=("EURUSD", "USDCHF", "XAUUSD"),
+        live_symbol_learning_enabled=False,
+        dynamic_universe_enabled=False,
+    )
+    try:
+        out = await run_institutional_multi_asset_scan(
+            mt5_adapter=object(),
+            config=narrow,
+            open_positions=0,
+        )
+        assert out.get("note") != "multi_asset_scan_body_failed"
+        assert out.get("scan_error_type") is None
+        symbols = {r["symbol"] for r in (out.get("noc_rows") or [])}
+        assert "EURUSD" in symbols
+        assert "USDCHF" in symbols
+        assert "XAUUSD" in symbols
+        usdchf = next(r for r in out["noc_rows"] if r["symbol"] == "USDCHF")
+        assert usdchf["direction"] == "SELL"
+        xau = next(r for r in out["noc_rows"] if r["symbol"] == "XAUUSD")
+        assert xau["reject"] is True
+        assert "TIMEOUT" in str(
+            xau.get("reject_reason") or xau.get("blocking_gate") or ""
+        ).upper()
+        eligible = {str(s).upper() for s in (out.get("eligible_symbols") or [])}
+        assert "EURUSD" in eligible
+        assert "USDCHF" in eligible
+        assert "XAUUSD" not in eligible
+    finally:
+        mas._LAST_SCAN = None
+        reset_market_universe_cache_for_tests()
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+@pytest.mark.asyncio
+async def test_missing_required_timeframe_isolates_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    async def _not_ready(*_a: Any, **_k: Any) -> Any:
+        return SimpleNamespace(
+            ok=False,
+            snapshot=None,
+            account=None,
+            reason="SYMBOL_CONTEXT_NOT_READY:M15:Insufficient bars",
+            diagnostics={"required_timeframes": ["H1", "M15", "M5", "M1"]},
+        )
+
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "app.domain.trading.execution_universe.broker_discovered_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.build_ite_cycle_market_context",
+        _not_ready,
+    )
+    row = await score_symbol_for_scan(object(), "GBPUSD")
+    assert row["reject"] is True
+    assert row["context_status"] == "SYMBOL_CONTEXT_NOT_READY"
+    assert "M15" in str(row.get("reject_reason") or "")
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+@pytest.mark.asyncio
+async def test_scoring_exception_isolates_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    async def _ready(*_a: Any, **_k: Any) -> Any:
+        return SimpleNamespace(
+            ok=True,
+            snapshot=SimpleNamespace(
+                trend=SimpleNamespace(alignment_score=80),
+                entry_opens=(),
+                entry_highs=(),
+                entry_lows=(),
+                entry_closes=(),
+            ),
+            account=SimpleNamespace(
+                atr=Decimal("0.0012"),
+                mid_price=Decimal("1.1700"),
+                bid=Decimal("1.1699"),
+                ask=Decimal("1.1701"),
+            ),
+            reason="ready",
+            diagnostics={"broker_symbol_resolved": "EURJPY"},
+            spread=Decimal("0.00012"),
+        )
+
+    def _boom(*_a: Any, **_k: Any) -> Any:
+        raise ValueError("malformed history")
+
+    monkeypatch.setattr(
+        "app.domain.trading.gold_only.gold_only_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "app.domain.trading.execution_universe.broker_discovered_enabled",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.build_ite_cycle_market_context",
+        _ready,
+    )
+    monkeypatch.setattr(
+        "app.application.services.institutional_multi_asset_scanner.score_scalping_setup",
+        _boom,
+    )
+    row = await score_symbol_for_scan(object(), "EURJPY")
+    assert row["reject"] is True
+    assert row["context_status"] == "SCORING_ERROR"
+    assert "ValueError" in str(row.get("reject_reason") or "")
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_scanner_does_not_import_telegram() -> None:
+    scanner = Path("app/application/services/institutional_multi_asset_scanner.py")
+    text = scanner.read_text(encoding="utf-8")
+    assert "telegram" not in text.lower()

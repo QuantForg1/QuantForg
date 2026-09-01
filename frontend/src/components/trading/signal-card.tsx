@@ -125,7 +125,7 @@ export function SignalCard({
       <div className="mt-4 grid grid-cols-2 gap-3 pl-1">
         <div>
           <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-            Strength
+            Score
           </p>
           <p className="mt-0.5 font-mono text-xl font-semibold tabular leading-none text-[var(--fg)]">
             {signalStrength(row)}
