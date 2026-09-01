@@ -162,20 +162,6 @@ export const TRADER_DESK_ORDER = [
   "/settings",
 ] as const;
 
-const TRADER_RAIL_SECTIONS: Record<
-  (typeof TRADER_DESK_ORDER)[number],
-  NonNullable<PrimaryNavItem["section"]>
-> = {
-  "/dashboard": "Workspace",
-  "/markets": "Workspace",
-  "/signals": "Workspace",
-  "/research": "Research",
-  "/portfolio": "Workspace",
-  "/terminal": "Trading",
-  "/settings": "System",
-};
-
-/** @deprecated Ops chrome uses /admin directly — never append Admin to trader rail. */
 export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
 
 /**
@@ -186,10 +172,7 @@ export function visiblePrimaryRail(_isOperator = false): PrimaryNavItem[] {
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
   return TRADER_DESK_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
-    .map((item) => ({
-      ...item,
-      section: TRADER_RAIL_SECTIONS[item.href as (typeof TRADER_DESK_ORDER)[number]],
-    }));
+    .map(({ section: _section, ...item }) => item);
 }
 
 /**

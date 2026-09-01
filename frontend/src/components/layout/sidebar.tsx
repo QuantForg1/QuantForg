@@ -126,7 +126,7 @@ function NavBody({
 
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Primary">
-      <ul className="space-y-0.5">
+      <ul className="space-y-1">
         {rail.map((item, index) => {
           const prev = index > 0 ? rail[index - 1] : undefined;
           const sectionChanged = item.section !== prev?.section;

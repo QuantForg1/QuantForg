@@ -17,7 +17,7 @@ export function AuthShell({
       tabIndex={-1}
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_85%_40%,rgba(255,90,31,0.1),transparent_58%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_88%_8%,rgba(255,90,31,0.05),transparent_55%)]"
         aria-hidden
       />
       <div className="relative w-full max-w-[420px]">
@@ -25,7 +25,7 @@ export function AuthShell({
           <BrandLogo size={40} priority />
         </Link>
         <div className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[var(--shadow-elevated)]">
-          <h1 className="text-center font-[family-name:var(--font-display)] text-[1.65rem] font-semibold leading-tight tracking-tight text-[var(--fg)]">
+          <h1 className="text-center font-[family-name:var(--font-display)] text-[1.45rem] font-semibold leading-tight tracking-tight text-[var(--fg)]">
             {title}
           </h1>
           <p className="mt-2 text-center text-sm text-[var(--fg-muted)]">{subtitle}</p>

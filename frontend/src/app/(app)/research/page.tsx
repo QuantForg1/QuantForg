@@ -21,8 +21,8 @@ export default function ResearchPage() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-1.5">
-        <p className="text-center text-[11px] font-medium uppercase tracking-wide text-[var(--fg-subtle)]">
-          RESEARCH · NOT A TRADE AUTHORIZATION
+        <p className="text-center text-[11px] font-medium text-[var(--fg-muted)]">
+          Research is independent of your MT5 connection · not a trade authorization
         </p>
         <Link
           href="/signals"

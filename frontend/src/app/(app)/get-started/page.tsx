@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,7 +10,6 @@ import {
   ProductTourTrigger,
 } from "@/components/platform/product-tour";
 import {
-  CHECKLIST_ITEMS,
   getChecklist,
   setChecklistItem,
   type ChecklistState,
@@ -87,73 +85,43 @@ export default function GetStartedPage() {
         <ProductTour forceOpen onClose={() => setTourOpen(false)} />
       ) : null}
 
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Your first steps</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {CHECKLIST_ITEMS.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-medium">{item.title}</div>
-                  <div className="text-xs text-[var(--fg-muted)]">
-                    {item.description}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge tone={checklist?.[item.id] ? "success" : "neutral"}>
-                    {checklist?.[item.id] ? "done" : "next"}
-                  </Badge>
-                  <Button size="sm" variant="secondary" asChild>
-                    <Link
-                      href={item.href}
-                      onClick={() =>
-                        setChecklist(setChecklistItem(item.id, true))
-                      }
-                    >
-                      Open
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>How QuantForg is organized</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ol className="list-decimal space-y-3 pl-5 text-sm">
-              {STEPS.map((s) => (
-                <li key={s.title}>
-                  <div className="font-medium">{s.title}</div>
-                  <div className="text-[var(--fg-muted)]">{s.detail}</div>
-                  {s.href ? (
-                    <Button size="sm" variant="secondary" className="mt-2" asChild>
-                      <Link
-                        href={s.href}
-                        onClick={() =>
-                          s.checklist
-                            ? setChecklist(setChecklistItem(s.checklist, true))
-                            : undefined
-                        }
-                      >
-                        Continue
-                      </Link>
-                    </Button>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          </CardContent>
-        </Card>
-      </div>
+      <ol className="space-y-3">
+        {STEPS.map((s, index) => (
+          <li
+            key={s.title}
+            className="flex flex-col gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--fg-subtle)]">
+                Step {index + 1}
+              </p>
+              <p className="mt-1 text-sm font-medium text-[var(--fg)]">{s.title}</p>
+              <p className="mt-1 text-sm leading-relaxed text-[var(--fg-muted)]">{s.detail}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {s.checklist ? (
+                <Badge tone={checklist?.[s.checklist] ? "success" : "neutral"}>
+                  {checklist?.[s.checklist] ? "done" : "next"}
+                </Badge>
+              ) : null}
+              {s.href ? (
+                <Button size="sm" variant="secondary" asChild>
+                  <Link
+                    href={s.href}
+                    onClick={() =>
+                      s.checklist
+                        ? setChecklist(setChecklistItem(s.checklist, true))
+                        : undefined
+                    }
+                  >
+                    Continue
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

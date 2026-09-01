@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Cable, Layers } from "lucide-react";
@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
 import { DeskEmpty, DeskError, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
-import { ConnectionStatus } from "@/components/trading/connection-status";
 import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
+import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
+import { SignalCard } from "@/components/trading/signal-card";
+import { Dialog, SheetContent } from "@/components/ui/dialog";
 import {
   marketUniverseApi,
   portfolioApi,
@@ -23,7 +25,6 @@ import { useAuth } from "@/providers/auth-provider";
 // Auth still required for session; Admin link removed from trader Home.
 import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
-import { directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
 import {
   lastUpdatedCopy,
   MARKET_UNIVERSE_QUERY_KEY,
@@ -41,11 +42,6 @@ import {
   positionExposureLabel,
   resolveConnectionPresentation,
   robotDisplayState,
-  scoreDisplay,
-  signalBoardDirection,
-  signalFreshness,
-  SIGNALS_NOT_AUTHORIZATION,
-  RESEARCH_OPPORTUNITY,
   topResearchOpportunities,
   TRADER_POLL_MS,
   traderFacingErrorMessage,
@@ -93,6 +89,7 @@ function statusTone(
 export default function DashboardPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [selected, setSelected] = useState<Row | null>(null);
 
   const sessionQ = useQuery({
     queryKey: ["trading-session"],
@@ -280,7 +277,7 @@ export default function DashboardPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Workspace"
+          eyebrow="Overview"
           title={workspaceGreeting()}
           description="Your QuantForg workspace."
         />
@@ -293,7 +290,7 @@ export default function DashboardPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Workspace"
+          eyebrow="Overview"
           title={workspaceGreeting()}
           description="Your QuantForg workspace."
         />
@@ -312,38 +309,38 @@ export default function DashboardPage() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
-        eyebrow="Workspace"
+        eyebrow="Overview"
         title={greeting}
         description={
           noBroker
-            ? "Your QuantForg workspace. Research is available without a broker. Connect when you are ready to trade."
+            ? "Explore markets and signals. Connect a broker when you are ready to trade."
             : sessionMismatch
-              ? "Your QuantForg workspace. Reconnect your trading session to restore account data."
-              : "Your QuantForg workspace."
+              ? "Reconnect your broker session to restore account data. Research remains available."
+              : signalPreview.length > 0
+                ? "Review the strongest signals, then open Trading only when you intend to execute."
+                : "Research is independent of live trading. Live trading stays off until you authorize it."
         }
         actions={
           noBroker || sessionMismatch ? (
             <Button asChild>
               <Link href="/broker">
-                <Cable className="h-4 w-4" /> Connect Broker
+                <Cable className="h-4 w-4" /> Connect broker
               </Link>
             </Button>
           ) : (
             <Button variant="secondary" size="sm" asChild>
-              <Link href="/terminal">Open terminal</Link>
+              <Link href="/signals">Open signals</Link>
             </Button>
           )
         }
       />
-
-      <ConnectionStatus session={session} />
 
       <section
         aria-label="Workspace status"
         className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
       >
         <DeskMetric
-          label="Account"
+          label="Broker"
           value={
             noBroker
               ? "Not connected"
@@ -360,7 +357,16 @@ export default function DashboardPage() {
               : "Available"
           }
         />
-        <DeskMetric label="Live trading" value={liveTradingHint.label} />
+        <DeskMetric
+          label="Live trading"
+          value={
+            liveTradingHint.label === "NOT AUTHORIZED"
+              ? "Not authorized"
+              : liveTradingHint.label === "UNAVAILABLE"
+                ? "Unavailable"
+                : liveTradingHint.label
+          }
+        />
         <DeskMetric
           label="Markets"
           value={
@@ -375,75 +381,11 @@ export default function DashboardPage() {
         />
       </section>
 
-      <section aria-labelledby="portfolio-snapshot">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 id="portfolio-snapshot" className="text-sm font-medium text-[var(--fg)]">
-            Account snapshot
-          </h2>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/portfolio">View portfolio</Link>
-          </Button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <DeskMetric label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
-          <DeskMetric label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
-          <DeskMetric label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
-          <DeskMetric
-            label="Free margin"
-            value={moneyOrUnavailable(session.free_margin, showMetrics)}
-          />
-        </div>
-      </section>
-
-      <section aria-labelledby="robot-status">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 id="robot-status" className="text-sm font-medium text-[var(--fg)]">
-            Robot / Analysis
-          </h2>
-          <Badge tone={statusTone(robot)}>{robot}</Badge>
-        </div>
-        <p className="mb-3 text-xs text-[var(--fg-subtle)]">
-          Research analysis runs independently. {liveTradingHint.detail}
-        </p>
-        {noBroker ? (
-          <p className="mb-3 text-sm text-[var(--fg-muted)]">BROKER NOT CONNECTED</p>
-        ) : sessionMismatch ? (
-          <p className="mb-3 text-sm text-[var(--fg-muted)]">ACCOUNT SESSION MISMATCH</p>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
-            onClick={() => robotMut.mutate("start")}
-          >
-            Start
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={robotMut.isPending || robot !== "RUNNING"}
-            onClick={() => robotMut.mutate("pause")}
-          >
-            Pause
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={
-              robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
-            }
-            onClick={() => robotMut.mutate("stop")}
-          >
-            Stop
-          </Button>
-        </div>
-      </section>
-
       <section aria-labelledby="top-signals">
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 id="top-signals" className="text-sm font-medium text-[var(--fg)]">
-              Top opportunities
+              Top signals
             </h2>
             {lastUpdatedCopy(research.asOf) ? (
               <p className="mt-1 text-xs text-[var(--fg-subtle)]">{lastUpdatedCopy(research.asOf)}</p>
@@ -453,13 +395,13 @@ export default function DashboardPage() {
             <Link href="/signals">View all signals</Link>
           </Button>
         </div>
-        <p className="mb-3 text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-          {RESEARCH_OPPORTUNITY} · {SIGNALS_NOT_AUTHORIZATION}
+        <p className="mb-3 text-sm text-[var(--fg-muted)]">
+          Research intelligence — independent of your MT5 connection, not a trade authorization.
         </p>
         {signalState === "UNAVAILABLE" ? (
           <DeskEmpty
             icon={Activity}
-            title={signalCopy.title}
+            title="Signals unavailable"
             description={signalCopy.description}
           />
         ) : signalState === "NOT_READY" || signalsQ.isLoading ? (
@@ -467,30 +409,16 @@ export default function DashboardPage() {
         ) : signalState === "LIVE_EMPTY" || signalPreview.length === 0 ? (
           <DeskEmpty
             icon={Activity}
-            title={signalCopy.title}
+            title="No signals"
             description={signalCopy.description}
           />
         ) : (
-          <ul className="space-y-2">
-            {signalPreview.map((row, i) => {
-              const dir = signalBoardDirection(row);
-              const freshness = signalFreshness(row);
-              return (
-                <li
-                  key={str(row.broker_symbol || row.symbol, String(i))}
-                  className="flex items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] px-3 py-2 text-sm"
-                >
-                  <span className="truncate font-medium">
-                    {str(row.broker_symbol || row.symbol)}
-                  </span>
-                  <Badge tone={directionTone(dir)}>{dir}</Badge>
-                  <span className="tabular text-[var(--fg-muted)]">
-                    {scoreDisplay(row.opportunity_score)}
-                  </span>
-                  <Badge tone={freshnessTone(freshness)}>{freshness}</Badge>
-                </li>
-              );
-            })}
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Top signals">
+            {signalPreview.map((row, i) => (
+              <li key={str(row.broker_symbol || row.symbol, String(i))}>
+                <SignalCard compact row={row} onOpen={() => setSelected(row)} />
+              </li>
+            ))}
           </ul>
         )}
       </section>
@@ -507,8 +435,8 @@ export default function DashboardPage() {
         {noBroker || sessionMismatch ? (
           <DeskEmpty
             icon={Layers}
-            title={noBroker ? "BROKER NOT CONNECTED" : "ACCOUNT SESSION MISMATCH"}
-            description="Connect your broker to load your positions."
+            title={noBroker ? "No broker connected" : "Session mismatch"}
+            description="Connect your broker to load your positions. Research and signals remain available."
             actionLabel="Connect Broker"
             actionHref="/broker"
           />
@@ -550,20 +478,19 @@ export default function DashboardPage() {
         </div>
         {noBroker ? (
           <p className="mb-3 text-sm text-[var(--fg-muted)]" role="status">
-            GLOBAL RESEARCH AVAILABLE. Personal broker: not connected.
-            Live trading unavailable until broker connection.
+            Global research is available without a broker. Live trading stays unavailable until you connect.
           </p>
         ) : null}
         {sessionMismatch ? (
           <p className="mb-3 text-sm text-[var(--warning)]" role="status">
-            ACCOUNT SESSION MISMATCH — live trading is blocked. Global research remains available.
+            Broker session mismatch — live trading is blocked. Global research remains available.
           </p>
         ) : null}
         {catalogue === "UNAVAILABLE" ? (
           <DeskEmpty
             icon={Activity}
-            title="RESEARCH CATALOGUE UNAVAILABLE"
-            description="Global market catalogue is currently unavailable. This is not an empty market."
+            title="Market catalogue unavailable"
+            description="The global market catalogue is currently unavailable. This is not an empty market."
           />
         ) : catalogue === "NOT_READY" || universeQ.isLoading ? (
           <DeskSkeleton rows={3} />
@@ -637,6 +564,66 @@ export default function DashboardPage() {
           </ul>
         )}
       </section>
+
+      <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+        <summary className="cursor-pointer rounded-sm text-sm font-medium text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+          Account details
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <DeskMetric label="Balance" value={moneyOrUnavailable(session.balance, showMetrics)} />
+          <DeskMetric label="Equity" value={moneyOrUnavailable(session.equity, showMetrics)} />
+          <DeskMetric label="Margin" value={moneyOrUnavailable(session.margin, showMetrics)} />
+          <DeskMetric
+            label="Free margin"
+            value={moneyOrUnavailable(session.free_margin, showMetrics)}
+          />
+        </div>
+      </details>
+
+      <details className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+        <summary className="cursor-pointer rounded-sm text-sm font-medium text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+          Advanced · analysis controls
+        </summary>
+        <div className="mt-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={statusTone(robot)}>{robot}</Badge>
+            <span className="text-xs text-[var(--fg-subtle)]">{liveTradingHint.detail}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={robotMut.isPending || noBroker || sessionMismatch || robot === "RUNNING"}
+              onClick={() => robotMut.mutate("start")}
+            >
+              Start
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={robotMut.isPending || robot !== "RUNNING"}
+              onClick={() => robotMut.mutate("pause")}
+            >
+              Pause
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={
+                robotMut.isPending || (robot !== "RUNNING" && robot !== "PAUSED")
+              }
+              onClick={() => robotMut.mutate("stop")}
+            >
+              Stop
+            </Button>
+          </div>
+        </div>
+      </details>
+
+      <Dialog open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
+        <SheetContent aria-describedby={undefined}>
+          {selected ? <IntelligenceDetail row={selected} kind="signal" /> : null}
+        </SheetContent>
+      </Dialog>
     </div>
   );
 }

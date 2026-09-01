@@ -272,15 +272,15 @@ export function PortfolioWorkspace() {
       {noBroker ? (
         <DeskEmpty
           icon={Activity}
-          title="BROKER NOT CONNECTED"
-          description="Connect and verify your broker to load this account's portfolio."
+          title="No broker connected"
+          description="Connect your broker to load this account's portfolio. Research and signals remain available."
           actionLabel="Connect Broker"
           actionHref="/broker"
         />
       ) : mismatch ? (
         <DeskEmpty
           icon={Activity}
-          title="ACCOUNT SESSION MISMATCH"
+          title="Session mismatch"
           description="This terminal is bound to another session. Reconnect your own account."
           actionLabel="Reconnect"
           actionHref="/broker"
@@ -341,7 +341,7 @@ export function PortfolioWorkspace() {
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Robot control</CardTitle>
             <Badge tone={noBroker ? "warning" : robotTone(robot)}>
-              {noBroker ? "BROKER NOT CONNECTED" : robot}
+              {noBroker ? "Not connected" : robot}
             </Badge>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -439,7 +439,7 @@ export function PortfolioWorkspace() {
           {noBroker || mismatch ? (
             <DeskEmpty
               icon={Layers}
-              title={noBroker ? "BROKER NOT CONNECTED" : "ACCOUNT SESSION MISMATCH"}
+              title={noBroker ? "No broker connected" : "Session mismatch"}
               description="Connect your own broker to load positions."
             />
           ) : portfolioQ.isLoading ? (
@@ -493,7 +493,7 @@ export function PortfolioWorkspace() {
             {noBroker || mismatch ? (
               <DeskEmpty
                 icon={Activity}
-                title="BROKER NOT CONNECTED"
+                title="No broker connected"
                 description="Connect your broker to load account history."
               />
             ) : historyQ.isLoading ? (
@@ -501,7 +501,7 @@ export function PortfolioWorkspace() {
             ) : historyUnavailable ? (
               <DeskEmpty
                 icon={Activity}
-                title="DATA UNAVAILABLE"
+                title="History unavailable"
                 description="Closed-trade history could not be loaded. This is not a zero performance chart."
               />
             ) : deals.length === 0 ? (

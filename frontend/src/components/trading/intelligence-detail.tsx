@@ -13,7 +13,8 @@ import {
   marketDirectionLabel,
   marketSignalLabel,
   presentField,
-  priceDisplay,
+  presentLevel,
+  presentPrice,
   researchMetricDisplay,
   rowRegime,
   rowSession,
@@ -48,7 +49,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">{label}</dt>
-      <dd className="text-sm text-[var(--fg)]">{value}</dd>
+      <dd className="font-mono text-sm tabular text-[var(--fg)]">{value}</dd>
     </div>
   );
 }
@@ -56,30 +57,32 @@ function Detail({ label, value }: { label: string; value: string }) {
 const WHY_SECTIONS: Array<{ title: string; labels: string[] }> = [
   {
     title: "Signal",
-    labels: ["Direction", "Why this signal exists", "Why the model prefers this direction"],
+    labels: ["Direction"],
   },
   {
-    title: "Market condition",
-    labels: ["Market condition", "Market", "Market regime", "Session"],
+    title: "Market regime",
+    labels: ["Market regime", "Market condition", "Market", "Session"],
   },
   {
-    title: "Price structure",
-    labels: ["Structure", "Trend / structure", "Zone"],
+    title: "Key evidence",
+    labels: [
+      "Momentum",
+      "Trend / structure",
+      "Structure",
+      "Volatility",
+      "Zone",
+      "Timing",
+      "Liquidity",
+      "Data quality",
+    ],
   },
-  { title: "Momentum", labels: ["Momentum"] },
-  { title: "Trend", labels: ["Trend / structure"] },
-  { title: "Volatility", labels: ["Volatility"] },
   {
-    title: "Technical evidence",
-    labels: ["Timing", "Liquidity", "Data quality"],
+    title: "Research interpretation",
+    labels: ["Why this signal exists", "Why the model prefers this direction"],
   },
   {
     title: "Risk context",
     labels: ["Risk context", "Blockers", "Invalidation"],
-  },
-  {
-    title: "Model reasoning",
-    labels: ["Why this signal exists", "Why the model prefers this direction"],
   },
 ];
 
@@ -123,14 +126,20 @@ export function IntelligenceDetail({
   return (
     <div className="space-y-5 pr-2">
       <div>
-        <DialogTitle>{symbol}</DialogTitle>
-        <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
-          {kind === "signal" ? `${RESEARCH_SIGNAL} · ` : ""}
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
+          Why this signal
+        </p>
+        <DialogTitle className="mt-1">{symbol}</DialogTitle>
+        <p className="mt-1 text-sm text-[var(--fg-muted)]">
+          {kind === "signal" ? `${RESEARCH_SIGNAL}. ` : ""}
           {SIGNALS_NOT_AUTHORIZATION}
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        <Badge tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}>
+        <Badge
+          tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}
+          aria-label={`Signal direction ${dir}`}
+        >
           {signal}
         </Badge>
         <Badge tone={freshnessTone(freshness)}>{signalFreshnessLabel(freshness)}</Badge>
@@ -141,102 +150,92 @@ export function IntelligenceDetail({
         {kind === "market" ? (
           <Detail label="Name" value={instrumentName(row)} />
         ) : null}
-        <Detail label="Asset class" value={presentField(row.asset_class)} />
-        <Detail label="Trading status" value={marketDataState(row)} />
-        <Detail label="Signal" value={signal} />
-        <Detail label="Direction" value={dir} />
-        <Detail label="Opportunity" value={score} />
-        <Detail label="Edge" value={edge} />
+        <Detail
+          label="Current price"
+          value={
+            presentPrice(row.current_price ?? row.price ?? row.bid) === "Price unavailable"
+              ? "Not available"
+              : presentPrice(row.current_price ?? row.price ?? row.bid)
+          }
+        />
+        <Detail
+          label="Entry"
+          value={presentLevel(row.entry ?? row.entry_candidate, "Entry")}
+        />
+        <Detail
+          label="Stop loss"
+          value={presentLevel(
+            row.stop_loss ?? row.SL_candidate ?? row.sl_candidate ?? row.stop,
+            "SL",
+          )}
+        />
+        <Detail
+          label="Take profit"
+          value={presentLevel(
+            row.take_profit ?? row.TP_candidate ?? row.tp_candidate ?? row.target,
+            "TP",
+          )}
+        />
         <Detail label="Risk/Reward" value={researchMetricDisplay(row, row.RR ?? row.rr)} />
         <Detail
           label="Strength"
-          value={signal === "NO SIGNAL" ? "—" : signalStrength(row)}
+          value={signal === "NO SIGNAL" ? "Not available" : signalStrength(row)}
         />
         <Detail
-          label="Confidence / score"
+          label="Score"
           value={
             signal === "NO SIGNAL"
-              ? "—"
+              ? "Not available"
               : presentField(row.research_rank_score) === "Not available"
-                ? "UNAVAILABLE"
+                ? "Not available"
                 : String(row.research_rank_score)
           }
         />
-        <Detail label="Session" value={presentField(rowSession(row))} />
+        <Detail label="Opportunity" value={score} />
+        <Detail label="Edge" value={edge} />
         <Detail label="Regime" value={presentField(rowRegime(row))} />
-        <Detail label="Market condition" value={presentField(row.market_condition ?? row.data_state)} />
-        <Detail label="Data freshness" value={freshness} />
         <Detail label="Timestamp" value={signalTimestampLabel(row)} />
         {kind === "market" ? (
           <>
-            <Detail label="Bid" value={priceDisplay(row.bid)} />
-            <Detail label="Ask" value={priceDisplay(row.ask)} />
+            <Detail label="Bid" value={presentPrice(row.bid)} />
+            <Detail label="Ask" value={presentPrice(row.ask)} />
+            <Detail label="Trading status" value={marketDataState(row)} />
+            <Detail label="Session" value={presentField(rowSession(row))} />
           </>
-        ) : (
-          <>
-            <Detail label="Current price" value={priceDisplay(row.current_price ?? row.price ?? row.bid)} />
-            <Detail
-              label="Signal type"
-              value={presentField(row.signal_type ?? row.entry_type)}
-            />
-            <Detail
-              label="Entry"
-              value={presentField(row.entry ?? row.entry_candidate)}
-            />
-            <Detail
-              label="Stop loss"
-              value={presentField(
-                row.stop_loss ?? row.SL_candidate ?? row.sl_candidate ?? row.stop,
-              )}
-            />
-            <Detail
-              label="Take profit"
-              value={presentField(
-                row.take_profit ?? row.TP_candidate ?? row.tp_candidate ?? row.target,
-              )}
-            />
-          </>
-        )}
-        <Detail label="Risk status" value={presentField(row.risk_status ?? row.RISK_CONDITIONS)} />
+        ) : null}
       </dl>
       {signal === "NO SIGNAL" ? (
-        <p className="text-sm text-[var(--fg-muted)]">NO SIGNAL</p>
+        <p className="text-sm text-[var(--fg-muted)]">No signal evidence is available for this instrument.</p>
       ) : whySections.length > 0 ? (
         <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-[var(--fg)]">Why this signal</h3>
           {whySections.map((section) => (
             <div key={section.title}>
-              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+              <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
                 {section.title}
-              </h4>
+              </h3>
               <ul className="space-y-2">
                 {section.items.map((factor) => (
                   <li
                     key={factor.label}
-                    className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
+                    className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2"
                   >
                     <p className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
                       {factor.label}
                     </p>
-                    <p className="text-sm text-[var(--fg)]">{factor.value}</p>
+                    <p className="text-sm leading-relaxed text-[var(--fg)]">{factor.value}</p>
                   </li>
                 ))}
               </ul>
             </div>
           ))}
-          <p className="text-sm text-[var(--fg)]">
-            Research conclusion: {dir} — {RESEARCH_SIGNAL}
-          </p>
         </section>
       ) : (
         <p className="text-sm text-[var(--fg-muted)]">{EXPLANATION_UNAVAILABLE}</p>
       )}
       <div className="border-t border-[var(--border)] pt-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--fg-subtle)]">
-          Research intelligence
-        </p>
-        <p className="mt-1 text-xs text-[var(--fg-muted)]">
-          Not trade authorization. There is no execute or place-order action on this desk.
+        <p className="text-xs leading-relaxed text-[var(--fg-muted)]">
+          This is research intelligence, not a guaranteed trade outcome. There is no execute
+          action on this desk.
         </p>
       </div>
       {kind === "market" ? (

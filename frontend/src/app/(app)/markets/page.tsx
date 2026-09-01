@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskEmpty, DeskSkeleton } from "@/components/desk/primitives";
-import { ConnectionStatus } from "@/components/trading/connection-status";
 import { MarketCatalogueRows, ResearchAdvisoryNote } from "@/components/trading/market-catalogue-rows";
 import { marketUniverseApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
@@ -93,8 +92,8 @@ export default function MarketsPage() {
     <div className="min-w-0 space-y-4">
       <PageHeader
         eyebrow="Markets"
-        title="Global market discovery"
-        description="Market overview, asset classes, and research status across the live catalogue. Personal MT5 is not required."
+        title="Global market intelligence"
+        description="Asset classes, research activity, and available instruments. Research does not require MT5."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -116,7 +115,6 @@ export default function MarketsPage() {
         aria-label="Markets command"
         className="flex flex-wrap items-center gap-2"
       >
-        <ConnectionStatus session={session} compact />
         <Badge
           tone={
             catalogue === "LIVE_ROWS"
@@ -126,12 +124,12 @@ export default function MarketsPage() {
                 : "warning"
           }
         >
-          {status}
+          {status === "LIVE_ROWS" ? "Live catalogue" : status}
         </Badge>
         <Badge
           tone={source === "LIVE_BROKER" ? "success" : "warning"}
         >
-          {source}
+          {source === "LIVE_BROKER" ? "Live broker" : source}
         </Badge>
         {instrumentCount ? (
           <span className="text-xs text-[var(--fg-subtle)]">
@@ -150,13 +148,12 @@ export default function MarketsPage() {
       <ResearchAdvisoryNote />
       {noBroker ? (
         <p className="text-sm text-[var(--fg-muted)]" role="status">
-          GLOBAL RESEARCH AVAILABLE. Personal broker: not connected.
-          Live trading unavailable until broker connection.
+          Global research is available without a personal broker. Live trading stays unavailable until you connect.
         </p>
       ) : null}
       {mismatch ? (
         <p className="text-sm text-[var(--warning)]" role="status">
-          ACCOUNT SESSION MISMATCH — live trading is blocked. Global research remains available.
+          Broker session mismatch — live trading is blocked. Global research remains available.
         </p>
       ) : null}
       {refreshError ? (
@@ -170,7 +167,7 @@ export default function MarketsPage() {
       ) : catalogue === "UNAVAILABLE" ? (
         <DeskEmpty
           icon={Activity}
-          title="RESEARCH CATALOGUE UNAVAILABLE"
+          title="Market catalogue unavailable"
           description={
             str(universe.reason || session.catalogue_last_error, "").trim() ||
             "Global market catalogue is currently unavailable. This is not an empty market."

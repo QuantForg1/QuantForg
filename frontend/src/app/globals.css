@@ -44,9 +44,8 @@
   --radius-sm: 0.5rem;
 
   --bg-ambient:
-    radial-gradient(ellipse 70% 50% at 88% 0%, rgba(255, 90, 31, 0.08), transparent 52%),
-    radial-gradient(ellipse 50% 40% at 8% 88%, rgba(56, 189, 248, 0.05), transparent 48%),
-    linear-gradient(180deg, #0f172a 0%, #0b1120 48%, #0a101c 100%);
+    radial-gradient(ellipse 55% 40% at 92% 0%, rgba(255, 90, 31, 0.04), transparent 58%),
+    linear-gradient(180deg, #0f172a 0%, #0b1120 52%, #0a101c 100%);
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;
