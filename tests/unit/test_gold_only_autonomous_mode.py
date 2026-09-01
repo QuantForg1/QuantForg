@@ -106,17 +106,19 @@ def test_gold_only_wins_over_multi_symbol_settings() -> None:
     assert settings.gold_only_mode is True
 
 
-def test_production_forces_gold_only_mode() -> None:
+def test_production_remaps_gold_only_to_broker_discovered() -> None:
     settings = production_settings(
         secret_key="a-real-production-secret-key-with-enough-entropy-here",
         postgres_password="a-real-production-password-here",
-        gold_only_mode=False,
-        multi_symbol_enabled=True,
+        gold_only_mode=True,
+        multi_symbol_enabled=False,
         institutional_alpha_enabled=True,
+        execution_universe_mode="GOLD_ONLY",
     )
-    assert settings.gold_only_mode is True
-    assert settings.multi_symbol_enabled is False
-    assert str(settings.execution_universe_mode).upper() == "GOLD_ONLY"
+    assert settings.gold_only_mode is False
+    assert settings.multi_symbol_enabled is True
+    assert str(settings.execution_universe_mode).upper() == "BROKER_DISCOVERED"
+    assert bool(getattr(settings, "force_first_trade", False)) is False
 
 
 def test_scanner_evaluates_xauusd_i_only(gold_only: None) -> None:

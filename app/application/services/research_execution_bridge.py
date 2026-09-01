@@ -50,23 +50,11 @@ def live_authorization_snapshot() -> dict[str, Any]:
         }
 
 
-def research_live_focus_symbols(*, limit: int = _MAX_FOCUS) -> list[str]:
-    """BUY/SELL research symbols for ITE evaluation when live trading is ENABLED.
-
-    Empty when the controller is not ENABLED. Does not authorize an order.
-    """
-    auth = live_authorization_snapshot()
-    if not auth.get("orders_may_submit"):
-        return []
-    try:
-        from app.application.services.market_universe_service import (
-            get_last_market_universe_snapshot,
-        )
-
-        snap = get_last_market_universe_snapshot() or {}
-    except Exception:
-        logger.info("research_focus_snapshot_unavailable")
-        return []
+def _ranked_research_buy_sell(
+    snap: dict[str, Any],
+    *,
+    limit: int,
+) -> list[str]:
     ranked: list[tuple[float, str]] = []
     seen: set[str] = set()
     for row in _research_signal_rows(snap):
@@ -83,6 +71,34 @@ def research_live_focus_symbols(*, limit: int = _MAX_FOCUS) -> list[str]:
         ranked.append((score, sym))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [sym for _score_v, sym in ranked[: max(1, int(limit or _MAX_FOCUS))]]
+
+
+def research_scan_focus_symbols(*, limit: int = _MAX_FOCUS) -> list[str]:
+    """BUY/SELL research desks for scan membership. Independent of live trading.
+
+    Does not authorize an order. Missing/stale snapshot → empty.
+    """
+    try:
+        from app.application.services.market_universe_service import (
+            get_last_market_universe_snapshot,
+        )
+
+        snap = get_last_market_universe_snapshot() or {}
+    except Exception:
+        logger.info("research_scan_snapshot_unavailable")
+        return []
+    return _ranked_research_buy_sell(snap, limit=limit)
+
+
+def research_live_focus_symbols(*, limit: int = _MAX_FOCUS) -> list[str]:
+    """BUY/SELL research symbols for ITE evaluation when live trading is ENABLED.
+
+    Empty when the controller is not ENABLED. Does not authorize an order.
+    """
+    auth = live_authorization_snapshot()
+    if not auth.get("orders_may_submit"):
+        return []
+    return research_scan_focus_symbols(limit=limit)
 
 
 def merge_research_into_execution_handoff(
@@ -220,14 +236,17 @@ def _clamp_handoff_to_execution_policy(
 def _symbol_in_execution_universe(sym: str) -> bool:
     if not sym:
         return False
-    if not _gold_only_execution():
-        return True
     try:
-        from app.domain.trading.gold_only import is_gold_symbol
-
-        return bool(is_gold_symbol(sym))
+        return bool(execution_symbol_allowed(sym))
     except Exception:
-        return _desk_key(sym) in {"XAUUSD", "GOLD"}
+        if not _gold_only_execution():
+            return False
+        try:
+            from app.domain.trading.gold_only import is_gold_symbol
+
+            return bool(is_gold_symbol(sym))
+        except Exception:
+            return _desk_key(sym) in {"XAUUSD", "GOLD"}
 
 
 def overlay_cycle_matches_row(row: dict[str, Any], last: dict[str, Any]) -> bool:

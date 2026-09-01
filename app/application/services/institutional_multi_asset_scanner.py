@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -290,6 +291,108 @@ def _noc_row_from_score(score: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def focus_broker_discovered_scan_universe(
+    live: Sequence[str],
+    *,
+    seed: Sequence[str] | None = None,
+    research_focus: Sequence[str] | None = None,
+    cap: int = 36,
+) -> tuple[str, ...]:
+    """Map research + scalping seed desks onto LIVE_BROKER catalogue spellings.
+
+    Does not invent symbols. Desks missing from the live catalogue are skipped
+    (SYMBOL_NOT_AVAILABLE). Does not scan the entire broker book.
+    """
+    from app.domain.trading.execution_universe import desk_code_for_execution
+
+    live_codes = [str(s).strip() for s in live if str(s).strip()]
+    if not live_codes:
+        return ()
+    exact: dict[str, str] = {}
+    by_desk: dict[str, str] = {}
+    for code in live_codes:
+        upper = code.upper()
+        exact.setdefault(upper, code)
+        desk = desk_code_for_execution(code)
+        if desk:
+            by_desk.setdefault(desk, code)
+
+    wanted: list[str] = []
+    seen_wanted: set[str] = set()
+    for raw in list(research_focus or ()) + list(
+        seed if seed is not None else DEFAULT_SCALPING_UNIVERSE
+    ):
+        token = str(raw or "").strip().upper()
+        if not token or token in seen_wanted:
+            continue
+        desk = desk_code_for_execution(token) or token
+        if (
+            token in BROKER_UNAVAILABLE_SCALP_SYMBOLS
+            or desk in BROKER_UNAVAILABLE_SCALP_SYMBOLS
+        ):
+            continue
+        seen_wanted.add(token)
+        wanted.append(token)
+
+    out: list[str] = []
+    seen_live: set[str] = set()
+    limit = max(1, int(cap or 36))
+    for token in wanted:
+        mapped = exact.get(token) or by_desk.get(
+            desk_code_for_execution(token) or token
+        )
+        if mapped is None:
+            continue
+        key = mapped.upper()
+        if key in seen_live:
+            continue
+        seen_live.add(key)
+        out.append(mapped)
+        if len(out) >= limit:
+            break
+    return tuple(out)
+
+
+def isolate_parallel_scan_results(
+    universe: Sequence[str],
+    results: Sequence[Any],
+) -> list[dict[str, Any]]:
+    """Keep one symbol's failure from aborting the rest of the scan."""
+    scored: list[dict[str, Any]] = []
+    for sym, result in zip(universe, results, strict=True):
+        if isinstance(result, BaseException):
+            logger.warning(
+                "multi_asset_score_isolated_failure",
+                symbol=sym,
+                error=type(result).__name__,
+            )
+            scored.append(
+                {
+                    "symbol": str(sym).strip().upper(),
+                    "reject": True,
+                    "reject_reason": f"EXECUTION_ERROR:{type(result).__name__}",
+                    "direction": "NONE",
+                    "ai_confidence": 0,
+                    "trade_quality": 0,
+                }
+            )
+            continue
+        if isinstance(result, dict):
+            scored.append(result)
+            continue
+        scored.append(
+            {
+                "symbol": str(sym).strip().upper(),
+                "reject": True,
+                "reject_reason": "EXECUTION_ERROR",
+                "direction": "NONE",
+                "ai_confidence": 0,
+                "trade_quality": 0,
+            }
+        )
+    return scored
+
+
 def resolve_scan_universe(
     config: AiScalpingConfig | None = None,
     *,
@@ -303,10 +406,12 @@ def resolve_scan_universe(
     Quality / structure / momentum / RR gates are unchanged — this only decides
     *which* symbols are scored each cycle.
 
-    BROKER_DISCOVERED uses LIVE_BROKER codes from the existing MT5Adapter
-    chain. Injected ``broker_symbol_rows`` never become the live universe.
+    BROKER_DISCOVERED maps research BUY/SELL plus the scalping seed onto
+    LIVE_BROKER catalogue codes. Injected ``broker_symbol_rows`` never become
+    the live universe. The full broker book is not scanned every cycle.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    broker_focused: tuple[str, ...] | None = None
     try:
         from app.domain.trading.execution_universe import (
             broker_discovered_enabled,
@@ -325,9 +430,65 @@ def resolve_scan_universe(
                 broker_symbol_rows=broker_symbol_rows
             )
         if broker_discovered_enabled():
-            return live_execution_symbols(mt5_adapter=mt5_adapter)
+            live = live_execution_symbols(mt5_adapter=mt5_adapter)
+            if not live:
+                return ()
+            research_focus: tuple[str, ...] = ()
+            try:
+                from app.application.services.research_execution_bridge import (
+                    research_scan_focus_symbols,
+                )
+
+                research_focus = tuple(research_scan_focus_symbols())
+            except Exception:
+                logger.exception("research_scan_focus_unavailable")
+            broker_focused = focus_broker_discovered_scan_universe(
+                live,
+                seed=tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE),
+                research_focus=research_focus,
+                cap=int(getattr(cfg, "max_universe_symbols", 36) or 36),
+            )
     except Exception:
         logger.exception("gold_only_scan_universe_failed")
+    if broker_focused is not None:
+        base = broker_focused
+        boost: dict[str, float] = {}
+        if getattr(cfg, "live_symbol_learning_enabled", True):
+            try:
+                from app.domain.institutional_trading.ai_scalping.symbol_production_stats import (
+                    get_symbol_stats_book,
+                )
+
+                book = get_symbol_stats_book()
+                book.expire_stale_demotions()
+                boost = book.performance_boost()
+            except Exception:
+                logger.exception("symbol_stats_priority_unavailable")
+        if plane is not None:
+            allowed = tuple(
+                str(s).strip().upper()
+                for s in (getattr(plane, "allowed_symbols", ()) or ())
+                if str(s).strip()
+            )
+            if allowed:
+                from app.domain.trading.gold_only import GOLD_SYMBOL
+
+                if not (len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}):
+                    allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
+                    filtered = tuple(s for s in base if s.upper() in allowed_set)
+                    base = filtered or base
+        if getattr(cfg, "session_symbol_priority_enabled", True):
+            try:
+                from app.domain.institutional_trading.ai_scalping.session_symbol_priority import (
+                    prioritize_universe_for_session,
+                )
+
+                base = prioritize_universe_for_session(
+                    base, session, performance_boost=boost
+                )
+            except Exception:
+                logger.exception("session_symbol_priority_failed")
+        return base
     seed = tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE)
     seed = tuple(s for s in seed if s not in BROKER_UNAVAILABLE_SCALP_SYMBOLS)
 
@@ -475,7 +636,7 @@ async def score_symbol_for_scan(
             return {
                 "symbol": code,
                 "reject": True,
-                "reject_reason": "NOT_IN_LIVE_EXECUTION_UNIVERSE",
+                "reject_reason": "SYMBOL_NOT_AVAILABLE",
                 "direction": "NONE",
                 "ai_confidence": 0,
                 "trade_quality": 0,
@@ -812,7 +973,13 @@ async def _run_institutional_multi_asset_scan_body(
                     config=cfg,
                 )
 
-        scored = list(await asyncio.gather(*[_score_one(s) for s in universe]))
+        scored = isolate_parallel_scan_results(
+            universe,
+            await asyncio.gather(
+                *[_score_one(s) for s in universe],
+                return_exceptions=True,
+            ),
+        )
     else:
         for symbol in universe:
             row = await score_symbol_for_scan(

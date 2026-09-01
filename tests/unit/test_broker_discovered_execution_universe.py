@@ -378,8 +378,11 @@ def test_no_gold_only_clamp_in_broker_discovered(broker_mode: None) -> None:
     adapter = _LiveAdapter()
     uni = resolve_scan_universe(mt5_adapter=adapter)
     assert any("EURUSD" in s.upper() for s in uni)
+    assert any("GBPUSD" in s.upper() for s in uni)
+    assert "DISABLEDX" not in {s.upper() for s in uni}
     src = inspect.getsource(resolve_scan_universe)
     assert "live_execution_symbols" in src
+    assert "focus_broker_discovered_scan_universe" in src
 
 
 def test_gold_specs_not_applied_to_non_gold(broker_mode: None) -> None:
