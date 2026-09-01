@@ -12,8 +12,8 @@ assert.equal(presentPrice(null), "Price unavailable");
 assert.equal(presentPrice("UNKNOWN"), "Price unavailable");
 assert.match(presentPrice(149.25), /^149\.25/);
 
-assert.equal(presentLevel(null, "Entry"), "Entry unavailable");
-assert.equal(presentLevel("", "SL"), "SL unavailable");
+assert.equal(presentLevel(null, "Entry"), "Not available");
+assert.equal(presentLevel("", "SL"), "Not available");
 assert.match(presentLevel(1.085, "TP"), /^1\.085/);
 
 const disconnected = resolveConnectionPresentation({

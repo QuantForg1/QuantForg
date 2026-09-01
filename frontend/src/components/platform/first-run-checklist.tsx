@@ -31,15 +31,16 @@ export function FirstRunChecklist() {
     <div
       className="border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-3"
       role="region"
-      aria-label="Closed beta first-run checklist"
+      aria-label="First-run checklist"
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium text-[var(--fg)]">
-            Welcome to QuantForg Closed Beta
+            Welcome to QuantForg
           </p>
           <p className="text-xs text-[var(--fg-muted)]">
-            First-run checklist · {progress.done}/{progress.total} complete
+            Research first. Connect a broker only when you are ready to trade. · {progress.done}/
+            {progress.total} complete
           </p>
           <ul className="mt-1 flex flex-wrap gap-2">
             {CHECKLIST_ITEMS.map((item) => (

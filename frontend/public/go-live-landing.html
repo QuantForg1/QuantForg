@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="light">
+<html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -24,21 +24,21 @@
     <meta name="twitter:image" content="/og-image.png" />
     <style>
       :root {
-        --bg: #f7f9fc;
-        --bg-elevated: #ffffff;
-        --surface: #ffffff;
-        --surface-2: #f1f5f9;
-        --border: #e5e7eb;
-        --border-strong: #d1d5db;
-        --fg: #111827;
-        --fg-muted: #64748b;
-        --fg-subtle: #94a3b8;
+        --bg: #0b1120;
+        --bg-elevated: #0f172a;
+        --surface: #151f32;
+        --surface-2: #182337;
+        --border: #243049;
+        --border-strong: #31415c;
+        --fg: #f8fafc;
+        --fg-muted: #94a3b8;
+        --fg-subtle: #64748b;
         --accent: #ff5a1f;
         --accent-fg: #ffffff;
-        --accent-soft: rgba(255, 90, 31, 0.1);
+        --accent-soft: rgba(255, 90, 31, 0.16);
         --accent-gradient: linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%);
-        --ring: rgba(255, 90, 31, 0.45);
-        --shadow-card: 0 1px 0 rgba(17, 24, 39, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+        --ring: rgba(255, 90, 31, 0.5);
+        --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 32px rgba(2, 6, 23, 0.35);
       }
       * { box-sizing: border-box; }
       body {
@@ -47,8 +47,9 @@
         color: var(--fg);
         font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
         background:
-          radial-gradient(ellipse 70% 50% at 92% 0%, rgba(255, 90, 31, 0.06), transparent 52%),
-          linear-gradient(180deg, #f8fafc 0%, #f7f9fc 42%, #eef2f7 100%);
+          radial-gradient(ellipse 70% 50% at 88% 0%, rgba(255, 90, 31, 0.08), transparent 52%),
+          radial-gradient(ellipse 50% 40% at 8% 88%, rgba(56, 189, 248, 0.05), transparent 48%),
+          linear-gradient(180deg, #0f172a 0%, #0b1120 48%, #0a101c 100%);
         background-attachment: fixed;
         -webkit-font-smoothing: antialiased;
       }
@@ -249,7 +250,7 @@
         </div>
         <nav class="actions" aria-label="Primary">
           <a class="btn btn-ghost" href="/login">Sign In</a>
-          <a class="btn btn-outline" href="/contact">Contact Sales</a>
+          <a class="btn btn-outline" href="/register">Create account</a>
         </nav>
       </header>
       <main id="main-content" tabindex="-1">
@@ -261,7 +262,7 @@
               designed like a product, measured like a desk.
             </p>
             <div class="cta">
-              <a class="btn btn-primary" href="/contact">Contact Support to Purchase</a>
+              <a class="btn btn-primary" href="/register">Create account</a>
               <a class="btn btn-secondary" href="/login">Sign In</a>
             </div>
           </div>
@@ -330,7 +331,7 @@
             <img src="/brand/quantforg-mark-256.png" width="32" height="32" alt="" />
             <span class="name">QuantForg</span>
           </div>
-          <p>Institutional trading operating system — licenses activated manually after payment verification.</p>
+          <p>Institutional trading and research platform. Create an account to explore markets and signals. Live trading stays gated until you connect a broker.</p>
         </div>
         <div class="footer-cols">
           <div>
@@ -344,9 +345,9 @@
           <div>
             <h3>Sales</h3>
             <ul>
-              <li><a href="/contact">Contact Sales</a></li>
-              <li><a href="mailto:support@quantforg.com">Support</a></li>
+              <li><a href="/register">Create account</a></li>
               <li><a href="/login">Sign In</a></li>
+              <li><a href="/contact">Contact Sales</a></li>
             </ul>
           </div>
           <div>

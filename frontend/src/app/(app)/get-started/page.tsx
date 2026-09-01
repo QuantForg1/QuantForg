@@ -17,25 +17,45 @@ import {
   type ChecklistState,
 } from "@/lib/platform/onboarding";
 
-const BROKER_STEPS = [
+const STEPS = [
   {
-    title: "Open Weltrade MT5",
-    detail: "Production v1 connects only Weltrade via MetaTrader 5.",
-    href: "/broker",
+    title: "Welcome to QuantForg",
+    detail:
+      "This is your workspace for market research and, when you choose, live trading. Research never requires a broker connection.",
   },
   {
-    title: "Start the Windows gateway",
-    detail: "Keep MetaTrader logged into Weltrade and run the local MT5 Gateway.",
+    title: "Explore markets",
+    detail:
+      "Open Markets to see the instruments QuantForg can research. Coverage comes from the live catalogue — never invented.",
+    href: "/markets",
+    checklist: "markets" as const,
   },
   {
-    title: "Connect in QuantForg",
-    detail: "Use /broker — browser talks to Railway, Railway talks to the gateway.",
-    href: "/broker",
+    title: "View research signals",
+    detail:
+      "Signals are research intelligence. They stay available without MT5. They are not trade authorization.",
+    href: "/signals",
+    checklist: "signals" as const,
   },
   {
-    title: "Confirm sync",
-    detail: "Verify balance, equity, margin, positions, and history after connect.",
+    title: "Connect a broker when ready",
+    detail:
+      "Broker connection is optional until you want account data or live execution. Research continues without it.",
     href: "/broker",
+    checklist: "broker" as const,
+  },
+  {
+    title: "Configure trading preferences",
+    detail: "Set appearance, notifications, and workspace defaults in Settings.",
+    href: "/settings",
+    checklist: "preferences" as const,
+  },
+  {
+    title: "Enable live trading only when explicitly ready",
+    detail:
+      "Live trading stays disabled until you connect a broker and pass existing risk, ownership, and authorization checks. QuantForg never auto-enables live trading.",
+    href: "/broker",
+    checklist: "live_ready" as const,
   },
 ];
 
@@ -50,8 +70,9 @@ export default function GetStartedPage() {
   return (
     <div>
       <PageHeader
-        title="Get started"
-        description="Closed beta onboarding — tour, broker wizard, and paper trading path."
+        eyebrow="Onboarding"
+        title="Welcome to QuantForg"
+        description="Start with markets and research. Connect a broker later. Live trading stays off until you enable it."
         actions={
           <div className="flex gap-2">
             <ProductTourTrigger />
@@ -69,13 +90,13 @@ export default function GetStartedPage() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>First-run checklist</CardTitle>
+            <CardTitle>Your first steps</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {CHECKLIST_ITEMS.map((item) => (
               <div
                 key={item.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded border border-[var(--border)] px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2"
               >
                 <div>
                   <div className="text-sm font-medium">{item.title}</div>
@@ -85,7 +106,7 @@ export default function GetStartedPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge tone={checklist?.[item.id] ? "success" : "neutral"}>
-                    {checklist?.[item.id] ? "done" : "todo"}
+                    {checklist?.[item.id] ? "done" : "next"}
                   </Badge>
                   <Button size="sm" variant="secondary" asChild>
                     <Link
@@ -103,26 +124,24 @@ export default function GetStartedPage() {
           </CardContent>
         </Card>
 
-        <Card id="broker">
+        <Card>
           <CardHeader>
-            <CardTitle>Broker connection wizard</CardTitle>
+            <CardTitle>How QuantForg is organized</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-[var(--fg-muted)]">
-              Additive guide over existing Compatibility and MT5 pages — no
-              simulated connectivity.
-            </p>
-            <ol className="list-decimal space-y-2 pl-5 text-sm">
-              {BROKER_STEPS.map((s) => (
+          <CardContent>
+            <ol className="list-decimal space-y-3 pl-5 text-sm">
+              {STEPS.map((s) => (
                 <li key={s.title}>
                   <div className="font-medium">{s.title}</div>
                   <div className="text-[var(--fg-muted)]">{s.detail}</div>
                   {s.href ? (
-                    <Button size="sm" variant="secondary" className="mt-1" asChild>
+                    <Button size="sm" variant="secondary" className="mt-2" asChild>
                       <Link
                         href={s.href}
                         onClick={() =>
-                          setChecklist(setChecklistItem("broker", true))
+                          s.checklist
+                            ? setChecklist(setChecklistItem(s.checklist, true))
+                            : undefined
                         }
                       >
                         Continue
@@ -132,31 +151,6 @@ export default function GetStartedPage() {
                 </li>
               ))}
             </ol>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Paper trading tutorial</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p className="text-[var(--fg-muted)]">
-              Open Paper Trading for the interactive tutorial card, or follow:
-            </p>
-            <ol className="list-decimal space-y-1 pl-5">
-              <li>Set symbol (e.g. XAUUSD) and volume (e.g. 0.10)</li>
-              <li>Submit a Buy or Sell paper order</li>
-              <li>Confirm positions and history update</li>
-              <li>Reset when finished practicing</li>
-            </ol>
-            <Button size="sm" asChild>
-              <Link
-                href="/paper"
-                onClick={() => setChecklist(setChecklistItem("paper", true))}
-              >
-                Go to Paper Trading
-              </Link>
-            </Button>
           </CardContent>
         </Card>
       </div>

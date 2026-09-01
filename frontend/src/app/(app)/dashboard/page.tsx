@@ -29,6 +29,7 @@ import {
   MARKET_UNIVERSE_QUERY_KEY,
   mergeCatalogueRows,
   hasResearchSignal,
+  knownInstrumentCountLabel,
   normalizeSignalCenterPayload,
   researchAvailabilityAsCatalogue,
   researchDeskLiveTradingStatus,
@@ -52,6 +53,13 @@ import {
 } from "@/lib/trading/trader-ux";
 
 type Row = Record<string, unknown>;
+
+function workspaceGreeting(now = new Date(), firstName = ""): string {
+  const hour = now.getHours();
+  const part =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  return firstName ? `${part}, ${firstName}` : part;
+}
 
 function moneyOrUnavailable(raw: unknown, available: boolean): string {
   if (!available) return "Unavailable";
@@ -273,8 +281,8 @@ export default function DashboardPage() {
       <div>
         <PageHeader
           eyebrow="Workspace"
-          title="Welcome back"
-          description="Your research, markets, and account."
+          title={workspaceGreeting()}
+          description="Your QuantForg workspace."
         />
         <DeskSkeleton variant="page" />
       </div>
@@ -286,8 +294,8 @@ export default function DashboardPage() {
       <div>
         <PageHeader
           eyebrow="Workspace"
-          title="Welcome back"
-          description="Your research, markets, and account."
+          title={workspaceGreeting()}
+          description="Your QuantForg workspace."
         />
         <DeskError
           message="Unable to load your trading session."
@@ -299,7 +307,7 @@ export default function DashboardPage() {
     );
   }
 
-  const greeting = firstName ? `Welcome back, ${firstName}` : "Welcome back";
+  const greeting = workspaceGreeting(new Date(), firstName);
 
   return (
     <div className="min-w-0 space-y-5">
@@ -308,10 +316,10 @@ export default function DashboardPage() {
         title={greeting}
         description={
           noBroker
-            ? "Global research is available. Connect a broker to load account data and enable live trading."
+            ? "Your QuantForg workspace. Research is available without a broker. Connect when you are ready to trade."
             : sessionMismatch
-              ? "Your trading session needs to be reconnected."
-              : "Market research, account state, and what needs attention."
+              ? "Your QuantForg workspace. Reconnect your trading session to restore account data."
+              : "Your QuantForg workspace."
         }
         actions={
           noBroker || sessionMismatch ? (
@@ -329,6 +337,43 @@ export default function DashboardPage() {
       />
 
       <ConnectionStatus session={session} />
+
+      <section
+        aria-label="Workspace status"
+        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <DeskMetric
+          label="Account"
+          value={
+            noBroker
+              ? "Not connected"
+              : sessionMismatch
+                ? "Reconnect required"
+                : "Connected"
+          }
+        />
+        <DeskMetric
+          label="Research"
+          value={
+            signalsQ.isError || signalState === "UNAVAILABLE"
+              ? "Unavailable"
+              : "Available"
+          }
+        />
+        <DeskMetric label="Live trading" value={liveTradingHint.label} />
+        <DeskMetric
+          label="Markets"
+          value={
+            catalogue === "LIVE_ROWS"
+              ? knownInstrumentCountLabel(catalogue, marketPreview.length) || "Live catalogue"
+              : catalogue === "LIVE_EMPTY"
+                ? "Empty catalogue"
+                : catalogue === "NOT_READY"
+                  ? "Loading"
+                  : "Unavailable"
+          }
+        />
+      </section>
 
       <section aria-labelledby="portfolio-snapshot">
         <div className="mb-2 flex items-center justify-between gap-2">

@@ -67,14 +67,55 @@ import {
 } from "@/lib/trading/trader-ux";
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
-  { id: "strongest", label: "Research rank" },
-  { id: "opportunity", label: "Opportunity" },
-  { id: "edge", label: "Edge" },
+  { id: "strongest", label: "Strongest" },
   { id: "newest", label: "Newest" },
+  { id: "instrument", label: "Symbol" },
+  { id: "asset_class", label: "Asset class" },
 ];
 
 const MARKET_CLASS_FILTERS = ["ALL", ...ASSET_CLASS_ORDER] as const;
 const SIGNAL_FEED_PAGE_SIZE = 40;
+const STATUS_FILTERS = [
+  { id: "ALL", label: "All status" },
+  { id: "ACTIVE", label: "Active" },
+  { id: "RECENT", label: "Recent" },
+  { id: "CLOSED", label: "Closed" },
+  { id: "UNAVAILABLE", label: "Unavailable" },
+] as const;
+
+type StatusFilterId = (typeof STATUS_FILTERS)[number]["id"];
+
+function CompactSelect({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ id: string; label: string }>;
+}) {
+  return (
+    <label className="flex min-w-[9.5rem] flex-1 flex-col gap-1 text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+      {label}
+      <select
+        id={id}
+        className="h-9 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-2 text-sm font-medium normal-case tracking-normal text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((opt) => (
+          <option key={opt.id} value={opt.id}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 function analysisTone(
   status: AnalysisDeskStatus,
@@ -100,6 +141,7 @@ export function SignalsWorkspace() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<SignalFilterState>(EMPTY_SIGNAL_FILTERS);
   const [sort, setSort] = useState<SignalSortKey>("strongest");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterId>("ALL");
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [feedLimit, setFeedLimit] = useState(SIGNAL_FEED_PAGE_SIZE);
@@ -188,7 +230,14 @@ export function SignalsWorkspace() {
   const sessions = useMemo(() => uniqueRowValues(signalRows, rowSession), [signalRows]);
   const regimes = useMemo(() => uniqueRowValues(signalRows, rowRegime), [signalRows]);
 
-  const filtered = useMemo(() => filterSignalRows(signalRows, filters), [filters, signalRows]);
+  const filtered = useMemo(() => {
+    const next: SignalFilterState = { ...filters };
+    if (statusFilter === "ACTIVE") next.freshness = "LIVE";
+    else if (statusFilter === "RECENT") next.freshness = "RECENT";
+    else if (statusFilter === "CLOSED") next.marketState = "CLOSED";
+    else if (statusFilter === "UNAVAILABLE") next.freshness = "UNAVAILABLE";
+    return filterSignalRows(signalRows, next);
+  }, [filters, signalRows, statusFilter]);
   const sorted = useMemo(() => sortSignalRows(filtered, sort), [filtered, sort]);
   const feedRows = useMemo(() => sorted.slice(0, feedLimit), [feedLimit, sorted]);
 
@@ -235,10 +284,6 @@ export function SignalsWorkspace() {
     researchHealth.instruments_analyzed != null
       ? String(researchHealth.instruments_analyzed)
       : "—";
-  const skippedLabel =
-    researchHealth.instruments_skipped != null
-      ? String(researchHealth.instruments_skipped)
-      : "—";
   const failedLabel =
     researchHealth.instruments_failed != null
       ? String(researchHealth.instruments_failed)
@@ -270,9 +315,9 @@ export function SignalsWorkspace() {
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
-        eyebrow="Global research"
-        title="Global Market Intelligence"
-        description="Research analysis across the global market universe. Signals remain available without a broker connection. Live trading is a separate authorization."
+        eyebrow="Signals"
+        title="Global Market Signals"
+        description="Research-backed market intelligence. Research intelligence is independent of your MT5 connection."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -316,7 +361,11 @@ export function SignalsWorkspace() {
               : "ACTIVE"}
           </Badge>
         </div>
-        <dl className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
+        <p className="mt-2 max-w-3xl text-sm text-[var(--fg-muted)]">
+          {RESEARCH_INDEPENDENT_COPY} You can view signals without connecting a broker.
+          Live trading remains a separate, explicitly authorized step.
+        </p>
+        <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
           <div>
             <dt className="text-[var(--fg-subtle)]">Broker connection</dt>
             <dd>
@@ -453,35 +502,34 @@ export function SignalsWorkspace() {
             Global market universe
           </h2>
           <p className="text-xs text-[var(--fg-subtle)]">
-            Discovered from the live broker catalogue — never invented
+            Eligible coverage is the subset research can analyze. Full catalogue coverage is
+            every discovered instrument. QuantForg never claims 100% global coverage.
           </p>
         </div>
-        <div className="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Market class">
-          {MARKET_CLASS_FILTERS.map((cls) => (
-            <FilterChip
-              key={cls}
-              active={filters.assetClass === cls}
-              onClick={() => setFilters((f) => ({ ...f, assetClass: cls }))}
-            >
-              {cls}
-            </FilterChip>
-          ))}
+        <div className="mb-3 max-w-xs">
+          <CompactSelect
+            id="universe-class"
+            label="Asset class"
+            value={filters.assetClass}
+            onChange={(value) => {
+              setUniversePage(1);
+              setFilters((f) => ({ ...f, assetClass: value }));
+            }}
+            options={MARKET_CLASS_FILTERS.map((cls) => ({
+              id: cls,
+              label: cls === "ALL" ? "All classes" : cls,
+            }))}
+          />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-10">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <DeskMetric label="Discovered" value={discoveredLabel} />
           <DeskMetric label="Eligible" value={eligibleLabel} />
           <DeskMetric label="Analyzed" value={analyzedLabel} />
-          <DeskMetric label="Coverage" value={coverageLabel} />
-          <DeskMetric label="Skipped" value={skippedLabel} />
           <DeskMetric label="Queued" value={String(lifecycle.queued)} />
           <DeskMetric label="Market closed" value={String(lifecycle.closed)} />
           <DeskMetric label="Unavailable" value={unavailableLabel} />
           <DeskMetric label="Failed" value={failedLabel} />
-          <DeskMetric label="Unsupported" value={String(lifecycle.unsupported)} />
-          <DeskMetric label="Active signals" value={summary.active} />
-          <DeskMetric label="BUY" value={summary.buy} />
-          <DeskMetric label="SELL" value={summary.sell} />
-          <DeskMetric label="NEUTRAL" value={summary.neutral} />
+          <DeskMetric label="Coverage" value={coverageLabel} />
         </div>
         {Object.keys(assetClassCounts).length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2" aria-label="Asset class distribution">
@@ -649,107 +697,65 @@ export function SignalsWorkspace() {
                       active={filters.direction === dir}
                       onClick={() => setFilters((f) => ({ ...f, direction: dir }))}
                     >
-                      {dir}
+                      {dir === "ALL" ? "All" : dir}
                     </FilterChip>
                   ))}
                 </div>
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Market state">
-                  {(["ALL", "OPEN", "CLOSED", "UNAVAILABLE"] as const).map((state) => (
-                    <FilterChip
-                      key={state}
-                      active={filters.marketState === state}
-                      onClick={() => {
-                        setUniversePage(1);
-                        setFilters((f) => ({ ...f, marketState: state }));
-                      }}
-                    >
-                      {state === "ALL" ? "All markets" : state}
-                    </FilterChip>
-                  ))}
-                </div>
-                {sessions.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Session">
-                    <FilterChip
-                      active={filters.session === "ALL"}
-                      onClick={() => setFilters((f) => ({ ...f, session: "ALL" }))}
-                    >
-                      All sessions
-                    </FilterChip>
-                    {sessions.map((item) => (
-                      <FilterChip
-                        key={item}
-                        active={filters.session === item}
-                        onClick={() => setFilters((f) => ({ ...f, session: item }))}
-                      >
-                        {item}
-                      </FilterChip>
-                    ))}
-                  </div>
-                ) : null}
-                {regimes.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Regime">
-                    <FilterChip
-                      active={filters.regime === "ALL"}
-                      onClick={() => setFilters((f) => ({ ...f, regime: "ALL" }))}
-                    >
-                      All regimes
-                    </FilterChip>
-                    {regimes.map((item) => (
-                      <FilterChip
-                        key={item}
-                        active={filters.regime === item}
-                        onClick={() => setFilters((f) => ({ ...f, regime: item }))}
-                      >
-                        {item}
-                      </FilterChip>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Freshness">
-                  {(
-                    [
-                      "ALL",
-                      "LIVE",
-                      "RECENT",
-                      "STALE",
-                      "PARTIAL",
-                      "UNAVAILABLE",
-                    ] as const
-                  ).map((fresh) => (
-                    <FilterChip
-                      key={fresh}
-                      active={filters.freshness === fresh}
-                      onClick={() => setFilters((f) => ({ ...f, freshness: fresh }))}
-                    >
-                      {fresh === "ALL"
-                        ? "All freshness"
-                        : fresh === "LIVE"
-                          ? "LIVE DATA"
-                          : fresh === "UNAVAILABLE"
-                            ? "DATA UNAVAILABLE"
-                            : fresh}
-                    </FilterChip>
-                  ))}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label
-                    htmlFor="signal-sort"
-                    className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]"
-                  >
-                    Sort
-                  </label>
-                  <select
+                <div className="flex flex-wrap gap-3">
+                  <CompactSelect
+                    id="signal-class"
+                    label="Asset class"
+                    value={filters.assetClass}
+                    onChange={(value) => {
+                      setUniversePage(1);
+                      setFilters((f) => ({ ...f, assetClass: value }));
+                    }}
+                    options={MARKET_CLASS_FILTERS.map((cls) => ({
+                      id: cls,
+                      label: cls === "ALL" ? "All classes" : cls,
+                    }))}
+                  />
+                  <CompactSelect
+                    id="signal-status"
+                    label="Status"
+                    value={statusFilter}
+                    onChange={(value) => setStatusFilter(value as StatusFilterId)}
+                    options={STATUS_FILTERS.map((item) => ({
+                      id: item.id,
+                      label: item.label,
+                    }))}
+                  />
+                  <CompactSelect
                     id="signal-sort"
-                    className="h-8 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-sm text-[var(--fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                    label="Sort"
                     value={sort}
-                    onChange={(e) => setSort(e.target.value as SignalSortKey)}
-                  >
-                    {SORT_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setSort(value as SignalSortKey)}
+                    options={SORT_OPTIONS}
+                  />
+                  {sessions.length > 0 ? (
+                    <CompactSelect
+                      id="signal-session"
+                      label="Session"
+                      value={filters.session}
+                      onChange={(value) => setFilters((f) => ({ ...f, session: value }))}
+                      options={[
+                        { id: "ALL", label: "All sessions" },
+                        ...sessions.map((item) => ({ id: item, label: item })),
+                      ]}
+                    />
+                  ) : null}
+                  {regimes.length > 0 ? (
+                    <CompactSelect
+                      id="signal-regime"
+                      label="Regime"
+                      value={filters.regime}
+                      onChange={(value) => setFilters((f) => ({ ...f, regime: value }))}
+                      options={[
+                        { id: "ALL", label: "All regimes" },
+                        ...regimes.map((item) => ({ id: item, label: item })),
+                      ]}
+                    />
+                  ) : null}
                 </div>
               </div>
 
@@ -761,140 +767,10 @@ export function SignalsWorkspace() {
                 />
               ) : (
                 <>
-                  <div className="hidden min-w-0 overflow-x-auto md:block">
-                    <table
-                      className="w-full min-w-[1100px] text-left text-sm"
-                      aria-label="Signals"
-                    >
-                      <thead>
-                        <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Symbol
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Class
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Direction
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Opportunity
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Edge
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            R/R
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Strength
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Rank
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Session
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Regime
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Price
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Entry
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            SL
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            TP
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Timestamp
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Freshness
-                          </th>
-                          <th className="py-2 pr-3 font-medium" scope="col">
-                            Analysis
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {feedRows.map((row, i) => {
-                          const dir = signalBoardDirection(row);
-                          const symbol = str(row.broker_symbol || row.symbol, "—");
-                          const freshness = signalFreshness(row);
-                          return (
-                            <tr
-                              key={`${symbol}-row-${i}`}
-                              className="border-b border-[var(--border)]"
-                            >
-                              <td className="py-2 pr-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelected(row)}
-                                  className="font-medium text-[var(--fg)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                                >
-                                  {symbol}
-                                </button>
-                              </td>
-                              <td className="py-2 pr-3">{presentField(row.asset_class)}</td>
-                              <td className="py-2 pr-3">
-                                <Badge tone={directionTone(dir)}>{dir}</Badge>
-                              </td>
-                              <td className="py-2 pr-3 tabular">
-                                {scoreDisplay(row.opportunity_score)}
-                              </td>
-                              <td className="py-2 pr-3 tabular">
-                                {scoreDisplay(row.directional_edge ?? row.edge)}
-                              </td>
-                              <td className="py-2 pr-3 tabular">
-                                {scoreDisplay(row.RR ?? row.rr)}
-                              </td>
-                              <td className="py-2 pr-3 tabular">{signalStrength(row)}</td>
-                              <td className="py-2 pr-3 tabular">
-                                {scoreDisplay(row.research_rank_score)}
-                              </td>
-                              <td className="py-2 pr-3">{presentField(row.session)}</td>
-                              <td className="py-2 pr-3">{presentField(rowRegime(row))}</td>
-                              <td className="py-2 pr-3 tabular">
-                                {presentPrice(row.price ?? row.mid ?? row.bid)}
-                              </td>
-                              <td className="py-2 pr-3 tabular">
-                                {presentLevel(row.entry ?? row.entry_candidate, "Entry")}
-                              </td>
-                              <td className="py-2 pr-3 tabular">
-                                {presentLevel(row.stop_loss ?? row.SL_candidate, "SL")}
-                              </td>
-                              <td className="py-2 pr-3 tabular">
-                                {presentLevel(row.take_profit ?? row.TP_candidate, "TP")}
-                              </td>
-                              <td className="py-2 pr-3 text-xs text-[var(--fg-muted)]">
-                                {signalTimestampLabel(row)}
-                              </td>
-                              <td className="py-2 pr-3">
-                                <Badge tone={freshnessTone(freshness)}>
-                                  {signalFreshnessLabel(freshness)}
-                                </Badge>
-                              </td>
-                              <td className="py-2 pr-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelected(row)}
-                                  className="text-xs font-medium text-[var(--accent)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                                >
-                                  Why this signal?
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <ul className="grid gap-3 md:hidden" aria-label="Signals">
+                  <ul
+                    className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+                    aria-label="Signals"
+                  >
                     {feedRows.map((row, i) => {
                       const dir = signalBoardDirection(row);
                       const symbol = str(row.broker_symbol || row.symbol, "—");
@@ -904,26 +780,39 @@ export function SignalsWorkspace() {
                           <button
                             type="button"
                             onClick={() => setSelected(row)}
-                            className="w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] p-4 text-left transition hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                            className="h-full w-full rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-elevated)] p-4 text-left shadow-[var(--shadow-card)] transition duration-[var(--duration-os)] hover:border-[var(--accent)] hover:shadow-[var(--shadow-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                           >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="truncate font-semibold text-[var(--fg)]">
+                                <p className="truncate text-base font-semibold tracking-tight text-[var(--fg)]">
                                   {symbol}
                                 </p>
-                                <p className="text-xs text-[var(--fg-subtle)]">
-                                  {presentField(row.asset_class)} ·{" "}
-                                  {presentField(row.session)}
+                                <p className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                                  {presentField(row.asset_class)}
                                 </p>
                               </div>
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex flex-col items-end gap-1">
                                 <Badge tone={directionTone(dir)}>{dir}</Badge>
                                 <Badge tone={freshnessTone(freshness)}>
                                   {signalFreshnessLabel(freshness)}
                                 </Badge>
                               </div>
                             </div>
-                            <dl className="mt-3 grid grid-cols-3 gap-2 text-sm sm:grid-cols-4">
+                            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm sm:grid-cols-3">
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  Strength
+                                </dt>
+                                <dd className="tabular">{signalStrength(row)}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  Confidence
+                                </dt>
+                                <dd className="tabular">
+                                  {scoreDisplay(row.research_rank_score)}
+                                </dd>
+                              </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
                                   Price
@@ -942,7 +831,7 @@ export function SignalsWorkspace() {
                               </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
-                                  SL
+                                  Stop loss
                                 </dt>
                                 <dd className="tabular">
                                   {presentLevel(row.stop_loss ?? row.SL_candidate, "SL")}
@@ -950,7 +839,7 @@ export function SignalsWorkspace() {
                               </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
-                                  TP
+                                  Take profit
                                 </dt>
                                 <dd className="tabular">
                                   {presentLevel(row.take_profit ?? row.TP_candidate, "TP")}
@@ -958,7 +847,7 @@ export function SignalsWorkspace() {
                               </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
-                                  RR
+                                  Risk/Reward
                                 </dt>
                                 <dd className="tabular">
                                   {scoreDisplay(row.RR ?? row.rr)}
@@ -966,33 +855,23 @@ export function SignalsWorkspace() {
                               </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
-                                  Opportunity
+                                  Regime
                                 </dt>
-                                <dd className="tabular">
-                                  {scoreDisplay(row.opportunity_score)}
-                                </dd>
+                                <dd>{presentField(rowRegime(row))}</dd>
                               </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
-                                  Edge
+                                  Timestamp
                                 </dt>
-                                <dd className="tabular">
-                                  {scoreDisplay(row.directional_edge ?? row.edge)}
-                                </dd>
-                              </div>
-                              <div>
-                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
-                                  Rank
-                                </dt>
-                                <dd className="tabular">
-                                  {scoreDisplay(row.research_rank_score)}
+                                <dd className="text-xs text-[var(--fg-muted)]">
+                                  {signalTimestampLabel(row)}
                                 </dd>
                               </div>
                             </dl>
                             <p className="mt-3 line-clamp-2 text-[11px] text-[var(--fg-muted)]">
                               {signalWhyPreview(row)}
                             </p>
-                            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
+                            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
                               Why this signal
                             </p>
                           </button>

@@ -40,7 +40,7 @@ export default function LoginPage() {
               remember: values.remember !== false,
             });
             toast.success("Signed in");
-            router.replace("/mission-control");
+            router.replace("/dashboard");
           } catch (e) {
             if (e instanceof ApiError && e.code === "email_not_verified") {
               toast.error("Verify your email before signing in.");
@@ -91,22 +91,27 @@ export default function LoginPage() {
             />
           </div>
         </div>
-        <label className="flex items-center gap-2 text-sm text-[var(--fg-muted)]">
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-[var(--accent)]"
-            {...form.register("remember")}
-          />
-          Remember me
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-sm text-[var(--fg-muted)]">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--accent)]"
+              {...form.register("remember")}
+            />
+            Remember me
+          </label>
+          <Link href="/forgot-password" className="text-sm text-[var(--accent)]">
+            Forgot password
+          </Link>
+        </div>
         <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
         </Button>
       </form>
       <p className="mt-4 text-center text-sm text-[var(--fg-muted)]">
-        Need help accessing your account?{" "}
-        <Link href="/contact" className="text-[var(--accent)]">
-          Contact QuantForg Support
+        New to QuantForg?{" "}
+        <Link href="/register" className="text-[var(--accent)]">
+          Create an account
         </Link>
       </p>
     </AuthShell>

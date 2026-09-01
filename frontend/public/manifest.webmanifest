@@ -4,7 +4,7 @@
   "description": "Institutional trading terminal — live MT5 portfolio, risk, research, and AI workspace.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F7F9FC",
+  "background_color": "#0B1120",
   "theme_color": "#FF5A1F",
   "icons": [
     {

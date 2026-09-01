@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-/** Root layout replacement for catastrophic render failures. Self-contained RC4 palette. */
+/** Root layout replacement for catastrophic render failures. Self-contained dark palette. */
 export default function GlobalError({
   error,
   reset,
@@ -40,8 +40,8 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#F7F9FC",
-          color: "#111827",
+          background: "#0B1120",
+          color: "#F8FAFC",
           fontFamily: "system-ui, sans-serif",
           padding: 24,
         }}
@@ -50,10 +50,11 @@ export default function GlobalError({
           style={{
             width: "100%",
             maxWidth: 440,
-            border: "1px solid #E5E7EB",
+            border: "1px solid #243049",
             borderRadius: 12,
-            background: "#FFFFFF",
+            background: "#151F32",
             padding: 24,
+            boxShadow: "0 24px 64px rgba(2, 6, 23, 0.55)",
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -67,7 +68,7 @@ export default function GlobalError({
           <h1 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 600 }}>
             Something went wrong
           </h1>
-          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#64748B" }}>
+          <p style={{ margin: "0 0 16px", fontSize: 14, color: "#94A3B8" }}>
             An unexpected error occurred. You can retry or return to the dashboard.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -89,13 +90,13 @@ export default function GlobalError({
             <button
               type="button"
               onClick={() => {
-                window.location.href = "/mission-control";
+                window.location.href = "/dashboard";
               }}
               style={{
-                border: "1px solid #E5E7EB",
+                border: "1px solid #31415c",
                 borderRadius: 8,
-                background: "#F1F5F9",
-                color: "#111827",
+                background: "#182337",
+                color: "#F8FAFC",
                 padding: "8px 14px",
                 cursor: "pointer",
               }}

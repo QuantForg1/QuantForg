@@ -52,7 +52,7 @@ export default function SettingsPage() {
   });
 
   const [form, setForm] = useState({
-    theme: "light",
+    theme: "dark",
     notifications_enabled: true,
     email_marketing: false,
     email_security: true,
@@ -67,7 +67,7 @@ export default function SettingsPage() {
     if (!settingsQ.data) return;
     const s = asRecord(settingsQ.data);
     setForm({
-      theme: str(s.theme, "light") === "dark" ? "dark" : "light",
+      theme: str(s.theme, "dark") === "light" ? "light" : "dark",
       notifications_enabled: Boolean(s.notifications_enabled),
       email_marketing: Boolean(s.email_marketing),
       email_security: Boolean(s.email_security),
@@ -218,11 +218,11 @@ export default function SettingsPage() {
                     }}
                     className="flex h-10 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-sm text-[var(--fg)]"
                   >
-                    <option value="light">Light</option>
                     <option value="dark">Dark</option>
+                    <option value="light">Light</option>
                   </select>
                   <p className="text-xs text-[var(--fg-subtle)]">
-                    Light is the primary QuantForg experience. Dark remains available.
+                    Dark is the primary QuantForg experience. Light remains available.
                   </p>
                 </div>
               </CardContent>

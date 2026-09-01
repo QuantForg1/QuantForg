@@ -156,12 +156,9 @@ export const TRADER_DESK_ORDER = [
   "/dashboard",
   "/markets",
   "/signals",
-  "/portfolio",
   "/research",
+  "/portfolio",
   "/terminal",
-  "/broker",
-  "/trading-journal",
-  "/notifications",
   "/settings",
 ] as const;
 
@@ -172,13 +169,10 @@ const TRADER_RAIL_SECTIONS: Record<
   "/dashboard": "Workspace",
   "/markets": "Workspace",
   "/signals": "Workspace",
-  "/portfolio": "Workspace",
   "/research": "Research",
+  "/portfolio": "Workspace",
   "/terminal": "Trading",
-  "/broker": "Trading",
-  "/trading-journal": "Tools",
-  "/notifications": "Tools",
-  "/settings": "Tools",
+  "/settings": "System",
 };
 
 /** @deprecated Ops chrome uses /admin directly — never append Admin to trader rail. */
@@ -259,11 +253,11 @@ export const primaryRail: PrimaryNavItem[] = [
   },
   {
     href: "/terminal",
-    label: "Terminal",
+    label: "Trading",
     icon: LayoutTemplate,
     hint: "Trade — chart · watchlist · ticket",
     match: ["/terminal", "/workspace", "/execution"],
-    shortcut: "5",
+    shortcut: "6",
     section: "Trading",
   },
   {
@@ -272,7 +266,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: CandlestickChart,
     hint: "Global market terminal",
     match: ["/markets"],
-    shortcut: "4",
+    shortcut: "2",
     section: "Trading",
   },
   {
@@ -313,7 +307,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Crosshair,
     hint: "Research intelligence · no broker required",
     match: ["/signals"],
-    shortcut: "2",
+    shortcut: "3",
     section: "Signals",
   },
   {
@@ -538,7 +532,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: FlaskConical,
     hint: "Idea → promote pipeline",
     match: ["/research", "/screeners"],
-    shortcut: "6",
+    shortcut: "4",
     section: "Research",
   },
   {
@@ -556,7 +550,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: PieChart,
     hint: "Your account · positions",
     match: ["/portfolio"],
-    shortcut: "3",
+    shortcut: "5",
     section: "Portfolio",
   },
   {
@@ -565,7 +559,7 @@ export const primaryRail: PrimaryNavItem[] = [
     icon: Settings,
     hint: "Profile, org, preferences",
     match: ["/settings", "/integrations", "/shortcuts"],
-    shortcut: "8",
+    shortcut: "7",
     section: "System",
   },
   {
@@ -1457,6 +1451,12 @@ export const mobileTabNav: NavItem[] = [
     hint: "Overview",
   },
   {
+    href: "/markets",
+    label: "Markets",
+    icon: CandlestickChart,
+    hint: "Markets",
+  },
+  {
     href: "/signals",
     label: "Signals",
     icon: Crosshair,
@@ -1469,16 +1469,10 @@ export const mobileTabNav: NavItem[] = [
     hint: "Portfolio",
   },
   {
-    href: "/markets",
-    label: "Markets",
-    icon: CandlestickChart,
-    hint: "Markets",
-  },
-  {
     href: "/terminal",
-    label: "Terminal",
+    label: "Trading",
     icon: LayoutTemplate,
-    hint: "Terminal",
+    hint: "Trading",
   },
 ];
 

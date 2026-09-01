@@ -662,7 +662,7 @@ export const TRADER_POLL_MS = 15_000;
 export const UNIVERSE_POLL_MS = 30_000;
 export const EXPLANATION_UNAVAILABLE = "EXPLANATION UNAVAILABLE";
 export const RESEARCH_INDEPENDENT_COPY =
-  "Research intelligence is available independently from your trading account.";
+  "Research intelligence is independent of your MT5 connection.";
 
 export type SignalAvailability = CatalogueViewState;
 
@@ -1237,13 +1237,13 @@ export function presentPrice(value: unknown): string {
 /** Structure level (Entry / SL / TP) — never coerce missing to 0. */
 export function presentLevel(
   value: unknown,
-  label: "Entry" | "SL" | "TP" = "Entry",
+  _label: "Entry" | "SL" | "TP" = "Entry",
 ): string {
   if (value == null || value === "" || value === "UNKNOWN" || value === "—") {
-    return `${label} unavailable`;
+    return "Not available";
   }
   const formatted = priceDisplay(value);
-  return formatted === "—" ? `${label} unavailable` : formatted;
+  return formatted === "—" ? "Not available" : formatted;
 }
 
 export function mergeResearchSignalFields(

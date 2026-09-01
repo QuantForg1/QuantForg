@@ -36,8 +36,8 @@ const SITE_URL =
       : "http://localhost:3000");
 
 export const viewport: Viewport = {
-  themeColor: "#FF5A1F",
-  colorScheme: "light",
+  themeColor: "#0B1120",
+  colorScheme: "dark",
 };
 
 export const metadata: Metadata = {
@@ -108,7 +108,7 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en" className="light" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
         className={`${sans.variable} ${display.variable} ${mono.variable} antialiased`}
       >

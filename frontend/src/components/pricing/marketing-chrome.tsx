@@ -49,8 +49,8 @@ export function PricingHeader({
         <Link href="/login" className={`${pricingBtnGhost} max-sm:px-3`}>
           Sign In
         </Link>
-        <Link href="/contact" className={`${pricingBtnOutline} max-sm:px-3`}>
-          Contact Sales
+        <Link href="/register" className={`${pricingBtnOutline} max-sm:px-3`}>
+          Create account
         </Link>
       </div>
     </header>

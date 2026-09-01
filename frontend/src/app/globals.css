@@ -1,50 +1,52 @@
 @import "tailwindcss";
 
-/* QuantForg — light-first institutional product language.
-   Product-owner visual override: calm light surfaces + orange accent.
-   Dark tokens remain on .dark so existing theme switching still works. */
+/* QuantForg — dark-first institutional product language.
+   Refined navy surfaces + orange accent. Not pure black.
+   Light remains on .light for theme switching. */
 :root,
-.light {
-  --bg: #f7f9fc;
-  --bg-elevated: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --surface-3: #e8eef5;
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-  --fg: #111827;
-  --fg-muted: #64748b;
-  --fg-subtle: #94a3b8;
+.dark {
+  --bg: #0b1120;
+  --bg-elevated: #0f172a;
+  --surface: #151f32;
+  --surface-2: #182337;
+  --surface-3: #1c2940;
+  --surface-elevated: #202d43;
+  --border: #243049;
+  --border-strong: #31415c;
+  --fg: #f8fafc;
+  --fg-muted: #94a3b8;
+  --fg-subtle: #64748b;
 
   --accent: #ff5a1f;
   --accent-hover: #ff7340;
   --accent-active: #e04a14;
   --accent-fg: #ffffff;
-  --accent-soft: rgba(255, 90, 31, 0.1);
-  --accent-glow: rgba(255, 90, 31, 0.16);
+  --accent-soft: rgba(255, 90, 31, 0.16);
+  --accent-glow: rgba(255, 90, 31, 0.2);
   --accent-gradient: linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%);
 
-  --success: #16a34a;
-  --success-soft: rgba(22, 163, 74, 0.12);
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.14);
   --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.14);
-  --danger: #dc2626;
-  --danger-soft: rgba(220, 38, 38, 0.12);
-  --info: #2563eb;
-  --info-soft: rgba(37, 99, 235, 0.1);
-  --buy: #16a34a;
-  --sell: #dc2626;
+  --warning-soft: rgba(245, 158, 11, 0.16);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.16);
+  --info: #38bdf8;
+  --info-soft: rgba(56, 189, 248, 0.14);
+  --buy: #22c55e;
+  --sell: #ef4444;
 
-  --shadow-card: 0 1px 0 rgba(17, 24, 39, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
-  --shadow-card-hover: 0 1px 0 rgba(17, 24, 39, 0.05), 0 12px 32px rgba(15, 23, 42, 0.1);
-  --shadow-elevated: 0 24px 56px rgba(15, 23, 42, 0.14);
-  --ring: rgba(255, 90, 31, 0.45);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 32px rgba(2, 6, 23, 0.35);
+  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 40px rgba(2, 6, 23, 0.45);
+  --shadow-elevated: 0 24px 64px rgba(2, 6, 23, 0.55);
+  --ring: rgba(255, 90, 31, 0.5);
   --radius-os: 0.75rem;
   --radius-sm: 0.5rem;
 
   --bg-ambient:
-    radial-gradient(ellipse 70% 50% at 92% 0%, rgba(255, 90, 31, 0.06), transparent 52%),
-    linear-gradient(180deg, #f8fafc 0%, #f7f9fc 42%, #eef2f7 100%);
+    radial-gradient(ellipse 70% 50% at 88% 0%, rgba(255, 90, 31, 0.08), transparent 52%),
+    radial-gradient(ellipse 50% 40% at 8% 88%, rgba(56, 189, 248, 0.05), transparent 48%),
+    linear-gradient(180deg, #0f172a 0%, #0b1120 48%, #0a101c 100%);
 
   --text-display: 2.75rem;
   --text-title: 1.75rem;
@@ -79,45 +81,42 @@
   --duration-slow: 220ms;
 }
 
-.dark {
-  --bg: #111827;
-  --bg-elevated: #151b23;
-  --surface: #1a2330;
-  --surface-2: #202938;
-  --surface-3: #283344;
-  --border: #2f3b4d;
-  --border-strong: #3d4d63;
-  --fg: #f4f7fb;
-  --fg-muted: #9aa8bc;
-  --fg-subtle: #6b7a8f;
-
+.light {
+  --bg: #f7f9fc;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-3: #e8eef5;
+  --surface-elevated: #ffffff;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --fg: #111827;
+  --fg-muted: #64748b;
+  --fg-subtle: #94a3b8;
   --accent: #ff5a1f;
   --accent-hover: #ff7340;
   --accent-active: #e04a14;
   --accent-fg: #ffffff;
-  --accent-soft: rgba(255, 90, 31, 0.16);
-  --accent-glow: rgba(255, 90, 31, 0.22);
+  --accent-soft: rgba(255, 90, 31, 0.1);
+  --accent-glow: rgba(255, 90, 31, 0.16);
   --accent-gradient: linear-gradient(135deg, #ff8a4c 0%, #ff5a1f 52%, #e04a14 100%);
-
-  --success: #22c55e;
-  --success-soft: rgba(34, 197, 94, 0.14);
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.12);
   --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.16);
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.16);
-  --info: #3b82f6;
-  --info-soft: rgba(59, 130, 246, 0.14);
-  --buy: #22c55e;
-  --sell: #ef4444;
-
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.28);
-  --shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 48px rgba(0, 0, 0, 0.36);
-  --shadow-elevated: 0 24px 64px rgba(0, 0, 0, 0.45);
-  --ring: rgba(255, 90, 31, 0.5);
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.12);
+  --info: #0284c7;
+  --info-soft: rgba(2, 132, 199, 0.1);
+  --buy: #16a34a;
+  --sell: #dc2626;
+  --shadow-card: 0 1px 0 rgba(17, 24, 39, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 1px 0 rgba(17, 24, 39, 0.05), 0 12px 32px rgba(15, 23, 42, 0.1);
+  --shadow-elevated: 0 24px 56px rgba(15, 23, 42, 0.14);
+  --ring: rgba(255, 90, 31, 0.45);
   --bg-ambient:
-    radial-gradient(ellipse 80% 55% at 85% 15%, rgba(255, 90, 31, 0.08), transparent 55%),
-    radial-gradient(ellipse 60% 45% at 10% 90%, rgba(37, 99, 235, 0.06), transparent 50%),
-    linear-gradient(180deg, #151b23 0%, #111827 48%, #0f1419 100%);
+    radial-gradient(ellipse 70% 50% at 92% 0%, rgba(255, 90, 31, 0.06), transparent 52%),
+    linear-gradient(180deg, #f8fafc 0%, #f7f9fc 42%, #eef2f7 100%);
 }
 
 @theme inline {

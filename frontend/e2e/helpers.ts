@@ -8,14 +8,14 @@ export async function seedDeskOnboarding(page: Page): Promise<void> {
       localStorage.setItem("qf.onboarding.tour.dismissed.v1", "1");
       localStorage.setItem("qf.onboarding.first_run.dismissed.v1", "1");
       localStorage.setItem(
-        "qf.onboarding.checklist.v1",
+        "qf.onboarding.checklist.v2",
         JSON.stringify({
-          invite: true,
-          tour: true,
-          paper: true,
+          welcome: true,
+          markets: true,
+          signals: true,
           broker: true,
-          feedback: true,
-          whats_new: true,
+          preferences: true,
+          live_ready: true,
         }),
       );
     } catch {
@@ -40,7 +40,9 @@ export async function loginAsE2E(page: Page): Promise<void> {
     await page.getByLabel(/^password$/i).fill(e2ePassword);
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL(/dashboard/, { timeout: 60_000 });
-    await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible({
+    await expect(
+      page.getByRole("heading", { name: /good (morning|afternoon|evening)/i }),
+    ).toBeVisible({
       timeout: 30_000,
     });
     await page.waitForFunction(() => Boolean(localStorage.getItem("qf_access_token")), null, {

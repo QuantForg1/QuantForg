@@ -17,29 +17,29 @@ import {
 
 const STEPS = [
   {
-    title: "Terminal",
-    body: "Trade here. Chart, ticket, and blotter — keyboard first. ⌘1 opens Terminal anytime.",
-    href: "/terminal",
+    title: "Overview",
+    body: "Your workspace status — account, research, markets, and what to do next.",
+    href: "/dashboard",
   },
   {
-    title: "Book",
-    body: "Portfolio, risk, and P&L from live session data. Empty when disconnected — never fabricated.",
-    href: "/book",
+    title: "Markets",
+    body: "Discover the research universe. Coverage comes from the live catalogue — never invented. No broker required.",
+    href: "/markets",
   },
   {
-    title: "Research & Counsel",
-    body: "Build and validate strategies in Research. Counsel is decision intelligence — advisory only, never auto-trades.",
-    href: "/research",
+    title: "Signals",
+    body: "Research-backed market intelligence. Independent of your MT5 connection. Not a trade authorization.",
+    href: "/signals",
   },
   {
     title: "Broker",
-    body: "Attach your MT5 session. The browser never talks to the terminal directly.",
+    body: "Connect when you are ready. Required only for account data and live execution — never for research.",
     href: "/broker",
   },
   {
-    title: "Journal",
-    body: "Session memory and post-trade notes. Use Inbox for alerts.",
-    href: "/journal",
+    title: "Trading",
+    body: "The execution desk. Live trading stays gated until you explicitly authorize it.",
+    href: "/terminal",
   },
 ] as const;
 
@@ -108,7 +108,7 @@ export function ProductTour({ forceOpen = false, onClose }: ProductTourProps) {
             <Button
               size="sm"
               onClick={() => {
-                setChecklistItem("tour", true);
+                setChecklistItem("welcome", true);
                 close(true);
               }}
             >

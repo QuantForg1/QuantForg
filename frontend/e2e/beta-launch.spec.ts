@@ -11,11 +11,11 @@ test.describe("QuantForg beta E2E", () => {
     await expect(page.getByRole("link", { name: /contact sales/i }).first()).toBeVisible();
   });
 
-  test("public register redirects to contact sales", async ({ page }) => {
+  test("public register is available without a purchase wall", async ({ page }) => {
     await page.goto("/register");
-    await expect(page).toHaveURL(/contact/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/register/, { timeout: 15_000 });
     await expect(
-      page.getByRole("heading", { name: /contact support to purchase/i }),
+      page.getByRole("heading", { name: /create your account/i }),
     ).toBeVisible();
   });
 
@@ -51,7 +51,9 @@ test.describe("QuantForg beta E2E", () => {
     test.setTimeout(180_000);
     const { loginAsE2E } = await import("./helpers");
     await loginAsE2E(page);
-    await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible({
+    await expect(
+      page.getByRole("heading", { name: /good (morning|afternoon|evening)/i }),
+    ).toBeVisible({
       timeout: 20_000,
     });
 
@@ -71,23 +73,21 @@ test.describe("QuantForg beta E2E", () => {
     await expect(page).toHaveURL(/login/, { timeout: 45_000 });
   });
 
-  test("forgot password routes to support contact", async ({ page }) => {
+  test("forgot password collects email", async ({ page }) => {
     await page.goto("/forgot-password");
     await expect(
-      page.getByRole("heading", { name: /need help accessing your account/i }),
+      page.getByRole("heading", { name: /reset your password/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /contact quantforg support/i }),
-    ).toBeVisible();
+    await expect(page.getByLabel(/^email$/i)).toBeVisible();
   });
 
-  test("reset password routes to support contact", async ({ page }) => {
+  test("reset password requires a valid reset link", async ({ page }) => {
     await page.goto("/reset-password");
     await expect(
-      page.getByRole("heading", { name: /need help accessing your account/i }),
+      page.getByRole("heading", { name: /choose a new password/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /contact quantforg support/i }),
+      page.getByRole("link", { name: /request a new reset link/i }),
     ).toBeVisible();
   });
 

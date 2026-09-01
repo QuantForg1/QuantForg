@@ -67,8 +67,8 @@ export default function LandingPage() {
           <Link href="/login" className={`${btnGhost} max-sm:px-3`}>
             Sign In
           </Link>
-          <Link href="/contact" className={`${btnOutline} max-sm:px-3`}>
-            Contact Sales
+          <Link href="/register" className={`${btnOutline} max-sm:px-3`}>
+            Create account
           </Link>
         </div>
       </header>
@@ -88,8 +88,8 @@ export default function LandingPage() {
               designed like a product, measured like a desk.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/contact" className={btnPrimary}>
-                Contact Support to Purchase
+              <Link href="/register" className={btnPrimary}>
+                Create account
               </Link>
               <Link href="/login" className={btnSecondary}>
                 Sign In
@@ -185,8 +185,8 @@ export default function LandingPage() {
           <div className="max-w-xs space-y-3">
             <BrandLogo size={32} />
             <p className="text-sm text-[var(--fg-muted)]">
-              Institutional trading operating system — licenses activated manually after payment
-              verification.
+              Institutional trading and research platform. Create an account to explore
+              markets and signals. Live trading stays gated until you connect a broker.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-8 text-sm sm:grid-cols-3">
@@ -229,6 +229,11 @@ export default function LandingPage() {
                 <li>
                   <Link href="/login" className="hover:text-[var(--fg)]">
                     Sign In
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/register" className="hover:text-[var(--fg)]">
+                    Create account
                   </Link>
                 </li>
               </ul>
