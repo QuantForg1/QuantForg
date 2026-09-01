@@ -45,13 +45,11 @@ const nextConfig: NextConfig = {
       { source: "/workspace", destination: "/terminal", permanent: false },
       { source: "/execution", destination: "/terminal", permanent: false },
       { source: "/paper", destination: "/terminal", permanent: false },
-      { source: "/get-started", destination: "/terminal", permanent: false },
       { source: "/execution-intel", destination: "/executions", permanent: false },
       { source: "/history", destination: "/executions", permanent: false },
 
       // Portfolio OS (Book → Portfolio)
       { source: "/book", destination: "/portfolio", permanent: false },
-      { source: "/dashboard", destination: "/portfolio", permanent: false },
       { source: "/wallet", destination: "/portfolio", permanent: false },
       { source: "/risk", destination: "/risk-center", permanent: false },
       { source: "/risk-lab", destination: "/allocation", permanent: false },
