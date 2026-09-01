@@ -10,6 +10,7 @@ import pytest
 
 from app.application.services.institutional_execution_engine import parse_order_intent
 from app.application.services.institutional_multi_asset_scanner import (
+    expand_live_liquid_scan_universe,
     focus_broker_discovered_scan_universe,
     isolate_parallel_scan_results,
 )
@@ -69,6 +70,46 @@ def test_seed_and_research_map_to_live_catalogue_spellings() -> None:
     assert "NOTAREALPAIR" not in upper
     assert "CADJPY_I" not in upper
     assert all(s in live for s in mapped)
+
+
+def test_expand_adds_live_liquid_cross_absent_from_seed() -> None:
+    live = (
+        "EURUSD_i",
+        "GBPUSD_i",
+        "XAUUSD_i",
+        "EURGBP_i",
+        "CADJPY_i",
+        "DISABLEDX",
+    )
+    focused = focus_broker_discovered_scan_universe(
+        live,
+        seed=("EURUSD", "XAUUSD", "GBPUSD"),
+        research_focus=(),
+        cap=36,
+    )
+    assert "CADJPY_i" not in focused
+    rows = (
+        {"code": "EURUSD_i", "trade_mode": 4, "digits": 5},
+        {"code": "GBPUSD_i", "trade_mode": 4, "digits": 5},
+        {"code": "XAUUSD_i", "trade_mode": 4, "digits": 3},
+        {"code": "EURGBP_i", "trade_mode": 4, "digits": 5},
+        {"code": "CADJPY_i", "trade_mode": 4, "digits": 3},
+        {"code": "DISABLEDX", "trade_mode": 0, "digits": 5},
+    )
+    expanded = expand_live_liquid_scan_universe(
+        live,
+        focused=focused,
+        broker_symbol_rows=rows,
+        cap=36,
+    )
+    upper = {s.upper() for s in expanded}
+    assert "EURUSD_I" in upper
+    assert "GBPUSD_I" in upper
+    assert "XAUUSD_I" in upper
+    assert "CADJPY_I" in upper
+    assert "EURGBP_I" in upper
+    assert "DISABLEDX" not in upper
+    assert len(expanded) <= 36
 
 
 def test_unknown_research_symbol_is_not_invented() -> None:

@@ -1144,6 +1144,7 @@ _GLOBAL_PLANE: OperationsControlPlane | None = None
 
 def _ensure_multi_symbol_allowlist(plane: OperationsControlPlane) -> None:
     """Expand a stale gold-only allowlist when multi-symbol policy is active."""
+    from app.domain.trading.execution_universe import broker_discovered_enabled
     from app.domain.trading.gold_only import gold_only_enabled
 
     if gold_only_enabled():
@@ -1151,6 +1152,14 @@ def _ensure_multi_symbol_allowlist(plane: OperationsControlPlane) -> None:
             trading_mode=plane.trading_mode,
             alpha_engine_enabled=plane.alpha_engine_enabled,
         )
+        return
+    if broker_discovered_enabled():
+        live = _default_allowed_symbols(
+            trading_mode=plane.trading_mode,
+            alpha_engine_enabled=plane.alpha_engine_enabled,
+        )
+        if live:
+            plane.allowed_symbols = live
         return
     try:
         from core.config.settings import get_settings

@@ -383,6 +383,161 @@ def test_no_gold_only_clamp_in_broker_discovered(broker_mode: None) -> None:
     src = inspect.getsource(resolve_scan_universe)
     assert "live_execution_symbols" in src
     assert "focus_broker_discovered_scan_universe" in src
+    assert "expand_live_liquid_scan_universe" in src
+
+
+def test_stale_unsuffixed_plane_does_not_drop_catalogue_forms(
+    broker_mode: None,
+) -> None:
+    plane = SimpleNamespace(
+        allowed_symbols=(
+            "EURUSD",
+            "GBPUSD",
+            "AUDUSD",
+            "NZDUSD",
+            "USDCHF",
+            "USDCAD",
+            "XAUUSD",
+            "USDJPY",
+            "BTCUSD",
+            "ETHUSD",
+        )
+    )
+    adapter = _LiveAdapter()
+    scan = resolve_scan_universe(
+        plane=plane,
+        mt5_adapter=adapter,
+        broker_symbol_rows=_LIVE_ROWS,
+    )
+    upper = {s.upper() for s in scan}
+    assert "EURUSD_I" in upper
+    assert "GBPUSD_I" in upper
+    assert "XAUUSD_I" in upper
+    assert "BTCUSD" in upper
+
+
+def test_broker_discovered_scan_covers_liquid_not_full_book(
+    broker_mode: None,
+) -> None:
+    extras = (
+        {
+            "code": "EURJPY_i",
+            "path": "Forex\\Crosses",
+            "trade_mode": 4,
+            "digits": 3,
+        },
+        {
+            "code": "EURGBP_i",
+            "path": "Forex\\Crosses",
+            "trade_mode": 4,
+            "digits": 5,
+        },
+        {
+            "code": "CADJPY_i",
+            "path": "Forex\\Crosses",
+            "trade_mode": 4,
+            "digits": 3,
+        },
+        {
+            "code": "XAGUSD_i",
+            "path": "Metals\\XAGUSD",
+            "trade_mode": 4,
+            "digits": 3,
+        },
+        {
+            "code": "XTIUSD",
+            "path": "Commodities\\XTIUSD",
+            "trade_mode": 4,
+            "digits": 2,
+        },
+        *(
+            {
+                "code": f"SYM{i:03d}_i",
+                "trade_mode": 4,
+                "digits": 5,
+            }
+            for i in range(70)
+        ),
+    )
+    rows = (*_LIVE_ROWS, *extras)
+    adapter = _LiveAdapter(rows=rows)
+    reset_broker_execution_universe_for_tests()
+    scan = resolve_scan_universe(
+        broker_symbol_rows=rows,
+        mt5_adapter=adapter,
+    )
+    upper = {s.upper() for s in scan}
+    assert len(scan) <= 36
+    assert len(scan) < 83
+    assert "EURUSD_I" in upper
+    assert "XAUUSD_I" in upper
+    assert "BTCUSD" in upper
+    assert "EURJPY_I" in upper
+    assert "CADJPY_I" in upper
+    assert "XAGUSD_I" in upper
+    assert "DISABLEDX" not in upper
+    assert "ZZZUNK" not in upper
+    assert not any(s.startswith("SYM") for s in upper)
+
+
+def test_research_buy_sell_leads_broker_discovered_scan(
+    broker_mode: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    from app.domain.institutional_trading.ai_scalping.config import (
+        DEFAULT_AI_SCALPING_CONFIG,
+    )
+
+    monkeypatch.setattr(
+        "app.application.services.research_execution_bridge.research_scan_focus_symbols",
+        lambda limit=36: ["EURGBP", "GBPJPY"][: int(limit or 36)],
+    )
+    rows = (
+        *_LIVE_ROWS,
+        {
+            "code": "EURGBP_i",
+            "path": "Forex\\Crosses",
+            "trade_mode": 4,
+            "digits": 5,
+        },
+        {
+            "code": "GBPJPY_i",
+            "path": "Forex\\Crosses",
+            "trade_mode": 4,
+            "digits": 3,
+        },
+    )
+    adapter = _LiveAdapter(rows=rows)
+    cfg = replace(
+        DEFAULT_AI_SCALPING_CONFIG,
+        live_symbol_learning_enabled=False,
+        session_symbol_priority_enabled=False,
+    )
+    reset_broker_execution_universe_for_tests()
+    scan = resolve_scan_universe(
+        cfg,
+        broker_symbol_rows=rows,
+        mt5_adapter=adapter,
+    )
+    assert scan[0].upper() == "EURGBP_I"
+    assert scan[1].upper() == "GBPJPY_I"
+
+
+def test_stale_ten_desk_allowlist_refreshes_from_live(broker_mode: None) -> None:
+    from app.domain.institutional_trading.operations.control_plane import (
+        OperationsControlPlane,
+        _ensure_multi_symbol_allowlist,
+    )
+
+    plane = OperationsControlPlane()
+    plane.allowed_symbols = ("EURUSD", "GBPUSD")
+    _ensure_multi_symbol_allowlist(plane)
+    upper = {s.upper() for s in plane.allowed_symbols}
+    assert "EURUSD_I" in upper
+    assert "BTCUSD" in upper
+    assert "XAUUSD_I" in upper
+    assert len(plane.allowed_symbols) >= 4
 
 
 def test_gold_specs_not_applied_to_non_gold(broker_mode: None) -> None:

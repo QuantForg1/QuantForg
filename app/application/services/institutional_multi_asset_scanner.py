@@ -354,6 +354,101 @@ def focus_broker_discovered_scan_universe(
     return tuple(out)
 
 
+def expand_live_liquid_scan_universe(
+    live: Sequence[str],
+    *,
+    focused: Sequence[str],
+    broker_symbol_rows: tuple[dict[str, Any], ...] | list[dict[str, Any]] | None = None,
+    mt5_adapter: Any | None = None,
+    cap: int = 36,
+) -> tuple[str, ...]:
+    """Research + seed first, then remaining liquid LIVE_BROKER desks, capped.
+
+    Does not invent symbols. Closed-only / unsupported / illiquid stay out.
+    Membership is always the live catalogue spelling, never an unsuffixed desk.
+    """
+    from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+        build_dynamic_scalping_universe,
+        discover_from_broker_rows,
+        fetch_broker_symbol_rows,
+    )
+    from app.domain.trading.execution_universe import desk_code_for_execution
+
+    live_codes = [str(s).strip() for s in live if str(s).strip()]
+    if not live_codes:
+        return ()
+    exact: dict[str, str] = {}
+    by_desk: dict[str, str] = {}
+    live_u: set[str] = set()
+    for code in live_codes:
+        upper = code.upper()
+        live_u.add(upper)
+        exact.setdefault(upper, code)
+        desk = desk_code_for_execution(code)
+        if desk:
+            by_desk.setdefault(desk, code)
+
+    def _map_live(token: str) -> str | None:
+        raw = str(token or "").strip()
+        if not raw:
+            return None
+        mapped = exact.get(raw.upper()) or by_desk.get(
+            desk_code_for_execution(raw) or raw.upper()
+        )
+        if mapped is None or mapped.upper() not in live_u:
+            return None
+        return mapped
+
+    cap_n = max(1, int(cap or 36))
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in focused:
+        mapped = _map_live(str(raw))
+        if mapped is None:
+            continue
+        key = mapped.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(mapped)
+        if len(out) >= cap_n:
+            return tuple(out)
+
+    rows = broker_symbol_rows
+    if not rows and mt5_adapter is not None:
+        try:
+            rows = fetch_broker_symbol_rows(mt5_adapter)
+        except Exception:
+            logger.exception("broker_rows_for_liquid_scan_failed")
+            rows = None
+    if not rows:
+        return tuple(out)
+
+    try:
+        discovered = discover_from_broker_rows(list(rows))
+        expanded = build_dynamic_scalping_universe(
+            discovered,
+            seed=tuple(out) or tuple(focused),
+            max_symbols=cap_n,
+        )
+    except Exception:
+        logger.exception("liquid_scan_universe_expand_failed")
+        return tuple(out)
+
+    for code in expanded:
+        mapped = _map_live(str(code))
+        if mapped is None:
+            continue
+        key = mapped.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(mapped)
+        if len(out) >= cap_n:
+            break
+    return tuple(out)
+
+
 def isolate_parallel_scan_results(
     universe: Sequence[str],
     results: Sequence[Any],
@@ -550,8 +645,10 @@ def resolve_scan_universe(
     *which* symbols are scored each cycle.
 
     BROKER_DISCOVERED maps research BUY/SELL plus the scalping seed onto
-    LIVE_BROKER catalogue codes. Injected ``broker_symbol_rows`` never become
-    the live universe. The full broker book is not scanned every cycle.
+    LIVE_BROKER catalogue codes, then expands with remaining liquid desks
+    from the live catalogue (capped). Injected rows never invent symbols
+    absent from ``live_execution_symbols``. The full broker book is not
+    scanned every cycle.
     """
     cfg = config or DEFAULT_AI_SCALPING_CONFIG
     broker_focused: tuple[str, ...] | None = None
@@ -577,19 +674,27 @@ def resolve_scan_universe(
             if not live:
                 return ()
             research_focus: tuple[str, ...] = ()
+            cap = int(getattr(cfg, "max_universe_symbols", 36) or 36)
             try:
                 from app.application.services.research_execution_bridge import (
                     research_scan_focus_symbols,
                 )
 
-                research_focus = tuple(research_scan_focus_symbols())
+                research_focus = tuple(research_scan_focus_symbols(limit=cap))
             except Exception:
                 logger.exception("research_scan_focus_unavailable")
-            broker_focused = focus_broker_discovered_scan_universe(
+            focused = focus_broker_discovered_scan_universe(
                 live,
                 seed=tuple(cfg.universe or DEFAULT_SCALPING_UNIVERSE),
                 research_focus=research_focus,
-                cap=int(getattr(cfg, "max_universe_symbols", 36) or 36),
+                cap=cap,
+            )
+            broker_focused = expand_live_liquid_scan_universe(
+                live,
+                focused=focused,
+                broker_symbol_rows=broker_symbol_rows,
+                mt5_adapter=mt5_adapter,
+                cap=cap,
             )
     except Exception:
         logger.exception("gold_only_scan_universe_failed")
@@ -607,19 +712,9 @@ def resolve_scan_universe(
                 boost = book.performance_boost()
             except Exception:
                 logger.exception("symbol_stats_priority_unavailable")
-        if plane is not None:
-            allowed = tuple(
-                str(s).strip().upper()
-                for s in (getattr(plane, "allowed_symbols", ()) or ())
-                if str(s).strip()
-            )
-            if allowed:
-                from app.domain.trading.gold_only import GOLD_SYMBOL
-
-                if not (len(allowed) <= 1 or set(allowed) <= {GOLD_SYMBOL}):
-                    allowed_set = set(allowed) - BROKER_UNAVAILABLE_SCALP_SYMBOLS
-                    filtered = tuple(s for s in base if s.upper() in allowed_set)
-                    base = filtered or base
+        # LIVE_BROKER membership already gated the universe. A persisted
+        # unsuffixed ops allowlist (EURUSD vs EURUSD_I) must not collapse
+        # the scan to exact-string leftovers such as unsuffixed crypto.
         if getattr(cfg, "session_symbol_priority_enabled", True):
             try:
                 from app.domain.institutional_trading.ai_scalping.session_symbol_priority import (

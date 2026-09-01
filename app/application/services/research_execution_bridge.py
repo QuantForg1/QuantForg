@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 _BUY_SELL = frozenset({"BUY", "SELL"})
 _STALE = frozenset({"STALE", "EXPIRED", "DATA_STALE"})
-_MAX_FOCUS = 8
+_MAX_FOCUS = 36
 
 
 def live_authorization_snapshot() -> dict[str, Any]:
