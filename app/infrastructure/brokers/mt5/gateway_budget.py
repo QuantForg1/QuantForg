@@ -88,6 +88,10 @@ def request_attempts(method: str, path: str, *, light: bool = False) -> int:
     if m == "GET":
         if light:
             return GET_ATTEMPTS
+        # Candle windows are heavy; two attempts fail closed faster than a
+        # 3x30s hang that burns the ITE cycle budget.
+        if str(path or "").split("?", 1)[0].startswith("/candles/"):
+            return GET_ATTEMPTS
         return GET_HEAVY_ATTEMPTS
     if is_read_only_post(path):
         return READ_ONLY_POST_ATTEMPTS

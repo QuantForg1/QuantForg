@@ -6,6 +6,7 @@ If market data cannot be loaded, returns an explicit failure reason.
 
 from __future__ import annotations
 
+import asyncio
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -129,6 +130,20 @@ _TF_COUNTS: tuple[tuple[Timeframe, int], ...] = (
     (Timeframe.M5, 400),
     (Timeframe.M1, 500),
 )
+# Cap concurrent candle fetches below TRADING_READ_LIMIT (6).
+_TF_GATE_LIMIT = 4
+_tf_fetch_gate: asyncio.Semaphore | None = None
+_tf_fetch_gate_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _tf_fetch_semaphore() -> asyncio.Semaphore:
+    """Loop-local gate — module Semaphore binds to the first pytest loop."""
+    global _tf_fetch_gate, _tf_fetch_gate_loop
+    loop = asyncio.get_running_loop()
+    if _tf_fetch_gate is None or _tf_fetch_gate_loop is not loop:
+        _tf_fetch_gate = asyncio.Semaphore(_TF_GATE_LIMIT)
+        _tf_fetch_gate_loop = loop
+    return _tf_fetch_gate
 
 
 @dataclass(frozen=True, slots=True)
@@ -508,16 +523,15 @@ async def build_ite_cycle_market_context(
     bars_loaded: dict[str, int] = {}
     last_bar_exc: Exception | None = None
     try:
-        import asyncio
-
         async def _one_tf(tf: Timeframe, count: int) -> tuple[Timeframe, list[Candle]]:
-            rates = await _io(
-                mt5_adapter.copy_rates_from_pos,
-                canonical_symbol,
-                tf,
-                0,
-                count,
-            )
+            async with _tf_fetch_semaphore():
+                rates = await _io(
+                    mt5_adapter.copy_rates_from_pos,
+                    canonical_symbol,
+                    tf,
+                    0,
+                    count,
+                )
             return tf, [_rate_to_candle(r) for r in (rates or [])]
 
         loaded = await asyncio.gather(
@@ -640,8 +654,6 @@ async def build_ite_cycle_market_context(
             ticks=diag.get("ticks"),
             snapshot="ANALYZE_FAIL",
         )
-
-    import asyncio
 
     from app.application.services.mt5_position_truth import force_sync_positions
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -393,6 +394,148 @@ def isolate_parallel_scan_results(
     return scored
 
 
+async def score_universe_with_budget(
+    mt5_adapter: Any,
+    universe: Sequence[str],
+    *,
+    position_engine: Any | None = None,
+    config: AiScalpingConfig | None = None,
+    budget_seconds: float = 75.0,
+    per_symbol_timeout: float = 12.0,
+    concurrency: int = 2,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Score watchlist symbols under a hard scan budget.
+
+    Does not invoke Risk/OMS/order_send. One slow desk cannot consume the
+    whole ITE cycle. New work is not started after the deadline.
+    """
+    from app.domain.institutional_trading.operations.worker_runtime_state import (
+        SCAN_SYMBOL_TIMEOUT_SECONDS,
+    )
+
+    symbols = [str(s).strip() for s in universe if str(s).strip()]
+    stats: dict[str, Any] = {
+        "symbols_queued": len(symbols),
+        "symbols_evaluated": 0,
+        "symbols_completed": 0,
+        "symbols_timed_out": 0,
+        "symbols_budget_skipped": 0,
+        "scan_budget_seconds": float(budget_seconds or 0.0),
+        "per_symbol_timeout_seconds": float(
+            per_symbol_timeout or SCAN_SYMBOL_TIMEOUT_SECONDS
+        ),
+    }
+    if not symbols:
+        return [], stats
+    conc = max(1, int(concurrency or 1))
+    deadline = time.monotonic() + max(1.0, float(budget_seconds or 1.0))
+    timeout_s = max(1.0, float(per_symbol_timeout or SCAN_SYMBOL_TIMEOUT_SECONDS))
+    pending = list(symbols)
+    in_flight: dict[asyncio.Task[dict[str, Any]], str] = {}
+    rows: list[dict[str, Any]] = []
+
+    async def _score_one(sym: str) -> dict[str, Any]:
+        remaining = deadline - time.monotonic()
+        slot = min(timeout_s, max(0.2, remaining))
+        try:
+            return await asyncio.wait_for(
+                score_symbol_for_scan(
+                    mt5_adapter,
+                    sym,
+                    position_engine=position_engine,
+                    config=config,
+                ),
+                timeout=slot,
+            )
+        except TimeoutError:
+            stats["symbols_timed_out"] = int(stats["symbols_timed_out"]) + 1
+            return {
+                "symbol": str(sym).strip().upper(),
+                "reject": True,
+                "reject_reason": "SYMBOL_TIMEOUT",
+                "direction": "NONE",
+                "ai_confidence": 0,
+                "trade_quality": 0,
+            }
+
+    def _cancel_in_flight() -> None:
+        for task in list(in_flight.keys()):
+            if not task.done():
+                task.cancel()
+
+    try:
+        while pending or in_flight:
+            while pending and len(in_flight) < conc:
+                if time.monotonic() >= deadline:
+                    break
+                sym = pending.pop(0)
+                stats["symbols_evaluated"] = int(stats["symbols_evaluated"]) + 1
+                task = asyncio.create_task(_score_one(sym))
+                in_flight[task] = sym
+            if not in_flight:
+                for leftover in pending:
+                    stats["symbols_budget_skipped"] = (
+                        int(stats["symbols_budget_skipped"]) + 1
+                    )
+                    rows.append(
+                        {
+                            "symbol": str(leftover).strip().upper(),
+                            "reject": True,
+                            "reject_reason": "CYCLE_BUDGET_EXHAUSTED",
+                            "direction": "NONE",
+                            "ai_confidence": 0,
+                            "trade_quality": 0,
+                        }
+                    )
+                pending.clear()
+                break
+            wait_left = max(0.05, deadline - time.monotonic() + timeout_s)
+            done, _alive = await asyncio.wait(
+                set(in_flight.keys()),
+                timeout=wait_left,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not done:
+                for task, sym in list(in_flight.items()):
+                    if not task.done():
+                        task.cancel()
+                        stats["symbols_timed_out"] = int(stats["symbols_timed_out"]) + 1
+                        rows.append(
+                            {
+                                "symbol": str(sym).strip().upper(),
+                                "reject": True,
+                                "reject_reason": "SYMBOL_TIMEOUT",
+                                "direction": "NONE",
+                                "ai_confidence": 0,
+                                "trade_quality": 0,
+                            }
+                        )
+                in_flight.clear()
+                continue
+            for task in done:
+                sym = in_flight.pop(task, "")
+                try:
+                    result = task.result()
+                except asyncio.CancelledError:
+                    continue
+                except Exception as exc:
+                    result = {
+                        "symbol": str(sym).strip().upper(),
+                        "reject": True,
+                        "reject_reason": f"EXECUTION_ERROR:{type(exc).__name__}",
+                        "direction": "NONE",
+                        "ai_confidence": 0,
+                        "trade_quality": 0,
+                    }
+                if isinstance(result, dict):
+                    rows.append(result)
+                    stats["symbols_completed"] = int(stats["symbols_completed"]) + 1
+    finally:
+        _cancel_in_flight()
+        in_flight.clear()
+    return rows, stats
+
+
 def resolve_scan_universe(
     config: AiScalpingConfig | None = None,
     *,
@@ -731,6 +874,7 @@ async def run_institutional_multi_asset_scan(
     config: AiScalpingConfig | None = None,
     plane: Any | None = None,
     ite_config: Any | None = None,
+    scan_budget_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Scan the full watchlist in parallel; rank; return eligible handoff list.
 
@@ -800,6 +944,7 @@ async def run_institutional_multi_asset_scan(
             config=cfg,
             plane=plane,
             ite_config=ite_config,
+            scan_budget_seconds=scan_budget_seconds,
         )
     finally:
         _SCAN_GATE.release()
@@ -814,6 +959,7 @@ async def _run_institutional_multi_asset_scan_body(
     config: AiScalpingConfig | None = None,
     plane: Any | None = None,
     ite_config: Any | None = None,
+    scan_budget_seconds: float | None = None,
 ) -> dict[str, Any]:
     import time as _time
 
@@ -960,35 +1106,34 @@ async def _run_institutional_multi_asset_scan_body(
         return payload
 
     scored: list[dict[str, Any]] = []
-    if bool(getattr(cfg, "parallel_scan_enabled", True)) and len(universe) > 1:
-        conc = max(1, int(getattr(cfg, "parallel_scan_concurrency", 4) or 4))
-        sem = asyncio.Semaphore(conc)
+    scan_stats: dict[str, Any] = {
+        "symbols_queued": len(universe),
+        "symbols_evaluated": 0,
+        "symbols_completed": 0,
+        "symbols_timed_out": 0,
+        "symbols_budget_skipped": 0,
+    }
+    from app.domain.institutional_trading.operations.worker_runtime_state import (
+        SCAN_SYMBOL_TIMEOUT_SECONDS,
+        cycle_scan_budget_seconds,
+    )
 
-        async def _score_one(sym: str) -> dict[str, Any]:
-            async with sem:
-                return await score_symbol_for_scan(
-                    mt5_adapter,
-                    sym,
-                    position_engine=position_engine,
-                    config=cfg,
-                )
-
-        scored = isolate_parallel_scan_results(
+    budget = (
+        float(scan_budget_seconds)
+        if scan_budget_seconds is not None
+        else cycle_scan_budget_seconds(5.0)
+    )
+    conc = max(1, min(2, int(getattr(cfg, "parallel_scan_concurrency", 2) or 2)))
+    if universe:
+        scored, scan_stats = await score_universe_with_budget(
+            mt5_adapter,
             universe,
-            await asyncio.gather(
-                *[_score_one(s) for s in universe],
-                return_exceptions=True,
-            ),
+            position_engine=position_engine,
+            config=cfg,
+            budget_seconds=budget,
+            per_symbol_timeout=SCAN_SYMBOL_TIMEOUT_SECONDS,
+            concurrency=conc,
         )
-    else:
-        for symbol in universe:
-            row = await score_symbol_for_scan(
-                mt5_adapter,
-                symbol,
-                position_engine=position_engine,
-                config=cfg,
-            )
-            scored.append(row)
 
     for row in scored:
         logger.warning(
@@ -1614,6 +1759,15 @@ async def _run_institutional_multi_asset_scan_body(
         "atr_source_timeframe": "M15",
         "atr_source_period": 14,
         "scanner_duration_ms": round((_time.perf_counter() - t_scan) * 1000.0, 1),
+        "symbols_queued": int(scan_stats.get("symbols_queued") or len(universe)),
+        "symbols_evaluated": int(scan_stats.get("symbols_evaluated") or 0),
+        "symbols_completed": int(scan_stats.get("symbols_completed") or 0),
+        "symbols_timed_out": int(scan_stats.get("symbols_timed_out") or 0),
+        "symbols_budget_skipped": int(scan_stats.get("symbols_budget_skipped") or 0),
+        "scan_budget_seconds": scan_stats.get("scan_budget_seconds"),
+        "per_symbol_timeout_seconds": scan_stats.get(
+            "per_symbol_timeout_seconds"
+        ),
     }
     try:
         from app.domain.institutional_trading.operations.fast_decision_path import (

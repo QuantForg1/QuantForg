@@ -38,6 +38,32 @@ def cycle_hard_timeout_seconds(interval_seconds: float) -> float:
     return max(180.0, window * 2.0)
 
 
+# Leave wall-clock for PME + one Risk→OMS path after the scan.
+CYCLE_EXECUTION_RESERVE_SECONDS = 40.0
+CYCLE_SCAN_BUDGET_CAP_SECONDS = 75.0
+SCAN_SYMBOL_TIMEOUT_SECONDS = 12.0
+
+
+def cycle_scan_budget_seconds(
+    interval_seconds: float,
+    *,
+    remaining: float | None = None,
+) -> float:
+    """Scan must finish with reserve left for PME / Risk / OMS / MT5."""
+    hard = cycle_hard_timeout_seconds(interval_seconds)
+    cap = min(
+        CYCLE_SCAN_BUDGET_CAP_SECONDS,
+        max(20.0, hard - CYCLE_EXECUTION_RESERVE_SECONDS),
+    )
+    if remaining is None:
+        return cap
+    try:
+        left = float(remaining)
+    except (TypeError, ValueError):
+        left = cap
+    return max(5.0, min(cap, left - CYCLE_EXECUTION_RESERVE_SECONDS))
+
+
 def scheduler_is_stalled(
     *,
     last_cycle_finished_mono: float,
@@ -135,6 +161,12 @@ def last_blocker_from_cycle(cycle: Any) -> tuple[str | None, str | None]:
             stage = "risk"
         elif "SAFETY" in abort:
             stage = "safety"
+        elif abort == "CYCLE_TIMEOUT":
+            diag = getattr(cycle, "market_context_diagnostics", None)
+            if isinstance(diag, dict) and diag.get("timeout_stage"):
+                stage = str(diag.get("timeout_stage"))
+            else:
+                stage = "timeout"
         return abort, stage
     if outcome in {"safety_blocked", "no_snapshot", "error"}:
         return (detail or outcome), outcome

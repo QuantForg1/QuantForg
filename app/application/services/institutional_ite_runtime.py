@@ -1123,6 +1123,73 @@ class InstitutionalIteRuntime:
             except Exception:
                 logger.exception("pvm_unbind_run_auto_cycle_failed")
 
+    def _protect_open_positions(self, *, reason: str) -> None:
+        """Keep SL/TP/breakeven work off the scan critical path.
+
+        Never submits a new order. Uses cached cycle context when present.
+        """
+        snapshot = None
+        account = None
+        open_syms: list[str] = []
+        try:
+            from app.application.services.ite_cycle_market_context import (
+                peek_cycle_market_context,
+            )
+            from app.domain.trading.gold_only import GOLD_SYMBOL
+
+            try:
+                open_syms = [
+                    str(getattr(p, "symbol", "") or "")
+                    for p in (
+                        getattr(self.position_management.engine, "_positions", {})
+                        or {}
+                    ).values()
+                ]
+            except Exception:
+                open_syms = []
+            for sym in [*open_syms, GOLD_SYMBOL]:
+                ctx = peek_cycle_market_context(sym)
+                if ctx is not None and ctx.ok and ctx.snapshot is not None:
+                    snapshot = ctx.snapshot
+                    account = ctx.account
+                    break
+        except Exception:
+            logger.exception("cycle_protect_peek_context_failed")
+        if snapshot is not None and account is not None:
+            self._sync_and_manage_open_positions(
+                snapshot=snapshot,
+                account=account,
+                reason=reason,
+            )
+            return
+        try:
+            from app.domain.institutional_trading.production_hardening.position_recovery import (  # noqa: E501
+                recover_positions_from_mt5,
+            )
+            from app.domain.trading.gold_only import GOLD_SYMBOL
+
+            recover_syms: list[str] = []
+            seen: set[str] = set()
+            for raw in [*open_syms, GOLD_SYMBOL]:
+                key = str(raw or "").strip().upper()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                recover_syms.append(str(raw).strip())
+            if self.mt5_adapter is not None:
+                for sym in recover_syms:
+                    recover_positions_from_mt5(
+                        mt5_adapter=self.mt5_adapter,
+                        engine=self.position_management.engine,
+                        symbol=sym,
+                    )
+        except Exception:
+            logger.exception("cycle_protect_position_recovery_failed")
+
+    def _manage_open_positions_after_timeout(self) -> None:
+        """PME must not starve when the scan overruns the cycle budget."""
+        self._protect_open_positions(reason="cycle_timeout_manage")
+
     def _sync_and_manage_open_positions(
         self,
         *,
@@ -4721,6 +4788,12 @@ class InstitutionalIteRuntime:
         last_d = payload.get("last_cycle")
         if isinstance(last_d, dict):
             payload["execution_status"] = last_d.get("execution_status")
+            payload["timeout_stage"] = last_d.get("timeout_stage") or diag.get(
+                "timeout_stage"
+            )
+            payload["symbols_evaluated"] = diag.get("symbols_evaluated")
+            payload["signals_found"] = diag.get("signals_found")
+            payload["eligible_opportunities"] = diag.get("eligible_opportunities")
             payload["tradeability"] = last_d.get("tradeability") or diag.get(
                 "tradeability"
             )
@@ -5092,6 +5165,17 @@ class InstitutionalIteRuntime:
             ite = getattr(self.decision_pipeline, "config", None)
             if ite is None or not bool(getattr(ite, "is_scalping", lambda: False)()):
                 ite = scalping_ite_config()
+            from app.domain.institutional_trading.operations.worker_runtime_state import (  # noqa: E501
+                cycle_hard_timeout_seconds,
+                cycle_scan_budget_seconds,
+            )
+
+            hard = cycle_hard_timeout_seconds(self.interval_seconds)
+            started = self._cycle_started_mono or time.monotonic()
+            remaining = hard - (time.monotonic() - started)
+            _scan_budget = cycle_scan_budget_seconds(
+                self.interval_seconds, remaining=remaining
+            )
             scan = await run_institutional_multi_asset_scan(
                 self.mt5_adapter,
                 position_engine=getattr(self.position_management, "engine", None),
@@ -5099,6 +5183,7 @@ class InstitutionalIteRuntime:
                 plane=self.plane,
                 config=DEFAULT_AI_SCALPING_CONFIG,
                 ite_config=ite,
+                scan_budget_seconds=_scan_budget,
             )
             scan_ms = round((time.perf_counter() - t_scan) * 1000.0, 1)
             if isinstance(scan, dict) and scan.get("scanner_duration_ms") is None:
@@ -5811,6 +5896,7 @@ class InstitutionalIteRuntime:
                         market_context_diagnostics=dict(ctx.diagnostics),
                     ),
                     what="run_shadow_cycle",
+                    cancel_on_timeout=False,
                 )
             else:
                 t_cycle = time.perf_counter()
@@ -5830,6 +5916,7 @@ class InstitutionalIteRuntime:
                         market_context_diagnostics=dict(ctx.diagnostics),
                     ),
                     what="run_auto_cycle",
+                    cancel_on_timeout=False,
                 )
             stage_timings_ms["decision_safety_risk_oms_ms"] = round(
                 (time.perf_counter() - t_cycle) * 1000.0, 1
@@ -5948,8 +6035,18 @@ class InstitutionalIteRuntime:
 
         return await offload_blocking(fn, *args, **kwargs)
 
-    async def _await_cycle_budget(self, awaitable: Any, *, what: str) -> Any:
-        """Bound one cycle step so a hung Gateway/scan cannot freeze the loop."""
+    async def _await_cycle_budget(
+        self,
+        awaitable: Any,
+        *,
+        what: str,
+        cancel_on_timeout: bool = True,
+    ) -> Any:
+        """Bound one cycle step so a hung Gateway/scan cannot freeze the loop.
+
+        Risk→OMS→MT5 (``run_auto_cycle``) is not cancelled: an in-flight
+        order_send must not be aborted by the scan budget.
+        """
         from app.domain.institutional_trading.operations.worker_runtime_state import (
             cycle_hard_timeout_seconds,
         )
@@ -5958,8 +6055,15 @@ class InstitutionalIteRuntime:
         timeout = cycle_hard_timeout_seconds(self.interval_seconds)
         remaining = timeout - (time.monotonic() - started)
         if remaining <= 0:
-            raise TimeoutError(f"cycle_budget_exhausted:{what}")
-        return await asyncio.wait_for(awaitable, timeout=remaining)
+            if cancel_on_timeout:
+                raise TimeoutError(f"cycle_budget_exhausted:{what}")
+            return await awaitable
+        if not cancel_on_timeout:
+            return await awaitable
+        try:
+            return await asyncio.wait_for(awaitable, timeout=remaining)
+        except TimeoutError:
+            raise TimeoutError(f"cycle_budget_exhausted:{what}") from None
 
     async def watch_orchestrator_task(
         self,
@@ -6110,6 +6214,11 @@ class InstitutionalIteRuntime:
                     )
                 except Exception:
                     logger.exception("pvm_scheduler_stage_failed")
+
+                try:
+                    self._protect_open_positions(reason="pre_scan_manage")
+                except Exception:
+                    logger.exception("pre_scan_position_protect_failed")
 
                 t_pick = time.perf_counter()
                 symbol = await self._await_cycle_budget(
@@ -6429,6 +6538,7 @@ class InstitutionalIteRuntime:
                                 market_context_diagnostics=dict(ctx.diagnostics),
                             ),
                             what="run_shadow_cycle",
+                            cancel_on_timeout=False,
                         )
                     else:
                         await self._await_cycle_budget(
@@ -6447,6 +6557,7 @@ class InstitutionalIteRuntime:
                                 market_context_diagnostics=dict(ctx.diagnostics),
                             ),
                             what="run_auto_cycle",
+                            cancel_on_timeout=False,
                         )
                     with self._lock:
                         if self._last_cycle is not None:
@@ -6519,11 +6630,74 @@ class InstitutionalIteRuntime:
                         forwarded_to_oms=getattr(last, "forwarded_to_oms", False),
                     )
             except TimeoutError as exc:
+                from datetime import timedelta
+
+                from app.domain.institutional_trading.operations.worker_runtime_state import (  # noqa: E501
+                    cycle_hard_timeout_seconds,
+                )
+
+                stage = str(exc) if str(exc) else "unknown"
+                last_scan: dict[str, Any] = {}
+                with self._lock:
+                    if isinstance(self._last_multi_asset_scan, dict):
+                        last_scan = dict(self._last_multi_asset_scan)
+                hard = cycle_hard_timeout_seconds(self.interval_seconds)
+                deadline_iso = None
+                try:
+                    started_at = self._cycle_started_at
+                    if started_at:
+                        started_dt = datetime.strptime(
+                            started_at, "%Y-%m-%dT%H:%M:%SZ"
+                        ).replace(tzinfo=UTC)
+                        deadline_iso = (
+                            started_dt + timedelta(seconds=hard)
+                        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                except Exception:
+                    deadline_iso = None
+                ranked = last_scan.get("ranked") or last_scan.get("rows") or []
+                signals_found = 0
+                if isinstance(ranked, list):
+                    signals_found = sum(
+                        1
+                        for row in ranked
+                        if isinstance(row, dict)
+                        and str(row.get("direction") or "").upper() in {"BUY", "SELL"}
+                    )
+                timeout_diag = {
+                    "timeout_stage": stage,
+                    "cycle_started_at": self._cycle_started_at,
+                    "cycle_deadline": deadline_iso,
+                    "cycle_duration_ms": round(
+                        (time.perf_counter() - cycle_t0) * 1000.0, 1
+                    ),
+                    "symbols_discovered": len(last_scan.get("universe") or []),
+                    "symbols_queued": last_scan.get("symbols_queued"),
+                    "symbols_evaluated": last_scan.get("symbols_evaluated"),
+                    "symbols_completed": last_scan.get("symbols_completed"),
+                    "symbols_timed_out": last_scan.get("symbols_timed_out"),
+                    "symbols_budget_skipped": last_scan.get("symbols_budget_skipped"),
+                    "signals_found": signals_found,
+                    "eligible_opportunities": last_scan.get("eligible_count"),
+                    "risk_evaluations": 0,
+                    "oms_attempts": 0,
+                    "orders_submitted": 0,
+                    "scanner_duration_ms": last_scan.get("scanner_duration_ms"),
+                    "execution_result": "NO BROKER ORDER WAS SUBMITTED",
+                }
                 logger.warning(
                     "ite_orchestrator_cycle_timeout",
                     error=str(exc),
+                    timeout_stage=stage,
                     run_state=self.plane.auto_trading_run_state,
+                    symbols_evaluated=timeout_diag.get("symbols_evaluated"),
+                    symbols_timed_out=timeout_diag.get("symbols_timed_out"),
                 )
+                try:
+                    self._manage_open_positions_after_timeout()
+                    timeout_diag["position_management_after_timeout"] = True
+                except Exception:
+                    logger.exception("cycle_timeout_position_manage_failed")
+                    timeout_diag["position_management_after_timeout"] = False
                 with self._lock:
                     self._last_cycle = ShadowCycleResult(
                         ok=False,
@@ -6532,6 +6706,9 @@ class InstitutionalIteRuntime:
                         detail=f"cycle timeout: {exc}",
                         cycle_outcome="error",
                         abort_reason="CYCLE_TIMEOUT",
+                        market_context_diagnostics=timeout_diag,
+                        forwarded_to_oms=False,
+                        mt5_ticket=None,
                     )
                     self._cycles += 1
                     self._last_failure = "CYCLE_TIMEOUT"
@@ -6552,6 +6729,7 @@ class InstitutionalIteRuntime:
                 logger.warning(
                     "Autonomous engine continuing after cycle timeout",
                     error=str(exc),
+                    timeout_stage=stage,
                     run_state=self.plane.auto_trading_run_state,
                 )
             except Exception as exc:

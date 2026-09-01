@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+import weakref
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -85,7 +86,10 @@ _ILLIQUID_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 _CATALOGUE_LOCK = threading.RLock()
+_CATALOGUE_ADAPTER: weakref.ReferenceType[Any] | None = None
 _CATALOGUE_CACHE: tuple[tuple[dict[str, Any], ...], float] | None = None
+_CATALOGUE_ERROR_ADAPTER: weakref.ReferenceType[Any] | None = None
+_CATALOGUE_FETCH_ERROR: str | None = None
 _CATALOGUE_TTL_S = 300.0
 
 
@@ -456,13 +460,41 @@ def build_dynamic_scalping_universe(
     return tuple(ordered[:max_symbols])
 
 
+def reset_catalogue_cache_for_tests() -> None:
+    """Drop cached broker rows (tests only)."""
+    global _CATALOGUE_ADAPTER, _CATALOGUE_CACHE
+    global _CATALOGUE_ERROR_ADAPTER, _CATALOGUE_FETCH_ERROR
+    with _CATALOGUE_LOCK:
+        _CATALOGUE_ADAPTER = None
+        _CATALOGUE_CACHE = None
+        _CATALOGUE_ERROR_ADAPTER = None
+        _CATALOGUE_FETCH_ERROR = None
+
+
+def last_catalogue_fetch_error(mt5_adapter: Any) -> str | None:
+    with _CATALOGUE_LOCK:
+        holder = _CATALOGUE_ERROR_ADAPTER
+        if holder is None or holder() is not mt5_adapter:
+            return None
+        err = _CATALOGUE_FETCH_ERROR
+    return str(err) if err else None
+
+
 def fetch_broker_symbol_rows(mt5_adapter: Any) -> tuple[dict[str, Any], ...]:
     """Read LIVE catalogue via gateway adapter (cached TTL)."""
-    global _CATALOGUE_CACHE
+    global _CATALOGUE_ADAPTER, _CATALOGUE_CACHE
+    global _CATALOGUE_ERROR_ADAPTER, _CATALOGUE_FETCH_ERROR
     now = time.monotonic()
     with _CATALOGUE_LOCK:
-        if _CATALOGUE_CACHE and now - _CATALOGUE_CACHE[1] < _CATALOGUE_TTL_S:
-            return _CATALOGUE_CACHE[0]
+        holder = _CATALOGUE_ADAPTER
+        cached = _CATALOGUE_CACHE
+        if (
+            holder is not None
+            and holder() is mt5_adapter
+            and cached
+            and now - cached[1] < _CATALOGUE_TTL_S
+        ):
+            return cached[0]
     rows: list[dict[str, Any]] = []
     try:
         # Prefer rich list_symbols when available
@@ -476,7 +508,9 @@ def fetch_broker_symbol_rows(mt5_adapter: Any) -> tuple[dict[str, Any], ...]:
                 if isinstance(item, dict):
                     rows.append(item)
                     continue
-                code = str(getattr(item, "code", None) or getattr(item, "name", "") or "")
+                code = str(
+                    getattr(item, "code", None) or getattr(item, "name", "") or ""
+                )
                 if not code:
                     continue
                 rows.append(
@@ -489,15 +523,32 @@ def fetch_broker_symbol_rows(mt5_adapter: Any) -> tuple[dict[str, Any], ...]:
                         "volume_max": getattr(item, "volume_max", None),
                     }
                 )
-    except Exception:
+    except Exception as exc:
         logger.exception("broker_symbol_catalogue_fetch_failed")
         with _CATALOGUE_LOCK:
-            if _CATALOGUE_CACHE:
-                return _CATALOGUE_CACHE[0]
+            try:
+                _CATALOGUE_ERROR_ADAPTER = weakref.ref(mt5_adapter)
+            except TypeError:
+                _CATALOGUE_ERROR_ADAPTER = None
+            _CATALOGUE_FETCH_ERROR = str(exc)
+            holder = _CATALOGUE_ADAPTER
+            cached = _CATALOGUE_CACHE
+            if holder is not None and holder() is mt5_adapter and cached:
+                return cached[0]
         return ()
     payload = tuple(rows)
     with _CATALOGUE_LOCK:
-        _CATALOGUE_CACHE = (payload, now)
+        try:
+            _CATALOGUE_ADAPTER = weakref.ref(mt5_adapter)
+        except TypeError:
+            _CATALOGUE_ADAPTER = None
+            _CATALOGUE_CACHE = None
+        else:
+            _CATALOGUE_CACHE = (payload, now)
+        err_holder = _CATALOGUE_ERROR_ADAPTER
+        if err_holder is not None and err_holder() is mt5_adapter:
+            _CATALOGUE_ERROR_ADAPTER = None
+            _CATALOGUE_FETCH_ERROR = None
     logger.warning(
         "broker_scalping_universe_catalogue",
         count=len(payload),

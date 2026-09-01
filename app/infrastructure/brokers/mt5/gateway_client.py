@@ -410,6 +410,10 @@ class GatewayMT5Client:
         # for the 15s frontend abort window.
         if self._is_light_gateway_path(path):
             return httpx.Timeout(3.5, connect=2.0, read=3.5, write=3.5, pool=2.0)
+        if str(path or "").split("?", 1)[0].startswith("/candles/"):
+            # Multi-symbol scans fetch 5 TFs per desk. A 30s hang per TF
+            # exhausts CYCLE_TIMEOUT before Risk/OMS. Fail closed faster.
+            return httpx.Timeout(8.0, connect=8.0, read=8.0, write=8.0, pool=8.0)
         if is_calc_path(path):
             from app.infrastructure.brokers.mt5.gateway_budget import (
                 CALC_READ_TIMEOUT_SECONDS,

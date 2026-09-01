@@ -36,6 +36,11 @@ def reset_broker_execution_universe_for_tests() -> None:
     global _SNAPSHOT
     with _SNAP_LOCK:
         _SNAPSHOT = None
+    from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+        reset_catalogue_cache_for_tests,
+    )
+
+    reset_catalogue_cache_for_tests()
 
 
 def normalize_execution_universe_mode(raw: Any) -> str:
@@ -212,24 +217,37 @@ def live_execution_snapshot(*, mt5_adapter: Any | None = None) -> dict[str, Any]
             base["execution_unavailable_reason"] = "injected_catalogue_not_live_broker"
         return base
     try:
-        from app.domain.market_universe.broker_catalogue import discover_live_catalogue
+        from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+            fetch_broker_symbol_rows,
+        )
     except Exception:
         base["execution_unavailable_reason"] = "broker_discovery_failed"
         return base
-    result = discover_live_catalogue(adapter)
-    source = str(result.get("catalogue_source") or CATALOGUE_UNAVAILABLE)
-    if source != CATALOGUE_LIVE_BROKER:
-        base["catalogue_source"] = (
-            CATALOGUE_UNAVAILABLE if source != CATALOGUE_LIVE_BROKER else source
-        )
-        err = str(result.get("error") or "broker_discovery_failed")
-        if "credential" in err.lower():
-            err = "gateway_credentials_unavailable"
-        elif "not connected" in err.lower() or "unreachable" in err.lower():
-            err = "gateway_unavailable"
-        base["execution_unavailable_reason"] = err
+    try:
+        fetched = fetch_broker_symbol_rows(adapter)
+    except Exception:
+        base["execution_unavailable_reason"] = "broker_discovery_failed"
         return base
-    rows = tuple(result.get("rows") or ())
+    rows = tuple(fetched or ())
+    if not rows:
+        from app.domain.institutional_trading.ai_scalping.universe_discovery import (
+            last_catalogue_fetch_error,
+        )
+
+        err = str(last_catalogue_fetch_error(adapter) or "").lower()
+        disconnected = any(
+            needle in err
+            for needle in (
+                "not connected",
+                "unreachable",
+                "credentials",
+                "no_mt5",
+            )
+        )
+        if disconnected:
+            base["catalogue_source"] = CATALOGUE_UNAVAILABLE
+            base["execution_unavailable_reason"] = "gateway_unavailable"
+            return base
     symbols: list[str] = []
     rejected = 0
     seen: set[str] = set()
