@@ -53,6 +53,7 @@ _REASON_GROUPS: dict[str, str] = {
     "margin_available": "risk",
     "broker_restrictions": "broker",
     "daily_loss": "risk",
+    "daily_pnl_verified": "risk",
     "max_open_positions": "risk",
     "trading_session": "market",
     "max_spread": "market",
@@ -315,6 +316,18 @@ def build_status_facts(
     def _opt_bool(value: Any, *, when_unknown: bool) -> bool:
         return when_unknown if value is None else bool(value)
 
+    daily_pnl_verified = True
+    try:
+        last = getattr(get_ite_runtime(), "_last_cycle", None)
+        diag = getattr(last, "market_context_diagnostics", None) if last else None
+        if isinstance(diag, dict) and (
+            diag.get("daily_pnl_fail_closed") is True
+            or diag.get("daily_pnl_trusted") is False
+        ):
+            daily_pnl_verified = False
+    except Exception:
+        daily_pnl_verified = True
+
     facts = AutoTradeLiveFacts(
         gateway_connected=gateway_ok,
         broker_connected=broker_ok,
@@ -353,6 +366,7 @@ def build_status_facts(
         spread_evaluated=isinstance(enriched.get("spread"), Decimal),
         news_blocked=False,
         daily_loss_exceeded=plane.daily_loss_exceeded,
+        daily_pnl_verified=daily_pnl_verified,
         emergency_stop=plane.kill_switch_armed,
         ops_mode=plane.mode.value,
         execution_enabled=bool(getattr(cfg, "execution_enabled", False)),

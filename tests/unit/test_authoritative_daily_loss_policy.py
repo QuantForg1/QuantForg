@@ -317,7 +317,8 @@ def test_13_untrusted_history_fail_closed_unchanged() -> None:
         trusted=False,
     )
     assert out["daily_loss_exceeded"] is True
-    assert out["source"] == "fail_closed"
+    assert out["source"] == "unavailable"
+    assert out["daily_loss_lock"] == "UNKNOWN"
     assert plane.daily_loss_exceeded is True
 
 

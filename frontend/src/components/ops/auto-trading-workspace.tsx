@@ -817,14 +817,28 @@ export function AutoTradingWorkspace() {
   const orch = asRecord(asRecord(opsPayload).orchestrator);
   const last = asRecord(orch.last_cycle);
   const diag = asRecord(last.market_context_diagnostics);
-  const utcDailyLossPct = Number.isFinite(num(diag.daily_loss_pct))
-    ? num(diag.daily_loss_pct)
-    : dailyLossPct;
   const utcDailyLimit = Number.isFinite(num(diag.daily_loss_limit_pct))
     ? num(diag.daily_loss_limit_pct)
     : maxDailyLossPct;
+  const pnlUnavailable =
+    diag.daily_pnl_trusted === false ||
+    diag.daily_pnl_fail_closed === true ||
+    str(diag.daily_loss_lock, "") === "UNKNOWN";
+  const utcDailyLossPct = pnlUnavailable
+    ? Number.NaN
+    : Number.isFinite(num(diag.daily_loss_pct))
+      ? num(diag.daily_loss_pct)
+      : dailyLossPct;
   const dailyLossLocked =
-    diag.daily_loss_exceeded === true || utcDailyLossPct > utcDailyLimit;
+    diag.daily_loss_exceeded === true ||
+    (!pnlUnavailable &&
+      Number.isFinite(utcDailyLossPct) &&
+      utcDailyLossPct > utcDailyLimit);
+  const dailyLossLockLabel = diag.daily_loss_exceeded === true
+    ? "EXCEEDED"
+    : pnlUnavailable
+      ? "UNKNOWN"
+      : "CLEAR";
   const dailyLossReset = str(diag.daily_loss_resets_at, "UTC 00:00");
   const capUsed = Number.isFinite(num(diag.capacity_used))
     ? num(diag.capacity_used)
@@ -2150,13 +2164,17 @@ export function AutoTradingWorkspace() {
             />
             <MetricCard
               label="Daily Loss"
-              value={`${formatNumber(utcDailyLossPct, 2)}% / ${formatNumber(utcDailyLimit, 1)}%`}
+              value={
+                pnlUnavailable
+                  ? "UNAVAILABLE / VERIFYING"
+                  : `${formatNumber(utcDailyLossPct, 2)}% / ${formatNumber(utcDailyLimit, 1)}%`
+              }
               tone={dailyLossLocked ? "bad" : utcDailyLossPct > 0 ? "warn" : "neutral"}
             />
             <MetricCard
               label="Daily loss lock"
-              value={dailyLossLocked ? "EXCEEDED" : "CLEAR"}
-              tone={dailyLossLocked ? "bad" : "ok"}
+              value={dailyLossLockLabel}
+              tone={dailyLossLocked ? "bad" : pnlUnavailable ? "warn" : "ok"}
             />
             <MetricCard label="Resets" value={dailyLossReset.replace("T00:00:00Z", " UTC")} />
             <MetricCard
@@ -2165,7 +2183,11 @@ export function AutoTradingWorkspace() {
             />
             <MetricCard
               label="Realized P/L"
-              value={str(diag.daily_realized_pnl || diag.daily_pnl, "—")}
+              value={
+                pnlUnavailable
+                  ? "UNAVAILABLE / VERIFYING"
+                  : str(diag.daily_realized_pnl || diag.daily_pnl, "—")
+              }
             />
             <MetricCard
               label="UTC session"

@@ -120,8 +120,9 @@ class ExecutionBridgeContext:
     # Broker session truth — UTC off_hours must not override an open broker.
     broker_session_open: bool | None = None
     session_source: str = "utc_classifier"
-    # None = unknown (treat as trusted for backward-compatible callers).
+    # None = unknown (do not arm or clear the daily-loss latch).
     # False = history deals unavailable — fail-close this cycle, do not latch.
+    # True = broker UTC-day deals were retrieved and P/L is trusted.
     daily_pnl_trusted: bool | None = None
 
     @property

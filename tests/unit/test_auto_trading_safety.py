@@ -153,6 +153,31 @@ class TestAutoTradeSafetyGate:
         )
         assert ok.allowed is True
 
+    def test_unverified_pnl_blocks_without_claiming_daily_loss(self) -> None:
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(
+                daily_pnl_verified=False,
+                daily_loss_exceeded=False,
+            ),
+        )
+        assert result.allowed is False
+        assert any("unavailable" in r.lower() for r in result.failed_reasons)
+        assert "Maximum daily loss exceeded" not in result.failed_reasons
+
+    def test_legitimate_daily_loss_still_blocks(self) -> None:
+        policy = AutoTradePolicy(enabled=True, run_state="running")
+        result = evaluate_auto_trade_safety(
+            policy,
+            _all_pass_facts(
+                daily_pnl_verified=True,
+                daily_loss_exceeded=True,
+            ),
+        )
+        assert result.allowed is False
+        assert "Maximum daily loss exceeded" in result.failed_reasons
+
     def test_allowlist_xauusd_recognizes_broker_xauusd_i(self) -> None:
         """Desk-aware: configured XAUUSD authorizes catalogue XAUUSD_I."""
         policy = AutoTradePolicy(

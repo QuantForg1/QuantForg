@@ -130,9 +130,11 @@ async def test_history_deals_failure_trips_daily_loss_fail_closed(
     assert ctx.diagnostics.get("daily_pnl_fail_closed") is True
     assert ctx.diagnostics.get("daily_pnl_trusted") is False
     assert ctx.account.daily_pnl == Decimal("0")
-    assert ctx.diagnostics.get("daily_loss_source") == "fail_closed"
-    # This cycle is blocked; the durable latch is not armed from missing deals.
-    assert ctx.diagnostics.get("daily_loss_exceeded") is True
+    assert ctx.account.daily_pnl != -(ctx.account.equity * Decimal("0.40"))
+    assert ctx.diagnostics.get("daily_pnl") is None
+    assert ctx.diagnostics.get("daily_loss_source") == "unavailable"
+    assert ctx.diagnostics.get("daily_loss_lock") == "UNKNOWN"
+    assert ctx.diagnostics.get("lock_changed") is not True
 
 
 @pytest.mark.unit

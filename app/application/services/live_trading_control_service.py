@@ -331,13 +331,13 @@ def _live_probe_facts(*, enrich_account: bool = False) -> dict[str, Any]:
         out["used_margin"] = _dec(account.get("margin") or account.get("margin_used"))
         out["margin_level"] = _dec(account.get("margin_level"))
         floating = _dec(account.get("profit") or account.get("floating_pnl"))
-        daily = _dec(
-            account.get("daily_pnl")
-            or account.get("today_pnl")
-            or live.get("daily_pnl")
-        )
         out["floating_pnl"] = floating
-        out["daily_pnl"] = daily
+        # Never copy gateway/account daily_pnl blobs. ITE UTC-day deals are
+        # the only trusted source; missing history stays UNAVAILABLE.
+        out["daily_pnl"] = None
+        out["daily_pnl_trusted"] = False
+        out["daily_pnl_status"] = "UNAVAILABLE"
+        _overlay_trusted_daily_pnl(out)
         positions = account.get("positions") or live.get("open_positions")
         try:
             out["open_positions"] = int(positions or facts.open_positions or 0)
@@ -364,6 +364,43 @@ def _live_probe_facts(*, enrich_account: bool = False) -> dict[str, Any]:
         logger.warning("live_trading_probe_failed", error=str(exc))
         out["probe_error"] = "unavailable"
     return out
+
+
+def _overlay_trusted_daily_pnl(out: dict[str, Any]) -> None:
+    """Fill daily P/L from the last ITE cycle when deals were trusted.
+
+    Never copies untrusted/fail-closed values. Missing history stays None.
+    """
+    try:
+        from app.application.services.institutional_ite_runtime import (
+            get_ite_runtime,
+        )
+
+        runtime = get_ite_runtime()
+        last = getattr(runtime, "_last_cycle", None)
+        diag = getattr(last, "market_context_diagnostics", None) if last else None
+        if not isinstance(diag, dict):
+            return
+        if diag.get("daily_pnl_fail_closed") is True or (
+            diag.get("daily_pnl_trusted") is False
+        ):
+            out["daily_pnl"] = None
+            out["daily_pnl_trusted"] = False
+            out["daily_pnl_status"] = "UNAVAILABLE"
+            return
+        if diag.get("daily_pnl_trusted") is not True:
+            return
+        raw = diag.get("daily_pnl")
+        if raw in (None, "", "UNKNOWN"):
+            return
+        out["daily_pnl"] = _dec(raw)
+        out["daily_pnl_trusted"] = True
+        out["daily_pnl_status"] = "TRUSTED"
+        pct = diag.get("daily_loss_pct")
+        if pct not in (None, ""):
+            out["daily_loss_pct"] = _dec(pct)
+    except Exception:
+        return
 
 
 def _research_block() -> dict[str, Any]:
@@ -648,6 +685,11 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
                     str(facts["daily_pnl"])
                     if facts.get("daily_pnl") is not None
                     else None
+                ),
+                "daily_pnl_trusted": facts.get("daily_pnl_trusted"),
+                "daily_pnl_status": facts.get("daily_pnl_status")
+                or (
+                    "UNAVAILABLE" if facts.get("daily_pnl") is None else None
                 ),
                 "floating_pnl": (
                     str(facts["floating_pnl"])

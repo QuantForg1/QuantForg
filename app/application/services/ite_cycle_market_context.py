@@ -933,7 +933,7 @@ async def build_ite_cycle_market_context(
                 reason="history_deals_unavailable",
             )
         diag["peak_equity"] = str(peak_equity)
-        diag["daily_pnl"] = str(daily_pnl)
+        diag["daily_pnl"] = str(daily_pnl) if daily_pnl_trusted else None
         diag["daily_pnl_trusted"] = daily_pnl_trusted
     except Exception as exc:
         logger.warning("ite_cycle_live_risk_resolve_failed", error=str(exc))
@@ -941,7 +941,7 @@ async def build_ite_cycle_market_context(
         diag["daily_pnl_fail_closed"] = True
         daily_pnl = Decimal("0")
         daily_pnl_trusted = False
-        diag["daily_pnl"] = str(daily_pnl)
+        diag["daily_pnl"] = None
         diag["daily_pnl_trusted"] = False
 
     try:

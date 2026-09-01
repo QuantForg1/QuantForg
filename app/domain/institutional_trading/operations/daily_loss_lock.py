@@ -89,9 +89,9 @@ def sync_utc_daily_loss_lock(
 ) -> dict[str, Any]:
     """Arm or clear the plane latch from current UTC-day P/L.
 
-    Untrusted P/L (deals unavailable) fail-closes this measurement: do not
-    clear an existing latch, and do not arm a durable "daily loss exceeded"
-    latch from missing history. The caller still blocks this cycle.
+    Untrusted P/L (deals unavailable) is UNKNOWN: do not arm, do not clear,
+    and do not report daily_loss_exceeded from missing history. Callers must
+    fail-close execution via a separate unverified-P/L gate.
     """
     cap = Decimal(str(max_daily_loss_pct or 0))
     pct = utc_daily_loss_pct(daily_pnl=daily_pnl, equity=equity, balance=balance)
@@ -103,10 +103,10 @@ def sync_utc_daily_loss_lock(
         balance=balance,
         max_daily_loss_pct=cap,
     )
-    exceeded = True if not trusted else measured
     prior = bool(
         getattr(plane, "daily_loss_exceeded", False) if plane is not None else False
     )
+    exceeded = measured if trusted else prior
     changed = False
     moment = now or datetime.now(UTC)
     if moment.tzinfo is None:
@@ -165,27 +165,32 @@ def sync_utc_daily_loss_lock(
         armed = armed_at if armed_at.tzinfo else armed_at.replace(tzinfo=UTC)
         lock_age = max(0, int((moment - armed.astimezone(UTC)).total_seconds()))
     floating = Decimal(str(floating_pnl or 0)) if floating_pnl is not None else None
-    rearm = "LOCKED" if exceeded else "CLEAR"
-    if not exceeded and prior and changed:
+    if not trusted:
+        rearm = "UNKNOWN"
+        lock_label = "UNKNOWN"
+    else:
+        rearm = "LOCKED" if exceeded else "CLEAR"
+        lock_label = "EXCEEDED" if exceeded else "CLEAR"
+    if trusted and not exceeded and prior and changed:
         rearm = "REARMED"
     return {
-        "daily_loss_pct": str(pct),
+        "daily_loss_pct": str(pct) if trusted else None,
         "daily_loss_limit_pct": str(cap),
-        "daily_loss_lock": "EXCEEDED" if exceeded else "CLEAR",
+        "daily_loss_lock": lock_label,
         "daily_loss_exceeded": bool(exceeded),
         "daily_loss_base": base_name,
         "daily_loss_base_value": str(base),
-        "daily_realized_pnl": str(daily_pnl),
+        "daily_realized_pnl": str(daily_pnl) if trusted else None,
         "daily_unrealized_pnl": str(floating) if floating is not None else None,
         "utc_session_date": session,
         "daily_loss_session_day": session,
         "daily_loss_resets_at": resets,
-        "daily_pnl": str(daily_pnl),
+        "daily_pnl": str(daily_pnl) if trusted else None,
         "daily_pnl_trusted": bool(trusted),
-        "daily_loss_source": "utc_session_deals" if trusted else "fail_closed",
-        "history_confidence": "trusted" if trusted else "untrusted_fail_closed",
+        "daily_loss_source": "utc_session_deals" if trusted else "unavailable",
+        "history_confidence": "trusted" if trusted else "untrusted",
         "lock_age": lock_age,
         "rearm_state": rearm,
         "lock_changed": changed,
-        "source": "utc_session_deals" if trusted else "fail_closed",
+        "source": "utc_session_deals" if trusted else "unavailable",
     }

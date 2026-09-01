@@ -157,7 +157,8 @@ def test_untrusted_deals_fail_closed_do_not_clear() -> None:
         trusted=False,
     )
     assert out["daily_loss_exceeded"] is True
-    assert out["source"] == "fail_closed"
+    assert out["source"] == "unavailable"
+    assert out["daily_loss_lock"] == "UNKNOWN"
     assert plane.daily_loss_exceeded is True
 
 
@@ -175,9 +176,66 @@ def test_untrusted_deals_do_not_arm_durable_latch() -> None:
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
         trusted=False,
     )
-    assert out["daily_loss_exceeded"] is True
-    assert out["source"] == "fail_closed"
+    assert out["daily_loss_exceeded"] is False
+    assert out["source"] == "unavailable"
+    assert out["daily_loss_lock"] == "UNKNOWN"
     assert plane.daily_loss_exceeded is False
+
+
+def test_trusted_broker_loss_over_cap_still_blocks() -> None:
+    """Production 2026-09-01: -$121.02 on $161.98 is 74.71% > 40% cap."""
+    plane = SimpleNamespace(
+        daily_loss_exceeded=False,
+        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
+        clear_daily_loss=lambda **k: False,
+    )
+    out = sync_utc_daily_loss_lock(
+        plane,
+        daily_pnl=Decimal("-121.02"),
+        equity=Decimal("161.98"),
+        balance=Decimal("161.98"),
+        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        trusted=True,
+    )
+    assert out["daily_loss_exceeded"] is True
+    assert out["daily_loss_lock"] == "EXCEEDED"
+    assert out["source"] == "utc_session_deals"
+    assert plane.daily_loss_exceeded is True
+    from app.domain.institutional_trading.auto_trading import (
+        AutoTradePolicy,
+        evaluate_auto_trade_safety,
+    )
+
+    safety = evaluate_auto_trade_safety(
+        AutoTradePolicy(enabled=True, run_state="running"),
+        _live_safety_facts(daily_loss_exceeded=True),
+    )
+    assert safety.allowed is False
+    assert any("daily loss" in r.lower() for r in safety.failed_reasons)
+
+
+def test_restart_untrusted_zero_does_not_fabricate_daily_loss() -> None:
+    plane = SimpleNamespace(
+        daily_loss_exceeded=False,
+        flag_daily_loss=lambda now=None: setattr(plane, "daily_loss_exceeded", True),
+        clear_daily_loss=lambda **k: False,
+    )
+    out = sync_utc_daily_loss_lock(
+        plane,
+        daily_pnl=Decimal("0"),
+        equity=Decimal("161.98"),
+        balance=Decimal("161.98"),
+        max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
+        trusted=False,
+    )
+    assert out["daily_pnl"] is None
+    assert out["daily_loss_pct"] is None
+    assert out["daily_loss_lock"] == "UNKNOWN"
+    assert out["daily_loss_exceeded"] is False
+    assert plane.daily_loss_exceeded is False
+    payload = str(out)
+    assert "-40" not in payload
+    assert "40.0" in payload
 
 
 def test_cap_unchanged() -> None:

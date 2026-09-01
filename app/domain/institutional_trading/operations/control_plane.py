@@ -810,6 +810,7 @@ class OperationsControlPlane:
                 news_reason=facts.news_reason,
                 daily_loss_exceeded=self.daily_loss_exceeded
                 or facts.daily_loss_exceeded,
+                daily_pnl_verified=facts.daily_pnl_verified,
                 emergency_stop=self.kill_switch_armed or facts.emergency_stop,
                 ops_mode=self.mode.value,
                 execution_enabled=facts.execution_enabled,

@@ -760,8 +760,10 @@ class InstitutionalIteRuntime:
         except Exception:
             logger.exception("force_sync_positions_before_safety_failed")
 
-        cycle_daily_loss = bool(self.plane.daily_loss_exceeded) or (
-            diag_in.get("daily_pnl_fail_closed") is True
+        cycle_daily_loss = bool(self.plane.daily_loss_exceeded)
+        daily_pnl_verified = (
+            diag_in.get("daily_pnl_fail_closed") is not True
+            and diag_in.get("daily_pnl_trusted") is True
         )
         safety = self.plane.evaluate_auto_trading(
             AutoTradeLiveFacts(
@@ -784,6 +786,7 @@ class InstitutionalIteRuntime:
                 news_blocked=bool(news.blocked),
                 news_reason=str(news.reason or ""),
                 daily_loss_exceeded=cycle_daily_loss,
+                daily_pnl_verified=daily_pnl_verified,
                 emergency_stop=self.plane.kill_switch_armed,
                 ops_mode=self.plane.mode.value,
                 execution_enabled=execution_on,
@@ -837,6 +840,7 @@ class InstitutionalIteRuntime:
                             news_blocked=bool(news.blocked),
                             news_reason=str(news.reason or ""),
                             daily_loss_exceeded=cycle_daily_loss,
+                            daily_pnl_verified=daily_pnl_verified,
                             emergency_stop=self.plane.kill_switch_armed,
                             ops_mode=self.plane.mode.value,
                             execution_enabled=execution_on,
@@ -2905,12 +2909,9 @@ class InstitutionalIteRuntime:
             ),
             session_source=session_obs.session_source,
             daily_pnl_trusted=(
-                True
-                if force_shadow
-                else (
-                    market_context_diagnostics.get("daily_pnl_fail_closed") is not True
-                    and market_context_diagnostics.get("daily_pnl_trusted") is not False
-                )
+                market_context_diagnostics.get("daily_pnl_fail_closed")
+                is not True
+                and market_context_diagnostics.get("daily_pnl_trusted") is True
             ),
         )
         if self._manual_execution:

@@ -1430,7 +1430,7 @@ class ExecutionBridge:
                 equity=context.account.equity,
                 balance=context.account.balance,
                 max_daily_loss_pct=Decimal(str(self.ite_config.max_daily_loss_pct)),
-                trusted=context.daily_pnl_trusted is not False,
+                trusted=context.daily_pnl_trusted is True,
                 floating_pnl=getattr(context.account, "floating_pnl", None),
             )
             account_daily = bool(lock.get("daily_loss_exceeded"))
@@ -1472,6 +1472,7 @@ class ExecutionBridge:
             news_blocked=bool(news.blocked),
             news_reason=str(news.reason or ""),
             daily_loss_exceeded=daily_loss_exceeded,
+            daily_pnl_verified=context.daily_pnl_trusted is not False,
             emergency_stop=bool(
                 getattr(self.ops_plane, "kill_switch_armed", False)
                 if self.ops_plane is not None

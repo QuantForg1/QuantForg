@@ -181,6 +181,7 @@ class AutoTradeLiveFacts:
     news_blocked: bool = False
     news_reason: str = ""
     daily_loss_exceeded: bool = False
+    daily_pnl_verified: bool = True
     emergency_stop: bool = False
     ops_mode: str = "SHADOW"
     execution_enabled: bool = False
@@ -472,6 +473,16 @@ def evaluate_auto_trade_safety(
             "TEST MODE — daily loss lock overridden"
             if daily_override
             else ("Maximum daily loss exceeded" if facts.daily_loss_exceeded else "")
+        ),
+    )
+    add(
+        "daily_pnl_verified",
+        "Daily P/L verified",
+        bool(facts.daily_pnl_verified),
+        (
+            "Daily P/L unavailable — verifying"
+            if not facts.daily_pnl_verified
+            else ""
         ),
     )
     opens_ok = facts.open_positions < policy.max_open_positions

@@ -284,8 +284,22 @@ export function LiveTradingControlPanel() {
             <Metric label="Equity" value={str(account.equity, "—")} />
             <Metric label="Available margin" value={str(account.free_margin, "—")} />
             <Metric label="Open positions" value={str(account.open_positions, "0")} />
-            <Metric label="Today's P/L" value={str(account.daily_pnl, "—")} />
-            <Metric label="Today's loss %" value={str(risk.daily_loss_used_pct, "—")} />
+            <Metric
+              label="Today's P/L"
+              value={
+                str(account.daily_pnl_status, "") === "UNAVAILABLE"
+                  ? "UNAVAILABLE / VERIFYING"
+                  : str(account.daily_pnl, "—")
+              }
+            />
+            <Metric
+              label="Today's loss %"
+              value={
+                str(account.daily_pnl_status, "") === "UNAVAILABLE"
+                  ? "UNAVAILABLE / VERIFYING"
+                  : str(risk.daily_loss_used_pct, "—")
+              }
+            />
             <Metric label="Risk / trade" value={`${str(risk.risk_per_trade_pct, "—")}%`} />
             <Metric label="Daily loss limit" value={`${str(risk.max_daily_loss_pct, "—")}%`} />
             <Metric
