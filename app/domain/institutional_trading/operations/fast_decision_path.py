@@ -117,6 +117,8 @@ _ROTATE_NEEDLES: tuple[str, ...] = (
     "allowlist",
     "execution infeasible",
     "portfolio conflict",
+    "cycle timeout",
+    "symbol timeout",
 )
 
 _WAIT_NEEDLES: tuple[str, ...] = (

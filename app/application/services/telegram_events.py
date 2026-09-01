@@ -425,6 +425,7 @@ def format_risk_block(
             _clean(reason) or "RISK_REJECTED",
             "",
             "No order submitted.",
+            "No MT5 ticket.",
         ]
     )
 
@@ -480,7 +481,7 @@ def format_trade_rejected(
 ) -> str:
     return _join(
         [
-            "⚠️ QUANTFORG TRADE REJECTED",
+            "🟡 QUANTFORG SIGNAL REJECTED",
             "",
             _line("Symbol", symbol),
             _line("Action", _side(action) or _clean(action)),
@@ -489,6 +490,7 @@ def format_trade_rejected(
             _clean(reason) or "REJECTED",
             "",
             "Status: NO ORDER",
+            "No MT5 ticket.",
         ]
     )
 
@@ -848,7 +850,7 @@ def classify_cycle_notices(
             }
         )
         return notices
-    if confirmed and abort:
+    if abort and (confirmed or generated):
         notices.append(
             {
                 "event": TRADE_REJECTED,

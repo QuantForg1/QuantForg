@@ -16,6 +16,10 @@ const signals = readFileSync(
   join(root, "components/trading/signals-workspace.tsx"),
   "utf8",
 );
+const signalCard = readFileSync(
+  join(root, "components/trading/signal-card.tsx"),
+  "utf8",
+);
 const broker = readFileSync(
   join(root, "components/broker/broker-config-workspace.tsx"),
   "utf8",
@@ -31,8 +35,11 @@ assert.match(dash, /Research and signals remain independent/);
 assert.match(dash, /QuantForg workspace/);
 
 assert.match(signals, /GLOBAL MARKET SIGNALS/);
-assert.match(signals, /Stop loss/);
-assert.match(signals, /Take profit/);
+assert.match(signals, /SignalCard/);
+assert.match(signalCard, /Stop loss/);
+assert.match(signalCard, /Take profit/);
+assert.match(signalCard, /signalExecutionStatusLabel/);
+assert.match(signalCard, /signalMt5Ticket/);
 assert.equal(signals.includes("Why this signal"), false);
 assert.match(signals, /Research does not require a personal MT5 session/);
 

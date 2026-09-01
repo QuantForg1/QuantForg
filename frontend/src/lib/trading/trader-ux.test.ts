@@ -882,7 +882,7 @@ assert.equal(
 {
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "LIVE_ELIGIBLE" }),
-    "WAITING FOR EXECUTION",
+    "WAITING",
   );
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "RISK_BLOCKED" }),
@@ -890,15 +890,33 @@ assert.equal(
   );
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "EXECUTION_BLOCKED" }),
-    "EXECUTION BLOCKED",
+    "REJECTED",
   );
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "ORDER_SUBMITTED" }),
-    "ORDER_SUBMITTED",
+    "REJECTED",
+  );
+  assert.equal(
+    signalExecutionStatusLabel({
+      execution_status: "ORDER_SUBMITTED",
+      ticket: 123456,
+    }),
+    "WAITING",
   );
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "FILLED" }),
-    "FILLED",
+    "REJECTED",
+  );
+  assert.equal(
+    signalExecutionStatusLabel({
+      execution_status: "FILLED",
+      ticket: 778899,
+    }),
+    "EXECUTED",
+  );
+  assert.equal(
+    signalExecutionStatusLabel({ card_status: "EXECUTED" }),
+    "REJECTED",
   );
   assert.equal(signalKindLabel({ kind: "LIVE_OPPORTUNITY" }), "LIVE OPPORTUNITY");
   assert.equal(signalKindLabel({ kind: "RESEARCH_SIGNAL" }), "RESEARCH SIGNAL");

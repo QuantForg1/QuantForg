@@ -2031,6 +2031,7 @@ def list_live_signals(
     from app.application.services.research_execution_bridge import (
         live_authorization_snapshot,
         research_live_focus_symbols,
+        signal_card_lifecycle,
         signal_execution_status,
     )
 
@@ -2039,6 +2040,17 @@ def list_live_signals(
         research_focus = research_live_focus_symbols()
     except Exception:
         logger.exception("signal_center_live_authorization_failed")
+
+    scan_eligible: list[str] = []
+    try:
+        scan_snap = get_last_multi_asset_scan() or {}
+        scan_eligible = [
+            str(s).strip().upper()
+            for s in (scan_snap.get("eligible_symbols") or [])
+            if str(s).strip()
+        ]
+    except Exception:
+        scan_eligible = []
 
     for row in signals:
         if not isinstance(row, dict):
@@ -2052,6 +2064,16 @@ def list_live_signals(
             open_symbols=open_symbols,
         )
         row["execution_status"] = status
+        card = signal_card_lifecycle(
+            row,
+            execution_status=status,
+            scan_eligible=scan_eligible,
+        )
+        row["signal_lifecycle"] = card["lifecycle"]
+        row["card_status"] = card["card_status"]
+        if card.get("reason") and not row.get("block_code"):
+            row["block_code"] = card["reason"]
+        row["waiting_reason"] = card.get("reason") or None
         row["live_eligible"] = status == "LIVE_ELIGIBLE"
         row["kind"] = (
             "LIVE_OPPORTUNITY"

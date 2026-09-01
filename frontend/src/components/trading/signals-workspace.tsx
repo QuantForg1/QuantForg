@@ -28,7 +28,6 @@ import {
   normalizeAssetClass,
   normalizeSignalCenterPayload,
   presentField,
-  presentLevel,
   presentPrice,
   presentUnavailable,
   researchCoverageLabel,
@@ -44,13 +43,8 @@ import {
   scoreDisplay,
   SIGNAL_CENTER_QUERY_KEY,
   signalBoardDirection,
-  signalExecutionStatusLabel,
-  signalKindLabel,
   signalFreshness,
   signalFreshnessLabel,
-  signalRiskRewardDisplay,
-  signalScoreDisplay,
-  signalStrengthBand,
   signalSummary,
   signalTimestampLabel,
   signalUpdatedAgo,
@@ -226,10 +220,6 @@ function researchStatusLabel(input: {
   return "RUNNING";
 }
 
-function levelCell(value: unknown, kind: "Entry" | "SL" | "TP"): string {
-  return presentUnavailable(presentLevel(value, kind));
-}
-
 function priceCell(value: unknown): string {
   const shown = presentPrice(value);
   return shown === "Price unavailable" ? "N/A" : presentUnavailable(shown);
@@ -250,19 +240,6 @@ function StatusDot({
       <span className="font-medium text-[var(--fg)]">{value}</span>
     </span>
   );
-}
-
-function signalNote(row: Record<string, unknown>): string {
-  const pipe = asRecord(row.pipeline);
-  const blocker = str(
-    pipe.first_blocker || pipe.blocker_reason || row.eligibility_reason,
-    "",
-  );
-  if (blocker) return blocker;
-  const setup = str(pipe.setup_state || pipe.final_decision, "");
-  if (setup) return setup;
-  const reason = str(row.reason || row.explanation || row.eligibility_status, "");
-  return reason || "—";
 }
 
 export function SignalsWorkspace() {
@@ -582,132 +559,11 @@ export function SignalsWorkspace() {
         />
       ) : (
         <>
-          <div className="hidden min-w-0 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] md:block">
-            <table className="w-full min-w-[1080px] text-left text-sm" aria-label="Signals">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Symbol
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Kind
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Asset
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Signal
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Strength
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Score
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Price
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Entry
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Stop loss
-                  </th>
-                  <th className="px-3 py-2.5 font-medium" scope="col">
-                    Take profit
-                  </th>
-                    <th className="px-3 py-2.5 font-medium" scope="col">
-                      R/R
-                    </th>
-                    <th className="px-3 py-2.5 font-medium" scope="col">
-                      Session
-                    </th>
-                    <th className="px-3 py-2.5 font-medium" scope="col">
-                      Freshness
-                    </th>
-                    <th className="px-3 py-2.5 font-medium" scope="col">
-                      Execution
-                    </th>
-                    <th className="px-3 py-2.5 font-medium" scope="col">
-                      Note
-                    </th>
-                    <th className="px-3 py-2.5 font-medium" scope="col">
-                      Updated
-                    </th>
-                </tr>
-              </thead>
-              <tbody>
-                {feedRows.map((row, i) => {
-                  const symbol = str(row.broker_symbol || row.symbol, "N/A");
-                  const dir = signalBoardDirection(row);
-                  return (
-                    <tr
-                      key={`${symbol}-${i}`}
-                      className="cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]"
-                      onClick={() => setSelected(row)}
-                    >
-                      <td className="px-3 py-2.5 font-semibold">{symbol}</td>
-                      <td className="px-3 py-2.5 text-[11px] tracking-wide text-[var(--fg-muted)]">
-                        {signalKindLabel(row)}
-                      </td>
-                      <td className="px-3 py-2.5 text-[var(--fg-muted)]">
-                        {presentUnavailable(presentField(row.asset_class))}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <DirectionBadge dir={dir} />
-                        {dir === "NEUTRAL" ? (
-                          <span className="ml-2 text-[11px] text-[var(--fg-subtle)]">
-                            No actionable direction
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2.5">{signalStrengthBand(row)}</td>
-                      <td className="px-3 py-2.5 font-mono tabular">
-                        {signalScoreDisplay(row)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono tabular">
-                        {priceCell(row.price ?? row.mid ?? row.bid)}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono tabular">
-                        {levelCell(row.entry ?? row.entry_candidate, "Entry")}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono tabular">
-                        {levelCell(row.stop_loss ?? row.SL_candidate, "SL")}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono tabular">
-                        {levelCell(row.take_profit ?? row.TP_candidate, "TP")}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono tabular">
-                        {signalRiskRewardDisplay(row)}
-                      </td>
-                      <td className="px-3 py-2.5 text-[var(--fg-muted)]">
-                        {presentUnavailable(presentField(rowSession(row)))}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Badge tone={freshnessTone(signalFreshness(row))}>
-                          {signalFreshnessLabel(signalFreshness(row))}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2.5 text-[11px] font-medium tracking-wide text-[var(--fg)]">
-                        {signalExecutionStatusLabel(row)}
-                      </td>
-                      <td className="max-w-[14rem] px-3 py-2.5 text-[11px] leading-snug text-[var(--fg-muted)]">
-                        {signalNote(row)}
-                      </td>
-                      <td className="px-3 py-2.5 text-[var(--fg-subtle)]">
-                        {signalUpdatedAgo(row)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <ul className="grid gap-3 md:hidden" aria-label="Signals">
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Signals">
             {feedRows.map((row, i) => {
               const symbol = str(row.broker_symbol || row.symbol, "N/A");
               return (
-                <li key={`${symbol}-m-${i}`}>
+                <li key={`${symbol}-${i}`}>
                   <SignalCard row={row} onOpen={() => setSelected(row)} />
                 </li>
               );

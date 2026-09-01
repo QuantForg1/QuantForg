@@ -106,11 +106,12 @@ def merge_research_into_execution_handoff(
     *,
     universe: Sequence[str] | Iterable[str] | None = None,
     research_focus: Sequence[str] | None = None,
-    limit: int = 12,
+    limit: int = _MAX_FOCUS,
 ) -> list[str]:
     """Prefer cached research BUY/SELL symbols already in the scan universe.
 
     Symbols outside the current execution universe are not injected.
+    Scanner-eligible symbols are never dropped to make room for extras.
     ITE still evaluates strategy/risk/OMS and may WAIT.
     """
     focus = [
@@ -139,9 +140,10 @@ def merge_research_into_execution_handoff(
             continue
         extra.append(sym)
         seen.add(sym)
-    merged = extra + ordered
-    cap = max(len(ordered), min(int(limit or 12), len(merged)))
-    return _clamp_handoff_to_execution_policy(merged[:cap])
+    universe_cap = max(len(ordered), min(int(limit or _MAX_FOCUS), _MAX_FOCUS))
+    extras_room = max(0, universe_cap - len(ordered))
+    merged = extra[:extras_room] + ordered
+    return _clamp_handoff_to_execution_policy(merged)
 
 
 def signal_execution_status(
@@ -206,6 +208,134 @@ def signal_execution_status(
     if not orders_ok:
         return "EXECUTION_BLOCKED"
     return "LIVE_ELIGIBLE"
+
+
+def signal_card_lifecycle(
+    row: dict[str, Any] | None,
+    *,
+    execution_status: str | None = None,
+    scan_eligible: Sequence[str] | None = None,
+) -> dict[str, str]:
+    """Shared card/Telegram lifecycle. Never claims EXECUTED without a ticket."""
+    status = str(execution_status or "").strip().upper()
+    if not isinstance(row, dict):
+        return {
+            "lifecycle": "DISCOVERED",
+            "card_status": "WAITING",
+            "reason": "NO_SIGNAL_ROW",
+        }
+    pipe = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
+    ticket = pipe.get("ticket") or row.get("ticket") or row.get("mt5_ticket")
+    try:
+        ticket_n = int(ticket) if ticket not in (None, "", "0", 0) else 0
+    except (TypeError, ValueError):
+        ticket_n = 0
+    reason = str(
+        pipe.get("abort_reason")
+        or row.get("abort_reason")
+        or row.get("block_code")
+        or row.get("reject_reason")
+        or row.get("waiting_reason")
+        or ""
+    ).strip()
+    direction = str(row.get("direction") or "").strip().upper()
+    if ticket_n > 0:
+        return {
+            "lifecycle": "EXECUTED",
+            "card_status": "EXECUTED",
+            "reason": reason or "MT5_TICKET",
+        }
+    if status == "POSITION_OPEN":
+        if ticket_n > 0:
+            return {
+                "lifecycle": "EXECUTED",
+                "card_status": "EXECUTED",
+                "reason": reason or "POSITION_OPEN",
+            }
+        return {
+            "lifecycle": "WAITING",
+            "card_status": "WAITING",
+            "reason": reason or "POSITION_OPEN",
+        }
+    if status == "EXPIRED" or _row_is_stale(row):
+        return {
+            "lifecycle": "EXPIRED",
+            "card_status": "EXPIRED",
+            "reason": reason or "STALE_SIGNAL",
+        }
+    if status == "RISK_BLOCKED":
+        return {
+            "lifecycle": "RISK_REJECTED",
+            "card_status": "RISK_BLOCKED",
+            "reason": reason or "RISK_REJECTED",
+        }
+    abort = str(pipe.get("abort_reason") or row.get("abort_reason") or "").upper()
+    oms = str(pipe.get("oms") or "").upper()
+    if "MIN_LOT" in abort or "SIZING" in abort:
+        return {
+            "lifecycle": "SIZING_REJECTED",
+            "card_status": "REJECTED",
+            "reason": reason or abort or "SIZING_REJECTED",
+        }
+    if oms in {"REJECT", "REJECTED", "BLOCK"} or "OMS" in abort:
+        return {
+            "lifecycle": "OMS_REJECTED",
+            "card_status": "REJECTED",
+            "reason": reason or abort or "OMS_REJECTED",
+        }
+    if "BROKER" in abort:
+        return {
+            "lifecycle": "BROKER_REJECTED",
+            "card_status": "REJECTED",
+            "reason": reason or abort or "BROKER_REJECTED",
+        }
+    lifecycle = str(pipe.get("execution_lifecycle") or "").upper()
+    if status == "EXECUTION_BLOCKED" or lifecycle == "EXECUTION_BLOCKED":
+        return {
+            "lifecycle": "EXECUTION_ERROR"
+            if "ERROR" in abort or "TIMEOUT" in abort
+            else "FILTERED",
+            "card_status": "REJECTED",
+            "reason": reason or abort or "EXECUTION_BLOCKED",
+        }
+    if status == "ORDER_SUBMITTED":
+        return {
+            "lifecycle": "ORDER_SUBMITTED",
+            "card_status": "WAITING",
+            "reason": reason or "AWAITING_BROKER_TICKET",
+        }
+    if status == "READY_FOR_REVIEW":
+        return {
+            "lifecycle": "STRATEGY_VALID",
+            "card_status": "WAITING",
+            "reason": reason or "READY_FOR_REVIEW",
+        }
+    if status == "RESEARCH_ONLY" or direction not in _BUY_SELL:
+        return {
+            "lifecycle": "DISCOVERED" if direction not in _BUY_SELL else "FILTERED",
+            "card_status": "WAITING" if direction not in _BUY_SELL else "REJECTED",
+            "reason": reason
+            or ("NO_DIRECTION" if direction not in _BUY_SELL else "RESEARCH_ONLY"),
+        }
+    eligible = {str(s).strip().upper() for s in (scan_eligible or ()) if str(s).strip()}
+    sym = str(row.get("symbol") or row.get("broker_symbol") or "").strip().upper()
+    opp = row.get("opportunity_eligible")
+    desk_keys = {_desk_key(s) for s in eligible}
+    in_scan = bool(sym) and (sym in eligible or _desk_key(sym) in desk_keys)
+    if opp is True or (eligible and in_scan):
+        missing = reason or str(row.get("reject_reason") or "WAITING_FOR_SETUP")
+        if opp is True and not reason:
+            missing = "STRATEGY_PENDING"
+        return {
+            "lifecycle": "TRADEABLE" if opp is True else "ANALYZING",
+            "card_status": "TRADEABLE" if opp is True else "WAITING",
+            "reason": missing,
+        }
+    return {
+        "lifecycle": "WAITING",
+        "card_status": "WAITING",
+        "reason": reason or "WAITING_FOR_SETUP",
+    }
 
 
 def _gold_only_execution() -> bool:

@@ -10,13 +10,16 @@ import {
   rowRegime,
   scoreDisplay,
   signalBoardDirection,
+  signalCardTone,
   signalFreshness,
   signalFreshnessLabel,
+  signalMt5Ticket,
   signalStrength,
   signalTimestampLabel,
   signalHumanExplanation,
   signalExecutionStatusLabel,
   signalKindLabel,
+  signalWaitingReason,
 } from "@/lib/trading/trader-ux";
 import { freshnessTone } from "@/components/trading/intelligence-detail";
 
@@ -76,6 +79,13 @@ export function SignalCard({
   const symbol = str(row.broker_symbol || row.symbol, "—");
   const freshness = signalFreshness(row);
   const asset = presentField(row.asset_class);
+  const statusLabel = signalExecutionStatusLabel(row);
+  const statusTone = signalCardTone(row);
+  const ticket = signalMt5Ticket(row);
+  const waiting = signalWaitingReason(row);
+  const timeframe = presentField(row.timeframe ?? row.entry_timeframe ?? row.tf);
+  const strategy = presentField(row.strategy ?? row.strategy_id ?? row.setup);
+  const executed = Boolean(ticket);
 
   return (
     <button
@@ -104,7 +114,12 @@ export function SignalCard({
             {asset}
           </p>
         </div>
-        <DirectionBadge dir={dir} />
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <DirectionBadge dir={dir} />
+          <Badge tone={statusTone} aria-label={`Signal status ${statusLabel}`}>
+            {statusLabel}
+          </Badge>
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 pl-1">
@@ -128,7 +143,7 @@ export function SignalCard({
 
       {compact ? (
         <p className="mt-3 pl-1 text-[11px] text-[var(--fg-muted)]">
-          {signalHumanExplanation(row)}
+          {waiting && !ticket ? `${statusLabel}: ${waiting}` : signalHumanExplanation(row)}
         </p>
       ) : (
         <>
@@ -168,14 +183,43 @@ export function SignalCard({
           </dl>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pl-1 text-[11px] text-[var(--fg-muted)]">
             <span>{presentField(rowRegime(row))}</span>
+            <span className="tabular">{timeframe}</span>
             <span className="tabular">{displayTimestamp(row)}</span>
             <Badge tone={freshnessTone(freshness)}>
               {signalFreshnessLabel(freshness)}
             </Badge>
-            <span className="font-medium tracking-wide text-[var(--fg)]">
-              {signalKindLabel(row)} · {signalExecutionStatusLabel(row)}
-            </span>
           </div>
+          <p className="mt-2 pl-1 text-[11px] text-[var(--fg-subtle)]">
+            {signalKindLabel(row)}
+            {strategy !== "Not available" ? ` · ${strategy}` : ""}
+          </p>
+          {executed ? (
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-[var(--border)] pt-3 pl-1 text-[11px] sm:grid-cols-4">
+              <div>
+                <dt className="uppercase tracking-wide text-[var(--fg-subtle)]">MT5 ticket</dt>
+                <dd className="font-mono tabular text-[var(--fg)]">{ticket}</dd>
+              </div>
+              <div>
+                <dt className="uppercase tracking-wide text-[var(--fg-subtle)]">Fill</dt>
+                <dd className="font-mono tabular">
+                  {presentLevel(row.entry_price ?? row.fill_price ?? row.entry, "Entry")}
+                </dd>
+              </div>
+              <div>
+                <dt className="uppercase tracking-wide text-[var(--fg-subtle)]">Volume</dt>
+                <dd className="font-mono tabular">{presentField(row.volume ?? row.lots)}</dd>
+              </div>
+              <div>
+                <dt className="uppercase tracking-wide text-[var(--fg-subtle)]">Executed</dt>
+                <dd className="tabular">{displayTimestamp(row)}</dd>
+              </div>
+            </dl>
+          ) : null}
+          {waiting && statusLabel !== "EXECUTED" ? (
+            <p className="mt-3 line-clamp-2 pl-1 font-mono text-[11px] text-[var(--fg-muted)]">
+              {statusLabel === "WAITING" ? `Waiting: ${waiting}` : waiting}
+            </p>
+          ) : null}
           <p className="mt-3 line-clamp-2 pl-1 text-[12px] leading-relaxed text-[var(--fg-muted)]">
             {signalHumanExplanation(row)}
           </p>

@@ -5272,6 +5272,9 @@ class InstitutionalIteRuntime:
                 if isinstance(scan, dict)
                 else scan_ms,
             )
+            if isinstance(scan, dict):
+                with self._lock:
+                    self._last_multi_asset_scan = dict(scan)
             eligible = [
                 str(s).upper()
                 for s in (scan.get("eligible_symbols") or [])
@@ -5338,6 +5341,46 @@ class InstitutionalIteRuntime:
                     eligible = list(filter_autonomous_symbols(eligible))
             except Exception:
                 logger.exception("gold_only_post_research_handoff_failed")
+            if not eligible and isinstance(scan, dict):
+                try:
+                    from app.application.services.institutional_multi_asset_scanner import (
+                        independent_evaluation_symbols,
+                    )
+
+                    ranked_rows: list[Any] = []
+                    for key in ("opportunity_ranked", "ranked", "rows"):
+                        block = scan.get(key)
+                        if isinstance(block, list):
+                            ranked_rows.extend(
+                                r for r in block if isinstance(r, dict)
+                            )
+                    open_for_eval: set[str] = set()
+                    try:
+                        from app.domain.institutional_trading.operations.quantforg_position_cap import (
+                            engine_position_rows,
+                            quantforg_open_symbols,
+                        )
+
+                        open_for_eval = quantforg_open_symbols(
+                            engine_position_rows(self.position_management.engine)
+                        )
+                    except Exception:
+                        open_for_eval = set()
+                    eligible = independent_evaluation_symbols(
+                        ranked_rows,
+                        existing=(),
+                        open_symbols=open_for_eval,
+                        cap=int(
+                            getattr(
+                                DEFAULT_AI_SCALPING_CONFIG,
+                                "max_universe_symbols",
+                                36,
+                            )
+                            or 36
+                        ),
+                    )
+                except Exception:
+                    logger.exception("independent_evaluation_fallback_failed")
             with self._lock:
                 self._last_multi_asset_scan = (
                     dict(scan) if isinstance(scan, dict) else None

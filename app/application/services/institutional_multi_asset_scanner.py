@@ -104,6 +104,80 @@ def _store_last_scan(
         _LAST_SCAN = dict(payload)
 
 
+_HARD_ROUTING_NEEDLES: tuple[str, ...] = (
+    "symbol_select",
+    "symbol_timeout",
+    "symbol timeout",
+    "market data load failed",
+    "terminal: call failed",
+    "gateway market data",
+    "no full mode",
+    "symbol unavailable",
+)
+
+
+def _is_hard_routing_reject(reason: Any) -> bool:
+    hay = str(reason or "").lower()
+    if not hay:
+        return False
+    if "503" in hay:
+        return True
+    return any(needle in hay for needle in _HARD_ROUTING_NEEDLES)
+
+
+def _row_direction(row: dict[str, Any]) -> str:
+    raw_sniper = row.get("sniper_entry")
+    sniper = raw_sniper if isinstance(raw_sniper, dict) else {}
+    raw = str(
+        row.get("direction")
+        or row.get("signal_action")
+        or (sniper.get("action") if isinstance(sniper, dict) else "")
+        or ""
+    ).strip().upper()
+    return raw if raw in {"BUY", "SELL"} else ""
+
+
+def independent_evaluation_symbols(
+    rows: Sequence[Any],
+    *,
+    existing: Sequence[str] = (),
+    open_symbols: Sequence[str] | set[str] = (),
+    cap: int = 36,
+) -> list[str]:
+    """BUY/SELL desks to evaluate through the existing ITE cycle.
+
+    Does not authorize orders. Sniper TAKE / Risk / OMS still apply downstream.
+    Skips hard routing failures so one dead symbol cannot fill the queue.
+    """
+    from app.domain.institutional_trading.operations.quantforg_position_cap import (
+        is_quantforg_same_symbol_open,
+    )
+
+    seen = {str(s).strip().upper() for s in existing if str(s).strip()}
+    open_set = {str(s).strip().upper() for s in open_symbols if str(s).strip()}
+    out = [str(s).strip().upper() for s in existing if str(s).strip()]
+    limit = max(1, int(cap or 36))
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if not _row_direction(row):
+            continue
+        if _is_hard_routing_reject(
+            row.get("reject_reason") or row.get("blocking_gate") or row.get("reason")
+        ):
+            continue
+        sym = str(row.get("symbol") or row.get("broker_symbol") or "").strip().upper()
+        if not sym or sym in seen:
+            continue
+        if is_quantforg_same_symbol_open(sym, open_set):
+            continue
+        seen.add(sym)
+        out.append(sym)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _as_text(value: Any) -> str | None:
     if value is None or value == "":
         return None
@@ -1445,6 +1519,25 @@ async def _run_institutional_multi_asset_scan_body(
             eligible_symbols = [best_symbol] + [
                 s for s in eligible_symbols if s != best_symbol
             ]
+        # Research/scan BUY/SELL must still be evaluated independently even when
+        # sniper has not TAKE yet. ITE strategy/Risk/OMS remain authoritative.
+        ranked_for_eval = [
+            r
+            for r in (
+                list(opportunity_ranked) + [x for x in ranked if isinstance(x, dict)]
+            )
+            if isinstance(r, dict)
+        ]
+        cap = max(
+            1,
+            int(getattr(cfg, "max_universe_symbols", 36) or 36),
+        )
+        eligible_symbols = independent_evaluation_symbols(
+            ranked_for_eval,
+            existing=eligible_symbols,
+            open_symbols=open_syms,
+            cap=cap,
+        )
 
     scalp_traces: list[dict[str, Any]] = []
     ite_mode = str(getattr(ite_config, "trading_mode", "") or "scalping")
