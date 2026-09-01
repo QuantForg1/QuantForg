@@ -14,9 +14,9 @@ import {
   signalFreshnessLabel,
   signalStrength,
   signalTimestampLabel,
-  signalWhyPreview,
+  signalHumanExplanation,
 } from "@/lib/trading/trader-ux";
-import { directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
+import { freshnessTone } from "@/components/trading/intelligence-detail";
 
 export function DirectionBadge({
   dir,
@@ -27,7 +27,9 @@ export function DirectionBadge({
 }) {
   return (
     <Badge
-      tone={dir === "BUY" || dir === "SELL" ? directionTone(dir) : "neutral"}
+      tone={
+        dir === "BUY" ? "success" : dir === "SELL" ? "danger" : dir === "NEUTRAL" ? "warning" : "neutral"
+      }
       className={cn("font-semibold tracking-[0.08em]", className)}
       aria-label={`Signal direction ${dir}`}
     >
@@ -124,7 +126,7 @@ export function SignalCard({
 
       {compact ? (
         <p className="mt-3 pl-1 text-[11px] text-[var(--fg-muted)]">
-          {signalWhyPreview(row)}
+          {signalHumanExplanation(row)}
         </p>
       ) : (
         <>
@@ -170,13 +172,10 @@ export function SignalCard({
             </Badge>
           </div>
           <p className="mt-3 line-clamp-2 pl-1 text-[12px] leading-relaxed text-[var(--fg-muted)]">
-            {signalWhyPreview(row)}
+            {signalHumanExplanation(row)}
           </p>
         </>
       )}
-      <p className="mt-3 pl-1 text-[11px] font-semibold tracking-[0.08em] text-[var(--accent)]">
-        Why this signal?
-      </p>
     </button>
   );
 }

@@ -142,7 +142,7 @@ const CANONICAL = "XAUUSD_i";
 
 // 8. Duplicated request dedupe
 {
-  assert.equal(shouldDedupeGet("/weltrade/health"), true);
+  assert.equal(shouldDedupeGet("/trading/session"), true);
   assert.equal(shouldDedupeGet("/portfolio"), true);
   assert.equal(shouldDedupeGet("/positions?symbol=XAUUSD_i"), true);
   assert.equal(shouldDedupeGet("/mt5/account"), true);

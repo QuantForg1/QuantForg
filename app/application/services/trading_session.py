@@ -7,6 +7,7 @@ global ITE ops remain on the existing control plane.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, replace
 from typing import Any
 from uuid import UUID
@@ -128,9 +129,17 @@ class GetTradingSessionUseCase:
     adapter: MT5Adapter
 
     async def execute(self, *, user_id: UUID) -> dict[str, Any]:
-        connection = await ensure_live_mt5_session_for_user(
-            self.uow_factory, self.adapter, user_id
-        )
+        try:
+            connection = await ensure_live_mt5_session_for_user(
+                self.uow_factory, self.adapter, user_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "trading_session_ensure_failed",
+                user_id=str(user_id),
+                error=str(exc),
+            )
+            connection = None
         plane = get_control_plane()
         runtime = get_ite_runtime()
         runtime_user = (
@@ -154,7 +163,19 @@ class GetTradingSessionUseCase:
         session_code = "NOT_CONNECTED"
         if connection is not None and connection.connected:
             try:
-                info = self.adapter.account_info()
+                try:
+                    info = await asyncio.wait_for(
+                        asyncio.to_thread(self.adapter.account_info),
+                        timeout=3.0,
+                    )
+                except TimeoutError:
+                    logger.info(
+                        "trading_session_account_probe_timeout",
+                        user_id=str(user_id),
+                    )
+                    info = None
+                if info is None:
+                    raise RuntimeError("account_info_unavailable")
                 live_login = int(getattr(info, "login", 0) or 0)
                 if live_login > 1 and owned_login > 1 and live_login == owned_login:
                     balance = str(getattr(info, "balance", "") or "")
@@ -200,7 +221,18 @@ class GetTradingSessionUseCase:
 
                 # Markets / Signals research catalogue — not the gold-only
                 # execution lock. Execution mode is reported separately.
-                research = discover_live_catalogue(self.adapter)
+                # Cap catalogue probing so a slow MT5 listing cannot stall
+                # the whole trading-session endpoint (dashboard/signals).
+                try:
+                    research = await asyncio.wait_for(
+                        asyncio.to_thread(discover_live_catalogue, self.adapter),
+                        timeout=2.5,
+                    )
+                except TimeoutError:
+                    research = {
+                        "catalogue_source": "UNAVAILABLE",
+                        "error": "catalogue_diagnostics_timeout",
+                    }
                 catalogue_source = str(research.get("catalogue_source") or "")
                 catalogue_unavailable = catalogue_source != CATALOGUE_LIVE_BROKER
                 catalogue_last_error = research.get("error")

@@ -16,6 +16,9 @@ from app.application.services.trading_session import (
 from app.presentation.dependencies.auth import CurrentUser, get_client_meta
 from app.presentation.dependencies.mt5 import get_mt5_adapter, get_mt5_uow_factory
 from app.presentation.dependencies.weltrade import WeltradeSvc
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/trading", tags=["trading-session"])
 
@@ -39,9 +42,17 @@ async def get_trading_session(
     user: CurrentUser, weltrade: WeltradeSvc
 ) -> dict[str, object]:
     # Owner/admin adopt after Railway redeploy loses ephemeral profile/DB bind.
-    await weltrade.ensure_user_session_bound(
-        user_id=user.id, role=str(getattr(user, "role", "") or "")
-    )
+    # Best-effort: a bind failure must not 500 the whole workspace.
+    try:
+        await weltrade.ensure_user_session_bound(
+            user_id=user.id, role=str(getattr(user, "role", "") or "")
+        )
+    except Exception as exc:
+        logger.warning(
+            "trading_session_bind_failed",
+            user_id=str(user.id),
+            error=str(exc),
+        )
     return await _session_uc().execute(user_id=user.id)
 
 

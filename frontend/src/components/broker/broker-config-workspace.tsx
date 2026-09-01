@@ -13,7 +13,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DeskSkeleton } from "@/components/desk/primitives";
 import { ConnectionStatus } from "@/components/trading/connection-status";
 import { mt5Api, marketUniverseApi, tradingSessionApi, weltradeApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
@@ -21,6 +20,8 @@ import { asRecord, str } from "@/lib/desk";
 import {
   MARKET_UNIVERSE_QUERY_KEY,
   SIGNAL_CENTER_QUERY_KEY,
+  latencyLabel,
+  researchDeskLiveTradingStatus,
   resolveConnectionPresentation,
   traderFacingErrorMessage,
 } from "@/lib/trading/trader-ux";
@@ -334,135 +335,103 @@ export function BrokerConfigWorkspace() {
   );
   const showConnectForm = !connected || uxState === "SESSION_MISMATCH";
 
+  const liveTradingHint = researchDeskLiveTradingStatus(
+    connectionView,
+    tradingSnap.trading,
+  );
+  const isLiveAccount = accountType === "live";
+  const latency =
+    session.latencyMs && session.latencyMs !== "—"
+      ? latencyLabel(Number(session.latencyMs))
+      : "Not available";
+
   const showPasswordField =
     showConnectForm && !connectMut.isPending && !saveMut.isPending;
 
-  if (healthQ.isLoading && mt5Q.isLoading && tradingSessionQ.isLoading) {
-    return <DeskSkeleton rows={6} />;
-  }
+  const onReconnect = () => {
+    void (async () => {
+      setProgress("Reconnecting…");
+      try {
+        await weltradeApi.reconnect();
+        toast.success("Broker reconnected");
+        await refresh();
+      } catch (e) {
+        toast.error(
+          e instanceof ApiError ? traderFacingErrorMessage(e) : "CONNECTION_FAILED",
+        );
+      } finally {
+        setProgress(null);
+      }
+    })();
+  };
+
+  const onVerify = () => {
+    if (showConnectForm) {
+      saveMut.mutate();
+      return;
+    }
+    onReconnect();
+  };
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-2xl space-y-4 px-1 sm:px-0">
       <PageHeader
         title="Broker"
-        description={
-          connected
-            ? "Owned connection. Password is never shown after verification. Connecting a broker does not enable live trading."
-            : "Connect and verify your account. Gateway health alone is not a connection. Live trading stays disabled until explicitly authorized."
-        }
+        description="Connect your MT5 account to access your broker account, portfolio data and, when authorized, live execution."
       />
+
+      <p className="text-sm leading-relaxed text-[var(--fg-muted)]">
+        Connecting your broker gives QuantForg access to account information. Live trading
+        requires the existing authorization and risk controls.
+      </p>
 
       <ConnectionStatus
         session={tradingSnap}
         connecting={
-          Boolean(progress) && !connected || connectMut.isPending || saveMut.isPending
+          (Boolean(progress) && !connected) || connectMut.isPending || saveMut.isPending
         }
       />
 
-      <Section title="Connection health">
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              Broker
-            </dt>
-            <dd className="text-sm text-[var(--fg)]">
-              {connected ? "CONNECTED" : "BROKER NOT CONNECTED"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              Gateway
-            </dt>
-            <dd className="text-sm text-[var(--fg)]">
-              {gatewayOnline
-                ? "Online"
-                : healthQ.isError
-                  ? "Unavailable"
-                  : "Offline"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              MT5 process
-            </dt>
-            <dd className="text-sm text-[var(--fg)]">
-              {gatewayMt5Attached
-                ? connected
-                  ? "Attached (owned)"
-                  : "Attached (not owned by you)"
-                : "Not attached"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              Ownership
-            </dt>
-            <dd className="text-sm text-[var(--fg)]">
-              {connectionView.ownership === "owned"
-                ? "Owned by you"
-                : "None"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              Last verified
-            </dt>
-            <dd className="text-sm text-[var(--fg)]">
-              {connectionView.lastVerified || "Unavailable"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              Research analysis
-            </dt>
-            <dd className="text-sm text-[var(--fg)]">ACTIVE (advisory)</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-              Live trading
-            </dt>
-            <dd className="text-sm text-[var(--fg)]">DISABLED</dd>
-          </div>
-        </dl>
-        {!connected && gatewayMt5Attached ? (
-          <p className="mt-3 text-xs text-[var(--warning)]">
-            A gateway session may exist, but it is not your owned broker connection.
-            Use Connect & Verify to claim ownership.
-          </p>
-        ) : null}
-      </Section>
-
       {connected && uxState !== "SESSION_MISMATCH" ? (
-        <Section title="Connected account">
+        <Section
+          title="CONNECTED"
+          aside={
+            isLiveAccount ? (
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--warning)]">
+                Live account
+              </span>
+            ) : (
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-subtle)]">
+                Demo
+              </span>
+            )
+          }
+        >
           <dl className="grid gap-3 sm:grid-cols-2">
             <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">Login</dt>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Broker
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">Weltrade / MT5</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Server
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">{connectionView.server || "N/A"}</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Account
+              </dt>
               <dd className="text-sm text-[var(--fg)]">{connectionView.maskedLogin}</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">Server</dt>
-              <dd className="text-sm text-[var(--fg)]">{connectionView.server}</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Connection health
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">{connectionView.health}</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Ownership
-              </dt>
-              <dd className="text-sm text-[var(--fg)]">Owned by you</dd>
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
                 Balance
               </dt>
               <dd className="text-sm text-[var(--fg)]">
-                {session.balance && session.balance !== "—"
-                  ? session.balance
-                  : "Unavailable"}
+                {session.balance && session.balance !== "—" ? session.balance : "N/A"}
               </dd>
             </div>
             <div>
@@ -470,9 +439,7 @@ export function BrokerConfigWorkspace() {
                 Equity
               </dt>
               <dd className="text-sm text-[var(--fg)]">
-                {session.equity && session.equity !== "—"
-                  ? session.equity
-                  : "Unavailable"}
+                {session.equity && session.equity !== "—" ? session.equity : "N/A"}
               </dd>
             </div>
             <div>
@@ -482,21 +449,72 @@ export function BrokerConfigWorkspace() {
               <dd className="text-sm text-[var(--fg)]">
                 {session.freeMargin && session.freeMargin !== "—"
                   ? session.freeMargin
-                  : "Unavailable"}
+                  : "N/A"}
               </dd>
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                Margin level
+                Connection latency
               </dt>
               <dd className="text-sm text-[var(--fg)]">
-                {session.marginLevel && session.marginLevel !== "—"
-                  ? session.marginLevel
-                  : "Unavailable"}
+                {latency === "—" ? "N/A" : latency}
               </dd>
             </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Last verified
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {connectionView.lastVerified || "N/A"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                MT5 status
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {gatewayMt5Attached
+                  ? connected
+                    ? "Attached (owned)"
+                    : "Attached (not owned by you)"
+                  : "Not attached"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Gateway status
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {gatewayOnline
+                  ? "Online"
+                  : healthQ.isError
+                    ? "Unavailable"
+                    : "Offline"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Ownership
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {connectionView.ownership === "owned" ? "Owned by you" : "None"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Live trading
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">{liveTradingHint.label}</dd>
+            </div>
           </dl>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button variant="secondary" disabled={busy} onClick={onReconnect}>
+              <RefreshCw className="h-4 w-4" />
+              Reconnect
+            </Button>
+            <Button variant="secondary" disabled={busy} onClick={onVerify}>
+              Verify connection
+            </Button>
             <Button
               variant="secondary"
               disabled={busy}
@@ -507,10 +525,53 @@ export function BrokerConfigWorkspace() {
             </Button>
           </div>
         </Section>
-      ) : null}
+      ) : (
+        <Section title="Connection">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Broker
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">NOT CONNECTED</dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Gateway
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {gatewayOnline
+                  ? "Online"
+                  : healthQ.isError
+                    ? "Unavailable"
+                    : "Offline"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                MT5
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">
+                {gatewayMt5Attached ? "Attached (not owned by you)" : "Not attached"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                Live trading
+              </dt>
+              <dd className="text-sm text-[var(--fg)]">{liveTradingHint.label}</dd>
+            </div>
+          </dl>
+          {!connected && gatewayMt5Attached ? (
+            <p className="mt-3 text-xs text-[var(--warning)]">
+              A gateway session may exist, but it is not your owned broker connection.
+              Use Connect MT5 to claim ownership.
+            </p>
+          ) : null}
+        </Section>
+      )}
 
       <Section
-        title="Your connection"
+        title="Connect MT5"
         aside={
           <Button
             size="sm"
@@ -531,119 +592,122 @@ export function BrokerConfigWorkspace() {
           </p>
         ) : null}
         {showConnectForm ? (
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={busy} onClick={onConnect}>
-              {connectMut.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Cable className="h-4 w-4" />
-              )}
-              Connect & Verify
-            </Button>
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--fg-muted)]">CONNECTED</p>
-        )}
-        {progress ? (
-          <p className="mt-3 flex items-center gap-2 text-sm text-[var(--accent)]">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {progress}
-          </p>
-        ) : null}
-      </Section>
-
-      {showConnectForm ? (
-      <Section title="Connect Broker">
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          {(["demo", "live"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setAccountType(t)}
-              className={cn(
-                "border px-3 py-2 text-sm capitalize transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
-                accountType === t
-                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--fg)]"
-                  : "border-[var(--border)] text-[var(--fg-muted)] hover:border-[var(--border-strong)]",
-              )}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="bw-server">Server</Label>
-            <select
-              id="bw-server"
-              className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
-              value={server}
-              onChange={(e) => setServer(e.target.value)}
-            >
-              {serverOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              {(["demo", "live"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setAccountType(t)}
+                  className={cn(
+                    "border px-3 py-2 text-sm capitalize transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+                    accountType === t
+                      ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--fg)]"
+                      : "border-[var(--border)] text-[var(--fg-muted)] hover:border-[var(--border-strong)]",
+                  )}
+                >
+                  {t === "live" ? "Live" : "Demo"}
+                </button>
               ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="bw-login">Login</Label>
-            <Input
-              id="bw-login"
-              inputMode="numeric"
-              autoComplete="username"
-              value={login}
-              onChange={(e) => setLogin(e.target.value)}
-              placeholder="Account number"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="bw-password">Password</Label>
-            {showPasswordField ? (
-            <Input
-              key={passwordFieldKey}
-              id="bw-password"
-              type="password"
-              autoComplete="off"
-              name="broker-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Required to verify the connection"
-            />
-            ) : (
-              <p className="text-sm text-[var(--fg-subtle)]">
-                Password submitted. It is not kept on this page.
+            </div>
+            <div className="grid gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="bw-server">Broker / Server</Label>
+                <select
+                  id="bw-server"
+                  className="flex h-10 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm"
+                  value={server}
+                  onChange={(e) => setServer(e.target.value)}
+                >
+                  {serverOptions.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bw-login">MT5 Login</Label>
+                <Input
+                  id="bw-login"
+                  inputMode="numeric"
+                  autoComplete="username"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
+                  placeholder="Account number"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="bw-password">Password</Label>
+                {showPasswordField ? (
+                  <Input
+                    key={passwordFieldKey}
+                    id="bw-password"
+                    type="password"
+                    autoComplete="off"
+                    name="broker-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Required to verify the connection"
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--fg-subtle)]">
+                    Password submitted. It is never displayed again.
+                  </p>
+                )}
+              </div>
+              {isOperator ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="bw-path">Terminal Path</Label>
+                  <Input
+                    id="bw-path"
+                    value={terminalPath}
+                    onChange={(e) => setTerminalPath(e.target.value)}
+                    placeholder="Optional — leave blank to auto-attach"
+                  />
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button disabled={busy} onClick={onConnect}>
+                {connectMut.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Cable className="h-4 w-4" />
+                )}
+                Connect MT5
+              </Button>
+              <Button variant="secondary" disabled={busy} onClick={onVerify}>
+                Verify connection
+              </Button>
+            </div>
+            {progress ? (
+              <p className="mt-3 flex items-center gap-2 text-sm text-[var(--accent)]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {progress}
               </p>
-            )}
-          </div>
-          {isOperator ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="bw-path">Terminal Path</Label>
-            <Input
-              id="bw-path"
-              value={terminalPath}
-              onChange={(e) => setTerminalPath(e.target.value)}
-              placeholder="Optional — leave blank to auto-attach"
-            />
-          </div>
-          ) : null}
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={() => saveMut.mutate()}>
-            {saveMut.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
             ) : null}
-            Verify Connection
-          </Button>
-        </div>
-        <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
-          Password is used only to submit this form. It is never stored in the browser, localStorage, or API responses.
-        </p>
+            <p className="mt-3 text-[11px] text-[var(--fg-subtle)]">
+              Password is used only to submit this form. It is never stored in the browser,
+              localStorage, or API responses.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-[var(--fg-muted)]">
+            Connected. Use Reconnect, Verify, or Disconnect above.
+          </p>
+        )}
       </Section>
-      ) : null}
+
+      <Section title="Security">
+        <ul className="space-y-2 text-sm text-[var(--fg-muted)]">
+          <li>Credentials are protected through the existing secure session mechanism.</li>
+          <li>Password is never displayed after submission.</li>
+          <li>Account number is masked.</li>
+          <li>The connection can be revoked at any time with Disconnect.</li>
+          <li>QuantForg does not bypass broker, ownership, or risk controls.</li>
+        </ul>
+      </Section>
     </div>
   );
 }

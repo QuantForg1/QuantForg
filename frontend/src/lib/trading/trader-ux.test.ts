@@ -28,6 +28,8 @@ import {
   isHighConfidence,
   mergeResearchSignalFields,
   presentField,
+  presentLevel,
+  presentUnavailable,
   signalAvailability,
   signalBoardDirection,
   signalFeedState,
@@ -37,6 +39,10 @@ import {
   signalSummary,
   signalWhyFactors,
   signalWhyPreview,
+  signalHumanExplanation,
+  signalScoreDisplay,
+  signalRiskRewardDisplay,
+  signalStrengthBand,
   sortSignalRows,
   strongestSetupLabel,
   unavailableSignalsTitle,
@@ -826,12 +832,19 @@ assert.equal(
     state: "BROKER_NOT_CONNECTED",
   });
   assert.equal(liveHint.state, "LIVE_TRADING_UNAVAILABLE");
-  assert.equal(liveHint.detail, "Unavailable until broker connection");
+  assert.equal(liveHint.label, "NOT AUTHORIZED");
+  assert.match(liveHint.detail, /does not authorize live trading/i);
   const connectedHint = researchDeskLiveTradingStatus({
     connected: true,
     state: "CONNECTED",
   });
   assert.equal(connectedHint.state, "LIVE_TRADING_DISABLED");
+  assert.equal(connectedHint.label, "NOT AUTHORIZED");
+  const authorizedHint = researchDeskLiveTradingStatus(
+    { connected: true, state: "CONNECTED" },
+    "Enabled",
+  );
+  assert.equal(authorizedHint.label, "AUTHORIZED");
 }
 
 {
@@ -884,6 +897,46 @@ assert.equal(
   });
   assert.notEqual(preview, EXPLANATION_UNAVAILABLE);
   assert.match(preview, /Failed breakout|SELL/);
+}
+
+{
+  const buy = signalHumanExplanation({
+    broker_symbol: "XAUUSD",
+    direction: "BUY",
+    market_regime: "Bullish",
+    stop_loss: 2640,
+    evidence: { MOMENTUM: "Rising impulse" },
+  });
+  assert.match(buy, /XAUUSD/);
+  assert.match(buy, /BUY/);
+  assert.doesNotMatch(buy, /MACD|RSI divergence|invented/i);
+  const limited = signalHumanExplanation({});
+  assert.equal(
+    limited,
+    "Signal explanation is limited because supporting evidence is currently unavailable.",
+  );
+  const sell = signalHumanExplanation({
+    broker_symbol: "EURUSD",
+    direction: "SELL",
+    reason: "Failed breakout from range",
+  });
+  assert.match(sell, /Failed breakout/);
+  const neutral = signalHumanExplanation({
+    broker_symbol: "US500",
+    direction: "NEUTRAL",
+  });
+  assert.match(neutral, /US500/);
+  assert.match(neutral, /actionable/i);
+}
+
+{
+  assert.equal(signalScoreDisplay({}), "N/A");
+  assert.equal(signalScoreDisplay({ research_rank_score: 82 }), "82");
+  assert.equal(signalRiskRewardDisplay({}), "N/A");
+  assert.equal(signalRiskRewardDisplay({ RR: 2.4 }), "2.4R");
+  assert.equal(signalStrengthBand({ research_rank_score: 82 }), "Strong");
+  assert.equal(presentUnavailable(presentLevel(null, "SL")), "N/A");
+  assert.notEqual(presentLevel(null, "SL"), "0");
 }
 
 console.log("trader-ux.test.ts ok");

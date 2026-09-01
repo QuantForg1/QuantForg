@@ -507,30 +507,37 @@ export type ResearchDeskLiveTradingState =
   | "LIVE_TRADING_UNAVAILABLE"
   | "LIVE_TRADING_DISABLED";
 
-/** Research desk never authorizes trades. Personal MT5 only affects this hint. */
-export function researchDeskLiveTradingStatus(connection: {
-  connected: boolean;
-  state: string;
-}): {
+/** Research desk never authorizes trades. Broker connection is independent. */
+export function researchDeskLiveTradingStatus(
+  connection: {
+    connected: boolean;
+    state: string;
+  },
+  trading?: unknown,
+): {
   label: string;
   detail: string;
   state: ResearchDeskLiveTradingState;
 } {
-  if (
-    !connection.connected ||
-    connection.state === "BROKER_NOT_CONNECTED" ||
-    connection.state === "ACCOUNT_SESSION_MISMATCH"
-  ) {
+  const authorized =
+    connection.connected &&
+    (trading === "Enabled" || trading === true || trading === "AUTHORIZED");
+  if (authorized) {
     return {
-      label: "UNAVAILABLE",
-      detail: "Unavailable until broker connection",
-      state: "LIVE_TRADING_UNAVAILABLE",
+      label: "AUTHORIZED",
+      detail: "Existing authorization and risk controls currently permit execution.",
+      state: "LIVE_TRADING_DISABLED",
     };
   }
+  const disconnected =
+    !connection.connected ||
+    connection.state === "BROKER_NOT_CONNECTED" ||
+    connection.state === "ACCOUNT_SESSION_MISMATCH";
   return {
     label: "NOT AUTHORIZED",
-    detail: SIGNALS_NOT_AUTHORIZATION,
-    state: "LIVE_TRADING_DISABLED",
+    detail:
+      "Connecting a broker does not authorize live trading. Existing authorization and risk controls remain required.",
+    state: disconnected ? "LIVE_TRADING_UNAVAILABLE" : "LIVE_TRADING_DISABLED",
   };
 }
 
@@ -1547,6 +1554,109 @@ export function signalWhyPreview(row: Record<string, unknown>): string {
   if (!first) return EXPLANATION_UNAVAILABLE;
   const text = `${first.label}: ${first.value}`;
   return text.length > 140 ? `${text.slice(0, 137)}…` : text;
+}
+
+const LIMITED_EXPLANATION =
+  "Signal explanation is limited because supporting evidence is currently unavailable.";
+
+/**
+ * Short human-readable explanation from actual evidence only.
+ * Never invents technical facts that are not on the row.
+ */
+export function signalHumanExplanation(row: Record<string, unknown>): string {
+  const factors = signalWhyFactors(row);
+  const backend = factors
+    .find((factor) => factor.label === "Why this signal exists")
+    ?.value.trim();
+  if (backend && backend !== "Not available") return backend;
+
+  const symbol = String(row.broker_symbol || row.symbol || "").trim() || "this instrument";
+  const dir = signalBoardDirection(row);
+  if (dir !== "BUY" && dir !== "SELL" && dir !== "NEUTRAL") {
+    return LIMITED_EXPLANATION;
+  }
+  if (dir === "NEUTRAL") {
+    return `QuantForg does not currently have an actionable BUY or SELL direction on ${symbol}.`;
+  }
+
+  const bits: string[] = [
+    `QuantForg currently has a ${dir} research bias on ${symbol}.`,
+  ];
+  const regime = presentField(rowRegime(row));
+  if (regime !== "Not available") {
+    bits.push(`Reported market regime: ${regime}.`);
+  }
+  for (const label of [
+    "Momentum",
+    "Trend / structure",
+    "Structure",
+    "Why the model prefers this direction",
+  ]) {
+    const hit = factors.find((factor) => factor.label === label)?.value.trim();
+    if (hit && hit !== "Not available") {
+      bits.push(label === "Why the model prefers this direction" ? hit : `${label}: ${hit}.`);
+    }
+  }
+  const sl = presentLevel(row.stop_loss ?? row.SL_candidate, "SL");
+  if (sl !== "Not available") {
+    bits.push(`Risk is defined by the displayed stop-loss (${sl}).`);
+  }
+  bits.push("This is research intelligence, not authorization to trade.");
+  return bits.join(" ");
+}
+
+export function signalUpdatedAgo(row: Record<string, unknown>, nowMs = Date.now()): string {
+  const raw = signalTimestamp(row);
+  if (!raw) return "Not available";
+  const ms = Date.parse(String(raw));
+  if (!Number.isFinite(ms)) return "Not available";
+  const diffSec = Math.round((nowMs - ms) / 1000);
+  if (!Number.isFinite(diffSec) || diffSec < 0) return "Not available";
+  if (diffSec < 60) return `${Math.max(0, diffSec)}s ago`;
+  const mins = Math.round(diffSec / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  return `${hrs}h ago`;
+}
+
+export function presentUnavailable(value: unknown): string {
+  const shown = String(value ?? "").trim();
+  if (
+    !shown ||
+    shown === "—" ||
+    shown === "UNKNOWN" ||
+    shown === "Not available" ||
+    shown === "Price unavailable" ||
+    shown === "N/A"
+  ) {
+    return "N/A";
+  }
+  return shown;
+}
+
+export function signalStrengthBand(row: Record<string, unknown>): string {
+  const raw = numericSortValue(row.research_rank_score);
+  const n = raw ?? numericSortValue(row.opportunity_score);
+  if (n == null) return "Not available";
+  if (n >= 80) return "Strong";
+  if (n >= 50) return "Moderate";
+  return "Developing";
+}
+
+/** Score as an integer, or N/A — never fabricated. */
+export function signalScoreDisplay(row: Record<string, unknown>): string {
+  const n =
+    numericSortValue(row.research_rank_score) ?? numericSortValue(row.opportunity_score);
+  if (n == null) return "N/A";
+  return String(Math.round(n));
+}
+
+/** Risk/reward as 2.4R, or N/A — never fabricated. */
+export function signalRiskRewardDisplay(row: Record<string, unknown>): string {
+  const n = numericSortValue(row.RR ?? row.rr ?? row.risk_reward);
+  if (n == null) return "N/A";
+  const shown = Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return `${shown}R`;
 }
 
 /** Honest coverage from research worker health — never invents 100%. */

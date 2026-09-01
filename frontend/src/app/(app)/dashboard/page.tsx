@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskError, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { MarketCatalogueRows } from "@/components/trading/market-catalogue-rows";
 import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
 import { SignalCard } from "@/components/trading/signal-card";
@@ -96,6 +96,7 @@ export default function DashboardPage() {
     queryFn: tradingSessionApi.session,
     retry: false,
     refetchInterval: TRADER_POLL_MS,
+    staleTime: 10_000,
   });
   const portfolio = useQuery({
     queryKey: ["portfolio"],
@@ -117,7 +118,7 @@ export default function DashboardPage() {
   const noBroker = connection.state === "BROKER_NOT_CONNECTED";
   const sessionMismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
   const robot = robotDisplayState(session, connection);
-  const liveTradingHint = researchDeskLiveTradingStatus(connection);
+  const liveTradingHint = researchDeskLiveTradingStatus(connection, session.trading);
 
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -273,53 +274,33 @@ export default function DashboardPage() {
     [],
   );
 
-  if (sessionQ.isLoading) {
-    return (
-      <div>
-        <PageHeader
-          eyebrow="Overview"
-          title={workspaceGreeting()}
-          description="Your QuantForg workspace."
-        />
-        <DeskSkeleton variant="page" />
-      </div>
-    );
-  }
-
-  if (sessionQ.isError) {
-    return (
-      <div>
-        <PageHeader
-          eyebrow="Overview"
-          title={workspaceGreeting()}
-          description="Your QuantForg workspace."
-        />
-        <DeskError
-          message="Unable to load your trading session."
-          onRetry={() => {
-            void sessionQ.refetch();
-          }}
-        />
-      </div>
-    );
-  }
-
   const greeting = workspaceGreeting(new Date(), firstName);
 
   return (
     <div className="min-w-0 space-y-5">
+      {sessionQ.isError ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
+        >
+          <p className="text-sm text-[var(--fg-muted)]">
+            Trading session temporarily unavailable. Research and signals remain independent.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void sessionQ.refetch();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : null}
       <PageHeader
         eyebrow="Overview"
         title={greeting}
-        description={
-          noBroker
-            ? "Explore markets and signals. Connect a broker when you are ready to trade."
-            : sessionMismatch
-              ? "Reconnect your broker session to restore account data. Research remains available."
-              : signalPreview.length > 0
-                ? "Review the strongest signals, then open Trading only when you intend to execute."
-                : "Research is independent of live trading. Live trading stays off until you authorize it."
-        }
+        description="QuantForg workspace"
         actions={
           noBroker || sessionMismatch ? (
             <Button asChild>
@@ -337,48 +318,52 @@ export default function DashboardPage() {
 
       <section
         aria-label="Workspace status"
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm"
       >
-        <DeskMetric
-          label="Broker"
-          value={
-            noBroker
-              ? "Not connected"
-              : sessionMismatch
-                ? "Reconnect required"
-                : "Connected"
-          }
-        />
-        <DeskMetric
-          label="Research"
-          value={
-            signalsQ.isError || signalState === "UNAVAILABLE"
+        <span>
+          <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+            Research{" "}
+          </span>
+          <span className="font-medium text-[var(--fg)]">
+            {signalsQ.isError || signalState === "UNAVAILABLE" ? "Unavailable" : "Running"}
+          </span>
+        </span>
+        <span>
+          <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+            Broker{" "}
+          </span>
+          <span className="font-medium text-[var(--fg)]">
+            {sessionQ.isError
               ? "Unavailable"
-              : "Available"
-          }
-        />
-        <DeskMetric
-          label="Live trading"
-          value={
-            liveTradingHint.label === "NOT AUTHORIZED"
-              ? "Not authorized"
-              : liveTradingHint.label === "UNAVAILABLE"
-                ? "Unavailable"
-                : liveTradingHint.label
-          }
-        />
-        <DeskMetric
-          label="Markets"
-          value={
-            catalogue === "LIVE_ROWS"
-              ? knownInstrumentCountLabel(catalogue, marketPreview.length) || "Live catalogue"
+              : noBroker
+                ? "Not connected"
+                : sessionMismatch
+                  ? "Reconnect required"
+                  : "Connected"}
+          </span>
+        </span>
+        <span>
+          <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+            Live trading{" "}
+          </span>
+          <span className="font-medium text-[var(--fg)]">
+            {liveTradingHint.label === "AUTHORIZED" ? "Authorized" : "Not authorized"}
+          </span>
+        </span>
+        <span>
+          <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+            Markets{" "}
+          </span>
+          <span className="font-medium text-[var(--fg)]">
+            {catalogue === "LIVE_ROWS"
+              ? knownInstrumentCountLabel(catalogue, marketPreview.length) || "Live"
               : catalogue === "LIVE_EMPTY"
-                ? "Empty catalogue"
+                ? "Empty"
                 : catalogue === "NOT_READY"
                   ? "Loading"
-                  : "Unavailable"
-          }
-        />
+                  : "Unavailable"}
+          </span>
+        </span>
       </section>
 
       <section aria-labelledby="top-signals">

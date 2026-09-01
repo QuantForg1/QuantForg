@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DeskDataTable, type DeskColumn } from "@/components/desk/data-table";
-import { DeskEmpty, DeskError, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
+import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { portfolioApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/client";
 import { asList, asRecord, num, str } from "@/lib/desk";
@@ -220,7 +220,7 @@ export function PortfolioWorkspace() {
     [currency],
   );
 
-  if (sessionQ.isLoading) {
+  if (sessionQ.isLoading && !sessionQ.data && !sessionQ.isError) {
     return (
       <div>
         <PageHeader
@@ -233,26 +233,27 @@ export function PortfolioWorkspace() {
     );
   }
 
-  if (sessionQ.isError) {
-    return (
-      <div>
-        <PageHeader
-          eyebrow="Account"
-          title="Portfolio"
-          description="Equity, margin, positions, and exposure from your own broker session."
-        />
-        <DeskError
-          message="Unable to load your trading session."
-          onRetry={() => {
-            void sessionQ.refetch();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="min-w-0 space-y-5">
+      {sessionQ.isError ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
+        >
+          <p className="text-sm text-[var(--fg-muted)]">
+            Trading session temporarily unavailable. Retry to reload account data.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void sessionQ.refetch();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : null}
       <PageHeader
         eyebrow="Account"
         title="Portfolio"

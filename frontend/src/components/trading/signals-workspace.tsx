@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, LayoutGrid, Radar, RefreshCw, SlidersHorizontal, Table2 } from "lucide-react";
+import { Activity, Radar, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogTitle, SheetContent } from "@/components/ui/dialog";
 import { DeskEmpty, DeskMetric, DeskSkeleton } from "@/components/desk/primitives";
 import { FilterChip } from "@/components/trading/filter-chip";
-import { IntelligenceDetail, directionTone, freshnessTone } from "@/components/trading/intelligence-detail";
+import { IntelligenceDetail } from "@/components/trading/intelligence-detail";
 import { DirectionBadge, SignalCard } from "@/components/trading/signal-card";
 import { marketUniverseApi, signalCenterApi, tradingSessionApi } from "@/lib/api/endpoints";
 import { asList, asRecord, str } from "@/lib/desk";
@@ -23,8 +22,6 @@ import {
   cataloguePageSlice,
   EMPTY_SIGNAL_FILTERS,
   filterSignalRows,
-  knownUniverseCountLabel,
-  lastUpdatedCopy,
   MARKET_PAGE_SIZE,
   MARKET_UNIVERSE_QUERY_KEY,
   marketStateBucket,
@@ -33,6 +30,7 @@ import {
   presentField,
   presentLevel,
   presentPrice,
+  presentUnavailable,
   RESEARCH_INDEPENDENT_COPY,
   researchCoverageLabel,
   researchDeskLiveTradingStatus,
@@ -49,8 +47,12 @@ import {
   signalBoardDirection,
   signalFreshness,
   signalFreshnessLabel,
-  signalStrength,
+  signalRiskRewardDisplay,
+  signalScoreDisplay,
+  signalStrengthBand,
+  signalSummary,
   signalTimestampLabel,
+  signalUpdatedAgo,
   sortSignalRows,
   TRADER_POLL_MS,
   UNIVERSE_POLL_MS,
@@ -59,6 +61,7 @@ import {
   type SignalFilterState,
   type SignalSortKey,
 } from "@/lib/trading/trader-ux";
+import { freshnessTone } from "@/components/trading/intelligence-detail";
 
 const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
   { id: "strongest", label: "Strongest" },
@@ -70,7 +73,7 @@ const SORT_OPTIONS: Array<{ id: SignalSortKey; label: string }> = [
 const MARKET_CLASS_FILTERS = ["ALL", ...ASSET_CLASS_ORDER] as const;
 const SIGNAL_FEED_PAGE_SIZE = 40;
 const STATUS_FILTERS = [
-          { id: "ALL", label: "All" },
+  { id: "ALL", label: "All" },
   { id: "ACTIVE", label: "Active" },
   { id: "RECENT", label: "Recent" },
   { id: "CLOSED", label: "Closed" },
@@ -189,45 +192,6 @@ function productEmptyTitle(title: string): string {
   return title;
 }
 
-function ViewToggle({
-  view,
-  onChange,
-}: {
-  view: "cards" | "table";
-  onChange: (value: "cards" | "table") => void;
-}) {
-  return (
-    <div
-      className="flex rounded-[var(--radius-sm)] border border-[var(--border)] p-0.5"
-      role="group"
-      aria-label="Signal layout"
-    >
-      {(
-        [
-          ["cards", LayoutGrid, "Cards"],
-          ["table", Table2, "Table"],
-        ] as const
-      ).map(([id, Icon, label]) => (
-        <button
-          key={id}
-          type="button"
-          aria-pressed={view === id}
-          onClick={() => onChange(id)}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-sm)-2px)] px-2.5 py-1.5 text-xs font-medium transition-colors duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
-            view === id
-              ? "bg-[var(--surface-elevated)] text-[var(--fg)]"
-              : "text-[var(--fg-muted)] hover:text-[var(--fg)]",
-          )}
-        >
-          <Icon className="h-3.5 w-3.5" aria-hidden />
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function analysisTone(
   status: AnalysisDeskStatus,
 ): "success" | "warning" | "danger" | "neutral" | "accent" {
@@ -248,6 +212,45 @@ function researchWorkerTone(
   return "neutral";
 }
 
+function researchStatusLabel(input: {
+  fetchError: boolean;
+  workerStatus: string;
+  loading: boolean;
+}): string {
+  if (input.fetchError) return "UNAVAILABLE";
+  if (input.loading) return "RUNNING";
+  if (input.workerStatus === "STOPPED") return "STOPPED";
+  if (input.workerStatus === "DEGRADED") return "DEGRADED";
+  if (input.workerStatus === "UNAVAILABLE") return "UNAVAILABLE";
+  return "RUNNING";
+}
+
+function levelCell(value: unknown, kind: "Entry" | "SL" | "TP"): string {
+  return presentUnavailable(presentLevel(value, kind));
+}
+
+function priceCell(value: unknown): string {
+  const shown = presentPrice(value);
+  return shown === "Price unavailable" ? "N/A" : presentUnavailable(shown);
+}
+
+function StatusDot({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 text-sm">
+      <span className="text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+        {label}
+      </span>
+      <span className="font-medium text-[var(--fg)]">{value}</span>
+    </span>
+  );
+}
+
 export function SignalsWorkspace() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<SignalFilterState>(EMPTY_SIGNAL_FILTERS);
@@ -257,7 +260,6 @@ export function SignalsWorkspace() {
   const [refreshing, setRefreshing] = useState(false);
   const [feedLimit, setFeedLimit] = useState(SIGNAL_FEED_PAGE_SIZE);
   const [universePage, setUniversePage] = useState(1);
-  const [view, setView] = useState<"cards" | "table">("cards");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const sessionQ = useQuery({
@@ -265,11 +267,12 @@ export function SignalsWorkspace() {
     queryFn: tradingSessionApi.session,
     retry: false,
     refetchInterval: TRADER_POLL_MS,
+    staleTime: 10_000,
   });
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
   const accountHint = accountConnectionHint(connection);
-  const liveTradingHint = researchDeskLiveTradingStatus(connection);
+  const liveTradingHint = researchDeskLiveTradingStatus(connection, session.trading);
 
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -338,6 +341,11 @@ export function SignalsWorkspace() {
   const signalRows = normalized.rows;
   const researchHealth = normalized.researchAnalysis ?? {};
   const workerStatus = String(researchHealth.status || "UNKNOWN").toUpperCase();
+  const researchLabel = researchStatusLabel({
+    fetchError: Boolean(signalsQ.isError),
+    workerStatus,
+    loading: signalsQ.isLoading,
+  });
 
   const sessions = useMemo(() => uniqueRowValues(signalRows, rowSession), [signalRows]);
   const regimes = useMemo(() => uniqueRowValues(signalRows, rowRegime), [signalRows]);
@@ -363,39 +371,34 @@ export function SignalsWorkspace() {
     universeSize: normalized.universeSize,
   });
   const analysisLabel = analysisDeskStatusLabel(analysisStatus);
-  const updated = lastUpdatedCopy(normalized.asOf);
   const emptyCopy = researchSignalsEmptyCopy({
     fetchError: Boolean(signalsQ.isError),
     fabricatedBlocked: normalized.fabricatedBlocked,
     empty: true,
     universeSize: normalized.universeSize,
   });
-  const marketsAnalyzed = knownUniverseCountLabel(
-    normalized.universeSize,
-    normalized.countConfirmed && !signalsQ.isError,
-  );
   const coverageLabel = researchCoverageLabel(researchHealth);
   const progressCopy = researchProgressCopy(researchHealth);
   const discoveredLabel =
     researchHealth.instruments_discovered != null
       ? String(researchHealth.instruments_discovered)
-      : marketsAnalyzed;
+      : "N/A";
   const eligibleLabel =
     researchHealth.instruments_eligible != null
       ? String(researchHealth.instruments_eligible)
-      : "—";
+      : "N/A";
   const analyzedLabel =
     researchHealth.instruments_analyzed != null
       ? String(researchHealth.instruments_analyzed)
-      : "—";
+      : "N/A";
   const failedLabel =
     researchHealth.instruments_failed != null
       ? String(researchHealth.instruments_failed)
-      : "—";
+      : "N/A";
   const unavailableLabel =
     researchHealth.instruments_unavailable != null
       ? String(researchHealth.instruments_unavailable)
-      : "—";
+      : "N/A";
   const coverageState = String(researchHealth.coverage_state || "").toUpperCase();
   const lifecycle = researchLifecycleCounts(universeInstruments);
   const assetClassCounts =
@@ -404,10 +407,19 @@ export function SignalsWorkspace() {
       ? (researchHealth.asset_class_counts as Record<string, unknown>)
       : {};
 
+  const summary = signalSummary({
+    availability: signalsQ.isError ? "UNAVAILABLE" : availability,
+    rows: signalRows,
+    instrumentCount: normalized.universeSize ?? universeInstruments.length,
+    lastUpdate: normalized.asOf,
+  });
+  const lastUpdateRel = normalized.asOf
+    ? signalUpdatedAgo({ as_of: normalized.asOf, time_generated: normalized.asOf })
+    : "Not available";
+
   async function refreshAnalysis() {
     setRefreshing(true);
     try {
-      // Research refresh only — never starts live trading / OMS.
       await marketUniverseApi.refresh().catch(() => null);
       await qc.invalidateQueries({ queryKey: MARKET_UNIVERSE_QUERY_KEY });
       await signalsQ.refetch();
@@ -416,14 +428,40 @@ export function SignalsWorkspace() {
     }
   }
 
+  const brokerLabel =
+    accountHint.detail === "CONNECTED"
+      ? "CONNECTED"
+      : accountHint.detail === "SESSION MISMATCH"
+        ? "SESSION MISMATCH"
+        : "NOT CONNECTED";
+
+  const researchFailed = Boolean(signalsQ.isError);
+
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
         eyebrow="Signals"
         title="GLOBAL MARKET SIGNALS"
-        description="Research-backed market intelligence across the available universe."
+        description="Real-time research-backed opportunities across the QuantForg market universe."
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="hidden min-w-[12rem] md:block">
+              <Input
+                value={filters.q}
+                onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+                placeholder="Search"
+                aria-label="Search signals"
+              />
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="md:hidden"
+              onClick={() => setFiltersOpen(true)}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filters
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -438,94 +476,55 @@ export function SignalsWorkspace() {
               />
               Refresh
             </Button>
-            <Button variant="secondary" size="sm" asChild>
-              <Link href="/markets">Markets</Link>
-            </Button>
           </div>
         }
       />
 
       <p className="max-w-3xl text-sm leading-relaxed text-[var(--fg-muted)]">
-        {RESEARCH_INDEPENDENT_COPY} Research does not require MT5. Live trading remains a
-        separate, explicitly authorized step.
+        {RESEARCH_INDEPENDENT_COPY} Research does not require a personal MT5 session. Live
+        trading remains a separate, explicitly authorized step.
       </p>
 
       <section
         aria-label="Research, broker, and live trading"
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5"
       >
-        <Badge
-          tone={
-            signalsQ.isError || availability === "UNAVAILABLE" ? "danger" : "success"
-          }
-        >
-          Research{" "}
-          {signalsQ.isError || availability === "UNAVAILABLE" ? "unavailable" : "available"}
-        </Badge>
-        <Badge
-          tone={
-            accountHint.detail === "CONNECTED"
-              ? "success"
-              : accountHint.detail === "SESSION MISMATCH"
-                ? "danger"
-                : "neutral"
-          }
-        >
-          Broker{" "}
-          {accountHint.detail === "CONNECTED"
-            ? "connected"
-            : accountHint.detail === "SESSION MISMATCH"
-              ? "session mismatch"
-              : "not connected"}
-        </Badge>
-        <Badge
-          tone={
-            liveTradingHint.state === "LIVE_TRADING_UNAVAILABLE" ? "neutral" : "warning"
-          }
-        >
-          Live trading {liveTradingHint.label.toLowerCase()}
-        </Badge>
-        {updated ? (
-          <span className="text-xs text-[var(--fg-subtle)]">{updated}</span>
-        ) : null}
+        <StatusDot label="Research" value={researchLabel} />
+        <StatusDot label="Broker" value={brokerLabel} />
+        <StatusDot label="Live trading" value={liveTradingHint.label} />
       </section>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="hidden min-w-0 flex-1 md:block">
-          <FilterControls
-            filters={filters}
-            setFilters={setFilters}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
-            sort={sort}
-            setSort={setSort}
-            setUniversePage={setUniversePage}
-          />
-        </div>
-        <div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="md:hidden"
-            onClick={() => setFiltersOpen(true)}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filters
-          </Button>
-          <ViewToggle view={view} onChange={setView} />
-        </div>
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--fg-muted)]">
+        <span>{summary.markets} Markets</span>
+        <span>{analyzedLabel === "N/A" ? summary.markets : analyzedLabel} Analyzed</span>
+        <span className="text-[var(--success)]">{summary.buy} BUY</span>
+        <span className="text-[var(--danger)]">{summary.sell} SELL</span>
+        <span>{summary.neutral} NEUTRAL</span>
+        <span className="text-[var(--fg-subtle)]">Last update: {lastUpdateRel}</span>
+      </p>
+
+      <div className="hidden md:block">
+        <FilterControls
+          filters={filters}
+          setFilters={setFilters}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          sort={sort}
+          setSort={setSort}
+          setUniversePage={setUniversePage}
+        />
       </div>
 
       {signalsQ.isLoading ? (
-        <DeskSkeleton rows={6} />
-      ) : signalsQ.isError || availability === "UNAVAILABLE" ? (
+        <DeskSkeleton rows={8} />
+      ) : researchFailed ? (
         <DeskEmpty
           icon={Radar}
           title={productEmptyTitle(emptyCopy.title)}
-          description={emptyCopy.description}
+          description={`${emptyCopy.description} Research is independent of your broker connection. Retry when the research API is reachable.`}
         />
       ) : availability === "NOT_READY" ? (
-        <DeskSkeleton rows={6} />
+        <DeskSkeleton rows={8} />
       ) : availability === "LIVE_EMPTY" || signalRows.length === 0 ? (
         <DeskEmpty
           icon={Activity}
@@ -538,108 +537,114 @@ export function SignalsWorkspace() {
           title="No matching signals"
           description="No signals match the current filters."
         />
-      ) : view === "table" ? (
-        <div className="min-w-0 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)]">
-          <table className="w-full min-w-[920px] text-left text-sm" aria-label="Signals">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Symbol
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Class
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Direction
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Strength
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Price
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Entry
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Stop loss
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Take profit
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  R/R
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  Status
-                </th>
-                <th className="px-3 py-2.5 font-medium" scope="col">
-                  <span className="sr-only">Why</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {feedRows.map((row, i) => {
-                const symbol = str(row.broker_symbol || row.symbol, "—");
-                const freshness = signalFreshness(row);
-                return (
-                  <tr key={`${symbol}-${i}`} className="border-b border-[var(--border)] last:border-0">
-                    <td className="px-3 py-2.5 font-semibold">{symbol}</td>
-                    <td className="px-3 py-2.5 text-[var(--fg-muted)]">
-                      {presentField(row.asset_class)}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <DirectionBadge dir={signalBoardDirection(row)} />
-                    </td>
-                    <td className="px-3 py-2.5 font-mono tabular">{signalStrength(row)}</td>
-                    <td className="px-3 py-2.5 font-mono tabular">
-                      {presentPrice(row.price ?? row.mid ?? row.bid) === "Price unavailable"
-                        ? "Not available"
-                        : presentPrice(row.price ?? row.mid ?? row.bid)}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono tabular">
-                      {presentLevel(row.entry ?? row.entry_candidate, "Entry")}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono tabular">
-                      {presentLevel(row.stop_loss ?? row.SL_candidate, "SL")}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono tabular">
-                      {presentLevel(row.take_profit ?? row.TP_candidate, "TP")}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono tabular">
-                      {scoreDisplay(row.RR ?? row.rr)}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <Badge tone={freshnessTone(freshness)}>
-                        {signalFreshnessLabel(freshness)}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setSelected(row)}
-                        className="text-[11px] font-semibold text-[var(--accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                      >
-                        Why
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Signals">
-          {feedRows.map((row, i) => {
-            const symbol = str(row.broker_symbol || row.symbol, "—");
-            return (
-              <li key={`${symbol}-${i}`}>
-                <SignalCard row={row} onOpen={() => setSelected(row)} />
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <div className="hidden min-w-0 overflow-x-auto rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface)] md:block">
+            <table className="w-full min-w-[1080px] text-left text-sm" aria-label="Signals">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-[11px] uppercase tracking-wide text-[var(--fg-subtle)]">
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Symbol
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Asset
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Signal
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Strength
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Score
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Price
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Entry
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Stop loss
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Take profit
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    R/R
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Regime
+                  </th>
+                  <th className="px-3 py-2.5 font-medium" scope="col">
+                    Updated
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {feedRows.map((row, i) => {
+                  const symbol = str(row.broker_symbol || row.symbol, "N/A");
+                  const dir = signalBoardDirection(row);
+                  return (
+                    <tr
+                      key={`${symbol}-${i}`}
+                      className="cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-2)]"
+                      onClick={() => setSelected(row)}
+                    >
+                      <td className="px-3 py-2.5 font-semibold">{symbol}</td>
+                      <td className="px-3 py-2.5 text-[var(--fg-muted)]">
+                        {presentUnavailable(presentField(row.asset_class))}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <DirectionBadge dir={dir} />
+                        {dir === "NEUTRAL" ? (
+                          <span className="ml-2 text-[11px] text-[var(--fg-subtle)]">
+                            No actionable direction
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2.5">{signalStrengthBand(row)}</td>
+                      <td className="px-3 py-2.5 font-mono tabular">
+                        {signalScoreDisplay(row)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono tabular">
+                        {priceCell(row.price ?? row.mid ?? row.bid)}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono tabular">
+                        {levelCell(row.entry ?? row.entry_candidate, "Entry")}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono tabular">
+                        {levelCell(row.stop_loss ?? row.SL_candidate, "SL")}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono tabular">
+                        {levelCell(row.take_profit ?? row.TP_candidate, "TP")}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono tabular">
+                        {signalRiskRewardDisplay(row)}
+                      </td>
+                      <td className="px-3 py-2.5 text-[var(--fg-muted)]">
+                        {presentUnavailable(presentField(rowRegime(row)))}
+                      </td>
+                      <td className="px-3 py-2.5 text-[var(--fg-subtle)]">
+                        {signalUpdatedAgo(row)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <ul className="grid gap-3 md:hidden" aria-label="Signals">
+            {feedRows.map((row, i) => {
+              const symbol = str(row.broker_symbol || row.symbol, "N/A");
+              return (
+                <li key={`${symbol}-m-${i}`}>
+                  <SignalCard row={row} onOpen={() => setSelected(row)} />
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       {sorted.length > 0 && feedLimit < sorted.length ? (
@@ -802,12 +807,6 @@ export function SignalsWorkspace() {
                         Opportunity
                       </th>
                       <th className="py-2 pr-3 font-medium" scope="col">
-                        Edge
-                      </th>
-                      <th className="py-2 pr-3 font-medium" scope="col">
-                        RR
-                      </th>
-                      <th className="py-2 pr-3 font-medium" scope="col">
                         Freshness
                       </th>
                       <th className="py-2 pr-3 font-medium" scope="col">
@@ -819,10 +818,10 @@ export function SignalsWorkspace() {
                     {universePageRows.map((row, i) => {
                       const symbol = str(
                         row.broker_symbol || row.canonical_symbol || row.symbol,
-                        "—",
+                        "N/A",
                       );
                       const market = marketStateBucket(row);
-                      const lifecycle = researchLifecycleLabel(row);
+                      const lifecycleLabel = researchLifecycleLabel(row);
                       const signalRow = signalRows.find(
                         (s) =>
                           str(s.broker_symbol || s.symbol, "").toUpperCase() ===
@@ -852,7 +851,7 @@ export function SignalsWorkspace() {
                         >
                           <td className="py-2 pr-3 font-medium">{symbol}</td>
                           <td className="py-2 pr-3">
-                            {presentField(row.asset_class)}
+                            {presentUnavailable(presentField(row.asset_class))}
                           </td>
                           <td className="py-2 pr-3">
                             <Badge
@@ -868,38 +867,20 @@ export function SignalsWorkspace() {
                             </Badge>
                           </td>
                           <td className="py-2 pr-3">
-                            <Badge
-                              tone={
-                                dir === "BUY" || dir === "SELL"
-                                  ? directionTone(dir)
-                                  : "neutral"
-                              }
-                            >
-                              {dir}
-                            </Badge>
+                            <DirectionBadge dir={dir} />
                             <span className="ml-2 text-[10px] text-[var(--fg-subtle)]">
-                              {lifecycle}
+                              {lifecycleLabel}
                             </span>
                           </td>
+                          <td className="py-2 pr-3 tabular">{priceCell(price)}</td>
                           <td className="py-2 pr-3 tabular">
-                            {market === "CLOSED" && price == null
-                              ? "—"
-                              : presentPrice(price)}
-                          </td>
-                          <td className="py-2 pr-3 tabular">
-                            {scoreDisplay(
-                              signalRow?.opportunity_score ??
-                                (row.scorecard as Record<string, unknown> | undefined)
-                                  ?.OPPORTUNITY_QUALITY,
+                            {presentUnavailable(
+                              scoreDisplay(
+                                signalRow?.opportunity_score ??
+                                  (row.scorecard as Record<string, unknown> | undefined)
+                                    ?.OPPORTUNITY_QUALITY,
+                              ),
                             )}
-                          </td>
-                          <td className="py-2 pr-3 tabular">
-                            {scoreDisplay(
-                              signalRow?.directional_edge ?? signalRow?.edge,
-                            )}
-                          </td>
-                          <td className="py-2 pr-3 tabular">
-                            {scoreDisplay(signalRow?.RR ?? signalRow?.rr)}
                           </td>
                           <td className="py-2 pr-3">
                             <Badge tone={freshnessTone(freshness)}>
@@ -909,10 +890,12 @@ export function SignalsWorkspace() {
                           <td className="py-2 pr-3 text-xs text-[var(--fg-muted)]">
                             {signalRow
                               ? signalTimestampLabel(signalRow)
-                              : presentField(
-                                  row.features_as_of ||
-                                    row.last_quote_timestamp ||
-                                    dq.last_quote_timestamp,
+                              : presentUnavailable(
+                                  presentField(
+                                    row.features_as_of ||
+                                      row.last_quote_timestamp ||
+                                      dq.last_quote_timestamp,
+                                  ),
                                 )}
                           </td>
                         </tr>
@@ -925,7 +908,7 @@ export function SignalsWorkspace() {
                 {universePageRows.map((row, i) => {
                   const symbol = str(
                     row.broker_symbol || row.canonical_symbol || row.symbol,
-                    "—",
+                    "N/A",
                   );
                   const market = marketStateBucket(row);
                   return (

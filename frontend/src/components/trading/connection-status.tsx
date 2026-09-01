@@ -35,6 +35,7 @@ export function ConnectionStatus({
     queryFn: tradingSessionApi.session,
     retry: false,
     refetchInterval: TRADER_POLL_MS,
+    staleTime: 10_000,
     enabled: sessionOverride == null,
   });
   const session = sessionOverride ?? asRecord(sessionQ.data);

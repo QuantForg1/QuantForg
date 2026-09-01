@@ -159,8 +159,23 @@ export const TRADER_DESK_ORDER = [
   "/research",
   "/portfolio",
   "/terminal",
+  "/broker",
   "/settings",
 ] as const;
+
+const TRADER_RAIL_SECTIONS: Record<
+  (typeof TRADER_DESK_ORDER)[number],
+  NonNullable<PrimaryNavItem["section"]>
+> = {
+  "/dashboard": "Workspace",
+  "/markets": "Workspace",
+  "/signals": "Workspace",
+  "/research": "Workspace",
+  "/portfolio": "Workspace",
+  "/terminal": "Trading",
+  "/broker": "Trading",
+  "/settings": "System",
+};
 
 export const OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER;
 
@@ -172,7 +187,10 @@ export function visiblePrimaryRail(_isOperator = false): PrimaryNavItem[] {
   const allowed = new Map(primaryRail.map((item) => [item.href, item]));
   return TRADER_DESK_ORDER.map((href) => allowed.get(href))
     .filter((item): item is PrimaryNavItem => item != null)
-    .map(({ section: _section, ...item }) => item);
+    .map((item) => ({
+      ...item,
+      section: TRADER_RAIL_SECTIONS[item.href as (typeof TRADER_DESK_ORDER)[number]],
+    }));
 }
 
 /**
@@ -565,10 +583,10 @@ export const primaryRail: PrimaryNavItem[] = [
     href: "/broker",
     label: "Broker",
     icon: Building2,
-    hint: "Attach session · connectivity",
+    hint: "Connect MT5 · account ownership",
     match: ["/broker"],
-    shortcut: "7",
-    section: "System",
+    shortcut: "8",
+    section: "Trading",
   },
   {
     href: "/logs",

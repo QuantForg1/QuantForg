@@ -145,7 +145,9 @@ export function shouldDedupeGet(path: string): boolean {
     p.includes("/positions") ||
     p.endsWith("/orders") ||
     p.endsWith("/history") ||
-    p.endsWith("/brokers")
+    p.endsWith("/brokers") ||
+    p.endsWith("/trading/session") ||
+    p.endsWith("/trading/account")
   );
 }
 
