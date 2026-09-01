@@ -264,3 +264,39 @@ def test_close_does_not_set_durable_halt() -> None:
         assert get_phase_a_plane().halt.mode is HaltMode.ACTIVE
     except Exception:
         pytest.skip("phase A plane unavailable")
+
+
+def test_in_progress_cycle_is_not_stalled_inside_hard_timeout() -> None:
+    now = time.monotonic()
+    assert (
+        scheduler_is_stalled(
+            last_cycle_finished_mono=0.0,
+            now_mono=now,
+            interval_seconds=5.0,
+            started_mono=now - 120,
+            running=True,
+            cycle_started_mono=now - 30,
+        )
+        is False
+    )
+
+
+def test_in_progress_cycle_stalls_only_after_hard_timeout() -> None:
+    from app.domain.institutional_trading.operations.worker_runtime_state import (
+        cycle_hard_timeout_seconds,
+    )
+
+    now = time.monotonic()
+    hard = cycle_hard_timeout_seconds(5.0)
+    assert hard >= 180.0
+    assert (
+        scheduler_is_stalled(
+            last_cycle_finished_mono=0.0,
+            now_mono=now,
+            interval_seconds=5.0,
+            started_mono=now - 400,
+            running=True,
+            cycle_started_mono=now - (hard + 1.0),
+        )
+        is True
+    )

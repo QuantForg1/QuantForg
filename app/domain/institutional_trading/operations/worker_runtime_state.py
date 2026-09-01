@@ -32,6 +32,12 @@ def healthy_cycle_window_seconds(interval_seconds: float) -> float:
     return max(90.0, interval * 12.0)
 
 
+def cycle_hard_timeout_seconds(interval_seconds: float) -> float:
+    """Abort a hung cycle. Cold scans may exceed the 90s stall window."""
+    window = healthy_cycle_window_seconds(interval_seconds)
+    return max(180.0, window * 2.0)
+
+
 def scheduler_is_stalled(
     *,
     last_cycle_finished_mono: float,
@@ -39,19 +45,24 @@ def scheduler_is_stalled(
     interval_seconds: float,
     started_mono: float,
     running: bool,
+    cycle_started_mono: float = 0.0,
 ) -> bool:
     """True when the loop has not finished a cycle inside the healthy window.
 
     Closed-session manage-only cycles count as completed. Stall means the
-    scheduler itself stopped ticking — not WAITING_SESSION.
+    scheduler itself stopped ticking — not WAITING_SESSION. A cycle that is
+    still in flight is not stalled until it exceeds the hard timeout.
     """
     if not running:
         return False
+    window = healthy_cycle_window_seconds(interval_seconds)
+    hard = cycle_hard_timeout_seconds(interval_seconds)
+    if cycle_started_mono > last_cycle_finished_mono:
+        return (now_mono - cycle_started_mono) > hard
     if last_cycle_finished_mono <= 0:
-        window = healthy_cycle_window_seconds(interval_seconds)
         return (now_mono - started_mono) > window
     age = now_mono - last_cycle_finished_mono
-    return age > healthy_cycle_window_seconds(interval_seconds)
+    return age > window
 
 
 def derive_worker_state(

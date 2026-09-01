@@ -849,8 +849,10 @@ def test_admin_page_and_nav_keep_trader_free_of_admin() -> None:
     assert "ARM LIVE TRADING" in panel
     assert "ENABLE LIVE TRADING" in panel
     assert "DISABLE LIVE TRADING" in panel
-    assert 'liveConfirmed ? "ACTIVE"' in panel
-    assert "ACTIVE" in panel
+    assert 'liveConfirmed ? "LIVE_ENABLED"' in panel
+    assert "LIVE_ENABLED" in panel
+    assert "worker_state" in panel
+    assert "scheduler_state" in panel
     assert "OPERATOR_RAIL_ORDER = TRADER_DESK_ORDER" in nav
     assert (
         '"/admin/live-trading"' in nav

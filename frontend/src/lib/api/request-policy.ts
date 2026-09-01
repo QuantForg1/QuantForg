@@ -99,6 +99,9 @@ export function defaultTimeoutForPath(path: string): number {
   if (isTelemetryPath(p)) {
     return API_TELEMETRY_TIMEOUT_MS;
   }
+  if (p.endsWith("/trading/session") || p.includes("/live-trading")) {
+    return API_TELEMETRY_TIMEOUT_MS;
+  }
   if (
     p.includes("/mt5") ||
     p.includes("/weltrade") ||

@@ -186,7 +186,7 @@ export function LiveTradingControlPanel() {
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
             LIVE TRADING
             <Badge tone={toneForState(liveConfirmed ? "LIVE_ENABLED" : state)}>
-              {liveConfirmed ? "ACTIVE" : state}
+              {liveConfirmed ? "LIVE_ENABLED" : state}
             </Badge>
             <Badge tone="neutral">
               research_can_execute = {d.research_can_execute ? "true" : "false"}
@@ -198,8 +198,9 @@ export function LiveTradingControlPanel() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-[var(--fg-muted)]">
-            Backend state is authoritative. ACTIVE is shown only when the
-            server confirms ENABLED. Research stays advisory. This page never
+            Backend state is authoritative. LIVE_ENABLED is the controller.
+            Worker and scheduler states are independent and must not be inferred
+            from orders_may_submit. Research stays advisory. This page never
             enables trading on load. Capital preservation is the priority.
             Returns are not promised.
           </p>
@@ -245,9 +246,14 @@ export function LiveTradingControlPanel() {
               ok={gates.some((g) => str(g.key) === "oms_healthy" && g.passed === true)}
             />
             <StatusTile
-              label="Robot"
-              value={liveConfirmed ? "ACTIVE" : state}
-              ok={liveConfirmed}
+              label="Worker"
+              value={str(d.worker_state, "UNKNOWN")}
+              ok={str(d.worker_state, "").toUpperCase() === "RUNNING"}
+            />
+            <StatusTile
+              label="Scheduler"
+              value={str(d.scheduler_state, "UNKNOWN")}
+              ok={str(d.scheduler_state, "").toUpperCase() === "RUNNING"}
             />
             <StatusTile
               label="Kill switch"
@@ -311,6 +317,14 @@ export function LiveTradingControlPanel() {
               label="Consecutive losses"
               value={`${str(risk.consecutive_losses, "0")} / ${str(risk.max_consecutive_losses, "2")}`}
             />
+            <Metric label="Cycles" value={str(d.cycles, "0")} />
+            <Metric label="Last cycle" value={str(d.last_cycle_at, "—")} />
+            <Metric
+              label="Last successful cycle"
+              value={str(d.last_successful_cycle || d.last_successful_cycle_at, "—")}
+            />
+            <Metric label="Recovery" value={str(d.recovery_state, "—")} />
+            <Metric label="Risk state" value={str(d.risk_state, "—")} />
             <Metric label="Margin level" value={str(account.margin_level, "—")} />
           </div>
 

@@ -415,6 +415,59 @@ def _overlay_trusted_daily_pnl(out: dict[str, Any]) -> None:
         return
 
 
+def _overlay_ite_worker_status(out: dict[str, Any]) -> None:
+    """Copy truthful ITE worker fields. Never invents P/L or tickets."""
+    try:
+        from app.application.services.institutional_ite_runtime import (
+            get_ite_runtime,
+        )
+
+        runtime = get_ite_runtime()
+        if runtime is None:
+            return
+        st = runtime.status() or {}
+    except Exception:
+        return
+    if not isinstance(st, dict):
+        return
+    for key in (
+        "worker_state",
+        "scheduler_state",
+        "cycles",
+        "last_cycle",
+        "last_cycle_at",
+        "last_successful_cycle",
+        "last_successful_cycle_at",
+        "last_error",
+        "recovery_state",
+        "risk_state",
+        "new_entries_blocked_for_recovery",
+        "watchdog_state",
+        "watchdog_restarts",
+        "capital_baseline",
+        "deposit_verification",
+        "daily_pnl_status",
+    ):
+        if key in st:
+            out[key] = st[key]
+    last = st.get("last_cycle") if isinstance(st.get("last_cycle"), dict) else {}
+    if last:
+        out.setdefault(
+            "execution_status",
+            last.get("cycle_outcome") or last.get("abort_reason"),
+        )
+        ticket = (
+            last.get("mt5_ticket")
+            or last.get("broker_ticket")
+            or last.get("ticket")
+        )
+        if ticket not in (None, "", 0, "0"):
+            out["broker_ticket"] = ticket
+        else:
+            out.setdefault("broker_ticket", None)
+        out.setdefault("last_order_attempt", last.get("last_order_attempt"))
+
+
 def _research_block() -> dict[str, Any]:
     block: dict[str, Any] = {
         "symbols_analyzed": None,
@@ -631,7 +684,7 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
             pause_reason = "operator"
     last_fill = ctrl.fills[-1].to_dict() if ctrl.fills else None
     last_rej = ctrl.rejections[-1] if ctrl.rejections else None
-    return strip_secrets(
+    payload = strip_secrets(
         {
             "live_trading_state": state,
             "display_state": display,
@@ -753,6 +806,8 @@ def build_live_trading_status(*, user: AuthUserDTO | None = None) -> dict[str, A
             "fabricated": False,
         }
     )
+    _overlay_ite_worker_status(payload)
+    return payload
 
 
 def confirmation_preview(*, user: AuthUserDTO) -> dict[str, Any]:

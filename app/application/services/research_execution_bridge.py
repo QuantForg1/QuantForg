@@ -158,11 +158,12 @@ def signal_execution_status(
         return "EXECUTION_BLOCKED"
     oms = str(pipe.get("oms") or row.get("oms") or "").strip().upper()
     risk = str(pipe.get("risk") or row.get("risk") or "").strip().upper()
-    if oms in {"REJECT", "REJECTED", "BLOCK"} or risk in {
-        "REJECT",
-        "REJECTED",
-        "BLOCK",
-    }:
+    abort = str(
+        pipe.get("abort_reason") or row.get("abort_reason") or ""
+    ).strip().upper()
+    if risk in {"REJECT", "REJECTED", "BLOCK"} or "RISK" in abort:
+        return "RISK_BLOCKED"
+    if oms in {"REJECT", "REJECTED", "BLOCK"}:
         return "EXECUTION_BLOCKED"
     if _row_is_stale(row):
         return "EXPIRED"
@@ -171,7 +172,7 @@ def signal_execution_status(
     state = str(live_state or "").strip().upper()
     if state in {"ARMED", "READY_FOR_REVIEW"} and direction in _BUY_SELL:
         return "READY_FOR_REVIEW"
-    if not orders_ok or state not in {"ENABLED", "LIVE_ENABLED"}:
+    if state not in {"ENABLED", "LIVE_ENABLED"}:
         return "RESEARCH_ONLY"
     if direction not in _BUY_SELL:
         return "RESEARCH_ONLY"
@@ -186,6 +187,8 @@ def signal_execution_status(
         and _desk_key(sym) not in focus_keys
     ):
         return "RESEARCH_ONLY"
+    if not orders_ok:
+        return "EXECUTION_BLOCKED"
     return "LIVE_ELIGIBLE"
 
 

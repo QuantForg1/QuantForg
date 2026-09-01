@@ -65,6 +65,7 @@ import {
   marketSignalLabel,
   normalizeSignalCenterPayload,
   researchDeskLiveTradingStatus,
+  liveTradingLabel,
   signalExecutionStatusLabel,
   signalKindLabel,
   researchFeedState,
@@ -869,8 +870,27 @@ assert.equal(
 
 {
   assert.equal(
+    liveTradingLabel({ live_trading_state: "ENABLED", trading_enabled: false }),
+    "LIVE TRADING AUTHORIZED",
+  );
+  assert.equal(
+    liveTradingLabel({ live_authorization: "EXECUTION_BLOCKED" }),
+    "EXECUTION BLOCKED",
+  );
+}
+
+{
+  assert.equal(
     signalExecutionStatusLabel({ execution_status: "LIVE_ELIGIBLE" }),
-    "LIVE_ELIGIBLE",
+    "WAITING FOR EXECUTION",
+  );
+  assert.equal(
+    signalExecutionStatusLabel({ execution_status: "RISK_BLOCKED" }),
+    "RISK BLOCKED",
+  );
+  assert.equal(
+    signalExecutionStatusLabel({ execution_status: "EXECUTION_BLOCKED" }),
+    "EXECUTION BLOCKED",
   );
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "ORDER_SUBMITTED" }),
@@ -878,7 +898,7 @@ assert.equal(
   );
   assert.equal(
     signalExecutionStatusLabel({ execution_status: "FILLED" }),
-    "RESEARCH_ONLY",
+    "FILLED",
   );
   assert.equal(signalKindLabel({ kind: "LIVE_OPPORTUNITY" }), "LIVE OPPORTUNITY");
   assert.equal(signalKindLabel({ kind: "RESEARCH_SIGNAL" }), "RESEARCH SIGNAL");

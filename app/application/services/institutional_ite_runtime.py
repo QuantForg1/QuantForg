@@ -213,6 +213,7 @@ class InstitutionalIteRuntime:
     _cycles: int = 0
     _started_mono: float = field(default_factory=time.monotonic, repr=False)
     _last_cycle_finished_mono: float = field(default=0.0, repr=False)
+    _cycle_started_mono: float = field(default=0.0, repr=False)
     _last_successful_cycle_mono: float = field(default=0.0, repr=False)
     _last_successful_cycle_at: str | None = field(default=None, repr=False)
     _last_cycle_at: str | None = field(default=None, repr=False)
@@ -243,6 +244,7 @@ class InstitutionalIteRuntime:
         wall = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         with self._lock:
             self._last_cycle_finished_mono = now
+            self._cycle_started_mono = 0.0
             self._last_cycle_at = wall
             if successful:
                 self._last_successful_cycle_mono = now
@@ -265,6 +267,7 @@ class InstitutionalIteRuntime:
                 interval_seconds=self.interval_seconds,
                 started_mono=self._started_mono,
                 running=not self._stop.is_set(),
+                cycle_started_mono=self._cycle_started_mono,
             )
             if stalled:
                 self._recovery_orders_blocked = True
@@ -4448,6 +4451,8 @@ class InstitutionalIteRuntime:
             watchdog_restarts = self._watchdog_restarts
             watchdog_state = self._watchdog_state
             started_mono = self._started_mono
+            cycle_started = self._cycle_started_mono
+            daily_loss_latched = bool(self.plane.daily_loss_exceeded)
         settings = get_settings()
         gold = {}
         try:
@@ -4474,8 +4479,9 @@ class InstitutionalIteRuntime:
             last_cycle_finished_mono=last_finished,
             now_mono=time.monotonic(),
             interval_seconds=self.interval_seconds,
-            started_mono=self._started_mono,
+            started_mono=started_mono,
             running=not self._stop.is_set(),
+            cycle_started_mono=cycle_started,
         )
         halt_kind = HaltKind.NONE
         try:
@@ -4502,6 +4508,39 @@ class InstitutionalIteRuntime:
             broker_session_open=broker_open,
         )
         blocker, blocker_stage = last_blocker_from_cycle(last)
+        diag = (
+            getattr(last, "market_context_diagnostics", None)
+            if last is not None
+            else None
+        )
+        if not isinstance(diag, dict):
+            diag = {}
+        last_error = (
+            getattr(last, "detail", None)
+            if last is not None
+            and str(getattr(last, "cycle_outcome", "") or "") == "error"
+            else None
+        ) or last_failure
+        if stalled:
+            recovery_state = "STALLED"
+        elif recovering:
+            recovery_state = "BLOCKED_NEW_ENTRIES"
+        else:
+            recovery_state = "CLEAR"
+        if daily_loss_latched:
+            risk_state = "DAILY_LOSS_EXCEEDED"
+        elif last is None:
+            risk_state = "UNKNOWN"
+        elif str(getattr(last, "cycle_outcome", "") or "") == "safety_blocked":
+            risk_state = "BLOCKED"
+        elif diag.get("daily_pnl_fail_closed") is True or (
+            diag.get("daily_pnl_trusted") is False
+        ):
+            risk_state = "UNAVAILABLE"
+        elif diag.get("daily_pnl_trusted") is True:
+            risk_state = "EVALUATED"
+        else:
+            risk_state = "UNKNOWN"
         payload = {
             "mode": self.plane.mode.value,
             "kill_switch": self.plane.kill_switch_armed,
@@ -4551,12 +4590,21 @@ class InstitutionalIteRuntime:
             "last_successful_cycle_at": last_ok_at,
             "last_blocker": blocker,
             "last_blocker_stage": blocker_stage,
-            "last_error": (
-                getattr(last, "detail", None)
-                if last is not None
-                and str(getattr(last, "cycle_outcome", "") or "") == "error"
-                else None
+            "last_error": last_error,
+            "recovery_state": recovery_state,
+            "risk_state": risk_state,
+            "daily_pnl_status": (
+                "UNAVAILABLE"
+                if diag.get("daily_pnl_fail_closed") is True
+                or diag.get("daily_pnl_trusted") is False
+                else (
+                    "TRUSTED"
+                    if diag.get("daily_pnl_trusted") is True
+                    else None
+                )
             ),
+            "capital_baseline": diag.get("capital_baseline"),
+            "deposit_verification": diag.get("deposit_verification"),
             "cycle_id": cycles,
             "cycle_start": self._cycle_started_at,
             "cycle_end": last_at,
@@ -4576,7 +4624,7 @@ class InstitutionalIteRuntime:
                 "UNAVAILABLE"
                 if last is not None
                 and str(getattr(last, "abort_reason", "") or "")
-                in {"NO_MARKET_CONTEXT", "CYCLE_EXCEPTION"}
+                in {"NO_MARKET_CONTEXT", "CYCLE_EXCEPTION", "CYCLE_TIMEOUT"}
                 else ("UNKNOWN" if last is None else "READY")
             ),
             "next_cycle_at": last_at,
@@ -4595,13 +4643,7 @@ class InstitutionalIteRuntime:
                 else round(time.monotonic() - started_mono, 3)
             ),
             "last_successful_cycle": last_ok_at,
-            "last_failure": last_failure
-            or (
-                getattr(last, "detail", None)
-                if last is not None
-                and str(getattr(last, "cycle_outcome", "") or "") == "error"
-                else None
-            ),
+            "last_failure": last_error,
             "scanner_unhealthy": bool(stalled),
             "new_entries_blocked_for_recovery": bool(recovering or stalled),
         }
@@ -5666,27 +5708,33 @@ class InstitutionalIteRuntime:
             )
             if self.plane.mode is OpsExecutionMode.SHADOW:
                 t_cycle = time.perf_counter()
-                cycle = await self._offload_blocking_io(
-                    self.run_shadow_cycle,
-                    snapshot=ctx.snapshot,
-                    account=ctx.account,
-                    market_context_diagnostics=dict(ctx.diagnostics),
+                cycle = await self._await_cycle_budget(
+                    self._offload_blocking_io(
+                        self.run_shadow_cycle,
+                        snapshot=ctx.snapshot,
+                        account=ctx.account,
+                        market_context_diagnostics=dict(ctx.diagnostics),
+                    ),
+                    what="run_shadow_cycle",
                 )
             else:
                 t_cycle = time.perf_counter()
-                cycle = await self._offload_blocking_io(
-                    self.run_auto_cycle,
-                    snapshot=ctx.snapshot,
-                    account=ctx.account,
-                    gateway_connected=True,
-                    broker_connected=True,
-                    market_data_live=mkt_ok,
-                    account_trading_enabled=acct_ok,
-                    mt5_autotrading_enabled=mt5_at,
-                    symbol_tradable=sym_ok,
-                    no_broker_restrictions=no_restr,
-                    risk_allowed=True,
-                    market_context_diagnostics=dict(ctx.diagnostics),
+                cycle = await self._await_cycle_budget(
+                    self._offload_blocking_io(
+                        self.run_auto_cycle,
+                        snapshot=ctx.snapshot,
+                        account=ctx.account,
+                        gateway_connected=True,
+                        broker_connected=True,
+                        market_data_live=mkt_ok,
+                        account_trading_enabled=acct_ok,
+                        mt5_autotrading_enabled=mt5_at,
+                        symbol_tradable=sym_ok,
+                        no_broker_restrictions=no_restr,
+                        risk_allowed=True,
+                        market_context_diagnostics=dict(ctx.diagnostics),
+                    ),
+                    what="run_auto_cycle",
                 )
             stage_timings_ms["decision_safety_risk_oms_ms"] = round(
                 (time.perf_counter() - t_cycle) * 1000.0, 1
@@ -5805,9 +5853,50 @@ class InstitutionalIteRuntime:
 
         return await offload_blocking(fn, *args, **kwargs)
 
+    async def _await_cycle_budget(self, awaitable: Any, *, what: str) -> Any:
+        """Bound one cycle step so a hung Gateway/scan cannot freeze the loop."""
+        from app.domain.institutional_trading.operations.worker_runtime_state import (
+            cycle_hard_timeout_seconds,
+        )
+
+        started = self._cycle_started_mono or time.monotonic()
+        timeout = cycle_hard_timeout_seconds(self.interval_seconds)
+        remaining = timeout - (time.monotonic() - started)
+        if remaining <= 0:
+            raise TimeoutError(f"cycle_budget_exhausted:{what}")
+        return await asyncio.wait_for(awaitable, timeout=remaining)
+
+    async def watch_orchestrator_task(
+        self,
+        orch: asyncio.Task[Any],
+        *,
+        poll_seconds: float = 5.0,
+    ) -> str:
+        """Poll the existing run_forever task. Does not start a second loop.
+
+        Returns ``done`` when the task finishes, ``hung`` when the scheduler
+        is stalled so the watchdog can cancel and restart it.
+        """
+        poll = max(0.05, float(poll_seconds or 5.0))
+        while not orch.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(orch), timeout=poll)
+            except TimeoutError:
+                stalled = False
+                try:
+                    stalled = bool(self.note_scheduler_stalled())
+                except Exception:
+                    logger.exception("ite_watchdog_stall_check_failed")
+                if stalled:
+                    return "hung"
+        return "done"
+
     async def run_forever(self) -> None:
         """Background loop — live market context → Decision→Risk→Safety→OMS."""
         import os
+
+        self._started_mono = time.monotonic()
+        self._cycle_started_mono = 0.0
 
         # Continuous production cadence (default 5s). Override via ITE_CYCLE_INTERVAL_SECONDS.  # noqa: E501
         try:
@@ -5836,7 +5925,6 @@ class InstitutionalIteRuntime:
             mode=self.plane.mode.value,
             run_state=self.plane.auto_trading_run_state,
         )
-        self._started_mono = time.monotonic()
         logger.info(
             "ite_orchestrator_started",
             interval_seconds=self.interval_seconds,
@@ -5870,6 +5958,7 @@ class InstitutionalIteRuntime:
             logger.exception("continuous_ops_startup_resume_failed")
         while not self._stop.is_set():
             cycle_t0 = time.perf_counter()
+            self._cycle_started_mono = time.monotonic()
             self._cycle_started_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             _pvm_vid = None
             _pvm_token = None
@@ -5928,7 +6017,10 @@ class InstitutionalIteRuntime:
                     logger.exception("pvm_scheduler_stage_failed")
 
                 t_pick = time.perf_counter()
-                symbol = await self._pick_executable_symbol_async()
+                symbol = await self._await_cycle_budget(
+                    self._pick_executable_symbol_async(),
+                    what="pick_executable_symbol",
+                )
                 pick_ms = round((time.perf_counter() - t_pick) * 1000.0, 1)
                 manage_only = False
                 if not symbol:
@@ -5951,10 +6043,22 @@ class InstitutionalIteRuntime:
                         context_symbol=symbol,
                     )
                 logger.warning("Scanning Symbols", symbol=symbol)
-                ctx = await build_ite_cycle_market_context(
-                    self.mt5_adapter,
-                    symbol=symbol,
-                    position_engine=self.position_management.engine,
+                if self._recovery_orders_blocked:
+                    try:
+                        from app.application.services.ite_cycle_market_context import (
+                            refresh_execution_gateway_reads,
+                        )
+
+                        refresh_execution_gateway_reads(self.mt5_adapter)
+                    except Exception:
+                        logger.exception("recovery_fresh_history_failed")
+                ctx = await self._await_cycle_budget(
+                    build_ite_cycle_market_context(
+                        self.mt5_adapter,
+                        symbol=symbol,
+                        position_engine=self.position_management.engine,
+                    ),
+                    what="build_ite_cycle_market_context",
                 )
                 try:
                     with self._lock:
@@ -6222,26 +6326,32 @@ class InstitutionalIteRuntime:
                         key="no_broker_restrictions",
                     )
                     if self.plane.mode is OpsExecutionMode.SHADOW:
-                        await self._offload_blocking_io(
-                            self.run_shadow_cycle,
-                            snapshot=ctx.snapshot,
-                            account=ctx.account,
-                            market_context_diagnostics=dict(ctx.diagnostics),
+                        await self._await_cycle_budget(
+                            self._offload_blocking_io(
+                                self.run_shadow_cycle,
+                                snapshot=ctx.snapshot,
+                                account=ctx.account,
+                                market_context_diagnostics=dict(ctx.diagnostics),
+                            ),
+                            what="run_shadow_cycle",
                         )
                     else:
-                        await self._offload_blocking_io(
-                            self.run_auto_cycle,
-                            snapshot=ctx.snapshot,
-                            account=ctx.account,
-                            gateway_connected=True,
-                            broker_connected=True,
-                            market_data_live=mkt_ok,
-                            account_trading_enabled=acct_ok,
-                            mt5_autotrading_enabled=mt5_at,
-                            symbol_tradable=sym_ok,
-                            no_broker_restrictions=no_restr,
-                            risk_allowed=True,
-                            market_context_diagnostics=dict(ctx.diagnostics),
+                        await self._await_cycle_budget(
+                            self._offload_blocking_io(
+                                self.run_auto_cycle,
+                                snapshot=ctx.snapshot,
+                                account=ctx.account,
+                                gateway_connected=True,
+                                broker_connected=True,
+                                market_data_live=mkt_ok,
+                                account_trading_enabled=acct_ok,
+                                mt5_autotrading_enabled=mt5_at,
+                                symbol_tradable=sym_ok,
+                                no_broker_restrictions=no_restr,
+                                risk_allowed=True,
+                                market_context_diagnostics=dict(ctx.diagnostics),
+                            ),
+                            what="run_auto_cycle",
                         )
                     with self._lock:
                         if self._last_cycle is not None:
@@ -6313,6 +6423,42 @@ class InstitutionalIteRuntime:
                         abort=getattr(last, "abort_reason", None),
                         forwarded_to_oms=getattr(last, "forwarded_to_oms", False),
                     )
+            except TimeoutError as exc:
+                logger.warning(
+                    "ite_orchestrator_cycle_timeout",
+                    error=str(exc),
+                    run_state=self.plane.auto_trading_run_state,
+                )
+                with self._lock:
+                    self._last_cycle = ShadowCycleResult(
+                        ok=False,
+                        trace_id=None,
+                        mode=self.plane.mode.value,
+                        detail=f"cycle timeout: {exc}",
+                        cycle_outcome="error",
+                        abort_reason="CYCLE_TIMEOUT",
+                    )
+                    self._cycles += 1
+                    self._last_failure = "CYCLE_TIMEOUT"
+                self._clear_ephemeral_cycle_state()
+                try:
+                    from app.application.services.cycle_evidence import (
+                        record_cycle_evidence,
+                    )
+
+                    record_cycle_evidence(
+                        cycle_outcome="error",
+                        decision_action="NO_TRADE",
+                        reasons=[f"cycle timeout: {exc}"],
+                        abort_reason="CYCLE_TIMEOUT",
+                    )
+                except Exception:
+                    logger.exception("cycle_evidence_timeout_record_failed")
+                logger.warning(
+                    "Autonomous engine continuing after cycle timeout",
+                    error=str(exc),
+                    run_state=self.plane.auto_trading_run_state,
+                )
             except Exception as exc:
                 logger.exception("ite_orchestrator_cycle_failed", error=str(exc))
                 with self._lock:

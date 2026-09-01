@@ -140,7 +140,19 @@ def test_risk_or_oms_block_is_execution_blocked() -> None:
         orders_ok=True,
         research_focus=["EURUSD"],
     )
-    assert blocked == "EXECUTION_BLOCKED"
+    assert blocked == "RISK_BLOCKED"
+
+
+@pytest.mark.unit
+@pytest.mark.trading_core
+def test_enabled_without_submit_flag_is_execution_blocked_not_unauthorized() -> None:
+    status = signal_execution_status(
+        {"symbol": "EURUSD", "direction": "BUY"},
+        live_state="ENABLED",
+        orders_ok=False,
+        research_focus=["EURUSD"],
+    )
+    assert status == "EXECUTION_BLOCKED"
 
 
 @pytest.mark.unit

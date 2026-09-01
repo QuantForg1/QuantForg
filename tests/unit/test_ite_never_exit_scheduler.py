@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -108,7 +109,12 @@ async def _drive(
     _stop_after(rt, cycles)
 
     async def _pick() -> str | None:
-        return pick() if callable(pick) else pick
+        if callable(pick):
+            got = pick()
+            if inspect.isawaitable(got):
+                return await got
+            return got
+        return pick
 
     rt._pick_executable_symbol_async = _pick  # type: ignore[method-assign]
     rt._sync_and_manage_open_positions = MagicMock()
@@ -447,7 +453,7 @@ async def test_watchdog_restarts_then_stops_without_crash_loop() -> None:
             await rt.run_forever()
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         if rt._stop.is_set():
             break
@@ -560,3 +566,47 @@ def test_observability_fields_present_on_status_shape() -> None:
         "watchdog_state",
     }
     assert required.issubset(payload)
+
+
+@pytest.mark.asyncio
+async def test_hung_pick_times_out_and_loop_continues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rt = _runtime()
+    hits = {"n": 0}
+
+    async def _pick() -> str | None:
+        hits["n"] += 1
+        if hits["n"] == 1:
+            await asyncio.Event().wait()
+        return "XAUUSD_i"
+
+    monkeypatch.setattr(
+        "app.domain.institutional_trading.operations.worker_runtime_state.cycle_hard_timeout_seconds",
+        lambda _interval: 0.05,
+    )
+    await _drive(rt, cycles=2, pick=_pick, context=_ok_ctx())
+    assert hits["n"] >= 2
+    assert rt._cycles >= 2
+    assert rt._last_cycle is not None
+    assert rt._last_cycle_finished_mono > 0
+    rt.guarded_submit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_watchdog_reports_hung_orchestrator() -> None:
+    rt = _runtime()
+    rt._started_mono = time.monotonic() - 400
+    rt._cycle_started_mono = 0.0
+    rt._last_cycle_finished_mono = 0.0
+
+    async def _hang() -> None:
+        await asyncio.sleep(30)
+
+    orch = asyncio.create_task(_hang())
+    outcome = await rt.watch_orchestrator_task(orch, poll_seconds=0.05)
+    assert outcome == "hung"
+    orch.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await orch
+    assert rt._recovery_orders_blocked is True

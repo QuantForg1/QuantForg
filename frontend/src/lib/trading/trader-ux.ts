@@ -612,14 +612,20 @@ export function signalExecutionStatusLabel(row: Record<string, unknown>): string
   const raw = String(row.execution_status || "")
     .trim()
     .toUpperCase();
+  if (raw === "LIVE_ELIGIBLE" || raw === "WAITING_FOR_EXECUTION") {
+    return "WAITING FOR EXECUTION";
+  }
+  if (raw === "RISK_BLOCKED") return "RISK BLOCKED";
+  if (raw === "EXECUTION_BLOCKED") return "EXECUTION BLOCKED";
+  if (raw === "LIVE_TRADING_AUTHORIZED") return "LIVE TRADING AUTHORIZED";
   const allowed = new Set([
     "RESEARCH_ONLY",
     "READY_FOR_REVIEW",
-    "LIVE_ELIGIBLE",
-    "EXECUTION_BLOCKED",
     "ORDER_SUBMITTED",
     "POSITION_OPEN",
     "EXPIRED",
+    "FILLED",
+    "NO_ORDER",
   ]);
   if (allowed.has(raw)) return raw;
   return "RESEARCH_ONLY";
@@ -1241,7 +1247,19 @@ export function latencyLabel(ms: number | null | undefined): string {
 
 /** Live trading robot is separate from research analysis — never conflate. */
 export function liveTradingLabel(session: Record<string, unknown>): string {
-  const trading = session.trading_enabled === true || session.execution_permitted === true;
+  const state = String(
+    session.live_trading_state || session.liveTradingState || "",
+  )
+    .trim()
+    .toUpperCase();
+  if (state === "ENABLED" || state === "LIVE_ENABLED") {
+    return "LIVE TRADING AUTHORIZED";
+  }
+  const auth = String(session.live_authorization || "").trim().toUpperCase();
+  if (auth === "LIVE_ENABLED") return "LIVE TRADING AUTHORIZED";
+  if (auth === "EXECUTION_BLOCKED") return "EXECUTION BLOCKED";
+  const trading =
+    session.trading_enabled === true || session.execution_permitted === true;
   if (trading) return "LIVE TRADING AUTHORIZED";
   return "LIVE TRADING OFF";
 }

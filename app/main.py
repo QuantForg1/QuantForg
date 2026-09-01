@@ -449,12 +449,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             if runtime is not None:
 
                 async def _ite_watchdog() -> None:
-                    """Restart ITE loop if it exits unexpectedly (never leave AUTO dead)."""  # noqa: E501
+                    """Restart ITE loop if it exits or hangs (never leave AUTO dead)."""
                     restarts = 0
-                    try:
+                    orch: asyncio.Task[Any] | None = None
+                    with contextlib.suppress(Exception):
                         runtime._watchdog_state = "RUNNING"
-                    except Exception:
-                        pass
                     while True:
                         try:
                             logger.warning(
@@ -466,41 +465,85 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                                 ),
                                 restarts=restarts,
                             )
-                            try:
+                            with contextlib.suppress(Exception):
                                 runtime._watchdog_state = "RUNNING"
-                            except Exception:
-                                pass
-                            await runtime.run_forever()
+                                runtime._started_mono = time.monotonic()
+                                runtime._cycle_started_mono = 0.0
+                            orch = asyncio.create_task(
+                                runtime.run_forever(), name="ite-orchestrator"
+                            )
+                            watch = getattr(runtime, "watch_orchestrator_task", None)
+                            if callable(watch):
+                                outcome = await watch(orch)
+                            else:
+                                await orch
+                                outcome = "done"
+                            if outcome == "hung":
+                                logger.error(
+                                    "ite_watchdog_hung_cycle_cancel",
+                                    cycles=getattr(runtime, "_cycles", None),
+                                )
+                                orch.cancel()
+                                with contextlib.suppress(asyncio.CancelledError):
+                                    await orch
+                                restarts += 1
+                                with contextlib.suppress(Exception):
+                                    runtime._watchdog_restarts = restarts
+                                    runtime._watchdog_state = "BACKOFF"
+                                    runtime._watchdog_restart_reason = (
+                                        "hung_cycle_cancelled"
+                                    )
+                                    runtime._cycle_started_mono = 0.0
+                                    runtime._started_mono = time.monotonic()
+                                delay = min(30.0, 2.0 * (2 ** min(restarts - 1, 4)))
+                                logger.error(
+                                    "ite_watchdog_restarting",
+                                    detail=(
+                                        "scheduler hung - "
+                                        f"restarting in {delay:.0f}s (no order_send)"
+                                    ),
+                                    delay_seconds=delay,
+                                    restarts=restarts,
+                                )
+                                await asyncio.sleep(delay)
+                                continue
+                            if not orch.cancelled():
+                                exc = orch.exception()
+                                if exc is not None:
+                                    raise exc
                         except asyncio.CancelledError:
-                            try:
+                            if orch is not None and not orch.done():
+                                orch.cancel()
+                                with contextlib.suppress(asyncio.CancelledError):
+                                    await orch
+                            with contextlib.suppress(Exception):
                                 runtime._watchdog_state = "CANCELLED"
-                            except Exception:
-                                pass
                             raise
                         except Exception as exc:
                             logger.exception(
                                 "ite_watchdog_orchestrator_crashed",
                                 error=str(exc),
                             )
+                            with contextlib.suppress(Exception):
+                                runtime._watchdog_restart_reason = (
+                                    f"{type(exc).__name__}: orchestrator_crashed"
+                                )
                         if (
                             getattr(runtime, "_stop", None) is not None
                             and runtime._stop.is_set()
                         ):
                             logger.info("ite_watchdog_stop_requested")
-                            try:
+                            with contextlib.suppress(Exception):
                                 runtime._watchdog_state = "STOPPED"
-                            except Exception:
-                                pass
                             break
                         restarts += 1
-                        try:
+                        with contextlib.suppress(Exception):
                             runtime._watchdog_restarts = restarts
                             runtime._watchdog_state = "BACKOFF"
-                            runtime._watchdog_restart_reason = (
-                                f"{type(exc).__name__}: orchestrator_crashed"
-                            )
-                        except Exception:
-                            pass
+                            if not getattr(runtime, "_watchdog_restart_reason", None):
+                                runtime._watchdog_restart_reason = (
+                                    "orchestrator_exited"
+                                )
                         delay = min(30.0, 2.0 * (2 ** min(restarts - 1, 4)))
                         try:
                             note = getattr(runtime, "note_scheduler_stalled", None)
