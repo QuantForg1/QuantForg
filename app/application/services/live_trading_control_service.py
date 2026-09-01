@@ -452,10 +452,26 @@ def _overlay_ite_worker_status(out: dict[str, Any]) -> None:
             out[key] = st[key]
     last = st.get("last_cycle") if isinstance(st.get("last_cycle"), dict) else {}
     if last:
-        out.setdefault(
-            "execution_status",
-            last.get("cycle_outcome") or last.get("abort_reason"),
-        )
+        exec_status = last.get("execution_status") or st.get("execution_status")
+        if exec_status:
+            out["execution_status"] = exec_status
+        else:
+            out.setdefault(
+                "execution_status",
+                last.get("cycle_outcome") or last.get("abort_reason"),
+            )
+        if last.get("tradeability"):
+            out["tradeability"] = last.get("tradeability")
+        if last.get("tradeability_reason"):
+            out["tradeability_reason"] = last.get("tradeability_reason")
+        if last.get("strategy_signal"):
+            out["strategy_signal"] = last.get("strategy_signal")
+        if last.get("estimated_risk_at_min_lot") is not None:
+            out["estimated_risk_at_min_lot"] = last.get("estimated_risk_at_min_lot")
+        if last.get("maximum_tradeable_stop_distance") is not None:
+            out["maximum_tradeable_stop_distance"] = last.get(
+                "maximum_tradeable_stop_distance"
+            )
         ticket = (
             last.get("mt5_ticket")
             or last.get("broker_ticket")
@@ -465,7 +481,12 @@ def _overlay_ite_worker_status(out: dict[str, Any]) -> None:
             out["broker_ticket"] = ticket
         else:
             out.setdefault("broker_ticket", None)
+            out.setdefault(
+                "execution_result",
+                last.get("execution_result") or "NO BROKER ORDER WAS SUBMITTED",
+            )
         out.setdefault("last_order_attempt", last.get("last_order_attempt"))
+        out.setdefault("order_attempt", last.get("order_attempt"))
 
 
 def _research_block() -> dict[str, Any]:

@@ -461,3 +461,193 @@ def normalize_lots_against_broker(
         needed_pct=needed,
         hard_max_risk_pct=hard,
     )
+
+
+TRADEABLE = "TRADEABLE"
+NOT_TRADEABLE = "NOT_TRADEABLE"
+
+EXEC_TRADEABLE = "TRADEABLE"
+EXEC_NOT_TRADEABLE = "NOT_TRADEABLE"
+EXEC_RISK_BLOCKED = "RISK_BLOCKED"
+EXEC_WAITING_FOR_SETUP = "WAITING_FOR_SETUP"
+EXEC_EXECUTING = "EXECUTING"
+EXEC_EXECUTED = "EXECUTED"
+EXEC_EXECUTION_FAILED = "EXECUTION_FAILED"
+
+_HARD_BLOCK_ABORTS = frozenset(
+    {
+        "DAILY_LOSS_BLOCK",
+        "DAILY_LOSS_EXCEEDED",
+        "SAFETY_BLOCKED",
+        "KILL_SWITCH",
+        "HALTED_BY_RISK",
+    }
+)
+_FAIL_ABORTS = frozenset(
+    {
+        "OMS_NOT_READY",
+        "GATEWAY_UNAVAILABLE",
+        "MT5_UNAVAILABLE",
+        "CYCLE_TIMEOUT",
+        "CYCLE_EXCEPTION",
+        "NO_MARKET_CONTEXT",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SetupTradeability:
+    """Pre-submit: can broker min lot fit the existing hard risk ceiling?"""
+
+    tradeability: str
+    tradeability_reason: str
+    estimated_risk_at_min_lot: Decimal | None
+    maximum_tradeable_stop_distance: Decimal | None
+    stop_distance: Decimal | None
+    risk_budget: Decimal | None
+    equity: Decimal | None
+    broker_min_lot: Decimal | None
+    broker_lot_step: Decimal | None
+    broker_max_lot: Decimal | None
+    feasibility: MinLotFeasibilityResult
+
+    def to_observability(self) -> dict[str, Any]:
+        return {
+            "tradeability": self.tradeability,
+            "tradeability_reason": self.tradeability_reason,
+            "estimated_risk_at_min_lot": (
+                str(self.estimated_risk_at_min_lot)
+                if self.estimated_risk_at_min_lot is not None
+                else None
+            ),
+            "maximum_tradeable_stop_distance": (
+                str(self.maximum_tradeable_stop_distance)
+                if self.maximum_tradeable_stop_distance is not None
+                else None
+            ),
+            "stop_distance": (
+                str(self.stop_distance) if self.stop_distance is not None else None
+            ),
+            "risk_budget": (
+                str(self.risk_budget) if self.risk_budget is not None else None
+            ),
+            "equity": str(self.equity) if self.equity is not None else None,
+            "broker_min_lot": (
+                str(self.broker_min_lot) if self.broker_min_lot is not None else None
+            ),
+            "broker_lot_step": (
+                str(self.broker_lot_step) if self.broker_lot_step is not None else None
+            ),
+            "broker_max_lot": (
+                str(self.broker_max_lot) if self.broker_max_lot is not None else None
+            ),
+        }
+
+
+def evaluate_setup_tradeability(
+    *,
+    stop_distance: Any,
+    equity: Any,
+    min_lot: Any = None,
+    lot_step: Any = None,
+    max_lot: Any = None,
+    contract_size: Any = None,
+    hard_max_risk_pct: Any = None,
+    tick_size: Any = None,
+    tick_value: Any = None,
+) -> SetupTradeability:
+    """Can the smallest broker-valid lot open inside the existing 5% ceiling?
+
+    Does not move the stop. Infeasible setups return NOT_TRADEABLE and the
+    caller must continue scanning — never force min lot.
+    """
+    feas = evaluate_min_lot_feasibility(
+        stop_distance=stop_distance,
+        equity=equity,
+        min_lot=min_lot,
+        contract_size=contract_size,
+        hard_max_risk_pct=hard_max_risk_pct,
+    )
+    lot = feas.min_lot
+    step = _dec(lot_step)
+    mx = _dec(max_lot)
+    est: Decimal | None = None
+    if (
+        feas.stop_distance is not None
+        and feas.stop_distance > 0
+        and lot is not None
+        and lot > 0
+        and feas.contract_size is not None
+        and feas.contract_size > 0
+    ):
+        est = lot_dollar_risk(
+            lot,
+            stop_distance=feas.stop_distance,
+            contract_size=feas.contract_size,
+            tick_size=_dec(tick_size),
+            tick_value=_dec(tick_value),
+        )
+    budget: Decimal | None = None
+    if feas.equity is not None and feas.equity > 0 and feas.hard_max_risk_pct > 0:
+        budget = (feas.equity * feas.hard_max_risk_pct / _PCT).quantize(_CENTS)
+
+    if feas.classification == CLASS_INSUFFICIENT:
+        status = NOT_TRADEABLE
+        reason = CLASS_INSUFFICIENT
+    elif feas.infeasible:
+        status = NOT_TRADEABLE
+        reason = CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
+    else:
+        status = TRADEABLE
+        reason = CLASS_FEASIBLE
+
+    return SetupTradeability(
+        tradeability=status,
+        tradeability_reason=reason,
+        estimated_risk_at_min_lot=est,
+        maximum_tradeable_stop_distance=feas.max_allowed_stop,
+        stop_distance=feas.stop_distance,
+        risk_budget=budget,
+        equity=feas.equity,
+        broker_min_lot=lot,
+        broker_lot_step=step,
+        broker_max_lot=mx,
+        feasibility=feas,
+    )
+
+
+def _has_broker_ticket(ticket: Any) -> bool:
+    return ticket not in (None, "", 0, "0", "None")
+
+
+def classify_cycle_execution_status(
+    *,
+    abort_reason: str | None = None,
+    cycle_outcome: str | None = None,
+    forwarded_to_oms: bool = False,
+    mt5_ticket: Any = None,
+    kill_switch: bool = False,
+    tradeability: str | None = None,
+) -> str:
+    """Truthful cycle status. LIVE / running is never proof of a fill."""
+    if _has_broker_ticket(mt5_ticket):
+        return EXEC_EXECUTED
+    abort = str(abort_reason or "").upper()
+    outcome = str(cycle_outcome or "").lower()
+    if kill_switch or abort in _HARD_BLOCK_ABORTS or "KILL" in abort:
+        return EXEC_RISK_BLOCKED
+    if "DAILY_LOSS" in abort:
+        return EXEC_RISK_BLOCKED
+    if forwarded_to_oms and not _has_broker_ticket(mt5_ticket):
+        return EXEC_EXECUTION_FAILED
+    if outcome == "error" or abort in _FAIL_ABORTS:
+        return EXEC_EXECUTION_FAILED
+    if abort == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET or "MIN_LOT" in abort:
+        return EXEC_WAITING_FOR_SETUP
+    if tradeability == NOT_TRADEABLE:
+        return EXEC_WAITING_FOR_SETUP
+    if tradeability == TRADEABLE:
+        return EXEC_TRADEABLE
+    if outcome in {"waiting_next_cycle", "execution_contract", "no_snapshot"}:
+        return EXEC_WAITING_FOR_SETUP
+    return EXEC_WAITING_FOR_SETUP

@@ -312,3 +312,330 @@ def test_institutional_equity_never_upsizes_to_min_lot() -> None:
     assert out.normalized_lot == Decimal("0")
     assert out.block_reason == CODE_MIN_LOT_CONSTRAINT
     assert out.approved is False
+
+
+def test_calculated_lot_0_001_normalizes_to_broker_min_when_budget_allows() -> None:
+    out = _norm(calculated_lot=Decimal("0.001"), stop_distance=Decimal("4.00"))
+    assert out.normalized_lot == _MIN
+    assert out.broker_min_lot == Decimal("0.01")
+    assert out.sizing_status == STATUS_NORMALIZED_TO_MIN
+    assert out.approved is True
+
+
+def test_setup_tradeability_tight_stop_is_tradeable() -> None:
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        TRADEABLE,
+        evaluate_setup_tradeability,
+    )
+
+    out = evaluate_setup_tradeability(
+        stop_distance=Decimal("4.00"),
+        equity=_EQUITY,
+        min_lot=_MIN,
+        lot_step=_STEP,
+        max_lot=_MAX,
+        contract_size=_CS,
+    )
+    assert out.tradeability == TRADEABLE
+    assert out.feasibility.infeasible is False
+    assert out.estimated_risk_at_min_lot == Decimal("4.00")
+    assert out.maximum_tradeable_stop_distance == Decimal("8.10")
+    assert out.feasibility.stop_changed is False
+
+
+def test_setup_tradeability_wide_stop_is_not_tradeable() -> None:
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+        NOT_TRADEABLE,
+        evaluate_setup_tradeability,
+    )
+
+    out = evaluate_setup_tradeability(
+        stop_distance=Decimal("13.14"),
+        equity=_EQUITY,
+        min_lot=_MIN,
+        lot_step=_STEP,
+        max_lot=_MAX,
+        contract_size=_CS,
+    )
+    assert out.tradeability == NOT_TRADEABLE
+    assert out.tradeability_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
+    assert out.estimated_risk_at_min_lot == Decimal("13.14")
+    assert out.maximum_tradeable_stop_distance == Decimal("8.10")
+    assert out.feasibility.stop_changed is False
+    assert out.stop_distance == Decimal("13.14")
+
+
+def test_small_account_vs_larger_account_tradeability() -> None:
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        NOT_TRADEABLE,
+        TRADEABLE,
+        evaluate_setup_tradeability,
+    )
+
+    stop = Decimal("10.00")
+    small = evaluate_setup_tradeability(
+        stop_distance=stop,
+        equity=Decimal("162.00"),
+        min_lot=_MIN,
+        contract_size=_CS,
+    )
+    large = evaluate_setup_tradeability(
+        stop_distance=stop,
+        equity=Decimal("2000.00"),
+        min_lot=_MIN,
+        contract_size=_CS,
+    )
+    assert small.tradeability == NOT_TRADEABLE
+    assert large.tradeability == TRADEABLE
+    assert large.estimated_risk_at_min_lot == Decimal("10.00")
+
+
+def test_hard_max_risk_pct_stays_five() -> None:
+    from app.domain.institutional_trading.micro_account_mode import MicroAccountProfile
+
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("5.0")
+
+
+def test_kill_switch_blocks_before_oms() -> None:
+    out = evaluate_gold_execution_contract(_ready(kill_switch=True))
+    assert out.may_submit_oms is False
+    assert out.fault_code == "SAFETY_BLOCKED"
+
+
+def test_broker_disconnect_and_mt5_unavailable_block_oms() -> None:
+    gw = evaluate_gold_execution_contract(_ready(gateway_connected=False))
+    assert gw.may_submit_oms is False
+    assert gw.fault_code == "GATEWAY_UNAVAILABLE"
+    mt5 = evaluate_gold_execution_contract(_ready(broker_connected=False))
+    assert mt5.may_submit_oms is False
+    assert mt5.fault_code == "MT5_UNAVAILABLE"
+
+
+def test_mt5_timeout_is_execution_failed_not_a_fill() -> None:
+    from app.application.services.institutional_ite_runtime import ShadowCycleResult
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        EXEC_EXECUTION_FAILED,
+        classify_cycle_execution_status,
+    )
+
+    status = classify_cycle_execution_status(
+        abort_reason="CYCLE_TIMEOUT",
+        cycle_outcome="error",
+        forwarded_to_oms=False,
+        mt5_ticket=None,
+    )
+    assert status == EXEC_EXECUTION_FAILED
+    cycle = ShadowCycleResult(
+        ok=False,
+        trace_id="t",
+        mode="live",
+        cycle_outcome="error",
+        abort_reason="CYCLE_TIMEOUT",
+        forwarded_to_oms=True,
+        mt5_ticket=None,
+    )
+    payload = cycle.to_dict()
+    assert payload["execution_status"] == EXEC_EXECUTION_FAILED
+    assert payload["execution_result"] == "NO BROKER ORDER WAS SUBMITTED"
+    assert payload["broker_ticket"] is None
+
+
+def test_min_lot_rejection_does_not_stop_worker_or_stall_scheduler() -> None:
+    from app.application.services.institutional_ite_runtime import ShadowCycleResult
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+        EXEC_WAITING_FOR_SETUP,
+        classify_cycle_execution_status,
+    )
+    from app.domain.institutional_trading.operations.worker_runtime_state import (
+        RUNNING,
+        derive_scheduler_state,
+        derive_worker_state,
+        last_blocker_from_cycle,
+        scheduler_is_stalled,
+    )
+
+    cycle = ShadowCycleResult(
+        ok=True,
+        trace_id="t",
+        mode="live",
+        decision_action="SELL",
+        forwarded_to_oms=False,
+        cycle_outcome="execution_contract",
+        abort_reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+        mt5_ticket=None,
+        market_context_diagnostics={
+            "tradeability": "NOT_TRADEABLE",
+            "tradeability_reason": CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            "estimated_risk_at_min_lot": "13.14",
+            "maximum_tradeable_stop_distance": "8.10",
+        },
+    )
+    payload = cycle.to_dict()
+    assert payload["execution_status"] == EXEC_WAITING_FOR_SETUP
+    assert payload["tradeability"] == "NOT_TRADEABLE"
+    assert payload["execution_result"] == "NO BROKER ORDER WAS SUBMITTED"
+    assert classify_cycle_execution_status(
+        abort_reason=CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+        cycle_outcome="execution_contract",
+        forwarded_to_oms=False,
+        mt5_ticket=None,
+        tradeability="NOT_TRADEABLE",
+    ) == EXEC_WAITING_FOR_SETUP
+    blocker, stage = last_blocker_from_cycle(cycle)
+    assert blocker == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
+    assert stage == "risk"
+    assert (
+        derive_worker_state(
+            running=True,
+            cycles=12,
+            broker_session_open=True,
+            operator_halt=False,
+            risk_halt=False,
+            recovering=False,
+            degraded=False,
+            last_outcome="execution_contract",
+            stalled=False,
+        )
+        == RUNNING
+    )
+    assert (
+        derive_scheduler_state(
+            running=True,
+            stalled=False,
+            broker_session_open=True,
+        )
+        == RUNNING
+    )
+    now = 1_000_000.0
+    assert (
+        scheduler_is_stalled(
+            last_cycle_finished_mono=now - 5.0,
+            now_mono=now,
+            interval_seconds=5.0,
+            started_mono=now - 600.0,
+            running=True,
+            cycle_started_mono=now - 5.0,
+        )
+        is False
+    )
+    assert (
+        scheduler_is_stalled(
+            last_cycle_finished_mono=now - 4.0,
+            now_mono=now,
+            interval_seconds=5.0,
+            started_mono=now - 3600.0,
+            running=True,
+            cycle_started_mono=0.0,
+        )
+        is False
+    )
+
+
+def test_eligible_tight_setup_reaches_oms_without_fabricating_ticket() -> None:
+    out = evaluate_gold_execution_contract(
+        _ready(
+            symbol="XAUUSD_i",
+            approved_lots=_MIN,
+            min_lot_infeasible=False,
+            risk_eligible=True,
+        )
+    )
+    assert out.may_submit_oms is True
+    assert out.execution_readiness == "EXECUTION_READY"
+    assert out.execute_now_required is False
+
+
+def test_strategy_stop_never_clamped_to_min_lot_max() -> None:
+    from types import SimpleNamespace
+
+    from app.domain.institutional_trading.ai_scalping.structure_targets import (
+        choose_strategy_stop_distance,
+    )
+    from app.domain.institutional_trading.decision_models import TradeDirection
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        evaluate_setup_tradeability,
+        max_allowed_stop_at_min_lot,
+    )
+
+    snap = SimpleNamespace(
+        primary_structure=SimpleNamespace(
+            last_swing_low=None,
+            last_swing_high=Decimal("4600"),
+            swings=(),
+        ),
+        structure_by_tf=None,
+        fair_value_gaps=None,
+        order_blocks=None,
+        liquidity=None,
+    )
+    atr = Decimal("12.00")
+    chosen, source = choose_strategy_stop_distance(
+        snap,  # type: ignore[arg-type]
+        direction=TradeDirection.SELL,
+        entry=Decimal("4380"),
+        atr=atr,
+        stop_atr_mult=Decimal("1.10"),
+    )
+    max_stop = max_allowed_stop_at_min_lot(
+        equity=_EQUITY,
+        hard_max_risk_pct=Decimal("5.0"),
+        min_lot=_MIN,
+        contract_size=_CS,
+    )
+    assert chosen == atr * Decimal("1.10")
+    assert source == "atr_cap" or source == "atr_fallback"
+    assert chosen > max_stop
+    trade = evaluate_setup_tradeability(
+        stop_distance=chosen,
+        equity=_EQUITY,
+        min_lot=_MIN,
+        contract_size=_CS,
+    )
+    assert trade.tradeability == "NOT_TRADEABLE"
+    assert trade.feasibility.stop_changed is False
+
+
+def test_tight_structure_stop_is_tradeable_without_moving_sl() -> None:
+    from types import SimpleNamespace
+
+    from app.domain.institutional_trading.ai_scalping.structure_targets import (
+        choose_strategy_stop_distance,
+    )
+    from app.domain.institutional_trading.decision_models import TradeDirection
+    from app.domain.institutional_trading.operations.min_lot_feasibility import (
+        TRADEABLE,
+        evaluate_setup_tradeability,
+    )
+
+    snap = SimpleNamespace(
+        primary_structure=SimpleNamespace(
+            last_swing_low=None,
+            last_swing_high=Decimal("4384.00"),
+            swings=(),
+        ),
+        structure_by_tf=None,
+        fair_value_gaps=None,
+        order_blocks=None,
+        liquidity=None,
+    )
+    atr = Decimal("12.00")
+    chosen, source = choose_strategy_stop_distance(
+        snap,  # type: ignore[arg-type]
+        direction=TradeDirection.SELL,
+        entry=Decimal("4380.00"),
+        atr=atr,
+        stop_atr_mult=Decimal("1.10"),
+    )
+    assert source == "structure"
+    assert chosen is not None
+    assert chosen < Decimal("8.10")
+    trade = evaluate_setup_tradeability(
+        stop_distance=chosen,
+        equity=_EQUITY,
+        min_lot=_MIN,
+        contract_size=_CS,
+    )
+    assert trade.tradeability == TRADEABLE
+    assert trade.feasibility.stop_changed is False

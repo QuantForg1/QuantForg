@@ -144,6 +144,22 @@ class ShadowCycleResult:
     execution_blocked: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        diag = self.market_context_diagnostics
+        if not isinstance(diag, dict):
+            diag = {}
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            classify_cycle_execution_status,
+        )
+
+        execution_status = classify_cycle_execution_status(
+            abort_reason=self.abort_reason,
+            cycle_outcome=self.cycle_outcome,
+            forwarded_to_oms=self.forwarded_to_oms,
+            mt5_ticket=self.mt5_ticket,
+            tradeability=diag.get("tradeability"),
+        )
+        ticket = self.mt5_ticket
+        no_ticket = ticket in (None, "", 0, "0")
         return {
             "ok": self.ok,
             "trace_id": self.trace_id,
@@ -179,6 +195,21 @@ class ShadowCycleResult:
                     dict,
                 )
                 else None
+            ),
+            "tradeability": diag.get("tradeability"),
+            "tradeability_reason": diag.get("tradeability_reason"),
+            "execution_status": execution_status,
+            "strategy_signal": self.decision_action,
+            "estimated_risk_at_min_lot": diag.get("estimated_risk_at_min_lot"),
+            "maximum_tradeable_stop_distance": diag.get(
+                "maximum_tradeable_stop_distance"
+            ),
+            "broker_ticket": ticket if not no_ticket else None,
+            "order_attempt": bool(self.forwarded_to_oms),
+            "execution_result": (
+                "BROKER_TICKET"
+                if not no_ticket
+                else "NO BROKER ORDER WAS SUBMITTED"
             ),
         }
 
@@ -2785,10 +2816,18 @@ class InstitutionalIteRuntime:
             logger.exception("pvm_decision_stages_failed")
 
         # Enrich diagnostics with live ATR sizing facts (observational only).
-        # Never overwrite the pipeline-sized stop with a swing 1.5× ATR multiple.
+        # Prefer the pipeline-sized stop — never overwrite with a wider ATR
+        # preview that disagrees with Risk / min-lot.
         sizing_diag: dict[str, Any] = dict(market_context_diagnostics or {})
+        feas_pipe = (
+            self.decision_pipeline.last_min_lot_feasibility()
+            if hasattr(self.decision_pipeline, "last_min_lot_feasibility")
+            else None
+        ) or {}
         atr_val = getattr(account, "atr", None)
-        existing_stop = sizing_diag.get("stop_distance")
+        existing_stop = feas_pipe.get("stop_distance") or sizing_diag.get(
+            "stop_distance"
+        )
         entry_atr_raw = sizing_diag.get("entry_atr")
         atr_for_stop = None
         try:
@@ -2842,8 +2881,26 @@ class InstitutionalIteRuntime:
                     else None
                 ),
                 "force_first_trade": forced_override,
+                "strategy_signal": str(
+                    getattr(decision.action, "value", decision.action) or ""
+                ),
             }
         )
+        for key in (
+            "tradeability",
+            "tradeability_reason",
+            "estimated_risk_at_min_lot",
+            "maximum_tradeable_stop_distance",
+            "broker_min_lot",
+            "broker_lot_step",
+            "broker_max_lot",
+        ):
+            if feas_pipe.get(key) not in (None, ""):
+                sizing_diag[key] = feas_pipe[key]
+        if feas_pipe.get("tradeability") == "NOT_TRADEABLE":
+            sizing_diag["execution_status"] = "WAITING_FOR_SETUP"
+        elif feas_pipe.get("tradeability") == "TRADEABLE":
+            sizing_diag["execution_status"] = "TRADEABLE"
         market_context_diagnostics = sizing_diag
 
         self.reliability.traces.span(
@@ -4647,6 +4704,30 @@ class InstitutionalIteRuntime:
             "scanner_unhealthy": bool(stalled),
             "new_entries_blocked_for_recovery": bool(recovering or stalled),
         }
+        last_d = payload.get("last_cycle")
+        if isinstance(last_d, dict):
+            payload["execution_status"] = last_d.get("execution_status")
+            payload["tradeability"] = last_d.get("tradeability") or diag.get(
+                "tradeability"
+            )
+            payload["tradeability_reason"] = last_d.get(
+                "tradeability_reason"
+            ) or diag.get("tradeability_reason")
+            payload["strategy_signal"] = last_d.get("strategy_signal") or last_d.get(
+                "decision_action"
+            )
+            payload["estimated_risk_at_min_lot"] = last_d.get(
+                "estimated_risk_at_min_lot"
+            ) or diag.get("estimated_risk_at_min_lot")
+            payload["maximum_tradeable_stop_distance"] = last_d.get(
+                "maximum_tradeable_stop_distance"
+            ) or diag.get("maximum_tradeable_stop_distance")
+            if last_d.get("mt5_ticket") in (None, "", 0, "0"):
+                payload.setdefault(
+                    "execution_result",
+                    last_d.get("execution_result")
+                    or "NO BROKER ORDER WAS SUBMITTED",
+                )
         try:
             from app.domain.institutional_trading.operations.infrastructure_heartbeats import (
                 RAILWAY_ITE_HEARTBEAT,

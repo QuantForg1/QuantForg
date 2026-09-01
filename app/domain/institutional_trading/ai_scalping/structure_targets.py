@@ -110,6 +110,69 @@ def select_scalp_stop_distance(
     return structure_distance, "structure"
 
 
+def choose_strategy_stop_distance(
+    snapshot: MarketAnalysisSnapshot | None,
+    *,
+    direction: TradeDirection,
+    entry: Decimal | None,
+    atr: Decimal | None,
+    stop_atr_mult: Decimal,
+    ai_stop_distance: Decimal | None = None,
+    config: AiScalpingConfig | None = None,
+) -> tuple[Decimal | None, str]:
+    """Structure-first scalp stop; ATR is a cap/fallback.
+
+    Prefers the tightest already-valid strategy stop (swing / FVG / AI
+    invalidation / ATR x mult). Never clamps to a min-lot max-stop to
+    manufacture eligibility.
+    """
+    cfg = config or DEFAULT_AI_SCALPING_CONFIG
+    if cfg.stop_atr_mult != stop_atr_mult:
+        from dataclasses import replace
+
+        cfg = replace(cfg, stop_atr_mult=stop_atr_mult)
+
+    candidates: list[tuple[Decimal, str]] = []
+    if (
+        snapshot is not None
+        and direction in {TradeDirection.BUY, TradeDirection.SELL}
+        and entry is not None
+        and entry > 0
+    ):
+        targets = compute_structure_targets(
+            snapshot,
+            direction=direction,
+            entry=entry,
+            atr=atr,
+            config=cfg,
+        )
+        if targets.stop_distance is not None and targets.stop_distance > 0:
+            src = targets.stop_source or "structure"
+            candidates.append((targets.stop_distance, src))
+
+    if ai_stop_distance is not None and ai_stop_distance > 0:
+        chosen, source = select_scalp_stop_distance(
+            structure_distance=ai_stop_distance,
+            atr=atr,
+            stop_atr_mult=stop_atr_mult,
+        )
+        if chosen is not None and chosen > 0:
+            candidates.append((chosen, source if source != "structure" else "ai"))
+
+    atr_chosen, atr_source = select_scalp_stop_distance(
+        structure_distance=None,
+        atr=atr,
+        stop_atr_mult=stop_atr_mult,
+    )
+    if atr_chosen is not None and atr_chosen > 0:
+        candidates.append((atr_chosen, atr_source))
+
+    if not candidates:
+        return None, "none"
+    # Tightest legitimate invalidation — never a min-lot clamp.
+    return min(candidates, key=lambda item: item[0])
+
+
 def _collect_swings(structure: Any) -> tuple[list[Decimal], list[Decimal]]:
     lows: list[Decimal] = []
     highs: list[Decimal] = []

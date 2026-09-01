@@ -1157,15 +1157,41 @@ async def build_ite_cycle_market_context(
         calc_lots = norm.normalized_lot if norm.approved else Decimal("0")
         sizing_status = norm.sizing_status
         diag.update(norm.to_observability())
+        from app.domain.institutional_trading.operations.min_lot_feasibility import (
+            CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            EXEC_WAITING_FOR_SETUP,
+            NOT_TRADEABLE,
+            TRADEABLE,
+            evaluate_setup_tradeability,
+        )
+
+        trade = evaluate_setup_tradeability(
+            stop_distance=stop_dist,
+            equity=equity,
+            min_lot=min_lot,
+            lot_step=lot_step,
+            max_lot=max_lot,
+            contract_size=contract_size,
+            tick_size=tick_size,
+            tick_value=tick_value,
+        )
+        trade_obs = trade.to_observability()
+        trade_obs.pop("risk_budget", None)
+        diag.update(trade_obs)
         if not norm.approved:
             diag["rejection_reason"] = norm.block_reason
             diag["signal_state"] = "VALID_SIGNAL"
             diag["execution_state"] = "EXECUTION_BLOCKED"
             if norm.sizing_status in {STATUS_BELOW_MIN, STATUS_EXCEEDS_BUDGET}:
                 diag["block_reason"] = norm.block_reason
+            if norm.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET:
+                diag["execution_status"] = EXEC_WAITING_FOR_SETUP
+                diag["tradeability"] = NOT_TRADEABLE
         else:
             diag["rejection_reason"] = None
             diag["block_reason"] = None
+            if trade.tradeability == TRADEABLE:
+                diag["execution_status"] = TRADEABLE
         if sizing_status == STATUS_INVALID_SPEC:
             diag["signal_state"] = "VALID_SIGNAL"
             diag["execution_state"] = "EXECUTION_BLOCKED"

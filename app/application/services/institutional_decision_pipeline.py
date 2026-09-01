@@ -243,22 +243,29 @@ class InstitutionalDecisionPipeline:
         equity: Any,
         min_lot: Any,
         contract_size: Any,
+        lot_step: Any = None,
+        max_lot: Any = None,
     ) -> Any:
         """Audit-only pre-Risk gate. Does not change stop / lot / 5% cap."""
         from app.domain.institutional_trading.operations.min_lot_feasibility import (
-            evaluate_min_lot_feasibility,
+            evaluate_setup_tradeability,
         )
 
-        result = evaluate_min_lot_feasibility(
+        trade = evaluate_setup_tradeability(
             stop_distance=stop_distance,
             equity=equity,
             min_lot=min_lot,
+            lot_step=lot_step,
+            max_lot=max_lot,
             contract_size=contract_size,
         )
+        result = trade.feasibility
         payload = result.to_dict()
+        payload.update(trade.to_observability())
         self._last_feasibility = payload
         if isinstance(self._last_ai_score, dict):
             self._last_ai_score["min_lot_feasibility"] = payload
+            self._last_ai_score.update(trade.to_observability())
         try:
             from app.application.services.strategy_performance_telemetry import (
                 get_strategy_performance_telemetry,
@@ -274,6 +281,8 @@ class InstitutionalDecisionPipeline:
             logger.warning(
                 "min_lot_infeasible_early",
                 classification=result.classification,
+                tradeability=trade.tradeability,
+                tradeability_reason=trade.tradeability_reason,
                 stop_distance=str(result.stop_distance),
                 max_allowed_stop=str(result.max_allowed_stop),
                 needed_pct=str(result.needed_pct),
@@ -430,54 +439,80 @@ class InstitutionalDecisionPipeline:
             stop_atr = account.atr
         atr_stop = stop_atr * stop_mult if stop_atr else None
         stop_distance = atr_stop
-        # Prefer a tighter legitimate invalidation. Never replace ATR with a
-        # wider M15/H1 swing that blows micro min-lot (live: 11.91 vs 6.995).
+        stop_source = "atr_fallback" if atr_stop is not None else "none"
+        entry = account.mid_price
+        ai_stop_distance = None
         if ai_score is not None and self._last_ai_score:
             raw_sd = self._last_ai_score.get("stop_loss")
             entry_s = self._last_ai_score.get("entry")
             try:
-                if raw_sd and entry_s and account.mid_price:
+                if raw_sd and entry_s:
                     from decimal import Decimal as _D
 
-                    from app.domain.institutional_trading.ai_scalping.structure_targets import (
-                        select_scalp_stop_distance,
-                    )
-
                     sd = abs(_D(str(entry_s)) - _D(str(raw_sd)))
-                    chosen, source = select_scalp_stop_distance(
-                        structure_distance=sd if sd > 0 else None,
-                        atr=stop_atr,
-                        stop_atr_mult=stop_mult,
-                    )
-                    if chosen is not None and chosen > 0:
-                        if source == "atr_cap":
-                            logger.warning(
-                                "ai_structure_stop_capped_to_atr",
-                                file=(
-                                    "app/application/services/"
-                                    "institutional_decision_pipeline.py"
-                                ),
-                                function="InstitutionalDecisionPipeline.decide",
-                                symbol=str(snapshot.symbol),
-                                ai_stop_distance=str(sd),
-                                atr_stop=str(atr_stop),
-                                chosen_stop=str(chosen),
-                                stop_source=source,
-                                condition="ai_stop_distance > atr * stop_mult",
-                            )
-                        stop_distance = chosen
+                    if sd > 0:
+                        ai_stop_distance = sd
+            except Exception:
+                ai_stop_distance = None
+        # Structure-first (existing scalp selector). Never clamp SL to
+        # max_allowed_stop_at_min_lot to manufacture eligibility.
+        if (
+            exe.direction in {TradeDirection.BUY, TradeDirection.SELL}
+            and entry is not None
+            and entry > 0
+        ):
+            try:
+                from app.domain.institutional_trading.ai_scalping import (
+                    structure_targets as st_mod,
+                )
+
+                chosen, source = st_mod.choose_strategy_stop_distance(
+                    snapshot,
+                    direction=exe.direction,
+                    entry=entry,
+                    atr=stop_atr,
+                    stop_atr_mult=stop_mult,
+                    ai_stop_distance=ai_stop_distance,
+                )
+                if chosen is not None and chosen > 0:
+                    if source == "atr_cap":
+                        logger.warning(
+                            "ai_structure_stop_capped_to_atr",
+                            file=(
+                                "app/application/services/"
+                                "institutional_decision_pipeline.py"
+                            ),
+                            function="InstitutionalDecisionPipeline.decide",
+                            symbol=str(snapshot.symbol),
+                            ai_stop_distance=(
+                                str(ai_stop_distance)
+                                if ai_stop_distance is not None
+                                else None
+                            ),
+                            atr_stop=str(atr_stop),
+                            chosen_stop=str(chosen),
+                            stop_source=source,
+                            condition="structure_or_ai_stop > atr * stop_mult",
+                        )
+                    stop_distance = chosen
+                    stop_source = source
             except Exception:  # noqa: S110  # best-effort optional path
                 pass
+        if isinstance(self._last_ai_score, dict):
+            self._last_ai_score["stop_distance"] = (
+                str(stop_distance) if stop_distance is not None else None
+            )
+            self._last_ai_score["stop_source"] = stop_source
         logger.info(
             "risk_sizing_stop_distance",
             symbol=str(snapshot.symbol),
             side=side,
             stop_distance=str(stop_distance) if stop_distance is not None else None,
+            stop_source=stop_source,
             atr=str(account.atr) if account.atr is not None else None,
             stop_atr=str(stop_atr) if stop_atr is not None else None,
             atr_stop=str(atr_stop) if atr_stop is not None else None,
         )
-        entry = account.mid_price
         if entry is None or entry <= 0:
             # Prefer No Trade — never invent an entry price for risk sizing.
             return TradeDecisionEngine(config=cfg).decide(
@@ -526,6 +561,8 @@ class InstitutionalDecisionPipeline:
             stop_distance=stop_distance,
             equity=account.equity,
             min_lot=live_min,
+            lot_step=live_step,
+            max_lot=live_max,
             contract_size=live_cs,
         )
         if feasibility.skip_expensive_downstream:

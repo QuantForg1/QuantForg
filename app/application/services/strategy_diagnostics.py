@@ -48,7 +48,7 @@ _REASON_LABELS: dict[str, str] = {
         "VALID_SIGNAL blocked: calculated volume below broker volume_min"
     ),
     "MIN_LOT_EXCEEDS_RISK_BUDGET": (
-        "VALID_SIGNAL blocked: broker minimum lot exceeds risk budget"
+        "WAITING FOR A TRADEABLE SETUP: broker min lot exceeds risk budget"
     ),
     "SAFETY_BLOCKED": "Auto-trade safety gate blocked",
     "NO_SNAPSHOT": "No market snapshot",
