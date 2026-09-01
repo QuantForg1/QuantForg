@@ -2901,6 +2901,20 @@ class InstitutionalIteRuntime:
             sizing_diag["execution_status"] = "WAITING_FOR_SETUP"
         elif feas_pipe.get("tradeability") == "TRADEABLE":
             sizing_diag["execution_status"] = "TRADEABLE"
+            # Drop ATR-preview min-lot leftovers; pipeline stop is authoritative.
+            from app.domain.institutional_trading.operations.min_lot_feasibility import (
+                CODE_MIN_LOT_CONSTRAINT,
+                CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+            )
+
+            leftover = str(sizing_diag.get("block_reason") or "")
+            if leftover in {
+                CODE_MIN_LOT_EXCEEDS_RISK_BUDGET,
+                CODE_MIN_LOT_CONSTRAINT,
+            }:
+                sizing_diag["block_reason"] = None
+                sizing_diag["rejection_reason"] = None
+                sizing_diag["sizing_status"] = "ok"
         market_context_diagnostics = sizing_diag
 
         self.reliability.traces.span(
