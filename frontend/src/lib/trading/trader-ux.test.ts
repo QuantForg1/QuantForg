@@ -58,12 +58,15 @@ import {
   marketDirectionLabel,
   marketSignalLabel,
   normalizeSignalCenterPayload,
+  researchDeskLiveTradingStatus,
   researchFeedState,
   researchFeedStateLabel,
+  researchLifecycleCounts,
   researchMetricDisplay,
   researchCoverageLabel,
   researchProgressCopy,
   researchSignalsEmptyCopy,
+  researchUniverseViewState,
   resolveAnalysisDeskStatus,
   analysisDeskStatusLabel,
   knownUniverseCountLabel,
@@ -794,6 +797,93 @@ assert.equal(
     }).rows[0]?.board_status,
     undefined,
   );
+}
+
+{
+  // Global research catalogue is independent of the viewer's MT5 session.
+  const disconnected = researchUniverseViewState({
+    snapshotFetched: true,
+    snapshotError: false,
+    catalogueSource: "LIVE_BROKER",
+    instrumentCount: 12,
+  });
+  assert.equal(disconnected, "LIVE_ROWS");
+  assert.equal(
+    catalogueViewState({
+      connected: false,
+      mismatch: false,
+      liveBrokerSession: false,
+      catalogueUnavailable: true,
+      snapshotFetched: true,
+      snapshotError: false,
+      catalogueSource: "LIVE_BROKER",
+      instrumentCount: 12,
+    }),
+    "UNAVAILABLE",
+  );
+  const liveHint = researchDeskLiveTradingStatus({
+    connected: false,
+    state: "BROKER_NOT_CONNECTED",
+  });
+  assert.equal(liveHint.state, "LIVE_TRADING_UNAVAILABLE");
+  assert.equal(liveHint.detail, "Unavailable until broker connection");
+  const connectedHint = researchDeskLiveTradingStatus({
+    connected: true,
+    state: "CONNECTED",
+  });
+  assert.equal(connectedHint.state, "LIVE_TRADING_DISABLED");
+}
+
+{
+  const counts = researchLifecycleCounts([
+    { research_lifecycle: "ANALYZED" },
+    { research_lifecycle: "QUEUED" },
+    { research_lifecycle: "MARKET_CLOSED" },
+    { research_lifecycle: "FAILED" },
+    { research_lifecycle: "UNSUPPORTED" },
+    { research_lifecycle: "DATA_UNAVAILABLE" },
+    { research_lifecycle: "READY" },
+  ]);
+  assert.equal(counts.analyzed, 1);
+  assert.equal(counts.queued, 1);
+  assert.equal(counts.closed, 1);
+  assert.equal(counts.failed, 1);
+  assert.equal(counts.unsupported, 1);
+  assert.equal(counts.unavailable, 1);
+  assert.equal(counts.ready, 1);
+}
+
+{
+  const why = signalWhyFactors({
+    direction: "BUY",
+    reason: "Trend aligned with momentum",
+    evidence: {
+      WHY_THIS_DIRECTION: "Higher highs on H1",
+      MOMENTUM: "Positive",
+      STRUCTURE_EVIDENCE: "Break of structure",
+      RISK_CONDITIONS: "Defined invalidation",
+    },
+    entry: 1.085,
+    stop_loss: 1.08,
+    take_profit: 1.095,
+    price: 1.0845,
+  });
+  assert.equal(why[0]?.label, "Direction");
+  assert.equal(why[0]?.value, "BUY");
+  assert.equal(
+    why.some((f) => f.label === "Why the model prefers this direction"),
+    true,
+  );
+  assert.equal(
+    why.some((f) => /invent|always buy/i.test(f.value)),
+    false,
+  );
+  const preview = signalWhyPreview({
+    direction: "SELL",
+    evidence: { WHY_THIS_DIRECTION: "Failed breakout" },
+  });
+  assert.notEqual(preview, EXPLANATION_UNAVAILABLE);
+  assert.match(preview, /Failed breakout|SELL/);
 }
 
 console.log("trader-ux.test.ts ok");

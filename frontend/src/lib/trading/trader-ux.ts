@@ -489,6 +489,51 @@ export function catalogueViewState(input: {
   return input.instrumentCount === 0 ? "LIVE_EMPTY" : "LIVE_ROWS";
 }
 
+/** Global research catalogue — independent of the viewer's personal MT5 session. */
+export function researchUniverseViewState(input: {
+  snapshotFetched: boolean;
+  snapshotError: boolean;
+  catalogueSource?: unknown;
+  instrumentCount: number;
+}): CatalogueViewState {
+  if (input.snapshotError) return "UNAVAILABLE";
+  if (!input.snapshotFetched) return "NOT_READY";
+  const source = String(input.catalogueSource || "").trim().toUpperCase();
+  if (source !== LIVE_BROKER) return "UNAVAILABLE";
+  return input.instrumentCount === 0 ? "LIVE_EMPTY" : "LIVE_ROWS";
+}
+
+export type ResearchDeskLiveTradingState =
+  | "LIVE_TRADING_UNAVAILABLE"
+  | "LIVE_TRADING_DISABLED";
+
+/** Research desk never authorizes trades. Personal MT5 only affects this hint. */
+export function researchDeskLiveTradingStatus(connection: {
+  connected: boolean;
+  state: string;
+}): {
+  label: string;
+  detail: string;
+  state: ResearchDeskLiveTradingState;
+} {
+  if (
+    !connection.connected ||
+    connection.state === "BROKER_NOT_CONNECTED" ||
+    connection.state === "ACCOUNT_SESSION_MISMATCH"
+  ) {
+    return {
+      label: "UNAVAILABLE",
+      detail: "Unavailable until broker connection",
+      state: "LIVE_TRADING_UNAVAILABLE",
+    };
+  }
+  return {
+    label: "NOT AUTHORIZED",
+    detail: SIGNALS_NOT_AUTHORIZATION,
+    state: "LIVE_TRADING_DISABLED",
+  };
+}
+
 export function catalogueStatusLabel(state: CatalogueViewState): string {
   if (state === "LIVE_ROWS") return "LIVE_BROKER";
   if (state === "LIVE_EMPTY") return "EMPTY";
@@ -1125,6 +1170,42 @@ export function researchLifecycleLabel(row: Record<string, unknown>): string {
   return "READY";
 }
 
+export type ResearchLifecycleCounts = {
+  analyzed: number;
+  ready: number;
+  queued: number;
+  closed: number;
+  unavailable: number;
+  failed: number;
+  unsupported: number;
+};
+
+/** Honest per-instrument lifecycle tallies from catalogue rows. Never invents. */
+export function researchLifecycleCounts(
+  rows: Record<string, unknown>[],
+): ResearchLifecycleCounts {
+  const out: ResearchLifecycleCounts = {
+    analyzed: 0,
+    ready: 0,
+    queued: 0,
+    closed: 0,
+    unavailable: 0,
+    failed: 0,
+    unsupported: 0,
+  };
+  for (const row of rows) {
+    const label = researchLifecycleLabel(row).replaceAll(" ", "_");
+    if (label === "ANALYZED") out.analyzed += 1;
+    else if (label === "READY") out.ready += 1;
+    else if (label === "QUEUED") out.queued += 1;
+    else if (label === "MARKET_CLOSED") out.closed += 1;
+    else if (label === "FAILED") out.failed += 1;
+    else if (label === "UNSUPPORTED") out.unsupported += 1;
+    else out.unavailable += 1;
+  }
+  return out;
+}
+
 export function isActionableDirection(dir: string): boolean {
   return dir === "BUY" || dir === "SELL";
 }
@@ -1406,13 +1487,29 @@ const WHY_KEYS: Array<{ key: string; label: string }> = [
 export function signalWhyFactors(row: Record<string, unknown>): SignalWhyFactor[] {
   const ev = evidenceBag(row);
   const out: SignalWhyFactor[] = [];
+  const direction = signalBoardDirection(row);
+  const rawDir = presentField(row.direction ?? row.signal_direction ?? row.signal);
+  if (rawDir !== "Not available" && direction && direction !== "UNKNOWN") {
+    out.push({ label: "Direction", value: direction });
+  }
+  const condition = presentField(
+    row.market_condition ?? row.data_state ?? ev.REGIME ?? row.regime,
+  );
+  if (condition !== "Not available") {
+    out.push({ label: "Market condition", value: condition });
+  }
   const reason = presentField(row.reason ?? row.explanation ?? row.reasoning);
   if (reason !== "Not available") {
     out.push({ label: "Why this signal exists", value: reason });
   }
+  const prefers = presentField(ev.WHY_THIS_DIRECTION);
+  if (prefers !== "Not available" && prefers !== direction) {
+    out.push({ label: "Why the model prefers this direction", value: prefers });
+  }
   for (const item of WHY_KEYS) {
     const shown = presentField(ev[item.key]);
     if (shown === "Not available") continue;
+    if (out.some((f) => f.label === item.label)) continue;
     out.push({ label: item.label, value: shown });
   }
   const scoreFallbacks: Array<{ label: string; value: unknown }> = [

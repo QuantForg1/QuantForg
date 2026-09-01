@@ -14,11 +14,10 @@ import { asList, asRecord, str } from "@/lib/desk";
 import { ApiError } from "@/lib/api/client";
 import {
   catalogueStatusLabel,
-  catalogueViewState,
   dataSourceLabel,
-  isLiveBrokerCatalogue,
   knownInstrumentCountLabel,
   lastUpdatedCopy,
+  LIVE_BROKER,
   MARKET_UNIVERSE_QUERY_KEY,
   mergeCatalogueRows,
   resolveConnectionPresentation,
@@ -26,6 +25,7 @@ import {
   traderFacingErrorMessage,
   TRADER_POLL_MS,
   UNIVERSE_POLL_MS,
+  researchUniverseViewState,
 } from "@/lib/trading/trader-ux";
 
 export default function MarketsPage() {
@@ -39,15 +39,13 @@ export default function MarketsPage() {
 
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
-  const liveCatalogue = isLiveBrokerCatalogue(session);
   const noBroker = connection.state === "BROKER_NOT_CONNECTED";
   const mismatch = connection.state === "ACCOUNT_SESSION_MISMATCH";
-  const canRefresh = connection.connected && !mismatch;
+  const canRefresh = true;
 
   const universeQ = useQuery({
     queryKey: MARKET_UNIVERSE_QUERY_KEY,
     queryFn: () => marketUniverseApi.snapshot(),
-    enabled: connection.connected && !mismatch && liveCatalogue && !sessionQ.isLoading,
     retry: false,
     refetchInterval: UNIVERSE_POLL_MS,
   });
@@ -63,11 +61,7 @@ export default function MarketsPage() {
   const universe = asRecord(universeQ.data);
   const instruments = asList(universe.instruments).map(asRecord);
   const skipped = skippedMalformedInstrumentCount(instruments);
-  const catalogue = catalogueViewState({
-    connected: connection.connected,
-    mismatch,
-    liveBrokerSession: liveCatalogue,
-    catalogueUnavailable: connection.catalogueUnavailable,
+  const catalogue = researchUniverseViewState({
     snapshotFetched: universeQ.isFetched,
     snapshotError: Boolean(universeQ.isError),
     catalogueSource: universe.catalogue_source,
@@ -80,9 +74,10 @@ export default function MarketsPage() {
           asList(asRecord(universe.opportunity_board).rows).map(asRecord),
         )
       : [];
+  const globalSource = String(universe.catalogue_source || "").trim().toUpperCase();
   const source = dataSourceLabel({
-    liveBroker: liveCatalogue,
-    catalogueSource: universe.catalogue_source ?? session.catalogue_source,
+    liveBroker: globalSource === LIVE_BROKER,
+    catalogueSource: universe.catalogue_source,
   });
   const status = catalogueStatusLabel(catalogue);
   const instrumentCount = knownInstrumentCountLabel(catalogue, rows.length);
@@ -98,7 +93,7 @@ export default function MarketsPage() {
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Markets"
-        description="BROKER-DISCOVERED MARKET UNIVERSE"
+        description="Global research universe — broker-discovered catalogue. Personal MT5 is not required."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -152,48 +147,39 @@ export default function MarketsPage() {
         ) : null}
       </section>
       <ResearchAdvisoryNote />
+      {noBroker ? (
+        <p className="text-sm text-[var(--fg-muted)]" role="status">
+          GLOBAL RESEARCH AVAILABLE. Personal broker: not connected.
+          Live trading unavailable until broker connection.
+        </p>
+      ) : null}
+      {mismatch ? (
+        <p className="text-sm text-[var(--warning)]" role="status">
+          ACCOUNT SESSION MISMATCH — live trading is blocked. Global research remains available.
+        </p>
+      ) : null}
       {refreshError ? (
         <p className="text-sm text-[var(--warning)]" role="status">
           {refreshError}
         </p>
       ) : null}
 
-      {sessionQ.isLoading ? (
-        <DeskSkeleton rows={4} />
-      ) : noBroker ? (
-        <DeskEmpty
-          icon={Activity}
-          title="MARKETS UNAVAILABLE"
-          description="BROKER NOT CONNECTED. Connect and verify your broker to load the live catalogue."
-          actionLabel="Connect Broker"
-          actionHref="/broker"
-        />
-      ) : mismatch ? (
-        <DeskEmpty
-          icon={Activity}
-          title="ACCOUNT SESSION MISMATCH"
-          description="This terminal is bound to another session. Reconnect your own account."
-          actionLabel="Reconnect"
-          actionHref="/broker"
-        />
+      {catalogue === "NOT_READY" || universeQ.isLoading || refreshMut.isPending ? (
+        <DeskSkeleton rows={6} />
       ) : catalogue === "UNAVAILABLE" ? (
         <DeskEmpty
           icon={Activity}
-          title="MARKETS UNAVAILABLE"
+          title="RESEARCH CATALOGUE UNAVAILABLE"
           description={
-            str(session.catalogue_last_error, "").trim() ||
-            "Broker market catalogue is currently unavailable. This is not an empty market."
+            str(universe.reason || session.catalogue_last_error, "").trim() ||
+            "Global market catalogue is currently unavailable. This is not an empty market."
           }
-          actionLabel="Connect Broker"
-          actionHref="/broker"
         />
-      ) : catalogue === "NOT_READY" || universeQ.isLoading || refreshMut.isPending ? (
-        <DeskSkeleton rows={6} />
       ) : catalogue === "LIVE_EMPTY" ? (
         <DeskEmpty
           icon={Activity}
           title="No markets in catalogue"
-          description="The live broker catalogue was queried. No instruments are listed for your account."
+          description="The live broker catalogue was queried. No instruments are listed."
         />
       ) : (
         <MarketCatalogueRows rows={rows} showFilters />

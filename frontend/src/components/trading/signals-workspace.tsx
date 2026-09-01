@@ -37,6 +37,8 @@ import {
   RESEARCH_SIGNAL,
   researchAvailabilityAsCatalogue,
   researchCoverageLabel,
+  researchDeskLiveTradingStatus,
+  researchLifecycleCounts,
   researchLifecycleLabel,
   researchProgressCopy,
   researchSignalsEmptyCopy,
@@ -112,6 +114,7 @@ export function SignalsWorkspace() {
   const session = asRecord(sessionQ.data);
   const connection = resolveConnectionPresentation(session);
   const accountHint = accountConnectionHint(connection);
+  const liveTradingHint = researchDeskLiveTradingStatus(connection);
 
   const signalsQ = useQuery({
     queryKey: SIGNAL_CENTER_QUERY_KEY,
@@ -245,6 +248,7 @@ export function SignalsWorkspace() {
       ? String(researchHealth.instruments_unavailable)
       : "—";
   const coverageState = String(researchHealth.coverage_state || "").toUpperCase();
+  const lifecycle = researchLifecycleCounts(universeInstruments);
   const assetClassCounts =
     researchHealth.asset_class_counts &&
     typeof researchHealth.asset_class_counts === "object"
@@ -267,7 +271,7 @@ export function SignalsWorkspace() {
     <div className="min-w-0 space-y-5">
       <PageHeader
         title="Signals"
-        description="Global Market Intelligence — research analysis across the available global universe. Not trade authorization."
+        description="GLOBAL MARKET INTELLIGENCE — research analysis across the available global universe. Not trade authorization."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -290,6 +294,52 @@ export function SignalsWorkspace() {
           </div>
         }
       />
+
+      <section
+        aria-label="Global research independence"
+        className="rounded-[var(--radius-os)] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-subtle)]">
+            GLOBAL RESEARCH
+          </p>
+          <Badge
+            tone={
+              signalsQ.isError || availability === "UNAVAILABLE"
+                ? "danger"
+                : "success"
+            }
+          >
+            {signalsQ.isError || availability === "UNAVAILABLE"
+              ? "UNAVAILABLE"
+              : "ACTIVE"}
+          </Badge>
+        </div>
+        <dl className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
+          <div>
+            <dt className="text-[var(--fg-subtle)]">Broker connection</dt>
+            <dd>
+              {accountHint.detail === "CONNECTED"
+                ? "Connected"
+                : accountHint.detail === "SESSION MISMATCH"
+                  ? "Session mismatch"
+                  : "Not connected"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[var(--fg-subtle)]">Research</dt>
+            <dd>
+              {signalsQ.isError || availability === "UNAVAILABLE"
+                ? "Unavailable"
+                : "Available"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[var(--fg-subtle)]">Live trading</dt>
+            <dd>{liveTradingHint.detail}</dd>
+          </div>
+        </dl>
+      </section>
 
       <section
         aria-label="Global research status bar"
@@ -374,10 +424,18 @@ export function SignalsWorkspace() {
             Live trading
           </p>
           <div className="mt-1.5">
-            <Badge tone="neutral">NOT AUTHORIZED</Badge>
+            <Badge
+              tone={
+                liveTradingHint.state === "LIVE_TRADING_UNAVAILABLE"
+                  ? "neutral"
+                  : "warning"
+              }
+            >
+              {liveTradingHint.label}
+            </Badge>
           </div>
           <p className="mt-1 text-[11px] text-[var(--fg-muted)]">
-            {SIGNALS_NOT_AUTHORIZATION}
+            {liveTradingHint.detail}
           </p>
         </div>
       </section>
@@ -414,8 +472,11 @@ export function SignalsWorkspace() {
           <DeskMetric label="Analyzed" value={analyzedLabel} />
           <DeskMetric label="Coverage" value={coverageLabel} />
           <DeskMetric label="Skipped" value={skippedLabel} />
+          <DeskMetric label="Queued" value={String(lifecycle.queued)} />
+          <DeskMetric label="Market closed" value={String(lifecycle.closed)} />
           <DeskMetric label="Unavailable" value={unavailableLabel} />
           <DeskMetric label="Failed" value={failedLabel} />
+          <DeskMetric label="Unsupported" value={String(lifecycle.unsupported)} />
           <DeskMetric label="Active signals" value={summary.active} />
           <DeskMetric label="BUY" value={summary.buy} />
           <DeskMetric label="SELL" value={summary.sell} />
@@ -520,6 +581,10 @@ export function SignalsWorkspace() {
                         </dd>
                       </div>
                       <div>
+                        <dt className="text-[var(--fg-subtle)]">RR</dt>
+                        <dd className="tabular">{scoreDisplay(row.RR ?? row.rr)}</dd>
+                      </div>
+                      <div>
                         <dt className="text-[var(--fg-subtle)]">Regime</dt>
                         <dd>{presentField(rowRegime(row))}</dd>
                       </div>
@@ -538,7 +603,7 @@ export function SignalsWorkspace() {
                       </span>
                     </div>
                     <p className="mt-2 text-[11px] font-medium text-[var(--accent)]">
-                      View analysis →
+                      WHY THIS SIGNAL
                     </p>
                   </button>
                 </li>
@@ -892,6 +957,14 @@ export function SignalsWorkspace() {
                               </div>
                               <div>
                                 <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
+                                  RR
+                                </dt>
+                                <dd className="tabular">
+                                  {scoreDisplay(row.RR ?? row.rr)}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[10px] uppercase text-[var(--fg-subtle)]">
                                   Opportunity
                                 </dt>
                                 <dd className="tabular">
@@ -919,7 +992,7 @@ export function SignalsWorkspace() {
                               {signalWhyPreview(row)}
                             </p>
                             <p className="mt-2 text-[11px] font-medium text-[var(--accent)]">
-                              View analysis →
+                              WHY THIS SIGNAL
                             </p>
                           </button>
                         </li>
