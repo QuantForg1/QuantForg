@@ -88,8 +88,8 @@ def _plane(*, exceeded: bool) -> SimpleNamespace:
     return plane
 
 
-def test_max_daily_loss_cap_remains_40() -> None:
-    assert Decimal("40.0") == MAX_DAILY_LOSS_PCT
+def test_max_daily_loss_cap_is_80() -> None:
+    assert Decimal("80.0") == MAX_DAILY_LOSS_PCT
 
 
 def test_verified_deposit_clears_latch_via_existing_lock_not_assignment() -> None:
@@ -123,7 +123,7 @@ def test_verified_deposit_clears_latch_via_existing_lock_not_assignment() -> Non
     assert out["rearm_state"] == "REARMED"
 
 
-def test_deposit_then_additional_loss_still_blocks_when_over_40() -> None:
+def test_deposit_then_additional_loss_still_blocks_when_over_80() -> None:
     now = datetime(2026, 9, 1, 16, 0, tzinfo=UTC)
     deals = [
         _deal(profit="-100", when=datetime(2026, 9, 1, 10, 0, tzinfo=UTC), ticket=1),
@@ -134,12 +134,12 @@ def test_deposit_then_additional_loss_still_blocks_when_over_40() -> None:
             volume="0",
             deal_type="balance",
         ),
-        _deal(profit="-90", when=datetime(2026, 9, 1, 13, 0, tzinfo=UTC), ticket=3),
+        _deal(profit="-161", when=datetime(2026, 9, 1, 13, 0, tzinfo=UTC), ticket=3),
     ]
     daily = LiveAccountRiskTracker.daily_pnl_from_deals(
         deals, now=now, ending_balance=Decimal("200")
     )
-    assert daily == Decimal("-90")
+    assert daily == Decimal("-161")
     assert utc_daily_loss_exceeded(
         daily_pnl=daily,
         equity=Decimal("200"),
@@ -414,7 +414,7 @@ async def test_ite_cycle_verified_deposit_sets_audit_baseline(
     assert ctx.diagnostics.get("daily_pnl_trusted") is True
     assert ctx.diagnostics.get("new_capital_detected") is True
     assert ctx.diagnostics.get("deposit_verification") == "verified"
-    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == "40.0"
+    assert ctx.diagnostics.get("max_daily_loss_limit_pct") == "80.0"
     baseline = ctx.diagnostics.get("capital_baseline")
     assert isinstance(baseline, dict)
     assert baseline.get("broker_deal_ticket") == 2

@@ -162,7 +162,7 @@ def _sniper(snap: MagicMock, direction: DirectionDecision, **kwargs: object) -> 
 
 def test_contracts_unchanged() -> None:
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert MAX_DAILY_LOSS_PCT == Decimal("40.0")
+    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
     assert should_blind_retry_order_submit() is False
     assert DEFAULT_AI_SCALPING_CONFIG.never_prefer_buy_only is True
     assert DEFAULT_AI_SCALPING_CONFIG.allow_martingale is False

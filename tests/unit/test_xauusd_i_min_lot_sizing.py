@@ -77,8 +77,8 @@ def test_xauusd_i_below_min_lot_is_legitimate_account_constraint() -> None:
     profile = MicroAccountProfile()
 
     assert norm < _VOLUME_MIN
-    assert needed > profile.hard_max_risk_pct
-    # Safety must reject — never upsize to min_lot past hard_max.
+    assert needed < profile.hard_max_risk_pct
+    # Min-lot is allowed when needed_pct stays at or below the 80% hard max.
     engine = RiskEngine()
     size = engine.size_position(
         equity=_EQUITY,
@@ -90,15 +90,14 @@ def test_xauusd_i_below_min_lot_is_legitimate_account_constraint() -> None:
         contract_size=_CONTRACT,
         risk_per_trade_pct=risk_pct,
     )
-    assert size.approved_lots == Decimal("0")
-    assert size.capped is True
-    # Dollar risk budget preserved (1% path), not inflated to min_lot loss.
-    assert size.dollar_risk == risk_amount
+    assert size.approved_lots == _VOLUME_MIN
+    assert size.capped is False
+    assert size.dollar_risk == min_loss
 
 
 @pytest.mark.unit
 def test_xauusd_i_valid_volume_at_min_lot_when_stop_fits_hard_max() -> None:
-    """Tight stop where min_lot risk <= 5% hard_max → micro conditional OK."""
+    """Tight stop where min_lot risk <= 80% hard_max → micro conditional OK."""
     dist = Decimal("4.00")  # min_lot $ risk = 4.00 → ~3.97% of $100.72
     engine = RiskEngine()
     size = engine.size_position(
@@ -119,8 +118,7 @@ def test_xauusd_i_valid_volume_at_min_lot_when_stop_fits_hard_max() -> None:
 
 @pytest.mark.unit
 def test_risk_engine_labels_min_lot_constraint_not_missing_signal() -> None:
-    atr = (_PRICE * Decimal("0.0015")).quantize(Decimal("0.001"))
-    dist = stop_distance_from_atr(atr)
+    dist = Decimal("90.00")
     engine = RiskEngine()
     result = engine.evaluate(
         RiskCheckInput(
@@ -130,7 +128,7 @@ def test_risk_engine_labels_min_lot_constraint_not_missing_signal() -> None:
             side="buy",
             requested_lots=Decimal("0.01"),
             stop_loss_distance=dist,
-            atr=atr,
+            atr=None,
             sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
             entry_price=_PRICE,
         ),

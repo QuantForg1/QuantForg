@@ -107,11 +107,11 @@ def test_blocker1_exposure_aggregated_across_all_symbols() -> None:
 
 @pytest.mark.unit
 def test_blocker2_daily_loss_from_account_ite_ceiling() -> None:
-    dd = portfolio_daily_loss_pct(equity=Decimal("10000"), daily_pnl=Decimal("-4001"))
-    assert dd == Decimal("40.01")
+    dd = portfolio_daily_loss_pct(equity=Decimal("10000"), daily_pnl=Decimal("-8001"))
+    assert dd == Decimal("80.01")
     account = AccountRiskState(
         equity=Decimal("10000"),
-        daily_pnl=Decimal("-4001"),
+        daily_pnl=Decimal("-8001"),
         open_positions=0,
     )
     snap = aggregate_portfolio_risk(
@@ -119,7 +119,7 @@ def test_blocker2_daily_loss_from_account_ite_ceiling() -> None:
         config=DEFAULT_AI_SCALPING_CONFIG,
         ite_config=DEFAULT_ITE_CONFIG,
     )
-    assert snap.daily_loss_pct == Decimal("40.01")
+    assert snap.daily_loss_pct == Decimal("80.01")
     assert snap.max_daily_loss_pct == DEFAULT_ITE_CONFIG.max_daily_loss_pct
 
     result = scan_multi_asset_portfolio(
@@ -138,7 +138,7 @@ def test_blocker2_daily_loss_from_account_ite_ceiling() -> None:
         ite_config=DEFAULT_ITE_CONFIG,
     )
     assert payload["blocked_by_portfolio"] is True
-    assert payload["portfolio_risk"]["daily_loss_pct"] == "40.01"
+    assert payload["portfolio_risk"]["daily_loss_pct"] == "80.01"
 
 
 @pytest.mark.unit

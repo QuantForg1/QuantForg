@@ -10,7 +10,7 @@ def observe_small_account_xau_block(
     equity: float | None,
     symbol: str,
     min_lot_risk_pct: float | None = None,
-    hard_max_risk_pct: float = 5.0,
+    hard_max_risk_pct: float = 80.0,
     blocked_by_min_lot: bool = False,
     block_reason: str | None = None,
 ) -> dict[str, Any]:

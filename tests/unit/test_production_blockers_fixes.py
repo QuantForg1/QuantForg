@@ -212,8 +212,8 @@ class TestLotSizingLiveSpecs:
             calculate_scalping_lots,
         )
 
-        # 7.26 stop at $181.53 is ~4% — within the existing 5% hard max, so
-        # the broker min lot is used. A wider stop must still fail closed.
+        # 7.26 stop at $181.53 is ~4% — within the 80% hard max, so
+        # the broker min lot is used. A stop above 80% must still fail closed.
         sized = calculate_scalping_lots(
             equity=Decimal("181.53"),
             stop_distance=Decimal("7.26"),
@@ -228,7 +228,7 @@ class TestLotSizingLiveSpecs:
 
         blocked = calculate_scalping_lots(
             equity=Decimal("181.53"),
-            stop_distance=Decimal("12.00"),
+            stop_distance=Decimal("150.00"),
             risk_pct=Decimal("1.0"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),

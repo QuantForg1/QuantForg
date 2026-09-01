@@ -337,7 +337,7 @@ export function LiveTradingControlPanel() {
               <p>Risk baseline recalculated from verified deposit</p>
               <p>
                 Maximum daily loss limit:{" "}
-                {str(account.max_daily_loss_limit_pct, "40")}%
+                {str(account.max_daily_loss_limit_pct, "80")}%
               </p>
               <p>Pre-deposit P/L preserved</p>
               <p>

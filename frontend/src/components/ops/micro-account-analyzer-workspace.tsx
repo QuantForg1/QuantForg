@@ -93,7 +93,7 @@ export function MicroAccountAnalyzerWorkspace() {
             />
             <MetricCard
               label="MICRO ACCOUNT"
-              value={`Targets $50–$500 · hard max ${str(micro.hard_max_risk_pct, "5.0")}%`}
+              value={`Targets $50–$500 · hard max ${str(micro.hard_max_risk_pct, "80.0")}%`}
             />
           </div>
           <p className="mt-2 text-[12px] text-[var(--fg-muted)]">

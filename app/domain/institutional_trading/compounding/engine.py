@@ -500,7 +500,7 @@ def evaluate_compounding_shadow(inputs: CompoundingInputs) -> CompoundingObserva
     notes = (
         "SHADOW_ONLY_NO_LIVE_MUTATION",
         "RISK_REMAINS_AUTHORITATIVE",
-        "HARD_MAX_RISK_PCT=5.0",
+        f"HARD_MAX_RISK_PCT={HARD_MAX_RISK_PCT}",
         "BROKER_MIN_LOT=0.01",
         *dd_notes,
     )

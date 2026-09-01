@@ -498,7 +498,8 @@ def test_settings_audit_does_not_change_gates() -> None:
     by_name = {r["SETTING"]: r for r in audit["settings"]}
     assert by_name["Opportunity threshold"]["LIVE_VALUE"] == 70
     assert by_name["Directional edge margin"]["LIVE_VALUE"] == 5
-    assert by_name["Daily loss cap"]["LIVE_VALUE"] == "40.0"
+    assert by_name["Daily loss cap"]["LIVE_VALUE"] == "80.0"
+    assert "80.0" in str(by_name["Daily loss cap"]["RECOMMENDED_FUTURE_ACTION"])
 
 
 def test_research_payload_includes_disclaimer_and_audit(tmp_path) -> None:

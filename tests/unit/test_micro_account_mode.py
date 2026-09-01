@@ -44,12 +44,12 @@ def test_dollar_risk_at_min_lot_is_stop_distance() -> None:
 
 
 @pytest.mark.unit
-def test_fifty_not_tradable_at_reference_atr() -> None:
+def test_fifty_conditional_at_reference_atr() -> None:
     result = evaluate_balance(Decimal("50"), atr=Decimal("12"))
-    assert result.tradability is MicroTradability.NOT_TRADABLE
-    assert result.smallest_executable_lot is None
-    assert result.min_usable_risk_pct > DEFAULT_MICRO_ACCOUNT_PROFILE.hard_max_risk_pct
-    assert any("$50 cannot safely trade" in r for r in result.reasons)
+    assert result.tradability is MicroTradability.CONDITIONAL
+    assert result.smallest_executable_lot == VOLUME_MIN
+    assert result.min_usable_risk_pct < DEFAULT_MICRO_ACCOUNT_PROFILE.hard_max_risk_pct
+    assert any("within hard max" in r for r in result.reasons)
 
 
 @pytest.mark.unit
@@ -68,7 +68,7 @@ def test_rejects_risk_above_hard_max() -> None:
     lots = size_micro_lots(
         equity=Decimal("500"),
         stop_distance=Decimal("18"),
-        risk_pct=Decimal("10.0"),  # above hard max 5%
+        risk_pct=Decimal("81.0"),  # above hard max 80%
     )
     assert lots == Decimal("0")
 
@@ -111,8 +111,8 @@ def test_feasibility_report_preserves_institutional() -> None:
     assert report["institutional_unchanged"]["quality"] == 80
     assert report["institutional_unchanged"]["confluence"] == 80
     assert report["institutional_unchanged"]["risk_per_trade_pct"] == "1.0"
-    assert report["summary"]["fifty_dollar_explicit"]
+    assert report["summary"]["fifty_dollar_explicit"] is None
     assert Decimal("50") == Decimal(report["balances"][0]["equity"])
     md = report_to_markdown(report)
     assert "Micro Account Mode" in md
-    assert "$50 cannot safely trade" in md
+    assert "conditional" in md.lower()

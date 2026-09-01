@@ -59,7 +59,7 @@ OPERATOR_ROLES = frozenset({"owner", "admin"})
 MappingLike = dict[str, Any]
 
 # Micro-account hard ceiling — configuration cannot exceed these.
-# Existing ITE MAX_DAILY_LOSS_PCT (40%) remains the global engine cap;
+# Existing ITE MAX_DAILY_LOSS_PCT (80%) remains the global engine cap;
 # this overlay is strictly tighter for real-money live authorization.
 HARD_CEILING_RISK_PER_TRADE_PCT = Decimal("1.00")
 HARD_CEILING_DAILY_LOSS_PCT = Decimal("8.00")

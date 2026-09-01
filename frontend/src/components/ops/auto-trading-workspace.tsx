@@ -250,7 +250,7 @@ export function AutoTradingWorkspace() {
     }
     return Boolean(policy.enabled) ? "running" : "off";
   })();
-  const maxDailyLossPct = num(policy.max_daily_loss_pct, 40);
+  const maxDailyLossPct = num(policy.max_daily_loss_pct, 80);
   const riskPerTradePct = num(policy.risk_per_trade_pct, 1);
   const maxOpen = num(policy.max_open_positions, 1);
   const tradingMode = str(policy.trading_mode, "scalping").toLowerCase();
@@ -453,7 +453,7 @@ export function AutoTradingWorkspace() {
         enabled: next === "running" || next === "paused",
         max_open_positions: maxOpen || 1,
         risk_per_trade_pct: String(riskPerTradePct || 1),
-        max_daily_loss_pct: String(maxDailyLossPct || 40),
+        max_daily_loss_pct: String(maxDailyLossPct || 80),
         max_spread: str(policy.max_spread, "2.00"),
         allowed_symbols: ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
@@ -483,7 +483,7 @@ export function AutoTradingWorkspace() {
             ? Math.max(maxOpen || 1, 3)
             : maxOpen || 1,
         risk_per_trade_pct: String(riskPerTradePct || 1),
-        max_daily_loss_pct: String(maxDailyLossPct || 40),
+        max_daily_loss_pct: String(maxDailyLossPct || 80),
         max_spread: str(policy.max_spread, "2.00"),
         allowed_symbols: ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
@@ -517,7 +517,7 @@ export function AutoTradingWorkspace() {
         trading_mode: tradingMode,
         max_open_positions: maxOpen || 1,
         risk_per_trade_pct: String(riskPerTradePct || 1),
-        max_daily_loss_pct: String(maxDailyLossPct || 40),
+        max_daily_loss_pct: String(maxDailyLossPct || 80),
         max_spread: str(policy.max_spread, "2.00"),
         allowed_symbols: ["XAUUSD"],
         allowed_sessions: asList(policy.allowed_sessions).map(String).length
@@ -2222,7 +2222,7 @@ export function AutoTradingWorkspace() {
               <p>Risk baseline recalculated from verified deposit</p>
               <p>
                 Maximum daily loss limit:{" "}
-                {str(diag.max_daily_loss_limit_pct || utcDailyLimit, "40")}%
+                {str(diag.max_daily_loss_limit_pct || utcDailyLimit, "80")}%
               </p>
               <p>Pre-deposit P/L preserved</p>
               <p>

@@ -234,7 +234,7 @@ def test_recovered_gateway_allows_without_execute_now() -> None:
 
 
 def test_daily_loss_40_percent_still_enforced() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("40.0")
+    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
     assert bridge_abort_stage("DAILY_LOSS_BLOCK") == "RISK"
 
 

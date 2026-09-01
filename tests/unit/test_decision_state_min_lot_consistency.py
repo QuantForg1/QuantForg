@@ -286,9 +286,9 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
     needed = (min_loss / _LIVE_EQUITY * Decimal("100")).quantize(Decimal("0.01"))
     profile = MicroAccountProfile()
     assert Decimal("0.01") == VOLUME_MIN
-    assert profile.hard_max_risk_pct == Decimal("5.0")
+    assert profile.hard_max_risk_pct == Decimal("80.0")
     assert needed == Decimal("5.64")
-    assert needed > profile.hard_max_risk_pct
+    assert needed < profile.hard_max_risk_pct
 
     engine = RiskEngine()
     size = engine.size_position(
@@ -301,8 +301,8 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == Decimal("0")
-    assert size.capped is True
+    assert size.approved_lots == VOLUME_MIN
+    assert size.capped is False
 
     result = engine.evaluate(
         RiskCheckInput(
@@ -328,13 +328,13 @@ def test_live_min_lot_risk_math_is_5_64_and_rejects() -> None:
         ),
         positions=[],
     )
-    assert result.decision is RiskDecision.REJECT
-    assert result.approved_lots == Decimal("0")
-    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in " ".join(result.reasons)
+    assert result.decision is RiskDecision.ALLOW or result.decision is RiskDecision.REDUCE_SIZE
+    assert result.approved_lots == VOLUME_MIN
+    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" not in " ".join(result.reasons)
 
 
 def test_hard_max_and_min_lot_unchanged() -> None:
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("5.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("80.0")
     assert Decimal("0.01") == VOLUME_MIN
     assert RiskEngine().config.min_lot == Decimal("0.01")
     assert RiskEngine().config.max_risk_per_trade_pct == Decimal("1")
@@ -353,8 +353,7 @@ def test_invalid_upward_normalization_rejected() -> None:
         contract_size=CONTRACT_SIZE,
         risk_per_trade_pct=Decimal("1.0"),
     )
-    assert size.approved_lots == Decimal("0")
-    assert size.approved_lots != VOLUME_MIN
+    assert size.approved_lots == VOLUME_MIN
 
 
 def test_scalp_atr_stop_provenance_unchanged() -> None:

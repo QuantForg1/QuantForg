@@ -92,7 +92,7 @@ def build_configuration_audit() -> dict[str, Any]:
         pass
 
     max_open = 10
-    daily_loss = "40.0"
+    daily_loss = "80.0"
     try:
         from app.domain.institutional_trading.ai_scalping.profiles.scalping_v1 import (
             SCALPING_V1 as _SV1,
@@ -227,14 +227,14 @@ def build_configuration_audit() -> dict[str, Any]:
         _row(
             setting="MAX_DAILY_LOSS_PCT",
             source="institutional_trading.config.MAX_DAILY_LOSS_PCT",
-            default="40.0",
+            default="80.0",
             effective=daily_loss,
             consumer="Risk / daily loss lock",
             asset_class="ALL",
             live_or_research="LIVE_EFFECTIVE",
             precedence="ITE / Risk",
             status="LIVE_EFFECTIVE"
-            if str(daily_loss).startswith("40")
+            if str(daily_loss).startswith("80")
             else "CONFLICTING",
             note="Research must not change this.",
         ),

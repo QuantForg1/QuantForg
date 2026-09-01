@@ -210,7 +210,7 @@ def test_stale_signal_not_reused_across_cycles() -> None:
 def test_min_lot_filter_unchanged() -> None:
     result = evaluate_min_lot_feasibility(
         equity=_EQUITY,
-        stop_distance=Decimal("18.15"),
+        stop_distance=Decimal("170"),
         min_lot=VOLUME_MIN,
         contract_size=CONTRACT_SIZE,
         hard_max_risk_pct=_HARD,

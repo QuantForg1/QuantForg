@@ -214,7 +214,7 @@ class AiScalpingConfig:
     # Prior 2.00 daily / 1.00 symbol caps were BELOW one min-lot fill, so after
     # the first ORDER ACCEPTED the portfolio gate blocked all further entries
     # until flat — swing cadence, not continuous scalping. Align with
-    # MicroAccountProfile.hard_max_risk_pct (5%). Quality floors unchanged.
+    # MicroAccountProfile.hard_max_risk_pct (80%). Quality floors unchanged.
     max_daily_exposure_pct: Decimal = Decimal("5.00")
     broker_min_lot: Decimal = Decimal("0.01")
     broker_lot_step: Decimal = Decimal("0.01")

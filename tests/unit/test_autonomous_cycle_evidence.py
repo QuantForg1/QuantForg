@@ -49,7 +49,7 @@ class TestAutonomousCycleEvidence:
     def test_below_min_lot_includes_required_fields(self) -> None:
         sized = calculate_scalping_lots(
             equity=Decimal("181.53"),
-            stop_distance=Decimal("12.00"),
+            stop_distance=Decimal("150.00"),
             risk_pct=Decimal("1.0"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),

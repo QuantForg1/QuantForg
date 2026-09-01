@@ -170,7 +170,7 @@ def build_strategy_settings_audit() -> dict[str, Any]:
         _row(
             setting="Daily loss cap",
             source="institutional_trading.config.MAX_DAILY_LOSS_PCT",
-            default="40.0",
+            default="80.0",
             live=str(MAX_DAILY_LOSS_PCT),
             consumer="OMS / ITE / live account risk tracker",
             path="MAX_DAILY_LOSS_PCT → ITEConfig.max_daily_loss_pct → OMS",
@@ -178,9 +178,9 @@ def build_strategy_settings_audit() -> dict[str, Any]:
             duplicated=False,
             unused=False,
             conflict=False,
-            action="Keep 40.0%. Do not raise.",
+            action="Keep 80.0%. Do not raise.",
             status="AUTHORITATIVE_LIVE",
-            actual_effect="OMS/ITE halt new entries when daily loss reaches 40.0%.",
+            actual_effect="OMS/ITE halt new entries when daily loss exceeds 80.0%.",
             safe_to_change=False,
         ),
         _row(

@@ -97,12 +97,12 @@ class TestQualityBands:
 class TestDynamicSizingSafety:
     def test_never_force_broker_min_lot(self) -> None:
         """Wide stop where min_lot risk exceeds hard_max → reject (no upsize)."""
-        # min_loss = 0.01 * 100 * 12 = 12 → ~6.6% of $181.53 > hard_max 5%
+        # min_loss = 0.01 * 100 * 150 = 150 → ~82.6% of $181.53 > hard_max 80%
         d = calculate_dynamic_lots_v2(
             equity=Decimal("181.53"),
             balance=Decimal("181.53"),
             free_margin=Decimal("181.53"),
-            stop_distance=Decimal("12.00"),
+            stop_distance=Decimal("150.00"),
             risk_pct=Decimal("0.50"),
             contract_size=Decimal("100"),
             min_lot=Decimal("0.01"),
@@ -124,7 +124,7 @@ class TestDynamicSizingSafety:
 
     def test_micro_conditional_approves_when_min_lot_within_hard_max(self) -> None:
         """~$181 equity / moderate stop → micro_conditional keeps broker min_lot."""
-        # min_loss = 0.01 * 100 * 7.26 = 7.26 → ~4.0% <= hard_max 5%
+        # min_loss = 0.01 * 100 * 7.26 = 7.26 → ~4.0% <= hard_max 80%
         d = calculate_dynamic_lots_v2(
             equity=Decimal("181.53"),
             balance=Decimal("181.53"),

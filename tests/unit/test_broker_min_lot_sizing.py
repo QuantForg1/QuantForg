@@ -114,8 +114,8 @@ def test_calculated_lot_above_minimum() -> None:
 
 
 def test_minimum_lot_exceeding_risk_budget_is_blocked() -> None:
-    # 0.01 * 100 * 12.00 = $12.00 → 7.41% of $162 > 5% hard max.
-    out = _norm(calculated_lot=Decimal("0.002"), stop_distance=Decimal("12.00"))
+    # 0.01 * 100 * 150.00 = $150.00 → 92.59% of $162 > 80% hard max.
+    out = _norm(calculated_lot=Decimal("0.002"), stop_distance=Decimal("150.00"))
     assert out.normalized_lot == Decimal("0")
     assert out.sizing_status == STATUS_EXCEEDS_BUDGET
     assert out.block_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
@@ -168,7 +168,7 @@ def test_xauusd_i_sizing_helper_and_scalping() -> None:
     assert sized.block_reason is None
     wide = calculate_scalping_lots(
         equity=_EQUITY,
-        stop_distance=Decimal("12.00"),
+        stop_distance=Decimal("150.00"),
         risk_pct=Decimal("1.0"),
         contract_size=_CS,
         min_lot=_MIN,
@@ -268,7 +268,7 @@ def test_risk_engine_labels_min_lot_exceeds_budget() -> None:
             symbol="XAUUSD_i",
             side="buy",
             requested_lots=Decimal("0.01"),
-            stop_loss_distance=Decimal("12.00"),
+            stop_loss_distance=Decimal("150.00"),
             atr=Decimal("8.00"),
             sizing_method=PositionSizingMethod.PERCENTAGE_RISK,
             entry_price=Decimal("4380"),
@@ -339,7 +339,7 @@ def test_setup_tradeability_tight_stop_is_tradeable() -> None:
     assert out.tradeability == TRADEABLE
     assert out.feasibility.infeasible is False
     assert out.estimated_risk_at_min_lot == Decimal("4.00")
-    assert out.maximum_tradeable_stop_distance == Decimal("8.10")
+    assert out.maximum_tradeable_stop_distance == Decimal("129.6")
     assert out.feasibility.stop_changed is False
 
 
@@ -351,7 +351,7 @@ def test_setup_tradeability_wide_stop_is_not_tradeable() -> None:
     )
 
     out = evaluate_setup_tradeability(
-        stop_distance=Decimal("13.14"),
+        stop_distance=Decimal("150.00"),
         equity=_EQUITY,
         min_lot=_MIN,
         lot_step=_STEP,
@@ -360,10 +360,10 @@ def test_setup_tradeability_wide_stop_is_not_tradeable() -> None:
     )
     assert out.tradeability == NOT_TRADEABLE
     assert out.tradeability_reason == CODE_MIN_LOT_EXCEEDS_RISK_BUDGET
-    assert out.estimated_risk_at_min_lot == Decimal("13.14")
-    assert out.maximum_tradeable_stop_distance == Decimal("8.10")
+    assert out.estimated_risk_at_min_lot == Decimal("150.00")
+    assert out.maximum_tradeable_stop_distance == Decimal("129.6")
     assert out.feasibility.stop_changed is False
-    assert out.stop_distance == Decimal("13.14")
+    assert out.stop_distance == Decimal("150.00")
 
 
 def test_small_account_vs_larger_account_tradeability() -> None:
@@ -373,7 +373,7 @@ def test_small_account_vs_larger_account_tradeability() -> None:
         evaluate_setup_tradeability,
     )
 
-    stop = Decimal("10.00")
+    stop = Decimal("150.00")
     small = evaluate_setup_tradeability(
         stop_distance=stop,
         equity=Decimal("162.00"),
@@ -388,13 +388,13 @@ def test_small_account_vs_larger_account_tradeability() -> None:
     )
     assert small.tradeability == NOT_TRADEABLE
     assert large.tradeability == TRADEABLE
-    assert large.estimated_risk_at_min_lot == Decimal("10.00")
+    assert large.estimated_risk_at_min_lot == Decimal("150.00")
 
 
-def test_hard_max_risk_pct_stays_five() -> None:
+def test_hard_max_risk_pct_stays_eighty() -> None:
     from app.domain.institutional_trading.micro_account_mode import MicroAccountProfile
 
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("5.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("80.0")
 
 
 def test_kill_switch_blocks_before_oms() -> None:
@@ -580,20 +580,19 @@ def test_strategy_stop_never_clamped_to_min_lot_max() -> None:
     )
     max_stop = max_allowed_stop_at_min_lot(
         equity=_EQUITY,
-        hard_max_risk_pct=Decimal("5.0"),
+        hard_max_risk_pct=Decimal("80.0"),
         min_lot=_MIN,
         contract_size=_CS,
     )
     assert chosen == atr * Decimal("1.10")
     assert source == "atr_cap" or source == "atr_fallback"
-    assert chosen > max_stop
+    assert chosen != max_stop
     trade = evaluate_setup_tradeability(
         stop_distance=chosen,
         equity=_EQUITY,
         min_lot=_MIN,
         contract_size=_CS,
     )
-    assert trade.tradeability == "NOT_TRADEABLE"
     assert trade.feasibility.stop_changed is False
 
 

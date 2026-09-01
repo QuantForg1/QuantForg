@@ -263,22 +263,22 @@ def test_min_lot_infeasible_remains_blocked() -> None:
 
 
 @pytest.mark.unit
-def test_daily_loss_at_or_below_40_is_not_the_old_3_percent_cap() -> None:
-    assert MAX_DAILY_LOSS_PCT == Decimal("40.0")
+def test_daily_loss_at_or_below_80_is_not_the_old_3_percent_cap() -> None:
+    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
     under = utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-39.99"),
+        daily_pnl=Decimal("-79.99"),
         equity=Decimal("100"),
         balance=Decimal("100"),
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
     )
     at_cap = utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-40.00"),
+        daily_pnl=Decimal("-80.00"),
         equity=Decimal("100"),
         balance=Decimal("100"),
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,
     )
     over = utc_daily_loss_exceeded(
-        daily_pnl=Decimal("-40.01"),
+        daily_pnl=Decimal("-80.01"),
         equity=Decimal("100"),
         balance=Decimal("100"),
         max_daily_loss_pct=MAX_DAILY_LOSS_PCT,

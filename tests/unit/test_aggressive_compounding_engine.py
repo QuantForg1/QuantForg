@@ -81,12 +81,12 @@ def _inputs(**overrides: object) -> CompoundingInputs:
 
 
 def test_hard_cap_and_min_lot_unchanged() -> None:
-    assert HARD_MAX_RISK_PCT == Decimal("5.0")
-    assert MicroAccountProfile().hard_max_risk_pct == Decimal("5.0")
+    assert HARD_MAX_RISK_PCT == Decimal("80.0")
+    assert MicroAccountProfile().hard_max_risk_pct == Decimal("80.0")
     assert BROKER_MIN_LOT == Decimal("0.01")
     assert VOLUME_MIN == Decimal("0.01")
     obs = evaluate_compounding_shadow(_inputs())
-    assert obs.live_hard_max_risk_pct == "5.0"
+    assert obs.live_hard_max_risk_pct == "80.0"
     assert obs.live_min_lot == "0.01"
 
 
@@ -109,7 +109,7 @@ def test_aggressive_mode_does_not_raise_live_risk() -> None:
         "CAPITAL_ATTACK",
     }
     assert obs.sizing.suggested_volume <= obs.sizing.risk_approved_volume
-    assert Decimal(obs.live_hard_max_risk_pct) == Decimal("5.0")
+    assert Decimal(obs.live_hard_max_risk_pct) == Decimal("80.0")
 
 
 def test_drawdown_reduces_aggressiveness() -> None:

@@ -111,8 +111,8 @@ def test_london_session_prioritizes_micro_safe_over_gold_and_crosses() -> None:
 
 
 @pytest.mark.unit
-def test_xauusd_i_still_min_lot_constrained_on_micro_equity() -> None:
-    """Alignment must not weaken gold MIN_LOT_CONSTRAINT on ~$100."""
+def test_xauusd_i_min_lot_approved_on_micro_equity_under_hard_max() -> None:
+    """Realistic gold ATR on ~$100 stays under the 80% hard max."""
     equity = Decimal("100.72")
     price = Decimal("4380.013")
     atr = (price * Decimal("0.0015")).quantize(Decimal("0.001"))
@@ -142,13 +142,13 @@ def test_xauusd_i_still_min_lot_constrained_on_micro_equity() -> None:
         ),
         positions=[],
     )
-    assert result.decision is RiskDecision.REJECT
-    assert result.approved_lots == Decimal("0")
-    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" in " ".join(result.reasons)
+    assert result.decision is RiskDecision.ALLOW or result.decision is RiskDecision.REDUCE_SIZE
+    assert result.approved_lots == Decimal("0.01")
+    assert "MIN_LOT_EXCEEDS_RISK_BUDGET" not in " ".join(result.reasons)
     profile = MicroAccountProfile()
     min_loss = (Decimal("0.01") * Decimal("100") * dist).quantize(Decimal("0.01"))
     needed = (min_loss / equity * Decimal("100")).quantize(Decimal("0.01"))
-    assert needed > profile.hard_max_risk_pct
+    assert needed < profile.hard_max_risk_pct
 
 
 @pytest.mark.unit
@@ -184,7 +184,7 @@ def test_usdjpy_i_existing_cs_stop_sizing_still_rejects_micro_equity() -> None:
 @pytest.mark.unit
 def test_alignment_does_not_change_risk_ceilings() -> None:
     profile = MicroAccountProfile()
-    assert profile.hard_max_risk_pct == Decimal("5.0")
+    assert profile.hard_max_risk_pct == Decimal("80.0")
     assert DEFAULT_ITE_CONFIG.risk_per_trade_pct == Decimal("1.0")
     # Seed list still contains gold — analysis retained, not force-executable.
     assert "XAUUSD" in DEFAULT_SCALPING_UNIVERSE

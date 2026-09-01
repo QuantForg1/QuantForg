@@ -64,7 +64,7 @@ export function AutoTradeControls() {
   const [runState, setRunState] = useState<RunState>("off");
   const [maxOpen, setMaxOpen] = useState("1");
   const [riskPct, setRiskPct] = useState("1.0");
-  const [dailyLoss, setDailyLoss] = useState("40.0");
+  const [dailyLoss, setDailyLoss] = useState("80.0");
   const [maxSpread, setMaxSpread] = useState("2.00");
   const [sessions, setSessions] = useState<string[]>([
     "sydney",
@@ -94,7 +94,7 @@ export function AutoTradeControls() {
     }
     setMaxOpen(str(policy.max_open_positions, "1"));
     setRiskPct(str(policy.risk_per_trade_pct, "1.0"));
-    setDailyLoss(str(policy.max_daily_loss_pct, "40.0"));
+    setDailyLoss(str(policy.max_daily_loss_pct, "80.0"));
     setMaxSpread(str(policy.max_spread, "2.00"));
     setSessions(
       asList(policy.allowed_sessions).map(String).length

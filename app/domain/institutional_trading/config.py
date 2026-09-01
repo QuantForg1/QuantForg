@@ -14,7 +14,7 @@ from app.domain.trading.gold_only import GOLD_SYMBOL
 # Authoritative XAUUSD autonomous daily-loss hard cap. Risk, Auto Trading,
 # diagnostics, Signal Center, and execution readiness must all read this value.
 # It is a maximum, not a target. Boundary: pct > cap blocks; pct == cap does not.
-MAX_DAILY_LOSS_PCT = Decimal("40.0")
+MAX_DAILY_LOSS_PCT = Decimal("80.0")
 
 
 def coerce_max_daily_loss_pct(value: Decimal) -> Decimal:

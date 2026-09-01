@@ -1,6 +1,6 @@
 """Small-account min-lot feasibility gate + performance telemetry.
 
-Does not change stops, lots, the 5% ceiling, or Risk semantics.
+Does not change stops, lots, the 80% ceiling, or Risk semantics.
 Never sends orders.
 """
 
@@ -64,13 +64,13 @@ def test_max_allowed_stop_formula_current_account() -> None:
         min_lot=_MIN_LOT,
         contract_size=_CS,
     )
-    # 201.77 * 0.05 / (0.01 * 100) = 10.0885
-    assert max_stop == Decimal("10.0885")
-    assert _EQUITY * Decimal("0.05") == Decimal("10.0885")
+    # 201.77 * 0.80 / (0.01 * 100) = 161.416
+    assert max_stop == Decimal("161.416")
+    assert _EQUITY * Decimal("0.80") == Decimal("161.416")
 
 
 def test_stop_above_threshold_is_min_lot_infeasible() -> None:
-    result = _feas(stop=Decimal("13.3846"))
+    result = _feas(stop=Decimal("170"))
     assert result.classification == CLASS_INFEASIBLE
     assert result.infeasible is True
     assert result.skip_expensive_downstream is True
@@ -82,7 +82,7 @@ def test_stop_above_threshold_is_min_lot_infeasible() -> None:
 
 
 def test_observed_live_stops_are_infeasible_on_201_equity() -> None:
-    for stop in (Decimal("13.3846"), Decimal("11.6746")):
+    for stop in (Decimal("170"), Decimal("180")):
         result = _feas(stop=stop)
         assert result.classification == CLASS_INFEASIBLE
         assert result.skip_expensive_downstream is True
@@ -168,7 +168,7 @@ def test_pipeline_gate_records_skip_vs_continue() -> None:
     reset_strategy_performance_telemetry()
     pipe = InstitutionalDecisionPipeline(config=ITEConfig())
     blocked = pipe.evaluate_min_lot_feasibility_gate(
-        stop_distance=Decimal("13.3846"),
+        stop_distance=Decimal("170"),
         equity=_EQUITY,
         min_lot=_MIN_LOT,
         contract_size=_CS,

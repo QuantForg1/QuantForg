@@ -1,11 +1,12 @@
 """Production reliability hardening — infrastructure only.
 
-Does not change Opportunity 70, sniper, Risk 40%, Safety, OMS, or MT5
+Does not change Opportunity 70, sniper, Risk 80%, Safety, OMS, or MT5
 order_send semantics. Fail-closed on unverified duplicate-protection state.
 """
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -65,9 +66,9 @@ def test_owner_surfaces_not_required() -> None:
     assert snap["running_terminal_is_not_execution_ready"] is True
 
 
-def test_opportunity_70_and_daily_loss_40_unchanged() -> None:
+def test_opportunity_70_and_daily_loss_80_unchanged() -> None:
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert MAX_DAILY_LOSS_PCT == pytest.approx(40.0)
+    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
 
 
 def test_take_is_not_executed_without_ticket() -> None:
@@ -263,7 +264,7 @@ def test_resource_snapshot_does_not_change_thresholds() -> None:
     assert "ram_band" in snap
     assert "disk_band" in snap
     assert OPPORTUNITY_SCORE_THRESHOLD == 70
-    assert MAX_DAILY_LOSS_PCT == pytest.approx(40.0)
+    assert MAX_DAILY_LOSS_PCT == Decimal("80.0")
 
 
 def test_railway_restart_policy_always() -> None:
