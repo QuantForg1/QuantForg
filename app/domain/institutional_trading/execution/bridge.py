@@ -1248,10 +1248,20 @@ class ExecutionBridge:
                 "disabled",
             )
         # Gateway / connectivity class (MT5 10031 = no connection)
+        msg = (result.message or "").lower()
+        gateway_markers = (
+            "gateway_market_data_unavailable",
+            "symbol_info unavailable",
+            "symbol_select failed",
+            "gateway /quotes/",
+            "gateway /symbols/",
+            "terminal: call failed",
+        )
         if (
             "gateway" in outcome
             or outcome in {"timeout", "unavailable"}
             or result.retcode in {10031, 10012}
+            or any(marker in msg for marker in gateway_markers)
         ):
             return (
                 BridgeAbortReason.GATEWAY_FAILURE,

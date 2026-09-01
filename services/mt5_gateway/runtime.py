@@ -598,11 +598,14 @@ class MT5GatewayRuntime:
         """Map any case variant to the exact MetaTrader5 catalogue name.
 
         Weltrade (and similar) expose institutional CFDs as ``XAUUSD_i`` /
-        ``EURUSD_i``. Callers often uppercase to ``XAUUSD_I``, which makes
-        ``symbol_select`` / ticks fail with Terminal: Call failed even though
-        the instrument exists. Resolution is catalogue-driven — never invents
-        a name that is not in ``symbols_get``.
+        ``EURUSD_i``, or as unsuffixed ``XAUUSD``. Callers often uppercase the
+        display form to ``XAUUSD_I``, which makes ``symbol_select`` fail with
+        Terminal: Call failed even though the instrument is already quoting.
+        Resolution is catalogue-driven — never invents a name that is not in
+        ``symbols_get``.
         """
+        from services.mt5_gateway.symbol_resolve import resolve_catalogue_symbol
+
         sym = (symbol or "").strip()
         if not sym:
             return sym
@@ -611,7 +614,11 @@ class MT5GatewayRuntime:
         if exact:
             return exact
         self._refresh_symbol_name_index_unlocked()
-        return self._symbol_name_by_upper.get(key, sym)
+        exact = self._symbol_name_by_upper.get(key)
+        if exact:
+            return exact
+        aliased = resolve_catalogue_symbol(sym, self._symbol_name_by_upper)
+        return aliased or sym
 
     def start_background(self) -> None:
         if self._hb_thread and self._hb_thread.is_alive():
@@ -1232,32 +1239,51 @@ class MT5GatewayRuntime:
 
         Returns the exact broker symbol name used for subsequent MT5 calls.
         """
+        from services.mt5_gateway.symbol_resolve import catalogue_exact_names
+
         requested = (symbol or "").strip()
         if not requested:
             raise RuntimeError("symbol_select failed: empty symbol")
-        exact = self._resolve_broker_symbol(requested)
-        if exact in self._selected_symbols:
-            return exact
-        last_err: Any = None
-        for attempt in range(2):
-            ok = bool(self.bridge.symbol_select(exact, True))
-            if ok:
-                self._selected_symbols.add(exact)
-                # Keep UPPER index aligned even if symbols_get was empty earlier.
-                self._symbol_name_by_upper.setdefault(exact.upper(), exact)
-                return exact
-            last_err = self.bridge.last_error()
-            if attempt == 0 and _is_terminal_call_failed(last_err):
-                # Case-mismatch can surface as Terminal: Call failed — refresh
-                # catalogue once and retry with the exact spelling if it differs.
-                self._refresh_symbol_name_index_unlocked()
-                refreshed = self._symbol_name_by_upper.get(requested.upper())
-                if refreshed and refreshed != exact:
-                    exact = refreshed
-                time.sleep(0.05)
+        primary = self._resolve_broker_symbol(requested)
+        candidates: list[str] = []
+        seen: set[str] = set()
+        extras = catalogue_exact_names(requested, self._symbol_name_by_upper)
+        for name in (primary, *extras):
+            n = (name or "").strip()
+            if not n or n in seen:
                 continue
-            break
-        raise RuntimeError(f"symbol_select failed for {symbol}: {last_err}")
+            seen.add(n)
+            candidates.append(n)
+        last_err: Any = None
+        tried: list[str] = []
+        for exact in candidates:
+            if exact in self._selected_symbols:
+                return exact
+            for attempt in range(2):
+                tried.append(exact)
+                ok = bool(self.bridge.symbol_select(exact, True))
+                if ok:
+                    self._selected_symbols.add(exact)
+                    # Keep UPPER index aligned even if symbols_get was empty earlier.
+                    self._symbol_name_by_upper.setdefault(exact.upper(), exact)
+                    return exact
+                last_err = self.bridge.last_error()
+                if attempt == 0 and _is_terminal_call_failed(last_err):
+                    # Case-mismatch can surface as Terminal: Call failed — refresh
+                    # catalogue once and retry with remaining catalogue aliases.
+                    self._refresh_symbol_name_index_unlocked()
+                    for extra in catalogue_exact_names(
+                        requested, self._symbol_name_by_upper
+                    ):
+                        if extra not in seen:
+                            seen.add(extra)
+                            candidates.append(extra)
+                    time.sleep(0.05)
+                    continue
+                break
+        raise RuntimeError(
+            f"symbol_select failed for {requested} (tried {tried}): {last_err}"
+        )
 
     def account(self) -> dict[str, Any]:
         self._require_connected()

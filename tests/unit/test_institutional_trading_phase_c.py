@@ -499,6 +499,28 @@ class TestExecutionBridgePhaseC:
         assert result.forwarded_to_oms is True
         assert result.abort_reason is BridgeAbortReason.OMS_FAILURE
 
+    def test_gateway_market_data_unavailable_is_gateway_failure(self) -> None:
+        decision, snap, acct = _buy_decision()
+        oms = RecordingOmsPort(
+            result=OmsSubmitResult(
+                outcome="failed",
+                message=(
+                    "symbol_info unavailable for XAUUSD_I: "
+                    "GATEWAY_MARKET_DATA_UNAVAILABLE: Gateway /quotes/XAUUSD_I "
+                    "failed upstream HTTP 503: symbol_select failed for XAUUSD_I: "
+                    "(-1, 'Terminal: Call failed')"
+                ),
+                retcode=None,
+                oms_status="failed",
+                gateway_status="not_called",
+            )
+        )
+        integ = _bridge(oms)
+        result = integ.execute(decision, _ctx(decision, snap, acct))
+        assert result.forwarded_to_oms is True
+        assert result.abort_reason is BridgeAbortReason.GATEWAY_FAILURE
+        assert result.journal_entry.mt5_ticket is None
+
     def test_gateway_failure(self) -> None:
         decision, snap, acct = _buy_decision()
         oms = RecordingOmsPort(

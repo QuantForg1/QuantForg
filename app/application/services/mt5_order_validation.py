@@ -63,7 +63,8 @@ class MT5OrderValidationService:
 
     def constraints_for(self, symbol: str) -> OrderConstraints:
         """Load live broker constraints from MT5 — never invent lot/stops rules."""
-        info = self.adapter.symbol_info(symbol)
+        resolved = self.resolve_canonical_broker_symbol(symbol)
+        info = self.adapter.symbol_info(resolved or symbol)
         min_vol = Decimal(str(getattr(info, "volume_min", None) or "0.01"))
         max_vol = Decimal(str(getattr(info, "volume_max", None) or "100"))
         step = Decimal(str(getattr(info, "volume_step", None) or "0.01"))

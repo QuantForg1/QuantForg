@@ -296,6 +296,84 @@ class _CaseSensitiveWeltradeBridge(_FakeBridge):
         return super().copy_rates_from_pos(symbol, timeframe, start_pos, count)
 
 
+class _BareGoldCatalogueBridge(_FakeBridge):
+    """Live Weltrade-style book: gold is unsuffixed ``XAUUSD``, not ``XAUUSD_I``."""
+
+    def __init__(self) -> None:
+        super().__init__(prelogged=True)
+        self.select_calls = 0
+        self.selected_exact: list[str] = []
+        self._last_err: Any = (1, "ok")
+
+    def symbols_get(self) -> Any:
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name="XAUUSD", description="Gold", digits=3)]
+
+    def symbol_select(self, symbol: str, enable: bool = True) -> bool:
+        _ = enable
+        self.select_calls += 1
+        if symbol == "XAUUSD":
+            self.selected_exact.append(symbol)
+            self.selected.append(symbol)
+            self._last_err = (1, "ok")
+            return True
+        self._last_err = (-1, "Terminal: Call failed")
+        return False
+
+    def last_error(self) -> Any:
+        return self._last_err
+
+    def symbol_info_tick(self, symbol: str) -> Any:
+        from types import SimpleNamespace
+
+        if symbol != "XAUUSD":
+            return None
+        return SimpleNamespace(bid=4374.193, ask=4374.607, time=1_700_000_000)
+
+    def symbol_info(self, symbol: str) -> Any:
+        from types import SimpleNamespace
+
+        if symbol != "XAUUSD":
+            return None
+        return SimpleNamespace(
+            name="XAUUSD",
+            description="Gold",
+            digits=3,
+            point=0.001,
+            trade_contract_size=100.0,
+            volume_min=0.01,
+            volume_max=100.0,
+            volume_step=0.01,
+            volume_limit=0.0,
+            trade_stops_level=0,
+            trade_freeze_level=0,
+            filling_mode=2,
+            trade_mode=4,
+            trade_exemode=2,
+            trade_calc_mode=0,
+            order_mode=127,
+            visible=True,
+            select=True,
+            currency_base="XAU",
+            currency_profit="USD",
+            currency_margin="USD",
+            swap_mode=0,
+            session_deals=0,
+            session_buy_orders=0,
+            session_sell_orders=0,
+            time=1_700_000_000,
+        )
+
+    def copy_rates_from_pos(
+        self, symbol: str, timeframe: int, start_pos: int, count: int
+    ) -> Any:
+        if symbol != "XAUUSD":
+            self._last_err = (-1, "Terminal: Call failed")
+            return None
+        return super().copy_rates_from_pos(symbol, timeframe, start_pos, count)
+
+
 @pytest.mark.unit
 def test_xauusd_uppercase_resolves_to_catalogue_exact_case() -> None:
     bridge = _CaseSensitiveWeltradeBridge()
@@ -320,6 +398,25 @@ def test_wrong_case_does_not_fabricate_when_absent_from_catalogue() -> None:
     bridge = _CaseSensitiveWeltradeBridge()
     rt = MT5GatewayRuntime(bridge=bridge)
     rt.diagnostics.connected = True
+    with pytest.raises(RuntimeError, match="symbol_select failed"):
+        rt.quote("NOTAREALSYM")
+
+
+@pytest.mark.unit
+def test_xauusd_i_resolves_to_unsuffixed_catalogue_gold() -> None:
+    """OMS uppercases XAUUSD_i → XAUUSD_I; live book may only expose XAUUSD."""
+    bridge = _BareGoldCatalogueBridge()
+    rt = MT5GatewayRuntime(bridge=bridge)
+    rt.diagnostics.connected = True
+
+    quote = rt.quote("XAUUSD_I")
+    specs = rt.symbol_specs("XAUUSD_i")
+
+    assert float(quote["bid"]) > 0
+    assert quote["symbol"] == "XAUUSD"
+    assert specs["code"] in {"XAUUSD", "XAUUSD_I"}
+    assert bridge.selected_exact == ["XAUUSD"]
+    assert "XAUUSD" in rt._selected_symbols
     with pytest.raises(RuntimeError, match="symbol_select failed"):
         rt.quote("NOTAREALSYM")
 

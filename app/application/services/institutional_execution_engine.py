@@ -167,6 +167,51 @@ def parse_order_intent(
         ) from exc
 
 
+def mask_account_login(login: int | str | None) -> str | None:
+    """Mask MT5 login for logs — never emit the full account number."""
+    if login is None or login == "":
+        return None
+    text = str(login).strip()
+    if not text:
+        return None
+    if len(text) <= 3:
+        return "***"
+    return f"{text[:2]}***{text[-2:]}"
+
+
+def retcode_description(retcode: int | None) -> str | None:
+    """Human MT5 retcode text. None when order_send was never called."""
+    if retcode is None:
+        return None
+    try:
+        from app.domain.entities.execution_gateway import map_retcode_to_outcome
+
+        _, _, message = map_retcode_to_outcome(int(retcode))
+        return message
+    except (TypeError, ValueError):
+        return None
+
+
+def order_attempt_execution_result(
+    *,
+    order_send_reached: bool,
+    ticket: int | None,
+    outcome: str,
+    retcode: int | None,
+    message: str,
+) -> str:
+    """Honest fill/fail label — never call a failed send a fill."""
+    success = (outcome or "").strip().lower() in {"success", "filled", "done"}
+    if success and ticket:
+        return f"FILLED ticket={ticket}"
+    if success and not ticket:
+        return "OMS reported success without MT5 ticket"
+    if order_send_reached:
+        rc = f"retcode={retcode}" if retcode is not None else "retcode=null"
+        return f"ORDER_SEND_FAILED {rc} {message}".strip()
+    return f"NO BROKER ORDER WAS SUBMITTED: {message}".strip()
+
+
 @dataclass
 class InstitutionalExecutionEngine:
     """Single execution pipeline — validation → risk → gate → broker → journal."""
@@ -209,6 +254,72 @@ class InstitutionalExecutionEngine:
             source="institutional_execution_engine",
             meta={"pipeline_stage": stage.value, **(meta or {})},
             force=True,
+        )
+
+    def _record_order_attempt(
+        self,
+        *,
+        intent: OrderIntent,
+        request: Any,
+        constraints: Any,
+        login: int | None,
+        oms_result: str,
+        execution_result: str,
+        mt5_retcode: int | None,
+        broker_comment: str,
+        mt5_ticket: int | None,
+        order_send_reached: bool,
+    ) -> None:
+        filling = ""
+        tif = ""
+        price = ""
+        sl = ""
+        tp = ""
+        broker_symbol = intent.symbol
+        if request is not None:
+            filling = str(getattr(request, "type_filling", "") or "")
+            tif = str(getattr(request, "type_time", "") or "")
+            price = str(getattr(request, "price", "") or "")
+            sl = str(getattr(request, "stop_loss", "") or "")
+            tp = str(getattr(request, "take_profit", "") or "")
+            broker_symbol = str(getattr(request, "symbol", "") or intent.symbol)
+        elif intent.stop_loss is not None:
+            sl = str(intent.stop_loss.value)
+        if intent.take_profit is not None and not tp:
+            tp = str(intent.take_profit.value)
+        if intent.price is not None and not price:
+            price = str(intent.price)
+        if constraints is not None:
+            from app.application.services.mt5_order_validation import _filling_label
+
+            if not filling:
+                filling = _filling_label(
+                    int(getattr(constraints, "filling_mode", 0) or 0),
+                    execution_mode=str(
+                        getattr(constraints, "execution_mode", "") or ""
+                    ),
+                )
+            broker_symbol = str(getattr(constraints, "symbol", "") or broker_symbol)
+        logger.info(
+            "ORDER_ATTEMPT",
+            symbol=intent.symbol,
+            side=intent.side.value,
+            volume=str(intent.volume.value),
+            price=price or None,
+            sl=sl or None,
+            tp=tp or None,
+            order_type=intent.order_type.value,
+            filling_mode=filling or None,
+            time_in_force=tif or None,
+            broker_symbol=broker_symbol,
+            account_login_masked=mask_account_login(login),
+            mt5_retcode=mt5_retcode,
+            retcode_description=retcode_description(mt5_retcode),
+            broker_comment=broker_comment or None,
+            oms_result=oms_result,
+            execution_result=execution_result,
+            order_send_reached=bool(order_send_reached),
+            mt5_ticket=mt5_ticket,
         )
 
     def _stage(
@@ -319,6 +430,12 @@ class InstitutionalExecutionEngine:
         request: Any = None
         constraints: Any = None
         try:
+            canonical = self.order_validation.resolve_canonical_broker_symbol(
+                intent.symbol
+            )
+            if canonical:
+                intent = self.order_validation._intent_with_symbol(intent, canonical)
+                symbol = intent.symbol
             intent, norm_notes = self.order_validation.normalize_intent(intent)
             volume = str(intent.volume.value)
             constraints = self.order_validation.constraints_for(intent.symbol)
@@ -436,6 +553,24 @@ class InstitutionalExecutionEngine:
                 latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
             )
             result.journal_entry = self._write_journal(result, intent, None, uid)
+            self._record_order_attempt(
+                intent=intent,
+                request=request,
+                constraints=constraints,
+                login=login,
+                oms_result="rejected",
+                execution_result=order_attempt_execution_result(
+                    order_send_reached=False,
+                    ticket=None,
+                    outcome="rejected",
+                    retcode=None,
+                    message=result.message,
+                ),
+                mt5_retcode=None,
+                broker_comment=result.message,
+                mt5_ticket=None,
+                order_send_reached=False,
+            )
             return result, None
 
         self._observe(
@@ -835,6 +970,24 @@ class InstitutionalExecutionEngine:
                 latency_ms=(time.perf_counter() - t_pipeline) * 1000.0,
             )
             result.journal_entry = self._write_journal(result, intent, exec_result, uid)
+            self._record_order_attempt(
+                intent=intent,
+                request=request,
+                constraints=constraints,
+                login=login,
+                oms_result=exec_result.outcome.value,
+                execution_result=order_attempt_execution_result(
+                    order_send_reached=False,
+                    ticket=exec_result.order_ticket,
+                    outcome=exec_result.outcome.value,
+                    retcode=exec_result.retcode,
+                    message=exec_result.message,
+                ),
+                mt5_retcode=exec_result.retcode,
+                broker_comment=exec_result.message,
+                mt5_ticket=exec_result.order_ticket,
+                order_send_reached=False,
+            )
             return result, decision
 
         if exec_result.outcome is ExecutionOutcome.SUCCESS:
@@ -959,6 +1112,25 @@ class InstitutionalExecutionEngine:
             ),
         )
         result.journal_entry = self._write_journal(result, intent, exec_result, uid)
+        send_reached = exec_result.outcome is not ExecutionOutcome.DISABLED
+        self._record_order_attempt(
+            intent=intent,
+            request=request,
+            constraints=constraints,
+            login=login,
+            oms_result=exec_result.outcome.value,
+            execution_result=order_attempt_execution_result(
+                order_send_reached=send_reached,
+                ticket=exec_result.order_ticket,
+                outcome=exec_result.outcome.value,
+                retcode=exec_result.retcode,
+                message=exec_result.message,
+            ),
+            mt5_retcode=exec_result.retcode if send_reached else None,
+            broker_comment=exec_result.message,
+            mt5_ticket=exec_result.order_ticket,
+            order_send_reached=send_reached,
+        )
         return result, decision
 
     def run_cancel(

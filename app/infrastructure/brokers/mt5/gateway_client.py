@@ -1365,6 +1365,27 @@ class GatewayMT5Client:
             return None
         return self._catalogue_cache
 
+    def _catalogue_code_for(self, symbol: str) -> str:
+        """Map desk/display form to a live catalogue code when the cache is warm.
+
+        Never invents a name that is not already in GET /symbols. Falls back
+        to the requested spelling when the catalogue is unknown.
+        """
+        from services.mt5_gateway.symbol_resolve import resolve_catalogue_symbol
+
+        requested = (symbol or "").strip()
+        if not requested:
+            return requested
+        cached = self._catalogue_cached()
+        if not cached:
+            return requested
+        by_upper: dict[str, str] = {}
+        for row in cached:
+            code = str(getattr(row, "code", "") or "").strip()
+            if code:
+                by_upper.setdefault(code.upper(), code)
+        return resolve_catalogue_symbol(requested, by_upper) or requested
+
     def health(self) -> MT5HealthSnapshot:
         now = time.monotonic()
         cached = self._health_snapshot_cache
@@ -1484,7 +1505,7 @@ class GatewayMT5Client:
 
     def symbol_info(self, symbol: str) -> MT5SymbolInfo:
         self._require_connected()
-        code = symbol.strip().upper()
+        code = self._catalogue_code_for(symbol).strip().upper()
         cached_spec = self._symbol_info_cache.get(code)
         if cached_spec is not None and self._cycle_reads_active:
             gateway_metrics.record_cache(hit=True)
@@ -1560,7 +1581,8 @@ class GatewayMT5Client:
 
     def latest_tick(self, symbol: str) -> MT5Tick:
         self._require_connected()
-        data = self._request("GET", f"/quotes/{symbol.strip().upper()}")
+        code = self._catalogue_code_for(symbol).strip().upper()
+        data = self._request("GET", f"/quotes/{code}")
         ts = data.get("time")
         timestamp = datetime.fromtimestamp(int(ts), tz=UTC) if ts else datetime.now(UTC)
         return MT5Tick(
